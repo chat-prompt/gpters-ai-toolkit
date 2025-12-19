@@ -1,0 +1,253 @@
+#!/bin/bash
+
+# aitk - AI Toolkit CLI
+# 사내 AI 스킬/에이전트 관리 도구
+
+set -e
+
+TOOLKIT_DIR="${AITK_HOME:-$HOME/projects/company-ai-toolkit}"
+CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
+CLAUDE_AGENTS_DIR="$HOME/.claude/agents"
+
+# 색상
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+print_help() {
+    echo "aitk - AI Toolkit CLI"
+    echo ""
+    echo "사용법: aitk <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  list                    사용 가능한 스킬/에이전트 목록"
+    echo "  install <type> <name>   스킬 또는 에이전트 설치 (type: skill|agent)"
+    echo "  install all             모든 스킬/에이전트 설치"
+    echo "  new <type> <name>       새 스킬/에이전트 생성 (type: skill|agent|prompt)"
+    echo "  update                  저장소 업데이트 (git pull)"
+    echo "  open                    프로젝트 폴더 열기"
+    echo "  edit                    WebStorm으로 프로젝트 열기"
+    echo "  help                    도움말"
+    echo ""
+    echo "Examples:"
+    echo "  aitk list"
+    echo "  aitk install skill case-study-writer"
+    echo "  aitk install all"
+    echo "  aitk new skill my-skill"
+    echo "  aitk new agent my-agent"
+}
+
+cmd_list() {
+    echo -e "${BLUE}=== Skills ===${NC}"
+    for dir in "$TOOLKIT_DIR/skills"/*/; do
+        if [ -d "$dir" ] && [ "$(basename "$dir")" != "_template" ]; then
+            name=$(basename "$dir")
+            desc=""
+            if [ -f "$dir/skill.md" ]; then
+                desc=$(grep -m1 "^description:" "$dir/skill.md" 2>/dev/null | sed 's/description: *//' || echo "")
+            fi
+            installed=""
+            if [ -d "$CLAUDE_SKILLS_DIR/$name" ]; then
+                installed="${GREEN}[installed]${NC}"
+            fi
+            echo -e "  $name $installed"
+            [ -n "$desc" ] && echo -e "    ${YELLOW}$desc${NC}"
+        fi
+    done
+
+    echo ""
+    echo -e "${BLUE}=== Agents ===${NC}"
+    for dir in "$TOOLKIT_DIR/agents"/*/; do
+        if [ -d "$dir" ] && [ "$(basename "$dir")" != "_template" ]; then
+            name=$(basename "$dir")
+            installed=""
+            if [ -f "$CLAUDE_AGENTS_DIR/$name.md" ]; then
+                installed="${GREEN}[installed]${NC}"
+            fi
+            echo -e "  $name $installed"
+        fi
+    done
+
+    echo ""
+    echo -e "${BLUE}=== Prompts ===${NC}"
+    for file in "$TOOLKIT_DIR/prompts"/*.md; do
+        if [ -f "$file" ] && [ "$(basename "$file")" != "_template.md" ]; then
+            echo "  $(basename "$file" .md)"
+        fi
+    done
+}
+
+cmd_install() {
+    local type=$1
+    local name=$2
+
+    if [ "$type" = "all" ]; then
+        echo -e "${BLUE}모든 스킬/에이전트 설치 중...${NC}"
+
+        mkdir -p "$CLAUDE_SKILLS_DIR"
+        mkdir -p "$CLAUDE_AGENTS_DIR"
+
+        # Install all skills
+        for dir in "$TOOLKIT_DIR/skills"/*/; do
+            if [ -d "$dir" ] && [ "$(basename "$dir")" != "_template" ]; then
+                skill_name=$(basename "$dir")
+                cp -r "$dir" "$CLAUDE_SKILLS_DIR/"
+                echo -e "  ${GREEN}✓${NC} skill: $skill_name"
+            fi
+        done
+
+        # Install all agents
+        for dir in "$TOOLKIT_DIR/agents"/*/; do
+            if [ -d "$dir" ] && [ "$(basename "$dir")" != "_template" ]; then
+                agent_name=$(basename "$dir")
+                cp "$dir/agent.md" "$CLAUDE_AGENTS_DIR/$agent_name.md"
+                echo -e "  ${GREEN}✓${NC} agent: $agent_name"
+            fi
+        done
+
+        echo -e "${GREEN}완료!${NC}"
+        return
+    fi
+
+    if [ -z "$name" ]; then
+        echo -e "${RED}Error: 이름을 지정해주세요${NC}"
+        echo "사용법: aitk install <skill|agent> <name>"
+        exit 1
+    fi
+
+    case $type in
+        skill)
+            if [ ! -d "$TOOLKIT_DIR/skills/$name" ]; then
+                echo -e "${RED}Error: 스킬 '$name'을 찾을 수 없습니다${NC}"
+                exit 1
+            fi
+            mkdir -p "$CLAUDE_SKILLS_DIR"
+            cp -r "$TOOLKIT_DIR/skills/$name" "$CLAUDE_SKILLS_DIR/"
+            echo -e "${GREEN}✓ 스킬 '$name' 설치 완료${NC}"
+            ;;
+        agent)
+            if [ ! -d "$TOOLKIT_DIR/agents/$name" ]; then
+                echo -e "${RED}Error: 에이전트 '$name'을 찾을 수 없습니다${NC}"
+                exit 1
+            fi
+            mkdir -p "$CLAUDE_AGENTS_DIR"
+            cp "$TOOLKIT_DIR/agents/$name/agent.md" "$CLAUDE_AGENTS_DIR/$name.md"
+            echo -e "${GREEN}✓ 에이전트 '$name' 설치 완료${NC}"
+            ;;
+        *)
+            echo -e "${RED}Error: 알 수 없는 타입 '$type'${NC}"
+            echo "사용 가능: skill, agent"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_new() {
+    local type=$1
+    local name=$2
+
+    if [ -z "$name" ]; then
+        echo -e "${RED}Error: 이름을 지정해주세요${NC}"
+        echo "사용법: aitk new <skill|agent|prompt> <name>"
+        exit 1
+    fi
+
+    case $type in
+        skill)
+            if [ -d "$TOOLKIT_DIR/skills/$name" ]; then
+                echo -e "${RED}Error: 스킬 '$name'이 이미 존재합니다${NC}"
+                exit 1
+            fi
+            cp -r "$TOOLKIT_DIR/skills/_template" "$TOOLKIT_DIR/skills/$name"
+            # Update name in skill.md
+            sed -i '' "s/스킬-이름/$name/g" "$TOOLKIT_DIR/skills/$name/skill.md"
+            sed -i '' "s/스킬 이름/$name/g" "$TOOLKIT_DIR/skills/$name/skill.md"
+            sed -i '' "s/스킬이름/$name/g" "$TOOLKIT_DIR/skills/$name/README.md"
+            echo -e "${GREEN}✓ 스킬 '$name' 생성 완료${NC}"
+            echo "  경로: $TOOLKIT_DIR/skills/$name"
+            echo "  다음 파일을 수정하세요:"
+            echo "    - skill.md (스킬 정의)"
+            echo "    - README.md (사용 문서)"
+            ;;
+        agent)
+            if [ -d "$TOOLKIT_DIR/agents/$name" ]; then
+                echo -e "${RED}Error: 에이전트 '$name'이 이미 존재합니다${NC}"
+                exit 1
+            fi
+            cp -r "$TOOLKIT_DIR/agents/_template" "$TOOLKIT_DIR/agents/$name"
+            sed -i '' "s/에이전트 이름/$name/g" "$TOOLKIT_DIR/agents/$name/agent.md"
+            sed -i '' "s/에이전트이름/$name/g" "$TOOLKIT_DIR/agents/$name/README.md"
+            echo -e "${GREEN}✓ 에이전트 '$name' 생성 완료${NC}"
+            echo "  경로: $TOOLKIT_DIR/agents/$name"
+            ;;
+        prompt)
+            if [ -f "$TOOLKIT_DIR/prompts/$name.md" ]; then
+                echo -e "${RED}Error: 프롬프트 '$name'이 이미 존재합니다${NC}"
+                exit 1
+            fi
+            cp "$TOOLKIT_DIR/prompts/_template.md" "$TOOLKIT_DIR/prompts/$name.md"
+            sed -i '' "s/프롬프트 이름/$name/g" "$TOOLKIT_DIR/prompts/$name.md"
+            echo -e "${GREEN}✓ 프롬프트 '$name' 생성 완료${NC}"
+            echo "  경로: $TOOLKIT_DIR/prompts/$name.md"
+            ;;
+        *)
+            echo -e "${RED}Error: 알 수 없는 타입 '$type'${NC}"
+            echo "사용 가능: skill, agent, prompt"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_update() {
+    echo -e "${BLUE}저장소 업데이트 중...${NC}"
+    cd "$TOOLKIT_DIR"
+    git pull
+    echo -e "${GREEN}✓ 업데이트 완료${NC}"
+}
+
+cmd_open() {
+    open "$TOOLKIT_DIR"
+}
+
+cmd_edit() {
+    if command -v webstorm &> /dev/null; then
+        webstorm "$TOOLKIT_DIR"
+    elif command -v code &> /dev/null; then
+        code "$TOOLKIT_DIR"
+    else
+        echo -e "${YELLOW}WebStorm 또는 VS Code를 찾을 수 없습니다${NC}"
+        open "$TOOLKIT_DIR"
+    fi
+}
+
+# Main
+case "${1:-help}" in
+    list|ls)
+        cmd_list
+        ;;
+    install|i)
+        cmd_install "$2" "$3"
+        ;;
+    new|n)
+        cmd_new "$2" "$3"
+        ;;
+    update|up)
+        cmd_update
+        ;;
+    open)
+        cmd_open
+        ;;
+    edit|e)
+        cmd_edit
+        ;;
+    help|--help|-h)
+        print_help
+        ;;
+    *)
+        echo -e "${RED}Error: 알 수 없는 명령어 '$1'${NC}"
+        print_help
+        exit 1
+        ;;
+esac
