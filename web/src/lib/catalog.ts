@@ -2,11 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { CatalogItem, ItemType, Difficulty } from './types'
 
-// In Vercel build, folders are copied to web/, so look in current directory
-// In local dev, folders are in parent directory
-const ROOT_DIR = fs.existsSync(path.join(process.cwd(), 'skills'))
-  ? process.cwd()
-  : path.join(process.cwd(), '..')
+const ROOT_DIR = process.cwd()
 
 interface FrontMatter {
   name?: string
