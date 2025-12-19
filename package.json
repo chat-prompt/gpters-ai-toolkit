@@ -1,0 +1,9 @@
+{
+  "name": "gpters-ai-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd web && npm install && npm run build",
+    "dev": "cd web && npm run dev"
+  }
+}
