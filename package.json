@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "prebuild": "cp -r skills agents prompts web/",
     "build": "cd web && npm install && npm run build",
+    "postbuild": "rm -rf web/skills web/agents web/prompts",
     "dev": "cd web && npm run dev"
   }
 }
