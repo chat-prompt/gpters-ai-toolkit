@@ -5,5 +5,8 @@
   "scripts": {
     "build": "pnpm --filter web build",
     "dev": "pnpm --filter web dev"
+  },
+  "devDependencies": {
+    "next": "^16.1.0"
   }
 }
