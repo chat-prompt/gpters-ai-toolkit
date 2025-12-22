@@ -61,6 +61,7 @@ function scanDirectory(type: ItemType): CatalogItem[] {
     skill: 'skills',
     agent: 'agents',
     prompt: 'prompts',
+    command: 'commands',
   }
 
   const dirPath = path.join(ROOT_DIR, dirMap[type])
@@ -92,14 +93,20 @@ function scanDirectory(type: ItemType): CatalogItem[] {
       })
     }
   } else {
-    // Skills and agents are directories
+    // Skills, agents, and commands are directories
     const dirs = fs.readdirSync(dirPath).filter(d => {
       const stat = fs.statSync(path.join(dirPath, d))
       return stat.isDirectory() && !d.startsWith('_')
     })
 
     for (const dir of dirs) {
-      const mainFile = type === 'skill' ? 'skill.md' : 'agent.md'
+      const mainFileMap: Record<ItemType, string> = {
+        skill: 'skill.md',
+        agent: 'agent.md',
+        command: 'command.md',
+        prompt: 'prompt.md',
+      }
+      const mainFile = mainFileMap[type]
       const mainFilePath = path.join(dirPath, dir, mainFile)
       const readmePath = path.join(dirPath, dir, 'README.md')
 
@@ -140,8 +147,9 @@ export function getCatalog(): CatalogItem[] {
   const skills = scanDirectory('skill')
   const agents = scanDirectory('agent')
   const prompts = scanDirectory('prompt')
+  const commands = scanDirectory('command')
 
-  return [...skills, ...agents, ...prompts]
+  return [...skills, ...agents, ...prompts, ...commands]
 }
 
 export function getItemById(id: string): CatalogItem | undefined {

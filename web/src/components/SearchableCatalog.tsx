@@ -23,6 +23,12 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
     gradient: 'from-orange-400 to-amber-400',
     glow: 'group-hover:shadow-[0_0_30px_rgba(255,107,53,0.3)]',
   },
+  command: {
+    label: 'COMMAND',
+    icon: '▸',
+    gradient: 'from-rose-400 to-red-400',
+    glow: 'group-hover:shadow-[0_0_30px_rgba(251,113,133,0.3)]',
+  },
 }
 
 function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
@@ -146,6 +152,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   const skills = filteredCatalog.filter(item => item.type === 'skill')
   const agents = filteredCatalog.filter(item => item.type === 'agent')
   const prompts = filteredCatalog.filter(item => item.type === 'prompt')
+  const commands = filteredCatalog.filter(item => item.type === 'command')
 
   // Keyboard shortcut for search (⌘K)
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -170,6 +177,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   const totalSkills = catalog.filter(item => item.type === 'skill').length
   const totalAgents = catalog.filter(item => item.type === 'agent').length
   const totalPrompts = catalog.filter(item => item.type === 'prompt').length
+  const totalCommands = catalog.filter(item => item.type === 'command').length
 
   return (
     <>
@@ -181,7 +189,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search skills, agents, prompts..."
+            placeholder="Search skills, agents, prompts, commands..."
             className="w-full px-6 py-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
           />
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -241,6 +249,16 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           >
             ✦ Prompts ({totalPrompts})
           </button>
+          <button
+            onClick={() => setActiveFilter('command')}
+            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+              activeFilter === 'command'
+                ? 'bg-rose-400 text-black'
+                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            ▸ Commands ({totalCommands})
+          </button>
         </div>
       </div>
 
@@ -259,6 +277,11 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
         <div>
           <div className="text-3xl font-light text-[var(--text-primary)]">{prompts.length}</div>
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Prompts</div>
+        </div>
+        <div className="w-px h-8 bg-[var(--border-subtle)]" />
+        <div>
+          <div className="text-3xl font-light text-[var(--text-primary)]">{commands.length}</div>
+          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Commands</div>
         </div>
         {searchQuery && (
           <>
@@ -300,6 +323,23 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {agents.map((item, i) => (
+                <ItemCard key={item.id} item={item} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Commands Section */}
+        {commands.length > 0 && (activeFilter === 'all' || activeFilter === 'command') && (
+          <section className="mb-20">
+            <SectionHeader
+              icon="▸"
+              title="Commands"
+              count={commands.length}
+              accentColor="text-rose-400"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {commands.map((item, i) => (
                 <ItemCard key={item.id} item={item} index={i} />
               ))}
             </div>

@@ -1,4 +1,4 @@
-export type ItemType = 'skill' | 'agent' | 'prompt'
+export type ItemType = 'skill' | 'agent' | 'prompt' | 'command'
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
@@ -33,6 +33,14 @@ export const TAGS: Record<string, Tag> = {
   review: { id: 'review', label: '리뷰', color: 'bg-orange-100 text-orange-800' },
   meeting: { id: 'meeting', label: '회의', color: 'bg-pink-100 text-pink-800' },
   analysis: { id: 'analysis', label: '분석', color: 'bg-indigo-100 text-indigo-800' },
+  database: { id: 'database', label: '데이터베이스', color: 'bg-cyan-100 text-cyan-800' },
+  sql: { id: 'sql', label: 'SQL', color: 'bg-cyan-100 text-cyan-800' },
+  debugging: { id: 'debugging', label: '디버깅', color: 'bg-red-100 text-red-800' },
+  learning: { id: 'learning', label: '학습', color: 'bg-teal-100 text-teal-800' },
+  refactoring: { id: 'refactoring', label: '리팩토링', color: 'bg-violet-100 text-violet-800' },
+  api: { id: 'api', label: 'API', color: 'bg-amber-100 text-amber-800' },
+  testing: { id: 'testing', label: '테스트', color: 'bg-lime-100 text-lime-800' },
+  git: { id: 'git', label: 'Git', color: 'bg-rose-100 text-rose-800' },
 }
 
 export const DIFFICULTY_LABELS: Record<Difficulty, { label: string; color: string }> = {
