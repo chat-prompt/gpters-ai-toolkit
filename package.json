@@ -1,0 +1,9 @@
+{
+  "name": "gpters-ai-toolkit",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm --filter web build",
+    "dev": "pnpm --filter web dev"
+  }
+}
