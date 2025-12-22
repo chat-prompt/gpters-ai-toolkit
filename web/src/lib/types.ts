@@ -1,4 +1,4 @@
-export type ItemType = 'skill' | 'agent' | 'prompt' | 'command'
+export type ItemType = 'skill' | 'agent' | 'prompt' | 'command' | 'guide'
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
@@ -11,6 +11,7 @@ export interface CatalogItem {
   tags: string[]
   difficulty?: Difficulty
   pluginId?: string // 플러그인 설치 ID (스킬만)
+  estimatedTime?: string // 예상 소요 시간 (가이드)
   content: string // skill.md 내용
   readme?: string // README.md 내용
   createdAt?: string
@@ -41,6 +42,15 @@ export const TAGS: Record<string, Tag> = {
   api: { id: 'api', label: 'API', color: 'bg-amber-100 text-amber-800' },
   testing: { id: 'testing', label: '테스트', color: 'bg-lime-100 text-lime-800' },
   git: { id: 'git', label: 'Git', color: 'bg-rose-100 text-rose-800' },
+  // Guide tags
+  setup: { id: 'setup', label: '설정', color: 'bg-sky-100 text-sky-800' },
+  deployment: { id: 'deployment', label: '배포', color: 'bg-emerald-100 text-emerald-800' },
+  infrastructure: { id: 'infrastructure', label: '인프라', color: 'bg-slate-100 text-slate-800' },
+  beginner: { id: 'beginner', label: '입문', color: 'bg-green-100 text-green-800' },
+  image: { id: 'image', label: '이미지', color: 'bg-fuchsia-100 text-fuchsia-800' },
+  cdn: { id: 'cdn', label: 'CDN', color: 'bg-violet-100 text-violet-800' },
+  domain: { id: 'domain', label: '도메인', color: 'bg-orange-100 text-orange-800' },
+  auth: { id: 'auth', label: '인증', color: 'bg-red-100 text-red-800' },
 }
 
 export const DIFFICULTY_LABELS: Record<Difficulty, { label: string; color: string }> = {

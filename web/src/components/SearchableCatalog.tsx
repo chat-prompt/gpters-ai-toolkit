@@ -29,6 +29,12 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
     gradient: 'from-rose-400 to-red-400',
     glow: 'group-hover:shadow-[0_0_30px_rgba(251,113,133,0.3)]',
   },
+  guide: {
+    label: 'GUIDE',
+    icon: '📚',
+    gradient: 'from-emerald-400 to-teal-400',
+    glow: 'group-hover:shadow-[0_0_30px_rgba(16,185,129,0.3)]',
+  },
 }
 
 function ItemCard({ item, index }: { item: CatalogItem; index: number }) {

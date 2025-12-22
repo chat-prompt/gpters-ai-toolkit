@@ -11,6 +11,7 @@ interface FrontMatter {
   tags?: string[]
   difficulty?: Difficulty
   pluginId?: string
+  estimatedTime?: string
 }
 
 function parseFrontMatter(content: string): { frontMatter: FrontMatter; body: string } {
@@ -44,6 +45,7 @@ function parseFrontMatter(content: string): { frontMatter: FrontMatter; body: st
     if (key === 'author') frontMatter.author = value
     if (key === 'difficulty') frontMatter.difficulty = value as Difficulty
     if (key === 'pluginId') frontMatter.pluginId = value
+    if (key === 'estimatedTime') frontMatter.estimatedTime = value
     if (key === 'tags') {
       // Parse tags array: [tag1, tag2] or tag1, tag2
       const tagsMatch = value.match(/\[(.*)\]/)
@@ -62,6 +64,7 @@ function scanDirectory(type: ItemType): CatalogItem[] {
     agent: 'agents',
     prompt: 'prompts',
     command: 'commands',
+    guide: 'guides',
   }
 
   const dirPath = path.join(ROOT_DIR, dirMap[type])
@@ -105,6 +108,7 @@ function scanDirectory(type: ItemType): CatalogItem[] {
         agent: 'agent.md',
         command: 'command.md',
         prompt: 'prompt.md',
+        guide: 'guide.md',
       }
       const mainFile = mainFileMap[type]
       const mainFilePath = path.join(dirPath, dir, mainFile)
@@ -132,6 +136,7 @@ function scanDirectory(type: ItemType): CatalogItem[] {
         tags: frontMatter.tags || [],
         difficulty: frontMatter.difficulty,
         pluginId: frontMatter.pluginId,
+        estimatedTime: frontMatter.estimatedTime,
         content: body,
         readme,
         createdAt: stats.birthtime.toISOString().split('T')[0],
@@ -160,4 +165,13 @@ export function getItemById(id: string): CatalogItem | undefined {
 export function getItemsByType(type: ItemType): CatalogItem[] {
   const catalog = getCatalog()
   return catalog.filter(item => item.type === type)
+}
+
+export function getGuides(): CatalogItem[] {
+  return scanDirectory('guide')
+}
+
+export function getGuideById(id: string): CatalogItem | undefined {
+  const guides = getGuides()
+  return guides.find(guide => guide.id === id)
 }
