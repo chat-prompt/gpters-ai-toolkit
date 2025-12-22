@@ -3,6 +3,7 @@ import { Header } from '@/components/Header'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import Link from 'next/link'
 
+// Guides page for Vibe Coding tutorials
 export default function GuidesPage() {
   const guides = getGuides()
 
