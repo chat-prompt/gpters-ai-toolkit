@@ -159,6 +159,49 @@ input:focus, button:focus {
   color: var(--bg-primary);
 }
 
+/* Guide Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+}
+
+.guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.guide-table th {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.guide-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.guide-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.guide-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.guide-table strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 /* Utility */
 .line-clamp-2 {
   display: -webkit-box;

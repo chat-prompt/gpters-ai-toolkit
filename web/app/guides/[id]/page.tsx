@@ -118,8 +118,24 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
 }
 
 function formatGuideContent(content: string): string {
+  // Process tables first (before other transformations)
+  const tableRegex = /\|(.+)\|\n\|[-:| ]+\|\n((?:\|.+\|\n?)+)/g
+  let html = content.replace(tableRegex, (_, headerRow, bodyRows) => {
+    const headers = headerRow.split('|').map((h: string) => h.trim()).filter(Boolean)
+    const rows = bodyRows.trim().split('\n').map((row: string) =>
+      row.split('|').map((cell: string) => cell.trim()).filter(Boolean)
+    )
+
+    const headerHtml = headers.map((h: string) => `<th>${h}</th>`).join('')
+    const bodyHtml = rows.map((row: string[]) =>
+      `<tr>${row.map((cell: string) => `<td>${cell}</td>`).join('')}</tr>`
+    ).join('')
+
+    return `<div class="table-wrapper"><table class="guide-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`
+  })
+
   // Simple markdown-like formatting
-  let html = content
+  html = html
     // Headers
     .replace(/^### (.+)$/gm, '<h3 class="text-lg font-medium text-[var(--text-primary)] mt-8 mb-4">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="text-xl font-medium text-[var(--text-primary)] mt-10 mb-4">$1</h2>')

@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { CatalogItem, ItemType, Difficulty } from './types'
 
-const ROOT_DIR = process.cwd()
+const ROOT_DIR = path.resolve(process.cwd(), '..')
 
 interface FrontMatter {
   name?: string
