@@ -1,6 +1,7 @@
 import { getGuideById, getGuides } from '@/lib/catalog'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import { Header } from '@/components/Header'
+import { MarkdownContent } from '@/components/MarkdownContent'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -90,10 +91,7 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         {/* Guide Content */}
         <div className="glass rounded-2xl p-8 mb-8" style={{ boxShadow: '0 0 30px rgba(16,185,129,0.1)' }}>
           <article className="prose prose-invert prose-emerald max-w-none">
-            <div
-              className="text-[var(--text-secondary)] leading-relaxed guide-content"
-              dangerouslySetInnerHTML={{ __html: formatGuideContent(guide.content) }}
-            />
+            <MarkdownContent content={guide.content} />
           </article>
         </div>
 
@@ -106,54 +104,11 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
             </div>
 
             <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-              <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-                {guide.readme}
-              </pre>
+              <MarkdownContent content={guide.readme} />
             </div>
           </div>
         )}
       </main>
     </div>
   )
-}
-
-function formatGuideContent(content: string): string {
-  // Process tables first (before other transformations)
-  // Match: header row | separator row | body rows
-  const tableRegex = /^\|(.+)\|\r?\n\|[\s\-:|]+\|\r?\n((?:\|.+\|\r?\n?)+)/gm
-  let html = content.replace(tableRegex, (match, headerRow, bodyRows) => {
-    const headers = headerRow.split('|').map((h: string) => h.trim()).filter(Boolean)
-    const rows = bodyRows.trim().split(/\r?\n/).filter(Boolean).map((row: string) =>
-      row.split('|').map((cell: string) => cell.trim()).filter(Boolean)
-    )
-
-    const headerHtml = headers.map((h: string) => `<th>${h}</th>`).join('')
-    const bodyHtml = rows.map((row: string[]) =>
-      `<tr>${row.map((cell: string) => `<td>${cell}</td>`).join('')}</tr>`
-    ).join('')
-
-    return `<div class="table-wrapper"><table class="guide-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`
-  })
-
-  // Simple markdown-like formatting
-  html = html
-    // Headers
-    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-medium text-[var(--text-primary)] mt-8 mb-4">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-xl font-medium text-[var(--text-primary)] mt-10 mb-4">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-medium text-[var(--text-primary)] mt-10 mb-6">$1</h1>')
-    // Code blocks
-    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-[var(--bg-primary)] rounded-xl p-4 my-4 overflow-x-auto"><code class="text-sm text-emerald-400">$2</code></pre>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-emerald-400 text-sm">$1</code>')
-    // Bold
-    .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-[var(--text-primary)]">$1</strong>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:underline">$1</a>')
-    // Lists
-    .replace(/^- (.+)$/gm, '<li class="ml-4 mb-2">• $1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 mb-2"><span class="text-emerald-400 mr-2">$1.</span>$2</li>')
-    // Paragraphs
-    .replace(/\n\n/g, '</p><p class="mb-4">')
-
-  return `<p class="mb-4">${html}</p>`
 }
