@@ -119,10 +119,11 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
 
 function formatGuideContent(content: string): string {
   // Process tables first (before other transformations)
-  const tableRegex = /\|(.+)\|\n\|[-:| ]+\|\n((?:\|.+\|\n?)+)/g
-  let html = content.replace(tableRegex, (_, headerRow, bodyRows) => {
+  // Match: header row | separator row | body rows
+  const tableRegex = /^\|(.+)\|\r?\n\|[\s\-:|]+\|\r?\n((?:\|.+\|\r?\n?)+)/gm
+  let html = content.replace(tableRegex, (match, headerRow, bodyRows) => {
     const headers = headerRow.split('|').map((h: string) => h.trim()).filter(Boolean)
-    const rows = bodyRows.trim().split('\n').map((row: string) =>
+    const rows = bodyRows.trim().split(/\r?\n/).filter(Boolean).map((row: string) =>
       row.split('|').map((cell: string) => cell.trim()).filter(Boolean)
     )
 
