@@ -2,8 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { CatalogItem, ItemType, Difficulty } from './types'
 
-// Vercel builds from project root, local dev runs from web/
-const ROOT_DIR = process.env.VERCEL ? process.cwd() : path.resolve(process.cwd(), '..')
+// Both Vercel and local dev run from web/ directory, so go up one level
+const ROOT_DIR = path.resolve(process.cwd(), '..')
 
 interface FrontMatter {
   name?: string
