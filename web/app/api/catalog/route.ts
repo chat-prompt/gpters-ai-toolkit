@@ -58,6 +58,12 @@ export async function POST(request: NextRequest) {
         ...newItem,
         likes: 0,
         dependencies: [],
+        difficulty: newItem.difficulty ?? undefined,
+        pluginId: newItem.pluginId ?? undefined,
+        estimatedTime: newItem.estimatedTime ?? undefined,
+        readme: newItem.readme ?? undefined,
+        marketplaceEnabled: newItem.marketplaceEnabled ?? undefined,
+        marketplaceVersion: newItem.marketplaceVersion ?? undefined,
       }
       await syncItemToGitHub(catalogItem)
 
@@ -67,6 +73,12 @@ export async function POST(request: NextRequest) {
         ...item,
         tags: item.tags || [],
         dependencies: item.dependencies || [],
+        difficulty: item.difficulty ?? undefined,
+        pluginId: item.pluginId ?? undefined,
+        estimatedTime: item.estimatedTime ?? undefined,
+        readme: item.readme ?? undefined,
+        marketplaceEnabled: item.marketplaceEnabled ?? undefined,
+        marketplaceVersion: item.marketplaceVersion ?? undefined,
         createdAt: item.createdAt?.toISOString(),
         updatedAt: item.updatedAt?.toISOString(),
         marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
