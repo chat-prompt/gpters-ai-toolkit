@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum, integer } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean } from 'drizzle-orm/pg-core'
 
 export const itemTypeEnum = pgEnum('item_type', [
   'skill',
@@ -24,6 +24,10 @@ export const catalogItems = pgTable('catalog_items', {
   likes: integer('likes').notNull().default(0),
   content: text('content').notNull(),
   readme: text('readme'),
+  // Marketplace integration fields
+  marketplaceEnabled: boolean('marketplace_enabled').default(false),
+  marketplaceSyncedAt: timestamp('marketplace_synced_at', { withTimezone: true }),
+  marketplaceVersion: text('marketplace_version').default('1.0.0'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 })

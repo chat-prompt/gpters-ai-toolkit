@@ -16,6 +16,10 @@ export interface CatalogItem {
   likes: number // 좋아요 수
   content: string // skill.md 내용
   readme?: string // README.md 내용
+  // Marketplace integration fields
+  marketplaceEnabled?: boolean // Claude Code 마켓플레이스에 등록 여부
+  marketplaceSyncedAt?: string // 마지막 마켓플레이스 동기화 시간
+  marketplaceVersion?: string // 마켓플레이스 버전 (semver)
   createdAt?: string
   updatedAt?: string
 }

@@ -106,6 +106,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
             itemType="skill"
             pluginId={item.pluginId}
             content={item.content}
+            marketplaceEnabled={item.marketplaceEnabled}
           />
         </div>
 

@@ -104,6 +104,7 @@ export default async function PromptPage({ params }: { params: Promise<{ id: str
             itemId={item.id}
             itemType="prompt"
             content={item.content}
+            marketplaceEnabled={item.marketplaceEnabled}
           />
         </div>
 

@@ -96,11 +96,18 @@ function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
               </span>
             )}
           </div>
-          {item.type === 'skill' && item.pluginId && (
-            <span className="text-[10px] text-[var(--accent-cyan)] font-medium tracking-wide">
-              PLUGIN READY →
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {item.marketplaceEnabled && item.type !== 'guide' && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] font-medium tracking-wide border border-[var(--accent-cyan)]/30">
+                CLI READY
+              </span>
+            )}
+            {item.type === 'skill' && item.pluginId && (
+              <span className="text-[10px] text-[var(--accent-purple)] font-medium tracking-wide">
+                PLUGIN →
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </Link>

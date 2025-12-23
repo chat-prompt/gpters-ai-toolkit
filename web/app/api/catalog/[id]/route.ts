@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty } from '@/lib/types'
+import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -49,10 +50,46 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (body.content !== undefined) updateData.content = body.content
   if (body.readme !== undefined) updateData.readme = body.readme
   if (body.type !== undefined) updateData.type = body.type as ItemType
+  // Marketplace fields
+  if (body.marketplaceEnabled !== undefined) updateData.marketplaceEnabled = body.marketplaceEnabled
+  if (body.marketplaceVersion !== undefined) updateData.marketplaceVersion = body.marketplaceVersion
 
   await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
 
   const [updated] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
+
+  // Auto-sync to GitHub if marketplace is enabled
+  if (updated.marketplaceEnabled && updated.type !== 'guide') {
+    try {
+      const catalogItem = {
+        ...updated,
+        tags: updated.tags || [],
+        dependencies: updated.dependencies || [],
+        createdAt: updated.createdAt?.toISOString(),
+        updatedAt: updated.updatedAt?.toISOString(),
+        marketplaceSyncedAt: updated.marketplaceSyncedAt?.toISOString(),
+      }
+      await syncItemToGitHub(catalogItem)
+
+      // Update marketplace.json
+      const allItems = await db.select().from(catalogItems).where(eq(catalogItems.marketplaceEnabled, true))
+      const allCatalogItems = allItems.map(item => ({
+        ...item,
+        tags: item.tags || [],
+        dependencies: item.dependencies || [],
+        createdAt: item.createdAt?.toISOString(),
+        updatedAt: item.updatedAt?.toISOString(),
+        marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
+      }))
+      await updateMarketplaceJson(allCatalogItems)
+
+      // Update sync timestamp
+      await db.update(catalogItems).set({ marketplaceSyncedAt: new Date() }).where(eq(catalogItems.id, id))
+    } catch (error) {
+      console.error('Failed to sync to marketplace:', error)
+      // Don't fail the update if sync fails
+    }
+  }
 
   return NextResponse.json(updated)
 }
@@ -70,6 +107,28 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   if (!existing) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // Delete from marketplace if it was enabled
+  if (existing.marketplaceEnabled) {
+    try {
+      await deleteItemFromGitHub(id)
+
+      // Update marketplace.json
+      const allItems = await db.select().from(catalogItems).where(eq(catalogItems.marketplaceEnabled, true))
+      const remainingItems = allItems.filter(item => item.id !== id).map(item => ({
+        ...item,
+        tags: item.tags || [],
+        dependencies: item.dependencies || [],
+        createdAt: item.createdAt?.toISOString(),
+        updatedAt: item.updatedAt?.toISOString(),
+        marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
+      }))
+      await updateMarketplaceJson(remainingItems)
+    } catch (error) {
+      console.error('Failed to delete from marketplace:', error)
+      // Don't fail the delete if marketplace sync fails
+    }
   }
 
   await db.delete(catalogItems).where(eq(catalogItems.id, id))

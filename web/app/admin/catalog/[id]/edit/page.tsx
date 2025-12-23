@@ -30,6 +30,9 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     estimatedTime: '',
     content: '',
     readme: '',
+    marketplaceEnabled: false,
+    marketplaceVersion: '1.0.0',
+    marketplaceSyncedAt: '',
   })
 
   useEffect(() => {
@@ -54,6 +57,9 @@ export default function EditCatalogItem({ params }: EditPageProps) {
             estimatedTime: item.estimatedTime || '',
             content: item.content,
             readme: item.readme || '',
+            marketplaceEnabled: item.marketplaceEnabled || false,
+            marketplaceVersion: item.marketplaceVersion || '1.0.0',
+            marketplaceSyncedAt: item.marketplaceSyncedAt || '',
           })
         } else {
           setError('Item not found')
@@ -86,6 +92,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         content: formData.content,
         readme: formData.readme || null,
         type: formData.type,
+        marketplaceEnabled: formData.marketplaceEnabled,
+        marketplaceVersion: formData.marketplaceVersion || '1.0.0',
       }
 
       const res = await fetch(`/api/catalog/${id}`, {
@@ -286,6 +294,66 @@ export default function EditCatalogItem({ params }: EditPageProps) {
             />
           </div>
         </div>
+
+        {/* Marketplace Settings */}
+        {formData.type !== 'guide' && (
+          <div className="glass rounded-2xl p-8 space-y-6">
+            <h2 className="text-xl font-medium text-[var(--text-primary)] flex items-center gap-2">
+              <span className="text-[var(--accent-cyan)]">CLI</span> Marketplace Settings
+            </h2>
+            <p className="text-sm text-[var(--text-muted)]">
+              Enable this item in the Claude Code plugin marketplace for CLI installation.
+            </p>
+
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.marketplaceEnabled}
+                  onChange={(e) => setFormData({ ...formData, marketplaceEnabled: e.target.checked })}
+                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+                />
+                <span className="text-[var(--text-primary)]">Enable in Marketplace</span>
+              </label>
+            </div>
+
+            {formData.marketplaceEnabled && (
+              <>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                      Version (semver)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.marketplaceVersion}
+                      onChange={(e) => setFormData({ ...formData, marketplaceVersion: e.target.value })}
+                      placeholder="1.0.0"
+                      className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                      Last Synced
+                    </label>
+                    <div className="px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
+                      {formData.marketplaceSyncedAt
+                        ? new Date(formData.marketplaceSyncedAt).toLocaleString()
+                        : 'Not synced yet'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+                  <p className="text-sm text-[var(--text-secondary)] mb-2">Installation command:</p>
+                  <code className="text-sm text-[var(--accent-cyan)] font-mono">
+                    /plugin install {formData.id}@gpters-ai-toolkit
+                  </code>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="text-red-400 text-sm">{error}</div>

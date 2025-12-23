@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty } from '@/lib/types'
+import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
 
-  const { id, type, name, description, author, tags, difficulty, pluginId, estimatedTime, content, readme } = body
+  const { id, type, name, description, author, tags, difficulty, pluginId, estimatedTime, content, readme, marketplaceEnabled, marketplaceVersion } = body
 
   if (!id || !type || !name || !content) {
     return NextResponse.json(
@@ -44,9 +45,41 @@ export async function POST(request: NextRequest) {
     estimatedTime: estimatedTime || null,
     content,
     readme: readme || null,
+    marketplaceEnabled: marketplaceEnabled || false,
+    marketplaceVersion: marketplaceVersion || '1.0.0',
   }
 
   await db.insert(catalogItems).values(newItem)
+
+  // Auto-sync to GitHub if marketplace is enabled
+  if (newItem.marketplaceEnabled && newItem.type !== 'guide') {
+    try {
+      const catalogItem = {
+        ...newItem,
+        likes: 0,
+        dependencies: [],
+      }
+      await syncItemToGitHub(catalogItem)
+
+      // Update marketplace.json
+      const allItems = await db.select().from(catalogItems).where(eq(catalogItems.marketplaceEnabled, true))
+      const allCatalogItems = allItems.map(item => ({
+        ...item,
+        tags: item.tags || [],
+        dependencies: item.dependencies || [],
+        createdAt: item.createdAt?.toISOString(),
+        updatedAt: item.updatedAt?.toISOString(),
+        marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
+      }))
+      await updateMarketplaceJson(allCatalogItems)
+
+      // Update sync timestamp
+      await db.update(catalogItems).set({ marketplaceSyncedAt: new Date() }).where(eq(catalogItems.id, id))
+    } catch (error) {
+      console.error('Failed to sync to marketplace:', error)
+      // Don't fail the insert if sync fails
+    }
+  }
 
   return NextResponse.json(newItem, { status: 201 })
 }

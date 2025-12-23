@@ -1,0 +1,13 @@
+{
+  "name": "gpters-ai-toolkit",
+  "owner": {
+    "name": "GPTers",
+    "email": "contact@gpters.org"
+  },
+  "metadata": {
+    "description": "GPTers AI Toolkit - Claude Code Skills, Agents, and Commands for Korean developers",
+    "version": "1.0.0",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": []
+}

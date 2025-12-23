@@ -24,6 +24,8 @@ export default function NewCatalogItem() {
     estimatedTime: '',
     content: '',
     readme: '',
+    marketplaceEnabled: false,
+    marketplaceVersion: '1.0.0',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,6 +42,8 @@ export default function NewCatalogItem() {
         pluginId: formData.pluginId || null,
         estimatedTime: formData.estimatedTime || null,
         readme: formData.readme || null,
+        marketplaceEnabled: formData.marketplaceEnabled,
+        marketplaceVersion: formData.marketplaceVersion || '1.0.0',
       }
 
       const res = await fetch('/api/catalog', {
@@ -238,6 +242,45 @@ export default function NewCatalogItem() {
             />
           </div>
         </div>
+
+        {/* Marketplace Settings */}
+        {formData.type !== 'guide' && (
+          <div className="glass rounded-2xl p-8 space-y-6">
+            <h2 className="text-xl font-medium text-[var(--text-primary)] flex items-center gap-2">
+              <span className="text-[var(--accent-cyan)]">CLI</span> Marketplace Settings
+            </h2>
+            <p className="text-sm text-[var(--text-muted)]">
+              Enable this item in the Claude Code plugin marketplace for CLI installation.
+            </p>
+
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.marketplaceEnabled}
+                  onChange={(e) => setFormData({ ...formData, marketplaceEnabled: e.target.checked })}
+                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+                />
+                <span className="text-[var(--text-primary)]">Enable in Marketplace</span>
+              </label>
+            </div>
+
+            {formData.marketplaceEnabled && (
+              <div>
+                <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                  Version (semver)
+                </label>
+                <input
+                  type="text"
+                  value={formData.marketplaceVersion}
+                  onChange={(e) => setFormData({ ...formData, marketplaceVersion: e.target.value })}
+                  placeholder="1.0.0"
+                  className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="text-red-400 text-sm">{error}</div>
