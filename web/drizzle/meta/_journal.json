@@ -8,6 +8,13 @@
       "when": 1766479535653,
       "tag": "0000_spooky_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766480666129,
+      "tag": "0001_lying_senator_kelly",
+      "breakpoints": true
     }
   ]
 }

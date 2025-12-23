@@ -4,6 +4,7 @@ import { CopyButton } from '@/components/CopyButton'
 import { InstallGuide } from '@/components/InstallGuide'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { DependencyDisplay } from '@/components/DependencyDisplay'
+import { LikeButton } from '@/components/LikeButton'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -87,6 +88,8 @@ export default async function PromptPage({ params }: { params: Promise<{ id: str
                 <span>Updated {item.updatedAt}</span>
               </>
             )}
+            <span className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
+            <LikeButton itemId={item.id} initialLikes={item.likes} />
           </div>
         </div>
 

@@ -14,6 +14,7 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     pluginId: record.pluginId ?? undefined,
     estimatedTime: record.estimatedTime ?? undefined,
     dependencies: record.dependencies || [],
+    likes: record.likes,
     content: record.content,
     readme: record.readme ?? undefined,
     createdAt: record.createdAt?.toISOString(),

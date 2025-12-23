@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer } from 'drizzle-orm/pg-core'
 
 export const itemTypeEnum = pgEnum('item_type', [
   'skill',
@@ -21,6 +21,7 @@ export const catalogItems = pgTable('catalog_items', {
   pluginId: text('plugin_id'),
   estimatedTime: text('estimated_time'),
   dependencies: text('dependencies').array().default([]), // e.g., ["mcp:github", "skill:git-commit"]
+  likes: integer('likes').notNull().default(0),
   content: text('content').notNull(),
   readme: text('readme'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

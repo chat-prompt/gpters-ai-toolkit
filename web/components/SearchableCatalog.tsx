@@ -87,7 +87,15 @@ function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]">
-          <span className="text-xs text-[var(--text-muted)]">@{item.author}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[var(--text-muted)]">@{item.author}</span>
+            {item.likes > 0 && (
+              <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
+                <span className="text-rose-400">♥</span>
+                {item.likes}
+              </span>
+            )}
+          </div>
           {item.type === 'skill' && item.pluginId && (
             <span className="text-[10px] text-[var(--accent-cyan)] font-medium tracking-wide">
               PLUGIN READY →
