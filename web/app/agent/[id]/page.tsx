@@ -4,6 +4,9 @@ import { CopyButton } from '@/components/CopyButton'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+export const revalidate = 60
+export const dynamicParams = true
+
 export async function generateStaticParams() {
   const catalog = await getCatalog()
   return catalog

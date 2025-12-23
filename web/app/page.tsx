@@ -2,6 +2,9 @@ import { getCatalog } from '@/lib/catalog'
 import { SearchableCatalog } from '@/components/SearchableCatalog'
 import { Header } from '@/components/Header'
 
+// Revalidate every 60 seconds
+export const revalidate = 60
+
 export default async function Home() {
   const catalog = await getCatalog()
 

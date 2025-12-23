@@ -3,6 +3,9 @@ import { Header } from '@/components/Header'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import Link from 'next/link'
 
+// Revalidate every 60 seconds
+export const revalidate = 60
+
 // Guides page for Vibe Coding tutorials
 export default async function GuidesPage() {
   const guides = await getGuides()

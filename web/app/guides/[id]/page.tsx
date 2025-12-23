@@ -5,6 +5,9 @@ import { MarkdownContent } from '@/components/MarkdownContent'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+export const revalidate = 60
+export const dynamicParams = true
+
 export async function generateStaticParams() {
   const guides = await getGuides()
   return guides.map(guide => ({ id: guide.id }))
