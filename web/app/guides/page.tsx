@@ -4,8 +4,8 @@ import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import Link from 'next/link'
 
 // Guides page for Vibe Coding tutorials
-export default function GuidesPage() {
-  const guides = getGuides()
+export default async function GuidesPage() {
+  const guides = await getGuides()
 
   return (
     <div className="min-h-screen grid-pattern noise-overlay">

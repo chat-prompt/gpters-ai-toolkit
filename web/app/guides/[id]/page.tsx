@@ -6,13 +6,13 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 export async function generateStaticParams() {
-  const guides = getGuides()
+  const guides = await getGuides()
   return guides.map(guide => ({ id: guide.id }))
 }
 
 export default async function GuidePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const guide = getGuideById(id)
+  const guide = await getGuideById(id)
 
   if (!guide) {
     notFound()

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 export async function generateStaticParams() {
-  const catalog = getCatalog()
+  const catalog = await getCatalog()
   return catalog
     .filter(item => item.type === 'prompt')
     .map(item => ({ id: item.id }))
@@ -13,7 +13,7 @@ export async function generateStaticParams() {
 
 export default async function PromptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const item = getItemById(id)
+  const item = await getItemById(id)
 
   if (!item || item.type !== 'prompt') {
     notFound()

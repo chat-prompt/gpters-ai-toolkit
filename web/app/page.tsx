@@ -2,8 +2,8 @@ import { getCatalog } from '@/lib/catalog'
 import { SearchableCatalog } from '@/components/SearchableCatalog'
 import { Header } from '@/components/Header'
 
-export default function Home() {
-  const catalog = getCatalog()
+export default async function Home() {
+  const catalog = await getCatalog()
 
   return (
     <div className="min-h-screen grid-pattern noise-overlay">
