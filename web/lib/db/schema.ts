@@ -20,6 +20,7 @@ export const catalogItems = pgTable('catalog_items', {
   difficulty: difficultyEnum('difficulty'),
   pluginId: text('plugin_id'),
   estimatedTime: text('estimated_time'),
+  dependencies: text('dependencies').array().default([]), // e.g., ["mcp:github", "skill:git-commit"]
   content: text('content').notNull(),
   readme: text('readme'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

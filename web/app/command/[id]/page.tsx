@@ -1,6 +1,9 @@
 import { getItemById, getCatalog } from '@/lib/catalog'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import { CopyButton } from '@/components/CopyButton'
+import { InstallGuide } from '@/components/InstallGuide'
+import { MarkdownContent } from '@/components/MarkdownContent'
+import { DependencyDisplay } from '@/components/DependencyDisplay'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -87,31 +90,18 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* Installation */}
-        <div className="glass rounded-2xl p-8 mb-8" style={{ boxShadow: '0 0 30px rgba(251,113,133,0.1)' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xl">▸</span>
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">Installation</h2>
-          </div>
+        {/* Dependencies */}
+        {item.dependencies && item.dependencies.length > 0 && (
+          <DependencyDisplay dependencies={item.dependencies} />
+        )}
 
-          <ol className="space-y-3 text-sm text-[var(--text-secondary)]">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">1</span>
-              <span>Copy the command content below</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">2</span>
-              <span>Create folder: <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-rose-400">~/.claude/commands/{item.id}/</code></span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">3</span>
-              <span>Paste into <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-rose-400">command.md</code></span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">4</span>
-              <span>Use with <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-rose-400">/{item.id}</code> in Claude Code</span>
-            </li>
-          </ol>
+        {/* Installation Guide */}
+        <div className="mb-8">
+          <InstallGuide
+            itemId={item.id}
+            itemType="command"
+            content={item.content}
+          />
         </div>
 
         {/* Command Content */}
@@ -125,9 +115,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           </div>
 
           <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-            <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-              {item.content}
-            </pre>
+            <MarkdownContent content={item.content} />
           </div>
         </div>
 
@@ -143,9 +131,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
             </div>
 
             <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-              <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-                {item.readme}
-              </pre>
+              <MarkdownContent content={item.readme} />
             </div>
           </div>
         )}

@@ -12,10 +12,49 @@ export interface CatalogItem {
   difficulty?: Difficulty
   pluginId?: string // 플러그인 설치 ID (스킬만)
   estimatedTime?: string // 예상 소요 시간 (가이드)
+  dependencies?: string[] // 의존성 목록 (e.g., "mcp:github", "skill:git-commit")
   content: string // skill.md 내용
   readme?: string // README.md 내용
   createdAt?: string
   updatedAt?: string
+}
+
+export interface Dependency {
+  type: 'mcp' | 'skill' | 'agent' | 'other'
+  id: string
+  label: string
+}
+
+export const MCP_SERVERS: Record<string, { label: string; description: string }> = {
+  github: { label: 'GitHub MCP', description: 'GitHub API 통합' },
+  filesystem: { label: 'Filesystem MCP', description: '파일 시스템 접근' },
+  postgresql: { label: 'PostgreSQL MCP', description: 'PostgreSQL 데이터베이스' },
+  sqlite: { label: 'SQLite MCP', description: 'SQLite 데이터베이스' },
+  slack: { label: 'Slack MCP', description: 'Slack 통합' },
+  notion: { label: 'Notion MCP', description: 'Notion API 통합' },
+  linear: { label: 'Linear MCP', description: 'Linear 이슈 관리' },
+  puppeteer: { label: 'Puppeteer MCP', description: '브라우저 자동화' },
+  brave: { label: 'Brave Search MCP', description: '웹 검색' },
+}
+
+export function parseDependency(dep: string): Dependency {
+  const [type, ...idParts] = dep.split(':')
+  const id = idParts.join(':')
+
+  if (type === 'mcp') {
+    const mcpInfo = MCP_SERVERS[id]
+    return {
+      type: 'mcp',
+      id,
+      label: mcpInfo?.label || `${id} MCP`,
+    }
+  }
+
+  return {
+    type: type as Dependency['type'],
+    id,
+    label: id,
+  }
 }
 
 export interface Tag {
@@ -53,8 +92,8 @@ export const TAGS: Record<string, Tag> = {
   auth: { id: 'auth', label: '인증', color: 'bg-red-100 text-red-800' },
 }
 
-export const DIFFICULTY_LABELS: Record<Difficulty, { label: string; color: string }> = {
-  easy: { label: '쉬움', color: 'bg-green-100 text-green-800' },
-  medium: { label: '보통', color: 'bg-yellow-100 text-yellow-800' },
-  hard: { label: '어려움', color: 'bg-red-100 text-red-800' },
+export const DIFFICULTY_LABELS: Record<Difficulty, { label: string; color: string; emoji: string }> = {
+  easy: { label: '쉬움', color: 'bg-green-100 text-green-800', emoji: '🟢' },
+  medium: { label: '보통', color: 'bg-yellow-100 text-yellow-800', emoji: '🟡' },
+  hard: { label: '어려움', color: 'bg-red-100 text-red-800', emoji: '🔴' },
 }

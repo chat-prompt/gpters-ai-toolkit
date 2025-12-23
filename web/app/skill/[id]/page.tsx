@@ -1,6 +1,9 @@
 import { getItemById, getCatalog } from '@/lib/catalog'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import { CopyButton } from '@/components/CopyButton'
+import { InstallGuide } from '@/components/InstallGuide'
+import { MarkdownContent } from '@/components/MarkdownContent'
+import { DependencyDisplay } from '@/components/DependencyDisplay'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -88,48 +91,19 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* Plugin Install */}
-        {item.pluginId && (
-          <div className="glass rounded-2xl p-8 mb-8 glow-cyan">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-xl">⚡</span>
-              <h2 className="text-lg font-medium text-[var(--text-primary)]">Quick Install</h2>
-            </div>
-
-            <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm mb-4 flex items-center justify-between">
-              <code className="text-[var(--accent-cyan)]">
-                claude plugin install {item.pluginId}
-              </code>
-              <CopyButton text={`claude plugin install ${item.pluginId}`} />
-            </div>
-
-            <p className="text-sm text-[var(--text-secondary)]">
-              Run this command in Claude Code to install the plugin instantly.
-            </p>
-          </div>
+        {/* Dependencies */}
+        {item.dependencies && item.dependencies.length > 0 && (
+          <DependencyDisplay dependencies={item.dependencies} />
         )}
 
-        {/* Manual Install */}
-        <div className="glass rounded-2xl p-8 mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xl">📁</span>
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">Manual Installation</h2>
-          </div>
-
-          <ol className="space-y-3 text-sm text-[var(--text-secondary)]">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">1</span>
-              <span>Copy the skill content below</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">2</span>
-              <span>Create folder: <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--accent-cyan)]">~/.claude/skills/{item.id}/</code></span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">3</span>
-              <span>Paste into <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--accent-cyan)]">skill.md</code></span>
-            </li>
-          </ol>
+        {/* Installation Guide */}
+        <div className="mb-8">
+          <InstallGuide
+            itemId={item.id}
+            itemType="skill"
+            pluginId={item.pluginId}
+            content={item.content}
+          />
         </div>
 
         {/* Skill Content */}
@@ -143,9 +117,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-            <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-              {item.content}
-            </pre>
+            <MarkdownContent content={item.content} />
           </div>
         </div>
 
@@ -161,9 +133,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
             </div>
 
             <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-              <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-                {item.readme}
-              </pre>
+              <MarkdownContent content={item.readme} />
             </div>
           </div>
         )}

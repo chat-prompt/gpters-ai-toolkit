@@ -1,6 +1,9 @@
 import { getItemById, getCatalog } from '@/lib/catalog'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import { CopyButton } from '@/components/CopyButton'
+import { InstallGuide } from '@/components/InstallGuide'
+import { MarkdownContent } from '@/components/MarkdownContent'
+import { DependencyDisplay } from '@/components/DependencyDisplay'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -87,31 +90,18 @@ export default async function PromptPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        {/* Usage Instructions */}
-        <div className="glass rounded-2xl p-8 mb-8" style={{ boxShadow: '0 0 40px rgba(255, 107, 53, 0.15)' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xl">💡</span>
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">How to Use</h2>
-          </div>
+        {/* Dependencies */}
+        {item.dependencies && item.dependencies.length > 0 && (
+          <DependencyDisplay dependencies={item.dependencies} />
+        )}
 
-          <p className="text-sm text-[var(--text-secondary)] mb-4">
-            Copy this prompt template and paste it into your Claude conversation. Fill in the placeholders with your specific context.
-          </p>
-
-          <ol className="space-y-3 text-sm text-[var(--text-secondary)]">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">1</span>
-              <span>Click the copy button below to copy the prompt</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">2</span>
-              <span>Paste into Claude Code or Claude.ai</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs text-[var(--text-muted)] shrink-0">3</span>
-              <span>Replace any <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--accent-orange)]">[placeholders]</code> with your content</span>
-            </li>
-          </ol>
+        {/* Installation Guide */}
+        <div className="mb-8">
+          <InstallGuide
+            itemId={item.id}
+            itemType="prompt"
+            content={item.content}
+          />
         </div>
 
         {/* Prompt Content */}
@@ -125,9 +115,7 @@ export default async function PromptPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-            <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-              {item.content}
-            </pre>
+            <MarkdownContent content={item.content} />
           </div>
         </div>
 
@@ -143,9 +131,7 @@ export default async function PromptPage({ params }: { params: Promise<{ id: str
             </div>
 
             <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-              <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-                {item.readme}
-              </pre>
+              <MarkdownContent content={item.readme} />
             </div>
           </div>
         )}

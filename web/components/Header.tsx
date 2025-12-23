@@ -8,7 +8,8 @@ export function Header() {
   const pathname = usePathname()
 
   const isGuidesTab = pathname.startsWith('/guides')
-  const isCatalogTab = !isGuidesTab && pathname !== '/upload'
+  const isStartTab = pathname.startsWith('/getting-started')
+  const isCatalogTab = !isGuidesTab && !isStartTab && pathname !== '/upload'
 
   return (
     <header className="relative z-10 border-b border-[var(--border-subtle)]">
@@ -31,6 +32,16 @@ export function Header() {
 
             {/* Tab Navigation */}
             <nav className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1">
+              <Link
+                href="/getting-started"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isStartTab
+                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                시작하기
+              </Link>
               <Link
                 href="/"
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${

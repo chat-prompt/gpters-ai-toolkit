@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType } from '@/lib/types'
+import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty } from '@/lib/types'
 
 const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: string; glow: string }> = {
   skill: {
@@ -128,32 +128,75 @@ interface SearchableCatalogProps {
 export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<ItemType | 'all'>('all')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | ''>('')
+  const [showFilters, setShowFilters] = useState(false)
 
-  // Filter items based on search query and type filter
+  // Get unique tags from all items
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    catalog.forEach(item => item.tags.forEach(tag => tagSet.add(tag)))
+    return Array.from(tagSet).sort()
+  }, [catalog])
+
+  // Filter items based on search query, type filter, tags, and difficulty
   const filteredCatalog = useMemo(() => {
-    return catalog.filter(item => {
-      // Type filter
-      if (activeFilter !== 'all' && item.type !== activeFilter) {
-        return false
-      }
+    return catalog
+      .filter(item => {
+        // Type filter
+        if (activeFilter !== 'all' && item.type !== activeFilter) {
+          return false
+        }
 
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase()
-        const matchesName = item.name.toLowerCase().includes(query)
-        const matchesDescription = item.description.toLowerCase().includes(query)
-        const matchesTags = item.tags.some(tag =>
-          tag.toLowerCase().includes(query) ||
-          (TAGS[tag]?.label || '').toLowerCase().includes(query)
-        )
-        const matchesAuthor = item.author.toLowerCase().includes(query)
+        // Tag filter - item must have ALL selected tags
+        if (selectedTags.length > 0) {
+          const hasAllTags = selectedTags.every(tag => item.tags.includes(tag))
+          if (!hasAllTags) return false
+        }
 
-        return matchesName || matchesDescription || matchesTags || matchesAuthor
-      }
+        // Difficulty filter
+        if (selectedDifficulty && item.difficulty !== selectedDifficulty) {
+          return false
+        }
 
-      return true
-    })
-  }, [catalog, searchQuery, activeFilter])
+        // Search filter
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase()
+          const matchesName = item.name.toLowerCase().includes(query)
+          const matchesDescription = item.description.toLowerCase().includes(query)
+          const matchesTags = item.tags.some(tag =>
+            tag.toLowerCase().includes(query) ||
+            (TAGS[tag]?.label || '').toLowerCase().includes(query)
+          )
+          const matchesAuthor = item.author.toLowerCase().includes(query)
+          const matchesId = item.id.toLowerCase().includes(query)
+
+          return matchesName || matchesDescription || matchesTags || matchesAuthor || matchesId
+        }
+
+        return true
+      })
+      .sort((a, b) => {
+        // If searching, prioritize name matches
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase()
+          const aNameMatch = a.name.toLowerCase().includes(query) ? 1 : 0
+          const bNameMatch = b.name.toLowerCase().includes(query) ? 1 : 0
+          if (aNameMatch !== bNameMatch) return bNameMatch - aNameMatch
+        }
+        // Then sort by updated date
+        return (b.updatedAt || '').localeCompare(a.updatedAt || '')
+      })
+  }, [catalog, searchQuery, activeFilter, selectedTags, selectedDifficulty])
+
+  const hasActiveFilters = selectedTags.length > 0 || selectedDifficulty !== ''
+
+  const clearAllFilters = () => {
+    setSelectedTags([])
+    setSelectedDifficulty('')
+    setSearchQuery('')
+    setActiveFilter('all')
+  }
 
   const skills = filteredCatalog.filter(item => item.type === 'skill')
   const agents = filteredCatalog.filter(item => item.type === 'agent')
@@ -265,8 +308,132 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           >
             ▸ Commands ({totalCommands})
           </button>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 ${
+              showFilters || hasActiveFilters
+                ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--accent-cyan)]'
+                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <span>⚙</span>
+            Filters
+            {hasActiveFilters && (
+              <span className="w-2 h-2 rounded-full bg-[var(--accent-cyan)]" />
+            )}
+          </button>
         </div>
+
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+          <div className="mt-4 p-5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] animate-fade-up">
+            {/* Difficulty Filter */}
+            <div className="mb-5">
+              <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
+                Difficulty
+              </div>
+              <div className="flex gap-2">
+                {(['easy', 'medium', 'hard'] as Difficulty[]).map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => setSelectedDifficulty(selectedDifficulty === level ? '' : level)}
+                    className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+                      selectedDifficulty === level
+                        ? level === 'easy'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                          : level === 'medium'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
+                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {DIFFICULTY_LABELS[level].emoji} {DIFFICULTY_LABELS[level].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tag Filter */}
+            <div>
+              <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
+                Tags {selectedTags.length > 0 && `(${selectedTags.length} selected)`}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => {
+                      setSelectedTags(prev =>
+                        prev.includes(tag)
+                          ? prev.filter(t => t !== tag)
+                          : [...prev, tag]
+                      )
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
+                      selectedTags.includes(tag)
+                        ? 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/50'
+                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                    }`}
+                  >
+                    {TAGS[tag]?.label || tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Clear Filters */}
+            {hasActiveFilters && (
+              <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
+                <button
+                  onClick={clearAllFilters}
+                  className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors flex items-center gap-2"
+                >
+                  <span>✕</span>
+                  Clear all filters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Active Filters Summary */}
+      {hasActiveFilters && !showFilters && (
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-[var(--text-muted)]">Active filters:</span>
+          {selectedDifficulty && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+              {DIFFICULTY_LABELS[selectedDifficulty].emoji} {DIFFICULTY_LABELS[selectedDifficulty].label}
+              <button
+                onClick={() => setSelectedDifficulty('')}
+                className="ml-1 hover:text-rose-400 transition-colors"
+              >
+                ✕
+              </button>
+            </span>
+          )}
+          {selectedTags.map(tag => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]"
+            >
+              {TAGS[tag]?.label || tag}
+              <button
+                onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                className="ml-1 hover:text-rose-400 transition-colors"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          <button
+            onClick={clearAllFilters}
+            className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mt-12 flex items-center gap-12">
@@ -289,11 +456,12 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           <div className="text-3xl font-light text-[var(--text-primary)]">{commands.length}</div>
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Commands</div>
         </div>
-        {searchQuery && (
+        {(searchQuery || hasActiveFilters) && (
           <>
             <div className="w-px h-8 bg-[var(--border-subtle)]" />
             <div className="text-xs text-[var(--text-muted)]">
               Showing {filteredCatalog.length} of {catalog.length} items
+              {hasActiveFilters && ' (filtered)'}
             </div>
           </>
         )}
@@ -374,14 +542,18 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           <div className="text-center py-32">
             <div className="text-6xl mb-6 opacity-20">∅</div>
             <p className="text-[var(--text-secondary)] text-lg mb-4">
-              {searchQuery ? `No results for "${searchQuery}"` : 'No items yet'}
+              {searchQuery
+                ? `No results for "${searchQuery}"`
+                : hasActiveFilters
+                ? 'No items match the selected filters'
+                : 'No items yet'}
             </p>
-            {searchQuery ? (
+            {(searchQuery || hasActiveFilters) ? (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={clearAllFilters}
                 className="text-[var(--accent-cyan)] hover:underline"
               >
-                Clear search
+                Clear all filters
               </button>
             ) : (
               <Link

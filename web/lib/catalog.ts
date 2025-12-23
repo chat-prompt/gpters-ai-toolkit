@@ -13,6 +13,7 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     difficulty: record.difficulty ?? undefined,
     pluginId: record.pluginId ?? undefined,
     estimatedTime: record.estimatedTime ?? undefined,
+    dependencies: record.dependencies || [],
     content: record.content,
     readme: record.readme ?? undefined,
     createdAt: record.createdAt?.toISOString(),
@@ -55,4 +56,18 @@ export async function getGuideById(id: string): Promise<CatalogItem | undefined>
 
   if (!record || record.type !== 'guide') return undefined
   return toPlainObject(record)
+}
+
+export async function getBeginnerItems(): Promise<CatalogItem[]> {
+  // Get items suitable for beginners (easy difficulty or beginner tag)
+  const records = await db.select().from(catalogItems)
+
+  return records
+    .map(toPlainObject)
+    .filter(
+      (item) =>
+        item.difficulty === 'easy' ||
+        item.tags.includes('beginner') ||
+        item.tags.includes('입문')
+    )
 }
