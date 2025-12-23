@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import { ThemeToggle } from './ThemeToggle'
 
 export function Header() {
   const pathname = usePathname()
@@ -66,7 +67,8 @@ export function Header() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Link
               href="/upload"
               className="px-4 py-2 rounded-xl text-sm font-medium bg-[#F26522] text-white hover:bg-[#E55A1B] transition-colors"
