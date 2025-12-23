@@ -17,6 +17,7 @@ estimatedTime: 5분
 |------|-----|
 | API 엔드포인트 | `https://images.gpters.org` |
 | 이미지 URL | `https://images.gpters.org/images/{key}` |
+| 인증 | `X-API-Key` 헤더 (업로드 시 필요) |
 | 지원 포맷 | JPEG, PNG, GIF, WebP, SVG, HEIC |
 | 캐싱 | 1년 (immutable) |
 
@@ -29,7 +30,10 @@ estimatedTime: 5분
 ```javascript
 const response = await fetch('https://images.gpters.org/upload-url', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': 'YOUR_API_KEY'  // 필수
+  },
   body: JSON.stringify({
     filename: 'my-image.png',
     contentType: 'image/png',
@@ -43,9 +47,9 @@ const { uploadUrl, imageUrl, key } = await response.json()
 **응답 예시:**
 ```json
 {
-  "uploadUrl": "https://images.gpters.org/upload?key=my-project/gxe4xx-a1b2c3-my-image.png",
-  "imageUrl": "https://images.gpters.org/images/my-project/gxe4xx-a1b2c3-my-image.png",
-  "key": "my-project/gxe4xx-a1b2c3-my-image.png"
+  "uploadUrl": "https://images.gpters.org/upload?key=my-project/m1abc123-xyz789-my-image.png",
+  "imageUrl": "https://images.gpters.org/images/my-project/m1abc123-xyz789-my-image.png",
+  "key": "my-project/m1abc123-xyz789-my-image.png"
 }
 ```
 
@@ -54,7 +58,10 @@ const { uploadUrl, imageUrl, key } = await response.json()
 ```javascript
 await fetch(uploadUrl, {
   method: 'POST',
-  headers: { 'Content-Type': 'image/png' },
+  headers: {
+    'Content-Type': 'image/png',
+    'X-API-Key': 'YOUR_API_KEY'  // 필수
+  },
   body: file  // File 객체
 })
 ```
@@ -62,7 +69,8 @@ await fetch(uploadUrl, {
 ### 3단계: 이미지 사용
 
 ```html
-<img src="https://images.gpters.org/images/my-project/gxe4xx-a1b2c3-my-image.png" />
+<!-- 이미지 조회는 인증 불필요 -->
+<img src="https://images.gpters.org/images/my-project/m1abc123-xyz789-my-image.png" />
 ```
 
 ---
@@ -70,6 +78,8 @@ await fetch(uploadUrl, {
 ## 이미지 리사이징
 
 업로드한 이미지를 URL 파라미터로 리사이징할 수 있습니다.
+
+> **참고**: 리사이징 시 포맷을 지정하지 않으면 자동으로 WebP로 변환됩니다.
 
 ### 파라미터
 
@@ -87,14 +97,14 @@ await fetch(uploadUrl, {
 <!-- 원본 이미지 -->
 <img src="https://images.gpters.org/images/photo.jpg" />
 
-<!-- 300px 너비로 리사이징 -->
+<!-- 300px 너비로 리사이징 (자동 WebP 변환) -->
 <img src="https://images.gpters.org/images/photo.jpg?w=300" />
 
 <!-- 200x200 썸네일 (cover) -->
 <img src="https://images.gpters.org/images/photo.jpg?w=200&h=200&fit=cover" />
 
-<!-- WebP 포맷으로 변환 + 품질 80% -->
-<img src="https://images.gpters.org/images/photo.jpg?f=webp&q=80" />
+<!-- JPEG 포맷 유지 + 품질 80% -->
+<img src="https://images.gpters.org/images/photo.jpg?w=400&f=jpeg&q=80" />
 ```
 
 ### 실제 이미지 비교
@@ -113,6 +123,8 @@ await fetch(uploadUrl, {
 ### React 컴포넌트
 
 ```jsx
+const API_KEY = process.env.NEXT_PUBLIC_GPTERS_CDN_API_KEY
+
 function ImageUploader() {
   const [imageUrl, setImageUrl] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -129,7 +141,10 @@ function ImageUploader() {
         'https://images.gpters.org/upload-url',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY
+          },
           body: JSON.stringify({
             filename: file.name,
             contentType: file.type
@@ -141,7 +156,10 @@ function ImageUploader() {
       // 2. 이미지 업로드
       await fetch(uploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': file.type },
+        headers: {
+          'Content-Type': file.type,
+          'X-API-Key': API_KEY
+        },
         body: file
       })
 
@@ -173,6 +191,7 @@ function ImageUploader() {
 
 ```javascript
 const CDN_URL = 'https://images.gpters.org'
+const API_KEY = process.env.GPTERS_CDN_API_KEY
 
 /**
  * 이미지를 GPTers CDN에 업로드합니다.
@@ -184,7 +203,10 @@ async function uploadImage(file, folder) {
   // 1. 업로드 URL 받기
   const urlResponse = await fetch(`${CDN_URL}/upload-url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY
+    },
     body: JSON.stringify({
       filename: file.name,
       contentType: file.type,
@@ -201,7 +223,10 @@ async function uploadImage(file, folder) {
   // 2. 이미지 업로드
   const uploadResponse = await fetch(uploadUrl, {
     method: 'POST',
-    headers: { 'Content-Type': file.type },
+    headers: {
+      'Content-Type': file.type,
+      'X-API-Key': API_KEY
+    },
     body: file
   })
 
@@ -240,6 +265,10 @@ const thumbnail = getResizedImageUrl(imageUrl, { width: 200, height: 200, fit: '
 
 ## 자주 묻는 질문
 
+### Q: API Key는 어디서 받나요?
+
+GPTers 팀에 문의하세요. 프로젝트별로 API Key가 발급됩니다.
+
 ### Q: 어떤 이미지 포맷을 지원하나요?
 
 JPEG, PNG, GIF, WebP, SVG, HEIC를 지원합니다.
@@ -248,13 +277,17 @@ JPEG, PNG, GIF, WebP, SVG, HEIC를 지원합니다.
 
 영구 보관됩니다. 캐시는 1년간 유지됩니다.
 
-### Q: CORS 에러가 나요
+### Q: 이미지 조회도 API Key가 필요한가요?
 
-모든 도메인에서 사용 가능합니다. CORS 에러가 발생하면 요청 형식을 확인해주세요.
+아니요. 이미지 조회(`GET /images/{key}`)는 인증 없이 가능합니다.
 
 ### Q: 리사이징은 원본에 영향을 주나요?
 
 아니요. 원본은 그대로 유지되고, URL 파라미터에 따라 실시간으로 리사이징됩니다.
+
+### Q: 리사이징하면 왜 WebP로 바뀌나요?
+
+포맷을 지정하지 않으면 자동으로 WebP로 변환됩니다. 원본 포맷을 유지하려면 `f=jpeg` 또는 `f=png`를 명시하세요.
 
 ---
 
@@ -262,7 +295,11 @@ JPEG, PNG, GIF, WebP, SVG, HEIC를 지원합니다.
 
 ### POST /upload-url
 
-업로드 URL을 발급받습니다.
+업로드 URL을 발급받습니다. **인증 필요**
+
+**헤더:**
+- `Content-Type`: `application/json`
+- `X-API-Key`: API 키 (필수)
 
 **요청:**
 ```json
@@ -282,18 +319,19 @@ JPEG, PNG, GIF, WebP, SVG, HEIC를 지원합니다.
 **응답:**
 ```json
 {
-  "uploadUrl": "https://images.gpters.org/upload?key=avatars/gxe4xx-a1b2c3-image.jpg",
-  "imageUrl": "https://images.gpters.org/images/avatars/gxe4xx-a1b2c3-image.jpg",
-  "key": "avatars/gxe4xx-a1b2c3-image.jpg"
+  "uploadUrl": "https://images.gpters.org/upload?key=avatars/m1abc123-xyz789-image.jpg",
+  "imageUrl": "https://images.gpters.org/images/avatars/m1abc123-xyz789-image.jpg",
+  "key": "avatars/m1abc123-xyz789-image.jpg"
 }
 ```
 
 ### POST /upload?key={key}
 
-이미지를 업로드합니다.
+이미지를 업로드합니다. **인증 필요**
 
 **헤더:**
 - `Content-Type`: 이미지 MIME 타입 (image/png, image/jpeg 등)
+- `X-API-Key`: API 키 (필수)
 
 **바디:**
 - 이미지 파일 바이너리
@@ -302,14 +340,16 @@ JPEG, PNG, GIF, WebP, SVG, HEIC를 지원합니다.
 ```json
 {
   "success": true,
-  "imageUrl": "https://images.gpters.org/images/avatars/gxe4xx-a1b2c3-image.jpg",
-  "key": "avatars/gxe4xx-a1b2c3-image.jpg"
+  "imageUrl": "https://images.gpters.org/images/avatars/m1abc123-xyz789-image.jpg",
+  "key": "avatars/m1abc123-xyz789-image.jpg"
 }
 ```
 
 ### GET /images/{key}
 
-이미지를 반환합니다. 쿼리 파라미터로 리사이징을 지원합니다.
+이미지를 반환합니다. **인증 불필요**
+
+쿼리 파라미터로 리사이징을 지원합니다.
 
 **리사이징 파라미터:**
 
@@ -320,6 +360,8 @@ JPEG, PNG, GIF, WebP, SVG, HEIC를 지원합니다.
 | `fit` | 맞춤 모드 | `contain`, `cover`, `crop`, `scale-down` |
 | `q` | 품질 | 1-100 |
 | `f` | 포맷 | `webp`, `avif`, `jpeg`, `png` |
+
+> 포맷 미지정 시 자동으로 WebP 변환
 
 ---
 
