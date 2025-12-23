@@ -61,7 +61,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'Newsreader, serif' }}>
+          <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'var(--font-newsreader)' }}>
             {item.name}
           </h1>
 

@@ -30,7 +30,7 @@ export default async function GuidesPage() {
             </span>
           </div>
 
-          <h1 className="text-5xl font-light text-[var(--text-primary)] tracking-tight mb-6" style={{ fontFamily: 'Newsreader, serif' }}>
+          <h1 className="text-5xl font-light text-[var(--text-primary)] tracking-tight mb-6" style={{ fontFamily: 'var(--font-newsreader)' }}>
             Vibe Coding Guides
           </h1>
 

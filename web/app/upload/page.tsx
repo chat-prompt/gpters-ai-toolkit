@@ -212,7 +212,7 @@ export default function UploadPage() {
           <p className="text-[#F26522] text-xs font-medium uppercase tracking-[0.3em] mb-4">
             Share with GPTers
           </p>
-          <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'Newsreader, serif' }}>
+          <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'var(--font-newsreader)' }}>
             Share Your Creation
           </h1>
           <p className="text-lg text-[var(--text-secondary)]">

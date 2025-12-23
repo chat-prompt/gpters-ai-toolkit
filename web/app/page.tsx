@@ -25,7 +25,7 @@ export default async function Home() {
             <p className="text-[#F26522] text-xs font-medium uppercase tracking-[0.3em] mb-6">
               GPTers AI Automation Hub
             </p>
-            <h2 className="text-5xl md:text-6xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-6" style={{ fontFamily: 'Newsreader, serif' }}>
+            <h2 className="text-5xl md:text-6xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-6" style={{ fontFamily: 'var(--font-newsreader)' }}>
               Discover & Share
               <br />
               <span className="bg-gradient-to-r from-[#F26522] to-[#FF8C42] bg-clip-text text-transparent font-medium">Claude Skills</span>

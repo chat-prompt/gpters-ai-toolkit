@@ -69,7 +69,7 @@ export default async function GettingStartedPage() {
 
           <h1
             className="text-5xl font-light text-[var(--text-primary)] tracking-tight mb-6"
-            style={{ fontFamily: 'Newsreader, serif' }}
+            style={{ fontFamily: 'var(--font-newsreader)' }}
           >
             시작하기
           </h1>
