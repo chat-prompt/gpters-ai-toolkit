@@ -14,10 +14,10 @@ gpters-team
 ## Installation
 
 ```bash
-/plugin marketplace add gpters/gpters-ai-toolkit
+/plugin marketplace add chat-prompt/gpters-ai-toolkit
 /plugin install refactor-guide@gpters-ai-toolkit
 ```
 
 ---
 
-*Part of [GPTers AI Toolkit](https://github.com/gpters/gpters-ai-toolkit)*
+*Part of [GPTers AI Toolkit](https://github.com/chat-prompt/gpters-ai-toolkit)*
