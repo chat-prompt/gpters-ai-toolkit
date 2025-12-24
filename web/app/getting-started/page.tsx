@@ -114,17 +114,17 @@ export default async function GettingStartedPage() {
 
           <div className="glass rounded-2xl p-6">
             <h3 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider mb-4">
-              Claude Code 설치
+              마켓플레이스 추가 (Claude Code 내에서)
             </h3>
             <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm">
-              <code className="text-[var(--accent-cyan)]">npm install -g @anthropic-ai/claude-code</code>
+              <code className="text-[var(--accent-cyan)]">/plugin marketplace add chat-prompt/gpters-ai-toolkit</code>
             </div>
 
             <h3 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider mb-4 mt-8">
               플러그인 설치 예시
             </h3>
             <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm">
-              <code className="text-[var(--accent-cyan)]">claude plugins install superpowers@superpowers-marketplace</code>
+              <code className="text-[var(--accent-cyan)]">/plugin install code-reviewer@gpters-ai-toolkit</code>
             </div>
           </div>
         </section>
