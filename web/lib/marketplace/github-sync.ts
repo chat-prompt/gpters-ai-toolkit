@@ -9,6 +9,17 @@ import type { SyncResult } from './types'
 import { MARKETPLACE_CONFIG } from './types'
 import { generateMarketplaceJson, generatePluginFiles } from './transform'
 
+/**
+ * Build full path, handling empty base path
+ */
+function buildFullPath(relativePath: string): string {
+  const basePath = MARKETPLACE_CONFIG.repository.path
+  if (!basePath) {
+    return relativePath
+  }
+  return `${basePath}/${relativePath}`
+}
+
 // Initialize Octokit with GitHub token
 function getOctokit(): Octokit {
   const token = process.env.GH_TOKEN
@@ -29,7 +40,7 @@ async function getFileContent(
     const { data } = await octokit.repos.getContent({
       owner: MARKETPLACE_CONFIG.repository.owner,
       repo: MARKETPLACE_CONFIG.repository.repo,
-      path: `${MARKETPLACE_CONFIG.repository.path}/${path}`,
+      path: buildFullPath(path),
       ref: MARKETPLACE_CONFIG.repository.branch,
     })
 
@@ -57,7 +68,7 @@ async function upsertFile(
   content: string,
   message: string
 ): Promise<{ created: boolean; path: string }> {
-  const fullPath = `${MARKETPLACE_CONFIG.repository.path}/${path}`
+  const fullPath = buildFullPath(path)
   const existing = await getFileContent(octokit, path)
 
   const encodedContent = Buffer.from(content).toString('base64')
@@ -88,7 +99,7 @@ async function deleteFile(
   path: string,
   message: string
 ): Promise<boolean> {
-  const fullPath = `${MARKETPLACE_CONFIG.repository.path}/${path}`
+  const fullPath = buildFullPath(path)
   const existing = await getFileContent(octokit, path)
 
   if (!existing) {
