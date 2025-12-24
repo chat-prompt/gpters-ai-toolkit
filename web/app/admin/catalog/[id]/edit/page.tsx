@@ -6,7 +6,7 @@ import Link from 'next/link'
 import type { TeamTag } from '@/lib/types'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
 
-const ITEM_TYPES = ['skill', 'agent', 'prompt', 'command', 'guide'] as const
+const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
 
 interface EditPageProps {

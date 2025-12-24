@@ -5,7 +5,7 @@ import { CopyButton } from './CopyButton'
 
 interface InstallGuideProps {
   itemId: string
-  itemType: 'skill' | 'agent' | 'prompt' | 'command'
+  itemType: 'skill' | 'agent' | 'command'
   pluginId?: string
   content: string
   marketplaceEnabled?: boolean
@@ -14,7 +14,6 @@ interface InstallGuideProps {
 const TYPE_PATHS: Record<string, { folder: string; file: string }> = {
   skill: { folder: 'skills', file: 'skill.md' },
   agent: { folder: 'agents', file: 'agent.md' },
-  prompt: { folder: 'prompts', file: 'prompt.md' },
   command: { folder: 'commands', file: 'command.md' },
 }
 

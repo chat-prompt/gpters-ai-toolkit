@@ -7,7 +7,6 @@ interface Stats {
   total: number
   skill: number
   agent: number
-  prompt: number
   command: number
   guide: number
 }
@@ -29,7 +28,6 @@ export default function AdminDashboard() {
           total: items.length,
           skill: items.filter((i: { type: string }) => i.type === 'skill').length,
           agent: items.filter((i: { type: string }) => i.type === 'agent').length,
-          prompt: items.filter((i: { type: string }) => i.type === 'prompt').length,
           command: items.filter((i: { type: string }) => i.type === 'command').length,
           guide: items.filter((i: { type: string }) => i.type === 'guide').length,
         }
@@ -49,7 +47,6 @@ export default function AdminDashboard() {
     { label: 'Total Items', value: stats?.total || 0, color: 'cyan' },
     { label: 'Skills', value: stats?.skill || 0, color: 'cyan' },
     { label: 'Agents', value: stats?.agent || 0, color: 'purple' },
-    { label: 'Prompts', value: stats?.prompt || 0, color: 'orange' },
     { label: 'Commands', value: stats?.command || 0, color: 'rose' },
     { label: 'Guides', value: stats?.guide || 0, color: 'emerald' },
   ]
@@ -85,9 +82,10 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          <div className="glass rounded-2xl p-8">
+          {/* Catalog Actions */}
+          <div className="glass rounded-2xl p-8 mb-8">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-6">
-              Quick Actions
+              Catalog
             </h2>
             <div className="flex flex-wrap gap-4">
               <Link
@@ -101,6 +99,51 @@ export default function AdminDashboard() {
                 className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
               >
                 Create New Item
+              </Link>
+            </div>
+          </div>
+
+          {/* Data Management */}
+          <div className="glass rounded-2xl p-8">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-6">
+              Data Management
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Link
+                href="/admin/tags"
+                className="p-6 rounded-xl bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] transition-colors group"
+              >
+                <div className="text-2xl mb-2">🏷️</div>
+                <h3 className="text-[var(--text-primary)] font-medium group-hover:text-[var(--accent-cyan)] transition-colors">
+                  Tags
+                </h3>
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  Manage catalog item tags
+                </p>
+              </Link>
+              <Link
+                href="/admin/authors"
+                className="p-6 rounded-xl bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] transition-colors group"
+              >
+                <div className="text-2xl mb-2">👤</div>
+                <h3 className="text-[var(--text-primary)] font-medium group-hover:text-[var(--accent-cyan)] transition-colors">
+                  Authors
+                </h3>
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  Manage content authors
+                </p>
+              </Link>
+              <Link
+                href="/admin/mcp-servers"
+                className="p-6 rounded-xl bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] transition-colors group"
+              >
+                <div className="text-2xl mb-2">🔌</div>
+                <h3 className="text-[var(--text-primary)] font-medium group-hover:text-[var(--accent-cyan)] transition-colors">
+                  MCP Servers
+                </h3>
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  Manage MCP server definitions
+                </p>
               </Link>
             </div>
           </div>

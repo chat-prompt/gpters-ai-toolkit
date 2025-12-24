@@ -1,4 +1,4 @@
-export type ItemType = 'skill' | 'agent' | 'prompt' | 'command' | 'guide'
+export type ItemType = 'skill' | 'agent' | 'command' | 'guide'
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 

@@ -70,7 +70,7 @@ export function parseFrontmatter(markdown: string): ParsedMarkdown {
         frontmatter.id = value
         break
       case 'type':
-        if (['skill', 'agent', 'prompt', 'command', 'guide'].includes(value)) {
+        if (['skill', 'agent', 'command', 'guide'].includes(value)) {
           frontmatter.type = value as ItemType
         }
         break

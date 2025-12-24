@@ -21,7 +21,6 @@ interface CatalogItem {
 const TYPE_COLORS: Record<string, string> = {
   skill: 'text-cyan-400',
   agent: 'text-purple-400',
-  prompt: 'text-orange-400',
   command: 'text-rose-400',
   guide: 'text-emerald-400',
 }
@@ -29,7 +28,6 @@ const TYPE_COLORS: Record<string, string> = {
 const TYPE_ICONS: Record<string, string> = {
   skill: '⚡',
   agent: '◈',
-  prompt: '✦',
   command: '▸',
   guide: '📚',
 }
@@ -83,7 +81,7 @@ export default function CatalogList() {
     }
   }
 
-  const filters = ['all', 'skill', 'agent', 'prompt', 'command', 'guide']
+  const filters = ['all', 'skill', 'agent', 'command', 'guide']
   const teamFilters: (TeamTag | 'all')[] = ['all', ...Object.keys(TEAM_TAGS) as TeamTag[]]
 
   // Filter items by team tag (client-side)

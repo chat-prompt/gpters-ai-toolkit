@@ -18,12 +18,6 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
     gradient: 'from-purple-400 to-pink-400',
     glow: 'group-hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]',
   },
-  prompt: {
-    label: 'PROMPT',
-    icon: '✦',
-    gradient: 'from-orange-400 to-amber-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(255,107,53,0.3)]',
-  },
   command: {
     label: 'COMMAND',
     icon: '▸',
@@ -226,7 +220,6 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
 
   const skills = filteredCatalog.filter(item => item.type === 'skill')
   const agents = filteredCatalog.filter(item => item.type === 'agent')
-  const prompts = filteredCatalog.filter(item => item.type === 'prompt')
   const commands = filteredCatalog.filter(item => item.type === 'command')
 
   // Keyboard shortcut for search (⌘K)
@@ -251,7 +244,6 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
 
   const totalSkills = catalog.filter(item => item.type === 'skill').length
   const totalAgents = catalog.filter(item => item.type === 'agent').length
-  const totalPrompts = catalog.filter(item => item.type === 'prompt').length
   const totalCommands = catalog.filter(item => item.type === 'command').length
 
   return (
@@ -264,7 +256,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search skills, agents, prompts, commands..."
+            placeholder="Search skills, agents, commands..."
             className="w-full px-6 py-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
           />
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -313,16 +305,6 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             }`}
           >
             ◈ Agents ({totalAgents})
-          </button>
-          <button
-            onClick={() => setActiveFilter('prompt')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'prompt'
-                ? 'bg-[var(--accent-orange)] text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            ✦ Prompts ({totalPrompts})
           </button>
           <button
             onClick={() => setActiveFilter('command')}
@@ -511,11 +493,6 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
         </div>
         <div className="w-px h-8 bg-[var(--border-subtle)]" />
         <div>
-          <div className="text-3xl font-light text-[var(--text-primary)]">{prompts.length}</div>
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Prompts</div>
-        </div>
-        <div className="w-px h-8 bg-[var(--border-subtle)]" />
-        <div>
           <div className="text-3xl font-light text-[var(--text-primary)]">{commands.length}</div>
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Commands</div>
         </div>
@@ -577,23 +554,6 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {commands.map((item, i) => (
-                <ItemCard key={item.id} item={item} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Prompts Section */}
-        {prompts.length > 0 && (activeFilter === 'all' || activeFilter === 'prompt') && (
-          <section className="mb-20">
-            <SectionHeader
-              icon="✦"
-              title="Prompts"
-              count={prompts.length}
-              accentColor="text-[var(--accent-orange)]"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {prompts.map((item, i) => (
                 <ItemCard key={item.id} item={item} index={i} />
               ))}
             </div>

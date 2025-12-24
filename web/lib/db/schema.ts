@@ -1,9 +1,9 @@
-import { pgTable, text, timestamp, pgEnum, integer, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
   'skill',
   'agent',
-  'prompt',
   'command',
   'guide',
 ])
@@ -57,3 +57,81 @@ export const catalogItems = pgTable('catalog_items', {
 
 export type CatalogItemRecord = typeof catalogItems.$inferSelect
 export type NewCatalogItemRecord = typeof catalogItems.$inferInsert
+
+// ============================================
+// Normalized Tables
+// ============================================
+
+// Authors table
+export const authors = pgTable('authors', {
+  id: text('id').primaryKey(), // slug-style id
+  name: text('name').notNull(),
+  email: text('email'),
+  avatarUrl: text('avatar_url'),
+  bio: text('bio'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type AuthorRecord = typeof authors.$inferSelect
+export type NewAuthorRecord = typeof authors.$inferInsert
+
+// Tags table
+export const tags = pgTable('tags', {
+  id: text('id').primaryKey(), // slug-style id (e.g., "writing", "code")
+  label: text('label').notNull(), // Display label (e.g., "문서 작성", "코드")
+  color: text('color').notNull().default('bg-gray-100 text-gray-800'),
+  description: text('description'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type TagRecord = typeof tags.$inferSelect
+export type NewTagRecord = typeof tags.$inferInsert
+
+// MCP Servers table
+export const mcpServers = pgTable('mcp_servers', {
+  id: text('id').primaryKey(), // slug-style id (e.g., "github", "slack")
+  label: text('label').notNull(), // Display label (e.g., "GitHub MCP")
+  description: text('description').notNull().default(''),
+  documentationUrl: text('documentation_url'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type McpServerRecord = typeof mcpServers.$inferSelect
+export type NewMcpServerRecord = typeof mcpServers.$inferInsert
+
+// Junction table for catalog items <-> tags (many-to-many)
+export const catalogItemTags = pgTable('catalog_item_tags', {
+  itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+}, (table) => [
+  primaryKey({ columns: [table.itemId, table.tagId] }),
+])
+
+export type CatalogItemTagRecord = typeof catalogItemTags.$inferSelect
+export type NewCatalogItemTagRecord = typeof catalogItemTags.$inferInsert
+
+// ============================================
+// Relations
+// ============================================
+
+export const catalogItemsRelations = relations(catalogItems, ({ many }) => ({
+  itemTags: many(catalogItemTags),
+}))
+
+export const tagsRelations = relations(tags, ({ many }) => ({
+  itemTags: many(catalogItemTags),
+}))
+
+export const catalogItemTagsRelations = relations(catalogItemTags, ({ one }) => ({
+  item: one(catalogItems, {
+    fields: [catalogItemTags.itemId],
+    references: [catalogItems.id],
+  }),
+  tag: one(tags, {
+    fields: [catalogItemTags.tagId],
+    references: [tags.id],
+  }),
+}))

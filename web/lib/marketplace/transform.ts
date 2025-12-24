@@ -133,8 +133,6 @@ function generateSkillDescription(item: CatalogItem): string {
 
   if (item.type === 'skill') {
     triggers.push(`Use when asked to "${item.name.toLowerCase()}"`)
-  } else if (item.type === 'prompt') {
-    triggers.push(`Use this prompt when asked about "${item.name.toLowerCase()}"`)
   }
 
   // Add tag-based triggers
@@ -165,7 +163,6 @@ export function generatePluginStructure(item: CatalogItem): PluginStructure {
 
   switch (item.type) {
     case 'skill':
-    case 'prompt': // prompts are converted to skills
       content = transformToSkillMd(item)
       contentType = 'skill'
       contentPath = `skills/${item.id}/SKILL.md`
@@ -241,7 +238,6 @@ function generateDefaultReadme(item: CatalogItem): string {
     skill: 'Skill',
     agent: 'Agent',
     command: 'Command',
-    prompt: 'Prompt',
     guide: 'Guide',
   }[item.type]
 

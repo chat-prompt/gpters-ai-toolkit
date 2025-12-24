@@ -11,7 +11,7 @@ import { TeamTagSelector } from '@/components/TeamTagSelector'
 import { parseFrontmatter, generateIdFromName } from '@/lib/frontmatter'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
 
-type ItemType = 'skill' | 'agent' | 'prompt' | 'command' | 'guide'
+type ItemType = 'skill' | 'agent' | 'command' | 'guide'
 
 const AVAILABLE_TAGS = Object.keys(TAGS) as Array<keyof typeof TAGS>
 

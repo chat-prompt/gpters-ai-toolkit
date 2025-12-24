@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const validTypes = ['skill', 'agent', 'prompt', 'command', 'guide']
+    const validTypes = ['skill', 'agent', 'command', 'guide']
     if (!validTypes.includes(type)) {
       return NextResponse.json(
         { error: `Invalid type. Must be one of: ${validTypes.join(', ')}` },

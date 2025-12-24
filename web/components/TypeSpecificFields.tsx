@@ -37,7 +37,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
 
   return (
     <div className="space-y-6">
-      {/* Difficulty - for skill, prompt, guide */}
+      {/* Difficulty - for skill, guide */}
       {fields.showDifficulty && (
         <div>
           <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">

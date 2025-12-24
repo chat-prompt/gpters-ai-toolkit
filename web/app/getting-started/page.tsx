@@ -30,7 +30,6 @@ const LEARNING_PATH = [
 const TYPE_CONFIG = {
   skill: { icon: '⚡', color: 'cyan', label: 'Skill' },
   agent: { icon: '◈', color: 'purple', label: 'Agent' },
-  prompt: { icon: '✦', color: 'orange', label: 'Prompt' },
   command: { icon: '▸', color: 'cyan', label: 'Command' },
   guide: { icon: '📚', color: 'emerald', label: 'Guide' },
 }

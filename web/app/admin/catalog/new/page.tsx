@@ -9,7 +9,7 @@ import { TeamTagSelector } from '@/components/TeamTagSelector'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
 
-const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'prompt', 'command', 'guide']
+const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide']
 
 export default function NewCatalogItem() {
   const router = useRouter()
