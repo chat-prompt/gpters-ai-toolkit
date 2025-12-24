@@ -5,6 +5,7 @@ import Google from 'next-auth/providers/google'
 const ALLOWED_DOMAIN = 'gpters.org'
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
