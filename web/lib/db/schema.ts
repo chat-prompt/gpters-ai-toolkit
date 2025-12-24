@@ -59,6 +59,23 @@ export type CatalogItemRecord = typeof catalogItems.$inferSelect
 export type NewCatalogItemRecord = typeof catalogItems.$inferInsert
 
 // ============================================
+// Users Table (OAuth)
+// ============================================
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey(), // Google sub ID
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  image: text('image'),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type UserRecord = typeof users.$inferSelect
+export type NewUserRecord = typeof users.$inferInsert
+
+// ============================================
 // Normalized Tables
 // ============================================
 
