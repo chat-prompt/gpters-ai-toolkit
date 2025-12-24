@@ -11,9 +11,9 @@ import { generateMarketplaceJson, generatePluginFiles } from './transform'
 
 // Initialize Octokit with GitHub token
 function getOctokit(): Octokit {
-  const token = process.env.GITHUB_TOKEN
+  const token = process.env.GH_TOKEN
   if (!token) {
-    throw new Error('GITHUB_TOKEN environment variable is required')
+    throw new Error('GH_TOKEN environment variable is required')
   }
   return new Octokit({ auth: token })
 }

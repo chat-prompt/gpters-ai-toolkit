@@ -87,9 +87,9 @@ export const MARKETPLACE_CONFIG = {
     pluginRoot: './plugins',
   },
   repository: {
-    owner: process.env.GITHUB_OWNER || 'gpters',
-    repo: process.env.GITHUB_REPO || 'gpters-ai-toolkit',
-    branch: process.env.GITHUB_BRANCH || 'main',
-    path: process.env.MARKETPLACE_PATH || 'marketplace',
+    owner: process.env.GH_OWNER || 'gpters',
+    repo: process.env.GH_REPO || 'gpters-ai-toolkit',
+    branch: process.env.GH_BRANCH || 'main',
+    path: process.env.GH_MARKETPLACE_PATH || 'marketplace',
   },
 } as const
