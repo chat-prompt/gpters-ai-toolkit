@@ -97,8 +97,8 @@ export async function POST(request: NextRequest) {
         marketplaceVersion: newItem.marketplaceVersion ?? undefined,
         // Type-specific fields
         allowedTools: newItem.allowedTools ?? undefined,
-        agentModel: newItem.agentModel ?? undefined,
-        agentPermissionMode: newItem.agentPermissionMode ?? undefined,
+        agentModel: (newItem.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
+        agentPermissionMode: (newItem.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
         agentSkills: newItem.agentSkills ?? undefined,
         commandArgumentHint: newItem.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: newItem.commandDisableModelInvocation ?? undefined,
@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
         marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
         // Type-specific fields
         allowedTools: item.allowedTools ?? undefined,
-        agentModel: item.agentModel ?? undefined,
-        agentPermissionMode: item.agentPermissionMode ?? undefined,
+        agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
+        agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
         agentSkills: item.agentSkills ?? undefined,
         commandArgumentHint: item.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,

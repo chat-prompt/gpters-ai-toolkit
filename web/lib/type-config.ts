@@ -51,6 +51,10 @@ export const TYPE_CONFIG: Record<
     icon: string
     description: string
     color: string
+    namePlaceholder: string
+    descriptionPlaceholder: string
+    contentPlaceholder: string
+    suggestedTags: string[]
     contentTemplate: string
     guide: {
       title: string
@@ -79,6 +83,10 @@ export const TYPE_CONFIG: Record<
     icon: '⚡',
     description: 'Claude가 자동으로 호출하는 기능',
     color: 'cyan',
+    namePlaceholder: 'my-skill-name',
+    descriptionPlaceholder: '이 스킬이 언제 사용되는지 설명하세요 (예: PDF 작업 시, Git 커밋 시)',
+    contentPlaceholder: '스킬의 실행 방법과 예시를 작성하세요...',
+    suggestedTags: ['automation', 'productivity', 'workflow'],
     contentTemplate: `# {name}
 
 ## Instructions
@@ -137,6 +145,10 @@ export const TYPE_CONFIG: Record<
     icon: '◈',
     description: 'Task 도구로 호출하는 서브에이전트',
     color: 'purple',
+    namePlaceholder: 'my-agent-name',
+    descriptionPlaceholder: '이 에이전트의 전문 분야를 설명하세요 (예: 코드 리뷰, 문서 생성)',
+    contentPlaceholder: '에이전트의 시스템 프롬프트를 작성하세요...',
+    suggestedTags: ['agent', 'specialized', 'task'],
     contentTemplate: `# {name}
 
 You are a specialized agent for {purpose}.
@@ -207,6 +219,10 @@ You are a specialized agent for {purpose}.
     icon: '✦',
     description: '재사용 가능한 프롬프트 템플릿',
     color: 'orange',
+    namePlaceholder: 'my-prompt-name',
+    descriptionPlaceholder: '이 프롬프트의 용도를 설명하세요 (예: 코드 설명, 번역)',
+    contentPlaceholder: '재사용할 프롬프트 템플릿을 작성하세요...',
+    suggestedTags: ['template', 'reusable', 'prompt'],
     contentTemplate: `# {name}
 
 ## Context
@@ -270,6 +286,10 @@ You are a specialized agent for {purpose}.
     icon: '▸',
     description: '/명령어로 실행하는 커맨드',
     color: 'cyan',
+    namePlaceholder: 'my-command',
+    descriptionPlaceholder: '이 커맨드가 수행하는 작업을 설명하세요 (예: Git 커밋, 테스트 실행)',
+    contentPlaceholder: '커맨드 실행 시 수행할 작업을 작성하세요...',
+    suggestedTags: ['command', 'cli', 'shortcut'],
     contentTemplate: `# {name}
 
 ## Current State
@@ -332,6 +352,10 @@ $ARGUMENTS를 기반으로 작업을 수행합니다.
     icon: '📚',
     description: '실습 가이드 및 튜토리얼',
     color: 'purple',
+    namePlaceholder: 'my-guide-title',
+    descriptionPlaceholder: '이 가이드에서 배울 내용을 설명하세요',
+    contentPlaceholder: '단계별 가이드 내용을 작성하세요...',
+    suggestedTags: ['tutorial', 'guide', 'learning'],
     contentTemplate: `# {name}
 
 ## 개요
