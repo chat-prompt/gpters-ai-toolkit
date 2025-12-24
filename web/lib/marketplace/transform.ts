@@ -241,12 +241,12 @@ ${item.tags?.map((t) => `\`${t}\``).join(', ') || 'None'}
 ## Installation
 
 \`\`\`bash
-/plugin marketplace add gpters/gpters-ai-toolkit
+/plugin marketplace add chat-prompt/gpters-ai-toolkit
 /plugin install ${item.id}@gpters-ai-toolkit
 \`\`\`
 
 ---
 
-*Part of [GPTers AI Toolkit](https://github.com/gpters/gpters-ai-toolkit)*
+*Part of [GPTers AI Toolkit](https://github.com/chat-prompt/gpters-ai-toolkit)*
 `
 }

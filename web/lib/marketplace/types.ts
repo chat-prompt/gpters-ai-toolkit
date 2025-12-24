@@ -87,7 +87,7 @@ export const MARKETPLACE_CONFIG = {
     pluginRoot: './plugins',
   },
   repository: {
-    owner: process.env.GH_OWNER || 'gpters',
+    owner: process.env.GH_OWNER || 'chat-prompt',
     repo: process.env.GH_REPO || 'gpters-ai-toolkit',
     branch: process.env.GH_BRANCH || 'main',
     path: process.env.GH_MARKETPLACE_PATH ?? '',
