@@ -37,6 +37,23 @@
         "analysis",
         "refactoring"
       ]
+    },
+    {
+      "name": "data-source-reference",
+      "source": "./plugins/data-source-reference",
+      "description": "GPTers 플랫폼의 데이터 소스 레퍼런스 - Portal DB와 Airtable 테이블 구조, 동기화 방향, ID 매핑 관계 참조",
+      "version": "1.0.0",
+      "author": {
+        "name": "gpters-team"
+      },
+      "category": "skill",
+      "keywords": [
+        "database",
+        "airtable",
+        "postgresql",
+        "schema",
+        "sync"
+      ]
     }
   ]
 }
