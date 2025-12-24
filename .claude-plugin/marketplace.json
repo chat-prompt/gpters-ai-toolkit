@@ -22,6 +22,21 @@
         "code",
         "review"
       ]
+    },
+    {
+      "name": "refactor-guide",
+      "source": "./plugins/refactor-guide",
+      "description": "코드 스멜을 분석하고 리팩토링 가이드를 제공 합니다",
+      "version": "1.0.0",
+      "author": {
+        "name": "gpters-team"
+      },
+      "category": "skill",
+      "keywords": [
+        "code",
+        "analysis",
+        "refactoring"
+      ]
     }
   ]
 }
