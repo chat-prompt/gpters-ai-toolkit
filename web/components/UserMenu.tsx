@@ -57,7 +57,7 @@ export function UserMenu({ user }: UserMenuProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 glass rounded-xl overflow-hidden shadow-lg">
+        <div className="absolute right-0 mt-2 w-56 rounded-xl overflow-hidden shadow-xl z-[1001] bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
           <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
             <p className="text-sm font-medium text-[var(--text-primary)] truncate">
               {user.name}

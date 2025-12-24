@@ -22,7 +22,7 @@ export function Header({ user }: HeaderProps) {
   const isCatalogTab = !isGuidesTab && !isStartTab && pathname !== '/upload'
 
   return (
-    <header className="relative z-10 border-b border-[var(--border-subtle)]">
+    <header className="relative z-[1010] border-b border-[var(--border-subtle)]">
       <div className="max-w-6xl mx-auto px-8 py-5">
         <div className="flex items-center justify-between">
           {/* Logo & Nav */}

@@ -1,6 +1,9 @@
 import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 
+// Development auth bypass
+const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true'
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
@@ -12,6 +15,11 @@ export default auth((req) => {
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml'
   ) {
+    return NextResponse.next()
+  }
+
+  // Skip auth in development if bypass is enabled
+  if (DEV_BYPASS_AUTH) {
     return NextResponse.next()
   }
 
