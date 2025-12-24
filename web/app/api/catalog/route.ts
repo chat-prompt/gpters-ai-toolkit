@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 
 export async function GET(request: NextRequest) {
@@ -24,7 +24,29 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
 
-  const { id, type, name, description, author, tags, difficulty, pluginId, estimatedTime, content, readme, marketplaceEnabled, marketplaceVersion } = body
+  const {
+    id,
+    type,
+    name,
+    description,
+    author,
+    tags,
+    teamTag,
+    difficulty,
+    pluginId,
+    estimatedTime,
+    content,
+    readme,
+    marketplaceEnabled,
+    marketplaceVersion,
+    // Type-specific fields
+    allowedTools,
+    agentModel,
+    agentPermissionMode,
+    agentSkills,
+    commandArgumentHint,
+    commandDisableModelInvocation,
+  } = body
 
   if (!id || !type || !name || !content) {
     return NextResponse.json(
@@ -40,6 +62,7 @@ export async function POST(request: NextRequest) {
     description: description || '',
     author: author || 'unknown',
     tags: tags || [],
+    teamTag: (teamTag as TeamTag) || 'general',
     difficulty: difficulty as Difficulty | null,
     pluginId: pluginId || null,
     estimatedTime: estimatedTime || null,
@@ -47,6 +70,13 @@ export async function POST(request: NextRequest) {
     readme: readme || null,
     marketplaceEnabled: marketplaceEnabled || false,
     marketplaceVersion: marketplaceVersion || '1.0.0',
+    // Type-specific fields
+    allowedTools: allowedTools || null,
+    agentModel: (agentModel as AgentModel) || null,
+    agentPermissionMode: (agentPermissionMode as AgentPermissionMode) || null,
+    agentSkills: agentSkills || null,
+    commandArgumentHint: commandArgumentHint || null,
+    commandDisableModelInvocation: commandDisableModelInvocation || false,
   }
 
   await db.insert(catalogItems).values(newItem)
@@ -58,12 +88,20 @@ export async function POST(request: NextRequest) {
         ...newItem,
         likes: 0,
         dependencies: [],
+        teamTag: newItem.teamTag ?? undefined,
         difficulty: newItem.difficulty ?? undefined,
         pluginId: newItem.pluginId ?? undefined,
         estimatedTime: newItem.estimatedTime ?? undefined,
         readme: newItem.readme ?? undefined,
         marketplaceEnabled: newItem.marketplaceEnabled ?? undefined,
         marketplaceVersion: newItem.marketplaceVersion ?? undefined,
+        // Type-specific fields
+        allowedTools: newItem.allowedTools ?? undefined,
+        agentModel: newItem.agentModel ?? undefined,
+        agentPermissionMode: newItem.agentPermissionMode ?? undefined,
+        agentSkills: newItem.agentSkills ?? undefined,
+        commandArgumentHint: newItem.commandArgumentHint ?? undefined,
+        commandDisableModelInvocation: newItem.commandDisableModelInvocation ?? undefined,
       }
       await syncItemToGitHub(catalogItem)
 
@@ -73,6 +111,7 @@ export async function POST(request: NextRequest) {
         ...item,
         tags: item.tags || [],
         dependencies: item.dependencies || [],
+        teamTag: item.teamTag ?? undefined,
         difficulty: item.difficulty ?? undefined,
         pluginId: item.pluginId ?? undefined,
         estimatedTime: item.estimatedTime ?? undefined,
@@ -82,6 +121,13 @@ export async function POST(request: NextRequest) {
         createdAt: item.createdAt?.toISOString(),
         updatedAt: item.updatedAt?.toISOString(),
         marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
+        // Type-specific fields
+        allowedTools: item.allowedTools ?? undefined,
+        agentModel: item.agentModel ?? undefined,
+        agentPermissionMode: item.agentPermissionMode ?? undefined,
+        agentSkills: item.agentSkills ?? undefined,
+        commandArgumentHint: item.commandArgumentHint ?? undefined,
+        commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
       }))
       await updateMarketplaceJson(allCatalogItems)
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
 
 /**
  * Public upload API - no authentication required
@@ -17,12 +17,20 @@ export async function POST(request: NextRequest) {
       description,
       author,
       tags,
+      teamTag,
       difficulty,
       pluginId,
       estimatedTime,
       dependencies,
       content,
       readme,
+      // Type-specific fields
+      allowedTools,
+      agentModel,
+      agentPermissionMode,
+      agentSkills,
+      commandArgumentHint,
+      commandDisableModelInvocation,
     } = body
 
     if (!id || !type || !name || !content) {
@@ -47,12 +55,20 @@ export async function POST(request: NextRequest) {
       description: description || '',
       author: author || 'anonymous',
       tags: tags || [],
+      teamTag: (teamTag as TeamTag) || 'general',
       difficulty: difficulty as Difficulty | null,
       pluginId: pluginId || null,
       estimatedTime: estimatedTime || null,
       dependencies: dependencies || [],
       content,
       readme: readme || null,
+      // Type-specific fields
+      allowedTools: allowedTools || null,
+      agentModel: (agentModel as AgentModel) || null,
+      agentPermissionMode: (agentPermissionMode as AgentPermissionMode) || null,
+      agentSkills: agentSkills || null,
+      commandArgumentHint: commandArgumentHint || null,
+      commandDisableModelInvocation: commandDisableModelInvocation || false,
     }
 
     await db.insert(catalogItems).values(newItem)

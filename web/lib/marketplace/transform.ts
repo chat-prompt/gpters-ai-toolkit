@@ -54,54 +54,74 @@ export function generatePluginJson(item: CatalogItem): PluginJson {
  * Transform CatalogItem to SKILL.md content with YAML frontmatter
  */
 export function transformToSkillMd(item: CatalogItem): string {
-  const frontmatter: SkillFrontmatter = {
-    name: item.name,
-    description: generateSkillDescription(item),
-    version: item.marketplaceVersion || '1.0.0',
+  const lines = [
+    '---',
+    `name: ${item.name}`,
+    `description: ${generateSkillDescription(item)}`,
+  ]
+
+  // Add allowed-tools if specified
+  if (item.allowedTools) {
+    lines.push(`allowed-tools: ${item.allowedTools}`)
   }
 
-  const yamlContent = [
-    '---',
-    `name: ${frontmatter.name}`,
-    `description: ${frontmatter.description}`,
-    `version: ${frontmatter.version}`,
-    '---',
-    '',
-  ].join('\n')
+  lines.push('---', '')
 
-  return yamlContent + item.content
+  return lines.join('\n') + item.content
 }
 
 /**
  * Transform CatalogItem to agent markdown
  */
 export function transformToAgentMd(item: CatalogItem): string {
-  const frontmatter = [
+  const lines = [
     '---',
-    `name: ${item.name}`,
+    `name: ${item.id}`,
     `description: ${item.description}`,
-    `version: ${item.marketplaceVersion || '1.0.0'}`,
-    '---',
-    '',
-  ].join('\n')
+  ]
 
-  return frontmatter + item.content
+  // Add agent-specific fields
+  if (item.allowedTools) {
+    lines.push(`tools: ${item.allowedTools}`)
+  }
+  if (item.agentModel) {
+    lines.push(`model: ${item.agentModel}`)
+  }
+  if (item.agentPermissionMode) {
+    lines.push(`permissionMode: ${item.agentPermissionMode}`)
+  }
+  if (item.agentSkills) {
+    lines.push(`skills: ${item.agentSkills}`)
+  }
+
+  lines.push('---', '')
+
+  return lines.join('\n') + item.content
 }
 
 /**
  * Transform CatalogItem to command markdown
  */
 export function transformToCommandMd(item: CatalogItem): string {
-  const frontmatter = [
+  const lines = [
     '---',
-    `name: /${item.id}`,
     `description: ${item.description}`,
-    `version: ${item.marketplaceVersion || '1.0.0'}`,
-    '---',
-    '',
-  ].join('\n')
+  ]
 
-  return frontmatter + item.content
+  // Add command-specific fields
+  if (item.allowedTools) {
+    lines.push(`allowed-tools: ${item.allowedTools}`)
+  }
+  if (item.commandArgumentHint) {
+    lines.push(`argument-hint: ${item.commandArgumentHint}`)
+  }
+  if (item.commandDisableModelInvocation) {
+    lines.push(`disable-model-invocation: true`)
+  }
+
+  lines.push('---', '')
+
+  return lines.join('\n') + item.content
 }
 
 /**

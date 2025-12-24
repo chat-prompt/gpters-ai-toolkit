@@ -2,6 +2,15 @@ export type ItemType = 'skill' | 'agent' | 'prompt' | 'command' | 'guide'
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
+// Team tags for categorizing items by team ownership
+export type TeamTag = 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+
+// Agent model options
+export type AgentModel = 'sonnet' | 'opus' | 'haiku' | 'inherit'
+
+// Agent permission mode options
+export type AgentPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'ignore'
+
 export interface CatalogItem {
   id: string
   type: ItemType
@@ -9,6 +18,7 @@ export interface CatalogItem {
   description: string
   author: string
   tags: string[]
+  teamTag?: TeamTag
   difficulty?: Difficulty
   pluginId?: string // 플러그인 설치 ID (스킬만)
   estimatedTime?: string // 예상 소요 시간 (가이드)
@@ -16,6 +26,17 @@ export interface CatalogItem {
   likes: number // 좋아요 수
   content: string // skill.md 내용
   readme?: string // README.md 내용
+
+  // Type-specific fields for Claude Code plugins
+  allowedTools?: string // Skill/Agent/Command: 사용 가능 도구 (쉼표 구분, e.g., "Read, Grep, Bash")
+  // Agent-specific
+  agentModel?: AgentModel // Agent 모델 선택
+  agentPermissionMode?: AgentPermissionMode // Agent 권한 모드
+  agentSkills?: string // Agent에 로드할 스킬 목록 (쉼표 구분)
+  // Command-specific
+  commandArgumentHint?: string // Command 인자 힌트 (e.g., "[message]")
+  commandDisableModelInvocation?: boolean // Command 자동 호출 비활성화
+
   // Marketplace integration fields
   marketplaceEnabled?: boolean // Claude Code 마켓플레이스에 등록 여부
   marketplaceSyncedAt?: string // 마지막 마켓플레이스 동기화 시간
@@ -101,4 +122,13 @@ export const DIFFICULTY_LABELS: Record<Difficulty, { label: string; color: strin
   easy: { label: '쉬움', color: 'bg-green-100 text-green-800', emoji: '🟢' },
   medium: { label: '보통', color: 'bg-yellow-100 text-yellow-800', emoji: '🟡' },
   hard: { label: '어려움', color: 'bg-red-100 text-red-800', emoji: '🔴' },
+}
+
+export const TEAM_TAGS: Record<TeamTag, { label: string; color: string; emoji: string }> = {
+  platform: { label: '플랫폼팀', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', emoji: '🛠️' },
+  ai: { label: 'AI팀', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', emoji: '🤖' },
+  data: { label: '데이터팀', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', emoji: '📊' },
+  product: { label: '프로덕트팀', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30', emoji: '🎨' },
+  infra: { label: '인프라팀', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', emoji: '⚙️' },
+  general: { label: '공통', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', emoji: '📦' },
 }

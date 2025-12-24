@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import type { TeamTag } from '@/lib/types'
+import { TeamTagSelector } from '@/components/TeamTagSelector'
 
 const ITEM_TYPES = ['skill', 'agent', 'prompt', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
@@ -25,6 +27,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     description: '',
     author: '',
     tags: '',
+    teamTag: 'general' as TeamTag,
     difficulty: '' as '' | typeof DIFFICULTIES[number],
     pluginId: '',
     estimatedTime: '',
@@ -52,6 +55,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
             description: item.description || '',
             author: item.author || '',
             tags: (item.tags || []).join(', '),
+            teamTag: item.teamTag || 'general',
             difficulty: item.difficulty || '',
             pluginId: item.pluginId || '',
             estimatedTime: item.estimatedTime || '',
@@ -86,6 +90,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         description: formData.description,
         author: formData.author,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        teamTag: formData.teamTag,
         difficulty: formData.difficulty || null,
         pluginId: formData.pluginId || null,
         estimatedTime: formData.estimatedTime || null,
@@ -226,6 +231,11 @@ export default function EditCatalogItem({ params }: EditPageProps) {
               />
             </div>
           </div>
+
+          <TeamTagSelector
+            value={formData.teamTag}
+            onChange={(value) => setFormData({ ...formData, teamTag: value })}
+          />
 
           <div className="grid grid-cols-3 gap-6">
             <div>

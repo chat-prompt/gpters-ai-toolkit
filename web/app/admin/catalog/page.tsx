@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import type { TeamTag } from '@/lib/types'
+import { TEAM_TAGS } from '@/lib/types'
+import { TeamTagBadge } from '@/components/TeamTagSelector'
 
 interface CatalogItem {
   id: string
@@ -10,6 +13,7 @@ interface CatalogItem {
   description: string
   author: string
   tags: string[]
+  teamTag: TeamTag | null
   createdAt: string
   updatedAt: string
 }
@@ -34,6 +38,7 @@ export default function CatalogList() {
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [teamFilter, setTeamFilter] = useState<TeamTag | 'all'>('all')
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   async function fetchItems() {
@@ -79,6 +84,12 @@ export default function CatalogList() {
   }
 
   const filters = ['all', 'skill', 'agent', 'prompt', 'command', 'guide']
+  const teamFilters: (TeamTag | 'all')[] = ['all', ...Object.keys(TEAM_TAGS) as TeamTag[]]
+
+  // Filter items by team tag (client-side)
+  const filteredItems = teamFilter === 'all'
+    ? items
+    : items.filter(item => item.teamTag === teamFilter)
 
   return (
     <div className="max-w-7xl mx-auto px-8 py-12">
@@ -88,7 +99,7 @@ export default function CatalogList() {
             Catalog
           </h1>
           <p className="text-[var(--text-secondary)]">
-            {items.length} items
+            {filteredItems.length} items{teamFilter !== 'all' && ` (filtered from ${items.length})`}
           </p>
         </div>
         <Link
@@ -100,33 +111,71 @@ export default function CatalogList() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 mb-8">
-        {filters.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-              filter === f
-                ? 'bg-[var(--accent-cyan)] text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'
-            }`}
-          >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-          </button>
-        ))}
+      <div className="flex flex-col gap-4 mb-8">
+        {/* Type Filters */}
+        <div className="flex gap-2">
+          {filters.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                filter === f
+                  ? 'bg-[var(--accent-cyan)] text-black'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+        {/* Team Filters */}
+        <div className="flex gap-2 flex-wrap">
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider self-center mr-2">Team:</span>
+          {teamFilters.map((t) => {
+            const isAll = t === 'all'
+            const tagInfo = isAll ? null : TEAM_TAGS[t]
+            return (
+              <button
+                key={t}
+                onClick={() => setTeamFilter(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                  teamFilter === t
+                    ? isAll
+                      ? 'bg-[var(--accent-cyan)] text-black border-transparent'
+                      : tagInfo?.color
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {tagInfo && <span>{tagInfo.emoji}</span>}
+                <span>{isAll ? 'All' : tagInfo?.label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {loading ? (
         <div className="text-[var(--text-muted)]">Loading...</div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-[var(--text-muted)] mb-4">No items found</p>
-          <Link
-            href="/admin/catalog/new"
-            className="text-[var(--accent-cyan)] hover:underline"
-          >
-            Create your first item
-          </Link>
+          <p className="text-[var(--text-muted)] mb-4">
+            {items.length === 0 ? 'No items found' : 'No items match the selected filters'}
+          </p>
+          {items.length === 0 ? (
+            <Link
+              href="/admin/catalog/new"
+              className="text-[var(--accent-cyan)] hover:underline"
+            >
+              Create your first item
+            </Link>
+          ) : (
+            <button
+              onClick={() => { setFilter('all'); setTeamFilter('all'); }}
+              className="text-[var(--accent-cyan)] hover:underline"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="glass rounded-2xl overflow-hidden">
@@ -143,6 +192,9 @@ export default function CatalogList() {
                   Name
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
+                  Team
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
                   Author
                 </th>
                 <th className="text-right px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
@@ -151,7 +203,7 @@ export default function CatalogList() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <tr
                   key={item.id}
                   className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors"
@@ -171,6 +223,11 @@ export default function CatalogList() {
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-[var(--text-primary)]">{item.name}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {item.teamTag && (
+                      <TeamTagBadge tag={item.teamTag} size="sm" />
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-[var(--text-muted)]">

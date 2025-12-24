@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag } from '@/lib/types'
 import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 
 interface RouteParams {
@@ -44,6 +44,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (body.description !== undefined) updateData.description = body.description
   if (body.author !== undefined) updateData.author = body.author
   if (body.tags !== undefined) updateData.tags = body.tags
+  if (body.teamTag !== undefined) updateData.teamTag = body.teamTag as TeamTag
   if (body.difficulty !== undefined) updateData.difficulty = body.difficulty as Difficulty
   if (body.pluginId !== undefined) updateData.pluginId = body.pluginId
   if (body.estimatedTime !== undefined) updateData.estimatedTime = body.estimatedTime
@@ -65,6 +66,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...updated,
         tags: updated.tags || [],
         dependencies: updated.dependencies || [],
+        teamTag: updated.teamTag ?? undefined,
         difficulty: updated.difficulty ?? undefined,
         pluginId: updated.pluginId ?? undefined,
         estimatedTime: updated.estimatedTime ?? undefined,
@@ -83,6 +85,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...item,
         tags: item.tags || [],
         dependencies: item.dependencies || [],
+        teamTag: item.teamTag ?? undefined,
         difficulty: item.difficulty ?? undefined,
         pluginId: item.pluginId ?? undefined,
         estimatedTime: item.estimatedTime ?? undefined,
@@ -132,6 +135,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         ...item,
         tags: item.tags || [],
         dependencies: item.dependencies || [],
+        teamTag: item.teamTag ?? undefined,
         difficulty: item.difficulty ?? undefined,
         pluginId: item.pluginId ?? undefined,
         estimatedTime: item.estimatedTime ?? undefined,

@@ -10,6 +10,7 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     description: record.description,
     author: record.author,
     tags: record.tags || [],
+    teamTag: (record.teamTag as CatalogItem['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
     pluginId: record.pluginId ?? undefined,
     estimatedTime: record.estimatedTime ?? undefined,
@@ -17,6 +18,14 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     likes: record.likes,
     content: record.content,
     readme: record.readme ?? undefined,
+    // Type-specific fields
+    allowedTools: record.allowedTools ?? undefined,
+    agentModel: (record.agentModel as CatalogItem['agentModel']) ?? undefined,
+    agentPermissionMode: (record.agentPermissionMode as CatalogItem['agentPermissionMode']) ?? undefined,
+    agentSkills: record.agentSkills ?? undefined,
+    commandArgumentHint: record.commandArgumentHint ?? undefined,
+    commandDisableModelInvocation: record.commandDisableModelInvocation ?? undefined,
+    // Marketplace fields
     marketplaceEnabled: record.marketplaceEnabled ?? false,
     marketplaceSyncedAt: record.marketplaceSyncedAt?.toISOString(),
     marketplaceVersion: record.marketplaceVersion ?? undefined,
