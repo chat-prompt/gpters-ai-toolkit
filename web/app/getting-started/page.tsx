@@ -1,5 +1,5 @@
 import { getCatalog, getBeginnerItems } from '@/lib/catalog'
-import { Header } from '@/components/Header'
+import { ServerHeader } from '@/components/ServerHeader'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import Link from 'next/link'
 
@@ -56,7 +56,7 @@ export default async function GettingStartedPage() {
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
       </div>
 
-      <Header />
+      <ServerHeader />
 
       <main className="relative z-10 max-w-5xl mx-auto px-8 py-12">
         {/* Hero */}

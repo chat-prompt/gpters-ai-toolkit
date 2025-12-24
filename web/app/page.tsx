@@ -1,6 +1,6 @@
 import { getCatalog } from '@/lib/catalog'
 import { SearchableCatalog } from '@/components/SearchableCatalog'
-import { Header } from '@/components/Header'
+import { ServerHeader } from '@/components/ServerHeader'
 
 // Revalidate every 60 seconds
 export const revalidate = 60
@@ -16,7 +16,7 @@ export default async function Home() {
         <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
       </div>
 
-      <Header />
+      <ServerHeader />
 
       {/* Hero Section */}
       <section className="relative z-10 py-20 px-8">

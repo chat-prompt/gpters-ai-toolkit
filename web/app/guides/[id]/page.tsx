@@ -1,6 +1,6 @@
 import { getGuideById, getGuides } from '@/lib/catalog'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
-import { Header } from '@/components/Header'
+import { ServerHeader } from '@/components/ServerHeader'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -28,7 +28,7 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-emerald-500 opacity-[0.03] blur-[120px] rounded-full" />
       </div>
 
-      <Header />
+      <ServerHeader />
 
       {/* Back Link */}
       <div className="relative z-10 max-w-5xl mx-auto px-8 pt-6">

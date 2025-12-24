@@ -4,8 +4,17 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
+import { UserMenu } from './UserMenu'
 
-export function Header() {
+interface HeaderProps {
+  user?: {
+    name?: string | null
+    email?: string | null
+    image?: string | null
+  } | null
+}
+
+export function Header({ user }: HeaderProps) {
   const pathname = usePathname()
 
   const isGuidesTab = pathname.startsWith('/guides')
@@ -75,6 +84,7 @@ export function Header() {
             >
               Share
             </Link>
+            {user && <UserMenu user={user} />}
           </div>
         </div>
       </div>
