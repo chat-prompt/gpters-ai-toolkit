@@ -10,6 +10,20 @@ const db = drizzle(sql)
 type ItemType = 'skill' | 'agent' | 'prompt' | 'command' | 'guide'
 type Difficulty = 'easy' | 'medium' | 'hard'
 
+interface MigrationItem {
+  id: string
+  type: ItemType
+  name: string
+  description: string
+  author: string
+  tags: string[]
+  difficulty: Difficulty | null
+  pluginId: string | null
+  estimatedTime: string | null
+  content: string | null
+  readme: string | null
+}
+
 interface FrontMatter {
   name?: string
   description?: string
@@ -89,7 +103,7 @@ async function migrateDirectory(type: ItemType): Promise<number> {
     return 0
   }
 
-  const items: any[] = []
+  const items: MigrationItem[] = []
 
   if (type === 'prompt') {
     // Prompts are single files

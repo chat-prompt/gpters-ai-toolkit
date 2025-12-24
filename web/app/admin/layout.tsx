@@ -17,6 +17,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   useEffect(() => {
     const storedAuth = sessionStorage.getItem('admin_auth')
     if (storedAuth === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydration pattern for client-only sessionStorage
       setIsAuthenticated(true)
     }
   }, [])
