@@ -7,7 +7,7 @@ import { catalogItems } from '../lib/db/schema'
 const sql = neon(process.env.DATABASE_URL!)
 const db = drizzle(sql)
 
-type ItemType = 'skill' | 'agent' | 'prompt' | 'command' | 'guide'
+type ItemType = 'skill' | 'agent' | 'command' | 'guide'
 type Difficulty = 'easy' | 'medium' | 'hard'
 
 interface MigrationItem {
@@ -20,7 +20,7 @@ interface MigrationItem {
   difficulty: Difficulty | null
   pluginId: string | null
   estimatedTime: string | null
-  content: string | null
+  content: string
   readme: string | null
 }
 
@@ -83,7 +83,6 @@ async function migrateDirectory(type: ItemType): Promise<number> {
   const dirMap: Record<ItemType, string> = {
     skill: 'skills',
     agent: 'agents',
-    prompt: 'prompts',
     command: 'commands',
     guide: 'guides',
   }
@@ -91,7 +90,6 @@ async function migrateDirectory(type: ItemType): Promise<number> {
   const mainFileMap: Record<ItemType, string> = {
     skill: 'skill.md',
     agent: 'agent.md',
-    prompt: 'prompt.md',
     command: 'command.md',
     guide: 'guide.md',
   }
@@ -105,33 +103,8 @@ async function migrateDirectory(type: ItemType): Promise<number> {
 
   const items: MigrationItem[] = []
 
-  if (type === 'prompt') {
-    // Prompts are single files
-    const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md') && !f.startsWith('_'))
-
-    for (const file of files) {
-      const filePath = path.join(dirPath, file)
-      const content = fs.readFileSync(filePath, 'utf-8')
-      const { frontMatter, body } = parseFrontMatter(content)
-      const id = file.replace('.md', '')
-
-      items.push({
-        id,
-        type,
-        name: frontMatter.name || id,
-        description: frontMatter.description || '',
-        author: frontMatter.author || 'unknown',
-        tags: frontMatter.tags || [],
-        difficulty: frontMatter.difficulty || null,
-        pluginId: frontMatter.pluginId || null,
-        estimatedTime: frontMatter.estimatedTime || null,
-        content: body,
-        readme: null,
-      })
-    }
-  } else {
-    // Other types are directories
-    const dirs = fs.readdirSync(dirPath).filter(d => {
+  // All types are directories with a main file
+  const dirs = fs.readdirSync(dirPath).filter(d => {
       const stat = fs.statSync(path.join(dirPath, d))
       return stat.isDirectory() && !d.startsWith('_')
     })
@@ -168,7 +141,6 @@ async function migrateDirectory(type: ItemType): Promise<number> {
         readme,
       })
     }
-  }
 
   if (items.length > 0) {
     for (const item of items) {
@@ -183,7 +155,7 @@ async function migrateDirectory(type: ItemType): Promise<number> {
 async function main() {
   console.log('Starting migration to Neon DB...\n')
 
-  const types: ItemType[] = ['skill', 'agent', 'prompt', 'command', 'guide']
+  const types: ItemType[] = ['skill', 'agent', 'command', 'guide']
   let total = 0
 
   for (const type of types) {
