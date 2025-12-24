@@ -17,6 +17,9 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     likes: record.likes,
     content: record.content,
     readme: record.readme ?? undefined,
+    marketplaceEnabled: record.marketplaceEnabled ?? false,
+    marketplaceSyncedAt: record.marketplaceSyncedAt?.toISOString(),
+    marketplaceVersion: record.marketplaceVersion ?? undefined,
     createdAt: record.createdAt?.toISOString(),
     updatedAt: record.updatedAt?.toISOString(),
   }
