@@ -1,0 +1,12 @@
+{
+  "$schema": "https://claude.ai/schemas/settings.json",
+  "_comment": "GPTers Marketplace MCP 서버 설정 예시 - 이 파일을 ~/.claude/settings.json에 병합하세요",
+
+  "mcpServers": {
+    "gpters-marketplace": {
+      "type": "http",
+      "url": "https://toolkit.gpters.org/api/mcp",
+      "_description": "GPTers AI Toolkit 마켓플레이스 MCP 서버"
+    }
+  }
+}
