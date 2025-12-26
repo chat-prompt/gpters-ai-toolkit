@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp.schema.json",
+  "mcpServers": {
+    "gpters-marketplace": {
+      "type": "http",
+      "url": "https://toolkit.gpters.org/api/mcp"
+    },
+    "linear-server": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/linear-mcp-server"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/context7-mcp-server"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/chrome-devtools-mcp-server"]
+    }
+  }
+}

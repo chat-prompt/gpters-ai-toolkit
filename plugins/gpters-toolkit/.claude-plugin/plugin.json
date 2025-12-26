@@ -1,0 +1,14 @@
+{
+  "name": "gpters-toolkit",
+  "displayName": "GPTers Toolkit",
+  "version": "1.0.0",
+  "description": "GPTers 팀을 위한 올인원 Claude Code 플러그인 - 스킬, 에이전트, MCP 서버 통합",
+  "author": "GPTers",
+  "skills": [
+    "data-source-reference",
+    "refactor-guide"
+  ],
+  "agents": [
+    "code-reviewer"
+  ]
+}
