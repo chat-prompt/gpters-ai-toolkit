@@ -53,15 +53,32 @@ Claude가 자동으로 관련 플러그인을 검색하고 적용합니다.
 /mcp__gpters-marketplace__refactor-guide
 ```
 
-### 방법 3: 플러그인 설치 (짧은 명령어)
+### 방법 3: 올인원 플러그인 설치 (권장)
 
-자주 쓰는 플러그인은 설치해서 짧은 명령어로 사용할 수 있습니다:
+모든 스킬, 에이전트, MCP 서버를 한 번에 설치합니다:
 
 ```bash
 # 마켓플레이스 추가 (1회)
 /plugin marketplace add gpters/company-ai-toolkit
 
-# 플러그인 설치
+# 올인원 플러그인 설치
+/plugin install gpters-toolkit@company-ai-toolkit
+```
+
+**포함된 기능**:
+- 스킬: `data-source-reference`, `refactor-guide`
+- 에이전트: `code-reviewer`
+- MCP 서버: `linear`, `context7`, `chrome-devtools`, `gpters-marketplace`
+
+### 방법 4: 개별 플러그인 설치
+
+특정 플러그인만 필요하다면 개별 설치도 가능합니다:
+
+```bash
+# 마켓플레이스 추가 (1회)
+/plugin marketplace add gpters/company-ai-toolkit
+
+# 개별 플러그인 설치
 /plugin install code-reviewer@company-ai-toolkit
 
 # 사용
@@ -76,7 +93,8 @@ Claude가 자동으로 관련 플러그인을 검색하고 적용합니다.
 |------|----------|
 | 처음 사용하거나 뭘 찾아야 할지 모를 때 | **자연어** |
 | 특정 플러그인을 정확히 알고 있을 때 | **MCP 프롬프트** |
-| 매일 같은 플러그인을 사용할 때 | **플러그인 설치** |
+| 모든 기능 + MCP 서버를 한 번에 원할 때 | **올인원 플러그인** |
+| 특정 플러그인만 필요할 때 | **개별 플러그인 설치** |
 
 ---
 
@@ -93,12 +111,21 @@ Claude가 자동으로 관련 플러그인을 검색하고 적용합니다.
 
 ## 사용 가능한 플러그인
 
+### 올인원 플러그인
+- `gpters-toolkit` - 모든 스킬, 에이전트, MCP 서버 통합 패키지
+
 ### 스킬 (Skills)
 - `data-source-reference` - GPTers 데이터 소스 레퍼런스
 - `refactor-guide` - 코드 리팩토링 가이드
 
 ### 에이전트 (Agents)
 - `code-reviewer` - 코드 리뷰 서브에이전트
+
+### MCP 서버 (올인원 플러그인에 포함)
+- `linear` - Linear 이슈 관리
+- `context7` - 라이브러리 문서 조회
+- `chrome-devtools` - Chrome DevTools 연동
+- `gpters-marketplace` - 플러그인 동적 검색
 
 ### 커맨드 (Commands)
 - (추가 예정)
