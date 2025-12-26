@@ -227,6 +227,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   const skills = filteredCatalog.filter(item => item.type === 'skill')
   const agents = filteredCatalog.filter(item => item.type === 'agent')
   const commands = filteredCatalog.filter(item => item.type === 'command')
+  const hooks = filteredCatalog.filter(item => item.type === 'hook')
 
   // Keyboard shortcut for search (⌘K)
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -251,6 +252,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   const totalSkills = catalog.filter(item => item.type === 'skill').length
   const totalAgents = catalog.filter(item => item.type === 'agent').length
   const totalCommands = catalog.filter(item => item.type === 'command').length
+  const totalHooks = catalog.filter(item => item.type === 'hook').length
 
   return (
     <>
@@ -321,6 +323,16 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             }`}
           >
             ▸ Commands ({totalCommands})
+          </button>
+          <button
+            onClick={() => setActiveFilter('hook')}
+            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+              activeFilter === 'hook'
+                ? 'bg-orange-400 text-black'
+                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            🪝 Hooks ({totalHooks})
           </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -502,6 +514,11 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           <div className="text-3xl font-light text-[var(--text-primary)]">{commands.length}</div>
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Commands</div>
         </div>
+        <div className="w-px h-8 bg-[var(--border-subtle)]" />
+        <div>
+          <div className="text-3xl font-light text-[var(--text-primary)]">{hooks.length}</div>
+          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Hooks</div>
+        </div>
         {(searchQuery || hasActiveFilters) && (
           <>
             <div className="w-px h-8 bg-[var(--border-subtle)]" />
@@ -560,6 +577,23 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {commands.map((item, i) => (
+                <ItemCard key={item.id} item={item} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Hooks Section */}
+        {hooks.length > 0 && (activeFilter === 'all' || activeFilter === 'hook') && (
+          <section className="mb-20">
+            <SectionHeader
+              icon="🪝"
+              title="Hooks"
+              count={hooks.length}
+              accentColor="text-orange-400"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {hooks.map((item, i) => (
                 <ItemCard key={item.id} item={item} index={i} />
               ))}
             </div>

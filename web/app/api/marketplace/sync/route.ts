@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       ...item,
       tags: item.tags || [],
       dependencies: item.dependencies || [],
+      files: item.files ?? undefined,
       teamTag: item.teamTag ?? undefined,
       difficulty: item.difficulty ?? undefined,
       pluginId: item.pluginId ?? undefined,
