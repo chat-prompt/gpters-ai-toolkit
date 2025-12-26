@@ -18,6 +18,7 @@ out/
 # Local configs
 .env
 .env.local
+.env.vercel
 
 # Temp files
 *.tmp
