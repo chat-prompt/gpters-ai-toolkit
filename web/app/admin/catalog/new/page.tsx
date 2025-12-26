@@ -7,9 +7,9 @@ import { TypeSpecificFields } from '@/components/TypeSpecificFields'
 import { TypeGuidePanel } from '@/components/TypeGuidePanel'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/types'
 
-const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide']
+const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
 export default function NewCatalogItem() {
   const router = useRouter()
@@ -42,6 +42,13 @@ export default function NewCatalogItem() {
   const [commandArgumentHint, setCommandArgumentHint] = useState('')
   const [commandDisableModelInvocation, setCommandDisableModelInvocation] = useState(false)
 
+  // Hook state
+  const [hookEvent, setHookEvent] = useState<HookEvent | ''>('')
+  const [hookMatcher, setHookMatcher] = useState('')
+  const [hookCommand, setHookCommand] = useState('')
+  const [hookTimeout, setHookTimeout] = useState<number | ''>('')
+  const [hookBlocking, setHookBlocking] = useState(true)
+
   // Auto-apply content template when type or name changes
   useEffect(() => {
     if (name && !content) {
@@ -50,7 +57,7 @@ export default function NewCatalogItem() {
     }
   }, [type, name, content])
 
-  const handleTypeSpecificChange = (field: string, value: string | boolean) => {
+  const handleTypeSpecificChange = (field: string, value: string | boolean | number) => {
     switch (field) {
       case 'difficulty':
         setDifficulty(value as Difficulty | '')
@@ -76,6 +83,21 @@ export default function NewCatalogItem() {
       case 'commandDisableModelInvocation':
         setCommandDisableModelInvocation(value as boolean)
         break
+      case 'hookEvent':
+        setHookEvent(value as HookEvent | '')
+        break
+      case 'hookMatcher':
+        setHookMatcher(value as string)
+        break
+      case 'hookCommand':
+        setHookCommand(value as string)
+        break
+      case 'hookTimeout':
+        setHookTimeout(value as number | '')
+        break
+      case 'hookBlocking':
+        setHookBlocking(value as boolean)
+        break
     }
   }
 
@@ -93,6 +115,12 @@ export default function NewCatalogItem() {
     setAgentSkills('')
     setCommandArgumentHint('')
     setCommandDisableModelInvocation(false)
+    // Reset hook fields
+    setHookEvent('')
+    setHookMatcher('')
+    setHookCommand('')
+    setHookTimeout('')
+    setHookBlocking(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,6 +152,12 @@ export default function NewCatalogItem() {
         agentSkills: agentSkills || null,
         commandArgumentHint: commandArgumentHint || null,
         commandDisableModelInvocation,
+        // Hook fields
+        hookEvent: hookEvent || null,
+        hookMatcher: hookMatcher || null,
+        hookCommand: hookCommand || null,
+        hookTimeout: hookTimeout || null,
+        hookBlocking,
       }
 
       const res = await fetch('/api/catalog', {
@@ -304,6 +338,11 @@ export default function NewCatalogItem() {
                   agentSkills,
                   commandArgumentHint,
                   commandDisableModelInvocation,
+                  hookEvent,
+                  hookMatcher,
+                  hookCommand,
+                  hookTimeout,
+                  hookBlocking,
                 }}
                 onChange={handleTypeSpecificChange}
               />
@@ -344,7 +383,7 @@ export default function NewCatalogItem() {
             </div>
 
             {/* Marketplace Settings */}
-            {type !== 'guide' && (
+            {type !== 'guide' && type !== 'hook' && (
               <div className="glass rounded-2xl p-8 space-y-6">
                 <h2 className="text-lg font-medium text-[var(--text-primary)] flex items-center gap-2">
                   <span className="text-[var(--accent-cyan)]">CLI</span> Marketplace Settings

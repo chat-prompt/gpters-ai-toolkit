@@ -32,6 +32,7 @@ const TYPE_CONFIG = {
   agent: { icon: '◈', color: 'purple', label: 'Agent' },
   command: { icon: '▸', color: 'cyan', label: 'Command' },
   guide: { icon: '📚', color: 'emerald', label: 'Guide' },
+  hook: { icon: '🪝', color: 'orange', label: 'Hook' },
 }
 
 export default async function GettingStartedPage() {

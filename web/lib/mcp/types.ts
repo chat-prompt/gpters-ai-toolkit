@@ -2,7 +2,7 @@
  * MCP Server Types for GPTers Marketplace
  */
 
-import type { ItemType, TeamTag, Difficulty } from '../types'
+import type { ItemType, TeamTag, Difficulty, PluginFile } from '../types'
 
 // Tool input schemas
 export interface SearchPluginsInput {
@@ -24,6 +24,37 @@ export interface ListPluginsInput {
 export interface GetPluginsByCategoryInput {
   category: ItemType
   limit?: number
+}
+
+export interface CreatePluginInput {
+  id: string
+  type: ItemType
+  name: string
+  description?: string
+  content: string
+  author?: string
+  tags?: string[]
+  teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+  readme?: string
+  files?: PluginFile[]
+  marketplaceEnabled?: boolean
+}
+
+export interface UpdatePluginInput {
+  id: string
+  name?: string
+  description?: string
+  content?: string
+  author?: string
+  tags?: string[]
+  teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+  readme?: string
+  files?: PluginFile[]
+  marketplaceEnabled?: boolean
+}
+
+export interface DeletePluginInput {
+  id: string
 }
 
 // Tool output types
@@ -50,6 +81,7 @@ export interface PluginContent {
   difficulty?: Difficulty
   content: string       // Main content (SKILL.md, agent definition, etc.)
   readme?: string       // Additional documentation
+  files?: PluginFile[]  // Additional files (scripts, references, etc.)
   dependencies?: string[]
   allowedTools?: string
   // Agent-specific

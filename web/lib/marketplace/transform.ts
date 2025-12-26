@@ -9,6 +9,8 @@ import type {
   PluginJson,
   PluginStructure,
   SkillFrontmatter,
+  HookConfig,
+  HookMatcherConfig,
 } from './types'
 import { MARKETPLACE_CONFIG } from './types'
 
@@ -125,6 +127,81 @@ export function transformToCommandMd(item: CatalogItem): string {
 }
 
 /**
+ * Transform CatalogItem to hook JSON configuration
+ * This generates the settings.json hook configuration for users to copy
+ */
+export function transformToHookJson(item: CatalogItem): string {
+  if (!item.hookEvent || !item.hookCommand) {
+    throw new Error('Hook must have event and command defined')
+  }
+
+  const hookConfig: HookConfig = {
+    type: 'command',
+    command: item.hookCommand,
+  }
+
+  if (item.hookTimeout) {
+    hookConfig.timeout = item.hookTimeout
+  }
+
+  if (item.hookBlocking !== undefined) {
+    hookConfig.blocking = item.hookBlocking
+  }
+
+  const matcherConfig: HookMatcherConfig = {
+    hooks: [hookConfig],
+  }
+
+  if (item.hookMatcher) {
+    matcherConfig.matcher = item.hookMatcher
+  }
+
+  const eventConfig = {
+    [item.hookEvent]: [matcherConfig],
+  }
+
+  return JSON.stringify(eventConfig, null, 2)
+}
+
+/**
+ * Generate complete hook settings for copy-paste installation
+ */
+export function generateHookSettingsSnippet(item: CatalogItem): string {
+  if (!item.hookEvent || !item.hookCommand) {
+    throw new Error('Hook must have event and command defined')
+  }
+
+  const hookObj: Record<string, unknown> = {
+    type: 'command',
+    command: item.hookCommand,
+  }
+
+  if (item.hookTimeout) {
+    hookObj.timeout = item.hookTimeout
+  }
+
+  if (item.hookBlocking !== undefined) {
+    hookObj.blocking = item.hookBlocking
+  }
+
+  const matcherObj: Record<string, unknown> = {
+    hooks: [hookObj],
+  }
+
+  if (item.hookMatcher) {
+    matcherObj.matcher = item.hookMatcher
+  }
+
+  return `{
+  "hooks": {
+    "${item.hookEvent}": [
+${JSON.stringify(matcherObj, null, 6).split('\n').map(line => '      ' + line).join('\n').slice(6)}
+    ]
+  }
+}`
+}
+
+/**
  * Generate skill description with trigger keywords for discovery
  */
 function generateSkillDescription(item: CatalogItem): string {
@@ -158,7 +235,7 @@ export function generatePluginStructure(item: CatalogItem): PluginStructure {
   const pluginJson = generatePluginJson(item)
 
   let content: string
-  let contentType: 'skill' | 'agent' | 'command'
+  let contentType: 'skill' | 'agent' | 'command' | 'hook'
   let contentPath: string
 
   switch (item.type) {
@@ -178,6 +255,12 @@ export function generatePluginStructure(item: CatalogItem): PluginStructure {
       content = transformToCommandMd(item)
       contentType = 'command'
       contentPath = `commands/${item.id}.md`
+      break
+
+    case 'hook':
+      content = transformToHookJson(item)
+      contentType = 'hook'
+      contentPath = `hooks/${item.id}.json`
       break
 
     default:
@@ -239,7 +322,40 @@ function generateDefaultReadme(item: CatalogItem): string {
     agent: 'Agent',
     command: 'Command',
     guide: 'Guide',
+    hook: 'Hook',
   }[item.type]
+
+  // Hook has different installation method
+  if (item.type === 'hook') {
+    return `# ${item.name}
+
+${item.description}
+
+## Type
+${typeLabel}
+
+## Event
+\`${item.hookEvent}\`${item.hookMatcher ? ` (matcher: \`${item.hookMatcher}\`)` : ''}
+
+## Author
+${item.author}
+
+## Tags
+${item.tags?.map((t) => `\`${t}\``).join(', ') || 'None'}
+
+## Installation
+
+Add the following to your \`~/.claude/settings.json\` or \`.claude/settings.local.json\`:
+
+\`\`\`json
+${generateHookSettingsSnippet(item)}
+\`\`\`
+
+---
+
+*Part of [GPTers AI Toolkit](https://github.com/chat-prompt/gpters-ai-toolkit)*
+`
+  }
 
   return `# ${item.name}
 

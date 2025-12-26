@@ -18,6 +18,7 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     likes: record.likes,
     content: record.content,
     readme: record.readme ?? undefined,
+    files: record.files ?? undefined,
     // Type-specific fields
     allowedTools: record.allowedTools ?? undefined,
     agentModel: (record.agentModel as CatalogItem['agentModel']) ?? undefined,

@@ -103,6 +103,158 @@ export const MARKETPLACE_TOOLS: McpTool[] = [
       required: ['category'],
     },
   },
+  {
+    name: 'create_plugin',
+    description: `새 플러그인을 마켓플레이스에 생성합니다.
+스킬, 에이전트, 커맨드, 가이드, 훅을 생성할 수 있습니다.
+content 필드에 메인 콘텐츠(SKILL.md 등)를 전달하고,
+files 필드에 추가 파일(스크립트, 레퍼런스 등)을 배열로 전달할 수 있습니다.
+
+주의: 이 도구는 관리자 권한이 필요합니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: '플러그인 ID (소문자, 하이픈 사용, 예: "my-new-skill")',
+        },
+        type: {
+          type: 'string',
+          enum: ['skill', 'agent', 'command', 'guide', 'hook'],
+          description: '플러그인 타입',
+        },
+        name: {
+          type: 'string',
+          description: '플러그인 이름 (표시용)',
+        },
+        description: {
+          type: 'string',
+          description: '플러그인 설명',
+        },
+        content: {
+          type: 'string',
+          description: '메인 콘텐츠 (SKILL.md, AGENT.md 등의 내용)',
+        },
+        author: {
+          type: 'string',
+          description: '작성자 이름 (기본: unknown)',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '태그 목록',
+        },
+        teamTag: {
+          type: 'string',
+          enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
+          description: '팀 태그 (기본: general)',
+        },
+        readme: {
+          type: 'string',
+          description: 'README.md 내용 (선택)',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '파일명 (예: "setup.sh")' },
+              content: { type: 'string', description: '파일 내용' },
+              type: { type: 'string', description: '파일 타입 힌트 (예: "bash", "markdown")' },
+            },
+            required: ['name', 'content'],
+          },
+          description: '추가 파일 목록 (스크립트, 레퍼런스 등)',
+        },
+        marketplaceEnabled: {
+          type: 'boolean',
+          description: '마켓플레이스 공개 여부 (기본: false)',
+        },
+      },
+      required: ['id', 'type', 'name', 'content'],
+    },
+  },
+  {
+    name: 'update_plugin',
+    description: `기존 플러그인을 업데이트합니다.
+변경하고자 하는 필드만 전달하면 됩니다.
+files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
+
+주의: 이 도구는 관리자 권한이 필요합니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: '업데이트할 플러그인 ID',
+        },
+        name: {
+          type: 'string',
+          description: '새 플러그인 이름',
+        },
+        description: {
+          type: 'string',
+          description: '새 설명',
+        },
+        content: {
+          type: 'string',
+          description: '새 메인 콘텐츠',
+        },
+        author: {
+          type: 'string',
+          description: '새 작성자',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '새 태그 목록',
+        },
+        teamTag: {
+          type: 'string',
+          enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
+          description: '새 팀 태그',
+        },
+        readme: {
+          type: 'string',
+          description: '새 README 내용',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              content: { type: 'string' },
+              type: { type: 'string' },
+            },
+            required: ['name', 'content'],
+          },
+          description: '새 파일 목록 (기존 파일 교체)',
+        },
+        marketplaceEnabled: {
+          type: 'boolean',
+          description: '마켓플레이스 공개 여부',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_plugin',
+    description: `플러그인을 삭제합니다.
+
+주의: 이 작업은 되돌릴 수 없습니다. 관리자 권한이 필요합니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: '삭제할 플러그인 ID',
+        },
+      },
+      required: ['id'],
+    },
+  },
 ]
 
 export function getToolByName(name: string): McpTool | undefined {

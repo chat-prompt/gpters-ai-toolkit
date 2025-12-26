@@ -262,6 +262,30 @@ export async function handleSimpleRequest(
         }
       }
 
+      case 'create': {
+        const result = await executeTool('create_plugin', params)
+        return {
+          success: !result.isError,
+          data: JSON.parse(result.content[0].text),
+        }
+      }
+
+      case 'update': {
+        const result = await executeTool('update_plugin', params)
+        return {
+          success: !result.isError,
+          data: JSON.parse(result.content[0].text),
+        }
+      }
+
+      case 'delete': {
+        const result = await executeTool('delete_plugin', params)
+        return {
+          success: !result.isError,
+          data: JSON.parse(result.content[0].text),
+        }
+      }
+
       default:
         return {
           success: false,

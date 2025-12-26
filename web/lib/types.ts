@@ -1,4 +1,11 @@
-export type ItemType = 'skill' | 'agent' | 'command' | 'guide'
+export type ItemType = 'skill' | 'agent' | 'command' | 'guide' | 'hook'
+
+// Plugin file (script, reference, etc.)
+export interface PluginFile {
+  name: string      // e.g., "reference.md", "setup.sh"
+  content: string   // File content
+  type?: string     // Optional MIME type hint (e.g., "markdown", "bash")
+}
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
@@ -10,6 +17,22 @@ export type AgentModel = 'sonnet' | 'opus' | 'haiku' | 'inherit'
 
 // Agent permission mode options
 export type AgentPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'ignore'
+
+// Hook event types
+export type HookEvent =
+  | 'PreToolUse'
+  | 'PostToolUse'
+  | 'PermissionRequest'
+  | 'Notification'
+  | 'UserPromptSubmit'
+  | 'Stop'
+  | 'SubagentStop'
+  | 'PreCompact'
+  | 'SessionStart'
+  | 'SessionEnd'
+
+// Hook matcher types (varies by event)
+export type HookMatcher = string // e.g., 'auto', 'manual', 'startup', 'resume', 'compact', 'Bash', 'Read', etc.
 
 export interface CatalogItem {
   id: string
@@ -26,6 +49,7 @@ export interface CatalogItem {
   likes: number // 좋아요 수
   content: string // skill.md 내용
   readme?: string // README.md 내용
+  files?: PluginFile[] // 추가 파일들 (스크립트, 레퍼런스 등)
 
   // Type-specific fields for Claude Code plugins
   allowedTools?: string // Skill/Agent/Command: 사용 가능 도구 (쉼표 구분, e.g., "Read, Grep, Bash")
@@ -36,6 +60,13 @@ export interface CatalogItem {
   // Command-specific
   commandArgumentHint?: string // Command 인자 힌트 (e.g., "[message]")
   commandDisableModelInvocation?: boolean // Command 자동 호출 비활성화
+
+  // Hook-specific
+  hookEvent?: HookEvent // Hook 이벤트 타입 (PreCompact, SessionStart 등)
+  hookMatcher?: HookMatcher // Matcher (auto, manual, tool name 등)
+  hookCommand?: string // 실행할 셸 명령어
+  hookTimeout?: number // 타임아웃 (ms)
+  hookBlocking?: boolean // 블로킹 여부
 
   // Marketplace integration fields
   marketplaceEnabled?: boolean // Claude Code 마켓플레이스에 등록 여부
@@ -122,6 +153,60 @@ export const DIFFICULTY_LABELS: Record<Difficulty, { label: string; color: strin
   easy: { label: '쉬움', color: 'bg-green-100 text-green-800', emoji: '🟢' },
   medium: { label: '보통', color: 'bg-yellow-100 text-yellow-800', emoji: '🟡' },
   hard: { label: '어려움', color: 'bg-red-100 text-red-800', emoji: '🔴' },
+}
+
+// Hook event descriptions
+export const HOOK_EVENTS: Record<HookEvent, { label: string; description: string; matchers: string[] }> = {
+  PreToolUse: {
+    label: '도구 실행 전',
+    description: '도구가 실행되기 전에 호출됩니다. 도구 실행을 차단하거나 수정할 수 있습니다.',
+    matchers: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', '...'],
+  },
+  PostToolUse: {
+    label: '도구 실행 후',
+    description: '도구 실행이 완료된 후 호출됩니다. 결과를 검증하거나 후처리할 수 있습니다.',
+    matchers: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', '...'],
+  },
+  PermissionRequest: {
+    label: '권한 요청',
+    description: '권한 요청 시 호출됩니다. 자동 승인/거부 처리가 가능합니다.',
+    matchers: ['Bash', 'Read', 'Write', 'Edit', '...'],
+  },
+  Notification: {
+    label: '알림',
+    description: '알림 전송 시 호출됩니다. 커스텀 알림 처리가 가능합니다.',
+    matchers: [],
+  },
+  UserPromptSubmit: {
+    label: '프롬프트 제출',
+    description: '사용자 프롬프트 제출 시 호출됩니다. 프롬프트 검증이나 컨텍스트 추가가 가능합니다.',
+    matchers: [],
+  },
+  Stop: {
+    label: '응답 종료',
+    description: 'Claude 응답이 종료될 때 호출됩니다.',
+    matchers: [],
+  },
+  SubagentStop: {
+    label: '서브에이전트 완료',
+    description: '서브에이전트 작업이 완료될 때 호출됩니다.',
+    matchers: [],
+  },
+  PreCompact: {
+    label: 'Compaction 전',
+    description: 'Compaction 작업 직전에 호출됩니다. Transcript 백업 등에 활용됩니다.',
+    matchers: ['auto', 'manual'],
+  },
+  SessionStart: {
+    label: '세션 시작',
+    description: '세션이 시작되거나 재개될 때 호출됩니다.',
+    matchers: ['startup', 'resume', 'clear', 'compact'],
+  },
+  SessionEnd: {
+    label: '세션 종료',
+    description: '세션이 종료될 때 호출됩니다.',
+    matchers: [],
+  },
 }
 
 export const TEAM_TAGS: Record<TeamTag, { label: string; color: string; emoji: string }> = {

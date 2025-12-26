@@ -3,7 +3,7 @@
  * Defines templates, guides, and field configurations for each item type
  */
 
-import type { ItemType, AgentModel, AgentPermissionMode } from './types'
+import type { ItemType, AgentModel, AgentPermissionMode, HookEvent } from './types'
 
 // Available Claude Code tools
 export const CLAUDE_TOOLS = [
@@ -75,6 +75,7 @@ export const TYPE_CONFIG: Record<
       showAllowedTools: boolean
       showAgentFields: boolean
       showCommandFields: boolean
+      showHookFields: boolean
     }
   }
 > = {
@@ -138,6 +139,7 @@ export const TYPE_CONFIG: Record<
       showAllowedTools: true,
       showAgentFields: false,
       showCommandFields: false,
+      showHookFields: false,
     },
   },
   agent: {
@@ -212,6 +214,7 @@ You are a specialized agent for {purpose}.
       showAllowedTools: true,
       showAgentFields: true,
       showCommandFields: false,
+      showHookFields: false,
     },
   },
   command: {
@@ -278,6 +281,7 @@ $ARGUMENTS를 기반으로 작업을 수행합니다.
       showAllowedTools: true,
       showAgentFields: false,
       showCommandFields: true,
+      showHookFields: false,
     },
   },
   guide: {
@@ -350,6 +354,72 @@ $ARGUMENTS를 기반으로 작업을 수행합니다.
       showAllowedTools: false,
       showAgentFields: false,
       showCommandFields: false,
+      showHookFields: false,
+    },
+  },
+  hook: {
+    label: 'Hook',
+    icon: '🪝',
+    description: '이벤트 기반 자동 실행 스크립트',
+    color: 'orange',
+    namePlaceholder: 'my-hook-name',
+    descriptionPlaceholder: '이 Hook이 어떤 상황에서 실행되는지 설명하세요',
+    contentPlaceholder: 'Hook 실행 시 수행할 작업을 설명하세요...',
+    suggestedTags: ['automation', 'hook', 'workflow'],
+    contentTemplate: `# {name}
+
+## 개요
+
+이 Hook이 수행하는 작업을 설명합니다.
+
+## 사용 시나리오
+
+- 시나리오 1
+- 시나리오 2
+
+## 설정 방법
+
+1. settings.json을 열거나 생성합니다
+2. hooks 섹션에 아래 설정을 추가합니다
+
+## 주의사항
+
+- Hook 실행 시 고려해야 할 사항을 적어주세요
+`,
+    guide: {
+      title: 'Hook 작성 가이드',
+      sections: [
+        {
+          heading: 'Hook이란?',
+          content:
+            'Hook은 Claude Code의 특정 이벤트 발생 시 자동으로 실행되는 스크립트입니다. Compaction 전 백업, 세션 시작 시 환경 설정 등에 활용할 수 있습니다.',
+          tip: 'Hook은 settings.json 또는 settings.local.json에 직접 추가해야 합니다.',
+        },
+        {
+          heading: 'Event 선택',
+          content:
+            '- **PreCompact**: Compaction 직전 (transcript 백업)\n- **SessionStart**: 세션 시작/재개 시\n- **PreToolUse**: 도구 실행 전\n- **PostToolUse**: 도구 실행 후',
+        },
+        {
+          heading: 'Matcher 설정',
+          content:
+            'Event 종류에 따라 다른 Matcher를 사용합니다. PreCompact는 auto/manual, SessionStart는 startup/resume/compact/clear 등을 사용합니다.',
+        },
+        {
+          heading: '설치 방법',
+          content:
+            'Hook은 플러그인으로 설치되지 않습니다. 제공되는 JSON 설정을 복사하여 ~/.claude/settings.json의 hooks 섹션에 붙여넣으세요.',
+        },
+      ],
+    },
+    fields: {
+      showDifficulty: false,
+      showPluginId: false,
+      showEstimatedTime: false,
+      showAllowedTools: false,
+      showAgentFields: false,
+      showCommandFields: false,
+      showHookFields: true,
     },
   },
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -6,6 +6,7 @@ export const itemTypeEnum = pgEnum('item_type', [
   'agent',
   'command',
   'guide',
+  'hook',
 ])
 
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
@@ -35,6 +36,8 @@ export const catalogItems = pgTable('catalog_items', {
   likes: integer('likes').notNull().default(0),
   content: text('content').notNull(),
   readme: text('readme'),
+  // Additional files (scripts, references, etc.) - JSON array of {name, content, type?}
+  files: jsonb('files').$type<Array<{ name: string; content: string; type?: string }>>(),
 
   // Type-specific fields for Claude Code plugins
   // Skill & Command & Agent: allowed tools (comma-separated, e.g., "Read, Grep, Bash")
@@ -46,6 +49,13 @@ export const catalogItems = pgTable('catalog_items', {
   // Command-specific fields
   commandArgumentHint: text('command_argument_hint'), // e.g., "[message]"
   commandDisableModelInvocation: boolean('command_disable_model_invocation').default(false),
+
+  // Hook-specific fields
+  hookEvent: text('hook_event'), // PreCompact, SessionStart, PreToolUse, PostToolUse, etc.
+  hookMatcher: text('hook_matcher'), // auto, manual, startup, resume, compact, tool name, etc.
+  hookCommand: text('hook_command'), // Shell command to execute
+  hookTimeout: integer('hook_timeout'), // Timeout in milliseconds
+  hookBlocking: boolean('hook_blocking').default(true), // Whether hook blocks execution
 
   // Marketplace integration fields
   marketplaceEnabled: boolean('marketplace_enabled').default(false),

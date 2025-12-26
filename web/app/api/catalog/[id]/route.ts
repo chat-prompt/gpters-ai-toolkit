@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, HookEvent } from '@/lib/types'
 import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 
 interface RouteParams {
@@ -50,6 +50,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (body.estimatedTime !== undefined) updateData.estimatedTime = body.estimatedTime
   if (body.content !== undefined) updateData.content = body.content
   if (body.readme !== undefined) updateData.readme = body.readme
+  if (body.files !== undefined) updateData.files = body.files
   if (body.type !== undefined) updateData.type = body.type as ItemType
   // Marketplace fields
   if (body.marketplaceEnabled !== undefined) updateData.marketplaceEnabled = body.marketplaceEnabled
@@ -71,12 +72,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         pluginId: updated.pluginId ?? undefined,
         estimatedTime: updated.estimatedTime ?? undefined,
         readme: updated.readme ?? undefined,
+        files: updated.files ?? undefined,
         allowedTools: updated.allowedTools ?? undefined,
         agentModel: (updated.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
         agentPermissionMode: (updated.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
         agentSkills: updated.agentSkills ?? undefined,
         commandArgumentHint: updated.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: updated.commandDisableModelInvocation ?? undefined,
+        hookEvent: (updated.hookEvent ?? undefined) as HookEvent | undefined,
+        hookMatcher: updated.hookMatcher ?? undefined,
+        hookCommand: updated.hookCommand ?? undefined,
+        hookTimeout: updated.hookTimeout ?? undefined,
+        hookBlocking: updated.hookBlocking ?? undefined,
         marketplaceEnabled: updated.marketplaceEnabled ?? undefined,
         marketplaceVersion: updated.marketplaceVersion ?? undefined,
         createdAt: updated.createdAt?.toISOString(),
@@ -96,12 +103,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         pluginId: item.pluginId ?? undefined,
         estimatedTime: item.estimatedTime ?? undefined,
         readme: item.readme ?? undefined,
+        files: item.files ?? undefined,
         allowedTools: item.allowedTools ?? undefined,
         agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
         agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
         agentSkills: item.agentSkills ?? undefined,
         commandArgumentHint: item.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
+        hookEvent: (item.hookEvent ?? undefined) as HookEvent | undefined,
+        hookMatcher: item.hookMatcher ?? undefined,
+        hookCommand: item.hookCommand ?? undefined,
+        hookTimeout: item.hookTimeout ?? undefined,
+        hookBlocking: item.hookBlocking ?? undefined,
         marketplaceEnabled: item.marketplaceEnabled ?? undefined,
         marketplaceVersion: item.marketplaceVersion ?? undefined,
         createdAt: item.createdAt?.toISOString(),
@@ -152,12 +165,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         pluginId: item.pluginId ?? undefined,
         estimatedTime: item.estimatedTime ?? undefined,
         readme: item.readme ?? undefined,
+        files: item.files ?? undefined,
         allowedTools: item.allowedTools ?? undefined,
         agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
         agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
         agentSkills: item.agentSkills ?? undefined,
         commandArgumentHint: item.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
+        hookEvent: (item.hookEvent ?? undefined) as HookEvent | undefined,
+        hookMatcher: item.hookMatcher ?? undefined,
+        hookCommand: item.hookCommand ?? undefined,
+        hookTimeout: item.hookTimeout ?? undefined,
+        hookBlocking: item.hookBlocking ?? undefined,
         marketplaceEnabled: item.marketplaceEnabled ?? undefined,
         marketplaceVersion: item.marketplaceVersion ?? undefined,
         createdAt: item.createdAt?.toISOString(),

@@ -3,15 +3,14 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { TAGS, MCP_SERVERS, Difficulty, AgentModel, AgentPermissionMode, TeamTag } from '@/lib/types'
+import { TAGS, MCP_SERVERS, Difficulty, AgentModel, AgentPermissionMode, TeamTag, HookEvent } from '@/lib/types'
+import type { ItemType } from '@/lib/types'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { TypeGuidePanel } from '@/components/TypeGuidePanel'
 import { TypeSpecificFields } from '@/components/TypeSpecificFields'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
 import { parseFrontmatter, generateIdFromName } from '@/lib/frontmatter'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
-
-type ItemType = 'skill' | 'agent' | 'command' | 'guide'
 
 const AVAILABLE_TAGS = Object.keys(TAGS) as Array<keyof typeof TAGS>
 
@@ -41,6 +40,13 @@ export default function UploadPage() {
   const [agentSkills, setAgentSkills] = useState('')
   const [commandArgumentHint, setCommandArgumentHint] = useState('')
   const [commandDisableModelInvocation, setCommandDisableModelInvocation] = useState(false)
+
+  // Hook-specific fields
+  const [hookEvent, setHookEvent] = useState<HookEvent | ''>('')
+  const [hookMatcher, setHookMatcher] = useState('')
+  const [hookCommand, setHookCommand] = useState('')
+  const [hookTimeout, setHookTimeout] = useState<number | ''>('')
+  const [hookBlocking, setHookBlocking] = useState(true)
 
   // UI states
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -110,7 +116,7 @@ export default function UploadPage() {
   }, [handleFileUpload])
 
   // Handle type-specific field changes
-  const handleTypeFieldChange = (field: string, value: string | boolean) => {
+  const handleTypeFieldChange = (field: string, value: string | boolean | number) => {
     switch (field) {
       case 'difficulty':
         setDifficulty(value as Difficulty | '')
@@ -135,6 +141,21 @@ export default function UploadPage() {
         break
       case 'commandDisableModelInvocation':
         setCommandDisableModelInvocation(value as boolean)
+        break
+      case 'hookEvent':
+        setHookEvent(value as HookEvent | '')
+        break
+      case 'hookMatcher':
+        setHookMatcher(value as string)
+        break
+      case 'hookCommand':
+        setHookCommand(value as string)
+        break
+      case 'hookTimeout':
+        setHookTimeout(value as number | '')
+        break
+      case 'hookBlocking':
+        setHookBlocking(value as boolean)
         break
     }
   }
@@ -209,6 +230,12 @@ export default function UploadPage() {
         agentSkills: agentSkills || null,
         commandArgumentHint: commandArgumentHint || null,
         commandDisableModelInvocation: commandDisableModelInvocation || null,
+        // Hook fields
+        hookEvent: hookEvent || null,
+        hookMatcher: hookMatcher || null,
+        hookCommand: hookCommand || null,
+        hookTimeout: hookTimeout || null,
+        hookBlocking: hookBlocking,
       }
 
       const res = await fetch('/api/upload', {
@@ -338,6 +365,12 @@ export default function UploadPage() {
                       setAgentSkills('')
                       setCommandArgumentHint('')
                       setCommandDisableModelInvocation(false)
+                      // Reset hook fields
+                      setHookEvent('')
+                      setHookMatcher('')
+                      setHookCommand('')
+                      setHookTimeout('')
+                      setHookBlocking(true)
                     }}
                     className={`glass rounded-xl p-4 text-left transition-all ${
                       type === t
@@ -465,6 +498,11 @@ export default function UploadPage() {
                   agentSkills,
                   commandArgumentHint,
                   commandDisableModelInvocation,
+                  hookEvent,
+                  hookMatcher,
+                  hookCommand,
+                  hookTimeout,
+                  hookBlocking,
                 }}
                 onChange={handleTypeFieldChange}
               />

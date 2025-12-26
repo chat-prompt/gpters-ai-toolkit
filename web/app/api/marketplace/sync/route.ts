@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import { syncAllToGitHub } from '@/lib/marketplace'
+import type { HookEvent } from '@/lib/types'
 
 /**
  * POST /api/marketplace/sync
@@ -39,6 +40,12 @@ export async function POST(request: NextRequest) {
       agentSkills: item.agentSkills ?? undefined,
       commandArgumentHint: item.commandArgumentHint ?? undefined,
       commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
+      // Hook fields
+      hookEvent: (item.hookEvent ?? undefined) as HookEvent | undefined,
+      hookMatcher: item.hookMatcher ?? undefined,
+      hookCommand: item.hookCommand ?? undefined,
+      hookTimeout: item.hookTimeout ?? undefined,
+      hookBlocking: item.hookBlocking ?? undefined,
       marketplaceEnabled: item.marketplaceEnabled ?? undefined,
       marketplaceVersion: item.marketplaceVersion ?? undefined,
       createdAt: item.createdAt?.toISOString(),

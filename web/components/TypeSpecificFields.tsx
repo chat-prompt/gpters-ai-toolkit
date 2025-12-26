@@ -1,8 +1,8 @@
 'use client'
 
 import { CLAUDE_TOOLS, AGENT_MODELS, AGENT_PERMISSION_MODES, TYPE_CONFIG } from '@/lib/type-config'
-import type { ItemType, AgentModel, AgentPermissionMode, Difficulty } from '@/lib/types'
-import { DIFFICULTY_LABELS } from '@/lib/types'
+import type { ItemType, AgentModel, AgentPermissionMode, Difficulty, HookEvent } from '@/lib/types'
+import { DIFFICULTY_LABELS, HOOK_EVENTS } from '@/lib/types'
 
 interface TypeSpecificFieldsProps {
   type: ItemType
@@ -15,8 +15,14 @@ interface TypeSpecificFieldsProps {
     agentSkills: string
     commandArgumentHint: string
     commandDisableModelInvocation: boolean
+    // Hook fields
+    hookEvent: HookEvent | ''
+    hookMatcher: string
+    hookCommand: string
+    hookTimeout: number | ''
+    hookBlocking: boolean
   }
-  onChange: (field: string, value: string | boolean) => void
+  onChange: (field: string, value: string | boolean | number) => void
 }
 
 export function TypeSpecificFields({ type, values, onChange }: TypeSpecificFieldsProps) {
@@ -230,6 +236,152 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               </div>
             </label>
           </div>
+        </>
+      )}
+
+      {/* Hook-specific fields */}
+      {fields.showHookFields && (
+        <>
+          {/* Hook Event */}
+          <div>
+            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
+              Hook Event *
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {(Object.keys(HOOK_EVENTS) as HookEvent[]).map((event) => (
+                <button
+                  key={event}
+                  type="button"
+                  onClick={() => onChange('hookEvent', values.hookEvent === event ? '' : event)}
+                  className={`px-4 py-3 rounded-lg text-left transition-all ${
+                    values.hookEvent === event
+                      ? 'bg-[var(--accent-cyan)] text-black'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <div className="text-sm font-medium">{HOOK_EVENTS[event].label}</div>
+                  <div className={`text-xs mt-0.5 line-clamp-2 ${values.hookEvent === event ? 'text-black/70' : 'text-[var(--text-muted)]'}`}>
+                    {HOOK_EVENTS[event].description}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Hook Matcher */}
+          {values.hookEvent && HOOK_EVENTS[values.hookEvent as HookEvent]?.matchers.length > 0 && (
+            <div>
+              <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
+                Matcher
+              </label>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {HOOK_EVENTS[values.hookEvent as HookEvent].matchers.map((matcher) => (
+                  <button
+                    key={matcher}
+                    type="button"
+                    onClick={() => onChange('hookMatcher', values.hookMatcher === matcher ? '' : matcher)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      values.hookMatcher === matcher
+                        ? 'bg-[var(--accent-purple)] text-white'
+                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {matcher}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={values.hookMatcher}
+                onChange={(e) => onChange('hookMatcher', e.target.value)}
+                placeholder="또는 커스텀 matcher 입력..."
+                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
+              />
+            </div>
+          )}
+
+          {/* Hook Command */}
+          <div>
+            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              Command *
+            </label>
+            <p className="text-xs text-[var(--text-muted)] mb-3">
+              Hook 실행 시 호출할 셸 명령어를 입력하세요.
+            </p>
+            <textarea
+              value={values.hookCommand}
+              onChange={(e) => onChange('hookCommand', e.target.value)}
+              placeholder="예: cp $transcript_path ~/backups/transcript-$(date +%s).jsonl"
+              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors resize-none"
+              rows={3}
+            />
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              사용 가능한 변수: <code className="text-[var(--accent-cyan)]">$session_id</code>, <code className="text-[var(--accent-cyan)]">$transcript_path</code>, <code className="text-[var(--accent-cyan)]">$hook_event_name</code>
+            </p>
+          </div>
+
+          {/* Hook Timeout */}
+          <div>
+            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              Timeout (ms)
+            </label>
+            <input
+              type="number"
+              value={values.hookTimeout}
+              onChange={(e) => onChange('hookTimeout', e.target.value ? parseInt(e.target.value, 10) : '')}
+              placeholder="기본값: 60000 (60초)"
+              min={0}
+              className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+            />
+          </div>
+
+          {/* Hook Blocking */}
+          <div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={values.hookBlocking}
+                onChange={(e) => onChange('hookBlocking', e.target.checked)}
+                className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+              />
+              <div>
+                <span className="text-sm text-[var(--text-primary)]">
+                  Blocking
+                </span>
+                <p className="text-xs text-[var(--text-muted)]">
+                  체크하면 Hook이 완료될 때까지 Claude Code가 대기합니다.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Preview */}
+          {values.hookEvent && values.hookCommand && (
+            <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+              <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                설정 미리보기
+              </div>
+              <pre className="text-xs font-mono text-[var(--accent-cyan)] overflow-x-auto">
+{`{
+  "hooks": {
+    "${values.hookEvent}": [
+      {${values.hookMatcher ? `
+        "matcher": "${values.hookMatcher}",` : ''}
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${values.hookCommand}"${values.hookTimeout ? `,
+            "timeout": ${values.hookTimeout}` : ''}${!values.hookBlocking ? `,
+            "blocking": false` : ''}
+          }
+        ]
+      }
+    ]
+  }
+}`}
+              </pre>
+            </div>
+          )}
         </>
       )}
     </div>

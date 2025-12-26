@@ -12,6 +12,9 @@ import type {
   ListPluginsInput,
   GetPluginsByCategoryInput,
   GetPromptInput,
+  CreatePluginInput,
+  UpdatePluginInput,
+  DeletePluginInput,
   PluginSummary,
   PluginContent,
   SearchResult,
@@ -117,6 +120,7 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
     difficulty: item.difficulty || undefined,
     content: item.content,
     readme: item.readme || undefined,
+    files: item.files || undefined,
     dependencies: item.dependencies || undefined,
     allowedTools: item.allowedTools || undefined,
     agentModel: item.agentModel || undefined,
@@ -224,6 +228,110 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
 }
 
 /**
+ * Create a new plugin
+ * Requires admin authentication (handled by API route)
+ */
+export async function createPlugin(
+  input: CreatePluginInput
+): Promise<{ success: boolean; id: string; error?: string }> {
+  const { id, type, name, description, content, author, tags, teamTag, readme, files, marketplaceEnabled } = input
+
+  // Check if plugin already exists
+  const existing = await db
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (existing.length > 0) {
+    return { success: false, id, error: `Plugin with ID '${id}' already exists` }
+  }
+
+  await db.insert(catalogItems).values({
+    id,
+    type,
+    name,
+    description: description || '',
+    content,
+    author: author || 'unknown',
+    tags: tags || [],
+    teamTag: (teamTag as TeamTag) || 'general',
+    readme: readme || null,
+    files: files || null,
+    marketplaceEnabled: marketplaceEnabled || false,
+    likes: 0,
+    dependencies: [],
+  })
+
+  return { success: true, id }
+}
+
+/**
+ * Update an existing plugin
+ * Requires admin authentication (handled by API route)
+ */
+export async function updatePlugin(
+  input: UpdatePluginInput
+): Promise<{ success: boolean; id: string; error?: string }> {
+  const { id, ...updateFields } = input
+
+  // Check if plugin exists
+  const existing = await db
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (existing.length === 0) {
+    return { success: false, id, error: `Plugin with ID '${id}' not found` }
+  }
+
+  // Build update object with only provided fields
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date(),
+  }
+
+  if (updateFields.name !== undefined) updateData.name = updateFields.name
+  if (updateFields.description !== undefined) updateData.description = updateFields.description
+  if (updateFields.content !== undefined) updateData.content = updateFields.content
+  if (updateFields.author !== undefined) updateData.author = updateFields.author
+  if (updateFields.tags !== undefined) updateData.tags = updateFields.tags
+  if (updateFields.teamTag !== undefined) updateData.teamTag = updateFields.teamTag
+  if (updateFields.readme !== undefined) updateData.readme = updateFields.readme
+  if (updateFields.files !== undefined) updateData.files = updateFields.files
+  if (updateFields.marketplaceEnabled !== undefined) updateData.marketplaceEnabled = updateFields.marketplaceEnabled
+
+  await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
+
+  return { success: true, id }
+}
+
+/**
+ * Delete a plugin
+ * Requires admin authentication (handled by API route)
+ */
+export async function deletePlugin(
+  input: DeletePluginInput
+): Promise<{ success: boolean; id: string; error?: string }> {
+  const { id } = input
+
+  // Check if plugin exists
+  const existing = await db
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (existing.length === 0) {
+    return { success: false, id, error: `Plugin with ID '${id}' not found` }
+  }
+
+  await db.delete(catalogItems).where(eq(catalogItems.id, id))
+
+  return { success: true, id }
+}
+
+/**
  * Execute a tool call and return MCP-formatted response
  */
 export async function executeTool(
@@ -292,6 +400,83 @@ export async function executeTool(
               text: JSON.stringify(result, null, 2),
             },
           ],
+        }
+      }
+
+      case 'create_plugin': {
+        const input = args as unknown as CreatePluginInput
+        if (!input.id || !input.type || !input.name || !input.content) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required fields: id, type, name, content',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await createPlugin(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'update_plugin': {
+        const input = args as unknown as UpdatePluginInput
+        if (!input.id) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: 'Missing required field: id' }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await updatePlugin(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'delete_plugin': {
+        const input = args as unknown as DeletePluginInput
+        if (!input.id) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: 'Missing required field: id' }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await deletePlugin(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
         }
       }
 

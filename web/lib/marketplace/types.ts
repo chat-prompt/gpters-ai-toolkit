@@ -70,9 +70,26 @@ export interface SyncResult {
 export interface PluginStructure {
   pluginJson: PluginJson
   contentPath: string
-  contentType: 'skill' | 'agent' | 'command'
+  contentType: 'skill' | 'agent' | 'command' | 'hook'
   content: string
   readme?: string
+}
+
+// Hook configuration for settings.json
+export interface HookConfig {
+  type: 'command'
+  command: string
+  timeout?: number
+  blocking?: boolean
+}
+
+export interface HookMatcherConfig {
+  matcher?: string
+  hooks: HookConfig[]
+}
+
+export interface HookEventConfig {
+  [eventName: string]: HookMatcherConfig[]
 }
 
 // Marketplace configuration

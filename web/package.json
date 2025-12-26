@@ -22,6 +22,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@octokit/rest": "^21.1.1",
     "drizzle-orm": "^0.45.1",
+    "jszip": "^3.10.1",
     "next": "16.1.0",
     "next-auth": "5.0.0-beta.30",
     "react": "19.2.3",

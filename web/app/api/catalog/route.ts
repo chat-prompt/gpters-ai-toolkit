@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 
 export async function GET(request: NextRequest) {
@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
     estimatedTime,
     content,
     readme,
+    files,
     marketplaceEnabled,
     marketplaceVersion,
     // Type-specific fields
@@ -46,6 +47,12 @@ export async function POST(request: NextRequest) {
     agentSkills,
     commandArgumentHint,
     commandDisableModelInvocation,
+    // Hook fields
+    hookEvent,
+    hookMatcher,
+    hookCommand,
+    hookTimeout,
+    hookBlocking,
   } = body
 
   if (!id || !type || !name || !content) {
@@ -68,6 +75,7 @@ export async function POST(request: NextRequest) {
     estimatedTime: estimatedTime || null,
     content,
     readme: readme || null,
+    files: (files as PluginFile[]) || null,
     marketplaceEnabled: marketplaceEnabled || false,
     marketplaceVersion: marketplaceVersion || '1.0.0',
     // Type-specific fields
@@ -77,6 +85,12 @@ export async function POST(request: NextRequest) {
     agentSkills: agentSkills || null,
     commandArgumentHint: commandArgumentHint || null,
     commandDisableModelInvocation: commandDisableModelInvocation || false,
+    // Hook fields
+    hookEvent: (hookEvent as HookEvent) || null,
+    hookMatcher: hookMatcher || null,
+    hookCommand: hookCommand || null,
+    hookTimeout: hookTimeout || null,
+    hookBlocking: hookBlocking ?? true,
   }
 
   await db.insert(catalogItems).values(newItem)
@@ -93,6 +107,7 @@ export async function POST(request: NextRequest) {
         pluginId: newItem.pluginId ?? undefined,
         estimatedTime: newItem.estimatedTime ?? undefined,
         readme: newItem.readme ?? undefined,
+        files: newItem.files ?? undefined,
         marketplaceEnabled: newItem.marketplaceEnabled ?? undefined,
         marketplaceVersion: newItem.marketplaceVersion ?? undefined,
         // Type-specific fields
@@ -102,6 +117,12 @@ export async function POST(request: NextRequest) {
         agentSkills: newItem.agentSkills ?? undefined,
         commandArgumentHint: newItem.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: newItem.commandDisableModelInvocation ?? undefined,
+        // Hook fields
+        hookEvent: (newItem.hookEvent ?? undefined) as HookEvent | undefined,
+        hookMatcher: newItem.hookMatcher ?? undefined,
+        hookCommand: newItem.hookCommand ?? undefined,
+        hookTimeout: newItem.hookTimeout ?? undefined,
+        hookBlocking: newItem.hookBlocking ?? undefined,
       }
       await syncItemToGitHub(catalogItem)
 
@@ -116,6 +137,7 @@ export async function POST(request: NextRequest) {
         pluginId: item.pluginId ?? undefined,
         estimatedTime: item.estimatedTime ?? undefined,
         readme: item.readme ?? undefined,
+        files: item.files ?? undefined,
         marketplaceEnabled: item.marketplaceEnabled ?? undefined,
         marketplaceVersion: item.marketplaceVersion ?? undefined,
         createdAt: item.createdAt?.toISOString(),
@@ -128,6 +150,12 @@ export async function POST(request: NextRequest) {
         agentSkills: item.agentSkills ?? undefined,
         commandArgumentHint: item.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
+        // Hook fields
+        hookEvent: (item.hookEvent ?? undefined) as HookEvent | undefined,
+        hookMatcher: item.hookMatcher ?? undefined,
+        hookCommand: item.hookCommand ?? undefined,
+        hookTimeout: item.hookTimeout ?? undefined,
+        hookBlocking: item.hookBlocking ?? undefined,
       }))
       await updateMarketplaceJson(allCatalogItems)
 
