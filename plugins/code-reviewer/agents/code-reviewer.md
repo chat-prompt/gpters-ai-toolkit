@@ -1,7 +1,6 @@
 ---
 name: code-reviewer
 description: 코드 리뷰를 수행하고 개선점을 제안하는 서브에이전트
-version: 1.0.0
 ---
 # Code Reviewer Agent
 
