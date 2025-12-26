@@ -6,7 +6,7 @@
 Skill
 
 ## Author
-gpters-team
+primadonna
 
 ## Tags
 `code`, `analysis`, `refactoring`
