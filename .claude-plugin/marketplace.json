@@ -69,20 +69,6 @@
         "workflow",
         "backup"
       ]
-    },
-    {
-      "name": "script-test",
-      "source": "./plugins/script-test",
-      "description": "MCP를 통한 스크립트 실행 테스트",
-      "version": "1.0.0",
-      "author": {
-        "name": "gpters-team"
-      },
-      "category": "skill",
-      "keywords": [
-        "test",
-        "script"
-      ]
     }
   ]
 }
