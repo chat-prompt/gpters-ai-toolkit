@@ -91,3 +91,34 @@ export interface McpToolResponse {
   }>
   isError?: boolean
 }
+
+// MCP Prompt types
+export interface McpPrompt {
+  name: string
+  description?: string
+  arguments?: McpPromptArgument[]
+}
+
+export interface McpPromptArgument {
+  name: string
+  description?: string
+  required?: boolean
+}
+
+export interface McpPromptMessage {
+  role: 'user' | 'assistant'
+  content: {
+    type: 'text' | 'image' | 'resource'
+    text?: string
+  }
+}
+
+export interface McpPromptResult {
+  description?: string
+  messages: McpPromptMessage[]
+}
+
+export interface GetPromptInput {
+  name: string
+  arguments?: Record<string, string>
+}

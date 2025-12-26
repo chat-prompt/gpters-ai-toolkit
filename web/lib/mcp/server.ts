@@ -7,8 +7,8 @@
  */
 
 import { MARKETPLACE_TOOLS } from './tools'
-import { executeTool } from './handlers'
-import type { McpToolResponse } from './types'
+import { executeTool, listPrompts, getPrompt } from './handlers'
+import type { McpToolResponse, McpPromptResult, GetPromptInput } from './types'
 
 // MCP Protocol types
 interface McpRequest {
@@ -54,6 +54,7 @@ function handleInitialize(): McpResponse['result'] {
     serverInfo: SERVER_INFO,
     capabilities: {
       tools: {},
+      prompts: {},
     },
   }
 }
@@ -83,6 +84,21 @@ async function handleToolsCall(params: {
 }
 
 /**
+ * Handle prompts/list request
+ */
+async function handlePromptsList(): Promise<McpResponse['result']> {
+  const prompts = await listPrompts()
+  return { prompts }
+}
+
+/**
+ * Handle prompts/get request
+ */
+async function handlePromptsGet(params: GetPromptInput): Promise<McpPromptResult | null> {
+  return getPrompt(params)
+}
+
+/**
  * Process a single MCP request
  */
 export async function processRequest(request: McpRequest): Promise<McpResponse> {
@@ -107,6 +123,45 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
       case 'tools/call': {
         const toolParams = params as { name: string; arguments?: Record<string, unknown> }
         const result = await handleToolsCall(toolParams)
+        return {
+          jsonrpc: '2.0',
+          id,
+          result,
+        }
+      }
+
+      case 'prompts/list': {
+        const result = await handlePromptsList()
+        return {
+          jsonrpc: '2.0',
+          id,
+          result,
+        }
+      }
+
+      case 'prompts/get': {
+        const promptParams = params as unknown as GetPromptInput
+        if (!promptParams?.name) {
+          return {
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32602,
+              message: 'Missing required parameter: name',
+            },
+          }
+        }
+        const result = await handlePromptsGet(promptParams)
+        if (!result) {
+          return {
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32602,
+              message: `Prompt not found: ${promptParams.name}`,
+            },
+          }
+        }
         return {
           jsonrpc: '2.0',
           id,

@@ -11,11 +11,14 @@ import type {
   GetPluginContentInput,
   ListPluginsInput,
   GetPluginsByCategoryInput,
+  GetPromptInput,
   PluginSummary,
   PluginContent,
   SearchResult,
   ListResult,
   McpToolResponse,
+  McpPrompt,
+  McpPromptResult,
 } from './types'
 import type { ItemType, TeamTag } from '../types'
 
@@ -314,5 +317,89 @@ export async function executeTool(
       ],
       isError: true,
     }
+  }
+}
+
+/**
+ * List all available prompts (plugins as MCP prompts)
+ * Each plugin becomes an invocable prompt via /mcp__gpters-marketplace__<plugin-id>
+ */
+export async function listPrompts(): Promise<McpPrompt[]> {
+  const results = await db
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      type: catalogItems.type,
+      description: catalogItems.description,
+      commandArgumentHint: catalogItems.commandArgumentHint,
+    })
+    .from(catalogItems)
+    .where(eq(catalogItems.marketplaceEnabled, true))
+
+  return results.map((item) => {
+    const prompt: McpPrompt = {
+      name: item.id,
+      description: `[${item.type}] ${item.description}`,
+    }
+
+    // Add arguments for commands
+    if (item.type === 'command' && item.commandArgumentHint) {
+      prompt.arguments = [
+        {
+          name: 'args',
+          description: item.commandArgumentHint,
+          required: false,
+        },
+      ]
+    }
+
+    return prompt
+  })
+}
+
+/**
+ * Get a specific prompt by name
+ * Returns the plugin content as a prompt message
+ */
+export async function getPrompt(input: GetPromptInput): Promise<McpPromptResult | null> {
+  const { name, arguments: args } = input
+
+  const results = await db
+    .select()
+    .from(catalogItems)
+    .where(eq(catalogItems.id, name))
+    .limit(1)
+
+  if (results.length === 0) {
+    return null
+  }
+
+  const item = results[0]
+
+  // Build the prompt content
+  let promptContent = `## ${item.name}\n\n`
+  promptContent += `**Type:** ${item.type}\n`
+  promptContent += `**Description:** ${item.description}\n\n`
+
+  if (item.content) {
+    promptContent += `---\n\n${item.content}`
+  }
+
+  // Append arguments if provided (for commands)
+  if (args?.args) {
+    promptContent += `\n\n---\n\n**Arguments:** ${args.args}`
+  }
+
+  return {
+    description: item.description,
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text: promptContent,
+        },
+      },
+    ],
   }
 }

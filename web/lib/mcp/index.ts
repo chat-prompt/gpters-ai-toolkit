@@ -20,12 +20,17 @@ export type {
   GetPluginContentInput,
   ListPluginsInput,
   GetPluginsByCategoryInput,
+  GetPromptInput,
   PluginSummary,
   PluginContent,
   SearchResult,
   ListResult,
   McpTool,
   McpToolResponse,
+  McpPrompt,
+  McpPromptArgument,
+  McpPromptMessage,
+  McpPromptResult,
 } from './types'
 
 // Export tools
@@ -38,6 +43,8 @@ export {
   listPlugins,
   getPluginsByCategory,
   executeTool,
+  listPrompts,
+  getPrompt,
 } from './handlers'
 
 // Export server

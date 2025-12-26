@@ -129,6 +129,11 @@ The project includes an MCP (Model Context Protocol) server for dynamic plugin d
 - `list_plugins` - List all plugins
 - `get_plugins_by_category` - Get plugins by category
 
+**Available Prompts** (NEW):
+- All plugins are also exposed as MCP prompts
+- Invoke via `/mcp__gpters-marketplace__<plugin-id>`
+- Example: `/mcp__gpters-marketplace__code-reviewer`
+
 **Usage Modes**:
 ```bash
 # Simple REST API
@@ -138,6 +143,8 @@ POST /api/mcp?action=list    {}
 
 # JSON-RPC 2.0 (MCP Protocol)
 POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/list"}
+POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": {"name": "code-reviewer"}}
 ```
 
 **Claude Code Integration**:
@@ -154,3 +161,4 @@ POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
 ```
 
 See `docs/AUTO_PLUGIN_DISCOVERY.md` for detailed documentation.
+See `docs/TEAM_ONBOARDING.md` for team member setup guide.
