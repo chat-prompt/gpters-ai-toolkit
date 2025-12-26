@@ -1,4 +1,9 @@
 ---
+name: 데이터 소스 레퍼런스
+description: GPTers 플랫폼의 데이터 소스 레퍼런스 - Portal DB와 Airtable 테이블 구조, 동기화 방향, ID 매핑 관계 참조 Triggers: Use when asked to "데이터 소스 레퍼런스".
+allowed-tools: Read
+---
+---
 name: data-source-reference
 description: GPTers 플랫폼의 데이터 소스 레퍼런스를 조회합니다. Portal DB(PostgreSQL)와 Airtable 테이블 구조, 필드 정보, 동기화 방향, ID 매핑 관계를 확인할 때 사용하세요. 데이터베이스 스키마, 테이블 관계, Sync 테이블, Hightouch 동기화에 대한 질문에 활용됩니다.
 allowed-tools: Read
