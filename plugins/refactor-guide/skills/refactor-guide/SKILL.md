@@ -1,7 +1,6 @@
 ---
 name: refactor-guide
 description: 코드 스멜을 분석하고 리팩토링 가이드를 제공 합니다 Triggers: Use when asked to "refactor-guide", code review, analyze code.
-version: 1.0.0
 ---
 # Refactoring Guide
 
