@@ -10,32 +10,32 @@
   },
   "plugins": [
     {
-      "name": "code-reviewer",
-      "source": "./plugins/code-reviewer",
-      "description": "코드 리뷰를 수행하고 개선점을 제안하는 서브에이전트",
-      "version": "1.0.0",
-      "author": {
-        "name": "ai-team"
-      },
-      "category": "agent",
-      "keywords": [
-        "code",
-        "review"
-      ]
-    },
-    {
       "name": "refactor-guide",
       "source": "./plugins/refactor-guide",
       "description": "코드 스멜을 분석하고 리팩토링 가이드를 제공 합니다",
       "version": "1.0.0",
       "author": {
-        "name": "gpters-team"
+        "name": "primadonna"
       },
       "category": "skill",
       "keywords": [
         "code",
         "analysis",
         "refactoring"
+      ]
+    },
+    {
+      "name": "code-reviewer",
+      "source": "./plugins/code-reviewer",
+      "description": "코드 리뷰를 수행하고 개선점을 제안하는 서브에이전트",
+      "version": "1.0.0",
+      "author": {
+        "name": "primadonna"
+      },
+      "category": "agent",
+      "keywords": [
+        "code",
+        "review"
       ]
     },
     {
@@ -53,6 +53,21 @@
         "postgresql",
         "schema",
         "sync"
+      ]
+    },
+    {
+      "name": "pre-compact-backup",
+      "source": "./plugins/pre-compact-backup",
+      "description": "Compaction 전에 현재 세션의 대화 내역(transcript)을 자동으로 백업합니다. 중요한 작업 내역을 보존하여 컨텍스트 손실을 방지합니다.",
+      "version": "1.0.0",
+      "author": {
+        "name": "gpters"
+      },
+      "category": "hook",
+      "keywords": [
+        "automation",
+        "workflow",
+        "backup"
       ]
     }
   ]
