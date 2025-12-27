@@ -6,26 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GPTers AI Toolkit - a web platform for sharing Claude Code skills, agents, commands, and guides. Internal tool for the GPTers team with Google OAuth restricted to `@gpters.org` domain.
 
-## Monorepo Structure
+## Project Structure
 
 ```
 gpters-ai-toolkit/
-├── web/               # Next.js 16 application (main package)
+├── app/               # Next.js App Router pages and API routes
+├── components/        # React components
+├── lib/               # Utility functions and services
 ├── plugins/           # Claude Code plugin definitions
-├── marketplace/       # Claude Code marketplace sync directory
-└── docs/              # Documentation
+├── docs/              # Documentation
+├── tests/             # Test files (unit, API, E2E)
+└── public/            # Static assets
 ```
 
 ## Commands
-
-All commands run from repository root using pnpm workspaces:
 
 ```bash
 # Development
 pnpm dev                    # Start Next.js dev server (port 3000)
 pnpm build                  # Production build
 
-# From web/ directory:
+# Linting & Testing
 pnpm lint                   # ESLint
 pnpm test                   # Vitest unit + API tests
 pnpm test:watch             # Vitest watch mode
@@ -50,7 +51,7 @@ pnpm db:migrate-data        # Run data migration script
 - **NextAuth v5 (beta)** with Google OAuth
 - **Vitest** for unit/API tests, **Playwright** for E2E
 
-### Key Directories (web/)
+### Key Directories
 
 ```
 app/
@@ -65,10 +66,11 @@ app/
 lib/
 ├── db/               # Drizzle schema and connection
 ├── mcp/              # MCP server for plugin discovery
+├── marketplace/      # GitHub marketplace sync utilities
 ├── auth.ts           # NextAuth configuration
 ├── catalog.ts        # Catalog data access functions
 ├── types.ts          # TypeScript types and constants
-└── marketplace/      # GitHub marketplace sync utilities
+└── version.ts        # Version management for V2 deploy
 
 components/           # React components (SearchableCatalog, InstallGuide, etc.)
 tests/
@@ -88,7 +90,7 @@ Key database tables:
 
 ### Environment Variables
 
-Required in `web/.env.local` (see `.env.example`):
+Required in `.env.local` (see `.env.example`):
 - `DATABASE_URL` - Neon PostgreSQL connection string
 - `ADMIN_PASSWORD` - Admin dashboard access
 - `GH_TOKEN`, `GH_OWNER`, `GH_REPO`, `GH_BRANCH` - GitHub API for marketplace sync
@@ -128,8 +130,10 @@ The project includes an MCP (Model Context Protocol) server for dynamic plugin d
 - `get_plugin_content` - Get full plugin content
 - `list_plugins` - List all plugins
 - `get_plugins_by_category` - Get plugins by category
+- `deploy_skill` - Deploy skill/agent/command to team (V2)
+- `check_updates` - Check for installed skill updates (V2)
 
-**Available Prompts** (NEW):
+**Available Prompts**:
 - All plugins are also exposed as MCP prompts
 - Invoke via `/mcp__gpters-marketplace__<plugin-id>`
 - Example: `/mcp__gpters-marketplace__code-reviewer`
@@ -162,3 +166,4 @@ POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": {"
 
 See `docs/AUTO_PLUGIN_DISCOVERY.md` for detailed documentation.
 See `docs/TEAM_ONBOARDING.md` for team member setup guide.
+See `docs/ARCHITECTURE_V2.md` for V2 deploy architecture.

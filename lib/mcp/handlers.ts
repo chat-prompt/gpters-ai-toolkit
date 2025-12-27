@@ -28,7 +28,7 @@ import type {
   McpPromptResult,
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../types'
-import { determineVersion, generateIdFromName, hasUpdate } from '../services/version'
+import { determineVersion, generateIdFromName, hasUpdate } from '../version'
 import { syncItemToGitHub } from '../marketplace'
 
 /**
