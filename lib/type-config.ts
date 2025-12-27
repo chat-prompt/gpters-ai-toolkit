@@ -3,7 +3,7 @@
  * Defines templates, guides, and field configurations for each item type
  */
 
-import type { ItemType, AgentModel, AgentPermissionMode, HookEvent } from './types'
+import type { ItemType, AgentModel, AgentPermissionMode } from './types'
 
 // Available Claude Code tools
 export const CLAUDE_TOOLS = [

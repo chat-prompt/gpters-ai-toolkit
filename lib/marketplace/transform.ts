@@ -8,7 +8,6 @@ import type {
   PluginEntry,
   PluginJson,
   PluginStructure,
-  SkillFrontmatter,
   HookConfig,
   HookMatcherConfig,
 } from './types'

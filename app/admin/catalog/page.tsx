@@ -41,7 +41,6 @@ export default function CatalogList() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [teamFilter, setTeamFilter] = useState<TeamTag | 'all'>('all')
-  const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const fetchItems = useCallback(async () => {
     try {
@@ -73,7 +72,6 @@ export default function CatalogList() {
 
       if (res.ok) {
         setItems(items.filter((item) => item.id !== id))
-        setDeleteId(null)
       } else {
         alert('Failed to delete item')
       }

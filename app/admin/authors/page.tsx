@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAdminAuth } from '@/lib/admin-auth'
 
 interface Author {
@@ -233,7 +234,7 @@ export default function AuthorsAdminPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       {author.avatarUrl && (
-                        <img src={author.avatarUrl} alt="" className="w-8 h-8 rounded-full" />
+                        <Image src={author.avatarUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full" unoptimized />
                       )}
                       <span className="text-[var(--text-primary)]">{author.name}</span>
                     </div>

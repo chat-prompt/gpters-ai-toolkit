@@ -1,7 +1,6 @@
 import { getGuideById, getGuides } from '@/lib/catalog'
 import { DetailPageLayout } from '@/components/DetailPageLayout'
 import { ItemHero } from '@/components/ItemHero'
-import { ContentSection } from '@/components/ContentSection'
 import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { notFound } from 'next/navigation'

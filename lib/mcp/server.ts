@@ -29,12 +29,6 @@ interface McpResponse {
   }
 }
 
-interface McpNotification {
-  jsonrpc: '2.0'
-  method: string
-  params?: Record<string, unknown>
-}
-
 // Server info
 const SERVER_INFO = {
   name: 'gpters-marketplace',

@@ -1,6 +1,6 @@
-import { getCatalog, getBeginnerItems } from '@/lib/catalog'
+import { getBeginnerItems } from '@/lib/catalog'
 import { ServerHeader } from '@/components/ServerHeader'
-import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
+import { DIFFICULTY_LABELS } from '@/lib/types'
 import Link from 'next/link'
 
 // Revalidate every 60 seconds
@@ -36,18 +36,10 @@ const TYPE_CONFIG = {
 }
 
 export default async function GettingStartedPage() {
-  const [catalog, beginnerItems] = await Promise.all([
-    getCatalog(),
-    getBeginnerItems(),
-  ])
+  const beginnerItems = await getBeginnerItems()
 
   // Curated essentials - items that every beginner should know
   const essentials = beginnerItems.slice(0, 6)
-
-  // Get some easy guides
-  const easyGuides = catalog.filter(
-    (item) => item.type === 'guide' && item.difficulty === 'easy'
-  )
 
   return (
     <div className="min-h-screen grid-pattern noise-overlay">

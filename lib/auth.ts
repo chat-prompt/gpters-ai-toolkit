@@ -3,6 +3,9 @@ import Google from 'next-auth/providers/google'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('auth')
 
 // Allowed email domain for authentication
 const ALLOWED_DOMAIN = 'gpters.org'
@@ -52,7 +55,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           })
         }
       } catch (error) {
-        console.error('Failed to save user:', error)
+        log.error('Failed to save user', error, { action: 'signIn', userId: user.id })
         // Don't block sign in if DB save fails
       }
 

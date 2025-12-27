@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
+import Image from 'next/image'
 
 interface UserMenuProps {
   user: {
@@ -33,10 +34,13 @@ export function UserMenu({ user }: UserMenuProps) {
         className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
       >
         {user.image ? (
-          <img
+          <Image
             src={user.image}
             alt=""
+            width={24}
+            height={24}
             className="w-6 h-6 rounded-full"
+            unoptimized
           />
         ) : (
           <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)] flex items-center justify-center text-black text-xs font-medium">

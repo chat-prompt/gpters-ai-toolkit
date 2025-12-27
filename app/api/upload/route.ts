@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('api/upload')
 
 /**
  * Public upload API - no authentication required
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.error('Upload error:', error)
+    log.error('Upload failed', error, { action: 'create' })
     return NextResponse.json(
       { error: 'Failed to create item' },
       { status: 500 }
