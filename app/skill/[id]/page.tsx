@@ -6,6 +6,7 @@ import { InstallGuide } from '@/components/InstallGuide'
 import { DependencyDisplay } from '@/components/DependencyDisplay'
 import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import { TableOfContents, Section, type TocItem } from '@/components/TableOfContents'
+import { DraftBanner } from '@/components/DraftBanner'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -49,6 +50,8 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
   return (
     <DetailPageLayout accentColor="cyan">
       <TableOfContents items={tocItems} />
+
+      {item.status === 'draft' && <DraftBanner />}
 
       <Section id="overview">
         <ItemHero

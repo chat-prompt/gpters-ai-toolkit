@@ -6,6 +6,7 @@ import { ItemHero } from '@/components/ItemHero'
 import { ContentSection } from '@/components/ContentSection'
 import { CopyButton } from '@/components/CopyButton'
 import { TableOfContents, Section, type TocItem } from '@/components/TableOfContents'
+import { DraftBanner } from '@/components/DraftBanner'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -105,6 +106,8 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
   return (
     <DetailPageLayout accentColor="orange">
       <TableOfContents items={tocItems} />
+
+      {item.status === 'draft' && <DraftBanner />}
 
       <Section id="overview">
         <ItemHero

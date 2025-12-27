@@ -42,13 +42,21 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
 
 function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
   const config = TYPE_CONFIG[item.type]
+  const isDraft = item.status === 'draft'
 
   return (
     <Link href={`/${item.type}/${item.id}`}>
       <div
-        className={`group glass rounded-2xl p-6 h-full flex flex-col transition-all duration-300 hover:translate-y-[-4px] ${config.glow} animate-fade-up`}
+        className={`group glass rounded-2xl p-6 h-full flex flex-col transition-all duration-300 hover:translate-y-[-4px] ${config.glow} animate-fade-up relative ${isDraft ? 'border border-yellow-500/30' : ''}`}
         style={{ animationDelay: `${index * 80}ms` }}
       >
+        {/* Draft Indicator */}
+        {isDraft && (
+          <div className="absolute top-0 right-0 px-2.5 py-1 rounded-bl-xl rounded-tr-2xl bg-yellow-500/20 border-l border-b border-yellow-500/30">
+            <span className="text-[10px] font-medium text-yellow-400 uppercase tracking-wider">Draft</span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -63,7 +71,7 @@ function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
             )}
           </div>
           {item.difficulty && (
-            <span className="text-[10px] px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+            <span className={`text-[10px] px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)] ${isDraft ? 'mr-12' : ''}`}>
               {DIFFICULTY_LABELS[item.difficulty].label}
             </span>
           )}
