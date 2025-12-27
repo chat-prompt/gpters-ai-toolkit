@@ -3,28 +3,36 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
+import { ApiErrors, requireAdminAuth, validateRequired, apiSuccess } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('api:catalog')
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const type = searchParams.get('type') as ItemType | null
+  try {
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type') as ItemType | null
 
-  const items = type
-    ? await db.select().from(catalogItems).where(eq(catalogItems.type, type))
-    : await db.select().from(catalogItems)
+    const items = type
+      ? await db.select().from(catalogItems).where(eq(catalogItems.type, type))
+      : await db.select().from(catalogItems)
 
-  return NextResponse.json(items)
+    return NextResponse.json(items)
+  } catch (error) {
+    log.error('Failed to fetch catalog items', error)
+    return ApiErrors.internalError('Failed to fetch catalog items')
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const adminPassword = request.headers.get('x-admin-password')
+  // Check admin auth
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const body = await request.json()
 
-  const body = await request.json()
-
-  const {
+    const {
     id,
     type,
     name,
@@ -55,12 +63,13 @@ export async function POST(request: NextRequest) {
     hookBlocking,
   } = body
 
-  if (!id || !type || !name || !content) {
-    return NextResponse.json(
-      { error: 'Missing required fields: id, type, name, content' },
-      { status: 400 }
-    )
-  }
+  // Validate required fields
+    const validation = validateRequired(body, ['id', 'type', 'name', 'content'])
+    if (!validation.valid) {
+      return ApiErrors.badRequest(
+        `Missing required fields: ${validation.missing.join(', ')}`
+      )
+    }
 
   const newItem = {
     id,
@@ -168,10 +177,14 @@ export async function POST(request: NextRequest) {
       // Update sync timestamp
       await db.update(catalogItems).set({ marketplaceSyncedAt: new Date() }).where(eq(catalogItems.id, id))
     } catch (error) {
-      console.error('Failed to sync to marketplace:', error)
+      log.error('Failed to sync to marketplace', error)
       // Don't fail the insert if sync fails
     }
   }
 
-  return NextResponse.json(newItem, { status: 201 })
+    return apiSuccess(newItem, 201)
+  } catch (error) {
+    log.error('Failed to create catalog item', error)
+    return ApiErrors.internalError('Failed to create catalog item')
+  }
 }

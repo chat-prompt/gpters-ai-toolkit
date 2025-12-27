@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
+import { ApiErrors, validateRequired, apiSuccess } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
 
-const log = createLogger('api/upload')
+const log = createLogger('api:upload')
+
+const VALID_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 
 /**
  * Public upload API - no authentication required
@@ -36,19 +39,13 @@ export async function POST(request: NextRequest) {
       commandDisableModelInvocation,
     } = body
 
-    if (!id || !type || !name || !content) {
-      return NextResponse.json(
-        { error: 'Missing required fields: id, type, name, content' },
-        { status: 400 }
-      )
+    const validation = validateRequired(body, ['id', 'type', 'name', 'content'])
+    if (!validation.valid) {
+      return ApiErrors.badRequest(`Missing required fields: ${validation.missing.join(', ')}`)
     }
 
-    const validTypes = ['skill', 'agent', 'command', 'guide']
-    if (!validTypes.includes(type)) {
-      return NextResponse.json(
-        { error: `Invalid type. Must be one of: ${validTypes.join(', ')}` },
-        { status: 400 }
-      )
+    if (!VALID_TYPES.includes(type)) {
+      return ApiErrors.badRequest(`Invalid type. Must be one of: ${VALID_TYPES.join(', ')}`)
     }
 
     const newItem = {
@@ -76,23 +73,14 @@ export async function POST(request: NextRequest) {
 
     await db.insert(catalogItems).values(newItem)
 
-    return NextResponse.json(
-      { success: true, item: newItem },
-      { status: 201 }
-    )
+    return apiSuccess({ success: true, item: newItem }, 201)
   } catch (error) {
     // Handle duplicate ID error
     if (error instanceof Error && error.message.includes('duplicate')) {
-      return NextResponse.json(
-        { error: 'An item with this ID already exists' },
-        { status: 409 }
-      )
+      return ApiErrors.conflict('An item with this ID already exists')
     }
 
-    log.error('Upload failed', error, { action: 'create' })
-    return NextResponse.json(
-      { error: 'Failed to create item' },
-      { status: 500 }
-    )
+    log.error('Upload failed', error)
+    return ApiErrors.internalError('Failed to create item')
   }
 }

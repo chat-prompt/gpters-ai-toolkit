@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, sql } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
+import { ApiErrors } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('api:likes')
 
 export async function POST(
   request: NextRequest,
@@ -19,13 +23,13 @@ export async function POST(
       .returning({ likes: catalogItems.likes })
 
     if (!updated) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+      return ApiErrors.notFound('Item')
     }
 
     return NextResponse.json({ likes: updated.likes })
   } catch (error) {
-    console.error('Error updating likes:', error)
-    return NextResponse.json({ error: 'Failed to update likes' }, { status: 500 })
+    log.error('Failed to update likes', error)
+    return ApiErrors.internalError('Failed to update likes')
   }
 }
 
@@ -42,12 +46,12 @@ export async function GET(
       .where(eq(catalogItems.id, id))
 
     if (!item) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+      return ApiErrors.notFound('Item')
     }
 
     return NextResponse.json({ likes: item.likes })
   } catch (error) {
-    console.error('Error getting likes:', error)
-    return NextResponse.json({ error: 'Failed to get likes' }, { status: 500 })
+    log.error('Failed to get likes', error)
+    return ApiErrors.internalError('Failed to get likes')
   }
 }

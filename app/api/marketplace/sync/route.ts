@@ -3,6 +3,10 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import { syncAllToGitHub } from '@/lib/marketplace'
 import type { HookEvent } from '@/lib/types'
+import { ApiErrors, requireAdminAuth } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('api:marketplace:sync')
 
 /**
  * POST /api/marketplace/sync
@@ -10,12 +14,8 @@ import type { HookEvent } from '@/lib/types'
  * Requires admin authentication
  */
 export async function POST(request: NextRequest) {
-  // Admin authentication
-  const adminPassword = request.headers.get('x-admin-password')
-
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     // Get all marketplace-enabled items
@@ -85,13 +85,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Marketplace sync error:', error)
-    return NextResponse.json(
-      {
-        error: 'Sync failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+    log.error('Marketplace sync failed', error)
+    return ApiErrors.internalError(
+      error instanceof Error ? error.message : 'Sync failed'
     )
   }
 }

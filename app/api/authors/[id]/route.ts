@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, authors } from '@/lib/db'
 import { eq } from 'drizzle-orm'
+import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
-
-function checkAdminAuth(request: NextRequest): boolean {
-  const password = request.headers.get('x-admin-password')
-  return password === ADMIN_PASSWORD
-}
+const log = createLogger('api:authors')
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -20,21 +17,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const [author] = await db.select().from(authors).where(eq(authors.id, id))
 
     if (!author) {
-      return NextResponse.json({ error: 'Author not found' }, { status: 404 })
+      return ApiErrors.notFound('Author')
     }
 
     return NextResponse.json(author)
   } catch (error) {
-    console.error('Failed to fetch author:', error)
-    return NextResponse.json({ error: 'Failed to fetch author' }, { status: 500 })
+    log.error('Failed to fetch author', error)
+    return ApiErrors.internalError('Failed to fetch author')
   }
 }
 
 // PUT /api/authors/[id] - Update an author
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const { id } = await params
@@ -43,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const [existing] = await db.select().from(authors).where(eq(authors.id, id))
     if (!existing) {
-      return NextResponse.json({ error: 'Author not found' }, { status: 404 })
+      return ApiErrors.notFound('Author')
     }
 
     const [updated] = await db.update(authors)
@@ -59,28 +55,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated)
   } catch (error) {
-    console.error('Failed to update author:', error)
-    return NextResponse.json({ error: 'Failed to update author' }, { status: 500 })
+    log.error('Failed to update author', error)
+    return ApiErrors.internalError('Failed to update author')
   }
 }
 
 // DELETE /api/authors/[id] - Delete an author
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const { id } = await params
     const [existing] = await db.select().from(authors).where(eq(authors.id, id))
     if (!existing) {
-      return NextResponse.json({ error: 'Author not found' }, { status: 404 })
+      return ApiErrors.notFound('Author')
     }
 
     await db.delete(authors).where(eq(authors.id, id))
-    return NextResponse.json({ success: true })
+    return apiSuccess({ success: true })
   } catch (error) {
-    console.error('Failed to delete author:', error)
-    return NextResponse.json({ error: 'Failed to delete author' }, { status: 500 })
+    log.error('Failed to delete author', error)
+    return ApiErrors.internalError('Failed to delete author')
   }
 }

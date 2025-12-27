@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags } from '@/lib/db'
 import { eq } from 'drizzle-orm'
+import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
-
-function checkAdminAuth(request: NextRequest): boolean {
-  const password = request.headers.get('x-admin-password')
-  return password === ADMIN_PASSWORD
-}
+const log = createLogger('api:tags')
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -20,21 +17,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const [tag] = await db.select().from(tags).where(eq(tags.id, id))
 
     if (!tag) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return ApiErrors.notFound('Tag')
     }
 
     return NextResponse.json(tag)
   } catch (error) {
-    console.error('Failed to fetch tag:', error)
-    return NextResponse.json({ error: 'Failed to fetch tag' }, { status: 500 })
+    log.error('Failed to fetch tag', error)
+    return ApiErrors.internalError('Failed to fetch tag')
   }
 }
 
 // PUT /api/tags/[id] - Update a tag
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const { id } = await params
@@ -43,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const [existing] = await db.select().from(tags).where(eq(tags.id, id))
     if (!existing) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return ApiErrors.notFound('Tag')
     }
 
     const [updated] = await db.update(tags)
@@ -58,28 +54,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated)
   } catch (error) {
-    console.error('Failed to update tag:', error)
-    return NextResponse.json({ error: 'Failed to update tag' }, { status: 500 })
+    log.error('Failed to update tag', error)
+    return ApiErrors.internalError('Failed to update tag')
   }
 }
 
 // DELETE /api/tags/[id] - Delete a tag
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const { id } = await params
     const [existing] = await db.select().from(tags).where(eq(tags.id, id))
     if (!existing) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return ApiErrors.notFound('Tag')
     }
 
     await db.delete(tags).where(eq(tags.id, id))
-    return NextResponse.json({ success: true })
+    return apiSuccess({ success: true })
   } catch (error) {
-    console.error('Failed to delete tag:', error)
-    return NextResponse.json({ error: 'Failed to delete tag' }, { status: 500 })
+    log.error('Failed to delete tag', error)
+    return ApiErrors.internalError('Failed to delete tag')
   }
 }

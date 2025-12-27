@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags, mcpServers, authors } from '@/lib/db'
 import { TAGS, MCP_SERVERS } from '@/lib/types'
+import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
-
-function checkAdminAuth(request: NextRequest): boolean {
-  const password = request.headers.get('x-admin-password')
-  return password === ADMIN_PASSWORD
-}
+const log = createLogger('api:admin:seed')
 
 /**
  * POST /api/admin/seed
  * Seeds the database with initial data from hardcoded constants
  */
 export async function POST(request: NextRequest) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const results = {
@@ -77,17 +73,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       success: true,
       message: 'Database seeded successfully',
       results,
     })
   } catch (error) {
-    console.error('Failed to seed database:', error)
-    return NextResponse.json(
-      { error: 'Failed to seed database', details: String(error) },
-      { status: 500 }
-    )
+    log.error('Failed to seed database', error)
+    return ApiErrors.internalError('Failed to seed database')
   }
 }
 
@@ -96,9 +89,8 @@ export async function POST(request: NextRequest) {
  * Returns the current seed status (counts)
  */
 export async function GET(request: NextRequest) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const [tagCount, authorCount, mcpCount] = await Promise.all([
@@ -115,10 +107,7 @@ export async function GET(request: NextRequest) {
       hardcodedMcpServers: Object.keys(MCP_SERVERS).length,
     })
   } catch (error) {
-    console.error('Failed to get seed status:', error)
-    return NextResponse.json(
-      { error: 'Failed to get seed status', details: String(error) },
-      { status: 500 }
-    )
+    log.error('Failed to get seed status', error)
+    return ApiErrors.internalError('Failed to get seed status')
   }
 }

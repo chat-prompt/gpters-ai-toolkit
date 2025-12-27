@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, mcpServers } from '@/lib/db'
 import { eq } from 'drizzle-orm'
+import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
-
-function checkAdminAuth(request: NextRequest): boolean {
-  const password = request.headers.get('x-admin-password')
-  return password === ADMIN_PASSWORD
-}
+const log = createLogger('api:mcp-servers')
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -20,21 +17,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const [server] = await db.select().from(mcpServers).where(eq(mcpServers.id, id))
 
     if (!server) {
-      return NextResponse.json({ error: 'MCP server not found' }, { status: 404 })
+      return ApiErrors.notFound('MCP server')
     }
 
     return NextResponse.json(server)
   } catch (error) {
-    console.error('Failed to fetch MCP server:', error)
-    return NextResponse.json({ error: 'Failed to fetch MCP server' }, { status: 500 })
+    log.error('Failed to fetch MCP server', error)
+    return ApiErrors.internalError('Failed to fetch MCP server')
   }
 }
 
 // PUT /api/mcp-servers/[id] - Update an MCP server
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const { id } = await params
@@ -43,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const [existing] = await db.select().from(mcpServers).where(eq(mcpServers.id, id))
     if (!existing) {
-      return NextResponse.json({ error: 'MCP server not found' }, { status: 404 })
+      return ApiErrors.notFound('MCP server')
     }
 
     const [updated] = await db.update(mcpServers)
@@ -58,28 +54,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated)
   } catch (error) {
-    console.error('Failed to update MCP server:', error)
-    return NextResponse.json({ error: 'Failed to update MCP server' }, { status: 500 })
+    log.error('Failed to update MCP server', error)
+    return ApiErrors.internalError('Failed to update MCP server')
   }
 }
 
 // DELETE /api/mcp-servers/[id] - Delete an MCP server
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  if (!checkAdminAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const { id } = await params
     const [existing] = await db.select().from(mcpServers).where(eq(mcpServers.id, id))
     if (!existing) {
-      return NextResponse.json({ error: 'MCP server not found' }, { status: 404 })
+      return ApiErrors.notFound('MCP server')
     }
 
     await db.delete(mcpServers).where(eq(mcpServers.id, id))
-    return NextResponse.json({ success: true })
+    return apiSuccess({ success: true })
   } catch (error) {
-    console.error('Failed to delete MCP server:', error)
-    return NextResponse.json({ error: 'Failed to delete MCP server' }, { status: 500 })
+    log.error('Failed to delete MCP server', error)
+    return ApiErrors.internalError('Failed to delete MCP server')
   }
 }

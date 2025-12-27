@@ -3,6 +3,10 @@ import JSZip from 'jszip'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, PluginFile } from '@/lib/types'
+import { ApiErrors, requireAdminAuth } from '@/lib/api-utils'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('api:catalog:upload')
 
 // Main content file patterns for each type
 const MAIN_CONTENT_FILES: Record<ItemType, string[]> = {
@@ -128,11 +132,8 @@ function parseFrontmatter(content: string): { metadata: Record<string, string>; 
 }
 
 export async function POST(request: NextRequest) {
-  const adminPassword = request.headers.get('x-admin-password')
-
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = requireAdminAuth(request)
+  if (authError) return authError
 
   try {
     const formData = await request.formData()
@@ -142,11 +143,11 @@ export async function POST(request: NextRequest) {
     const updateExisting = formData.get('update') === 'true'
 
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      return ApiErrors.badRequest('No file provided')
     }
 
     if (!file.name.endsWith('.zip')) {
-      return NextResponse.json({ error: 'File must be a ZIP archive' }, { status: 400 })
+      return ApiErrors.badRequest('File must be a ZIP archive')
     }
 
     const itemType = typeParam || 'skill'
@@ -154,11 +155,8 @@ export async function POST(request: NextRequest) {
     const extracted = await extractZipContent(zipBuffer, itemType)
 
     if (!extracted.mainContent) {
-      return NextResponse.json(
-        {
-          error: `Main content file not found. Expected one of: ${MAIN_CONTENT_FILES[itemType].join(', ')}`,
-        },
-        { status: 400 }
+      return ApiErrors.badRequest(
+        `Main content file not found. Expected one of: ${MAIN_CONTENT_FILES[itemType].join(', ')}`
       )
     }
 
@@ -172,10 +170,7 @@ export async function POST(request: NextRequest) {
     const [existing] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
 
     if (existing && !updateExisting) {
-      return NextResponse.json(
-        { error: `Item with ID '${id}' already exists. Set update=true to overwrite.` },
-        { status: 409 }
-      )
+      return ApiErrors.conflict(`Item with ID '${id}' already exists. Set update=true to overwrite.`)
     }
 
     const itemData = {
@@ -224,10 +219,9 @@ export async function POST(request: NextRequest) {
       { status: existing ? 200 : 201 }
     )
   } catch (error) {
-    console.error('ZIP upload error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to process ZIP file' },
-      { status: 500 }
+    log.error('ZIP upload failed', error)
+    return ApiErrors.internalError(
+      error instanceof Error ? error.message : 'Failed to process ZIP file'
     )
   }
 }
