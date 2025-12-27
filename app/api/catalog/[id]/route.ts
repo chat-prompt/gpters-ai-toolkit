@@ -7,6 +7,7 @@ import { ApiErrors, apiSuccess, requirePermissionAsync } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import { Permissions } from '@/lib/rbac'
+import { cachedJsonResponse, addSurrogateKey } from '@/lib/api-cache'
 
 const log = createLogger('api:catalog')
 
@@ -27,7 +28,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return ApiErrors.notFound('Catalog item')
     }
 
-    return NextResponse.json(item)
+    // Return cached response with ETag support
+    const response = cachedJsonResponse(item, 'catalogItem', request)
+
+    // Add surrogate keys for CDN cache invalidation
+    addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+
+    return response
   } catch (error) {
     log.error('Failed to fetch catalog item', error)
     return ApiErrors.internalError('Failed to fetch catalog item')

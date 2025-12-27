@@ -7,6 +7,7 @@ import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync } from 
 import { createLogger } from '@/lib/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import { Permissions } from '@/lib/rbac'
+import { cachedJsonResponse, addSurrogateKey } from '@/lib/api-cache'
 
 const log = createLogger('api:catalog')
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     // Return empty array for invalid type (graceful handling)
     if (typeParam && !VALID_TYPES.includes(typeParam as ItemType)) {
-      return NextResponse.json([])
+      return cachedJsonResponse([], 'catalogList', request)
     }
 
     const type = typeParam as ItemType | null
@@ -33,7 +34,13 @@ export async function GET(request: NextRequest) {
       ? await db.select().from(catalogItems).where(eq(catalogItems.type, type))
       : await db.select().from(catalogItems)
 
-    return NextResponse.json(items)
+    // Return cached response with ETag support
+    const response = cachedJsonResponse(items, 'catalogList', request)
+
+    // Add surrogate keys for CDN cache invalidation
+    addSurrogateKey(response, 'catalog', type ? `catalog-${type}` : 'catalog-all')
+
+    return response
   } catch (error) {
     log.error('Failed to fetch catalog items', error)
     return ApiErrors.internalError('Failed to fetch catalog items')
