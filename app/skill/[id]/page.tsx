@@ -6,6 +6,7 @@ import { MarkdownContent } from '@/components/MarkdownContent'
 import { DependencyDisplay } from '@/components/DependencyDisplay'
 import { LikeButton } from '@/components/LikeButton'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -99,6 +100,15 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
         {/* Dependencies */}
         {item.dependencies && item.dependencies.length > 0 && (
           <DependencyDisplay dependencies={item.dependencies} />
+        )}
+
+        {/* Changelog */}
+        {item.changelog && (
+          <ChangelogDisplay
+            version={item.marketplaceVersion}
+            changelog={item.changelog}
+            updatedAt={item.updatedAt}
+          />
         )}
 
         {/* Installation Guide */}

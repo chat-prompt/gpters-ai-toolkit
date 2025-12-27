@@ -34,6 +34,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
 
   const marketplaceAddCommand = '/plugin marketplace add gpters/company-ai-toolkit'
   const marketplaceInstallCommand = `/plugin install ${itemId}@company-ai-toolkit`
+  const mcpPromptCommand = `/mcp__gpters-marketplace__${itemId}`
 
   const handleStepComplete = (stepIndex: number) => {
     setCompletedSteps((prev) => {
@@ -84,6 +85,42 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
                 </code>
                 <CopyButton text={marketplaceInstallCommand} />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MCP Prompt Usage */}
+      {marketplaceEnabled && (
+        <div className="glass rounded-2xl p-6 glow-purple">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-xl">🔮</span>
+            <h3 className="text-lg font-medium text-[var(--text-primary)]">MCP 프롬프트</h3>
+            <span className="text-xs px-2 py-1 rounded-full bg-[var(--accent-purple)]/10 text-[var(--accent-purple)]">
+              설치 없이 사용
+            </span>
+          </div>
+
+          <p className="text-sm text-[var(--text-secondary)] mb-4">
+            MCP 서버를 통해 설치 없이 바로 사용할 수 있습니다. Claude Code에서 다음과 같이 호출하세요.
+          </p>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-[var(--text-muted)] mb-2">프롬프트 호출</p>
+              <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm flex items-center justify-between gap-4">
+                <code className="text-[var(--accent-purple)] break-all">
+                  {mcpPromptCommand}
+                </code>
+                <CopyButton text={mcpPromptCommand} />
+              </div>
+            </div>
+
+            <div className="text-xs text-[var(--text-muted)] p-3 rounded-lg bg-[var(--bg-secondary)]">
+              <strong className="text-[var(--text-primary)]">참고:</strong> MCP 서버가 설정되어 있어야 합니다.{' '}
+              <a href="/getting-started" className="text-[var(--accent-purple)] hover:underline">
+                설정 방법 보기
+              </a>
             </div>
           </div>
         </div>

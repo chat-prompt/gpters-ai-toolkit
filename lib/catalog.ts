@@ -1,4 +1,4 @@
-import { eq, ne } from 'drizzle-orm'
+import { eq, ne, and, or, isNull } from 'drizzle-orm'
 import { db, catalogItems } from './db'
 import { CatalogItem, ItemType } from './types'
 
@@ -39,11 +39,17 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
 }
 
 export async function getCatalog(): Promise<CatalogItem[]> {
-  // Get all items except guides (they have their own page)
+  // Get all published items except guides (they have their own page)
+  // Filter: type != 'guide' AND (status = 'published' OR status IS NULL)
   const records = await db
     .select()
     .from(catalogItems)
-    .where(ne(catalogItems.type, 'guide'))
+    .where(
+      and(
+        ne(catalogItems.type, 'guide'),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
 
   return records.map(toPlainObject)
 }
@@ -56,12 +62,31 @@ export async function getItemById(id: string): Promise<CatalogItem | undefined> 
 }
 
 export async function getItemsByType(type: ItemType): Promise<CatalogItem[]> {
-  const records = await db.select().from(catalogItems).where(eq(catalogItems.type, type))
+  // Get published items of a specific type
+  const records = await db
+    .select()
+    .from(catalogItems)
+    .where(
+      and(
+        eq(catalogItems.type, type),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
   return records.map(toPlainObject)
 }
 
 export async function getGuides(): Promise<CatalogItem[]> {
-  const records = await db.select().from(catalogItems).where(eq(catalogItems.type, 'guide'))
+  // Get all published guides
+  // Filter: type = 'guide' AND (status = 'published' OR status IS NULL)
+  const records = await db
+    .select()
+    .from(catalogItems)
+    .where(
+      and(
+        eq(catalogItems.type, 'guide'),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
   return records.map(toPlainObject)
 }
 
@@ -76,8 +101,11 @@ export async function getGuideById(id: string): Promise<CatalogItem | undefined>
 }
 
 export async function getBeginnerItems(): Promise<CatalogItem[]> {
-  // Get items suitable for beginners (easy difficulty or beginner tag)
-  const records = await db.select().from(catalogItems)
+  // Get published items suitable for beginners (easy difficulty or beginner tag)
+  const records = await db
+    .select()
+    .from(catalogItems)
+    .where(or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)))
 
   return records
     .map(toPlainObject)

@@ -3,6 +3,7 @@ import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import { ServerHeader } from '@/components/ServerHeader'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -92,6 +93,15 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
             )}
           </div>
         </div>
+
+        {/* Changelog */}
+        {guide.changelog && (
+          <ChangelogDisplay
+            version={guide.marketplaceVersion}
+            changelog={guide.changelog}
+            updatedAt={guide.updatedAt}
+          />
+        )}
 
         {/* Guide Content */}
         <div className="glass rounded-2xl p-8 mb-8" style={{ boxShadow: '0 0 30px rgba(16,185,129,0.1)' }}>
