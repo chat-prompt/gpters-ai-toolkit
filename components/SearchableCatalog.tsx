@@ -262,9 +262,26 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           return false
         }
 
-        // Search filter
+        // Search filter with special prefix support
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase()
+
+          // Handle tag: prefix - exact tag filter
+          if (query.startsWith('tag:')) {
+            const tagKey = query.slice(4).trim()
+            return item.tags.some(tag =>
+              tag.toLowerCase() === tagKey ||
+              (TAGS[tag]?.label || '').toLowerCase() === tagKey
+            )
+          }
+
+          // Handle author: prefix - exact author filter
+          if (query.startsWith('author:')) {
+            const authorName = query.slice(7).trim()
+            return item.author.toLowerCase() === authorName
+          }
+
+          // Normal text search
           const matchesName = item.name.toLowerCase().includes(query)
           const matchesDescription = item.description.toLowerCase().includes(query)
           const matchesTags = item.tags.some(tag =>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CatalogItem, TAGS, ItemType } from '@/lib/types'
 
 interface Suggestion {
@@ -39,11 +39,9 @@ export function SearchAutocomplete({
 }: SearchAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Generate suggestions based on query
+  // Generate suggestions based on query (memoized)
   const generateSuggestions = useCallback((query: string): Suggestion[] => {
     if (!query.trim() || query.length < 2) return []
 
@@ -122,12 +120,14 @@ export function SearchAutocomplete({
     return results.slice(0, 8)
   }, [catalog])
 
-  // Update suggestions when query changes
-  useEffect(() => {
-    const newSuggestions = generateSuggestions(value)
-    setSuggestions(newSuggestions)
+  // Derive suggestions from value (using useMemo instead of useEffect + setState)
+  const suggestions = useMemo(() => generateSuggestions(value), [value, generateSuggestions])
+
+  // Reset selectedIndex when input value changes
+  const handleInputChange = useCallback((newValue: string) => {
+    onChange(newValue)
     setSelectedIndex(-1)
-  }, [value, generateSuggestions])
+  }, [onChange])
 
   // Handle click outside
   useEffect(() => {
@@ -160,11 +160,21 @@ export function SearchAutocomplete({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault()
-        setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0))
+        // If no item selected yet, start from first item
+        if (selectedIndex === -1) {
+          setSelectedIndex(0)
+        } else {
+          setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0))
+        }
         break
       case 'ArrowUp':
         e.preventDefault()
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1))
+        // If no item selected yet, start from last item
+        if (selectedIndex === -1) {
+          setSelectedIndex(suggestions.length - 1)
+        } else {
+          setSelectedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1))
+        }
         break
       case 'Enter':
         e.preventDefault()
@@ -200,7 +210,7 @@ export function SearchAutocomplete({
         type="text"
         value={value}
         onChange={(e) => {
-          onChange(e.target.value)
+          handleInputChange(e.target.value)
           setIsOpen(true)
         }}
         onFocus={() => value.length >= 2 && setIsOpen(true)}
@@ -215,7 +225,7 @@ export function SearchAutocomplete({
         {value && (
           <button
             onClick={() => {
-              onChange('')
+              handleInputChange('')
               setIsOpen(false)
             }}
             className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
