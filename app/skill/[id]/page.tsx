@@ -7,6 +7,7 @@ import { DependencyDisplay } from '@/components/DependencyDisplay'
 import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import { TableOfContents, Section, type TocItem } from '@/components/TableOfContents'
 import { DraftBanner } from '@/components/DraftBanner'
+import { TryItButton } from '@/components/TryItButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -66,6 +67,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           updatedAt={item.updatedAt}
           status={item.status}
           marketplaceVersion={item.marketplaceVersion}
+          extraBadges={<TryItButton itemId={item.id} />}
         />
       </Section>
 

@@ -7,6 +7,7 @@ import { ContentSection } from '@/components/ContentSection'
 import { CopyButton } from '@/components/CopyButton'
 import { TableOfContents, Section, type TocItem } from '@/components/TableOfContents'
 import { DraftBanner } from '@/components/DraftBanner'
+import { TryItButton } from '@/components/TryItButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -96,12 +97,17 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
     tocItems.push({ id: 'readme', label: 'README', icon: '📖' })
   }
 
-  // Extra badge for hook event
-  const extraBadges = eventInfo ? (
-    <span className="text-[10px] px-2 py-1 rounded-full bg-orange-500/10 text-orange-400">
-      {eventInfo.label}
-    </span>
-  ) : null
+  // Extra badges: hook event + try it button
+  const extraBadges = (
+    <>
+      {eventInfo && (
+        <span className="text-[10px] px-2 py-1 rounded-full bg-orange-500/10 text-orange-400">
+          {eventInfo.label}
+        </span>
+      )}
+      <TryItButton itemId={item.id} />
+    </>
+  )
 
   return (
     <DetailPageLayout accentColor="orange">
