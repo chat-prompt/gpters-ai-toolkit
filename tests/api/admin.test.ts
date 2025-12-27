@@ -155,6 +155,7 @@ describe('Admin API', () => {
         if (!serverAvailable) return
 
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
+          method: 'GET',
           headers: {
             'x-admin-password': ADMIN_PASSWORD,
           },
@@ -178,6 +179,7 @@ describe('Admin API', () => {
         if (!serverAvailable) return
 
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
+          method: 'GET',
           headers: {
             'x-admin-password': ADMIN_PASSWORD,
           },

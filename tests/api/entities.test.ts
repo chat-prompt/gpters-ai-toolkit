@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-admin-password'
 
 async function isServerRunning(): Promise<boolean> {
   try {
@@ -50,7 +50,7 @@ describe('Tags API', () => {
       expect(response.status).toBe(401)
 
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Admin authentication required')
     })
 
     it('should create tag with admin auth', async () => {
@@ -269,7 +269,7 @@ describe('Authors API', () => {
       expect(response.status).toBe(401)
 
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Admin authentication required')
     })
 
     it('should create author with admin auth', async () => {
@@ -488,7 +488,7 @@ describe('MCP Servers API', () => {
       expect(response.status).toBe(401)
 
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Admin authentication required')
     })
 
     it('should create MCP server with admin auth', async () => {

@@ -99,7 +99,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(401)
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Authentication required')
     })
 
     it('should fail to create item with wrong admin password', async () => {
@@ -123,7 +123,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(401)
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Authentication required')
     })
 
     it('should fail to create item without required fields', async () => {
@@ -288,7 +288,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(404)
       const data = await response.json()
-      expect(data.error).toBe('Not found')
+      expect(data.error).toBe('Catalog item not found')
     })
   })
 
@@ -377,7 +377,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(401)
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Authentication required')
     })
 
     it('should fail to update item with wrong admin password', async () => {
@@ -398,7 +398,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(401)
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Authentication required')
     })
 
     it('should return 404 when updating non-existent item', async () => {
@@ -419,7 +419,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(404)
       const data = await response.json()
-      expect(data.error).toBe('Not found')
+      expect(data.error).toBe('Catalog item not found')
     })
 
     it('should update partial fields only', async () => {
@@ -517,7 +517,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(401)
       const data = await response.json()
-      expect(data.error).toBe('Unauthorized')
+      expect(data.error).toBe('Authentication required')
 
       // Cleanup
       await fetch(`${API_BASE_URL}/api/catalog/${newItem.id}`, {
@@ -538,7 +538,7 @@ describe('Catalog CRUD API', () => {
 
       expect(response.status).toBe(404)
       const data = await response.json()
-      expect(data.error).toBe('Not found')
+      expect(data.error).toBe('Catalog item not found')
     })
   })
 

@@ -508,7 +508,7 @@ describe('Upload API', () => {
         description: 'A complete skill with all fields',
         author: 'test-author',
         tags: ['tag1', 'tag2', 'tag3'],
-        teamTag: 'engineering',
+        teamTag: 'platform',
         difficulty: 'medium',
         pluginId: 'test-plugin',
         estimatedTime: '10 minutes',
