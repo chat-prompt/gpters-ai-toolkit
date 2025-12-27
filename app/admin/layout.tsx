@@ -1,46 +1,32 @@
 'use client'
 
-import { useState, useEffect, ReactNode } from 'react'
+import { useState, ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { AdminAuthProvider, useAdminAuth } from '@/lib/admin-auth'
 
-interface AdminLayoutProps {
-  children: ReactNode
-}
-
-export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+function AdminLayoutContent({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading, login, logout } = useAdminAuth()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const pathname = usePathname()
-
-  useEffect(() => {
-    const storedAuth = sessionStorage.getItem('admin_auth')
-    if (storedAuth === 'true') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydration pattern for client-only sessionStorage
-      setIsAuthenticated(true)
-    }
-  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    try {
-      const res = await fetch('/api/catalog', {
-        headers: { 'x-admin-password': password },
-      })
-
-      if (res.ok) {
-        setIsAuthenticated(true)
-        sessionStorage.setItem('admin_auth', 'true')
-        sessionStorage.setItem('admin_password', password)
-      } else {
-        setError('Invalid password')
-      }
-    } catch {
-      setError('Connection error')
+    const success = await login(password)
+    if (!success) {
+      setError('Invalid password')
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
+        <div className="text-[var(--text-muted)]">Loading...</div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
@@ -123,11 +109,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               View Site
             </Link>
             <button
-              onClick={() => {
-                sessionStorage.removeItem('admin_auth')
-                sessionStorage.removeItem('admin_password')
-                setIsAuthenticated(false)
-              }}
+              onClick={logout}
               className="text-sm text-red-400 hover:text-red-300"
             >
               Logout
@@ -140,5 +122,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {children}
       </main>
     </div>
+  )
+}
+
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <AdminAuthProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AdminAuthProvider>
   )
 }

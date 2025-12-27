@@ -7,12 +7,14 @@ import { TypeSpecificFields } from '@/components/TypeSpecificFields'
 import { TypeGuidePanel } from '@/components/TypeGuidePanel'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
+import { useAdminAuth } from '@/lib/admin-auth'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/types'
 
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
 export default function NewCatalogItem() {
   const router = useRouter()
+  const { password } = useAdminAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -129,7 +131,6 @@ export default function NewCatalogItem() {
     setLoading(true)
 
     try {
-      const password = sessionStorage.getItem('admin_password')
       const payload = {
         id,
         type,

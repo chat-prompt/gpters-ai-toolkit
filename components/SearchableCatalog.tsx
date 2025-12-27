@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty, TeamTag, TEAM_TAGS } from '@/lib/types'
 import { TeamTagBadge } from './TeamTagSelector'
 
@@ -145,12 +146,88 @@ interface SearchableCatalogProps {
 }
 
 export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<ItemType | 'all'>('all')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | ''>('')
-  const [selectedTeamTag, setSelectedTeamTag] = useState<TeamTag | ''>('')
-  const [showFilters, setShowFilters] = useState(false)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // Initialize state from URL params
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
+  const [activeFilter, setActiveFilter] = useState<ItemType | 'all'>(
+    (searchParams.get('type') as ItemType | 'all') || 'all'
+  )
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    searchParams.get('tags')?.split(',').filter(Boolean) || []
+  )
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | ''>(
+    (searchParams.get('difficulty') as Difficulty) || ''
+  )
+  const [selectedTeamTag, setSelectedTeamTag] = useState<TeamTag | ''>(
+    (searchParams.get('team') as TeamTag) || ''
+  )
+  const [showFilters, setShowFilters] = useState(
+    Boolean(searchParams.get('tags') || searchParams.get('difficulty') || searchParams.get('team'))
+  )
+
+  // Sync URL with filter state
+  const updateURL = useCallback((updates: Record<string, string | string[] | null>) => {
+    const params = new URLSearchParams(searchParams.toString())
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+        params.delete(key)
+      } else if (Array.isArray(value)) {
+        params.set(key, value.join(','))
+      } else {
+        params.set(key, value)
+      }
+    })
+
+    const queryString = params.toString()
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+  }, [searchParams, router, pathname])
+
+  // Debounced search query update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateURL({ q: searchQuery || null })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, updateURL])
+
+  // Handlers that update both state and URL
+  const handleTypeFilter = useCallback((type: ItemType | 'all') => {
+    setActiveFilter(type)
+    updateURL({ type: type === 'all' ? null : type })
+  }, [updateURL])
+
+  const handleTagToggle = useCallback((tag: string) => {
+    setSelectedTags(prev => {
+      const newTags = prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+      updateURL({ tags: newTags.length > 0 ? newTags : null })
+      return newTags
+    })
+  }, [updateURL])
+
+  const handleDifficultyChange = useCallback((difficulty: Difficulty | '') => {
+    setSelectedDifficulty(difficulty)
+    updateURL({ difficulty: difficulty || null })
+  }, [updateURL])
+
+  const handleTeamTagChange = useCallback((team: TeamTag | '') => {
+    setSelectedTeamTag(team)
+    updateURL({ team: team || null })
+  }, [updateURL])
+
+  const handleClearAllFilters = useCallback(() => {
+    setSelectedTags([])
+    setSelectedDifficulty('')
+    setSelectedTeamTag('')
+    setSearchQuery('')
+    setActiveFilter('all')
+    router.replace(pathname, { scroll: false })
+  }, [router, pathname])
 
   // Get unique tags from all items
   const availableTags = useMemo(() => {
@@ -216,14 +293,6 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
 
   const hasActiveFilters = selectedTags.length > 0 || selectedDifficulty !== '' || selectedTeamTag !== ''
 
-  const clearAllFilters = () => {
-    setSelectedTags([])
-    setSelectedDifficulty('')
-    setSelectedTeamTag('')
-    setSearchQuery('')
-    setActiveFilter('all')
-  }
-
   const skills = filteredCatalog.filter(item => item.type === 'skill')
   const agents = filteredCatalog.filter(item => item.type === 'agent')
   const commands = filteredCatalog.filter(item => item.type === 'command')
@@ -285,7 +354,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
         {/* Type Filter Buttons */}
         <div className="flex gap-2 mt-4">
           <button
-            onClick={() => setActiveFilter('all')}
+            onClick={() => handleTypeFilter('all')}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
               activeFilter === 'all'
                 ? 'bg-[var(--accent-cyan)] text-black'
@@ -295,7 +364,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             All ({catalog.length})
           </button>
           <button
-            onClick={() => setActiveFilter('skill')}
+            onClick={() => handleTypeFilter('skill')}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
               activeFilter === 'skill'
                 ? 'bg-[var(--accent-cyan)] text-black'
@@ -305,7 +374,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             ⚡ Skills ({totalSkills})
           </button>
           <button
-            onClick={() => setActiveFilter('agent')}
+            onClick={() => handleTypeFilter('agent')}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
               activeFilter === 'agent'
                 ? 'bg-[var(--accent-purple)] text-black'
@@ -315,7 +384,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             ◈ Agents ({totalAgents})
           </button>
           <button
-            onClick={() => setActiveFilter('command')}
+            onClick={() => handleTypeFilter('command')}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
               activeFilter === 'command'
                 ? 'bg-rose-400 text-black'
@@ -325,7 +394,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             ▸ Commands ({totalCommands})
           </button>
           <button
-            onClick={() => setActiveFilter('hook')}
+            onClick={() => handleTypeFilter('hook')}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
               activeFilter === 'hook'
                 ? 'bg-orange-400 text-black'
@@ -364,7 +433,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                   return (
                     <button
                       key={tag}
-                      onClick={() => setSelectedTeamTag(selectedTeamTag === tag ? '' : tag)}
+                      onClick={() => handleTeamTagChange(selectedTeamTag === tag ? '' : tag)}
                       className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 border ${
                         selectedTeamTag === tag
                           ? tagInfo.color
@@ -388,7 +457,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                 {(['easy', 'medium', 'hard'] as Difficulty[]).map((level) => (
                   <button
                     key={level}
-                    onClick={() => setSelectedDifficulty(selectedDifficulty === level ? '' : level)}
+                    onClick={() => handleDifficultyChange(selectedDifficulty === level ? '' : level)}
                     className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
                       selectedDifficulty === level
                         ? level === 'easy'
@@ -414,13 +483,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                 {availableTags.map((tag) => (
                   <button
                     key={tag}
-                    onClick={() => {
-                      setSelectedTags(prev =>
-                        prev.includes(tag)
-                          ? prev.filter(t => t !== tag)
-                          : [...prev, tag]
-                      )
-                    }}
+                    onClick={() => handleTagToggle(tag)}
                     className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
                       selectedTags.includes(tag)
                         ? 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/50'
@@ -437,7 +500,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             {hasActiveFilters && (
               <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
                 <button
-                  onClick={clearAllFilters}
+                  onClick={handleClearAllFilters}
                   className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors flex items-center gap-2"
                 >
                   <span>✕</span>
@@ -457,7 +520,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs border ${TEAM_TAGS[selectedTeamTag].color}`}>
               {TEAM_TAGS[selectedTeamTag].emoji} {TEAM_TAGS[selectedTeamTag].label}
               <button
-                onClick={() => setSelectedTeamTag('')}
+                onClick={() => handleTeamTagChange('')}
                 className="ml-1 hover:text-rose-400 transition-colors"
               >
                 ✕
@@ -468,7 +531,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
               {DIFFICULTY_LABELS[selectedDifficulty].emoji} {DIFFICULTY_LABELS[selectedDifficulty].label}
               <button
-                onClick={() => setSelectedDifficulty('')}
+                onClick={() => handleDifficultyChange('')}
                 className="ml-1 hover:text-rose-400 transition-colors"
               >
                 ✕
@@ -482,7 +545,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             >
               {TAGS[tag]?.label || tag}
               <button
-                onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                onClick={() => handleTagToggle(tag)}
                 className="ml-1 hover:text-rose-400 transition-colors"
               >
                 ✕
@@ -490,7 +553,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             </span>
           ))}
           <button
-            onClick={clearAllFilters}
+            onClick={handleClearAllFilters}
             className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors"
           >
             Clear all
@@ -613,7 +676,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             </p>
             {(searchQuery || hasActiveFilters) ? (
               <button
-                onClick={clearAllFilters}
+                onClick={handleClearAllFilters}
                 className="text-[var(--accent-cyan)] hover:underline"
               >
                 Clear all filters

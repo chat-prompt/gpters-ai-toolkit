@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAdminAuth } from '@/lib/admin-auth'
 
 interface McpServer {
   id: string
@@ -13,6 +14,7 @@ interface McpServer {
 }
 
 export default function McpServersAdminPage() {
+  const { password } = useAdminAuth()
   const [servers, setServers] = useState<McpServer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -42,7 +44,6 @@ export default function McpServersAdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const password = sessionStorage.getItem('admin_password')
 
     try {
       if (editingServer) {
@@ -92,7 +93,6 @@ export default function McpServersAdminPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('정말 삭제하시겠습니까?')) return
 
-    const password = sessionStorage.getItem('admin_password')
     try {
       await fetch(`/api/mcp-servers/${id}`, {
         method: 'DELETE',

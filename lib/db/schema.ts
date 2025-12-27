@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -68,7 +68,15 @@ export const catalogItems = pgTable('catalog_items', {
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-})
+}, (table) => [
+  // Performance indexes for common queries
+  index('catalog_items_type_idx').on(table.type),
+  index('catalog_items_status_idx').on(table.status),
+  index('catalog_items_author_idx').on(table.author),
+  index('catalog_items_marketplace_enabled_idx').on(table.marketplaceEnabled),
+  // Composite index for type + status (common filter combination)
+  index('catalog_items_type_status_idx').on(table.type, table.status),
+])
 
 export type CatalogItemRecord = typeof catalogItems.$inferSelect
 export type NewCatalogItemRecord = typeof catalogItems.$inferInsert

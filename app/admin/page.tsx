@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAdminAuth } from '@/lib/admin-auth'
 
 interface Stats {
   total: number
@@ -12,13 +13,13 @@ interface Stats {
 }
 
 export default function AdminDashboard() {
+  const { password } = useAdminAuth()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const password = sessionStorage.getItem('admin_password')
         const res = await fetch('/api/catalog', {
           headers: { 'x-admin-password': password || '' },
         })
@@ -41,7 +42,7 @@ export default function AdminDashboard() {
     }
 
     fetchStats()
-  }, [])
+  }, [password])
 
   const statCards = [
     { label: 'Total Items', value: stats?.total || 0, color: 'cyan' },

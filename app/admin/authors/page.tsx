@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAdminAuth } from '@/lib/admin-auth'
 
 interface Author {
   id: string
@@ -14,6 +15,7 @@ interface Author {
 }
 
 export default function AuthorsAdminPage() {
+  const { password } = useAdminAuth()
   const [authors, setAuthors] = useState<Author[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -44,7 +46,6 @@ export default function AuthorsAdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const password = sessionStorage.getItem('admin_password')
 
     try {
       if (editingAuthor) {
@@ -96,7 +97,6 @@ export default function AuthorsAdminPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('정말 삭제하시겠습니까?')) return
 
-    const password = sessionStorage.getItem('admin_password')
     try {
       await fetch(`/api/authors/${id}`, {
         method: 'DELETE',

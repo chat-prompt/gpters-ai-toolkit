@@ -29,6 +29,13 @@
       "when": 1766546606782,
       "tag": "0003_far_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1766838929420,
+      "tag": "0004_slippery_oracle",
+      "breakpoints": true
     }
   ]
 }

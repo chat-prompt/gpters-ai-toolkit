@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import type { TeamTag } from '@/lib/types'
+import { useAdminAuth } from '@/lib/admin-auth'
 import { TEAM_TAGS } from '@/lib/types'
 import { TeamTagBadge } from '@/components/TeamTagSelector'
 
@@ -35,15 +36,15 @@ const TYPE_ICONS: Record<string, string> = {
 }
 
 export default function CatalogList() {
+  const { password } = useAdminAuth()
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [teamFilter, setTeamFilter] = useState<TeamTag | 'all'>('all')
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  async function fetchItems() {
+  const fetchItems = useCallback(async () => {
     try {
-      const password = sessionStorage.getItem('admin_password')
       const url = filter === 'all' ? '/api/catalog' : `/api/catalog?type=${filter}`
       const res = await fetch(url, {
         headers: { 'x-admin-password': password || '' },
@@ -55,17 +56,16 @@ export default function CatalogList() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter, password])
 
   useEffect(() => {
     fetchItems()
-  }, [filter])
+  }, [fetchItems])
 
   async function handleDelete(id: string) {
     if (!confirm(`Are you sure you want to delete "${id}"?`)) return
 
     try {
-      const password = sessionStorage.getItem('admin_password')
       const res = await fetch(`/api/catalog/${id}`, {
         method: 'DELETE',
         headers: { 'x-admin-password': password || '' },

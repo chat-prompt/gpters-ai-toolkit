@@ -2,6 +2,7 @@
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 import Link from 'next/link'
 
 interface MarkdownContentProps {
@@ -12,6 +13,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeSanitize]}
       components={{
         h1: ({ children }) => (
           <h1 className="text-2xl font-medium text-[var(--text-primary)] mt-10 mb-6">{children}</h1>

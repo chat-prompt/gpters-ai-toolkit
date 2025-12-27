@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { TeamTag } from '@/lib/types'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
+import { useAdminAuth } from '@/lib/admin-auth'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
@@ -17,6 +18,7 @@ interface EditPageProps {
 export default function EditCatalogItem({ params }: EditPageProps) {
   const { id } = use(params)
   const router = useRouter()
+  const { password } = useAdminAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -41,47 +43,46 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     changelog: '',
   })
 
-  useEffect(() => {
-    async function fetchItem() {
-      try {
-        const password = sessionStorage.getItem('admin_password')
-        const res = await fetch(`/api/catalog/${id}`, {
-          headers: { 'x-admin-password': password || '' },
+  const fetchItem = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/catalog/${id}`, {
+        headers: { 'x-admin-password': password || '' },
+      })
+
+      if (res.ok) {
+        const item = await res.json()
+        setFormData({
+          id: item.id,
+          type: item.type,
+          name: item.name,
+          description: item.description || '',
+          author: item.author || '',
+          tags: (item.tags || []).join(', '),
+          teamTag: item.teamTag || 'general',
+          difficulty: item.difficulty || '',
+          pluginId: item.pluginId || '',
+          estimatedTime: item.estimatedTime || '',
+          content: item.content,
+          readme: item.readme || '',
+          marketplaceEnabled: item.marketplaceEnabled || false,
+          marketplaceVersion: item.marketplaceVersion || '1.0.0',
+          marketplaceSyncedAt: item.marketplaceSyncedAt || '',
+          status: item.status || 'published',
+          changelog: item.changelog || '',
         })
-
-        if (res.ok) {
-          const item = await res.json()
-          setFormData({
-            id: item.id,
-            type: item.type,
-            name: item.name,
-            description: item.description || '',
-            author: item.author || '',
-            tags: (item.tags || []).join(', '),
-            teamTag: item.teamTag || 'general',
-            difficulty: item.difficulty || '',
-            pluginId: item.pluginId || '',
-            estimatedTime: item.estimatedTime || '',
-            content: item.content,
-            readme: item.readme || '',
-            marketplaceEnabled: item.marketplaceEnabled || false,
-            marketplaceVersion: item.marketplaceVersion || '1.0.0',
-            marketplaceSyncedAt: item.marketplaceSyncedAt || '',
-            status: item.status || 'published',
-            changelog: item.changelog || '',
-          })
-        } else {
-          setError('Item not found')
-        }
-      } catch {
-        setError('Failed to load item')
-      } finally {
-        setLoading(false)
+      } else {
+        setError('Item not found')
       }
+    } catch {
+      setError('Failed to load item')
+    } finally {
+      setLoading(false)
     }
+  }, [id, password])
 
+  useEffect(() => {
     fetchItem()
-  }, [id])
+  }, [fetchItem])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,7 +90,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     setSaving(true)
 
     try {
-      const password = sessionStorage.getItem('admin_password')
       const payload = {
         name: formData.name,
         description: formData.description,
