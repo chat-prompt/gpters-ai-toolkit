@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'

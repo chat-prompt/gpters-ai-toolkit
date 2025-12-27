@@ -13,10 +13,6 @@ export default defineConfig({
     exclude: ['tests/e2e/**/*'],
     globals: true,
     setupFiles: ['./tests/setup.ts'],
-    // Use node environment for API tests (they need real HTTP requests)
-    environmentMatchGlobs: [
-      ['tests/api/**/*.test.ts', 'node'],
-    ],
   },
   resolve: {
     alias: {
