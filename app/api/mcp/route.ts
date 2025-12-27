@@ -13,11 +13,19 @@
  *    Body: {"query": "database"}
  *
  *    Actions: search, get, list, tools
+ *
+ * Authentication:
+ *    Optional Bearer token authentication via Authorization header.
+ *    When a valid token is provided, per-token rate limiting applies.
+ *    Without authentication, standard IP-based rate limiting applies.
+ *
+ *    Example: Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { withMcpAuth, type McpAuthResult } from '@/lib/mcp-auth'
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -37,18 +45,48 @@ export async function OPTIONS() {
 }
 
 /**
+ * Add CORS headers to response
+ */
+function addCorsHeaders(response: NextResponse): NextResponse {
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value)
+  })
+  return response
+}
+
+/**
+ * Handle authentication and rate limiting
+ * Returns error response if auth/rate limit fails, null otherwise
+ */
+async function handleAuthAndRateLimit(
+  request: NextRequest
+): Promise<{ error?: NextResponse; auth?: McpAuthResult }> {
+  // Check MCP token authentication
+  const authResult = await withMcpAuth(request, { requireAuth: false })
+
+  if (authResult.error) {
+    return { error: addCorsHeaders(authResult.error) }
+  }
+
+  // If authenticated with token, token-based rate limiting is already applied
+  // If not authenticated, apply IP-based rate limiting
+  if (!authResult.auth) {
+    const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+    if (rateLimitError) {
+      return { error: addCorsHeaders(rateLimitError) }
+    }
+  }
+
+  return { auth: authResult.auth }
+}
+
+/**
  * GET - Server info and available tools
  */
 export async function GET(request: NextRequest) {
-  // Rate limit: 100 requests per minute for info queries
-  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
-  if (rateLimitError) {
-    // Add CORS headers to rate limit response
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-      rateLimitError.headers.set(key, value)
-    })
-    return rateLimitError
-  }
+  // Handle auth and rate limiting
+  const { error, auth } = await handleAuthAndRateLimit(request)
+  if (error) return error
 
   const { searchParams } = new URL(request.url)
   const format = searchParams.get('format')
@@ -64,6 +102,7 @@ export async function GET(request: NextRequest) {
           name: t.name,
           description: t.description.split('\n')[0],
         })),
+        authenticated: !!auth,
       },
       { headers: corsHeaders }
     )
@@ -84,6 +123,11 @@ export async function GET(request: NextRequest) {
         name: t.name,
         description: t.description.split('\n')[0],
       })),
+      authentication: {
+        status: auth ? 'authenticated' : 'public',
+        tokenName: auth?.tokenName,
+        usage: 'Add "Authorization: Bearer mcp_xxx" header for token-based access',
+      },
     },
     { headers: corsHeaders }
   )
@@ -93,15 +137,9 @@ export async function GET(request: NextRequest) {
  * POST - Handle MCP requests
  */
 export async function POST(request: NextRequest) {
-  // Rate limit: 100 requests per minute for MCP operations
-  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
-  if (rateLimitError) {
-    // Add CORS headers to rate limit response
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-      rateLimitError.headers.set(key, value)
-    })
-    return rateLimitError
-  }
+  // Handle auth and rate limiting
+  const { error } = await handleAuthAndRateLimit(request)
+  if (error) return error
 
   try {
     const { searchParams } = new URL(request.url)
