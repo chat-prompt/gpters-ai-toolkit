@@ -3,11 +3,32 @@
 import { useState, ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { AdminAuthProvider, useAdminAuth } from '@/lib/admin-auth'
+import type { UserRole } from '@/lib/rbac'
+
+// Role badge component
+function RoleBadge({ role }: { role: UserRole }) {
+  const colors: Record<UserRole, string> = {
+    admin: 'bg-red-500/20 text-red-400 border-red-500/30',
+    editor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    viewer: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  }
+
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${colors[role]}`}>
+      {role.charAt(0).toUpperCase() + role.slice(1)}
+    </span>
+  )
+}
 
 function AdminLayoutContent({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, login, logout } = useAdminAuth()
+  const { data: session } = useSession()
   const [password, setPassword] = useState('')
+
+  // Get user role from session
+  const userRole = session?.user?.role as UserRole | undefined
   const [error, setError] = useState('')
   const pathname = usePathname()
 
@@ -67,9 +88,12 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
+  // Nav items with optional role requirements
   const navItems = [
     { href: '/admin', label: 'Dashboard', exact: true },
     { href: '/admin/catalog', label: 'Catalog' },
+    { href: '/admin/users', label: 'Users' },
+    { href: '/admin/mcp-tokens', label: 'MCP Tokens' },
   ]
 
   return (
@@ -102,6 +126,22 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="flex items-center gap-4">
+            {/* User info and role badge */}
+            {session?.user && (
+              <div className="flex items-center gap-2">
+                {session.user.image && (
+                  <img
+                    src={session.user.image}
+                    alt={session.user.name || 'User'}
+                    className="w-6 h-6 rounded-full"
+                  />
+                )}
+                <span className="text-sm text-[var(--text-secondary)]">
+                  {session.user.name || session.user.email}
+                </span>
+                {userRole && <RoleBadge role={userRole} />}
+              </div>
+            )}
             <Link
               href="/"
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"

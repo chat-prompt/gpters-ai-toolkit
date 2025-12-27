@@ -2,10 +2,24 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import type { TeamTag } from '@/lib/types'
-import { useAdminAuth } from '@/lib/admin-auth'
 import { TEAM_TAGS } from '@/lib/types'
 import { TeamTagBadge } from '@/components/TeamTagSelector'
+import type { UserRole } from '@/lib/rbac'
+
+// RBAC helper functions
+function canCreate(role: UserRole | undefined): boolean {
+  return role === 'admin' || role === 'editor'
+}
+
+function canEdit(role: UserRole | undefined): boolean {
+  return role === 'admin' || role === 'editor'
+}
+
+function canDelete(role: UserRole | undefined): boolean {
+  return role === 'admin'
+}
 
 interface CatalogItem {
   id: string
@@ -36,18 +50,19 @@ const TYPE_ICONS: Record<string, string> = {
 }
 
 export default function CatalogList() {
-  const { password } = useAdminAuth()
+  const { data: session } = useSession()
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [teamFilter, setTeamFilter] = useState<TeamTag | 'all'>('all')
 
+  // Get user role from session
+  const userRole = session?.user?.role as UserRole | undefined
+
   const fetchItems = useCallback(async () => {
     try {
       const url = filter === 'all' ? '/api/catalog' : `/api/catalog?type=${filter}`
-      const res = await fetch(url, {
-        headers: { 'x-admin-password': password || '' },
-      })
+      const res = await fetch(url)
       const data = await res.json()
       setItems(data)
     } catch (error) {
@@ -55,23 +70,29 @@ export default function CatalogList() {
     } finally {
       setLoading(false)
     }
-  }, [filter, password])
+  }, [filter])
 
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
 
   async function handleDelete(id: string) {
+    if (!canDelete(userRole)) {
+      alert('You do not have permission to delete items')
+      return
+    }
+
     if (!confirm(`Are you sure you want to delete "${id}"?`)) return
 
     try {
       const res = await fetch(`/api/catalog/${id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': password || '' },
       })
 
       if (res.ok) {
         setItems(items.filter((item) => item.id !== id))
+      } else if (res.status === 403) {
+        alert('Permission denied: You do not have permission to delete items')
       } else {
         alert('Failed to delete item')
       }
@@ -100,12 +121,14 @@ export default function CatalogList() {
             {filteredItems.length} items{teamFilter !== 'all' && ` (filtered from ${items.length})`}
           </p>
         </div>
-        <Link
-          href="/admin/catalog/new"
-          className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
-        >
-          Create New
-        </Link>
+        {canCreate(userRole) && (
+          <Link
+            href="/admin/catalog/new"
+            className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
+          >
+            Create New
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
@@ -159,13 +182,15 @@ export default function CatalogList() {
           <p className="text-[var(--text-muted)] mb-4">
             {items.length === 0 ? 'No items found' : 'No items match the selected filters'}
           </p>
-          {items.length === 0 ? (
+          {items.length === 0 && canCreate(userRole) ? (
             <Link
               href="/admin/catalog/new"
               className="text-[var(--accent-cyan)] hover:underline"
             >
               Create your first item
             </Link>
+          ) : items.length === 0 ? (
+            <span className="text-[var(--text-muted)]">No items available</span>
           ) : (
             <button
               onClick={() => { setFilter('all'); setTeamFilter('all'); }}
@@ -262,18 +287,22 @@ export default function CatalogList() {
                       >
                         View
                       </Link>
-                      <Link
-                        href={`/admin/catalog/${item.id}/edit`}
-                        className="px-3 py-1.5 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] transition-colors"
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-400/10 transition-colors"
-                      >
-                        Delete
-                      </button>
+                      {canEdit(userRole) && (
+                        <Link
+                          href={`/admin/catalog/${item.id}/edit`}
+                          className="px-3 py-1.5 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] transition-colors"
+                        >
+                          Edit
+                        </Link>
+                      )}
+                      {canDelete(userRole) && (
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-400/10 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

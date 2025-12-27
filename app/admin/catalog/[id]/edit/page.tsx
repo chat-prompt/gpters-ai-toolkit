@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { TeamTag } from '@/lib/types'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
+import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/SecurityAuditPanel'
+import type { SecurityAuditResult } from '@/lib/security-audit'
 import { useAdminAuth } from '@/lib/admin-auth'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
@@ -22,6 +24,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [securityAuditResult, setSecurityAuditResult] = useState<SecurityAuditResult | null>(null)
+  const [showSecurityPanel, setShowSecurityPanel] = useState(false)
 
   const [formData, setFormData] = useState({
     id: '',
@@ -161,13 +165,30 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         >
           ← Back to Catalog
         </Link>
-        <h1 className="text-3xl font-light text-[var(--text-primary)]">
-          Edit: {formData.name}
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-light text-[var(--text-primary)]">
+            Edit: {formData.name}
+          </h1>
+          <SecurityAuditBadge
+            result={securityAuditResult}
+            onClick={() => setShowSecurityPanel(!showSecurityPanel)}
+          />
+        </div>
         <p className="text-sm text-[var(--text-muted)] mt-2">
           ID: {formData.id}
         </p>
       </div>
+
+      {/* Security Audit Panel */}
+      {showSecurityPanel && (
+        <SecurityAuditPanel
+          itemId={formData.id}
+          content={formData.content}
+          onAuditComplete={setSecurityAuditResult}
+          autoRun={true}
+          className="mb-6"
+        />
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="glass rounded-2xl p-8 space-y-6">
