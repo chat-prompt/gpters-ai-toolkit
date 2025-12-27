@@ -26,6 +26,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import { withMcpAuth, type McpAuthResult } from '@/lib/mcp-auth'
+import {
+  MAX_REQUEST_SIZE,
+  isRequestSizeValid,
+  validateSearchRequest,
+  validateGetRequest,
+  validateListRequest,
+  validateJsonRpcRequest,
+  createValidationError,
+  createJsonRpcValidationError,
+  containsDangerousPatterns,
+} from '@/lib/mcp-validation'
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -142,14 +153,69 @@ export async function POST(request: NextRequest) {
   if (error) return error
 
   try {
+    // Check request size
+    const contentLength = request.headers.get('content-length')
+    if (!isRequestSizeValid(contentLength ? parseInt(contentLength, 10) : null)) {
+      return addCorsHeaders(
+        NextResponse.json(
+          { success: false, error: `Request body too large. Maximum size is ${MAX_REQUEST_SIZE / 1024}KB` },
+          { status: 413 }
+        )
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const action = searchParams.get('action')
+
+    // Validate action parameter
+    if (action && containsDangerousPatterns(action)) {
+      return addCorsHeaders(
+        NextResponse.json(
+          { success: false, error: 'Invalid action parameter' },
+          { status: 400 }
+        )
+      )
+    }
 
     const body = await request.json()
 
     // Simple REST mode (action parameter)
     if (action) {
-      const result = await handleSimpleRequest(action, body)
+      // Validate request body based on action
+      let validationResult
+      switch (action) {
+        case 'search':
+          validationResult = validateSearchRequest(body)
+          break
+        case 'get':
+          validationResult = validateGetRequest(body)
+          break
+        case 'list':
+          validationResult = validateListRequest(body)
+          break
+        case 'tools':
+          // No validation needed for tools
+          validationResult = { success: true, data: body }
+          break
+        default:
+          return addCorsHeaders(
+            NextResponse.json(
+              { success: false, error: `Unknown action: ${action}` },
+              { status: 400 }
+            )
+          )
+      }
+
+      if (!validationResult.success && 'error' in validationResult) {
+        return addCorsHeaders(
+          NextResponse.json(
+            createValidationError(validationResult.error),
+            { status: 400 }
+          )
+        )
+      }
+
+      const result = await handleSimpleRequest(action, validationResult.data || body)
       return NextResponse.json(result, {
         status: result.success ? 200 : 400,
         headers: corsHeaders,
@@ -157,6 +223,16 @@ export async function POST(request: NextRequest) {
     }
 
     // JSON-RPC 2.0 mode (MCP protocol)
+    const rpcValidation = validateJsonRpcRequest(body)
+    if (!rpcValidation.success) {
+      return addCorsHeaders(
+        NextResponse.json(
+          createJsonRpcValidationError(body?.id, rpcValidation.error),
+          { status: 400 }
+        )
+      )
+    }
+
     const response = await handleHttpRequest(body)
     return NextResponse.json(response, { headers: corsHeaders })
   } catch (error) {
