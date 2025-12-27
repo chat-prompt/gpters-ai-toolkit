@@ -8,6 +8,7 @@ import { TeamTagSelector } from '@/components/TeamTagSelector'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
+const STATUSES = ['draft', 'published'] as const
 
 interface EditPageProps {
   params: Promise<{ id: string }>
@@ -36,6 +37,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     marketplaceEnabled: false,
     marketplaceVersion: '1.0.0',
     marketplaceSyncedAt: '',
+    status: 'published' as typeof STATUSES[number],
+    changelog: '',
   })
 
   useEffect(() => {
@@ -64,6 +67,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
             marketplaceEnabled: item.marketplaceEnabled || false,
             marketplaceVersion: item.marketplaceVersion || '1.0.0',
             marketplaceSyncedAt: item.marketplaceSyncedAt || '',
+            status: item.status || 'published',
+            changelog: item.changelog || '',
           })
         } else {
           setError('Item not found')
@@ -99,6 +104,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         type: formData.type,
         marketplaceEnabled: formData.marketplaceEnabled,
         marketplaceVersion: formData.marketplaceVersion || '1.0.0',
+        status: formData.status,
+        changelog: formData.changelog || null,
       }
 
       const res = await fetch(`/api/catalog/${id}`, {
@@ -305,6 +312,60 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           </div>
         </div>
 
+        {/* Version & Status Management */}
+        <div className="glass rounded-2xl p-8 space-y-6">
+          <h2 className="text-xl font-medium text-[var(--text-primary)] flex items-center gap-2">
+            📦 Version & Status
+          </h2>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                Status
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof STATUSES[number] })}
+                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s === 'draft' ? '🚧 Draft' : '✅ Published'}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Draft items are visible in admin but hidden from public catalog
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                Version (semver)
+              </label>
+              <input
+                type="text"
+                value={formData.marketplaceVersion}
+                onChange={(e) => setFormData({ ...formData, marketplaceVersion: e.target.value })}
+                placeholder="1.0.0"
+                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+              Changelog (latest version)
+            </label>
+            <textarea
+              value={formData.changelog}
+              onChange={(e) => setFormData({ ...formData, changelog: e.target.value })}
+              placeholder="What changed in this version?"
+              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] resize-none"
+              rows={3}
+            />
+          </div>
+        </div>
+
         {/* Marketplace Settings */}
         {formData.type !== 'guide' && (
           <div className="glass rounded-2xl p-8 space-y-6">
@@ -332,18 +393,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                      Version (semver)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.marketplaceVersion}
-                      onChange={(e) => setFormData({ ...formData, marketplaceVersion: e.target.value })}
-                      placeholder="1.0.0"
-                      className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-[var(--text-secondary)] mb-2">
                       Last Synced
                     </label>
                     <div className="px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
@@ -357,7 +406,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
                 <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
                   <p className="text-sm text-[var(--text-secondary)] mb-2">Installation command:</p>
                   <code className="text-sm text-[var(--accent-cyan)] font-mono">
-                    /plugin install {formData.id}@gpters-ai-toolkit
+                    /plugin install {formData.id}@company-ai-toolkit
                   </code>
                 </div>
               </>

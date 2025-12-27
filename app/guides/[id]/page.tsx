@@ -2,6 +2,7 @@ import { getGuideById, getGuides } from '@/lib/catalog'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
 import { ServerHeader } from '@/components/ServerHeader'
 import { MarkdownContent } from '@/components/MarkdownContent'
+import { StatusBadge } from '@/components/StatusBadge'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -59,6 +60,7 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
                 ⏱ {guide.estimatedTime}
               </span>
             )}
+            <StatusBadge status={guide.status} version={guide.marketplaceVersion} />
           </div>
 
           <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'var(--font-newsreader)' }}>

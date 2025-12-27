@@ -5,6 +5,7 @@ import { InstallGuide } from '@/components/InstallGuide'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { DependencyDisplay } from '@/components/DependencyDisplay'
 import { LikeButton } from '@/components/LikeButton'
+import { StatusBadge } from '@/components/StatusBadge'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -59,6 +60,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 {DIFFICULTY_LABELS[item.difficulty].label}
               </span>
             )}
+            <StatusBadge status={item.status} version={item.marketplaceVersion} />
           </div>
 
           <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'var(--font-newsreader)' }}>

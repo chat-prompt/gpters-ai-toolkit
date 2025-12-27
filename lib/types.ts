@@ -72,6 +72,11 @@ export interface CatalogItem {
   marketplaceEnabled?: boolean // Claude Code 마켓플레이스에 등록 여부
   marketplaceSyncedAt?: string // 마지막 마켓플레이스 동기화 시간
   marketplaceVersion?: string // 마켓플레이스 버전 (semver)
+
+  // V2: Status and version management
+  status?: 'draft' | 'published' // 배포 상태
+  changelog?: string // 최신 버전 변경 내역
+
   createdAt?: string
   updatedAt?: string
 }

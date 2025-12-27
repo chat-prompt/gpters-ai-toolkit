@@ -123,6 +123,9 @@ export async function POST(request: NextRequest) {
         hookCommand: newItem.hookCommand ?? undefined,
         hookTimeout: newItem.hookTimeout ?? undefined,
         hookBlocking: newItem.hookBlocking ?? undefined,
+        // V2 fields
+        status: 'published' as const,
+        changelog: undefined,
       }
       await syncItemToGitHub(catalogItem)
 
@@ -156,6 +159,9 @@ export async function POST(request: NextRequest) {
         hookCommand: item.hookCommand ?? undefined,
         hookTimeout: item.hookTimeout ?? undefined,
         hookBlocking: item.hookBlocking ?? undefined,
+        // V2 fields
+        status: (item.status as 'draft' | 'published') ?? 'published',
+        changelog: item.changelog ?? undefined,
       }))
       await updateMarketplaceJson(allCatalogItems)
 

@@ -30,6 +30,9 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     marketplaceEnabled: record.marketplaceEnabled ?? false,
     marketplaceSyncedAt: record.marketplaceSyncedAt?.toISOString(),
     marketplaceVersion: record.marketplaceVersion ?? undefined,
+    // V2: Status and version management
+    status: (record.status as CatalogItem['status']) ?? 'published',
+    changelog: record.changelog ?? undefined,
     createdAt: record.createdAt?.toISOString(),
     updatedAt: record.updatedAt?.toISOString(),
   }

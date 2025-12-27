@@ -55,6 +55,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   // Marketplace fields
   if (body.marketplaceEnabled !== undefined) updateData.marketplaceEnabled = body.marketplaceEnabled
   if (body.marketplaceVersion !== undefined) updateData.marketplaceVersion = body.marketplaceVersion
+  // V2: Status and changelog
+  if (body.status !== undefined) updateData.status = body.status
+  if (body.changelog !== undefined) updateData.changelog = body.changelog
 
   await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
 
@@ -86,6 +89,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         hookBlocking: updated.hookBlocking ?? undefined,
         marketplaceEnabled: updated.marketplaceEnabled ?? undefined,
         marketplaceVersion: updated.marketplaceVersion ?? undefined,
+        status: (updated.status as 'draft' | 'published') ?? 'published',
+        changelog: updated.changelog ?? undefined,
         createdAt: updated.createdAt?.toISOString(),
         updatedAt: updated.updatedAt?.toISOString(),
         marketplaceSyncedAt: updated.marketplaceSyncedAt?.toISOString(),
@@ -117,6 +122,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         hookBlocking: item.hookBlocking ?? undefined,
         marketplaceEnabled: item.marketplaceEnabled ?? undefined,
         marketplaceVersion: item.marketplaceVersion ?? undefined,
+        status: (item.status as 'draft' | 'published') ?? 'published',
+        changelog: item.changelog ?? undefined,
         createdAt: item.createdAt?.toISOString(),
         updatedAt: item.updatedAt?.toISOString(),
         marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
@@ -179,6 +186,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         hookBlocking: item.hookBlocking ?? undefined,
         marketplaceEnabled: item.marketplaceEnabled ?? undefined,
         marketplaceVersion: item.marketplaceVersion ?? undefined,
+        status: (item.status as 'draft' | 'published') ?? 'published',
+        changelog: item.changelog ?? undefined,
         createdAt: item.createdAt?.toISOString(),
         updatedAt: item.updatedAt?.toISOString(),
         marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),

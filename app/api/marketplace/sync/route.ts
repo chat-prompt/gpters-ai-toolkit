@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
       hookBlocking: item.hookBlocking ?? undefined,
       marketplaceEnabled: item.marketplaceEnabled ?? undefined,
       marketplaceVersion: item.marketplaceVersion ?? undefined,
+      // V2 fields
+      status: (item.status as 'draft' | 'published') ?? 'published',
+      changelog: item.changelog ?? undefined,
       createdAt: item.createdAt?.toISOString(),
       updatedAt: item.updatedAt?.toISOString(),
       marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),

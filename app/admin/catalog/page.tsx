@@ -14,6 +14,8 @@ interface CatalogItem {
   author: string
   tags: string[]
   teamTag: TeamTag | null
+  status: 'draft' | 'published' | null
+  marketplaceVersion: string | null
   createdAt: string
   updatedAt: string
 }
@@ -190,6 +192,9 @@ export default function CatalogList() {
                   Name
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
+                  Status
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
                   Team
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
@@ -221,6 +226,24 @@ export default function CatalogList() {
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-[var(--text-primary)]">{item.name}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      {item.status === 'draft' ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                          Draft
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+                          Published
+                        </span>
+                      )}
+                      {item.marketplaceVersion && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)] font-mono">
+                          v{item.marketplaceVersion}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     {item.teamTag && (
