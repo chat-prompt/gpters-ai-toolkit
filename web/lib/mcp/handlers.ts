@@ -5,7 +5,7 @@
  */
 
 import { db, catalogItems } from '../db'
-import { ilike, or, eq, and, sql } from 'drizzle-orm'
+import { ilike, or, eq, and, sql, inArray } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
   GetPluginContentInput,
@@ -15,6 +15,10 @@ import type {
   CreatePluginInput,
   UpdatePluginInput,
   DeletePluginInput,
+  DeploySkillInput,
+  DeploySkillResponse,
+  CheckUpdatesInput,
+  CheckUpdatesResponse,
   PluginSummary,
   PluginContent,
   SearchResult,
@@ -23,7 +27,9 @@ import type {
   McpPrompt,
   McpPromptResult,
 } from './types'
-import type { ItemType, TeamTag } from '../types'
+import type { ItemType, TeamTag, CatalogItem } from '../types'
+import { determineVersion, generateIdFromName, hasUpdate } from '../services/version'
+import { syncItemToGitHub } from '../marketplace'
 
 /**
  * Search plugins by keyword
@@ -128,6 +134,10 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
     agentSkills: item.agentSkills || undefined,
     commandArgumentHint: item.commandArgumentHint || undefined,
     commandDisableModelInvocation: item.commandDisableModelInvocation || undefined,
+    // V2: Version info
+    version: item.marketplaceVersion || '1.0.0',
+    status: item.status || 'published',
+    changelog: item.changelog || undefined,
   }
 }
 
@@ -332,6 +342,207 @@ export async function deletePlugin(
 }
 
 /**
+ * Deploy a skill/agent/command to the marketplace
+ * Handles both new deployments and updates with automatic versioning
+ */
+export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillResponse> {
+  const {
+    type,
+    name,
+    content,
+    id: providedId,
+    description,
+    tags,
+    teamTag,
+    allowedTools,
+    agentModel,
+    agentPermissionMode,
+    status = 'published',
+    changelog: explicitChangelog,
+    files,
+  } = input
+
+  // Generate ID from name if not provided
+  const id = providedId || generateIdFromName(name)
+
+  // Check if this is an update or new deployment
+  const existing = await db
+    .select({
+      id: catalogItems.id,
+      content: catalogItems.content,
+      marketplaceVersion: catalogItems.marketplaceVersion,
+    })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  const isUpdate = existing.length > 0
+  const existingItem = isUpdate ? existing[0] : null
+
+  // Determine version
+  const versionInfo = determineVersion(
+    existingItem ? { content: existingItem.content, version: existingItem.marketplaceVersion || '1.0.0' } : null,
+    content,
+    explicitChangelog
+  )
+
+  const now = new Date()
+
+  if (isUpdate) {
+    // Update existing item
+    await db
+      .update(catalogItems)
+      .set({
+        name,
+        content,
+        description: description || '',
+        tags: tags || [],
+        teamTag: (teamTag as TeamTag) || 'general',
+        allowedTools: allowedTools || null,
+        agentModel: agentModel || null,
+        agentPermissionMode: agentPermissionMode || null,
+        status,
+        marketplaceVersion: versionInfo.version,
+        changelog: versionInfo.changelog,
+        files: files || null,
+        marketplaceEnabled: status === 'published',
+        updatedAt: now,
+      })
+      .where(eq(catalogItems.id, id))
+  } else {
+    // Create new item
+    await db.insert(catalogItems).values({
+      id,
+      type,
+      name,
+      content,
+      description: description || '',
+      author: 'unknown', // TODO: Get from auth context
+      tags: tags || [],
+      teamTag: (teamTag as TeamTag) || 'general',
+      allowedTools: allowedTools || null,
+      agentModel: agentModel || null,
+      agentPermissionMode: agentPermissionMode || null,
+      status,
+      marketplaceVersion: versionInfo.version,
+      changelog: versionInfo.changelog,
+      files: files || null,
+      marketplaceEnabled: status === 'published',
+      likes: 0,
+      dependencies: [],
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+
+  // Build response
+  const response: DeploySkillResponse = {
+    success: true,
+    id,
+    version: versionInfo.version,
+    previousVersion: existingItem?.marketplaceVersion || undefined,
+    changelog: versionInfo.changelog,
+    status,
+    webUrl: `https://toolkit.gpters.org/${type}/${id}`,
+    installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
+  }
+
+  // Sync to GitHub if published
+  if (status === 'published') {
+    try {
+      const catalogItem: CatalogItem = {
+        id,
+        type,
+        name,
+        description: description || '',
+        author: 'unknown', // TODO: Get from auth context
+        tags: tags || [],
+        teamTag: (teamTag as TeamTag) || 'general',
+        likes: 0,
+        content,
+        allowedTools: allowedTools || undefined,
+        agentModel: agentModel as CatalogItem['agentModel'],
+        agentPermissionMode: agentPermissionMode as CatalogItem['agentPermissionMode'],
+        files: files || undefined,
+        marketplaceEnabled: true,
+        marketplaceVersion: versionInfo.version,
+      }
+
+      const syncResult = await syncItemToGitHub(catalogItem)
+
+      response.githubSync = {
+        success: syncResult.success,
+        filesCreated: syncResult.filesCreated,
+        filesUpdated: syncResult.filesUpdated,
+        errors: syncResult.errors,
+      }
+    } catch (error) {
+      response.githubSync = {
+        success: false,
+        filesCreated: [],
+        filesUpdated: [],
+        errors: [error instanceof Error ? error.message : 'GitHub sync failed'],
+      }
+    }
+  }
+
+  return response
+}
+
+/**
+ * Check for updates to installed skills
+ */
+export async function checkUpdates(input: CheckUpdatesInput): Promise<CheckUpdatesResponse> {
+  const { installations } = input
+
+  if (!installations || installations.length === 0) {
+    return { updates: [], upToDate: 0 }
+  }
+
+  // Get current versions from database
+  const ids = installations.map((i) => i.id)
+  const results = await db
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      marketplaceVersion: catalogItems.marketplaceVersion,
+      changelog: catalogItems.changelog,
+    })
+    .from(catalogItems)
+    .where(inArray(catalogItems.id, ids))
+
+  // Create a map for quick lookup
+  const latestVersions = new Map(
+    results.map((r) => [r.id, { name: r.name, version: r.marketplaceVersion || '1.0.0', changelog: r.changelog }])
+  )
+
+  const updates: CheckUpdatesResponse['updates'] = []
+  let upToDate = 0
+
+  for (const installation of installations) {
+    const latest = latestVersions.get(installation.id)
+    if (!latest) {
+      // Plugin not found in database, skip
+      continue
+    }
+
+    if (hasUpdate(installation.version, latest.version)) {
+      updates.push({
+        id: installation.id,
+        name: latest.name,
+        installedVersion: installation.version,
+        latestVersion: latest.version,
+        changelog: latest.changelog || 'No changelog available',
+      })
+    } else {
+      upToDate++
+    }
+  }
+
+  return { updates, upToDate }
+}
+
+/**
  * Execute a tool call and return MCP-formatted response
  */
 export async function executeTool(
@@ -477,6 +688,60 @@ export async function executeTool(
             },
           ],
           isError: !result.success,
+        }
+      }
+
+      // V2: Deploy and version management
+      case 'deploy_skill': {
+        const input = args as unknown as DeploySkillInput
+        if (!input.type || !input.name || !input.content) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required fields: type, name, content',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await deploySkill(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'check_updates': {
+        const input = args as unknown as CheckUpdatesInput
+        if (!input.installations || !Array.isArray(input.installations)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required field: installations (array)',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await checkUpdates(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
         }
       }
 

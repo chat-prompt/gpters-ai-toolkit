@@ -57,6 +57,60 @@ export interface DeletePluginInput {
   id: string
 }
 
+// V2: Deploy and version management inputs
+export interface DeploySkillInput {
+  type: ItemType
+  name: string
+  content: string
+  id?: string                    // Auto-generated from name if not provided
+  description?: string
+  tags?: string[]
+  teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+  allowedTools?: string          // For skills
+  agentModel?: string            // For agents
+  agentPermissionMode?: string   // For agents
+  status?: 'draft' | 'published'
+  changelog?: string             // What changed in this version
+  files?: PluginFile[]
+}
+
+export interface DeploySkillResponse {
+  success: boolean
+  id: string
+  version: string
+  previousVersion?: string
+  changelog: string
+  status: string
+  webUrl: string
+  installHint: string
+  error?: string
+  // GitHub sync result
+  githubSync?: {
+    success: boolean
+    filesCreated: string[]
+    filesUpdated: string[]
+    errors: string[]
+  }
+}
+
+export interface CheckUpdatesInput {
+  installations: Array<{
+    id: string
+    version: string
+  }>
+}
+
+export interface CheckUpdatesResponse {
+  updates: Array<{
+    id: string
+    name: string
+    installedVersion: string
+    latestVersion: string
+    changelog: string
+  }>
+  upToDate: number
+}
+
 // Tool output types
 export interface PluginSummary {
   id: string
@@ -91,6 +145,10 @@ export interface PluginContent {
   // Command-specific
   commandArgumentHint?: string
   commandDisableModelInvocation?: boolean
+  // V2: Version info
+  version?: string
+  status?: string
+  changelog?: string
 }
 
 export interface SearchResult {

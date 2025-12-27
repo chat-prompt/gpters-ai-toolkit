@@ -255,6 +255,114 @@ files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
       required: ['id'],
     },
   },
+  // V2: Deploy and version management tools
+  {
+    name: 'deploy_skill',
+    description: `스킬/에이전트/커맨드를 GPTers 팀에 배포합니다.
+
+현재 대화에서 만든 스킬을 팀과 공유할 때 사용합니다.
+버전은 자동으로 관리됩니다:
+- 신규: 1.0.0
+- 기존 업데이트: 변경 내용에 따라 자동 bump (patch/minor/major)
+
+예시:
+- 새 스킬 배포: type="skill", name="코드 리뷰어", content="..."
+- 기존 스킬 업데이트: id="code-reviewer", content="...", changelog="보안 체크 추가"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['skill', 'agent', 'command', 'hook'],
+          description: '배포할 항목 타입',
+        },
+        name: {
+          type: 'string',
+          description: '표시 이름 (예: "코드 리뷰어")',
+        },
+        content: {
+          type: 'string',
+          description: '메인 콘텐츠 (SKILL.md 내용 등)',
+        },
+        id: {
+          type: 'string',
+          description: '플러그인 ID (미지정 시 name에서 자동 생성)',
+        },
+        description: {
+          type: 'string',
+          description: '짧은 설명',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '태그 목록',
+        },
+        teamTag: {
+          type: 'string',
+          enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
+          description: '팀 태그',
+        },
+        allowedTools: {
+          type: 'string',
+          description: '허용된 도구 (스킬용, 쉼표 구분)',
+        },
+        status: {
+          type: 'string',
+          enum: ['draft', 'published'],
+          description: '배포 상태 (기본: published)',
+        },
+        changelog: {
+          type: 'string',
+          description: '변경사항 설명 (업데이트 시)',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              content: { type: 'string' },
+              type: { type: 'string' },
+            },
+            required: ['name', 'content'],
+          },
+          description: '추가 파일들',
+        },
+      },
+      required: ['type', 'name', 'content'],
+    },
+  },
+  {
+    name: 'check_updates',
+    description: `설치된 스킬들의 업데이트를 확인합니다.
+
+로컬에 설치된 스킬 목록과 버전을 전달하면,
+최신 버전과 비교하여 업데이트가 필요한 항목을 반환합니다.
+
+예시:
+installations: [
+  { id: "code-reviewer", version: "1.0.0" },
+  { id: "db-helper", version: "2.0.0" }
+]`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        installations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: '스킬 ID' },
+              version: { type: 'string', description: '설치된 버전' },
+            },
+            required: ['id', 'version'],
+          },
+          description: '설치된 스킬 목록',
+        },
+      },
+      required: ['installations'],
+    },
+  },
 ]
 
 export function getToolByName(name: string): McpTool | undefined {

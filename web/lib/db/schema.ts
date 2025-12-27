@@ -61,6 +61,11 @@ export const catalogItems = pgTable('catalog_items', {
   marketplaceEnabled: boolean('marketplace_enabled').default(false),
   marketplaceSyncedAt: timestamp('marketplace_synced_at', { withTimezone: true }),
   marketplaceVersion: text('marketplace_version').default('1.0.0'),
+
+  // V2: Status and version management
+  status: text('status').default('published'), // 'draft' | 'published'
+  changelog: text('changelog'), // Latest version changelog
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 })
