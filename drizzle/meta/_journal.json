@@ -36,6 +36,20 @@
       "when": 1766838929420,
       "tag": "0004_slippery_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1766848087453,
+      "tag": "0005_many_the_initiative",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1766849368124,
+      "tag": "0006_careful_jackal",
+      "breakpoints": true
     }
   ]
 }

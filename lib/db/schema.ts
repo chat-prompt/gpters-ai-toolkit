@@ -11,6 +11,9 @@ export const itemTypeEnum = pgEnum('item_type', [
 
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
 
+// User roles for RBAC
+export const userRoleEnum = pgEnum('user_role', ['admin', 'editor', 'viewer'])
+
 // Team tags for categorizing items by team ownership
 export const teamTagEnum = pgEnum('team_tag', [
   'platform', // 플랫폼팀
@@ -90,6 +93,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name'),
   image: text('image'),
+  role: userRoleEnum('role').notNull().default('viewer'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -203,3 +207,28 @@ export const installations = pgTable('installations', {
 
 export type InstallationRecord = typeof installations.$inferSelect
 export type NewInstallationRecord = typeof installations.$inferInsert
+
+// ============================================
+// MCP API Tokens Table
+// ============================================
+
+export const mcpTokens = pgTable('mcp_tokens', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the token
+  name: text('name').notNull(), // Human-readable name/description
+  description: text('description'), // Optional longer description
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }), // null = never expires
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  usageCount: integer('usage_count').notNull().default(0),
+  rateLimit: integer('rate_limit').default(100), // requests per minute
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('mcp_tokens_token_hash_idx').on(table.tokenHash),
+  index('mcp_tokens_is_active_idx').on(table.isActive),
+])
+
+export type McpTokenRecord = typeof mcpTokens.$inferSelect
+export type NewMcpTokenRecord = typeof mcpTokens.$inferInsert
