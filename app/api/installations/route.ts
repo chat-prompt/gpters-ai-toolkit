@@ -4,6 +4,7 @@ import { db, installations, catalogItems } from '@/lib/db'
 import { eq, desc, sql, and, gte } from 'drizzle-orm'
 import { ApiErrors, validateRequired, apiSuccess } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 const log = createLogger('api:installations')
 
@@ -13,6 +14,10 @@ const VALID_METHODS: InstallMethod[] = ['cli', 'mcp', 'plugin', 'manual_content'
 
 // POST - Track an installation
 export async function POST(request: NextRequest) {
+  // Rate limit: 200 requests per minute for tracking
+  const rateLimitError = withRateLimit(request, RateLimitPresets.tracking)
+  if (rateLimitError) return rateLimitError
+
   try {
     const body = await request.json()
     const validation = validateRequired(body, ['itemId', 'method'])
@@ -60,6 +65,10 @@ export async function POST(request: NextRequest) {
 
 // GET - Get installation statistics
 export async function GET(request: NextRequest) {
+  // Rate limit: 100 requests per minute for stats queries
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) return rateLimitError
+
   try {
     const { searchParams } = new URL(request.url)
     const itemId = searchParams.get('itemId')

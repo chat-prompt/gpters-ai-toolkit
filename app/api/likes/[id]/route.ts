@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import { ApiErrors } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 const log = createLogger('api:likes')
 
@@ -10,6 +11,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit: 30 requests per minute for like operations (prevents spam)
+  const rateLimitError = withRateLimit(request, RateLimitPresets.search)
+  if (rateLimitError) return rateLimitError
+
   try {
     const { id } = await params
 
@@ -37,6 +42,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit: 100 requests per minute for like queries
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) return rateLimitError
+
   try {
     const { id } = await params
 

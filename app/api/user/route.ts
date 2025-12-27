@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
@@ -6,10 +6,15 @@ import { eq } from 'drizzle-orm'
 import { getItemsByAuthor } from '@/lib/catalog'
 import { ApiErrors } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 const log = createLogger('api:user')
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limit: 100 requests per minute for profile queries
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) return rateLimitError
+
   try {
     const session = await auth()
 

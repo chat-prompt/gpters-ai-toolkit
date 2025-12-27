@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
+import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -39,6 +40,16 @@ export async function OPTIONS() {
  * GET - Server info and available tools
  */
 export async function GET(request: NextRequest) {
+  // Rate limit: 100 requests per minute for info queries
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) {
+    // Add CORS headers to rate limit response
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      rateLimitError.headers.set(key, value)
+    })
+    return rateLimitError
+  }
+
   const { searchParams } = new URL(request.url)
   const format = searchParams.get('format')
 
@@ -82,6 +93,16 @@ export async function GET(request: NextRequest) {
  * POST - Handle MCP requests
  */
 export async function POST(request: NextRequest) {
+  // Rate limit: 100 requests per minute for MCP operations
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) {
+    // Add CORS headers to rate limit response
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      rateLimitError.headers.set(key, value)
+    })
+    return rateLimitError
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const action = searchParams.get('action')

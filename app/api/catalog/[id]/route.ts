@@ -5,6 +5,7 @@ import type { ItemType, Difficulty, TeamTag, HookEvent } from '@/lib/types'
 import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 const log = createLogger('api:catalog')
 
@@ -13,6 +14,10 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  // Rate limit: 100 requests per minute for item queries
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) return rateLimitError
+
   try {
     const { id } = await params
     const [item] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
@@ -29,6 +34,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  // Rate limit: 60 requests per minute for admin operations
+  const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
+  if (rateLimitError) return rateLimitError
+
   const authError = requireAdminAuth(request)
   if (authError) return authError
 
@@ -152,6 +161,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  // Rate limit: 60 requests per minute for admin operations
+  const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
+  if (rateLimitError) return rateLimitError
+
   const authError = requireAdminAuth(request)
   if (authError) return authError
 

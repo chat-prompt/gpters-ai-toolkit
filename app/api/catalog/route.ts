@@ -5,10 +5,15 @@ import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, Ho
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 import { ApiErrors, requireAdminAuth, validateRequired, apiSuccess } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 const log = createLogger('api:catalog')
 
 export async function GET(request: NextRequest) {
+  // Rate limit: 100 requests per minute for catalog queries
+  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  if (rateLimitError) return rateLimitError
+
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') as ItemType | null
@@ -25,6 +30,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 60 requests per minute for admin operations
+  const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
+  if (rateLimitError) return rateLimitError
+
   // Check admin auth
   const authError = requireAdminAuth(request)
   if (authError) return authError
