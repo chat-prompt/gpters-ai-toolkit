@@ -2,12 +2,14 @@
 
 interface CopyButtonProps {
   text: string
+  onCopy?: () => void
 }
 
-export function CopyButton({ text }: CopyButtonProps) {
+export function CopyButton({ text, onCopy }: CopyButtonProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text)
+      onCopy?.()
     } catch (err) {
       console.error('Failed to copy:', err)
     }

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { CopyButton } from './CopyButton'
+import { trackInstall } from '@/lib/track-install'
 
 interface InstallGuideProps {
   itemId: string
@@ -35,6 +36,11 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
   const marketplaceAddCommand = '/plugin marketplace add gpters/company-ai-toolkit'
   const marketplaceInstallCommand = `/plugin install ${itemId}@company-ai-toolkit`
   const mcpPromptCommand = `/mcp__gpters-marketplace__${itemId}`
+
+  // Track installation methods
+  const handleTrack = useCallback((method: 'cli' | 'mcp' | 'plugin' | 'manual_content' | 'manual_folder' | 'manual_file') => {
+    trackInstall(itemId, method)
+  }, [itemId])
 
   const handleStepComplete = (stepIndex: number) => {
     setCompletedSteps((prev) => {
@@ -83,7 +89,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
                 <code className="text-[var(--accent-cyan)] break-all">
                   {marketplaceInstallCommand}
                 </code>
-                <CopyButton text={marketplaceInstallCommand} />
+                <CopyButton text={marketplaceInstallCommand} onCopy={() => handleTrack('cli')} />
               </div>
             </div>
           </div>
@@ -112,7 +118,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
                 <code className="text-[var(--accent-purple)] break-all">
                   {mcpPromptCommand}
                 </code>
-                <CopyButton text={mcpPromptCommand} />
+                <CopyButton text={mcpPromptCommand} onCopy={() => handleTrack('mcp')} />
               </div>
             </div>
 
@@ -141,7 +147,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
             <code className="text-[var(--accent-cyan)] break-all">
               claude plugins install {pluginId}
             </code>
-            <CopyButton text={`claude plugins install ${pluginId}`} />
+            <CopyButton text={`claude plugins install ${pluginId}`} onCopy={() => handleTrack('plugin')} />
           </div>
 
           <p className="text-sm text-[var(--text-secondary)]">
@@ -209,6 +215,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(content)
+                  handleTrack('manual_content')
                   handleStepComplete(0)
                 }}
                 className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
@@ -225,7 +232,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
                 <code className="text-[var(--accent-cyan)] text-sm font-mono break-all">
                   mkdir -p {folderPath}
                 </code>
-                <CopyButton text={`mkdir -p ${folderPath}`} />
+                <CopyButton text={`mkdir -p ${folderPath}`} onCopy={() => handleTrack('manual_folder')} />
               </div>
               <button
                 onClick={() => handleStepComplete(1)}
@@ -245,7 +252,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
                 <code className="text-[var(--accent-cyan)] text-sm font-mono break-all">
                   {filePath}
                 </code>
-                <CopyButton text={filePath} />
+                <CopyButton text={filePath} onCopy={() => handleTrack('manual_file')} />
               </div>
               <p className="text-xs text-[var(--text-muted)]">
                 Tip: <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">code {filePath}</code>로

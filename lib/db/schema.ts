@@ -175,3 +175,31 @@ export const catalogItemTagsRelations = relations(catalogItemTags, ({ one }) => 
     references: [tags.id],
   }),
 }))
+
+// ============================================
+// Installation Tracking Table
+// ============================================
+
+export const installMethodEnum = pgEnum('install_method', [
+  'cli',           // CLI command copied
+  'mcp',           // MCP prompt copied
+  'plugin',        // Plugin install command copied
+  'manual_content', // Manual content copied
+  'manual_folder', // Manual folder command copied
+  'manual_file',   // Manual file path copied
+])
+
+export const installations = pgTable('installations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  method: installMethodEnum('method').notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('installations_item_id_idx').on(table.itemId),
+  index('installations_method_idx').on(table.method),
+  index('installations_created_at_idx').on(table.createdAt),
+])
+
+export type InstallationRecord = typeof installations.$inferSelect
+export type NewInstallationRecord = typeof installations.$inferInsert
