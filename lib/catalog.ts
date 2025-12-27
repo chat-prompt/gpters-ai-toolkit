@@ -116,3 +116,12 @@ export async function getBeginnerItems(): Promise<CatalogItem[]> {
         item.tags.includes('입문')
     )
 }
+
+export async function getItemsByAuthor(author: string): Promise<CatalogItem[]> {
+  // Get all items by a specific author (including drafts for profile view)
+  const records = await db
+    .select()
+    .from(catalogItems)
+    .where(eq(catalogItems.author, author))
+  return records.map(toPlainObject)
+}
