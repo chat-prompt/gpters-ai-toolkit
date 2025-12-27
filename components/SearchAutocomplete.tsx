@@ -2,14 +2,21 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CatalogItem, TAGS, ItemType } from '@/lib/types'
+import {
+  naturalLanguageSearch,
+  getSearchSuggestions,
+  extractKeywords,
+  COMMON_SEARCH_SUGGESTIONS,
+} from '@/lib/search-utils'
 
 interface Suggestion {
-  type: 'item' | 'tag' | 'author'
+  type: 'item' | 'tag' | 'author' | 'nlp' | 'hint'
   value: string
   label: string
   icon?: string
   itemType?: ItemType
   description?: string
+  matchType?: 'exact' | 'keyword' | 'fuzzy' | 'natural'
 }
 
 const TYPE_ICONS: Record<ItemType, string> = {
@@ -43,13 +50,53 @@ export function SearchAutocomplete({
   const dropdownRef = useRef<HTMLDivElement>(null)
   // Generate suggestions based on query (memoized)
   const generateSuggestions = useCallback((query: string): Suggestion[] => {
-    if (!query.trim() || query.length < 2) return []
+    // Show common suggestions when query is empty or very short
+    if (!query.trim() || query.length < 2) {
+      // Return hint suggestions for common queries
+      return COMMON_SEARCH_SUGGESTIONS.slice(0, 4).map(s => ({
+        type: 'hint' as const,
+        value: s.query,
+        label: s.query,
+        icon: '💡',
+        description: s.description,
+      }))
+    }
 
     const lowerQuery = query.toLowerCase()
     const results: Suggestion[] = []
     const seen = new Set<string>()
 
-    // Search items by name (prioritized)
+    // Use natural language search for Korean queries or queries with Korean keywords
+    const hasKorean = /[\u3131-\uD79D]/.test(query)
+    const extractedKeywords = extractKeywords(query)
+
+    if (hasKorean || extractedKeywords.length > 1) {
+      // Natural language search results
+      const nlResults = naturalLanguageSearch(catalog, query, {
+        includeDescriptions: true,
+        maxResults: 6,
+        minScore: 15,
+      })
+
+      nlResults.forEach(result => {
+        if (!seen.has(`item:${result.item.id}`)) {
+          results.push({
+            type: 'nlp',
+            value: result.item.id,
+            label: result.item.name,
+            icon: TYPE_ICONS[result.item.type],
+            itemType: result.item.type,
+            description: result.matchedKeywords.length > 0
+              ? `${result.item.description.slice(0, 40)}... (${result.matchedKeywords.slice(0, 2).join(', ')})`
+              : result.item.description.slice(0, 60) + (result.item.description.length > 60 ? '...' : ''),
+            matchType: result.matchType,
+          })
+          seen.add(`item:${result.item.id}`)
+        }
+      })
+    }
+
+    // Also do traditional search for direct matches
     catalog.forEach(item => {
       if (item.name.toLowerCase().includes(lowerQuery) && !seen.has(`item:${item.id}`)) {
         results.push({
@@ -116,7 +163,23 @@ export function SearchAutocomplete({
       }
     })
 
-    // Limit and sort: items first, then tags, then authors
+    // If no results found and there's a query, add search suggestions
+    if (results.length === 0 && query.length >= 2) {
+      const searchHints = getSearchSuggestions(query, 3)
+      searchHints.forEach(hint => {
+        results.push({
+          type: 'hint',
+          value: hint.query,
+          label: hint.query,
+          icon: '🔍',
+          description: hint.description,
+        })
+      })
+    }
+
+    // Limit and sort: NLP matches first, then items, then tags, then authors
+    const sortOrder = { nlp: 0, item: 1, tag: 2, author: 3, hint: 4 }
+    results.sort((a, b) => sortOrder[a.type] - sortOrder[b.type])
     return results.slice(0, 8)
   }, [catalog])
 
@@ -190,13 +253,18 @@ export function SearchAutocomplete({
   }
 
   const handleSelectSuggestion = (suggestion: Suggestion) => {
-    if (suggestion.type === 'item') {
+    if (suggestion.type === 'item' || suggestion.type === 'nlp') {
       // Navigate to item page
       window.location.href = `/${suggestion.itemType}/${suggestion.value}`
     } else if (suggestion.type === 'tag') {
       onChange(`tag:${suggestion.value}`)
     } else if (suggestion.type === 'author') {
       onChange(`author:${suggestion.value}`)
+    } else if (suggestion.type === 'hint') {
+      // Apply the suggested search query
+      onChange(suggestion.value)
+      // Don't close - let user see results for the suggested query
+      return
     }
     onSelect?.(suggestion)
     setIsOpen(false)
@@ -260,9 +328,25 @@ export function SearchAutocomplete({
                   <span className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {suggestion.label}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                    {suggestion.type}
-                  </span>
+                  {suggestion.type === 'nlp' ? (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      suggestion.matchType === 'exact'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : suggestion.matchType === 'keyword'
+                        ? 'bg-cyan-500/20 text-cyan-400'
+                        : 'bg-purple-500/20 text-purple-400'
+                    }`}>
+                      {suggestion.matchType === 'exact' ? 'EXACT' : suggestion.matchType === 'keyword' ? 'KEYWORD' : 'NL'}
+                    </span>
+                  ) : suggestion.type === 'hint' ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                      TRY THIS
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                      {suggestion.type}
+                    </span>
+                  )}
                 </div>
                 {suggestion.description && (
                   <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">

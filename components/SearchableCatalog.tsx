@@ -6,6 +6,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty, TeamTag, TEAM_TAGS } from '@/lib/types'
 import { TeamTagBadge } from './TeamTagSelector'
 import { SearchAutocomplete } from './SearchAutocomplete'
+import { naturalLanguageSearch, extractKeywords, getDidYouMeanSuggestions } from '@/lib/search-utils'
 
 const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: string; glow: string }> = {
   skill: {
@@ -246,50 +247,84 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   }, [catalog])
 
   // Filter items based on search query, type filter, tags, and difficulty
-  const filteredCatalog = useMemo(() => {
-    return catalog
-      .filter(item => {
-        // Type filter
-        if (activeFilter !== 'all' && item.type !== activeFilter) {
-          return false
+  const { filteredCatalog, didYouMean } = useMemo(() => {
+    // First, apply non-search filters
+    let filtered = catalog.filter(item => {
+      // Type filter
+      if (activeFilter !== 'all' && item.type !== activeFilter) {
+        return false
+      }
+
+      // Tag filter - item must have ALL selected tags
+      if (selectedTags.length > 0) {
+        const hasAllTags = selectedTags.every(tag => item.tags.includes(tag))
+        if (!hasAllTags) return false
+      }
+
+      // Difficulty filter
+      if (selectedDifficulty && item.difficulty !== selectedDifficulty) {
+        return false
+      }
+
+      // Team tag filter
+      if (selectedTeamTag && item.teamTag !== selectedTeamTag) {
+        return false
+      }
+
+      return true
+    })
+
+    // Then apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+
+      // Handle tag: prefix - exact tag filter
+      if (query.startsWith('tag:')) {
+        const tagKey = query.slice(4).trim()
+        filtered = filtered.filter(item =>
+          item.tags.some(tag =>
+            tag.toLowerCase() === tagKey ||
+            (TAGS[tag]?.label || '').toLowerCase() === tagKey
+          )
+        )
+        return { filteredCatalog: filtered, didYouMean: [] }
+      }
+
+      // Handle author: prefix - exact author filter
+      if (query.startsWith('author:')) {
+        const authorName = query.slice(7).trim()
+        filtered = filtered.filter(item =>
+          item.author.toLowerCase() === authorName
+        )
+        return { filteredCatalog: filtered, didYouMean: [] }
+      }
+
+      // Check if this is a natural language query (Korean or multi-word)
+      const hasKorean = /[\u3131-\uD79D]/.test(searchQuery)
+      const extractedKeywords = extractKeywords(searchQuery)
+
+      if (hasKorean || extractedKeywords.length > 1) {
+        // Use natural language search
+        const nlResults = naturalLanguageSearch(filtered, searchQuery, {
+          includeDescriptions: true,
+          maxResults: 100,
+          minScore: 10,
+        })
+
+        // If no results, get "did you mean" suggestions
+        if (nlResults.length === 0) {
+          const suggestions = getDidYouMeanSuggestions(searchQuery, catalog, 3)
+          return { filteredCatalog: [], didYouMean: suggestions }
         }
 
-        // Tag filter - item must have ALL selected tags
-        if (selectedTags.length > 0) {
-          const hasAllTags = selectedTags.every(tag => item.tags.includes(tag))
-          if (!hasAllTags) return false
-        }
+        // Sort by score
+        const sortedItems = nlResults.map(r => r.item)
+        return { filteredCatalog: sortedItems, didYouMean: [] }
+      }
 
-        // Difficulty filter
-        if (selectedDifficulty && item.difficulty !== selectedDifficulty) {
-          return false
-        }
-
-        // Team tag filter
-        if (selectedTeamTag && item.teamTag !== selectedTeamTag) {
-          return false
-        }
-
-        // Search filter with special prefix support
-        if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase()
-
-          // Handle tag: prefix - exact tag filter
-          if (query.startsWith('tag:')) {
-            const tagKey = query.slice(4).trim()
-            return item.tags.some(tag =>
-              tag.toLowerCase() === tagKey ||
-              (TAGS[tag]?.label || '').toLowerCase() === tagKey
-            )
-          }
-
-          // Handle author: prefix - exact author filter
-          if (query.startsWith('author:')) {
-            const authorName = query.slice(7).trim()
-            return item.author.toLowerCase() === authorName
-          }
-
-          // Normal text search
+      // Traditional text search for simple queries
+      filtered = filtered
+        .filter(item => {
           const matchesName = item.name.toLowerCase().includes(query)
           const matchesDescription = item.description.toLowerCase().includes(query)
           const matchesTags = item.tags.some(tag =>
@@ -300,21 +335,28 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           const matchesId = item.id.toLowerCase().includes(query)
 
           return matchesName || matchesDescription || matchesTags || matchesAuthor || matchesId
-        }
-
-        return true
-      })
-      .sort((a, b) => {
-        // If searching, prioritize name matches
-        if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase()
+        })
+        .sort((a, b) => {
+          // Prioritize name matches
           const aNameMatch = a.name.toLowerCase().includes(query) ? 1 : 0
           const bNameMatch = b.name.toLowerCase().includes(query) ? 1 : 0
           if (aNameMatch !== bNameMatch) return bNameMatch - aNameMatch
-        }
-        // Then sort by updated date
-        return (b.updatedAt || '').localeCompare(a.updatedAt || '')
-      })
+          // Then sort by updated date
+          return (b.updatedAt || '').localeCompare(a.updatedAt || '')
+        })
+
+      // If no results, get "did you mean" suggestions
+      if (filtered.length === 0) {
+        const suggestions = getDidYouMeanSuggestions(searchQuery, catalog, 3)
+        return { filteredCatalog: [], didYouMean: suggestions }
+      }
+
+      return { filteredCatalog: filtered, didYouMean: [] }
+    }
+
+    // No search query - just sort by updated date
+    filtered.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    return { filteredCatalog: filtered, didYouMean: [] }
   }, [catalog, searchQuery, activeFilter, selectedTags, selectedDifficulty, selectedTeamTag])
 
   const hasActiveFilters = selectedTags.length > 0 || selectedDifficulty !== '' || selectedTeamTag !== ''
@@ -683,6 +725,25 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                 ? 'No items match the selected filters'
                 : 'No items yet'}
             </p>
+
+            {/* Did you mean suggestions */}
+            {didYouMean.length > 0 && (
+              <div className="mb-6">
+                <p className="text-[var(--text-muted)] text-sm mb-2">Did you mean:</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {didYouMean.map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSearchQuery(suggestion)}
+                      className="px-3 py-1.5 rounded-lg text-sm bg-[var(--bg-tertiary)] text-[var(--accent-cyan)] hover:bg-[var(--bg-secondary)] transition-colors"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {(searchQuery || hasActiveFilters) ? (
               <button
                 onClick={handleClearAllFilters}
