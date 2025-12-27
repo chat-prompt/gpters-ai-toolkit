@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty, TeamTag, TEAM_TAGS } from '@/lib/types'
 import { TeamTagBadge } from './TeamTagSelector'
+import { SearchAutocomplete } from './SearchAutocomplete'
 
 const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: string; glow: string }> = {
   skill: {
@@ -327,29 +328,12 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     <>
       {/* Search & Filter */}
       <div className="mt-12 max-w-2xl">
-        <div className="relative">
-          <input
-            id="search-input"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search skills, agents, commands..."
-            className="w-full px-6 py-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
-          />
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                ✕
-              </button>
-            )}
-            <kbd className="px-2 py-1 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
-              ⌘K
-            </kbd>
-          </div>
-        </div>
+        <SearchAutocomplete
+          value={searchQuery}
+          onChange={setSearchQuery}
+          catalog={catalog}
+          placeholder="Search skills, agents, commands..."
+        />
 
         {/* Type Filter Buttons */}
         <div className="flex gap-2 mt-4">
