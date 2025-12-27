@@ -1,6 +1,7 @@
 import { getBeginnerItems } from '@/lib/catalog'
 import { ServerHeader } from '@/components/ServerHeader'
 import { DIFFICULTY_LABELS } from '@/lib/types'
+import { MCPConfigGenerator } from '@/components/MCPConfigGenerator'
 import Link from 'next/link'
 
 // Revalidate every 60 seconds
@@ -105,7 +106,7 @@ export default async function GettingStartedPage() {
             빠른 시작
           </h2>
 
-          <div className="glass rounded-2xl p-6">
+          <div className="glass rounded-2xl p-6 mb-6">
             <h3 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider mb-4">
               마켓플레이스 추가 (Claude Code 내에서)
             </h3>
@@ -120,6 +121,9 @@ export default async function GettingStartedPage() {
               <code className="text-[var(--accent-cyan)]">/plugin install code-reviewer@gpters-ai-toolkit</code>
             </div>
           </div>
+
+          {/* MCP Config Generator */}
+          <MCPConfigGenerator defaultUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/mcp`} />
         </section>
 
         {/* Recommended for Beginners */}
