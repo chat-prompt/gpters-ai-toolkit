@@ -3,11 +3,15 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
-import { ApiErrors, requireAdminAuth, validateRequired, apiSuccess } from '@/lib/api-utils'
+import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { Permissions } from '@/lib/rbac'
 
 const log = createLogger('api:catalog')
+
+// Valid item types for type validation
+const VALID_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute for catalog queries
@@ -16,7 +20,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type') as ItemType | null
+    const typeParam = searchParams.get('type')
+
+    // Return empty array for invalid type (graceful handling)
+    if (typeParam && !VALID_TYPES.includes(typeParam as ItemType)) {
+      return NextResponse.json([])
+    }
+
+    const type = typeParam as ItemType | null
 
     const items = type
       ? await db.select().from(catalogItems).where(eq(catalogItems.type, type))
@@ -34,9 +45,9 @@ export async function POST(request: NextRequest) {
   const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
 
-  // Check admin auth
-  const authError = requireAdminAuth(request)
-  if (authError) return authError
+  // Check RBAC permission for creating catalog items
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_CREATE, request)
+  if (permissionError) return permissionError
 
   try {
     const body = await request.json()

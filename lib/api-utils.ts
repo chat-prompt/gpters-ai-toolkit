@@ -4,6 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createLogger } from './logger'
+import { auth } from '@/lib/auth'
+import { hasPermission, type Permission, type UserRole } from '@/lib/rbac'
 
 const log = createLogger('api')
 
@@ -94,7 +96,8 @@ export function apiSuccess<T>(
 }
 
 /**
- * Check admin authentication
+ * Check admin authentication (legacy - uses password header)
+ * @deprecated Use requirePermission from rbac.ts instead
  */
 export function checkAdminAuth(request: NextRequest): boolean {
   const password = request.headers.get('x-admin-password')
@@ -103,12 +106,55 @@ export function checkAdminAuth(request: NextRequest): boolean {
 
 /**
  * Require admin authentication - returns error response if not authenticated
+ * @deprecated Use requirePermission from rbac.ts instead
  */
 export function requireAdminAuth(request: NextRequest): NextResponse | null {
   if (!checkAdminAuth(request)) {
     return ApiErrors.unauthorized('Admin authentication required')
   }
   return null
+}
+
+/**
+ * Require specific permission using RBAC
+ * Returns error response if user doesn't have permission, null otherwise
+ * Also supports x-admin-password header as fallback for API/testing access
+ */
+export async function requirePermissionAsync(
+  permission: Permission,
+  request?: NextRequest
+): Promise<NextResponse | null> {
+  // First, check for x-admin-password header (admin fallback for API/testing)
+  if (request) {
+    const password = request.headers.get('x-admin-password')
+    if (password === process.env.ADMIN_PASSWORD) {
+      // Admin password grants admin role, which has all permissions
+      return null
+    }
+  }
+
+  // Check session-based auth
+  const session = await auth()
+
+  if (!session?.user) {
+    return ApiErrors.unauthorized('Authentication required')
+  }
+
+  const userRole = session.user.role as UserRole | undefined
+
+  if (!hasPermission(userRole, permission)) {
+    return ApiErrors.forbidden(`Permission denied: ${permission}`)
+  }
+
+  return null
+}
+
+/**
+ * Get current user from session
+ */
+export async function getCurrentUser() {
+  const session = await auth()
+  return session?.user ?? null
 }
 
 /**

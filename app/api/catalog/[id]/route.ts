@@ -3,9 +3,10 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, HookEvent } from '@/lib/types'
 import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
-import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
+import { ApiErrors, apiSuccess, requirePermissionAsync } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { Permissions } from '@/lib/rbac'
 
 const log = createLogger('api:catalog')
 
@@ -38,8 +39,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
 
-  const authError = requireAdminAuth(request)
-  if (authError) return authError
+  // Check RBAC permission for editing catalog items
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_EDIT, request)
+  if (permissionError) return permissionError
 
   try {
     const { id } = await params
@@ -73,6 +75,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // V2: Status and changelog
     if (body.status !== undefined) updateData.status = body.status
     if (body.changelog !== undefined) updateData.changelog = body.changelog
+    // Type-specific fields
+    if (body.allowedTools !== undefined) updateData.allowedTools = body.allowedTools
+    if (body.agentModel !== undefined) updateData.agentModel = body.agentModel
+    if (body.agentPermissionMode !== undefined) updateData.agentPermissionMode = body.agentPermissionMode
+    if (body.agentSkills !== undefined) updateData.agentSkills = body.agentSkills
+    if (body.commandArgumentHint !== undefined) updateData.commandArgumentHint = body.commandArgumentHint
+    if (body.commandDisableModelInvocation !== undefined) updateData.commandDisableModelInvocation = body.commandDisableModelInvocation
+    // Hook-specific fields
+    if (body.hookEvent !== undefined) updateData.hookEvent = body.hookEvent
+    if (body.hookMatcher !== undefined) updateData.hookMatcher = body.hookMatcher
+    if (body.hookCommand !== undefined) updateData.hookCommand = body.hookCommand
+    if (body.hookTimeout !== undefined) updateData.hookTimeout = body.hookTimeout
+    if (body.hookBlocking !== undefined) updateData.hookBlocking = body.hookBlocking
 
     await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
 
@@ -165,8 +180,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
 
-  const authError = requireAdminAuth(request)
-  if (authError) return authError
+  // Check RBAC permission for deleting catalog items (admin only)
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_DELETE, request)
+  if (permissionError) return permissionError
 
   try {
     const { id } = await params
