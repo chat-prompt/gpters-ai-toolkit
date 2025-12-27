@@ -6,12 +6,14 @@ import { usePathname } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 import { UpdateNotificationBell } from './UpdateNotificationBell'
+import type { UserRole } from '@/lib/rbac'
 
 interface HeaderProps {
   user?: {
     name?: string | null
     email?: string | null
     image?: string | null
+    role?: UserRole
   } | null
 }
 
