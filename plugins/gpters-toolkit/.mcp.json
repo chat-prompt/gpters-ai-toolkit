@@ -3,7 +3,7 @@
   "mcpServers": {
     "gpters-marketplace": {
       "type": "http",
-      "url": "https://toolkit.gpters.org/api/mcp"
+      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
     },
     "linear-server": {
       "command": "npx",

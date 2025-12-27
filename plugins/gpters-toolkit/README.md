@@ -76,4 +76,4 @@ GPTers 팀을 위한 올인원 Claude Code 플러그인입니다. 스킬, 에이
 
 ## 문의
 
-문제가 있거나 새로운 플러그인 요청은 [GPTers AI Toolkit](https://toolkit.gpters.org/admin)에서 제출해주세요.
+문제가 있거나 새로운 플러그인 요청은 [GPTers AI Toolkit](https://company-ai-toolkit.vercel.app/admin)에서 제출해주세요.

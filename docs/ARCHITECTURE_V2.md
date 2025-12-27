@@ -313,7 +313,7 @@ interface DeployResponse {
   version: string;
   previousVersion?: string;  // 업데이트인 경우
   changelog?: string;
-  webUrl: string;            // https://toolkit.gpters.org/skill/{id}
+  webUrl: string;            // https://company-ai-toolkit.vercel.app/skill/{id}
   installHint: string;       // "팀원들은 '{name} 설치해줘'라고 하면 돼요"
 }
 ```
@@ -585,7 +585,7 @@ web/lib/
    ✅ 배포 완료!
 
    📦 db-migration-helper v1.0.0
-   🔗 https://toolkit.gpters.org/skill/db-migration-helper
+   🔗 https://company-ai-toolkit.vercel.app/skill/db-migration-helper
 
    팀원들은 "DB 마이그레이션 스킬 설치해줘"라고 하면 돼요.
 ```

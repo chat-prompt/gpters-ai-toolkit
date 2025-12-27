@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 import { getCatalog } from '@/lib/catalog'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://toolkit.gpters.org'
+  const baseUrl = 'https://company-ai-toolkit.vercel.app'
   const catalog = await getCatalog()
 
   const staticPages: MetadataRoute.Sitemap = [

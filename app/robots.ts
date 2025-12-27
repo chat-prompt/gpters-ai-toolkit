@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://toolkit.gpters.org'
+  const baseUrl = 'https://company-ai-toolkit.vercel.app'
 
   return {
     rules: [

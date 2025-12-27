@@ -5,7 +5,7 @@
   "mcpServers": {
     "gpters-marketplace": {
       "type": "http",
-      "url": "https://toolkit.gpters.org/api/mcp",
+      "url": "https://company-ai-toolkit.vercel.app/api/mcp",
       "_description": "GPTers AI Toolkit 마켓플레이스 MCP 서버"
     }
   }

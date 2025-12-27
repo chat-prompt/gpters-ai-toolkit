@@ -443,7 +443,7 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
     previousVersion: existingItem?.marketplaceVersion || undefined,
     changelog: versionInfo.changelog,
     status,
-    webUrl: `https://toolkit.gpters.org/${type}/${id}`,
+    webUrl: `https://company-ai-toolkit.vercel.app/${type}/${id}`,
     installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
   }
 

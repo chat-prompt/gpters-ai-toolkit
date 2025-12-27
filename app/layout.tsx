@@ -24,7 +24,7 @@ const newsreader = Newsreader({
 const siteConfig = {
   name: "GPTers AI Toolkit",
   description: "Claude Code 스킬, 에이전트, 프롬프트, 커맨드를 찾아보세요. GPTers 팀원들이 만든 리소스를 플러그인으로 바로 설치하거나 복사해서 사용할 수 있습니다.",
-  url: "https://toolkit.gpters.org",
+  url: "https://company-ai-toolkit.vercel.app",
   ogImage: "/og-image.png",
   keywords: [
     "Claude Code",

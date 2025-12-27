@@ -299,7 +299,7 @@ export async function listPlugins(category?: string) {
       "command": "npx",
       "args": ["-y", "@gpters/marketplace-mcp"],
       "env": {
-        "API_URL": "https://toolkit.gpters.org/api"
+        "API_URL": "https://company-ai-toolkit.vercel.app/api"
       }
     }
   }
@@ -313,7 +313,7 @@ export async function listPlugins(category?: string) {
   "mcpServers": {
     "gpters-marketplace": {
       "type": "http",
-      "url": "https://toolkit.gpters.org/api/mcp"
+      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
     }
   }
 }
@@ -329,7 +329,7 @@ export async function listPlugins(category?: string) {
   "mcpServers": {
     "gpters-marketplace": {
       "type": "http",
-      "url": "https://toolkit.gpters.org/api/mcp"
+      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
     }
   }
 }

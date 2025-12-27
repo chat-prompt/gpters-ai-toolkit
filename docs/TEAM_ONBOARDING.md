@@ -15,7 +15,7 @@ GPTers 사내 플러그인(스킬, 에이전트, 커맨드, 가이드)을 Claude
   "mcpServers": {
     "gpters-marketplace": {
       "type": "http",
-      "url": "https://toolkit.gpters.org/api/mcp"
+      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
     }
   }
 }
@@ -142,7 +142,7 @@ Claude가 자동으로 관련 플러그인을 검색하고 적용합니다.
 ### "MCP 서버에 연결할 수 없습니다"
 
 1. `~/.claude/settings.json` 파일 확인
-2. URL이 정확한지 확인: `https://toolkit.gpters.org/api/mcp`
+2. URL이 정확한지 확인: `https://company-ai-toolkit.vercel.app/api/mcp`
 3. Claude Code 재시작
 
 ### "플러그인을 찾을 수 없습니다"
@@ -159,4 +159,4 @@ Claude가 자동으로 관련 플러그인을 검색하고 적용합니다.
 
 ## 피드백 및 요청
 
-새 플러그인 요청이나 버그 리포트는 [GPTers AI Toolkit](https://toolkit.gpters.org/admin)에서 제출해주세요.
+새 플러그인 요청이나 버그 리포트는 [GPTers AI Toolkit](https://company-ai-toolkit.vercel.app/admin)에서 제출해주세요.
