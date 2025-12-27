@@ -167,3 +167,21 @@ POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": {"
 See `docs/AUTO_PLUGIN_DISCOVERY.md` for detailed documentation.
 See `docs/TEAM_ONBOARDING.md` for team member setup guide.
 See `docs/ARCHITECTURE_V2.md` for V2 deploy architecture.
+
+## Development Guidelines
+
+### Test Requirements
+
+**모든 기능 작업 완료 시 관련 테스트 코드 작성 필수:**
+
+| 작업 유형 | 테스트 위치 | 테스트 프레임워크 |
+|----------|------------|-----------------|
+| API 엔드포인트 | `tests/api/` | Vitest |
+| 유틸리티/라이브러리 | `tests/` 또는 `*.test.ts` | Vitest |
+| 주요 사용자 흐름 | `tests/e2e/` | Playwright |
+
+**테스트 체크리스트:**
+- [ ] 성공 케이스 테스트
+- [ ] 에러/엣지 케이스 테스트
+- [ ] `pnpm test` 통과 확인
+- [ ] `pnpm lint` 통과 확인
