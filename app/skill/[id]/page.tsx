@@ -12,6 +12,7 @@ import { TryItButton } from '@/components/TryItButton'
 import { DownloadButton } from '@/components/DownloadButton'
 import { RelatedItems } from '@/components/RelatedItems'
 import { ExamplesSection } from '@/components/ExamplesSection'
+import { AdminEditButton } from '@/components/AdminEditButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -152,6 +153,8 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           />
         </Section>
       )}
+
+      <AdminEditButton itemId={item.id} returnUrl={`/skill/${item.id}`} />
     </DetailPageLayout>
   )
 }

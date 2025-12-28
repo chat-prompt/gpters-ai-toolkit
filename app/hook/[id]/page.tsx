@@ -9,6 +9,7 @@ import { TableOfContents, Section, type TocItem } from '@/components/TableOfCont
 import { DraftBanner } from '@/components/DraftBanner'
 import { TryItButton } from '@/components/TryItButton'
 import { DownloadButton } from '@/components/DownloadButton'
+import { AdminEditButton } from '@/components/AdminEditButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -231,6 +232,9 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           <ContentSection title="README.md" icon="📖" content={item.readme} />
         </Section>
       )}
+
+      {/* Admin Edit Button */}
+      <AdminEditButton itemId={item.id} returnUrl={`/hook/${item.id}`} />
     </DetailPageLayout>
   )
 }

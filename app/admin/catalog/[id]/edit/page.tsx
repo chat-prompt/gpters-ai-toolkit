@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, use, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { TeamTag } from '@/lib/types'
 import { TeamTagSelector } from '@/components/TeamTagSelector'
@@ -20,6 +20,8 @@ interface EditPageProps {
 export default function EditCatalogItem({ params }: EditPageProps) {
   const { id } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnUrl = searchParams.get('returnUrl')
   const { password } = useAdminAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -122,7 +124,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
       })
 
       if (res.ok) {
-        router.push('/admin/catalog')
+        // Redirect to returnUrl if provided, otherwise go to admin catalog
+        router.push(returnUrl || '/admin/catalog')
       } else {
         const data = await res.json()
         setError(data.error || 'Failed to update item')
@@ -160,10 +163,10 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     <div className="max-w-4xl mx-auto px-8 py-12">
       <div className="mb-8">
         <Link
-          href="/admin/catalog"
+          href={returnUrl || '/admin/catalog'}
           className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-4 inline-block"
         >
-          ← Back to Catalog
+          ← {returnUrl ? '돌아가기' : 'Back to Catalog'}
         </Link>
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-light text-[var(--text-primary)]">
@@ -441,10 +444,10 @@ export default function EditCatalogItem({ params }: EditPageProps) {
 
         <div className="flex justify-end gap-4">
           <Link
-            href="/admin/catalog"
+            href={returnUrl || '/admin/catalog'}
             className="px-6 py-3 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
           >
-            Cancel
+            {returnUrl ? '취소' : 'Cancel'}
           </Link>
           <button
             type="submit"

@@ -3,6 +3,7 @@ import { DetailPageLayout } from '@/components/DetailPageLayout'
 import { ItemHero } from '@/components/ItemHero'
 import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import { MarkdownContent } from '@/components/MarkdownContent'
+import { AdminEditButton } from '@/components/AdminEditButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -68,6 +69,9 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       )}
+
+      {/* Admin Edit Button */}
+      <AdminEditButton itemId={guide.id} returnUrl={`/guides/${guide.id}`} />
     </DetailPageLayout>
   )
 }
