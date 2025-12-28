@@ -21,7 +21,7 @@ import {
   getGraphStatistics,
   exportToMermaid,
   type PluginWithDependencies,
-} from '@/lib/plugin-dependency-graph'
+} from '@/lib/plugin/dependency-graph'
 
 // ============================================
 // Main Graph Visualization Component

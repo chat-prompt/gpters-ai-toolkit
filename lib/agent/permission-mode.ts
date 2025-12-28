@@ -8,7 +8,7 @@
  * - Recommendation engine
  */
 
-import { AgentPermissionMode } from './types'
+import { AgentPermissionMode } from '../types'
 
 /**
  * Security level for permission modes

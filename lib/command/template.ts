@@ -8,7 +8,7 @@
  * - Automatic example generation
  */
 
-import { createLogger } from './logger'
+import { createLogger } from '../logger'
 
 const log = createLogger('command-template')
 
@@ -775,7 +775,7 @@ export function renderAsTypeScript(template: CommandTemplate): string {
   lines.push(``)
 
   // Imports
-  lines.push(`import { createLogger } from './logger'`)
+  lines.push(`import { createLogger } from '../logger'`)
   lines.push(``)
   lines.push(`const log = createLogger('${template.name}')`)
   lines.push(``)

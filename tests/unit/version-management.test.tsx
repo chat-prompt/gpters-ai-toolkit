@@ -33,7 +33,7 @@ import {
   type InstalledPlugin,
   type PluginUpdate,
   type UpdateCheckResult,
-} from '@/lib/plugin-updates'
+} from '@/lib/plugin/updates'
 import type { CatalogItem } from '@/lib/types'
 import {
   createInstallationSnapshot,
@@ -59,7 +59,7 @@ import {
   ROLLBACK_STEPS,
   ROLLBACK_ERROR_CODES,
   type RollbackOptions,
-} from '@/lib/plugin-rollback'
+} from '@/lib/plugin/rollback'
 
 // ============================================================================
 // parseSemver Tests

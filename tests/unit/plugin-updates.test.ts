@@ -12,7 +12,7 @@ import {
   isValidVersion,
   normalizeVersion,
   type InstalledPlugin,
-} from '@/lib/plugin-updates'
+} from '@/lib/plugin/updates'
 import type { CatalogItem } from '@/lib/types'
 
 describe('Plugin Updates', () => {

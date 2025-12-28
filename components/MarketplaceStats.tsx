@@ -16,7 +16,7 @@ import {
   formatChange,
   getPeriodLabel,
   getRankingCategoryLabel,
-} from '@/lib/plugin-marketplace-stats'
+} from '@/lib/plugin/marketplace-stats'
 
 // ============================================
 // Main Dashboard Component

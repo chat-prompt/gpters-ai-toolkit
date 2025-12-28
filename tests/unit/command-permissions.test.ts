@@ -11,7 +11,7 @@ import {
   listPresets,
   getPresetDetails,
   type CommandPermission,
-} from '@/lib/command-permissions'
+} from '@/lib/command/permissions'
 
 describe('Command Permissions', () => {
   describe('PermissionPresets', () => {

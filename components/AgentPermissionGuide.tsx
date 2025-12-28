@@ -6,7 +6,7 @@ import {
   SECURITY_LEVELS,
   type PermissionModeInfo,
   type SecurityLevel,
-} from '@/lib/agent-permission-mode'
+} from '@/lib/agent/permission-mode'
 import { AgentPermissionMode } from '@/lib/types'
 
 interface AgentPermissionGuideProps {

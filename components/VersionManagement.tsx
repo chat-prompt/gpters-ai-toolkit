@@ -12,7 +12,7 @@ import {
   compareVersions,
   normalizeVersion,
   isValidVersion,
-} from '@/lib/plugin-updates'
+} from '@/lib/plugin/updates'
 import {
   InstallationSnapshot,
   RollbackScope,
@@ -24,7 +24,7 @@ import {
   formatFileSize,
   formatDuration,
   ROLLBACK_STEPS,
-} from '@/lib/plugin-rollback'
+} from '@/lib/plugin/rollback'
 
 // ============================================================================
 // Types

@@ -12,7 +12,7 @@ import {
   validateTemplate,
   type AgentRole,
   type AgentTemplate,
-} from '@/lib/agent-template'
+} from '@/lib/agent/template'
 
 describe('Agent Template Generator', () => {
   describe('createTemplateFromRole', () => {

@@ -20,7 +20,7 @@ import {
   getDaysUntilExpiry,
   isSnapshotExpired,
   getSnapshotStorageSummary,
-} from '@/lib/plugin-rollback'
+} from '@/lib/plugin/rollback'
 
 // ============================================
 // Main Rollback Panel

@@ -13,7 +13,7 @@ import {
   type TaskCategory,
   type TaskComplexity,
   type ModelRecommendationCriteria,
-} from '@/lib/agent-model-guide'
+} from '@/lib/agent/model-guide'
 import { AgentModel } from '@/lib/types'
 
 interface AgentModelGuideProps {

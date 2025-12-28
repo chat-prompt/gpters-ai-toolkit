@@ -8,7 +8,7 @@
  * - Output format settings
  */
 
-import { createLogger } from './logger'
+import { createLogger } from '../logger'
 
 const log = createLogger('agent-template')
 

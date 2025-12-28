@@ -13,7 +13,7 @@ import {
   compareModes,
   validateModeForContext,
   type RecommendationCriteria,
-} from '@/lib/agent-permission-mode'
+} from '@/lib/agent/permission-mode'
 import { AgentPermissionMode } from '@/lib/types'
 
 describe('agent-permission-mode', () => {

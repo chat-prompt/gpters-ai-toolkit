@@ -20,7 +20,7 @@ import {
   type SecurityFinding,
   type CodeSignature,
   type VerificationConfig,
-} from '@/lib/plugin-verification'
+} from '@/lib/plugin/verification'
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({

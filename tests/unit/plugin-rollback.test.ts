@@ -31,7 +31,7 @@ import {
   type RollbackOperation,
   type RollbackOptions,
   type FileChange,
-} from '@/lib/plugin-rollback'
+} from '@/lib/plugin/rollback'
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({

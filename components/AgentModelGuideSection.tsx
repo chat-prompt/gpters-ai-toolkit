@@ -6,7 +6,7 @@ import {
   MODEL_TIER_CONFIG,
   TASK_CATEGORIES,
   type TaskCategory,
-} from '@/lib/agent-model-guide'
+} from '@/lib/agent/model-guide'
 import { AgentModel } from '@/lib/types'
 
 interface AgentModelGuideSectionProps {

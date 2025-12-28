@@ -24,7 +24,7 @@ import {
   type ExecutionRecord,
   type HistoryFilter,
   type HistorySort,
-} from '@/lib/agent-execution-history'
+} from '@/lib/agent/execution-history'
 
 describe('Agent Execution History', () => {
   describe('generateExecutionId', () => {

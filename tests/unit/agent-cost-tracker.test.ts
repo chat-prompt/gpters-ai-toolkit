@@ -26,7 +26,7 @@ import {
   CostTracker,
   type TokenUsage,
   type BudgetConfig,
-} from '@/lib/agent-cost-tracker'
+} from '@/lib/agent/cost-tracker'
 
 describe('Agent Cost Tracker', () => {
   describe('MODEL_PRICING', () => {

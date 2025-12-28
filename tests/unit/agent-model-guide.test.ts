@@ -20,7 +20,7 @@ import {
   calculateSavings,
   type TaskCategory,
   type ModelRecommendationCriteria,
-} from '@/lib/agent-model-guide'
+} from '@/lib/agent/model-guide'
 
 describe('agent-model-guide', () => {
   describe('MODEL_SPECS', () => {

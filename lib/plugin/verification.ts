@@ -8,7 +8,7 @@
  * - Dangerous plugin warnings
  */
 
-import { createLogger } from './logger'
+import { createLogger } from '../logger'
 
 const log = createLogger('plugin-verification')
 

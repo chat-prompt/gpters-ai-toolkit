@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { PluginUpdate } from '@/lib/plugin-updates'
+import { PluginUpdate } from '@/lib/plugin/updates'
 
 interface PluginUpdateBannerProps {
   update: PluginUpdate

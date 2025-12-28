@@ -11,7 +11,7 @@ import {
   type CommandDefinition,
   type CommandResult,
   type TestCase,
-} from '@/lib/command-testing'
+} from '@/lib/command/testing'
 
 describe('Command Testing Framework', () => {
   // Sample command definition for testing

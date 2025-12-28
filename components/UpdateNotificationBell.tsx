@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { PluginUpdate, UpdateCheckResult } from '@/lib/plugin-updates'
+import { PluginUpdate, UpdateCheckResult } from '@/lib/plugin/updates'
 
 interface UpdateNotificationBellProps {
   /** Initial updates to display (from server-side fetch) */

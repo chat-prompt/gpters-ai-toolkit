@@ -28,7 +28,7 @@ import {
   type InputMapping,
   type OutputMapping,
   type StepExecutionResult,
-} from '@/lib/agent-chain'
+} from '@/lib/agent/chain'
 
 describe('Agent Chain', () => {
   describe('CHAIN_TEMPLATES', () => {

@@ -15,7 +15,7 @@ import {
   type RiskLevel,
   type VerificationConfig,
   DEFAULT_VERIFICATION_CONFIG,
-} from '@/lib/plugin-verification'
+} from '@/lib/plugin/verification'
 
 interface PluginVerificationProps {
   result: PluginVerificationResult

@@ -5,7 +5,7 @@ import {
   checkForUpdates,
   InstalledPlugin,
   UpdateCheckResult,
-} from '@/lib/plugin-updates'
+} from '@/lib/plugin/updates'
 import { ApiErrors, apiSuccess, validateRequired } from '@/lib/api-utils'
 import { createLogger } from '@/lib/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'

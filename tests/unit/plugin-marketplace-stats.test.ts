@@ -24,7 +24,7 @@ import {
   type ReviewStats,
   type TimePeriod,
   type RankingCategory,
-} from '@/lib/plugin-marketplace-stats'
+} from '@/lib/plugin/marketplace-stats'
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({

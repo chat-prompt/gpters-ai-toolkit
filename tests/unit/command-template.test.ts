@@ -14,7 +14,7 @@ import {
   type CommandCategory,
   type CommandTemplate,
   type ArgumentDefinition,
-} from '@/lib/command-template'
+} from '@/lib/command/template'
 
 describe('Command Template Generator', () => {
   describe('createTemplateFromCategory', () => {

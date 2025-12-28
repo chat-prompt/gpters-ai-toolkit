@@ -23,7 +23,7 @@ import {
   type PluginWithDependencies,
   type DependencyGraph,
   type GraphFilterOptions,
-} from '@/lib/plugin-dependency-graph'
+} from '@/lib/plugin/dependency-graph'
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
