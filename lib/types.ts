@@ -81,6 +81,13 @@ export interface CatalogItem {
   updatedAt?: string
 }
 
+/**
+ * Lightweight version of CatalogItem for list views.
+ * Excludes heavy fields: content, readme, files, changelog
+ * to reduce data transfer and improve performance.
+ */
+export type CatalogItemSummary = Omit<CatalogItem, 'content' | 'readme' | 'files' | 'changelog'>
+
 export interface Dependency {
   type: 'mcp' | 'skill' | 'agent' | 'other'
   id: string

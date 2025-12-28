@@ -12,7 +12,7 @@
  * - Filter history and saved filters
  */
 
-import { CatalogItem, ItemType, Difficulty, TeamTag, TAGS } from './types'
+import { CatalogItemSummary, ItemType, Difficulty, TeamTag, TAGS } from './types'
 
 // ============================================================================
 // Types
@@ -111,7 +111,7 @@ export interface FilterCounts {
  * Filter result with metadata
  */
 export interface FilterResult {
-  items: CatalogItem[]
+  items: CatalogItemSummary[]
   counts: FilterCounts
   totalCount: number
   filteredCount: number
@@ -303,7 +303,7 @@ export function parseSearchQuery(query: string): SearchToken[] {
 /**
  * Check if item matches search tokens
  */
-export function matchSearchTokens(item: CatalogItem, tokens: SearchToken[]): boolean {
+export function matchSearchTokens(item: CatalogItemSummary, tokens: SearchToken[]): boolean {
   if (tokens.length === 0) return true
 
   const searchableText = [
@@ -336,7 +336,7 @@ export function matchSearchTokens(item: CatalogItem, tokens: SearchToken[]): boo
 /**
  * Get field value from item for field:value search
  */
-function getFieldValue(item: CatalogItem, field: string): string {
+function getFieldValue(item: CatalogItemSummary, field: string): string {
   switch (field) {
     case 'tag':
     case 'tags':
@@ -422,12 +422,12 @@ export function fuzzyMatchScore(query: string, target: string): number {
  */
 export function findFuzzyMatches(
   query: string,
-  items: CatalogItem[],
+  items: CatalogItemSummary[],
   options: { minScore?: number; maxResults?: number } = {}
-): Array<{ item: CatalogItem; score: number; matchedField: string }> {
+): Array<{ item: CatalogItemSummary; score: number; matchedField: string }> {
   const { minScore = 0.5, maxResults = 10 } = options
 
-  const results: Array<{ item: CatalogItem; score: number; matchedField: string }> = []
+  const results: Array<{ item: CatalogItemSummary; score: number; matchedField: string }> = []
 
   for (const item of items) {
     const fields = [
@@ -465,7 +465,7 @@ export function findFuzzyMatches(
 /**
  * Apply filter state to catalog items
  */
-export function applyFilters(items: CatalogItem[], filters: FilterState): CatalogItem[] {
+export function applyFilters(items: CatalogItemSummary[], filters: FilterState): CatalogItemSummary[] {
   return items.filter(item => {
     // Type filter
     if (filters.type !== 'all' && item.type !== filters.type) {
@@ -548,7 +548,7 @@ export function applyFilters(items: CatalogItem[], filters: FilterState): Catalo
 /**
  * Sort items by configuration
  */
-export function sortItems(items: CatalogItem[], config: SortConfig): CatalogItem[] {
+export function sortItems(items: CatalogItemSummary[], config: SortConfig): CatalogItemSummary[] {
   const sorted = [...items]
 
   sorted.sort((a, b) => {
@@ -599,7 +599,7 @@ export function sortItems(items: CatalogItem[], config: SortConfig): CatalogItem
  * Calculate filter counts for UI display
  */
 export function calculateFilterCounts(
-  items: CatalogItem[],
+  items: CatalogItemSummary[],
   currentFilters: FilterState
 ): FilterCounts {
   // For counts, we apply all filters EXCEPT the one we're counting
@@ -687,7 +687,7 @@ export function calculateFilterCounts(
  * Apply complete filtering pipeline
  */
 export function filterCatalog(
-  items: CatalogItem[],
+  items: CatalogItemSummary[],
   filters: FilterState
 ): FilterResult {
   // Apply filters

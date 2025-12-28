@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty, TeamTag, TEAM_TAGS } from '@/lib/types'
+import { CatalogItemSummary, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty, TeamTag, TEAM_TAGS } from '@/lib/types'
 import { TeamTagBadge } from './TeamTagSelector'
 import { SearchAutocomplete } from './SearchAutocomplete'
 import { naturalLanguageSearch, extractKeywords, getDidYouMeanSuggestions } from '@/lib/search-utils'
@@ -41,7 +41,7 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
   },
 }
 
-const ItemCard = memo(function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
+const ItemCard = memo(function ItemCard({ item, index }: { item: CatalogItemSummary; index: number }) {
   const config = TYPE_CONFIG[item.type]
   const isDraft = item.status === 'draft'
 
@@ -152,7 +152,7 @@ const SectionHeader = memo(function SectionHeader({ icon, title, count, accentCo
 })
 
 interface SearchableCatalogProps {
-  catalog: CatalogItem[]
+  catalog: CatalogItemSummary[]
 }
 
 export function SearchableCatalog({ catalog }: SearchableCatalogProps) {

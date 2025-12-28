@@ -8,7 +8,7 @@
  * - Tag inference from natural language queries
  */
 
-import type { CatalogItem, ItemType } from './types'
+import type { CatalogItemSummary, ItemType } from './types'
 
 // Korean developer terms mapped to English keywords and tags
 export const KOREAN_KEYWORD_MAPPINGS: Record<string, string[]> = {
@@ -139,7 +139,7 @@ export const ACTION_VERBS: Record<string, string[]> = {
 }
 
 export interface SearchResult {
-  item: CatalogItem
+  item: CatalogItemSummary
   score: number
   matchedKeywords: string[]
   matchType: 'exact' | 'keyword' | 'fuzzy' | 'natural'
@@ -219,7 +219,7 @@ export function inferItemTypes(query: string): ItemType[] | undefined {
  * Calculate similarity score between query and item
  */
 export function calculateScore(
-  item: CatalogItem,
+  item: CatalogItemSummary,
   keywords: string[],
   originalQuery: string,
   options: NaturalLanguageSearchOptions = {}
@@ -300,7 +300,7 @@ export function calculateScore(
  * Enhanced natural language search
  */
 export function naturalLanguageSearch(
-  catalog: CatalogItem[],
+  catalog: CatalogItemSummary[],
   query: string,
   options: NaturalLanguageSearchOptions = {}
 ): SearchResult[] {
@@ -404,7 +404,7 @@ export function getSearchSuggestions(
  */
 export function getDidYouMeanSuggestions(
   query: string,
-  catalog: CatalogItem[],
+  catalog: CatalogItemSummary[],
   limit: number = 3
 ): string[] {
   const suggestions: Array<{ text: string; score: number }> = []

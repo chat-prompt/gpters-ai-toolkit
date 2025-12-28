@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { CatalogItem, TAGS, ItemType } from '@/lib/types'
+import { CatalogItemSummary, TAGS, ItemType } from '@/lib/types'
 import {
   naturalLanguageSearch,
   getSearchSuggestions,
@@ -31,7 +31,7 @@ interface SearchAutocompleteProps {
   value: string
   onChange: (value: string) => void
   onSelect?: (suggestion: Suggestion) => void
-  catalog: CatalogItem[]
+  catalog: CatalogItemSummary[]
   placeholder?: string
   className?: string
 }
