@@ -8,6 +8,7 @@ import { CopyButton } from '@/components/CopyButton'
 import { TableOfContents, Section, type TocItem } from '@/components/TableOfContents'
 import { DraftBanner } from '@/components/DraftBanner'
 import { TryItButton } from '@/components/TryItButton'
+import { DownloadButton } from '@/components/DownloadButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -97,7 +98,7 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
     tocItems.push({ id: 'readme', label: 'README', icon: '📖' })
   }
 
-  // Extra badges: hook event + try it button
+  // Extra badges: hook event + try it button + download
   const extraBadges = (
     <>
       {eventInfo && (
@@ -106,6 +107,7 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
         </span>
       )}
       <TryItButton itemId={item.id} />
+      <DownloadButton itemId={item.id} itemName={item.name} size="sm" />
     </>
   )
 

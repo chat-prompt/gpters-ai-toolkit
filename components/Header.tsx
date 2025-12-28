@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 import { UpdateNotificationBell } from './UpdateNotificationBell'
+import { MCPStatus } from './MCPStatus'
 import type { UserRole } from '@/lib/rbac'
 
 interface HeaderProps {
@@ -80,6 +81,7 @@ export function Header({ user }: HeaderProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            <MCPStatus />
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
             <Link

@@ -280,3 +280,65 @@ export async function getItemsByAuthor(author: string): Promise<CatalogItem[]> {
     .where(eq(catalogItems.author, author))
   return records.map(toPlainObject)
 }
+
+/**
+ * Get related items based on matching tags and same author.
+ * Excludes the current item and returns only published items.
+ *
+ * Scoring algorithm:
+ * - Each matching tag: +1 point
+ * - Same author: +2 points
+ *
+ * Results are sorted by score (descending), then by updatedAt (descending).
+ */
+export async function getRelatedItems(
+  itemId: string,
+  tags: string[],
+  author: string | null,
+  limit: number = 6
+): Promise<CatalogItemSummary[]> {
+  // Get all published items except the current one
+  const records = await db
+    .select(summaryColumns)
+    .from(catalogItems)
+    .where(
+      and(
+        ne(catalogItems.id, itemId),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
+
+  const items = records.map(toSummaryObject)
+
+  // Score and filter items
+  const scoredItems = items
+    .map(item => {
+      let score = 0
+
+      // Count matching tags
+      const matchingTags = item.tags.filter(tag => tags.includes(tag))
+      score += matchingTags.length
+
+      // Bonus for same author
+      if (author && item.author === author) {
+        score += 2
+      }
+
+      return { item, score, matchingTags: matchingTags.length }
+    })
+    .filter(({ score }) => score > 0) // Only items with at least one match
+    .sort((a, b) => {
+      // Sort by score first
+      if (b.score !== a.score) {
+        return b.score - a.score
+      }
+      // Then by updated date
+      const aDate = a.item.updatedAt || ''
+      const bDate = b.item.updatedAt || ''
+      return bDate.localeCompare(aDate)
+    })
+    .slice(0, limit)
+    .map(({ item }) => item)
+
+  return scoredItems
+}
