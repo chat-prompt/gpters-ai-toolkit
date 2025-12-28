@@ -607,7 +607,7 @@ export function calculateFilterCounts(
     types: { all: 0, skill: 0, agent: 0, command: 0, guide: 0, hook: 0 },
     tags: {},
     difficulties: { '': 0, easy: 0, medium: 0, hard: 0 },
-    teamTags: { '': 0, general: 0, dev: 0, pm: 0, content: 0, data: 0, design: 0, marketing: 0 },
+    teamTags: { '': 0, general: 0, platform: 0, ai: 0, data: 0, product: 0, infra: 0 },
     statuses: { all: 0, published: 0, draft: 0 },
     marketplaceEnabled: { true: 0, false: 0, all: 0 },
   }

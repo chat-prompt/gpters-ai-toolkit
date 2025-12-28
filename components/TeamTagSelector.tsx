@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import type { TeamTag } from '@/lib/types'
 import { TEAM_TAGS } from '@/lib/types'
 
@@ -47,7 +48,7 @@ interface TeamTagBadgeProps {
   size?: 'sm' | 'md'
 }
 
-export function TeamTagBadge({ tag, size = 'md' }: TeamTagBadgeProps) {
+export const TeamTagBadge = memo(function TeamTagBadge({ tag, size = 'md' }: TeamTagBadgeProps) {
   const tagInfo = TEAM_TAGS[tag]
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'
 
@@ -57,4 +58,4 @@ export function TeamTagBadge({ tag, size = 'md' }: TeamTagBadgeProps) {
       <span>{tagInfo.label}</span>
     </span>
   )
-}
+})

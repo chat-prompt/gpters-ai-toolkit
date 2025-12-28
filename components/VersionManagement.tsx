@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react'
 import {
   PluginUpdate,
   UpdateCheckResult,
-  ChangelogSection,
+  type ChangelogSection,
   parseChangelog,
   getChangesBetweenVersions,
   getUpdateTypeDescription,
@@ -283,7 +283,7 @@ export function ChangelogViewer({
   return (
     <div className={`space-y-4 ${className}`}>
       {displaySections.map((section, index) => (
-        <ChangelogSection key={`${section.version}-${index}`} section={section} />
+        <ChangelogSectionItem key={`${section.version}-${index}`} section={section} />
       ))}
       {hasMore && !expanded && (
         <button
@@ -306,9 +306,9 @@ export function ChangelogViewer({
 }
 
 /**
- * Single changelog section
+ * Single changelog section display
  */
-function ChangelogSection({ section }: { section: ChangelogSection }) {
+function ChangelogSectionItem({ section }: { section: ChangelogSection }) {
   return (
     <div className="border-l-2 border-[var(--border-primary)] pl-4">
       <div className="flex items-center gap-2 mb-2">

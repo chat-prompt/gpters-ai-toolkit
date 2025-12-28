@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, memo } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { CatalogItem, TAGS, DIFFICULTY_LABELS, ItemType, Difficulty, TeamTag, TEAM_TAGS } from '@/lib/types'
@@ -41,7 +41,7 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
   },
 }
 
-function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
+const ItemCard = memo(function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
   const config = TYPE_CONFIG[item.type]
   const isDraft = item.status === 'draft'
 
@@ -127,9 +127,9 @@ function ItemCard({ item, index }: { item: CatalogItem; index: number }) {
       </div>
     </Link>
   )
-}
+})
 
-function SectionHeader({ icon, title, count, accentColor }: {
+const SectionHeader = memo(function SectionHeader({ icon, title, count, accentColor }: {
   icon: string
   title: string
   count: number
@@ -149,7 +149,7 @@ function SectionHeader({ icon, title, count, accentColor }: {
       <div className="h-px flex-1 ml-8 bg-gradient-to-r from-[var(--border-subtle)] to-transparent" />
     </div>
   )
-}
+})
 
 interface SearchableCatalogProps {
   catalog: CatalogItem[]
@@ -361,10 +361,13 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
 
   const hasActiveFilters = selectedTags.length > 0 || selectedDifficulty !== '' || selectedTeamTag !== ''
 
-  const skills = filteredCatalog.filter(item => item.type === 'skill')
-  const agents = filteredCatalog.filter(item => item.type === 'agent')
-  const commands = filteredCatalog.filter(item => item.type === 'command')
-  const hooks = filteredCatalog.filter(item => item.type === 'hook')
+  // Memoize category groupings to prevent unnecessary recalculations
+  const { skills, agents, commands, hooks } = useMemo(() => ({
+    skills: filteredCatalog.filter(item => item.type === 'skill'),
+    agents: filteredCatalog.filter(item => item.type === 'agent'),
+    commands: filteredCatalog.filter(item => item.type === 'command'),
+    hooks: filteredCatalog.filter(item => item.type === 'hook'),
+  }), [filteredCatalog])
 
   // Keyboard shortcut for search (⌘K)
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -386,10 +389,13 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  const totalSkills = catalog.filter(item => item.type === 'skill').length
-  const totalAgents = catalog.filter(item => item.type === 'agent').length
-  const totalCommands = catalog.filter(item => item.type === 'command').length
-  const totalHooks = catalog.filter(item => item.type === 'hook').length
+  // Memoize total counts from original catalog
+  const { totalSkills, totalAgents, totalCommands, totalHooks } = useMemo(() => ({
+    totalSkills: catalog.filter(item => item.type === 'skill').length,
+    totalAgents: catalog.filter(item => item.type === 'agent').length,
+    totalCommands: catalog.filter(item => item.type === 'command').length,
+    totalHooks: catalog.filter(item => item.type === 'hook').length,
+  }), [catalog])
 
   return (
     <>
