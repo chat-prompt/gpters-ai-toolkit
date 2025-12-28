@@ -17,6 +17,14 @@ interface GeneratedToken {
   createdAt: string
 }
 
+// Get base URL for MCP endpoint
+function getMcpEndpointUrl(): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api/mcp`
+  }
+  return 'https://your-domain.com/api/mcp'
+}
+
 export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGeneratorProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -26,6 +34,8 @@ export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGener
   const [error, setError] = useState<string | null>(null)
   const [generatedToken, setGeneratedToken] = useState<GeneratedToken | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copiedConfig, setCopiedConfig] = useState(false)
+  const [activeTab, setActiveTab] = useState<'token' | 'config'>('config')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -58,99 +68,175 @@ export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGener
     }
   }
 
-  async function handleCopy() {
-    if (!generatedToken) return
-
+  async function copyToClipboard(text: string, type: 'token' | 'config') {
     try {
-      await navigator.clipboard.writeText(generatedToken.token)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      await navigator.clipboard.writeText(text)
     } catch {
       // Fallback for older browsers
       const textArea = document.createElement('textarea')
-      textArea.value = generatedToken.token
+      textArea.value = text
       document.body.appendChild(textArea)
       textArea.select()
       document.execCommand('copy')
       document.body.removeChild(textArea)
+    }
+
+    if (type === 'token') {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    } else {
+      setCopiedConfig(true)
+      setTimeout(() => setCopiedConfig(false), 2000)
     }
   }
 
-  // Show generated token
+  function getFullConfig(): string {
+    if (!generatedToken) return ''
+    return JSON.stringify({
+      mcpServers: {
+        'gpters-marketplace': {
+          type: 'http',
+          url: getMcpEndpointUrl(),
+          headers: {
+            Authorization: `Bearer ${generatedToken.token}`
+          }
+        }
+      }
+    }, null, 2)
+  }
+
+  // Show generated token with setup guide
   if (generatedToken) {
     return (
       <div className="space-y-4">
+        {/* Success Banner */}
         <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
           <div className="flex items-center gap-2 text-green-400 mb-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <span className="font-medium">Token Created Successfully</span>
+            <span className="font-medium">토큰이 생성되었습니다!</span>
           </div>
-          <p className="text-sm text-[var(--text-secondary)] mb-3">
-            Copy this token now. For security, it will not be shown again.
+          <p className="text-sm text-[var(--text-secondary)]">
+            보안상 토큰은 이 화면에서만 확인할 수 있습니다. 지금 복사해주세요.
           </p>
         </div>
 
-        <div>
-          <label className="block text-sm text-[var(--text-secondary)] mb-2">
-            Your API Token
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={generatedToken.token}
-              readOnly
-              className="flex-1 px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--accent-cyan)] font-mono text-sm"
-            />
-            <button
-              onClick={handleCopy}
-              className={`px-4 py-3 rounded-lg border transition-all ${
-                copied
-                  ? 'bg-green-500/20 border-green-500/30 text-green-400'
-                  : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-cyan)]'
-              }`}
-            >
-              {copied ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              )}
-            </button>
+        {/* Token Info */}
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <div className="p-2 rounded bg-[var(--bg-tertiary)]">
+            <span className="text-[var(--text-muted)]">이름</span>
+            <div className="text-[var(--text-primary)] truncate">{generatedToken.name}</div>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-[var(--text-muted)]">Name:</span>
-            <span className="ml-2 text-[var(--text-primary)]">{generatedToken.name}</span>
+          <div className="p-2 rounded bg-[var(--bg-tertiary)]">
+            <span className="text-[var(--text-muted)]">Rate Limit</span>
+            <div className="text-[var(--text-primary)]">{generatedToken.rateLimit}/min</div>
           </div>
-          <div>
-            <span className="text-[var(--text-muted)]">Rate Limit:</span>
-            <span className="ml-2 text-[var(--text-primary)]">{generatedToken.rateLimit}/min</span>
-          </div>
-          <div>
-            <span className="text-[var(--text-muted)]">Expires:</span>
-            <span className="ml-2 text-[var(--text-primary)]">
+          <div className="p-2 rounded bg-[var(--bg-tertiary)]">
+            <span className="text-[var(--text-muted)]">만료</span>
+            <div className="text-[var(--text-primary)]">
               {generatedToken.expiresAt
                 ? new Date(generatedToken.expiresAt).toLocaleDateString('ko-KR')
-                : 'Never'}
-            </span>
+                : '무제한'}
+            </div>
           </div>
         </div>
 
-        <div className="pt-4 flex justify-end">
+        {/* Tab Buttons */}
+        <div className="flex gap-2 border-b border-[var(--border-subtle)]">
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === 'config'
+                ? 'border-[var(--accent-cyan)] text-[var(--accent-cyan)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            설정 복사 (권장)
+          </button>
+          <button
+            onClick={() => setActiveTab('token')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === 'token'
+                ? 'border-[var(--accent-cyan)] text-[var(--accent-cyan)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            토큰만 복사
+          </button>
+        </div>
+
+        {/* Config Tab */}
+        {activeTab === 'config' && (
+          <div className="space-y-3">
+            <div className="text-sm text-[var(--text-secondary)]">
+              아래 설정을 <code className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--accent-cyan)]">~/.claude/settings.json</code>에 추가하세요:
+            </div>
+            <div className="relative">
+              <pre className="p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-secondary)]">
+                {getFullConfig()}
+              </pre>
+              <button
+                onClick={() => copyToClipboard(getFullConfig(), 'config')}
+                className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  copiedConfig
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
+              >
+                {copiedConfig ? '✓ 복사됨!' : '복사'}
+              </button>
+            </div>
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm text-amber-400">
+              <strong>Tip:</strong> 기존 settings.json이 있다면 mcpServers 안에 gpters-marketplace 항목만 추가하세요.
+            </div>
+          </div>
+        )}
+
+        {/* Token Tab */}
+        {activeTab === 'token' && (
+          <div className="space-y-3">
+            <div className="text-sm text-[var(--text-secondary)]">
+              토큰 값만 필요한 경우:
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={generatedToken.token}
+                readOnly
+                className="flex-1 px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--accent-cyan)] font-mono text-sm"
+              />
+              <button
+                onClick={() => copyToClipboard(generatedToken.token, 'token')}
+                className={`px-4 py-3 rounded-lg border transition-all ${
+                  copied
+                    ? 'bg-green-500/20 border-green-500/30 text-green-400'
+                    : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-cyan)]'
+                }`}
+              >
+                {copied ? '✓' : '복사'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Setup Steps */}
+        <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] space-y-2">
+          <div className="text-sm font-medium text-[var(--text-primary)]">설정 방법</div>
+          <ol className="text-sm text-[var(--text-secondary)] space-y-1 list-decimal list-inside">
+            <li>위 설정을 복사합니다</li>
+            <li><code className="px-1 py-0.5 rounded bg-[var(--bg-primary)] text-xs">~/.claude/settings.json</code> 파일을 엽니다</li>
+            <li>mcpServers 섹션에 붙여넣기 합니다</li>
+            <li>Claude Code를 재시작합니다</li>
+          </ol>
+        </div>
+
+        <div className="pt-2 flex justify-end">
           <button
             onClick={onSuccess}
             className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
           >
-            Done
+            완료
           </button>
         </div>
       </div>

@@ -43,6 +43,46 @@ const nextConfig: NextConfig = {
       ],
     },
     {
+      // Static assets (JS, CSS) - immutable, long-term cache
+      source: '/_next/static/:path*',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=31536000, immutable',
+        },
+      ],
+    },
+    {
+      // Public images and static files - moderate cache
+      source: '/images/:path*',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=86400, stale-while-revalidate=604800',
+        },
+      ],
+    },
+    {
+      // OG image - moderate cache
+      source: '/og-image.png',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=86400, stale-while-revalidate=604800',
+        },
+      ],
+    },
+    {
+      // Favicon and icons - long-term cache
+      source: '/:path(favicon.ico|icon.svg|apple-touch-icon.png)',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=604800, stale-while-revalidate=2592000',
+        },
+      ],
+    },
+    {
       source: '/api/:path*',
       headers: [
         {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, ReactNode } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -130,10 +131,12 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             {session?.user && (
               <div className="flex items-center gap-2">
                 {session.user.image && (
-                  <img
+                  <Image
                     src={session.user.image}
                     alt={session.user.name || 'User'}
-                    className="w-6 h-6 rounded-full"
+                    width={24}
+                    height={24}
+                    className="rounded-full"
                   />
                 )}
                 <span className="text-sm text-[var(--text-secondary)]">

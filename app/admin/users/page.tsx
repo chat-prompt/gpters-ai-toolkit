@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import type { UserRole } from '@/lib/rbac'
 
@@ -168,10 +169,12 @@ export default function UsersPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       {user.image ? (
-                        <img
+                        <Image
                           src={user.image}
                           alt={user.name || 'User'}
-                          className="w-8 h-8 rounded-full"
+                          width={32}
+                          height={32}
+                          className="rounded-full"
                         />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-[var(--text-muted)]">
