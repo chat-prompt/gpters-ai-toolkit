@@ -4,6 +4,7 @@ import { DetailPageLayout } from '@/components/DetailPageLayout'
 import { ItemHero } from '@/components/ItemHero'
 import { ContentSection } from '@/components/ContentSection'
 import { InstallGuide } from '@/components/InstallGuide'
+import { QuickActionGenerator } from '@/components/QuickActionGenerator'
 import { DependencyDisplay } from '@/components/DependencyDisplay'
 import { ChangelogDisplay } from '@/components/ChangelogDisplay'
 import { TableOfContents, Section, type TocItem } from '@/components/TableOfContents'
@@ -56,6 +57,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
     tocItems.push({ id: 'changelog', label: '변경 이력', icon: '📋' })
   }
 
+  tocItems.push({ id: 'quick-actions', label: '퀵 액션', icon: '🚀' })
   tocItems.push({ id: 'install', label: '설치 방법', icon: '📦' })
   tocItems.push({ id: 'content', label: 'command.md', icon: '📄' })
 
@@ -119,6 +121,17 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           />
         </Section>
       )}
+
+      {/* Quick Actions */}
+      <Section id="quick-actions" className="mb-8">
+        <QuickActionGenerator
+          itemId={item.id}
+          itemType="command"
+          commandArgumentHint={item.commandArgumentHint}
+          allowedTools={item.allowedTools}
+          marketplaceEnabled={item.marketplaceEnabled}
+        />
+      </Section>
 
       {/* Installation Guide */}
       <Section id="install" className="mb-8">

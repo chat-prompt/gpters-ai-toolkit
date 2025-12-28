@@ -7,6 +7,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 import { UpdateNotificationBell } from './UpdateNotificationBell'
 import { MCPStatus } from './MCPStatus'
+import { AdminQuickMenu } from './AdminQuickMenu'
 import type { UserRole } from '@/lib/rbac'
 
 interface HeaderProps {
@@ -23,7 +24,9 @@ export function Header({ user }: HeaderProps) {
 
   const isGuidesTab = pathname.startsWith('/guides')
   const isStartTab = pathname.startsWith('/getting-started')
-  const isCatalogTab = !isGuidesTab && !isStartTab && pathname !== '/upload'
+  const isPromptsTab = pathname.startsWith('/prompts')
+  const isStatsTab = pathname.startsWith('/stats')
+  const isCatalogTab = !isGuidesTab && !isStartTab && !isPromptsTab && !isStatsTab && pathname !== '/upload'
 
   return (
     <header className="relative z-[1010] border-b border-[var(--border-subtle)]">
@@ -76,6 +79,26 @@ export function Header({ user }: HeaderProps) {
               >
                 Guides
               </Link>
+              <Link
+                href="/prompts"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isPromptsTab
+                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                Prompts
+              </Link>
+              <Link
+                href="/stats"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isStatsTab
+                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                Stats
+              </Link>
             </nav>
           </div>
 
@@ -84,6 +107,7 @@ export function Header({ user }: HeaderProps) {
             <MCPStatus />
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
+            {user && <AdminQuickMenu userRole={user.role} />}
             <Link
               href="/upload"
               className="px-4 py-2 rounded-xl text-sm font-medium bg-[#F26522] text-white hover:bg-[#E55A1B] transition-colors"
