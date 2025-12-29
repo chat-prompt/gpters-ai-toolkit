@@ -8,6 +8,7 @@ import { createLogger } from '@/lib/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import { Permissions } from '@/lib/rbac'
 import { cachedJsonResponse, addSurrogateKey } from '@/lib/api-cache'
+import { createVersionOnUpdate } from '@/lib/skill-version'
 
 const log = createLogger('api:catalog')
 
@@ -96,9 +97,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.hookTimeout !== undefined) updateData.hookTimeout = body.hookTimeout
     if (body.hookBlocking !== undefined) updateData.hookBlocking = body.hookBlocking
 
+    // Check if content changed for version history
+    const contentChanged = body.content !== undefined && body.content !== existing.content
+    const previousContent = existing.content
+
     await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
 
     const [updated] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
+
+    // Create version history entry if content changed
+    if (contentChanged && updated) {
+      try {
+        await createVersionOnUpdate(updated, previousContent, {
+          changelog: body.changelog,
+          createdBy: undefined, // TODO: Get from session when available
+        })
+        log.info('Created version history entry', { itemId: id })
+      } catch (versionError) {
+        log.error('Failed to create version history entry', versionError)
+        // Don't fail the update if version creation fails
+      }
+    }
 
     // Auto-sync to GitHub if marketplace is enabled
     if (updated.marketplaceEnabled && updated.type !== 'guide') {

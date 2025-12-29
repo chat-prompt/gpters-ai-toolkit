@@ -14,7 +14,7 @@ export interface VersionBump {
 /**
  * Parse a semver string into components
  */
-function parseSemver(version: string): { major: number; minor: number; patch: number } {
+export function parseSemver(version: string): { major: number; minor: number; patch: number } {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
   if (!match) {
     return { major: 1, minor: 0, patch: 0 }
@@ -29,7 +29,7 @@ function parseSemver(version: string): { major: number; minor: number; patch: nu
 /**
  * Increment version based on bump type
  */
-function incrementVersion(version: string, type: 'major' | 'minor' | 'patch'): string {
+export function incrementVersion(version: string, type: 'major' | 'minor' | 'patch'): string {
   const { major, minor, patch } = parseSemver(version)
 
   switch (type) {
@@ -45,7 +45,7 @@ function incrementVersion(version: string, type: 'major' | 'minor' | 'patch'): s
 /**
  * Simple diff to detect changes between old and new content
  */
-function analyzeChanges(oldContent: string, newContent: string): {
+export function analyzeChanges(oldContent: string, newContent: string): {
   breaking: boolean
   newFeatures: boolean
   hasChanges: boolean

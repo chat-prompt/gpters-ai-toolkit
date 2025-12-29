@@ -14,6 +14,7 @@ import { DownloadButton } from '@/components/DownloadButton'
 import { RelatedItems } from '@/components/RelatedItems'
 import { ExamplesSection } from '@/components/ExamplesSection'
 import { AdminEditButton } from '@/components/AdminEditButton'
+import { SkillVersionHistory } from '@/components/SkillVersionHistory'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -57,6 +58,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
     tocItems.push({ id: 'changelog', label: '변경 이력', icon: '📋' })
   }
 
+  tocItems.push({ id: 'version-history', label: '버전 히스토리', icon: '🕐' })
   tocItems.push({ id: 'quick-actions', label: '퀵 액션', icon: '🚀' })
   tocItems.push({ id: 'install', label: '설치 방법', icon: '📦' })
   tocItems.push({ id: 'content', label: 'skill.md', icon: '📄' })
@@ -121,6 +123,14 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           />
         </Section>
       )}
+
+      {/* Version History */}
+      <Section id="version-history">
+        <SkillVersionHistory
+          itemId={item.id}
+          currentVersion={item.marketplaceVersion}
+        />
+      </Section>
 
       {/* Quick Actions */}
       <Section id="quick-actions" className="mb-8">

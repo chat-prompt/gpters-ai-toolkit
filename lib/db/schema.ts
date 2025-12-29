@@ -232,3 +232,53 @@ export const mcpTokens = pgTable('mcp_tokens', {
 
 export type McpTokenRecord = typeof mcpTokens.$inferSelect
 export type NewMcpTokenRecord = typeof mcpTokens.$inferInsert
+
+// ============================================
+// Item Version History Table
+// ============================================
+
+export const versionTypeEnum = pgEnum('version_type', ['major', 'minor', 'patch'])
+
+export const itemVersions = pgTable('item_versions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  version: text('version').notNull(), // semver format: "1.0.0"
+  versionType: versionTypeEnum('version_type').notNull(), // major | minor | patch
+
+  // Snapshot of the item at this version
+  content: text('content').notNull(),
+  changelog: text('changelog'), // What changed in this version
+
+  // Metadata
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+
+  // Additional snapshot data for rollback
+  snapshotData: jsonb('snapshot_data').$type<{
+    name?: string
+    description?: string
+    allowedTools?: string
+    dependencies?: string[]
+    files?: Array<{ name: string; content: string; type?: string }>
+    [key: string]: unknown
+  }>(),
+}, (table) => [
+  index('item_versions_item_id_idx').on(table.itemId),
+  index('item_versions_version_idx').on(table.version),
+  index('item_versions_created_at_idx').on(table.createdAt),
+])
+
+export type ItemVersionRecord = typeof itemVersions.$inferSelect
+export type NewItemVersionRecord = typeof itemVersions.$inferInsert
+
+// Relations for item versions
+export const itemVersionsRelations = relations(itemVersions, ({ one }) => ({
+  item: one(catalogItems, {
+    fields: [itemVersions.itemId],
+    references: [catalogItems.id],
+  }),
+  createdByUser: one(users, {
+    fields: [itemVersions.createdBy],
+    references: [users.id],
+  }),
+}))
