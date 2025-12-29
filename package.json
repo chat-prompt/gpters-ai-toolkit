@@ -22,6 +22,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "@octokit/rest": "^21.1.1",
+    "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "jszip": "^3.10.1",
     "next": "16.1.0",

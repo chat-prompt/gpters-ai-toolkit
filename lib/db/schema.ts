@@ -282,3 +282,69 @@ export const itemVersionsRelations = relations(itemVersions, ({ one }) => ({
     references: [users.id],
   }),
 }))
+
+// ============================================
+// Comments Table
+// ============================================
+
+export const comments = pgTable('comments', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  parentId: text('parent_id'), // For nested comments (replies)
+  content: text('content').notNull(),
+  likes: integer('likes').notNull().default(0),
+  isEdited: boolean('is_edited').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('comments_item_id_idx').on(table.itemId),
+  index('comments_user_id_idx').on(table.userId),
+  index('comments_parent_id_idx').on(table.parentId),
+  index('comments_created_at_idx').on(table.createdAt),
+])
+
+export type CommentRecord = typeof comments.$inferSelect
+export type NewCommentRecord = typeof comments.$inferInsert
+
+// Comment Likes Table (tracks who liked which comment)
+export const commentLikes = pgTable('comment_likes', {
+  commentId: text('comment_id').notNull().references(() => comments.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.commentId, table.userId] }),
+])
+
+export type CommentLikeRecord = typeof commentLikes.$inferSelect
+export type NewCommentLikeRecord = typeof commentLikes.$inferInsert
+
+// Relations for comments
+export const commentsRelations = relations(comments, ({ one, many }) => ({
+  item: one(catalogItems, {
+    fields: [comments.itemId],
+    references: [catalogItems.id],
+  }),
+  user: one(users, {
+    fields: [comments.userId],
+    references: [users.id],
+  }),
+  parent: one(comments, {
+    fields: [comments.parentId],
+    references: [comments.id],
+    relationName: 'parentChild',
+  }),
+  replies: many(comments, { relationName: 'parentChild' }),
+  likes: many(commentLikes),
+}))
+
+export const commentLikesRelations = relations(commentLikes, ({ one }) => ({
+  comment: one(comments, {
+    fields: [commentLikes.commentId],
+    references: [comments.id],
+  }),
+  user: one(users, {
+    fields: [commentLikes.userId],
+    references: [users.id],
+  }),
+}))
