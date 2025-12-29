@@ -195,13 +195,8 @@ export async function GET(request: NextRequest) {
 
   // SSE stream mode (Streamable HTTP transport)
   if (accept.includes('text/event-stream')) {
-    // Validate session if provided
-    if (sessionId && !validateSession(sessionId)) {
-      return new NextResponse('Session not found', {
-        status: 404,
-        headers: corsHeaders,
-      })
-    }
+    // In serverless environment, accept any session ID without validation
+    // Each serverless instance has its own memory, so session state is not shared
 
     // Create SSE stream
     const encoder = new TextEncoder()
@@ -551,22 +546,10 @@ export async function POST(request: NextRequest) {
     if (rpcMethod === 'initialize' && !hasError) {
       sessionId = getOrCreateSession(null)
     } else if (incomingSessionId) {
-      // Validate existing session for other methods
-      if (!validateSession(incomingSessionId)) {
-        return addCorsHeaders(
-          NextResponse.json(
-            {
-              jsonrpc: '2.0',
-              id: (body as Record<string, unknown>)?.id ?? null,
-              error: {
-                code: -32600,
-                message: 'Invalid session',
-              },
-            },
-            { status: 404 }
-          )
-        )
-      }
+      // In serverless environment, session validation is relaxed
+      // because each instance has its own memory
+      // Just accept the session ID without strict validation
+      sessionId = incomingSessionId
     }
 
     // Return response with session header
