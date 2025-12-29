@@ -1,6 +1,7 @@
 import { getItemById, getCatalog } from '@/lib/core/catalog'
 import { HOOK_EVENTS } from '@/lib/core/types'
 import type { HookEvent } from '@/lib/core/types'
+import { validateHookSecurity } from '@/lib/plugin/hook-security'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
 import { ContentSection } from '@/components/detail/ContentSection'
@@ -80,6 +81,11 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
       })
     : null
 
+  // Security validation
+  const securityResult = item.hookCommand
+    ? validateHookSecurity(item.hookCommand)
+    : null
+
   // Build TOC items based on available content
   const tocItems: TocItem[] = [
     { id: 'overview', label: '개요', icon: '🪝' },
@@ -143,6 +149,36 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
               <h2 className="text-lg font-medium text-[var(--text-primary)]">Hook 설정</h2>
             </div>
 
+            {/* Security Warning */}
+            {securityResult && !securityResult.safe && (
+              <div className={`mb-6 p-4 rounded-xl border ${
+                securityResult.riskLevel === 'critical'
+                  ? 'bg-red-500/10 border-red-500/30'
+                  : securityResult.riskLevel === 'high'
+                    ? 'bg-orange-500/10 border-orange-500/30'
+                    : 'bg-yellow-500/10 border-yellow-500/30'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <span className="text-lg">⚠️</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-[var(--text-primary)] mb-1">
+                      보안 검사 결과: {securityResult.risks.length}개 위험 감지
+                    </div>
+                    <ul className="text-xs text-[var(--text-secondary)] space-y-1">
+                      {securityResult.risks.slice(0, 3).map((risk, i) => (
+                        <li key={i}>• {risk.message}</li>
+                      ))}
+                      {securityResult.risks.length > 3 && (
+                        <li className="text-[var(--text-muted)]">
+                          ... 외 {securityResult.risks.length - 3}개
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
                 <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Event</div>
@@ -163,9 +199,29 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
 
               <div>
                 <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Command</div>
-                <code className="text-sm font-mono text-[var(--text-primary)] bg-[var(--bg-tertiary)] px-2 py-1 rounded">
-                  {item.hookCommand}
-                </code>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <code className="text-sm font-mono text-[var(--text-primary)] bg-[var(--bg-tertiary)] px-2 py-1 rounded">
+                    {item.hookCommand}
+                  </code>
+                  {securityResult && (
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full ${
+                        securityResult.safe
+                          ? 'bg-green-500/20 text-green-400'
+                          : securityResult.riskLevel === 'critical'
+                            ? 'bg-red-500/20 text-red-400'
+                            : securityResult.riskLevel === 'high'
+                              ? 'bg-orange-500/20 text-orange-400'
+                              : 'bg-yellow-500/20 text-yellow-400'
+                      }`}
+                      title={securityResult.safe ? 'No security risks detected' : `${securityResult.risks.length} risk(s) detected`}
+                    >
+                      {securityResult.safe
+                        ? '✅ Safe'
+                        : `⚠️ ${securityResult.risks.length} risk${securityResult.risks.length > 1 ? 's' : ''}`}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-6">
