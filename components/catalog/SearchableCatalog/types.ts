@@ -49,8 +49,10 @@ export interface UseSearchFiltersReturn {
   agents: CatalogItemSummary[]
   commands: CatalogItemSummary[]
   hooks: CatalogItemSummary[]
+  packages: CatalogItemSummary[]
   totalSkills: number
   totalAgents: number
   totalCommands: number
   totalHooks: number
+  totalPackages: number
 }

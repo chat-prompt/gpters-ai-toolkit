@@ -34,6 +34,7 @@ const TYPE_CONFIG = {
   command: { icon: '▸', color: 'cyan', label: 'Command' },
   guide: { icon: '📚', color: 'emerald', label: 'Guide' },
   hook: { icon: '🪝', color: 'orange', label: 'Hook' },
+  package: { icon: '📦', color: 'indigo', label: 'Package' },
 }
 
 export default async function GettingStartedPage() {

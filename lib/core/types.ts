@@ -1,4 +1,4 @@
-export type ItemType = 'skill' | 'agent' | 'command' | 'guide' | 'hook'
+export type ItemType = 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
 
 // Plugin file (script, reference, etc.)
 export interface PluginFile {
@@ -87,6 +87,22 @@ export interface CatalogItem {
  * to reduce data transfer and improve performance.
  */
 export type CatalogItemSummary = Omit<CatalogItem, 'content' | 'readme' | 'files' | 'changelog'>
+
+/**
+ * Package-Item relationship record
+ */
+export interface PackageItemRelation {
+  packageId: string
+  itemId: string
+  displayOrder: number
+}
+
+/**
+ * CatalogItem with package contents (for package detail views)
+ */
+export interface CatalogItemWithPackageContents extends CatalogItem {
+  packageContents?: CatalogItemSummary[]
+}
 
 export interface Dependency {
   type: 'mcp' | 'skill' | 'agent' | 'other'

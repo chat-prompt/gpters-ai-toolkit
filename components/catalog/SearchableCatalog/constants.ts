@@ -32,4 +32,10 @@ export const TYPE_CONFIG: Record<ItemType, TypeFilterConfig> = {
     gradient: 'from-orange-400 to-amber-400',
     glow: 'group-hover:shadow-[0_0_30px_rgba(251,146,60,0.3)]',
   },
+  package: {
+    label: 'PACKAGE',
+    icon: '📦',
+    gradient: 'from-indigo-400 to-violet-400',
+    glow: 'group-hover:shadow-[0_0_30px_rgba(99,102,241,0.3)]',
+  },
 }

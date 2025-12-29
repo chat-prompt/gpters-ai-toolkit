@@ -322,6 +322,7 @@ function generateDefaultReadme(item: CatalogItem): string {
     command: 'Command',
     guide: 'Guide',
     hook: 'Hook',
+    package: 'Package',
   }[item.type]
 
   // Hook has different installation method

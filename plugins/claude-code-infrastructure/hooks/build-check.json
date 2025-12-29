@@ -1,0 +1,14 @@
+{
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "echo '\\n🔍 Build Check...' && (pnpm build 2>&1 | tail -15) || true",
+          "timeout": 60000,
+          "blocking": false
+        }
+      ]
+    }
+  ]
+}

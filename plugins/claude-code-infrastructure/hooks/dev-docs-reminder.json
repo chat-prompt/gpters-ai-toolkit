@@ -1,0 +1,14 @@
+{
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "if [ -d 'dev/active' ] && [ \"$(ls -A dev/active 2>/dev/null)\" ]; then echo '\\n💡 Reminder: Run /update-dev-docs before ending session'; fi",
+          "timeout": 5000,
+          "blocking": false
+        }
+      ]
+    }
+  ]
+}

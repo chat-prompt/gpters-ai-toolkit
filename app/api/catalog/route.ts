@@ -12,7 +12,7 @@ import { cachedJsonResponse, addSurrogateKey } from '@/lib/utils/api-cache'
 const log = createLogger('api:catalog')
 
 // Valid item types for type validation
-const VALID_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
+const VALID_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook', 'package']
 
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute for catalog queries

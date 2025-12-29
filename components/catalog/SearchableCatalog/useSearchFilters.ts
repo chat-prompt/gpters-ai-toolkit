@@ -233,23 +233,25 @@ export function useSearchFilters({
     selectedTags.length > 0 || selectedDifficulty !== '' || selectedTeamTag !== ''
 
   // Memoize category groupings
-  const { skills, agents, commands, hooks } = useMemo(
+  const { skills, agents, commands, hooks, packages } = useMemo(
     () => ({
       skills: filteredCatalog.filter((item) => item.type === 'skill'),
       agents: filteredCatalog.filter((item) => item.type === 'agent'),
       commands: filteredCatalog.filter((item) => item.type === 'command'),
       hooks: filteredCatalog.filter((item) => item.type === 'hook'),
+      packages: filteredCatalog.filter((item) => item.type === 'package'),
     }),
     [filteredCatalog]
   )
 
   // Memoize total counts from original catalog
-  const { totalSkills, totalAgents, totalCommands, totalHooks } = useMemo(
+  const { totalSkills, totalAgents, totalCommands, totalHooks, totalPackages } = useMemo(
     () => ({
       totalSkills: catalog.filter((item) => item.type === 'skill').length,
       totalAgents: catalog.filter((item) => item.type === 'agent').length,
       totalCommands: catalog.filter((item) => item.type === 'command').length,
       totalHooks: catalog.filter((item) => item.type === 'hook').length,
+      totalPackages: catalog.filter((item) => item.type === 'package').length,
     }),
     [catalog]
   )
@@ -296,9 +298,11 @@ export function useSearchFilters({
     agents,
     commands,
     hooks,
+    packages,
     totalSkills,
     totalAgents,
     totalCommands,
     totalHooks,
+    totalPackages,
   }
 }

@@ -1,0 +1,14 @@
+{
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "~/.claude/hooks/skill-activation-prompt.sh",
+          "timeout": 5000,
+          "blocking": true
+        }
+      ]
+    }
+  ]
+}

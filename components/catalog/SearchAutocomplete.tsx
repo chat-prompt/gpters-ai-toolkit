@@ -26,6 +26,7 @@ const TYPE_ICONS: Record<ItemType, string> = {
   command: '▸',
   guide: '📚',
   hook: '🪝',
+  package: '📦',
 }
 
 interface SearchAutocompleteProps {

@@ -604,7 +604,7 @@ export function calculateFilterCounts(
 ): FilterCounts {
   // For counts, we apply all filters EXCEPT the one we're counting
   const counts: FilterCounts = {
-    types: { all: 0, skill: 0, agent: 0, command: 0, guide: 0, hook: 0 },
+    types: { all: 0, skill: 0, agent: 0, command: 0, guide: 0, hook: 0, package: 0 },
     tags: {},
     difficulties: { '': 0, easy: 0, medium: 0, hard: 0 },
     teamTags: { '': 0, general: 0, platform: 0, ai: 0, data: 0, product: 0, infra: 0 },

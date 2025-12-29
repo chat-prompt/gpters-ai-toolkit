@@ -125,6 +125,7 @@ const REQUIRED_FIELDS: Record<ItemType, (keyof CatalogItem)[]> = {
   command: ['id', 'name', 'description', 'content', 'type'],
   guide: ['id', 'name', 'description', 'content', 'type'],
   hook: ['id', 'name', 'description', 'content', 'type', 'hookEvent', 'hookCommand'],
+  package: ['id', 'name', 'description', 'content', 'type'],
 }
 
 /**
@@ -136,6 +137,7 @@ const REQUIRED_SECTIONS: Record<ItemType, string[]> = {
   command: ['Task', 'Steps', '작업', '단계'],
   guide: ['개요', 'Overview', '단계', 'Steps'],
   hook: ['개요', 'Overview', '설정', 'Configuration'],
+  package: ['개요', 'Overview', '포함 아이템', 'Contents'],
 }
 
 /**

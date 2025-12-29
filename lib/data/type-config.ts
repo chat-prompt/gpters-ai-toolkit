@@ -422,6 +422,72 @@ $ARGUMENTS를 기반으로 작업을 수행합니다.
       showHookFields: true,
     },
   },
+  package: {
+    label: 'Package',
+    icon: '📦',
+    description: '여러 아이템을 묶은 패키지',
+    color: 'indigo',
+    namePlaceholder: 'my-package-name',
+    descriptionPlaceholder: '이 패키지에 포함된 아이템들과 용도를 설명하세요',
+    contentPlaceholder: '패키지의 개요와 포함된 아이템들을 설명하세요...',
+    suggestedTags: ['bundle', 'collection', 'starter-kit'],
+    contentTemplate: `# {name}
+
+## 개요
+
+이 패키지에 포함된 아이템들과 전체적인 목적을 설명합니다.
+
+## 포함 아이템
+
+이 패키지에는 다음 아이템들이 포함되어 있습니다:
+
+1. **아이템 1**: 설명
+2. **아이템 2**: 설명
+3. **아이템 3**: 설명
+
+## 설치 방법
+
+### 전체 설치
+패키지의 모든 아이템을 한 번에 설치합니다.
+
+### 개별 설치
+필요한 아이템만 선택하여 설치할 수도 있습니다.
+
+## 사용 방법
+
+패키지를 효과적으로 사용하는 방법을 설명합니다.
+`,
+    guide: {
+      title: 'Package 작성 가이드',
+      sections: [
+        {
+          heading: 'Package란?',
+          content:
+            'Package는 관련된 여러 아이템(스킬, 가이드, 훅 등)을 하나로 묶어 배포할 수 있는 형태입니다. 사용자는 패키지 전체 또는 개별 아이템을 선택하여 설치할 수 있습니다.',
+          tip: '관련 기능들을 패키지로 묶으면 사용자가 쉽게 시작할 수 있습니다.',
+        },
+        {
+          heading: '포함 아이템 구성',
+          content:
+            '패키지에 포함할 아이템들은 별도로 등록된 후 패키지에 연결됩니다. 스킬, 에이전트, 커맨드, 가이드, 훅 등 다양한 유형의 아이템을 포함할 수 있습니다.',
+        },
+        {
+          heading: '패키지 설명',
+          content:
+            '패키지의 목적, 포함된 아이템 간의 관계, 함께 사용할 때의 장점 등을 설명하세요. 개별 아이템과 차별화된 가치를 제시해야 합니다.',
+        },
+      ],
+    },
+    fields: {
+      showDifficulty: true,
+      showPluginId: false,
+      showEstimatedTime: false,
+      showAllowedTools: false,
+      showAgentFields: false,
+      showCommandFields: false,
+      showHookFields: false,
+    },
+  },
 }
 
 /**

@@ -7,6 +7,7 @@ export const itemTypeEnum = pgEnum('item_type', [
   'command',
   'guide',
   'hook',
+  'package',
 ])
 
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
@@ -157,12 +158,30 @@ export const catalogItemTags = pgTable('catalog_item_tags', {
 export type CatalogItemTagRecord = typeof catalogItemTags.$inferSelect
 export type NewCatalogItemTagRecord = typeof catalogItemTags.$inferInsert
 
+// Junction table for packages <-> items (many-to-many)
+// A package can contain multiple items, and an item can belong to multiple packages
+export const packageItems = pgTable('package_items', {
+  packageId: text('package_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  displayOrder: integer('display_order').notNull().default(0),
+}, (table) => [
+  primaryKey({ columns: [table.packageId, table.itemId] }),
+  index('package_items_package_id_idx').on(table.packageId),
+  index('package_items_item_id_idx').on(table.itemId),
+])
+
+export type PackageItemRecord = typeof packageItems.$inferSelect
+export type NewPackageItemRecord = typeof packageItems.$inferInsert
+
 // ============================================
 // Relations
 // ============================================
 
 export const catalogItemsRelations = relations(catalogItems, ({ many }) => ({
   itemTags: many(catalogItemTags),
+  // Package relations
+  packageContents: many(packageItems, { relationName: 'packageContents' }), // Items contained in this package
+  containedInPackages: many(packageItems, { relationName: 'containedInPackages' }), // Packages containing this item
 }))
 
 export const tagsRelations = relations(tags, ({ many }) => ({
@@ -177,6 +196,19 @@ export const catalogItemTagsRelations = relations(catalogItemTags, ({ one }) => 
   tag: one(tags, {
     fields: [catalogItemTags.tagId],
     references: [tags.id],
+  }),
+}))
+
+export const packageItemsRelations = relations(packageItems, ({ one }) => ({
+  package: one(catalogItems, {
+    fields: [packageItems.packageId],
+    references: [catalogItems.id],
+    relationName: 'packageContents',
+  }),
+  item: one(catalogItems, {
+    fields: [packageItems.itemId],
+    references: [catalogItems.id],
+    relationName: 'containedInPackages',
   }),
 }))
 

@@ -31,10 +31,12 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     agents,
     commands,
     hooks,
+    packages,
     totalSkills,
     totalAgents,
     totalCommands,
     totalHooks,
+    totalPackages,
   } = useSearchFilters({ catalog })
 
   return (
@@ -99,6 +101,16 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             }`}
           >
             🪝 Hooks ({totalHooks})
+          </button>
+          <button
+            onClick={() => handleTypeFilter('package')}
+            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+              activeFilter === 'package'
+                ? 'bg-indigo-400 text-black'
+                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            📦 Packages ({totalPackages})
           </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -290,6 +302,13 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             Hooks
           </div>
         </div>
+        <div className="w-px h-8 bg-[var(--border-subtle)]" />
+        <div>
+          <div className="text-3xl font-light text-[var(--text-primary)]">{packages.length}</div>
+          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">
+            Packages
+          </div>
+        </div>
         {(searchQuery || hasActiveFilters) && (
           <>
             <div className="w-px h-8 bg-[var(--border-subtle)]" />
@@ -360,6 +379,18 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             <SectionHeader icon="🪝" title="Hooks" count={hooks.length} accentColor="text-orange-400" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {hooks.map((item, i) => (
+                <ItemCard key={item.id} item={item} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Packages Section */}
+        {packages.length > 0 && (activeFilter === 'all' || activeFilter === 'package') && (
+          <section className="mb-20">
+            <SectionHeader icon="📦" title="Packages" count={packages.length} accentColor="text-indigo-400" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {packages.map((item, i) => (
                 <ItemCard key={item.id} item={item} index={i} />
               ))}
             </div>

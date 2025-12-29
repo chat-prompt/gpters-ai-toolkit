@@ -57,6 +57,13 @@
       "when": 1766973822703,
       "tag": "0007_sticky_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1767018893522,
+      "tag": "0008_pretty_johnny_storm",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,12 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
     gradient: 'from-orange-400 to-amber-400',
     border: 'border-orange-400/20 hover:border-orange-400/40',
   },
+  package: {
+    label: 'PACKAGE',
+    icon: '📦',
+    gradient: 'from-indigo-400 to-violet-400',
+    border: 'border-indigo-400/20 hover:border-indigo-400/40',
+  },
 }
 
 interface RelatedItemsProps {

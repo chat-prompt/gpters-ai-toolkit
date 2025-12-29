@@ -15,6 +15,7 @@ const MAIN_CONTENT_FILES: Record<ItemType, string[]> = {
   command: ['COMMAND.md', 'command.md'],
   guide: ['GUIDE.md', 'guide.md', 'index.md'],
   hook: ['HOOK.md', 'hook.md'],
+  package: ['PACKAGE.md', 'package.md', 'index.md'],
 }
 
 // Files to treat as readme

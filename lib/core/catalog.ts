@@ -1,6 +1,6 @@
-import { eq, ne, and, or, isNull } from 'drizzle-orm'
-import { db, catalogItems } from '../db'
-import { CatalogItem, CatalogItemSummary, ItemType } from './types'
+import { eq, ne, and, or, isNull, asc } from 'drizzle-orm'
+import { db, catalogItems, packageItems } from '../db'
+import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
 
 // ============================================================================
 // Field Selection for Query Optimization
@@ -49,7 +49,7 @@ const summaryColumns = {
 
 type SummaryRecord = {
   id: string
-  type: 'skill' | 'agent' | 'command' | 'guide' | 'hook'
+  type: 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
   name: string
   description: string
   author: string
@@ -341,4 +341,118 @@ export async function getRelatedItems(
     .map(({ item }) => item)
 
   return scoredItems
+}
+
+// ============================================================================
+// Package-Related Queries
+// ============================================================================
+
+/**
+ * Get items contained in a package.
+ * Returns items sorted by displayOrder.
+ */
+export async function getPackageContents(packageId: string): Promise<CatalogItemSummary[]> {
+  // Get package-item relations ordered by displayOrder
+  const relations = await db
+    .select()
+    .from(packageItems)
+    .where(eq(packageItems.packageId, packageId))
+    .orderBy(asc(packageItems.displayOrder))
+
+  if (relations.length === 0) return []
+
+  // Get the items
+  const itemIds = relations.map(r => r.itemId)
+  const records = await db
+    .select(summaryColumns)
+    .from(catalogItems)
+    .where(
+      and(
+        or(...itemIds.map(id => eq(catalogItems.id, id))),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
+
+  // Sort by displayOrder
+  const itemMap = new Map(records.map(r => [r.id, r]))
+  return relations
+    .map(r => itemMap.get(r.itemId))
+    .filter((r): r is SummaryRecord => r !== undefined)
+    .map(toSummaryObject)
+}
+
+/**
+ * Get a package with its contained items.
+ */
+export async function getPackageWithContents(id: string): Promise<CatalogItemWithPackageContents | null> {
+  const item = await getItemById(id)
+  if (!item || item.type !== 'package') return null
+
+  const contents = await getPackageContents(id)
+
+  return {
+    ...item,
+    packageContents: contents,
+  }
+}
+
+/**
+ * Set items in a package (replaces existing items).
+ * @param packageId - The package ID
+ * @param itemIds - Array of item IDs to include in the package (order preserved)
+ */
+export async function setPackageItems(packageId: string, itemIds: string[]): Promise<void> {
+  // Delete existing items
+  await db.delete(packageItems).where(eq(packageItems.packageId, packageId))
+
+  // Insert new items with display order
+  if (itemIds.length > 0) {
+    const values = itemIds.map((itemId, index) => ({
+      packageId,
+      itemId,
+      displayOrder: index,
+    }))
+    await db.insert(packageItems).values(values)
+  }
+}
+
+/**
+ * Add an item to a package at the end.
+ */
+export async function addItemToPackage(packageId: string, itemId: string): Promise<void> {
+  // Get current max displayOrder
+  const existing = await db
+    .select({ displayOrder: packageItems.displayOrder })
+    .from(packageItems)
+    .where(eq(packageItems.packageId, packageId))
+    .orderBy(asc(packageItems.displayOrder))
+
+  const maxOrder = existing.length > 0 ? Math.max(...existing.map(e => e.displayOrder)) : -1
+
+  await db.insert(packageItems).values({
+    packageId,
+    itemId,
+    displayOrder: maxOrder + 1,
+  }).onConflictDoNothing()
+}
+
+/**
+ * Remove an item from a package.
+ */
+export async function removeItemFromPackage(packageId: string, itemId: string): Promise<void> {
+  await db
+    .delete(packageItems)
+    .where(
+      and(
+        eq(packageItems.packageId, packageId),
+        eq(packageItems.itemId, itemId)
+      )
+    )
+}
+
+/**
+ * Get all published packages.
+ */
+export async function getPackages(): Promise<CatalogItemSummary[]> {
+  return getItemsByType('package')
 }

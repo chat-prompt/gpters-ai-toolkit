@@ -200,3 +200,15 @@ pnpm build
 - [ ] `pnpm test` 통과 확인 (관련 테스트가 있는 경우)
 
 빌드 실패 시 Vercel 배포도 실패하므로, 로컬에서 먼저 빌드를 확인하는 것이 중요합니다.
+
+### Available Plugins
+
+이 프로젝트는 다음 플러그인을 마켓플레이스에서 제공합니다:
+
+- **claude-code-infrastructure** - Dev Docs 패턴, Context 보존 워크플로우
+- **code-reviewer** - 코드 리뷰 서브에이전트
+- **data-source-reference** - 데이터 소스 참조 가이드
+- **refactor-guide** - 리팩토링 가이드
+
+See `plugins/` directory for all available plugins.
+See `docs/CLAUDE_CODE_INFRASTRUCTURE.md` for Claude Code infrastructure patterns.

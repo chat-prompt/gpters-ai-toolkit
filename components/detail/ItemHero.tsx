@@ -3,7 +3,7 @@ import { LikeButton } from '../social/LikeButton'
 import { StatusBadge } from '../ui/StatusBadge'
 import { ReactNode } from 'react'
 
-export type ItemType = 'skill' | 'agent' | 'command' | 'hook' | 'guide'
+export type ItemType = 'skill' | 'agent' | 'command' | 'hook' | 'guide' | 'package'
 
 interface ItemHeroProps {
   type: ItemType
@@ -28,6 +28,7 @@ const TYPE_CONFIG: Record<ItemType, { icon: string; label: string; color: string
   command: { icon: '▸', label: 'Command', color: 'text-rose-400' },
   hook: { icon: '🪝', label: 'Hook', color: 'text-orange-400' },
   guide: { icon: '📚', label: 'Guide', color: 'text-emerald-400' },
+  package: { icon: '📦', label: 'Package', color: 'text-indigo-400' },
 }
 
 export function ItemHero({
