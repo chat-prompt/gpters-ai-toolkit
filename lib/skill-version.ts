@@ -191,27 +191,27 @@ export async function createVersionSnapshot(
     newVersion = incrementVersion(item.marketplaceVersion, newVersionType)
   }
 
-  // Create snapshot data
+  // Create snapshot data (convert null to undefined for schema compatibility)
   const snapshotData = {
     name: item.name,
     description: item.description,
-    allowedTools: item.allowedTools,
-    dependencies: item.dependencies,
-    files: item.files,
-    agentModel: item.agentModel,
-    agentPermissionMode: item.agentPermissionMode,
-    agentSkills: item.agentSkills,
-    commandArgumentHint: item.commandArgumentHint,
-    commandDisableModelInvocation: item.commandDisableModelInvocation,
-    hookEvent: item.hookEvent,
-    hookMatcher: item.hookMatcher,
-    hookCommand: item.hookCommand,
-    hookTimeout: item.hookTimeout,
-    hookBlocking: item.hookBlocking,
-    tags: item.tags,
-    difficulty: item.difficulty,
-    estimatedTime: item.estimatedTime,
-    readme: item.readme,
+    allowedTools: item.allowedTools ?? undefined,
+    dependencies: item.dependencies ?? undefined,
+    files: item.files ?? undefined,
+    agentModel: item.agentModel ?? undefined,
+    agentPermissionMode: item.agentPermissionMode ?? undefined,
+    agentSkills: item.agentSkills ?? undefined,
+    commandArgumentHint: item.commandArgumentHint ?? undefined,
+    commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
+    hookEvent: item.hookEvent ?? undefined,
+    hookMatcher: item.hookMatcher ?? undefined,
+    hookCommand: item.hookCommand ?? undefined,
+    hookTimeout: item.hookTimeout ?? undefined,
+    hookBlocking: item.hookBlocking ?? undefined,
+    tags: item.tags ?? undefined,
+    difficulty: item.difficulty ?? undefined,
+    estimatedTime: item.estimatedTime ?? undefined,
+    readme: item.readme ?? undefined,
   }
 
   const [newVersionRecord] = await db
