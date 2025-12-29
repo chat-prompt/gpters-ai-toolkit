@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
           event: item.hookEvent as HookEvent,
           command: item.hookCommand || '',
           timeout: item.hookTimeout || undefined,
-          env,
+          environment: env,
         }
 
         const scenarioResults = testHookScenarios(input)
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
         event: body.event as HookEvent,
         command: body.command,
         timeout: body.timeout,
-        env: body.env || {},
+        environment: body.env || {},
       }
 
       // Test multiple scenarios if requested
