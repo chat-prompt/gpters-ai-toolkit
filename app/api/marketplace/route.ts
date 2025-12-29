@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import { generateMarketplaceJson } from '@/lib/marketplace'
-import type { HookEvent } from '@/lib/types'
+import type { HookEvent } from '@/lib/core/types'
 
 /**
  * GET /api/marketplace
@@ -26,8 +26,8 @@ export async function GET() {
     estimatedTime: item.estimatedTime ?? undefined,
     readme: item.readme ?? undefined,
     allowedTools: item.allowedTools ?? undefined,
-    agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-    agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+    agentModel: (item.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+    agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
     agentSkills: item.agentSkills ?? undefined,
     commandArgumentHint: item.commandArgumentHint ?? undefined,
     commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,

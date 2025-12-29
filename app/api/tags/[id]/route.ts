@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:tags')
 

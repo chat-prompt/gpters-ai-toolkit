@@ -1,9 +1,9 @@
-import { getGuideById, getGuides } from '@/lib/catalog'
-import { DetailPageLayout } from '@/components/DetailPageLayout'
-import { ItemHero } from '@/components/ItemHero'
-import { ChangelogDisplay } from '@/components/ChangelogDisplay'
-import { MarkdownContent } from '@/components/MarkdownContent'
-import { AdminEditButton } from '@/components/AdminEditButton'
+import { getGuideById, getGuides } from '@/lib/core/catalog'
+import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
+import { ItemHero } from '@/components/detail/ItemHero'
+import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
+import { MarkdownContent } from '@/components/ui/MarkdownContent'
+import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60

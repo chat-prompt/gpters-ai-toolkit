@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { CatalogItem, TAGS } from '@/lib/types'
+import { CatalogItem, TAGS } from '@/lib/core/types'
 
 interface UserProfile {
   user: {

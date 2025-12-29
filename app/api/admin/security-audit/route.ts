@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server'
-import { ApiErrors, apiSuccess } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { getItemById } from '@/lib/catalog'
+import { ApiErrors, apiSuccess } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { getItemById } from '@/lib/core/catalog'
 import {
   auditCatalogItem,
   auditContent,
   type SecurityAuditResult,
   type SecurityIssue,
-} from '@/lib/security-audit'
+} from '@/lib/security/security-audit'
 
 const log = createLogger('api:security-audit')
 
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return available patterns info (useful for documentation)
-    const { getSecurityPatterns } = await import('@/lib/security-audit')
+    const { getSecurityPatterns } = await import('@/lib/security/security-audit')
     const patterns = getSecurityPatterns()
 
     return apiSuccess({

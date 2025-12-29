@@ -8,7 +8,7 @@
  * - Trend analysis
  */
 
-import { createLogger } from '../logger'
+import { createLogger } from '../core/logger'
 
 const log = createLogger('marketplace-stats')
 

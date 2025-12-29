@@ -5,7 +5,7 @@
  * with result passing, conditional branching, and chain templates.
  */
 
-import { logger as log } from '../logger'
+import { logger as log } from '../core/logger'
 
 // Agent types
 export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped'

@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/types'
-import { ApiErrors, validateRequired, apiSuccess } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/core/types'
+import { ApiErrors, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:upload')
 

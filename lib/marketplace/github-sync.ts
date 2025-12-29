@@ -4,7 +4,7 @@
  */
 
 import { Octokit } from '@octokit/rest'
-import type { CatalogItem } from '../types'
+import type { CatalogItem } from '../core/types'
 import type { SyncResult } from './types'
 import { MARKETPLACE_CONFIG } from './types'
 import { generateMarketplaceJson, generatePluginFiles } from './transform'

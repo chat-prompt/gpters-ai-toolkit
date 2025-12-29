@@ -4,7 +4,7 @@ import {
   serializeArgumentHints,
   validateArgumentHint,
   type ArgumentHint,
-} from '@/components/CommandArgumentHintEditor'
+} from '@/components/features/command/CommandArgumentHintEditor'
 
 describe('CommandArgumentHintEditor utilities', () => {
   describe('parseArgumentHints', () => {

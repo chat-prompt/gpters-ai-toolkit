@@ -1,7 +1,7 @@
-import { getBeginnerItems } from '@/lib/catalog'
-import { ServerHeader } from '@/components/ServerHeader'
-import { DIFFICULTY_LABELS } from '@/lib/types'
-import { MCPConfigGenerator } from '@/components/MCPConfigGenerator'
+import { getBeginnerItems } from '@/lib/core/catalog'
+import { ServerHeader } from '@/components/layout/ServerHeader'
+import { DIFFICULTY_LABELS } from '@/lib/core/types'
+import { MCPConfigGenerator } from '@/components/features/mcp/MCPConfigGenerator'
 import Link from 'next/link'
 
 // Revalidate every 60 seconds

@@ -13,7 +13,7 @@ import {
   rollbackToVersion,
   previewRollback,
   getVersion,
-} from '@/lib/skill-version'
+} from '@/lib/versioning/skill-version'
 
 interface RouteParams {
   params: Promise<{ itemId: string }>

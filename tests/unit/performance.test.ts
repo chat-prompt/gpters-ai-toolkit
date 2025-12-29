@@ -9,7 +9,7 @@ import {
   withTiming,
   formatDuration,
   Timer,
-} from '@/lib/performance'
+} from '@/lib/utils/performance'
 
 describe('Performance Monitoring', () => {
   beforeEach(() => {

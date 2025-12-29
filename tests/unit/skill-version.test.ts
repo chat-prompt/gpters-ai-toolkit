@@ -32,7 +32,7 @@ import {
   incrementVersion,
   compareVersions,
   analyzeChanges,
-} from '@/lib/version'
+} from '@/lib/versioning/version'
 
 describe('Skill Version Management', () => {
   describe('parseSemver', () => {

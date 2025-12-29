@@ -1,5 +1,5 @@
-import { ServerHeader } from '@/components/ServerHeader'
-import { StatsDashboard } from '@/components/StatsDashboard'
+import { ServerHeader } from '@/components/layout/ServerHeader'
+import { StatsDashboard } from '@/components/admin/StatsDashboard'
 
 export const metadata = {
   title: 'Usage Statistics - GPTers AI Toolkit',

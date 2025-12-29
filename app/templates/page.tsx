@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { SkillTemplateWizard, GeneratedTemplate } from '@/components/SkillTemplateWizard'
+import { SkillTemplateWizard, GeneratedTemplate } from '@/components/features/skill/SkillTemplateWizard'
 import { useState } from 'react'
 
 export default function TemplatesPage() {

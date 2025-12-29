@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { PromptExamplesLibrary } from '@/components/PromptExamplesLibrary'
-import { ServerHeader } from '@/components/ServerHeader'
+import { PromptExamplesLibrary } from '@/components/admin/PromptExamplesLibrary'
+import { ServerHeader } from '@/components/layout/ServerHeader'
 
 export const metadata = {
   title: '프롬프트 예시 라이브러리 | GPTers AI Toolkit',

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { auth } from '@/lib/core/auth'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
-import { getItemsByAuthor } from '@/lib/catalog'
-import { ApiErrors } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { getItemsByAuthor } from '@/lib/core/catalog'
+import { ApiErrors } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 
 const log = createLogger('api:user')
 

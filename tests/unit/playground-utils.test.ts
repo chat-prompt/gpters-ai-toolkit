@@ -19,7 +19,7 @@ import {
   extractUsageExamples,
   detectContentType,
   LANGUAGE_ALIASES,
-} from '@/lib/playground-utils'
+} from '@/lib/features/playground-utils'
 
 describe('Playground Utils', () => {
   describe('extractCodeBlocks', () => {

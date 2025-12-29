@@ -10,7 +10,7 @@ import {
   MAX_REQUEST_SIZE,
   pluginIdSchema,
   searchQuerySchema,
-} from '@/lib/mcp-validation'
+} from '@/lib/security/mcp-validation'
 
 describe('MCP Validation', () => {
   describe('containsDangerousPatterns', () => {

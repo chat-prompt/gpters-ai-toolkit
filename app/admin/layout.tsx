@@ -5,8 +5,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { AdminAuthProvider, useAdminAuth } from '@/lib/admin-auth'
-import type { UserRole } from '@/lib/rbac'
+import { AdminAuthProvider, useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import type { UserRole } from '@/lib/security/rbac'
 
 // Role badge component
 function RoleBadge({ role }: { role: UserRole }) {

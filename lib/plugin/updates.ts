@@ -5,7 +5,7 @@
  * with latest available versions from the catalog.
  */
 
-import { CatalogItem, ItemType } from '../types'
+import { CatalogItem, ItemType } from '../core/types'
 
 /**
  * Represents an installed plugin with version information

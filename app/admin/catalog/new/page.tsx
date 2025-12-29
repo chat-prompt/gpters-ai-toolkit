@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { TypeSpecificFields } from '@/components/TypeSpecificFields'
-import { TypeGuidePanel } from '@/components/TypeGuidePanel'
-import { TeamTagSelector } from '@/components/TeamTagSelector'
-import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
-import { useAdminAuth } from '@/lib/admin-auth'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/types'
+import { TypeSpecificFields } from '@/components/admin/TypeSpecificFields'
+import { TypeGuidePanel } from '@/components/admin/TypeGuidePanel'
+import { TeamTagSelector } from '@/components/social/TeamTagSelector'
+import { TYPE_CONFIG, getContentTemplate } from '@/lib/data/type-config'
+import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/core/types'
 
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 

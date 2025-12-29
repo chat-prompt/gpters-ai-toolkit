@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { ApiErrors } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import { ApiErrors } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:admin:auth')
 

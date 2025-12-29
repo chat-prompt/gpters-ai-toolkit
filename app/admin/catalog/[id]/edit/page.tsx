@@ -3,11 +3,11 @@
 import { useState, useEffect, use, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { TeamTag } from '@/lib/types'
-import { TeamTagSelector } from '@/components/TeamTagSelector'
-import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/SecurityAuditPanel'
-import type { SecurityAuditResult } from '@/lib/security-audit'
-import { useAdminAuth } from '@/lib/admin-auth'
+import type { TeamTag } from '@/lib/core/types'
+import { TeamTagSelector } from '@/components/social/TeamTagSelector'
+import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/admin/SecurityAuditPanel'
+import type { SecurityAuditResult } from '@/lib/security/security-audit'
+import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const

@@ -9,7 +9,7 @@ import {
   invalidateCacheResponse,
   createSurrogateKey,
   addSurrogateKey,
-} from '@/lib/api-cache'
+} from '@/lib/utils/api-cache'
 
 describe('API Cache Utilities', () => {
   describe('generateCacheControl', () => {

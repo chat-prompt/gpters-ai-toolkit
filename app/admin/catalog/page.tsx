@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import type { TeamTag } from '@/lib/types'
-import { TEAM_TAGS } from '@/lib/types'
-import { TeamTagBadge } from '@/components/TeamTagSelector'
-import type { UserRole } from '@/lib/rbac'
+import type { TeamTag } from '@/lib/core/types'
+import { TEAM_TAGS } from '@/lib/core/types'
+import { TeamTagBadge } from '@/components/social/TeamTagSelector'
+import type { UserRole } from '@/lib/security/rbac'
 
 // RBAC helper functions
 function canCreate(role: UserRole | undefined): boolean {

@@ -6,7 +6,7 @@
  * and mock execution mode.
  */
 
-import { createLogger } from '../logger'
+import { createLogger } from '../core/logger'
 
 const log = createLogger('command-testing')
 

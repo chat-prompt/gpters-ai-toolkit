@@ -17,7 +17,7 @@ import {
   RollbackProgress,
   VersionHistory,
   VersionInfoPanel,
-} from '@/components/VersionManagement'
+} from '@/components/admin/VersionManagement'
 import {
   parseSemver,
   compareVersions,
@@ -34,7 +34,7 @@ import {
   type PluginUpdate,
   type UpdateCheckResult,
 } from '@/lib/plugin/updates'
-import type { CatalogItem } from '@/lib/types'
+import type { CatalogItem } from '@/lib/core/types'
 import {
   createInstallationSnapshot,
   createFileSnapshot,

@@ -8,7 +8,7 @@
  * - Automatic model recommendations
  */
 
-import { AgentModel } from '../types'
+import { AgentModel } from '../core/types'
 
 /**
  * Model tier for categorization

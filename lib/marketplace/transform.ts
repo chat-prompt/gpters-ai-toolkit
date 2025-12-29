@@ -2,7 +2,7 @@
  * Transform CatalogItem to Claude Code Plugin format
  */
 
-import type { CatalogItem } from '../types'
+import type { CatalogItem } from '../core/types'
 import type {
   MarketplaceJson,
   PluginEntry,

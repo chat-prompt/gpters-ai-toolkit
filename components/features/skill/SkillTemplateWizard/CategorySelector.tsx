@@ -1,0 +1,68 @@
+import type { TemplateCategory, TemplateCategoryInfo } from './types'
+
+interface CategorySelectorProps {
+  categories: TemplateCategoryInfo[]
+  selectedCategory: TemplateCategory | null
+  onSelect: (category: TemplateCategory) => void
+}
+
+export function CategorySelector({
+  categories,
+  selectedCategory,
+  onSelect,
+}: CategorySelectorProps) {
+  return (
+    <div className="animate-fade-up">
+      <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">템플릿 유형 선택</h2>
+      <p className="text-sm text-[var(--text-secondary)] mb-6">
+        생성할 스킬의 카테고리를 선택하세요. 각 카테고리에는 최적화된 템플릿과 권장 도구가
+        포함되어 있습니다.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {categories.map((category) => (
+          <button
+            key={category.id}
+            onClick={() => onSelect(category.id)}
+            className={`p-6 rounded-xl text-left transition-all ${
+              selectedCategory === category.id
+                ? 'bg-[var(--accent-cyan)]/10 border-2 border-[var(--accent-cyan)]'
+                : 'bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)]'
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <span
+                className={`text-3xl w-12 h-12 flex items-center justify-center rounded-lg bg-gradient-to-br ${category.gradient} bg-opacity-20`}
+              >
+                {category.icon}
+              </span>
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-1">
+                  {category.name}
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
+                  {category.description}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-3">
+                  {category.recommendedTools.slice(0, 4).map((tool) => (
+                    <span
+                      key={tool}
+                      className="text-[10px] px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
+                    >
+                      {tool}
+                    </span>
+                  ))}
+                  {category.recommendedTools.length > 4 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
+                      +{category.recommendedTools.length - 4}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}

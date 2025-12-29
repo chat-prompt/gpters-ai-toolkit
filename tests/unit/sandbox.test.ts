@@ -6,7 +6,7 @@ import {
   executeInSandbox,
   validateSandboxConfig,
   mergeSandboxConfig,
-} from '@/lib/sandbox'
+} from '@/lib/security/sandbox'
 
 describe('Sandbox', () => {
   describe('SandboxPresets', () => {

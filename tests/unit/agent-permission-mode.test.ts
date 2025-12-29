@@ -14,7 +14,7 @@ import {
   validateModeForContext,
   type RecommendationCriteria,
 } from '@/lib/agent/permission-mode'
-import { AgentPermissionMode } from '@/lib/types'
+import { AgentPermissionMode } from '@/lib/core/types'
 
 describe('agent-permission-mode', () => {
   describe('PERMISSION_MODES', () => {

@@ -24,8 +24,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import { withMcpAuth, type McpAuthResult } from '@/lib/mcp-auth'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { withMcpAuth, type McpAuthResult } from '@/lib/security/mcp-auth'
 import {
   MAX_REQUEST_SIZE,
   isRequestSizeValid,
@@ -36,7 +36,7 @@ import {
   createValidationError,
   createJsonRpcValidationError,
   containsDangerousPatterns,
-} from '@/lib/mcp-validation'
+} from '@/lib/security/mcp-validation'
 
 // CORS headers for cross-origin requests
 const corsHeaders = {

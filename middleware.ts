@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { auth } from '@/lib/core/auth'
 import { NextResponse } from 'next/server'
 
 // Development auth bypass

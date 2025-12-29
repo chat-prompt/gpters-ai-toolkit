@@ -8,7 +8,7 @@
  * - Impact range analysis
  */
 
-import { createLogger } from '../logger'
+import { createLogger } from '../core/logger'
 
 const log = createLogger('plugin-dependency-graph')
 

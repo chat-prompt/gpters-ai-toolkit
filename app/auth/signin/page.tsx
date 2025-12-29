@@ -1,6 +1,6 @@
-import { signIn } from '@/lib/auth'
+import { signIn } from '@/lib/core/auth'
 import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
+import { auth } from '@/lib/core/auth'
 import Image from 'next/image'
 
 export default async function SignInPage({

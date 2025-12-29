@@ -5,7 +5,7 @@
  * file system scope, network access rules, and permission presets.
  */
 
-import { createLogger } from '../logger'
+import { createLogger } from '../core/logger'
 
 const log = createLogger('command-permissions')
 

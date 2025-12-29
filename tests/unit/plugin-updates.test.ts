@@ -13,7 +13,7 @@ import {
   normalizeVersion,
   type InstalledPlugin,
 } from '@/lib/plugin/updates'
-import type { CatalogItem } from '@/lib/types'
+import type { CatalogItem } from '@/lib/core/types'
 
 describe('Plugin Updates', () => {
   describe('parseSemver', () => {

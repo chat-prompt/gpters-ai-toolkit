@@ -14,7 +14,7 @@ import {
   createVersionSnapshot,
   compareWithPreviousVersion,
   type VersionType,
-} from '@/lib/skill-version'
+} from '@/lib/versioning/skill-version'
 
 interface RouteParams {
   params: Promise<{ itemId: string }>

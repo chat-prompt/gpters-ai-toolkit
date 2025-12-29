@@ -25,7 +25,7 @@ const {
   isValidTokenFormat,
   checkTokenRateLimit,
   extractBearerToken,
-} = await import('@/lib/mcp-auth')
+} = await import('@/lib/security/mcp-auth')
 
 describe('MCP Authentication', () => {
   describe('generateToken', () => {

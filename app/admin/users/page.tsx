@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
-import type { UserRole } from '@/lib/rbac'
+import type { UserRole } from '@/lib/security/rbac'
 
 interface User {
   id: string

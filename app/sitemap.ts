@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { getCatalog } from '@/lib/catalog'
+import { getCatalog } from '@/lib/core/catalog'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://company-ai-toolkit.vercel.app'

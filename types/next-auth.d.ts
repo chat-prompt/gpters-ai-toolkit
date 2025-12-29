@@ -1,6 +1,6 @@
 import { DefaultSession, DefaultUser } from 'next-auth'
 import { DefaultJWT } from 'next-auth/jwt'
-import type { UserRole } from '@/lib/rbac'
+import type { UserRole } from '@/lib/security/rbac'
 
 declare module 'next-auth' {
   interface Session {

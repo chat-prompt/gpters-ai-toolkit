@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
-import { ApiErrors, requirePermissionAsync } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import { Permissions } from '@/lib/rbac'
+import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { Permissions } from '@/lib/security/rbac'
 
 const log = createLogger('api:admin:stats')
 

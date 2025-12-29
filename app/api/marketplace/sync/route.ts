@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import { syncAllToGitHub } from '@/lib/marketplace'
-import type { HookEvent } from '@/lib/types'
-import { ApiErrors, requireAdminAuth } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import type { HookEvent } from '@/lib/core/types'
+import { ApiErrors, requireAdminAuth } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:marketplace:sync')
 
@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
       estimatedTime: item.estimatedTime ?? undefined,
       readme: item.readme ?? undefined,
       allowedTools: item.allowedTools ?? undefined,
-      agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-      agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+      agentModel: (item.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+      agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
       agentSkills: item.agentSkills ?? undefined,
       commandArgumentHint: item.commandArgumentHint ?? undefined,
       commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,

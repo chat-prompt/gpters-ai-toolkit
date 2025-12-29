@@ -36,7 +36,7 @@ import {
   PaginationState,
   VirtualScrollState,
   CursorPaginatedResult,
-} from '@/lib/pagination'
+} from '@/lib/utils/pagination'
 
 // Mock data for testing
 const mockItems = Array.from({ length: 100 }, (_, i) => ({

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { HookConfigGenerator } from '@/components/HookConfigGenerator'
+import { HookConfigGenerator } from '@/components/features/hook/HookConfigGenerator'
 
 // Mock clipboard API
 const mockWriteText = vi.fn().mockResolvedValue(undefined)

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import JSZip from 'jszip'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag, PluginFile } from '@/lib/types'
-import { ApiErrors, requireAdminAuth } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import type { ItemType, Difficulty, TeamTag, PluginFile } from '@/lib/core/types'
+import { ApiErrors, requireAdminAuth } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:catalog:upload')
 

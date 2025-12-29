@@ -17,7 +17,7 @@ import {
   safeCompareHashes,
   type HashAlgorithm,
   type IntegrityManifest,
-} from '@/lib/integrity'
+} from '@/lib/security/integrity'
 
 describe('Content Integrity', () => {
   const testContent = 'Hello, World!'

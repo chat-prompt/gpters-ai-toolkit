@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import MCPTokenGenerator from '@/components/MCPTokenGenerator'
-import type { UserRole } from '@/lib/rbac'
+import MCPTokenGenerator from '@/components/features/mcp/MCPTokenGenerator'
+import type { UserRole } from '@/lib/security/rbac'
 
 interface McpToken {
   id: string

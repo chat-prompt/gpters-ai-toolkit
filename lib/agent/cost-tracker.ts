@@ -5,7 +5,7 @@
  * for AI agent operations.
  */
 
-import { logger as log } from '../logger'
+import { logger as log } from '../core/logger'
 
 // Model pricing (per 1M tokens, USD)
 export const MODEL_PRICING: Record<string, ModelPricing> = {

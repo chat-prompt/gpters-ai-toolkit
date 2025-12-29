@@ -15,7 +15,7 @@ import {
   Permissions,
   ROLE_LABELS,
   type UserRole,
-} from '@/lib/rbac'
+} from '@/lib/security/rbac'
 
 describe('RBAC Utilities', () => {
   describe('hasPermission', () => {

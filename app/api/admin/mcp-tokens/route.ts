@@ -6,11 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { ApiErrors, apiSuccess } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import { requirePermission, Permissions } from '@/lib/rbac'
-import { auth } from '@/lib/auth'
+import { ApiErrors, apiSuccess } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { requirePermission, Permissions } from '@/lib/security/rbac'
+import { auth } from '@/lib/core/auth'
 import {
   createToken,
   listTokens,
@@ -19,7 +19,7 @@ import {
   reactivateToken,
   updateToken,
   type CreateTokenOptions,
-} from '@/lib/mcp-auth'
+} from '@/lib/security/mcp-auth'
 
 const log = createLogger('api:admin:mcp-tokens')
 

@@ -1,6 +1,6 @@
-import { getCatalog } from '@/lib/catalog'
-import { SearchableCatalog } from '@/components/SearchableCatalog'
-import { ServerHeader } from '@/components/ServerHeader'
+import { getCatalog } from '@/lib/core/catalog'
+import { SearchableCatalog } from '@/components/catalog/SearchableCatalog'
+import { ServerHeader } from '@/components/layout/ServerHeader'
 
 // Revalidate every 60 seconds
 export const revalidate = 60

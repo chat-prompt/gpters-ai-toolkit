@@ -1,6 +1,6 @@
-import { getGuides } from '@/lib/catalog'
-import { ServerHeader } from '@/components/ServerHeader'
-import { TAGS, DIFFICULTY_LABELS } from '@/lib/types'
+import { getGuides } from '@/lib/core/catalog'
+import { ServerHeader } from '@/components/layout/ServerHeader'
+import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import Link from 'next/link'
 
 // Revalidate every 60 seconds

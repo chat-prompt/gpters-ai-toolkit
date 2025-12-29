@@ -5,7 +5,7 @@
  * execution time, token usage, and success/failure statistics.
  */
 
-import { logger as log } from '../logger'
+import { logger as log } from '../core/logger'
 
 // Execution status types
 export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout'

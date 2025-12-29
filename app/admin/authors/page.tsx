@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useAdminAuth } from '@/lib/admin-auth'
+import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
 
 interface Author {
   id: string

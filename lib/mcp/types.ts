@@ -2,7 +2,7 @@
  * MCP Server Types for GPTers Marketplace
  */
 
-import type { ItemType, TeamTag, Difficulty, PluginFile } from '../types'
+import type { ItemType, TeamTag, Difficulty, PluginFile } from '../core/types'
 
 // Tool input schemas
 export interface SearchPluginsInput {

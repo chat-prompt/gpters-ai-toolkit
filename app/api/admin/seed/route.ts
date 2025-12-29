@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags, mcpServers, authors } from '@/lib/db'
-import { TAGS, MCP_SERVERS } from '@/lib/types'
-import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import { TAGS, MCP_SERVERS } from '@/lib/core/types'
+import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:admin:seed')
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPerformanceSummary, getAggregatedMetrics, getMetrics, formatDuration } from '@/lib/performance'
-import { requirePermissionAsync } from '@/lib/api-utils'
-import { Permissions } from '@/lib/rbac'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { getPerformanceSummary, getAggregatedMetrics, getMetrics, formatDuration } from '@/lib/utils/performance'
+import { requirePermissionAsync } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 
 /**
  * GET /api/admin/performance

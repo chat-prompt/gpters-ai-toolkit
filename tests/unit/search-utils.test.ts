@@ -9,8 +9,8 @@ import {
   KOREAN_KEYWORD_MAPPINGS,
   NATURAL_LANGUAGE_PATTERNS,
   COMMON_SEARCH_SUGGESTIONS,
-} from '@/lib/search-utils'
-import type { CatalogItem } from '@/lib/types'
+} from '@/lib/search/search-utils'
+import type { CatalogItem } from '@/lib/core/types'
 
 // Mock catalog items for testing
 const mockCatalog: CatalogItem[] = [

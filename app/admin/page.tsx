@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { useAdminAuth } from '@/lib/admin-auth'
-import type { UserRole } from '@/lib/rbac'
+import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import type { UserRole } from '@/lib/security/rbac'
 
 interface Stats {
   total: number

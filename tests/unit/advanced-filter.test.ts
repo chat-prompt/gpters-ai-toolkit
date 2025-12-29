@@ -27,8 +27,8 @@ import {
   FilterState,
   SearchToken,
   SortConfig,
-} from '@/lib/advanced-filter'
-import { CatalogItem } from '@/lib/types'
+} from '@/lib/search/advanced-filter'
+import { CatalogItem } from '@/lib/core/types'
 
 // Mock catalog items for testing
 const mockItems: CatalogItem[] = [

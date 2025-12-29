@@ -1,5 +1,5 @@
-import { getItemById, getCatalog } from '@/lib/catalog'
-import { SkillPlayground } from '@/components/SkillPlayground'
+import { getItemById, getCatalog } from '@/lib/core/catalog'
+import { SkillPlayground } from '@/components/features/skill/SkillPlayground'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'

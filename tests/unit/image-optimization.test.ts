@@ -39,7 +39,7 @@ import {
   LOGO_SIZES,
   OG_IMAGE_SIZES,
   QUALITY_PRESETS,
-} from '@/lib/image-optimization'
+} from '@/lib/utils/image-optimization'
 
 // ============================================================================
 // Format Detection Tests

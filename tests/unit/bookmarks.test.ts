@@ -39,7 +39,7 @@ import {
   type BookmarkedItem,
   type BookmarkState,
   type BookmarkFolder,
-} from '@/lib/bookmarks'
+} from '@/lib/features/bookmarks'
 
 // ============================================================================
 // Test Setup

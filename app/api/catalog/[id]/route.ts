@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag, HookEvent } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, HookEvent } from '@/lib/core/types'
 import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
-import { ApiErrors, apiSuccess, requirePermissionAsync } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import { Permissions } from '@/lib/rbac'
-import { cachedJsonResponse, addSurrogateKey } from '@/lib/api-cache'
-import { createVersionOnUpdate } from '@/lib/skill-version'
+import { ApiErrors, apiSuccess, requirePermissionAsync } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { Permissions } from '@/lib/security/rbac'
+import { cachedJsonResponse, addSurrogateKey } from '@/lib/utils/api-cache'
+import { createVersionOnUpdate } from '@/lib/versioning/skill-version'
 
 const log = createLogger('api:catalog')
 
@@ -133,8 +133,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           readme: updated.readme ?? undefined,
           files: updated.files ?? undefined,
           allowedTools: updated.allowedTools ?? undefined,
-          agentModel: (updated.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-          agentPermissionMode: (updated.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+          agentModel: (updated.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+          agentPermissionMode: (updated.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
           agentSkills: updated.agentSkills ?? undefined,
           commandArgumentHint: updated.commandArgumentHint ?? undefined,
           commandDisableModelInvocation: updated.commandDisableModelInvocation ?? undefined,
@@ -166,8 +166,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           readme: item.readme ?? undefined,
           files: item.files ?? undefined,
           allowedTools: item.allowedTools ?? undefined,
-          agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-          agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+          agentModel: (item.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+          agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
           agentSkills: item.agentSkills ?? undefined,
           commandArgumentHint: item.commandArgumentHint ?? undefined,
           commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
@@ -236,8 +236,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
           readme: item.readme ?? undefined,
           files: item.files ?? undefined,
           allowedTools: item.allowedTools ?? undefined,
-          agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-          agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+          agentModel: (item.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+          agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
           agentSkills: item.agentSkills ?? undefined,
           commandArgumentHint: item.commandArgumentHint ?? undefined,
           commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,

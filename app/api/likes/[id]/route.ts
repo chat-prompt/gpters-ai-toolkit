@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, sql } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import { ApiErrors } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { ApiErrors } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 
 const log = createLogger('api:likes')
 

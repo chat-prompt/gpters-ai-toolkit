@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import JSZip from 'jszip'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import type { PluginFile, ItemType } from '@/lib/types'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import type { PluginFile, ItemType } from '@/lib/core/types'
 
 const log = createLogger('api:catalog:download')
 

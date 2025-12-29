@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/types'
+import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
-import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
-import { withRateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import { Permissions } from '@/lib/rbac'
-import { cachedJsonResponse, addSurrogateKey } from '@/lib/api-cache'
+import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { Permissions } from '@/lib/security/rbac'
+import { cachedJsonResponse, addSurrogateKey } from '@/lib/utils/api-cache'
 
 const log = createLogger('api:catalog')
 
@@ -148,8 +148,8 @@ export async function POST(request: NextRequest) {
         marketplaceVersion: newItem.marketplaceVersion ?? undefined,
         // Type-specific fields
         allowedTools: newItem.allowedTools ?? undefined,
-        agentModel: (newItem.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-        agentPermissionMode: (newItem.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+        agentModel: (newItem.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+        agentPermissionMode: (newItem.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
         agentSkills: newItem.agentSkills ?? undefined,
         commandArgumentHint: newItem.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: newItem.commandDisableModelInvocation ?? undefined,
@@ -184,8 +184,8 @@ export async function POST(request: NextRequest) {
         marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
         // Type-specific fields
         allowedTools: item.allowedTools ?? undefined,
-        agentModel: (item.agentModel ?? undefined) as import('@/lib/types').AgentModel | undefined,
-        agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/types').AgentPermissionMode | undefined,
+        agentModel: (item.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
+        agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
         agentSkills: item.agentSkills ?? undefined,
         commandArgumentHint: item.commandArgumentHint ?? undefined,
         commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,

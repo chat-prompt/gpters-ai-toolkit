@@ -13,8 +13,8 @@ import {
   type SecurityIssue,
   type RiskLevel,
   type IssueCategory,
-} from '@/lib/security-audit'
-import type { CatalogItem } from '@/lib/types'
+} from '@/lib/security/security-audit'
+import type { CatalogItem } from '@/lib/core/types'
 
 // Helper to create a minimal catalog item for testing
 function createTestItem(overrides: Partial<CatalogItem> = {}): CatalogItem {

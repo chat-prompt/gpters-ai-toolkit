@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, authors } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { ApiErrors, requireAdminAuth, validateRequired, apiSuccess } from '@/lib/api-utils'
-import { createLogger } from '@/lib/logger'
+import { ApiErrors, requireAdminAuth, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:authors')
 

@@ -3,14 +3,14 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { TAGS, MCP_SERVERS, Difficulty, AgentModel, AgentPermissionMode, TeamTag, HookEvent } from '@/lib/types'
-import type { ItemType } from '@/lib/types'
-import { MarkdownContent } from '@/components/MarkdownContent'
-import { TypeGuidePanel } from '@/components/TypeGuidePanel'
-import { TypeSpecificFields } from '@/components/TypeSpecificFields'
-import { TeamTagSelector } from '@/components/TeamTagSelector'
-import { parseFrontmatter, generateIdFromName } from '@/lib/frontmatter'
-import { TYPE_CONFIG, getContentTemplate } from '@/lib/type-config'
+import { TAGS, MCP_SERVERS, Difficulty, AgentModel, AgentPermissionMode, TeamTag, HookEvent } from '@/lib/core/types'
+import type { ItemType } from '@/lib/core/types'
+import { MarkdownContent } from '@/components/ui/MarkdownContent'
+import { TypeGuidePanel } from '@/components/admin/TypeGuidePanel'
+import { TypeSpecificFields } from '@/components/admin/TypeSpecificFields'
+import { TeamTagSelector } from '@/components/social/TeamTagSelector'
+import { parseFrontmatter, generateIdFromName } from '@/lib/utils/frontmatter'
+import { TYPE_CONFIG, getContentTemplate } from '@/lib/data/type-config'
 
 const AVAILABLE_TAGS = Object.keys(TAGS) as Array<keyof typeof TAGS>
 
