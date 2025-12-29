@@ -633,7 +633,8 @@ export function exportToDot(graph: DependencyGraph): string {
 
   // Add nodes
   for (const node of graph.nodes) {
-    const config = NODE_STATUS_CONFIG[node.status]
+    // Node config available for future styling enhancements
+    const _config = NODE_STATUS_CONFIG[node.status]
     const color = node.isCyclic ? 'red' : node.status === 'installed' ? 'green' : 'gray'
     lines.push(`  "${node.id}" [label="${node.name}\\nv${node.version}", color="${color}"];`)
   }

@@ -9,9 +9,7 @@ import { db } from '@/lib/db'
 import { catalogItems, itemVersions, type ItemVersionRecord, type CatalogItemRecord } from '@/lib/db/schema'
 import { eq, desc, and, sql } from 'drizzle-orm'
 import {
-  parseSemver,
   incrementVersion,
-  compareVersions,
   analyzeChanges,
 } from '@/lib/versioning/version'
 

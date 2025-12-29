@@ -8,7 +8,7 @@ import type { UseVersionCheckOptions } from './types'
  * Hook for version check functionality
  */
 export function useVersionCheck(options: UseVersionCheckOptions = {}) {
-  const { autoCheck = false, checkInterval = 3600000 } = options // 1 hour default
+  const { autoCheck: _autoCheck = false, checkInterval: _checkInterval = 3600000 } = options // 1 hour default
 
   const [isChecking, setIsChecking] = useState(false)
   const [lastResult, setLastResult] = useState<UpdateCheckResult | null>(null)

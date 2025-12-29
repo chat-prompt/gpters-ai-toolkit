@@ -7,7 +7,6 @@ import {
   VirtualScrollRange,
   PageSize,
   PAGE_SIZE_OPTIONS,
-  DEFAULT_PAGINATION_STATE,
   paginateItems,
   getPageInfo,
   getPageNumbers,

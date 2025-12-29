@@ -57,7 +57,7 @@ export function PerformanceDashboard() {
       }
 
       setError(null)
-    } catch (err) {
+    } catch {
       setError('Failed to fetch performance data')
     } finally {
       setLoading(false)

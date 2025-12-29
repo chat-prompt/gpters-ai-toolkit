@@ -8,19 +8,14 @@ import {
   type GraphLayoutOptions,
   type GraphFilterOptions,
   type ImpactAnalysis,
-  type CycleDetectionResult,
   NODE_STATUS_CONFIG,
-  DEPENDENCY_TYPE_CONFIG,
   DEFAULT_LAYOUT_OPTIONS,
-  DEFAULT_FILTER_OPTIONS,
   calculateTreeLayout,
   detectCircularDependencies,
-  analyzeImpact,
   getDirectDependencies,
   getDirectDependents,
   getGraphStatistics,
   exportToMermaid,
-  type PluginWithDependencies,
 } from '@/lib/plugin/dependency-graph'
 
 // ============================================
@@ -255,7 +250,6 @@ function EdgeLine({ edge, nodes, isHighlighted }: EdgeLineProps) {
   const x2 = targetNode.x ?? 0
   const y2 = targetNode.y ?? 0
 
-  const config = DEPENDENCY_TYPE_CONFIG[edge.type]
   const strokeColor = edge.isCyclic ? 'rgb(239, 68, 68)' : isHighlighted ? 'rgb(96, 165, 250)' : 'rgb(75, 85, 99)'
   const strokeDasharray = edge.type === 'optional' ? '4,4' : edge.type === 'dev' ? '8,4' : undefined
 

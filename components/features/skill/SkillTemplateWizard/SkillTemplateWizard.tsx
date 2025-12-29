@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { ClaudeTool } from '@/lib/data/type-config'
-import type { TemplateCategory, GeneratedTemplate, SkillTemplateWizardProps } from './types'
+import type { TemplateCategory, SkillTemplateWizardProps } from './types'
 import { TEMPLATE_CATEGORIES, WIZARD_STEPS } from './constants'
 import { useTemplateGenerator } from './useTemplateGenerator'
 import { WizardProgress } from './WizardProgress'

@@ -11,7 +11,6 @@ import {
   validateSnapshotForRollback,
   getRollbackPreview,
   simulateRollback,
-  createRollbackOperation,
   getRollbackScopeLabel,
   getRollbackStatusLabel,
   getFileChangeTypeLabel,

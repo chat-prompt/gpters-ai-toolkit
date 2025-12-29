@@ -51,7 +51,8 @@ export function parseArgumentHints(json: string): ArgumentHint[] {
  */
 export function serializeArgumentHints(hints: ArgumentHint[]): string {
   return JSON.stringify(
-    hints.map(({ id: _id, ...rest }) => rest),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    hints.map(({ id, ...rest }) => rest),
     null,
     2
   )

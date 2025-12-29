@@ -408,6 +408,7 @@ export function ImageWithSkeleton({
           aria-hidden="true"
         />
       )}
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- alt is passed via props spread */}
       <Image
         {...props}
         className={`transition-opacity duration-300 ${
@@ -478,6 +479,7 @@ export function LazyImage({
         />
       )}
       {isVisible && (
+        // eslint-disable-next-line jsx-a11y/alt-text -- alt is passed via props spread
         <Image
           {...props}
           placeholder="blur"
@@ -506,7 +508,7 @@ interface OGImageProps {
 /**
  * Generate OG image metadata (for use in generateMetadata)
  */
-export function getOGImageMetadata({ title, description, type }: OGImageProps) {
+export function getOGImageMetadata({ title, description: _description, type }: OGImageProps) {
   const typeColors: Record<string, string> = {
     skill: '6366f1',
     agent: '10b981',
@@ -514,7 +516,8 @@ export function getOGImageMetadata({ title, description, type }: OGImageProps) {
     guide: '3b82f6',
   }
 
-  const bgColor = type ? typeColors[type] : '1f2937'
+  // bgColor is available for future dynamic OG image generation
+  const _bgColor = type ? typeColors[type] : '1f2937'
 
   // Using a placeholder service for dynamic OG images
   // In production, you might want to use @vercel/og or similar

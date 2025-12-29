@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   FilterState,
   FilterPreset,
@@ -9,7 +9,6 @@ import {
   SavedFilter,
   FILTER_PRESETS,
   SORT_OPTIONS,
-  DEFAULT_FILTER_STATE,
   getSavedFilters,
   saveFilter,
   deleteSavedFilter,

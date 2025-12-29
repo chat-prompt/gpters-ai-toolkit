@@ -189,7 +189,7 @@ export function importBookmarks(json: string): { success: boolean; error?: strin
     saveBookmarks(newState)
 
     return { success: true, count: newItems.length }
-  } catch (error) {
+  } catch {
     return { success: false, error: 'JSON 파싱 오류' }
   }
 }

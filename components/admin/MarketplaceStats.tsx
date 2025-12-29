@@ -7,7 +7,6 @@ import {
   type PluginStats,
   type RankingEntry,
   type MarketplaceOverview,
-  type TrendAnalysis,
   type TrendInsight,
   getPluginRanking,
   createMarketplaceOverview,
@@ -227,7 +226,7 @@ interface RankingTableProps {
   category: RankingCategory
 }
 
-export function RankingTable({ rankings, category }: RankingTableProps) {
+export function RankingTable({ rankings, category: _category }: RankingTableProps) {
   if (rankings.length === 0) {
     return (
       <div className="rounded-lg border border-gray-700 bg-gray-800 p-8 text-center text-gray-400">

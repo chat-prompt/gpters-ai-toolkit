@@ -257,7 +257,7 @@ function LineChart({ data, dateKey, valueKey }: {
 
 function formatDateLabel(date: string, type: 'date' | 'week' | 'month'): string {
   if (type === 'month') {
-    const [year, month] = date.split('-')
+    const [_year, month] = date.split('-')
     return `${month}월`
   }
   if (type === 'week') {

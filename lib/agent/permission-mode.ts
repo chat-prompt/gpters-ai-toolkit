@@ -478,7 +478,8 @@ export function validateModeForContext(
   const suggestions: string[] = []
   let isValid = true
 
-  const modeInfo = PERMISSION_MODES[mode]
+  // modeInfo is available for future use in validation messages
+  const _modeInfo = PERMISSION_MODES[mode]
 
   // Check critical combinations
   if (mode === 'bypassPermissions') {
