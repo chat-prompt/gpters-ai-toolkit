@@ -279,7 +279,7 @@ function analyzeCommand(command: string): {
   const hasOr = command.includes(' || ')
 
   let expectedOutput = ''
-  let expectedStderr = ''
+  const expectedStderr = ''
   let expectedExitCode = 0
   let estimatedDuration = 100
 
