@@ -158,7 +158,7 @@ async function handleBatch(request: NextRequest): Promise<NextResponse> {
       low: results.filter((r) => r.risks.some((risk) => risk.severity === 'low')).length,
     },
     averageScore: results.length > 0
-      ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+      ? Math.round(results.reduce((sum, r) => sum + r.riskScore, 0) / results.length)
       : 100,
   }
 
