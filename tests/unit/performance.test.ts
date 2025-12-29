@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
   recordMetric,
   getMetrics,
@@ -8,7 +8,6 @@ import {
   startTimer,
   withTiming,
   formatDuration,
-  Timer,
 } from '@/lib/utils/performance'
 
 describe('Performance Monitoring', () => {

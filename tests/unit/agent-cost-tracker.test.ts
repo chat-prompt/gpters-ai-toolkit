@@ -38,7 +38,7 @@ describe('Agent Cost Tracker', () => {
     })
 
     it('should have input and output prices', () => {
-      for (const [model, pricing] of Object.entries(MODEL_PRICING)) {
+      for (const [_model, pricing] of Object.entries(MODEL_PRICING)) {
         expect(pricing.input).toBeGreaterThan(0)
         expect(pricing.output).toBeGreaterThan(0)
         expect(pricing.contextWindow).toBeGreaterThan(0)
@@ -46,7 +46,7 @@ describe('Agent Cost Tracker', () => {
     })
 
     it('should have output price >= input price', () => {
-      for (const [model, pricing] of Object.entries(MODEL_PRICING)) {
+      for (const [_model, pricing] of Object.entries(MODEL_PRICING)) {
         expect(pricing.output).toBeGreaterThanOrEqual(pricing.input)
       }
     })

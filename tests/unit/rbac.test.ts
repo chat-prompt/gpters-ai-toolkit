@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   hasPermission,
   hasAnyPermission,
@@ -16,6 +16,27 @@ import {
   ROLE_LABELS,
   type UserRole,
 } from '@/lib/security/rbac'
+
+// Mock auth module for server-side function tests
+vi.mock('@/lib/core/auth', () => ({
+  auth: vi.fn(),
+}))
+
+// Mock api-utils module for server-side function tests
+vi.mock('@/lib/utils/api-utils', () => ({
+  ApiErrors: {
+    unauthorized: (message: string) => ({
+      type: 'unauthorized',
+      status: 401,
+      message,
+    }),
+    forbidden: (message: string) => ({
+      type: 'forbidden',
+      status: 403,
+      message,
+    }),
+  },
+}))
 
 describe('RBAC Utilities', () => {
   describe('hasPermission', () => {
@@ -318,6 +339,244 @@ describe('RBAC Utilities', () => {
       Object.values(Permissions).forEach(permission => {
         expect(adminPermissions).toContain(permission)
       })
+    })
+  })
+})
+
+// Server-side function tests with mocking
+describe('Server-side RBAC Functions', () => {
+  let mockAuth: ReturnType<typeof vi.fn>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const authModule = await import('@/lib/core/auth')
+    mockAuth = vi.mocked(authModule.auth)
+  })
+
+  describe('requirePermission', () => {
+    it('should return unauthorized error when user is not authenticated', async () => {
+      mockAuth.mockResolvedValue(null)
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_VIEW)
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('unauthorized')
+      expect(result?.status).toBe(401)
+    })
+
+    it('should return unauthorized error when session has no user', async () => {
+      mockAuth.mockResolvedValue({ user: null })
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_VIEW)
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('unauthorized')
+    })
+
+    it('should return forbidden error when user lacks permission', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'viewer' } })
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_DELETE)
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('forbidden')
+      expect(result?.status).toBe(403)
+    })
+
+    it('should return null when user has required permission', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'admin' } })
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_DELETE)
+
+      expect(result).toBeNull()
+    })
+
+    it('should return null when editor has CATALOG_EDIT permission', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'editor' } })
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_EDIT)
+
+      expect(result).toBeNull()
+    })
+
+    it('should return null when viewer has CATALOG_VIEW permission', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'viewer' } })
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_VIEW)
+
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('requireRole', () => {
+    it('should return unauthorized error when user is not authenticated', async () => {
+      mockAuth.mockResolvedValue(null)
+
+      const { requireRole } = await import('@/lib/security/rbac')
+      const result = await requireRole('viewer')
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('unauthorized')
+      expect(result?.status).toBe(401)
+    })
+
+    it('should return forbidden error when user role is lower than required', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'viewer' } })
+
+      const { requireRole } = await import('@/lib/security/rbac')
+      const result = await requireRole('admin')
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('forbidden')
+    })
+
+    it('should return null when user role equals required role', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'editor' } })
+
+      const { requireRole } = await import('@/lib/security/rbac')
+      const result = await requireRole('editor')
+
+      expect(result).toBeNull()
+    })
+
+    it('should return null when user role is higher than required', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'admin' } })
+
+      const { requireRole } = await import('@/lib/security/rbac')
+      const result = await requireRole('viewer')
+
+      expect(result).toBeNull()
+    })
+
+    it('should handle editor requiring viewer role', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'editor' } })
+
+      const { requireRole } = await import('@/lib/security/rbac')
+      const result = await requireRole('viewer')
+
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('getUserRole', () => {
+    it('should return null when not authenticated', async () => {
+      mockAuth.mockResolvedValue(null)
+
+      const { getUserRole } = await import('@/lib/security/rbac')
+      const result = await getUserRole()
+
+      expect(result).toBeNull()
+    })
+
+    it('should return null when session has no user', async () => {
+      mockAuth.mockResolvedValue({})
+
+      const { getUserRole } = await import('@/lib/security/rbac')
+      const result = await getUserRole()
+
+      expect(result).toBeNull()
+    })
+
+    it('should return user role when authenticated', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'editor' } })
+
+      const { getUserRole } = await import('@/lib/security/rbac')
+      const result = await getUserRole()
+
+      expect(result).toBe('editor')
+    })
+
+    it('should return admin role correctly', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'admin' } })
+
+      const { getUserRole } = await import('@/lib/security/rbac')
+      const result = await getUserRole()
+
+      expect(result).toBe('admin')
+    })
+
+    it('should return viewer role correctly', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'viewer' } })
+
+      const { getUserRole } = await import('@/lib/security/rbac')
+      const result = await getUserRole()
+
+      expect(result).toBe('viewer')
+    })
+  })
+
+  describe('isAdmin', () => {
+    it('should return false when not authenticated', async () => {
+      mockAuth.mockResolvedValue(null)
+
+      const { isAdmin } = await import('@/lib/security/rbac')
+      const result = await isAdmin()
+
+      expect(result).toBe(false)
+    })
+
+    it('should return false for viewer role', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'viewer' } })
+
+      const { isAdmin } = await import('@/lib/security/rbac')
+      const result = await isAdmin()
+
+      expect(result).toBe(false)
+    })
+
+    it('should return false for editor role', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'editor' } })
+
+      const { isAdmin } = await import('@/lib/security/rbac')
+      const result = await isAdmin()
+
+      expect(result).toBe(false)
+    })
+
+    it('should return true for admin role', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'admin' } })
+
+      const { isAdmin } = await import('@/lib/security/rbac')
+      const result = await isAdmin()
+
+      expect(result).toBe(true)
+    })
+  })
+
+  describe('Edge cases', () => {
+    it('should handle undefined user role in session', async () => {
+      mockAuth.mockResolvedValue({ user: {} })
+
+      const { getUserRole } = await import('@/lib/security/rbac')
+      const result = await getUserRole()
+
+      expect(result).toBeNull()
+    })
+
+    it('should handle undefined role for requirePermission', async () => {
+      mockAuth.mockResolvedValue({ user: {} })
+
+      const { requirePermission } = await import('@/lib/security/rbac')
+      const result = await requirePermission(Permissions.CATALOG_VIEW)
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('forbidden')
+    })
+
+    it('should handle undefined role for requireRole', async () => {
+      mockAuth.mockResolvedValue({ user: {} })
+
+      const { requireRole } = await import('@/lib/security/rbac')
+      const result = await requireRole('viewer')
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('forbidden')
     })
   })
 })

@@ -13,6 +13,25 @@ export default defineConfig({
     exclude: ['tests/e2e/**/*'],
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'html'],
+      include: ['lib/**/*.ts', 'components/**/*.tsx', 'app/**/*.ts', 'app/**/*.tsx'],
+      exclude: [
+        'node_modules/**',
+        'tests/**',
+        '**/*.d.ts',
+        '**/*.test.{ts,tsx}',
+        '**/index.ts',
+        'lib/db/**',
+      ],
+      thresholds: {
+        statements: 0,
+        branches: 0,
+        functions: 0,
+        lines: 0,
+      },
+    },
   },
   resolve: {
     alias: {

@@ -21,8 +21,6 @@ import {
   DEFAULT_LAYOUT_OPTIONS,
   DEFAULT_FILTER_OPTIONS,
   type PluginWithDependencies,
-  type DependencyGraph,
-  type GraphFilterOptions,
 } from '@/lib/plugin/dependency-graph'
 
 // Mock logger

@@ -3,7 +3,7 @@
  * 고급 필터 시스템 테스트
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   parseSearchQuery,
   matchSearchTokens,

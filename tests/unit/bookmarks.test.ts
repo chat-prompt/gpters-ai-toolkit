@@ -36,9 +36,7 @@ import {
   // Constants
   FOLDER_COLORS,
   TYPE_CONFIG,
-  type BookmarkedItem,
   type BookmarkState,
-  type BookmarkFolder,
 } from '@/lib/features/bookmarks'
 
 // ============================================================================

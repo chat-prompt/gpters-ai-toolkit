@@ -21,9 +21,7 @@ import {
   type PluginStats,
   type TimeSeriesData,
   type RatingStats,
-  type ReviewStats,
   type TimePeriod,
-  type RankingCategory,
 } from '@/lib/plugin/marketplace-stats'
 
 // Mock logger

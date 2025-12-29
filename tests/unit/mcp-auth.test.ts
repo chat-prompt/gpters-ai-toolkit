@@ -247,3 +247,508 @@ describe('Token Format Consistency', () => {
     expect(hash.length).toBe(64)
   })
 })
+
+// Import additional functions for extended tests
+const { mcpAuthError } = await import('@/lib/security/mcp-auth')
+
+describe('mcpAuthError', () => {
+  it('should create 401 unauthorized response by default', () => {
+    const response = mcpAuthError('Authentication required')
+
+    expect(response.status).toBe(401)
+  })
+
+  it('should create 401 response with explicit status', () => {
+    const response = mcpAuthError('Token invalid', 401)
+
+    expect(response.status).toBe(401)
+  })
+
+  it('should create 403 forbidden response', () => {
+    const response = mcpAuthError('Access denied', 403)
+
+    expect(response.status).toBe(403)
+  })
+
+  it('should return JSON response with error message and code', async () => {
+    const response = mcpAuthError('Test error', 401)
+    const json = await response.json()
+
+    expect(json.error).toBe('Test error')
+    expect(json.code).toBe('UNAUTHORIZED')
+  })
+
+  it('should return FORBIDDEN code for 403 status', async () => {
+    const response = mcpAuthError('Forbidden', 403)
+    const json = await response.json()
+
+    expect(json.error).toBe('Forbidden')
+    expect(json.code).toBe('FORBIDDEN')
+  })
+})
+
+// Database-dependent function tests with mocking
+describe('Database-dependent Functions', () => {
+  const mockDbSelect = vi.fn()
+  const mockDbInsert = vi.fn()
+  const mockDbUpdate = vi.fn()
+  const mockDbDelete = vi.fn()
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    // Reset db mocks
+    const dbModule = vi.mocked(await import('@/lib/db'))
+    dbModule.db.select = mockDbSelect
+    dbModule.db.insert = mockDbInsert
+    dbModule.db.update = mockDbUpdate
+    dbModule.db.delete = mockDbDelete
+  })
+
+  describe('validateToken', () => {
+    it('should return invalid for malformed tokens', async () => {
+      const { validateToken } = await import('@/lib/security/mcp-auth')
+      const result = await validateToken('invalid-token')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Invalid token format')
+    })
+
+    it('should return invalid for tokens not found in database', async () => {
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([])
+        })
+      })
+
+      const { validateToken } = await import('@/lib/security/mcp-auth')
+      const result = await validateToken('mcp_1234567890abcdef1234567890abcdef')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Invalid token')
+    })
+
+    it('should return invalid for inactive tokens', async () => {
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{
+            id: 'token-1',
+            name: 'Test Token',
+            isActive: false,
+            expiresAt: null,
+            rateLimit: 100,
+          }])
+        })
+      })
+
+      const { validateToken } = await import('@/lib/security/mcp-auth')
+      const result = await validateToken('mcp_1234567890abcdef1234567890abcdef')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Token has been revoked')
+    })
+
+    it('should return invalid for expired tokens', async () => {
+      const pastDate = new Date(Date.now() - 86400000) // 1 day ago
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{
+            id: 'token-1',
+            name: 'Test Token',
+            isActive: true,
+            expiresAt: pastDate,
+            rateLimit: 100,
+          }])
+        })
+      })
+
+      const { validateToken } = await import('@/lib/security/mcp-auth')
+      const result = await validateToken('mcp_1234567890abcdef1234567890abcdef')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Token has expired')
+    })
+
+    it('should return valid for active non-expired tokens', async () => {
+      const futureDate = new Date(Date.now() + 86400000) // 1 day from now
+      const mockTokenId = `token-valid-${Date.now()}`
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{
+            id: mockTokenId,
+            name: 'Test Token',
+            isActive: true,
+            expiresAt: futureDate,
+            rateLimit: 100,
+          }])
+        })
+      })
+      mockDbUpdate.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            catch: vi.fn()
+          })
+        })
+      })
+
+      const { validateToken } = await import('@/lib/security/mcp-auth')
+      const result = await validateToken('mcp_1234567890abcdef1234567890abcdef')
+
+      expect(result.valid).toBe(true)
+      expect(result.tokenId).toBe(mockTokenId)
+      expect(result.name).toBe('Test Token')
+      expect(result.rateLimit).toBe(100)
+    })
+
+    it('should handle database errors gracefully', async () => {
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockRejectedValue(new Error('Database connection failed'))
+        })
+      })
+
+      const { validateToken } = await import('@/lib/security/mcp-auth')
+      const result = await validateToken('mcp_1234567890abcdef1234567890abcdef')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Token validation failed')
+    })
+  })
+
+  describe('authenticateMcpRequest', () => {
+    function createMockRequest(authHeader: string | null): NextRequest {
+      const headers = new Headers()
+      if (authHeader) {
+        headers.set('Authorization', authHeader)
+      }
+      return { headers } as unknown as NextRequest
+    }
+
+    it('should return null for requests without auth header', async () => {
+      const { authenticateMcpRequest } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest(null)
+
+      const result = await authenticateMcpRequest(request)
+
+      expect(result).toBeNull()
+    })
+
+    it('should return unauthenticated for invalid tokens', async () => {
+      const { authenticateMcpRequest } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest('Bearer invalid-token')
+
+      const result = await authenticateMcpRequest(request)
+
+      expect(result?.authenticated).toBe(false)
+      expect(result?.error).toBeDefined()
+    })
+
+    it('should return authenticated for valid tokens', async () => {
+      const mockTokenId = `token-auth-${Date.now()}`
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{
+            id: mockTokenId,
+            name: 'API Token',
+            isActive: true,
+            expiresAt: null,
+            rateLimit: 100,
+          }])
+        })
+      })
+      mockDbUpdate.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            catch: vi.fn()
+          })
+        })
+      })
+
+      const { authenticateMcpRequest } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest('Bearer mcp_1234567890abcdef1234567890abcdef')
+
+      const result = await authenticateMcpRequest(request)
+
+      expect(result?.authenticated).toBe(true)
+      expect(result?.tokenId).toBe(mockTokenId)
+      expect(result?.tokenName).toBe('API Token')
+    })
+  })
+
+  describe('withMcpAuth middleware', () => {
+    function createMockRequest(authHeader: string | null): NextRequest {
+      const headers = new Headers()
+      if (authHeader) {
+        headers.set('Authorization', authHeader)
+      }
+      return { headers } as unknown as NextRequest
+    }
+
+    it('should allow public mode when auth not required', async () => {
+      const { withMcpAuth } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest(null)
+
+      const result = await withMcpAuth(request, { requireAuth: false })
+
+      expect(result.error).toBeUndefined()
+      expect(result.auth).toBeUndefined()
+    })
+
+    it('should return error when auth required but not provided', async () => {
+      const { withMcpAuth } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest(null)
+
+      const result = await withMcpAuth(request, { requireAuth: true })
+
+      expect(result.error).toBeDefined()
+      expect(result.error?.status).toBe(401)
+    })
+
+    it('should return error for invalid auth header', async () => {
+      const { withMcpAuth } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest('Bearer invalid-format')
+
+      const result = await withMcpAuth(request)
+
+      expect(result.error).toBeDefined()
+    })
+
+    it('should return auth result for valid token', async () => {
+      const mockTokenId = `token-with-${Date.now()}`
+      mockDbSelect.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{
+            id: mockTokenId,
+            name: 'Middleware Token',
+            isActive: true,
+            expiresAt: null,
+            rateLimit: 100,
+          }])
+        })
+      })
+      mockDbUpdate.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            catch: vi.fn()
+          })
+        })
+      })
+
+      const { withMcpAuth } = await import('@/lib/security/mcp-auth')
+      const request = createMockRequest('Bearer mcp_1234567890abcdef1234567890abcdef')
+
+      const result = await withMcpAuth(request)
+
+      expect(result.error).toBeUndefined()
+      expect(result.auth?.authenticated).toBe(true)
+    })
+  })
+
+  describe('Token Management Functions', () => {
+    describe('createToken', () => {
+      it('should create a token and return raw token once', async () => {
+        const mockCreatedRecord = {
+          id: 'new-token-id',
+          name: 'My API Token',
+          description: 'For testing',
+          expiresAt: null,
+          rateLimit: 50,
+          createdAt: new Date(),
+        }
+        mockDbInsert.mockReturnValue({
+          values: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([mockCreatedRecord])
+          })
+        })
+
+        const { createToken } = await import('@/lib/security/mcp-auth')
+        const result = await createToken({
+          name: 'My API Token',
+          description: 'For testing',
+          rateLimit: 50,
+        })
+
+        expect(result.token).toMatch(/^mcp_/)
+        expect(result.id).toBe('new-token-id')
+        expect(result.name).toBe('My API Token')
+        expect(result.rateLimit).toBe(50)
+      })
+    })
+
+    describe('listTokens', () => {
+      it('should return list of tokens without raw values', async () => {
+        const mockTokens = [
+          { id: 'token-1', name: 'Token 1', isActive: true },
+          { id: 'token-2', name: 'Token 2', isActive: false },
+        ]
+        mockDbSelect.mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(mockTokens)
+          })
+        })
+
+        const { listTokens } = await import('@/lib/security/mcp-auth')
+        const result = await listTokens()
+
+        expect(result).toHaveLength(2)
+        expect(result[0].name).toBe('Token 1')
+      })
+    })
+
+    describe('getToken', () => {
+      it('should return token by id', async () => {
+        const mockToken = { id: 'token-1', name: 'Single Token', isActive: true }
+        mockDbSelect.mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([mockToken])
+          })
+        })
+
+        const { getToken } = await import('@/lib/security/mcp-auth')
+        const result = await getToken('token-1')
+
+        expect(result?.id).toBe('token-1')
+        expect(result?.name).toBe('Single Token')
+      })
+
+      it('should return undefined for non-existent token', async () => {
+        mockDbSelect.mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([])
+          })
+        })
+
+        const { getToken } = await import('@/lib/security/mcp-auth')
+        const result = await getToken('non-existent')
+
+        expect(result).toBeUndefined()
+      })
+    })
+
+    describe('revokeToken', () => {
+      it('should revoke an active token', async () => {
+        mockDbUpdate.mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: 'token-1' }])
+            })
+          })
+        })
+
+        const { revokeToken } = await import('@/lib/security/mcp-auth')
+        const result = await revokeToken('token-1')
+
+        expect(result).toBe(true)
+      })
+
+      it('should return false for non-existent token', async () => {
+        mockDbUpdate.mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([])
+            })
+          })
+        })
+
+        const { revokeToken } = await import('@/lib/security/mcp-auth')
+        const result = await revokeToken('non-existent')
+
+        expect(result).toBe(false)
+      })
+    })
+
+    describe('deleteToken', () => {
+      it('should delete a token permanently', async () => {
+        mockDbDelete.mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 'token-1' }])
+          })
+        })
+
+        const { deleteToken } = await import('@/lib/security/mcp-auth')
+        const result = await deleteToken('token-1')
+
+        expect(result).toBe(true)
+      })
+
+      it('should return false for non-existent token', async () => {
+        mockDbDelete.mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([])
+          })
+        })
+
+        const { deleteToken } = await import('@/lib/security/mcp-auth')
+        const result = await deleteToken('non-existent')
+
+        expect(result).toBe(false)
+      })
+    })
+
+    describe('reactivateToken', () => {
+      it('should reactivate a revoked token', async () => {
+        mockDbUpdate.mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: 'token-1' }])
+            })
+          })
+        })
+
+        const { reactivateToken } = await import('@/lib/security/mcp-auth')
+        const result = await reactivateToken('token-1')
+
+        expect(result).toBe(true)
+      })
+
+      it('should return false for already active or non-existent token', async () => {
+        mockDbUpdate.mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([])
+            })
+          })
+        })
+
+        const { reactivateToken } = await import('@/lib/security/mcp-auth')
+        const result = await reactivateToken('token-1')
+
+        expect(result).toBe(false)
+      })
+    })
+
+    describe('updateToken', () => {
+      it('should update token settings', async () => {
+        mockDbUpdate.mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: 'token-1' }])
+            })
+          })
+        })
+
+        const { updateToken } = await import('@/lib/security/mcp-auth')
+        const result = await updateToken('token-1', {
+          name: 'Updated Name',
+          rateLimit: 200,
+        })
+
+        expect(result).toBe(true)
+      })
+
+      it('should return false for non-existent token', async () => {
+        mockDbUpdate.mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([])
+            })
+          })
+        })
+
+        const { updateToken } = await import('@/lib/security/mcp-auth')
+        const result = await updateToken('non-existent', { name: 'New Name' })
+
+        expect(result).toBe(false)
+      })
+    })
+  })
+})

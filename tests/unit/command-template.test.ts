@@ -13,7 +13,6 @@ import {
   validateTemplate,
   type CommandCategory,
   type CommandTemplate,
-  type ArgumentDefinition,
 } from '@/lib/command/template'
 
 describe('Command Template Generator', () => {

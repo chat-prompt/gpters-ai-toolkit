@@ -15,7 +15,6 @@ import {
   verifyBatchChecksums,
   formatHash,
   safeCompareHashes,
-  type HashAlgorithm,
   type IntegrityManifest,
 } from '@/lib/security/integrity'
 

@@ -22,8 +22,6 @@ import {
   ExecutionHistoryManager,
   createExecutionTracker,
   type ExecutionRecord,
-  type HistoryFilter,
-  type HistorySort,
 } from '@/lib/agent/execution-history'
 
 describe('Agent Execution History', () => {

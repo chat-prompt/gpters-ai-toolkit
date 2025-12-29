@@ -22,7 +22,6 @@ import {
   renderAsMermaid,
   renderAsJson,
   renderAsMarkdown,
-  type ChainStep,
   type ChainDefinition,
   type StepCondition,
   type InputMapping,
@@ -40,7 +39,7 @@ describe('Agent Chain', () => {
     })
 
     it('should have valid template structure', () => {
-      for (const [id, template] of Object.entries(CHAIN_TEMPLATES)) {
+      for (const [_id, template] of Object.entries(CHAIN_TEMPLATES)) {
         expect(template.name).toBeDefined()
         expect(template.steps).toBeDefined()
         expect(template.steps!.length).toBeGreaterThan(0)
