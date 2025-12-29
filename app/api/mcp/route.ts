@@ -1,25 +1,32 @@
 /**
- * MCP Server HTTP Endpoint
+ * MCP Server HTTP Endpoint (Streamable HTTP Transport)
  *
- * This endpoint provides two modes:
+ * Implements MCP 2025-03-26 Streamable HTTP transport specification.
  *
- * 1. JSON-RPC 2.0 Mode (MCP Protocol):
- *    POST /api/mcp
+ * Transport modes:
+ *
+ * 1. POST /api/mcp - JSON-RPC 2.0 requests
  *    Content-Type: application/json
  *    Body: {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+ *    Response: JSON or SSE stream (based on Accept header)
  *
- * 2. Simple REST Mode:
+ * 2. GET /api/mcp - SSE stream for server-to-client notifications
+ *    Accept: text/event-stream
+ *    Response: Server-Sent Events stream
+ *
+ * 3. DELETE /api/mcp - Close session
+ *    Mcp-Session-Id: <session-id>
+ *
+ * Session Management:
+ *    Server returns Mcp-Session-Id header on initialize.
+ *    Client must include this header in subsequent requests.
+ *
+ * Simple REST Mode (legacy):
  *    POST /api/mcp?action=search
  *    Body: {"query": "database"}
  *
- *    Actions: search, get, list, tools
- *
  * Authentication:
- *    Optional Bearer token authentication via Authorization header.
- *    When a valid token is provided, per-token rate limiting applies.
- *    Without authentication, standard IP-based rate limiting applies.
- *
- *    Example: Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ *    Optional Bearer token via Authorization header.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -47,8 +54,68 @@ import {
 // CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Session-Id, Last-Event-ID',
+  'Access-Control-Expose-Headers': 'Mcp-Session-Id',
+}
+
+// In-memory session store (for serverless, consider using Redis/KV in production)
+const sessions = new Map<string, { createdAt: number; lastAccess: number }>()
+
+// Session timeout (30 minutes)
+const SESSION_TIMEOUT = 30 * 60 * 1000
+
+/**
+ * Generate a new session ID
+ */
+function generateSessionId(): string {
+  return `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+}
+
+/**
+ * Validate and refresh session
+ */
+function validateSession(sessionId: string | null): boolean {
+  if (!sessionId) return true // New session allowed
+
+  const session = sessions.get(sessionId)
+  if (!session) return false
+
+  const now = Date.now()
+  if (now - session.lastAccess > SESSION_TIMEOUT) {
+    sessions.delete(sessionId)
+    return false
+  }
+
+  session.lastAccess = now
+  return true
+}
+
+/**
+ * Create or get session
+ */
+function getOrCreateSession(sessionId: string | null): string {
+  if (sessionId && sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)!
+    session.lastAccess = Date.now()
+    return sessionId
+  }
+
+  const newSessionId = generateSessionId()
+  sessions.set(newSessionId, { createdAt: Date.now(), lastAccess: Date.now() })
+  return newSessionId
+}
+
+/**
+ * Clean up expired sessions (called periodically)
+ */
+function cleanupSessions() {
+  const now = Date.now()
+  for (const [id, session] of sessions.entries()) {
+    if (now - session.lastAccess > SESSION_TIMEOUT) {
+      sessions.delete(id)
+    }
+  }
 }
 
 /**
@@ -113,13 +180,69 @@ async function handleAuthAndRateLimit(
 }
 
 /**
- * GET - Server info and available tools
+ * GET - SSE stream for server-to-client notifications (Streamable HTTP)
+ *
+ * When Accept: text/event-stream is present, opens an SSE connection.
+ * Otherwise, returns server info as JSON.
  */
 export async function GET(request: NextRequest) {
   // Handle auth and rate limiting
   const { error, auth } = await handleAuthAndRateLimit(request)
   if (error) return error
 
+  const accept = request.headers.get('accept') || ''
+  const sessionId = request.headers.get('mcp-session-id')
+
+  // SSE stream mode (Streamable HTTP transport)
+  if (accept.includes('text/event-stream')) {
+    // Validate session if provided
+    if (sessionId && !validateSession(sessionId)) {
+      return new NextResponse('Session not found', {
+        status: 404,
+        headers: corsHeaders,
+      })
+    }
+
+    // Create SSE stream
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        // Send initial connection event
+        const connectEvent = `event: open\ndata: {"status":"connected"}\n\n`
+        controller.enqueue(encoder.encode(connectEvent))
+
+        // Send periodic keepalive (every 30 seconds)
+        const keepaliveInterval = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(': keepalive\n\n'))
+          } catch {
+            clearInterval(keepaliveInterval)
+          }
+        }, 30000)
+
+        // Clean up on close
+        request.signal.addEventListener('abort', () => {
+          clearInterval(keepaliveInterval)
+          controller.close()
+        })
+      },
+    })
+
+    const responseHeaders: Record<string, string> = {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    }
+
+    if (sessionId) {
+      responseHeaders['Mcp-Session-Id'] = sessionId
+    }
+
+    return new Response(stream, { headers: responseHeaders })
+  }
+
+  // Legacy JSON mode
   const { searchParams } = new URL(request.url)
   const format = searchParams.get('format')
 
@@ -145,11 +268,12 @@ export async function GET(request: NextRequest) {
     {
       server: SERVER_INFO,
       endpoints: {
+        'GET /api/mcp': 'SSE stream (with Accept: text/event-stream) or server info',
         'POST /api/mcp': 'JSON-RPC 2.0 MCP endpoint',
+        'DELETE /api/mcp': 'Close session',
         'POST /api/mcp?action=search': 'Search plugins (query, category, limit)',
         'POST /api/mcp?action=get': 'Get plugin content (pluginId)',
         'POST /api/mcp?action=list': 'List all plugins (category)',
-        'POST /api/mcp?action=tools': 'List available tools',
       },
       tools: MARKETPLACE_TOOLS.map((t) => ({
         name: t.name,
@@ -160,9 +284,37 @@ export async function GET(request: NextRequest) {
         tokenName: auth?.tokenName,
         usage: 'Add "Authorization: Bearer mcp_xxx" header for token-based access',
       },
+      transport: 'Streamable HTTP (MCP 2025-03-26)',
     },
     { headers: corsHeaders }
   )
+}
+
+/**
+ * DELETE - Close session
+ */
+export async function DELETE(request: NextRequest) {
+  const sessionId = request.headers.get('mcp-session-id')
+
+  if (!sessionId) {
+    return new NextResponse('Missing Mcp-Session-Id header', {
+      status: 400,
+      headers: corsHeaders,
+    })
+  }
+
+  if (sessions.has(sessionId)) {
+    sessions.delete(sessionId)
+    return new NextResponse(null, {
+      status: 204,
+      headers: corsHeaders,
+    })
+  }
+
+  return new NextResponse('Session not found', {
+    status: 404,
+    headers: corsHeaders,
+  })
 }
 
 /**
@@ -206,7 +358,7 @@ function extractToolFromBody(body: unknown): string | undefined {
 }
 
 /**
- * POST - Handle MCP requests
+ * POST - Handle MCP requests (Streamable HTTP)
  */
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -214,6 +366,20 @@ export async function POST(request: NextRequest) {
   // Handle auth and rate limiting
   const { error, auditCtx } = await handleAuthAndRateLimit(request)
   if (error) return error
+
+  // Session management for Streamable HTTP transport
+  const incomingSessionId = request.headers.get('mcp-session-id')
+
+  // Periodic cleanup of expired sessions
+  if (Math.random() < 0.01) cleanupSessions()
+
+  // Helper to add session headers to response
+  const addSessionHeaders = (response: NextResponse, sessionId?: string): NextResponse => {
+    if (sessionId) {
+      response.headers.set('Mcp-Session-Id', sessionId)
+    }
+    return response
+  }
 
   // Helper to log audit entry
   const logAudit = async (
@@ -378,7 +544,34 @@ export async function POST(request: NextRequest) {
       errorInfo
     )
 
-    return NextResponse.json(response, { headers: corsHeaders })
+    // Handle session for Streamable HTTP transport
+    let sessionId = incomingSessionId
+
+    // Create new session on initialize method
+    if (rpcMethod === 'initialize' && !hasError) {
+      sessionId = getOrCreateSession(null)
+    } else if (incomingSessionId) {
+      // Validate existing session for other methods
+      if (!validateSession(incomingSessionId)) {
+        return addCorsHeaders(
+          NextResponse.json(
+            {
+              jsonrpc: '2.0',
+              id: (body as Record<string, unknown>)?.id ?? null,
+              error: {
+                code: -32600,
+                message: 'Invalid session',
+              },
+            },
+            { status: 404 }
+          )
+        )
+      }
+    }
+
+    // Return response with session header
+    const jsonResponse = NextResponse.json(response, { headers: corsHeaders })
+    return addSessionHeaders(jsonResponse, sessionId || undefined)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
