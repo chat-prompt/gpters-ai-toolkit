@@ -348,3 +348,51 @@ export const commentLikesRelations = relations(commentLikes, ({ one }) => ({
     references: [users.id],
   }),
 }))
+
+// ============================================
+// MCP Audit Logs Table
+// ============================================
+
+export const mcpAuditLogs = pgTable('mcp_audit_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+
+  // Request info
+  method: text('method').notNull(), // JSON-RPC method or REST action (e.g., 'tools/call', 'search')
+  tool: text('tool'), // Tool name if applicable (e.g., 'search_plugins', 'get_plugin_content')
+
+  // Authentication
+  tokenId: text('token_id').references(() => mcpTokens.id, { onDelete: 'set null' }),
+  isAuthenticated: boolean('is_authenticated').notNull().default(false),
+
+  // Client info (masked for privacy)
+  ipHash: text('ip_hash').notNull(), // SHA-256 hash of IP for privacy
+  userAgent: text('user_agent'),
+
+  // Request/Response
+  requestParams: jsonb('request_params').$type<Record<string, unknown>>(), // Sanitized request params
+  responseStatus: text('response_status').notNull(), // 'success' | 'error' | 'rate_limited'
+  responseTime: integer('response_time'), // Response time in milliseconds
+  errorCode: text('error_code'), // Error code if failed
+  errorMessage: text('error_message'), // Error message if failed
+
+  // Metadata
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('mcp_audit_logs_created_at_idx').on(table.createdAt),
+  index('mcp_audit_logs_token_id_idx').on(table.tokenId),
+  index('mcp_audit_logs_method_idx').on(table.method),
+  index('mcp_audit_logs_response_status_idx').on(table.responseStatus),
+  // Composite index for common queries
+  index('mcp_audit_logs_created_status_idx').on(table.createdAt, table.responseStatus),
+])
+
+export type McpAuditLogRecord = typeof mcpAuditLogs.$inferSelect
+export type NewMcpAuditLogRecord = typeof mcpAuditLogs.$inferInsert
+
+// Relations for MCP audit logs
+export const mcpAuditLogsRelations = relations(mcpAuditLogs, ({ one }) => ({
+  token: one(mcpTokens, {
+    fields: [mcpAuditLogs.tokenId],
+    references: [mcpTokens.id],
+  }),
+}))

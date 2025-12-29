@@ -7,6 +7,7 @@
 export * from './rbac'
 export * from './mcp-auth'
 export * from './mcp-validation'
+export * from './mcp-audit'
 export * from './security-audit'
 export * from './sandbox'
 export * from './integrity'
