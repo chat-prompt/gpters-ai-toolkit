@@ -8,15 +8,16 @@ import {
   extractKeywords,
   COMMON_SEARCH_SUGGESTIONS,
 } from '@/lib/search/search-utils'
+import { useSearchSuggestions } from '@/lib/search/use-server-search'
 
 interface Suggestion {
-  type: 'item' | 'tag' | 'author' | 'nlp' | 'hint'
+  type: 'item' | 'tag' | 'author' | 'nlp' | 'hint' | 'server'
   value: string
   label: string
   icon?: string
   itemType?: ItemType
   description?: string
-  matchType?: 'exact' | 'keyword' | 'fuzzy' | 'natural'
+  matchType?: 'exact' | 'keyword' | 'fuzzy' | 'natural' | 'fts'
 }
 
 const TYPE_ICONS: Record<ItemType, string> = {
@@ -34,6 +35,8 @@ interface SearchAutocompleteProps {
   catalog: CatalogItemSummary[]
   placeholder?: string
   className?: string
+  /** Use server-side FTS for suggestions (default: true) */
+  useServerSearch?: boolean
 }
 
 export function SearchAutocomplete({
@@ -43,11 +46,30 @@ export function SearchAutocomplete({
   catalog,
   placeholder = 'Search skills, agents, commands...',
   className = '',
+  useServerSearch = true,
 }: SearchAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Server-side suggestions hook
+  const {
+    suggestions: serverSuggestions,
+    isLoading: isLoadingServerSuggestions,
+    getSuggestions: fetchServerSuggestions,
+    clearSuggestions: clearServerSuggestions,
+  } = useSearchSuggestions({ enabled: useServerSearch, limit: 6 })
+
+  // Fetch server suggestions when value changes
+  useEffect(() => {
+    if (useServerSearch && value.length >= 2) {
+      fetchServerSuggestions(value)
+    } else {
+      clearServerSuggestions()
+    }
+  }, [value, useServerSearch, fetchServerSuggestions, clearServerSuggestions])
+
   // Generate suggestions based on query (memoized)
   const generateSuggestions = useCallback((query: string): Suggestion[] => {
     // Show common suggestions when query is empty or very short
@@ -178,13 +200,54 @@ export function SearchAutocomplete({
     }
 
     // Limit and sort: NLP matches first, then items, then tags, then authors
-    const sortOrder = { nlp: 0, item: 1, tag: 2, author: 3, hint: 4 }
+    const sortOrder = { nlp: 0, item: 1, tag: 2, author: 3, hint: 4, server: 0 }
     results.sort((a, b) => sortOrder[a.type] - sortOrder[b.type])
     return results.slice(0, 8)
   }, [catalog])
 
   // Derive suggestions from value (using useMemo instead of useEffect + setState)
-  const suggestions = useMemo(() => generateSuggestions(value), [value, generateSuggestions])
+  // Combine server suggestions with client-side suggestions
+  const suggestions = useMemo(() => {
+    const clientSuggestions = generateSuggestions(value)
+
+    // If server search is enabled and we have server suggestions, prioritize them
+    if (useServerSearch && serverSuggestions.length > 0) {
+      const seen = new Set<string>()
+      const combinedSuggestions: Suggestion[] = []
+
+      // Add server suggestions first (marked with FTS badge)
+      serverSuggestions.forEach((item) => {
+        const key = `item:${item.id}`
+        if (!seen.has(key)) {
+          combinedSuggestions.push({
+            type: 'server',
+            value: item.id,
+            label: item.name,
+            icon: TYPE_ICONS[item.type],
+            itemType: item.type,
+            matchType: 'fts',
+          })
+          seen.add(key)
+        }
+      })
+
+      // Add remaining client suggestions (excluding duplicates)
+      clientSuggestions.forEach((suggestion) => {
+        const key =
+          suggestion.type === 'item' || suggestion.type === 'nlp'
+            ? `item:${suggestion.value}`
+            : `${suggestion.type}:${suggestion.value}`
+        if (!seen.has(key)) {
+          combinedSuggestions.push(suggestion)
+          seen.add(key)
+        }
+      })
+
+      return combinedSuggestions.slice(0, 8)
+    }
+
+    return clientSuggestions
+  }, [value, generateSuggestions, useServerSearch, serverSuggestions])
 
   // Reset selectedIndex when input value changes
   const handleInputChange = useCallback((newValue: string) => {
@@ -253,7 +316,7 @@ export function SearchAutocomplete({
   }
 
   const handleSelectSuggestion = (suggestion: Suggestion) => {
-    if (suggestion.type === 'item' || suggestion.type === 'nlp') {
+    if (suggestion.type === 'item' || suggestion.type === 'nlp' || suggestion.type === 'server') {
       // Navigate to item page
       window.location.href = `/${suggestion.itemType}/${suggestion.value}`
     } else if (suggestion.type === 'tag') {
@@ -307,11 +370,18 @@ export function SearchAutocomplete({
       </div>
 
       {/* Suggestions dropdown */}
-      {isOpen && suggestions.length > 0 && (
+      {isOpen && (suggestions.length > 0 || isLoadingServerSuggestions) && (
         <div
           ref={dropdownRef}
           className="absolute z-50 w-full mt-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] shadow-2xl overflow-hidden animate-fade-up"
         >
+          {/* Loading indicator */}
+          {isLoadingServerSuggestions && suggestions.length === 0 && (
+            <div className="px-4 py-3 flex items-center gap-3 text-[var(--text-muted)]">
+              <span className="animate-spin">⟳</span>
+              <span className="text-sm">Searching...</span>
+            </div>
+          )}
           {suggestions.map((suggestion, index) => (
             <button
               key={`${suggestion.type}:${suggestion.value}`}
@@ -328,7 +398,11 @@ export function SearchAutocomplete({
                   <span className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {suggestion.label}
                   </span>
-                  {suggestion.type === 'nlp' ? (
+                  {suggestion.type === 'server' ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                      FTS
+                    </span>
+                  ) : suggestion.type === 'nlp' ? (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                       suggestion.matchType === 'exact'
                         ? 'bg-emerald-500/20 text-emerald-400'
