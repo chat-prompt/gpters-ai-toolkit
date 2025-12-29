@@ -13,7 +13,6 @@ import {
   isValidTool,
   parseAllowedTools,
   generateValidationReport,
-  type ValidationOptions,
 } from '@/lib/plugin/skill-validator'
 import type { CatalogItem } from '@/lib/core/types'
 
