@@ -8,10 +8,11 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
 
-  // Allow auth routes and API routes to pass through
+  // Allow auth routes, MCP endpoint, and metadata files to pass through
   if (
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/mcp') ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml'
   ) {

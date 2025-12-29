@@ -12,7 +12,7 @@ import {
   generateSecurityReport,
   type SecurityValidationResult,
 } from '@/lib/plugin/hook-security'
-import { getCatalogItem } from '@/lib/core/catalog'
+import { getItemById } from '@/lib/core/catalog'
 
 interface SecurityRequest {
   command?: string
@@ -91,7 +91,7 @@ async function handleValidate(request: NextRequest): Promise<NextResponse> {
   let result: SecurityValidationResult
 
   if (body.hookId) {
-    const item = await getCatalogItem(body.hookId)
+    const item = await getItemById(body.hookId)
     if (!item) {
       return NextResponse.json(
         { error: `Hook not found: ${body.hookId}` },
