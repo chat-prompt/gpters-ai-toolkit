@@ -122,11 +122,11 @@ export function HookSecurityValidator({
               <div className="flex items-center gap-3">
                 <div className={cn(
                   'text-3xl font-bold',
-                  result.score >= 80 ? 'text-green-600' :
-                  result.score >= 60 ? 'text-yellow-600' :
-                  result.score >= 40 ? 'text-orange-600' : 'text-red-600'
+                  result.riskScore >= 80 ? 'text-green-600' :
+                  result.riskScore >= 60 ? 'text-yellow-600' :
+                  result.riskScore >= 40 ? 'text-orange-600' : 'text-red-600'
                 )}>
-                  {result.score}
+                  {result.riskScore}
                 </div>
                 <div>
                   <div className="font-semibold">
@@ -152,21 +152,6 @@ export function HookSecurityValidator({
                   <RiskCard key={index} risk={risk} />
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Recommendations */}
-          {result.recommendations.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="font-semibold text-gray-800">권장사항</h3>
-              <ul className="space-y-1">
-                {result.recommendations.map((rec, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm">
-                    <span className="text-blue-500">💡</span>
-                    <span>{rec}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
 
@@ -300,10 +285,10 @@ function RiskCard({ risk }: RiskCardProps) {
               {CATEGORY_LABELS[risk.category]}
             </span>
           </div>
-          <p className="mt-1 text-sm text-gray-800">{risk.description}</p>
-          {risk.matchedPattern && (
+          <p className="mt-1 text-sm text-gray-800">{risk.message}</p>
+          {risk.match && (
             <p className="mt-1 text-xs text-gray-500">
-              매칭: <code className="bg-white/50 px-1 rounded">{risk.matchedPattern}</code>
+              매칭: <code className="bg-white/50 px-1 rounded">{risk.match}</code>
             </p>
           )}
         </div>

@@ -29,8 +29,8 @@ export function HookSimulator() {
   const [customEnvVars, setCustomEnvVars] = useState<EnvironmentVariable[]>([])
   const [result, setResult] = useState<HookSimulationResult | null>(null)
   const [scenarioResults, setScenarioResults] = useState<{
-    scenarios: Array<{ name: string; description: string; passed: boolean; result: HookSimulationResult }>
-    summary: { total: number; passed: number; failed: number }
+    scenarios: Array<{ name: string; result: HookSimulationResult }>
+    summary: { total: number; passed: number; failed: number; blocked: number; allowed: number }
   } | null>(null)
   const [isRunning, setIsRunning] = useState(false)
 
@@ -68,7 +68,7 @@ export function HookSimulator() {
         event,
         command,
         timeout,
-        env: buildEnvironment(),
+        environment: buildEnvironment(),
       }
 
       if (mode === 'scenarios') {
@@ -347,11 +347,11 @@ export function HookSimulator() {
             </div>
 
             {/* Validation Issues */}
-            {result.validation.issues.length > 0 && (
+            {result.issues.length > 0 && (
               <div className="p-3 rounded-xl bg-[var(--bg-secondary)]">
                 <p className="text-xs text-[var(--text-muted)] mb-2">검증 결과</p>
                 <ul className="space-y-1">
-                  {result.validation.issues.map((issue, i) => (
+                  {result.issues.map((issue, i) => (
                     <li key={i} className={`text-sm flex items-start gap-2 ${issue.severity === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
                       <span>{issue.severity === 'error' ? '❌' : '⚠️'}</span>
                       <span>{issue.message}</span>
@@ -364,68 +364,58 @@ export function HookSimulator() {
             {/* Behavior Prediction */}
             <div className="p-3 rounded-xl bg-[var(--bg-secondary)]">
               <p className="text-xs text-[var(--text-muted)] mb-2">예상 동작</p>
-              <ul className="space-y-1">
-                {result.behaviorPrediction.expectedBehaviors.map((behavior, i) => (
-                  <li key={i} className="text-sm text-[var(--text-primary)] flex items-start gap-2">
-                    <span className="text-[var(--accent-purple)]">•</span>
-                    <span>{behavior}</span>
-                  </li>
-                ))}
-              </ul>
-              {result.behaviorPrediction.blocksExecution && (
+              <p className="text-sm text-[var(--text-primary)]">{result.behavior.reason}</p>
+              {result.behavior.wouldBlock && (
                 <p className="mt-2 text-sm text-yellow-400 flex items-center gap-2">
                   <span>⏳</span>
                   이 Hook은 Claude 실행을 차단합니다.
                 </p>
               )}
+              {result.behavior.wouldAllow && (
+                <p className="mt-2 text-sm text-green-400 flex items-center gap-2">
+                  <span>✅</span>
+                  이 Hook은 Claude 실행을 허용합니다.
+                </p>
+              )}
             </div>
 
-            {/* Command Analysis */}
+            {/* Execution Info */}
             <div className="p-3 rounded-xl bg-[var(--bg-secondary)]">
-              <p className="text-xs text-[var(--text-muted)] mb-2">명령어 분석</p>
+              <p className="text-xs text-[var(--text-muted)] mb-2">실행 정보</p>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-xs text-[var(--text-muted)]">타입</p>
-                  <p className="text-sm text-[var(--text-primary)] font-mono">
-                    {result.commandAnalysis.type}
+                  <p className="text-xs text-[var(--text-muted)]">종료 코드</p>
+                  <p className={`text-sm font-mono ${result.execution.exitCode === 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {result.execution.exitCode}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--text-muted)]">파이프라인</p>
+                  <p className="text-xs text-[var(--text-muted)]">실행 시간</p>
                   <p className="text-sm text-[var(--text-primary)]">
-                    {result.commandAnalysis.hasPipes ? '있음' : '없음'}
+                    {result.execution.duration}ms
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--text-muted)]">리디렉션</p>
+                  <p className="text-xs text-[var(--text-muted)]">타임아웃</p>
                   <p className="text-sm text-[var(--text-primary)]">
-                    {result.commandAnalysis.hasRedirects ? '있음' : '없음'}
+                    {result.execution.timedOut ? '예' : '아니오'}
                   </p>
                 </div>
               </div>
-              {result.commandAnalysis.detectedCommands.length > 0 && (
+              {result.execution.stdout && (
                 <div className="mt-2">
-                  <p className="text-xs text-[var(--text-muted)] mb-1">감지된 명령어</p>
-                  <div className="flex flex-wrap gap-1">
-                    {result.commandAnalysis.detectedCommands.map((cmd, i) => (
-                      <code key={i} className="px-1.5 py-0.5 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--accent-cyan)]">
-                        {cmd}
-                      </code>
-                    ))}
-                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mb-1">표준 출력</p>
+                  <pre className="p-2 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] overflow-x-auto">
+                    {result.execution.stdout}
+                  </pre>
                 </div>
               )}
-              {result.commandAnalysis.potentialRisks.length > 0 && (
+              {result.execution.stderr && (
                 <div className="mt-2">
-                  <p className="text-xs text-[var(--text-muted)] mb-1">잠재적 위험</p>
-                  <ul className="space-y-1">
-                    {result.commandAnalysis.potentialRisks.map((risk, i) => (
-                      <li key={i} className="text-sm text-yellow-400 flex items-start gap-2">
-                        <span>⚠️</span>
-                        <span>{risk}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-xs text-[var(--text-muted)] mb-1">표준 에러</p>
+                  <pre className="p-2 rounded text-xs bg-[var(--bg-tertiary)] text-red-400 overflow-x-auto">
+                    {result.execution.stderr}
+                  </pre>
                 </div>
               )}
             </div>
@@ -470,12 +460,11 @@ export function HookSimulator() {
             {scenarioResults.scenarios.map((scenario, i) => (
               <details key={i} className="group">
                 <summary className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer ${
-                  scenario.passed ? 'bg-green-500/10' : 'bg-red-500/10'
+                  scenario.result.success ? 'bg-green-500/10' : 'bg-red-500/10'
                 } hover:opacity-80 transition-opacity`}>
-                  <span>{scenario.passed ? '✅' : '❌'}</span>
+                  <span>{scenario.result.success ? '✅' : '❌'}</span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-[var(--text-primary)]">{scenario.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{scenario.description}</p>
                   </div>
                   <span className="text-[var(--text-muted)] group-open:rotate-180 transition-transform">▼</span>
                 </summary>
@@ -484,11 +473,11 @@ export function HookSimulator() {
                   <pre className="font-mono text-sm text-[var(--accent-cyan)] whitespace-pre-wrap break-all">
                     {scenario.result.expandedCommand}
                   </pre>
-                  {scenario.result.validation.issues.length > 0 && (
+                  {scenario.result.issues.length > 0 && (
                     <div className="mt-2">
                       <p className="text-xs text-[var(--text-muted)] mb-1">이슈</p>
                       <ul className="space-y-1">
-                        {scenario.result.validation.issues.map((issue, j) => (
+                        {scenario.result.issues.map((issue, j) => (
                           <li key={j} className={`text-xs ${issue.severity === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
                             {issue.message}
                           </li>
