@@ -450,13 +450,8 @@ export function AdvancedFilterPanel({
   onReset,
 }: AdvancedFilterPanelProps) {
   const [showSaveModal, setShowSaveModal] = useState(false)
-  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([])
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => getSavedFilters())
   const [activePresetId, setActivePresetId] = useState<string | null>(null)
-
-  // Load saved filters on mount
-  useMemo(() => {
-    setSavedFilters(getSavedFilters())
-  }, [])
 
   const activeFilterCount = countActiveFilters(filters)
 

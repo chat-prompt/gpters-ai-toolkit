@@ -54,13 +54,8 @@ export function BookmarkButton({
   className = '',
   onToggle,
 }: BookmarkButtonProps) {
-  const [bookmarked, setBookmarked] = useState(false)
+  const [bookmarked, setBookmarked] = useState(() => isBookmarked(item.id))
   const [isAnimating, setIsAnimating] = useState(false)
-
-  // Load initial state
-  useEffect(() => {
-    setBookmarked(isBookmarked(item.id))
-  }, [item.id])
 
   // Subscribe to changes
   useEffect(() => {

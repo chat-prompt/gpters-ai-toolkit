@@ -193,7 +193,10 @@ export function VirtualList<T>({
 }: VirtualListProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
-  const [hasTriggeredEnd, setHasTriggeredEnd] = useState(false)
+  const [triggeredForItemsLength, setTriggeredForItemsLength] = useState<number | null>(null)
+
+  // Automatically resets when items.length changes
+  const hasTriggeredEnd = triggeredForItemsLength === items.length
 
   const range = useMemo((): VirtualScrollRange => {
     return calculateVirtualScrollRange({
@@ -205,26 +208,21 @@ export function VirtualList<T>({
     })
   }, [scrollTop, containerHeight, itemHeight, items.length, overscan])
 
-  const handleScroll = useCallback(
-    createScrollThrottler((newScrollTop: number) => {
+  const handleScroll = useMemo(
+    () => createScrollThrottler((newScrollTop: number) => {
       setScrollTop(newScrollTop)
 
       // Check for end reached
       if (onEndReached && !hasTriggeredEnd) {
         const totalHeight = items.length * itemHeight
         if (isNearBottom(newScrollTop, containerHeight, totalHeight, endReachedThreshold)) {
-          setHasTriggeredEnd(true)
+          setTriggeredForItemsLength(items.length)
           onEndReached()
         }
       }
     }, 16),
     [onEndReached, hasTriggeredEnd, items.length, itemHeight, containerHeight, endReachedThreshold]
   )
-
-  // Reset end trigger when items change
-  useEffect(() => {
-    setHasTriggeredEnd(false)
-  }, [items.length])
 
   const visibleItems = useMemo(() => {
     return items.slice(range.startIndex, range.endIndex)
@@ -284,7 +282,10 @@ export function VirtualGrid<T>({
 }: VirtualGridProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
-  const [hasTriggeredEnd, setHasTriggeredEnd] = useState(false)
+  const [triggeredForItemsLength, setTriggeredForItemsLength] = useState<number | null>(null)
+
+  // Automatically resets when items.length changes
+  const hasTriggeredEnd = triggeredForItemsLength === items.length
 
   const totalRows = Math.ceil(items.length / itemsPerRow)
   const effectiveRowHeight = rowHeight + gap
@@ -299,24 +300,20 @@ export function VirtualGrid<T>({
     })
   }, [scrollTop, containerHeight, effectiveRowHeight, totalRows, overscan])
 
-  const handleScroll = useCallback(
-    createScrollThrottler((newScrollTop: number) => {
+  const handleScroll = useMemo(
+    () => createScrollThrottler((newScrollTop: number) => {
       setScrollTop(newScrollTop)
 
       if (onEndReached && !hasTriggeredEnd) {
         const totalHeight = totalRows * effectiveRowHeight
         if (isNearBottom(newScrollTop, containerHeight, totalHeight, endReachedThreshold)) {
-          setHasTriggeredEnd(true)
+          setTriggeredForItemsLength(items.length)
           onEndReached()
         }
       }
     }, 16),
-    [onEndReached, hasTriggeredEnd, totalRows, effectiveRowHeight, containerHeight, endReachedThreshold]
+    [onEndReached, hasTriggeredEnd, totalRows, effectiveRowHeight, containerHeight, endReachedThreshold, items.length]
   )
-
-  useEffect(() => {
-    setHasTriggeredEnd(false)
-  }, [items.length])
 
   const visibleRows = useMemo(() => {
     const rows: Array<T[]> = []
@@ -465,23 +462,20 @@ export function usePaginatedList<T>({
   onPageChange,
   onPageSizeChange,
 }: UsePaginatedListOptions<T>) {
-  const [pagination, setPagination] = useState<PaginationState>({
+  const [pageState, setPageState] = useState({
     currentPage: initialPage,
     pageSize: initialPageSize,
-    totalItems: items.length,
   })
 
-  // Update total items when items change
-  useEffect(() => {
-    setPagination((prev) => ({
-      ...prev,
+  // Derive pagination from page state and items.length
+  const pagination = useMemo<PaginationState>(() => {
+    const maxPage = Math.max(1, Math.ceil(items.length / pageState.pageSize))
+    return {
+      currentPage: Math.min(pageState.currentPage, maxPage),
+      pageSize: pageState.pageSize,
       totalItems: items.length,
-      currentPage: Math.min(
-        prev.currentPage,
-        Math.max(1, Math.ceil(items.length / prev.pageSize))
-      ),
-    }))
-  }, [items.length])
+    }
+  }, [pageState.currentPage, pageState.pageSize, items.length])
 
   const pageInfo = useMemo(() => getPageInfo(pagination), [pagination])
 
@@ -490,7 +484,7 @@ export function usePaginatedList<T>({
   }, [items, pagination.currentPage, pagination.pageSize])
 
   const setPage = useCallback((page: number) => {
-    setPagination((prev) => ({
+    setPageState((prev) => ({
       ...prev,
       currentPage: page,
     }))
@@ -498,7 +492,7 @@ export function usePaginatedList<T>({
   }, [onPageChange])
 
   const setPageSize = useCallback((size: PageSize) => {
-    setPagination((prev) => ({
+    setPageState((prev) => ({
       ...prev,
       pageSize: size,
       currentPage: 1, // Reset to first page on size change
