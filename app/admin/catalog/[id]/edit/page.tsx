@@ -22,7 +22,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const returnUrl = searchParams.get('returnUrl')
-  const { password } = useAdminAuth()
+  useAdminAuth() // For layout protection
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -51,9 +51,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
 
   const fetchItem = useCallback(async () => {
     try {
-      const res = await fetch(`/api/catalog/${id}`, {
-        headers: { 'x-admin-password': password || '' },
-      })
+      const res = await fetch(`/api/catalog/${id}`)
 
       if (res.ok) {
         const item = await res.json()
@@ -84,7 +82,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     } finally {
       setLoading(false)
     }
-  }, [id, password])
+  }, [id])
 
   useEffect(() => {
     fetchItem()
@@ -117,7 +115,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': password || '',
         },
         body: JSON.stringify(payload),
       })

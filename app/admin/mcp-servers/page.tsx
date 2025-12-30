@@ -14,7 +14,7 @@ interface McpServer {
 }
 
 export default function McpServersAdminPage() {
-  const { password } = useAdminAuth()
+  useAdminAuth() // For layout protection
   const [servers, setServers] = useState<McpServer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -51,7 +51,6 @@ export default function McpServersAdminPage() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': password || '',
           },
           body: JSON.stringify({
             label: formData.label,
@@ -64,7 +63,6 @@ export default function McpServersAdminPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': password || '',
           },
           body: JSON.stringify(formData),
         })
@@ -96,7 +94,6 @@ export default function McpServersAdminPage() {
     try {
       await fetch(`/api/mcp-servers/${id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': password || '' },
       })
       fetchServers()
     } catch (error) {

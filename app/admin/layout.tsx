@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, ReactNode } from 'react'
+import { ReactNode } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { useSession, signIn } from 'next-auth/react'
 import { AdminAuthProvider, useAdminAuth } from '@/components/admin/AdminAuthProvider'
 import type { UserRole } from '@/lib/security/rbac'
 
@@ -24,24 +24,9 @@ function RoleBadge({ role }: { role: UserRole }) {
 }
 
 function AdminLayoutContent({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading, login, logout } = useAdminAuth()
+  const { isAuthenticated, isLoading, userRole, logout } = useAdminAuth()
   const { data: session } = useSession()
-  const [password, setPassword] = useState('')
-
-  // Get user role from session
-  const userRole = session?.user?.role as UserRole | undefined
-  const [error, setError] = useState('')
   const pathname = usePathname()
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    const success = await login(password)
-    if (!success) {
-      setError('Invalid password')
-    }
-  }
 
   if (isLoading) {
     return (
@@ -51,45 +36,62 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
-  if (!isAuthenticated) {
+  // Not logged in at all - show sign in prompt
+  if (!session?.user) {
     return (
       <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
-        <div className="glass rounded-2xl p-8 w-full max-w-md">
-          <h1 className="text-2xl font-light text-[var(--text-primary)] mb-6">
-            Admin Login
+        <div className="glass rounded-2xl p-8 w-full max-w-md text-center">
+          <h1 className="text-2xl font-light text-[var(--text-primary)] mb-4">
+            Admin Dashboard
           </h1>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
-                placeholder="Enter admin password"
-              />
-            </div>
-
-            {error && (
-              <p className="text-red-400 text-sm">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              className="w-full py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
-            >
-              Login
-            </button>
-          </form>
+          <p className="text-[var(--text-secondary)] mb-6">
+            Please sign in to access the admin dashboard.
+          </p>
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/admin' })}
+            className="w-full py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
+          >
+            Sign in with Google
+          </button>
         </div>
       </div>
     )
   }
 
-  // Nav items with optional role requirements
+  // Logged in but no admin role - show access denied
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
+        <div className="glass rounded-2xl p-8 w-full max-w-md text-center">
+          <h1 className="text-2xl font-light text-[var(--text-primary)] mb-4">
+            Access Denied
+          </h1>
+          <p className="text-[var(--text-secondary)] mb-2">
+            You don&apos;t have permission to access the admin dashboard.
+          </p>
+          <p className="text-[var(--text-muted)] text-sm mb-6">
+            Signed in as: {session.user.email}
+          </p>
+          <div className="flex gap-3">
+            <Link
+              href="/"
+              className="flex-1 py-3 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)] font-medium hover:opacity-90 transition-opacity text-center"
+            >
+              Go Home
+            </Link>
+            <button
+              onClick={() => logout()}
+              className="flex-1 py-3 rounded-lg border border-red-500/30 text-red-400 font-medium hover:bg-red-500/10 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Nav items
   const navItems = [
     { href: '/admin', label: 'Dashboard', exact: true },
     { href: '/admin/catalog', label: 'Catalog' },
@@ -152,7 +154,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
               View Site
             </Link>
             <button
-              onClick={logout}
+              onClick={() => logout()}
               className="text-sm text-red-400 hover:text-red-300"
             >
               Logout

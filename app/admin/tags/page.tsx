@@ -14,7 +14,7 @@ interface Tag {
 }
 
 export default function TagsAdminPage() {
-  const { password } = useAdminAuth()
+  useAdminAuth() // For layout protection
   const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -51,7 +51,6 @@ export default function TagsAdminPage() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': password || '',
           },
           body: JSON.stringify({
             label: formData.label,
@@ -64,7 +63,6 @@ export default function TagsAdminPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': password || '',
           },
           body: JSON.stringify(formData),
         })
@@ -96,7 +94,6 @@ export default function TagsAdminPage() {
     try {
       await fetch(`/api/tags/${id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': password || '' },
       })
       fetchTags()
     } catch (error) {

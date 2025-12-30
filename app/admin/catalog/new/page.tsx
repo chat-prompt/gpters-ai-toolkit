@@ -14,7 +14,7 @@ const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
 export default function NewCatalogItem() {
   const router = useRouter()
-  const { password } = useAdminAuth()
+  useAdminAuth() // For layout protection
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -165,7 +165,6 @@ export default function NewCatalogItem() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': password || '',
         },
         body: JSON.stringify(payload),
       })

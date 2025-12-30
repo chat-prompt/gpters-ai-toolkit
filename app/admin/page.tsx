@@ -93,7 +93,7 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export default function AdminDashboard() {
-  const { password } = useAdminAuth()
+  useAdminAuth() // For layout protection
   const { data: session } = useSession()
   const userRole = session?.user?.role as UserRole | undefined
   const [data, setData] = useState<DashboardData | null>(null)
@@ -102,9 +102,7 @@ export default function AdminDashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/stats', {
-        headers: { 'x-admin-password': password || '' },
-      })
+      const res = await fetch('/api/admin/stats')
       const dashboardData = await res.json()
       setData(dashboardData)
     } catch (error) {
@@ -112,7 +110,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [password])
+  }, [])
 
   useEffect(() => {
     fetchData()
