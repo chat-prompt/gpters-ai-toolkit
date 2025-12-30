@@ -104,7 +104,7 @@ export default async function GuidesPage() {
 
                   {/* Footer */}
                   <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]">
-                    <span className="text-xs text-[var(--text-muted)]">@{guide.author}</span>
+                    <span className="text-xs text-[var(--text-muted)]">@{guide.authorName}</span>
                     <span className="text-[10px] text-emerald-400 font-medium tracking-wide">
                       READ GUIDE →
                     </span>

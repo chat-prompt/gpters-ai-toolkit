@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, catalogItems } from '@/lib/db'
+import { db, catalogItems, users } from '@/lib/db'
 import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { Permissions } from '@/lib/security/rbac'
+import { eq } from 'drizzle-orm'
 
 const log = createLogger('api:admin:stats')
 
@@ -17,8 +18,21 @@ export async function GET(request: NextRequest) {
   if (permissionError) return permissionError
 
   try {
-    // Get all items for calculations
-    const items = await db.select().from(catalogItems)
+    // Get all items for calculations (with author names)
+    const items = await db
+      .select({
+        id: catalogItems.id,
+        name: catalogItems.name,
+        type: catalogItems.type,
+        status: catalogItems.status,
+        authorName: users.name,
+        tags: catalogItems.tags,
+        likes: catalogItems.likes,
+        createdAt: catalogItems.createdAt,
+        updatedAt: catalogItems.updatedAt,
+      })
+      .from(catalogItems)
+      .leftJoin(users, eq(catalogItems.authorId, users.id))
 
     // Calculate today's start (midnight UTC)
     const today = new Date()
@@ -61,7 +75,7 @@ export async function GET(request: NextRequest) {
         name: i.name,
         type: i.type,
         status: i.status,
-        author: i.author,
+        authorName: i.authorName || 'Unknown',
         updatedAt: i.updatedAt,
       }))
 
@@ -74,7 +88,7 @@ export async function GET(request: NextRequest) {
         name: i.name,
         type: i.type,
         likes: i.likes || 0,
-        author: i.author,
+        authorName: i.authorName || 'Unknown',
       }))
 
     // Get draft items for quick publish
@@ -90,7 +104,7 @@ export async function GET(request: NextRequest) {
         id: i.id,
         name: i.name,
         type: i.type,
-        author: i.author,
+        authorName: i.authorName || 'Unknown',
         updatedAt: i.updatedAt,
       }))
 

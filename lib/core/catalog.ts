@@ -16,7 +16,7 @@ const summaryColumns = {
   type: catalogItems.type,
   name: catalogItems.name,
   description: catalogItems.description,
-  author: catalogItems.author,
+  authorId: catalogItems.authorId,
   tags: catalogItems.tags,
   teamTag: catalogItems.teamTag,
   difficulty: catalogItems.difficulty,
@@ -52,7 +52,7 @@ type SummaryRecord = {
   type: 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
   name: string
   description: string
-  author: string
+  authorId: string | null
   tags: string[] | null
   teamTag: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general' | null
   difficulty: 'easy' | 'medium' | 'hard' | null
@@ -92,7 +92,7 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     type: record.type,
     name: record.name,
     description: record.description,
-    author: record.author,
+    authorId: record.authorId ?? undefined,
     tags: record.tags || [],
     teamTag: (record.teamTag as CatalogItemSummary['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
@@ -133,7 +133,7 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     type: record.type,
     name: record.name,
     description: record.description,
-    author: record.author,
+    authorId: record.authorId ?? undefined,
     tags: record.tags || [],
     teamTag: (record.teamTag as CatalogItem['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
@@ -269,15 +269,15 @@ export async function getBeginnerItems(): Promise<CatalogItemSummary[]> {
 }
 
 /**
- * Get all items by a specific author (including drafts for profile view).
+ * Get all items by a specific user ID (including drafts for profile view).
  * Returns full records since profile views may need content preview.
- * Uses index: catalog_items_author_idx
+ * Uses index: catalog_items_author_id_idx
  */
-export async function getItemsByAuthor(author: string): Promise<CatalogItem[]> {
+export async function getItemsByAuthorId(authorId: string): Promise<CatalogItem[]> {
   const records = await db
     .select()
     .from(catalogItems)
-    .where(eq(catalogItems.author, author))
+    .where(eq(catalogItems.authorId, authorId))
   return records.map(toPlainObject)
 }
 
@@ -294,7 +294,7 @@ export async function getItemsByAuthor(author: string): Promise<CatalogItem[]> {
 export async function getRelatedItems(
   itemId: string,
   tags: string[],
-  author: string | null,
+  authorId: string | null,
   limit: number = 6
 ): Promise<CatalogItemSummary[]> {
   // Get all published items except the current one
@@ -320,7 +320,7 @@ export async function getRelatedItems(
       score += matchingTags.length
 
       // Bonus for same author
-      if (author && item.author === author) {
+      if (authorId && item.authorId === authorId) {
         score += 2
       }
 

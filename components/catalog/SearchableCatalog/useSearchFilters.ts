@@ -161,10 +161,10 @@ export function useSearchFilters({
         return { filteredCatalog: filtered, didYouMean: [] }
       }
 
-      // Handle author: prefix - exact author filter
+      // Handle author: prefix - filter by authorId
       if (query.startsWith('author:')) {
-        const authorName = query.slice(7).trim()
-        filtered = filtered.filter((item) => item.author.toLowerCase() === authorName)
+        const authorIdFilter = query.slice(7).trim()
+        filtered = filtered.filter((item) => item.authorId === authorIdFilter)
         return { filteredCatalog: filtered, didYouMean: [] }
       }
 
@@ -201,7 +201,7 @@ export function useSearchFilters({
               tag.toLowerCase().includes(query) ||
               (TAGS[tag]?.label || '').toLowerCase().includes(query)
           )
-          const matchesAuthor = item.author.toLowerCase().includes(query)
+          const matchesAuthor = (item.authorName || '').toLowerCase().includes(query)
           const matchesId = item.id.toLowerCase().includes(query)
 
           return matchesName || matchesDescription || matchesTags || matchesAuthor || matchesId

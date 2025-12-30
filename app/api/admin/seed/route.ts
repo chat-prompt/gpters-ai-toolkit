@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, tags, mcpServers, authors } from '@/lib/db'
+import { db, tags, mcpServers } from '@/lib/db'
 import { TAGS, MCP_SERVERS } from '@/lib/core/types'
 import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
     const results = {
       tags: { created: 0, skipped: 0 },
       mcpServers: { created: 0, skipped: 0 },
-      authors: { created: 0, skipped: 0 },
     }
 
     // Seed Tags from TAGS constant
@@ -51,28 +50,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Seed default authors (extract from existing catalog items)
-    const defaultAuthors = [
-      { id: 'platform-team', name: '플랫폼팀' },
-      { id: 'ai-team', name: 'AI팀' },
-      { id: 'anonymous', name: 'Anonymous' },
-    ]
-
-    for (const author of defaultAuthors) {
-      try {
-        await db.insert(authors).values({
-          id: author.id,
-          name: author.name,
-          email: null,
-          avatarUrl: null,
-          bio: null,
-        }).onConflictDoNothing()
-        results.authors.created++
-      } catch {
-        results.authors.skipped++
-      }
-    }
-
     return apiSuccess({
       success: true,
       message: 'Database seeded successfully',
@@ -93,21 +70,19 @@ export async function GET(request: NextRequest) {
   if (authError) return authError
 
   try {
-    const [tagCount, authorCount, mcpCount] = await Promise.all([
+    const [tagCount, mcpCount] = await Promise.all([
       db.select().from(tags),
-      db.select().from(authors),
       db.select().from(mcpServers),
     ])
 
     return NextResponse.json({
       tags: tagCount.length,
-      authors: authorCount.length,
       mcpServers: mcpCount.length,
       hardcodedTags: Object.keys(TAGS).length,
       hardcodedMcpServers: Object.keys(MCP_SERVERS).length,
     })
   } catch (error) {
     log.error('Failed to get seed status', error)
-    return ApiErrors.internalError('Failed to get seed status')
+    return ApiErrors.internalError('Failed to seed status')
   }
 }

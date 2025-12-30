@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, HookEvent } from '@/lib/core/types'
 import { syncItemToGitHub, deleteItemFromGitHub, updateMarketplaceJson } from '@/lib/marketplace'
-import { ApiErrors, apiSuccess, requirePermissionAsync } from '@/lib/utils/api-utils'
+import { ApiErrors, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { Permissions } from '@/lib/security/rbac'
@@ -51,6 +51,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const permissionError = await requirePermissionAsync(Permissions.CATALOG_EDIT, request)
   if (permissionError) return permissionError
 
+  // Get current user for version tracking
+  const currentUser = await getCurrentUser()
+
   try {
     const { id } = await params
     const body = await request.json()
@@ -67,7 +70,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     if (body.name !== undefined) updateData.name = body.name
     if (body.description !== undefined) updateData.description = body.description
-    if (body.author !== undefined) updateData.author = body.author
+    if (body.authorId !== undefined) updateData.authorId = body.authorId
     if (body.tags !== undefined) updateData.tags = body.tags
     if (body.teamTag !== undefined) updateData.teamTag = body.teamTag as TeamTag
     if (body.difficulty !== undefined) updateData.difficulty = body.difficulty as Difficulty
@@ -110,7 +113,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       try {
         await createVersionOnUpdate(updated, previousContent, {
           changelog: body.changelog,
-          createdBy: undefined, // TODO: Get from session when available
+          createdBy: currentUser?.id,
         })
         log.info('Created version history entry', { itemId: id })
       } catch (versionError) {
@@ -126,6 +129,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ...updated,
           tags: updated.tags || [],
           dependencies: updated.dependencies || [],
+          authorId: updated.authorId ?? undefined,
           teamTag: updated.teamTag ?? undefined,
           difficulty: updated.difficulty ?? undefined,
           pluginId: updated.pluginId ?? undefined,
@@ -159,6 +163,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ...item,
           tags: item.tags || [],
           dependencies: item.dependencies || [],
+          authorId: item.authorId ?? undefined,
           teamTag: item.teamTag ?? undefined,
           difficulty: item.difficulty ?? undefined,
           pluginId: item.pluginId ?? undefined,
@@ -229,6 +234,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
           ...item,
           tags: item.tags || [],
           dependencies: item.dependencies || [],
+          authorId: item.authorId ?? undefined,
           teamTag: item.teamTag ?? undefined,
           difficulty: item.difficulty ?? undefined,
           pluginId: item.pluginId ?? undefined,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
-import { db, catalogItems } from '@/lib/db'
+import { db, catalogItems, users } from '@/lib/db'
 import JSZip from 'jszip'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -40,7 +40,7 @@ function generateInstallMd(item: {
   name: string
   type: ItemType
   description: string
-  author: string
+  authorName: string
   marketplaceVersion?: string | null
   pluginId?: string | null
   dependencies?: string[] | null
@@ -51,7 +51,7 @@ function generateInstallMd(item: {
     `> ${item.description}`,
     '',
     `- **Type**: ${item.type}`,
-    `- **Author**: @${item.author}`,
+    `- **Author**: @${item.authorName}`,
   ]
 
   if (item.marketplaceVersion) {
@@ -157,7 +157,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     const { id } = await params
-    const [item] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
+    const [item] = await db
+      .select({
+        id: catalogItems.id,
+        name: catalogItems.name,
+        type: catalogItems.type,
+        description: catalogItems.description,
+        authorName: users.name,
+        content: catalogItems.content,
+        readme: catalogItems.readme,
+        files: catalogItems.files,
+        marketplaceVersion: catalogItems.marketplaceVersion,
+        pluginId: catalogItems.pluginId,
+        dependencies: catalogItems.dependencies,
+      })
+      .from(catalogItems)
+      .leftJoin(users, eq(catalogItems.authorId, users.id))
+      .where(eq(catalogItems.id, id))
 
     if (!item) {
       return NextResponse.json(
@@ -202,7 +218,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       name: item.name,
       type: item.type as ItemType,
       description: item.description,
-      author: item.author,
+      authorName: item.authorName || 'Unknown',
       marketplaceVersion: item.marketplaceVersion,
       pluginId: item.pluginId,
       dependencies: item.dependencies,

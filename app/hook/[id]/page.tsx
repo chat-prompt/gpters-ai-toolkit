@@ -130,7 +130,7 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           itemId={item.id}
           name={item.name}
           description={item.description}
-          author={item.author}
+          authorName={item.authorName}
           tags={item.tags}
           likes={item.likes}
           updatedAt={item.updatedAt}

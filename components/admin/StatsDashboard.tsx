@@ -15,7 +15,7 @@ interface TopItem {
   id: string
   name: string
   type: string
-  author: string
+  authorName: string
   installCount: number
 }
 
@@ -32,7 +32,7 @@ interface RecentItem {
   id: string
   name: string
   type: string
-  author: string
+  authorName: string
   createdAt: string
 }
 
@@ -521,7 +521,7 @@ export function StatsDashboard() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[var(--text-primary)] truncate">{item.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{item.author}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{item.authorName}</p>
                   </div>
                   <span
                     className="px-2 py-1 rounded-md text-xs font-medium"
@@ -627,7 +627,7 @@ export function StatsDashboard() {
                     >
                       {item.name}
                     </Link>
-                    <p className="text-xs text-[var(--text-muted)]">by {item.author}</p>
+                    <p className="text-xs text-[var(--text-muted)]">by {item.authorName}</p>
                   </div>
                   <span
                     className="px-2 py-1 rounded-md text-xs font-medium"

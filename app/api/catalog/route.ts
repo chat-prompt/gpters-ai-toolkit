@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
-import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync } from '@/lib/utils/api-utils'
+import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { Permissions } from '@/lib/security/rbac'
@@ -56,6 +56,9 @@ export async function POST(request: NextRequest) {
   const permissionError = await requirePermissionAsync(Permissions.CATALOG_CREATE, request)
   if (permissionError) return permissionError
 
+  // Get current user for authorId
+  const currentUser = await getCurrentUser()
+
   try {
     const body = await request.json()
 
@@ -64,7 +67,6 @@ export async function POST(request: NextRequest) {
     type,
     name,
     description,
-    author,
     tags,
     teamTag,
     difficulty,
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
     type: type as ItemType,
     name,
     description: description || '',
-    author: author || 'unknown',
+    authorId: currentUser?.id || null,
     tags: tags || [],
     teamTag: (teamTag as TeamTag) || 'general',
     difficulty: difficulty as Difficulty | null,
@@ -138,6 +140,7 @@ export async function POST(request: NextRequest) {
         ...newItem,
         likes: 0,
         dependencies: [],
+        authorId: newItem.authorId ?? undefined,
         teamTag: newItem.teamTag ?? undefined,
         difficulty: newItem.difficulty ?? undefined,
         pluginId: newItem.pluginId ?? undefined,
@@ -171,6 +174,7 @@ export async function POST(request: NextRequest) {
         ...item,
         tags: item.tags || [],
         dependencies: item.dependencies || [],
+        authorId: item.authorId ?? undefined,
         teamTag: item.teamTag ?? undefined,
         difficulty: item.difficulty ?? undefined,
         pluginId: item.pluginId ?? undefined,

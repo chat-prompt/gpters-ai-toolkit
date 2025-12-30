@@ -34,7 +34,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     type: 'skill' as typeof ITEM_TYPES[number],
     name: '',
     description: '',
-    author: '',
+    authorName: '', // Read-only, for display purposes
     tags: '',
     teamTag: 'general' as TeamTag,
     difficulty: '' as '' | typeof DIFFICULTIES[number],
@@ -62,7 +62,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           type: item.type,
           name: item.name,
           description: item.description || '',
-          author: item.author || '',
+          authorName: item.authorName || '',
           tags: (item.tags || []).join(', '),
           teamTag: item.teamTag || 'general',
           difficulty: item.difficulty || '',
@@ -99,7 +99,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
       const payload = {
         name: formData.name,
         description: formData.description,
-        author: formData.author,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
         teamTag: formData.teamTag,
         difficulty: formData.difficulty || null,
@@ -241,14 +240,11 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Author
+                Author (read-only)
               </label>
-              <input
-                type="text"
-                value={formData.author}
-                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
-              />
+              <div className="w-full px-4 py-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
+                @{formData.authorName || 'Unknown'}
+              </div>
             </div>
             <div>
               <label className="block text-sm text-[var(--text-secondary)] mb-2">

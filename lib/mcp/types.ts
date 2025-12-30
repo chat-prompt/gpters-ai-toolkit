@@ -117,7 +117,7 @@ export interface PluginSummary {
   name: string
   type: ItemType
   description: string
-  author: string
+  authorName: string
   tags: string[]
   teamTag?: TeamTag
   difficulty?: Difficulty
@@ -129,7 +129,7 @@ export interface PluginContent {
   name: string
   type: ItemType
   description: string
-  author: string
+  authorName: string
   tags: string[]
   teamTag?: TeamTag
   difficulty?: Difficulty

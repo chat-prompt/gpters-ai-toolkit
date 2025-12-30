@@ -3,7 +3,7 @@ import { auth } from '@/lib/core/auth'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
-import { getItemsByAuthor } from '@/lib/core/catalog'
+import { getItemsByAuthorId } from '@/lib/core/catalog'
 import { ApiErrors } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -32,22 +32,8 @@ export async function GET(request: NextRequest) {
       return ApiErrors.notFound('User')
     }
 
-    // Get items created by this user (matching by email username)
-    const authorName = session.user.email.split('@')[0]
-    const items = await getItemsByAuthor(authorName)
-
-    // Also try with full name if different
-    const allItems = [...items]
-    if (session.user.name && session.user.name !== authorName) {
-      const nameItems = await getItemsByAuthor(session.user.name)
-      // Merge and dedupe
-      const itemIds = new Set(items.map(i => i.id))
-      for (const item of nameItems) {
-        if (!itemIds.has(item.id)) {
-          allItems.push(item)
-        }
-      }
-    }
+    // Get items created by this user using authorId
+    const allItems = await getItemsByAuthorId(user.id)
 
     return NextResponse.json({
       user: {

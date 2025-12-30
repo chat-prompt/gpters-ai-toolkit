@@ -103,7 +103,6 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
   const managementLinks = [
     { icon: '📦', label: '카탈로그 관리', href: '/admin/catalog', requireAdmin: false },
     { icon: '🏷️', label: '태그 관리', href: '/admin/tags', requireAdmin: false },
-    { icon: '👤', label: '작성자 관리', href: '/admin/authors', requireAdmin: false },
     { icon: '🔌', label: 'MCP 서버', href: '/admin/mcp-servers', requireAdmin: false },
     { icon: '👥', label: '사용자 관리', href: '/admin/users', requireAdmin: true },
   ]

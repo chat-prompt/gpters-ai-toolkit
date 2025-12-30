@@ -73,7 +73,7 @@ export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
         {/* Footer */}
         <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--text-muted)]">@{item.author}</span>
+            <span className="text-xs text-[var(--text-muted)]">@{item.authorName}</span>
             {item.likes > 0 && (
               <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
                 <span className="text-rose-400">♥</span>

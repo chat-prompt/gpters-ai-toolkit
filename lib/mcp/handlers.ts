@@ -4,7 +4,7 @@
  * Database query handlers for each MCP tool.
  */
 
-import { db, catalogItems } from '../db'
+import { db, catalogItems, users } from '../db'
 import { ilike, or, eq, and, sql, inArray } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
@@ -70,12 +70,13 @@ export async function searchPlugins(input: SearchPluginsInput): Promise<SearchRe
       name: catalogItems.name,
       type: catalogItems.type,
       description: catalogItems.description,
-      author: catalogItems.author,
+      authorName: users.name,
       tags: catalogItems.tags,
       teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
     })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(whereClause)
     .limit(safeLimit)
 
@@ -84,7 +85,7 @@ export async function searchPlugins(input: SearchPluginsInput): Promise<SearchRe
     name: item.name,
     type: item.type,
     description: item.description,
-    author: item.author,
+    authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
     teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
@@ -104,8 +105,31 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
   const { pluginId } = input
 
   const results = await db
-    .select()
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      type: catalogItems.type,
+      description: catalogItems.description,
+      authorName: users.name,
+      tags: catalogItems.tags,
+      teamTag: catalogItems.teamTag,
+      difficulty: catalogItems.difficulty,
+      content: catalogItems.content,
+      readme: catalogItems.readme,
+      files: catalogItems.files,
+      dependencies: catalogItems.dependencies,
+      allowedTools: catalogItems.allowedTools,
+      agentModel: catalogItems.agentModel,
+      agentPermissionMode: catalogItems.agentPermissionMode,
+      agentSkills: catalogItems.agentSkills,
+      commandArgumentHint: catalogItems.commandArgumentHint,
+      commandDisableModelInvocation: catalogItems.commandDisableModelInvocation,
+      marketplaceVersion: catalogItems.marketplaceVersion,
+      status: catalogItems.status,
+      changelog: catalogItems.changelog,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(eq(catalogItems.id, pluginId))
     .limit(1)
 
@@ -120,7 +144,7 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
     name: item.name,
     type: item.type,
     description: item.description,
-    author: item.author,
+    authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
     teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
@@ -168,12 +192,13 @@ export async function listPlugins(input: ListPluginsInput = {}): Promise<ListRes
       name: catalogItems.name,
       type: catalogItems.type,
       description: catalogItems.description,
-      author: catalogItems.author,
+      authorName: users.name,
       tags: catalogItems.tags,
       teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
     })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(whereClause)
 
   const plugins: PluginSummary[] = results.map((item) => ({
@@ -181,7 +206,7 @@ export async function listPlugins(input: ListPluginsInput = {}): Promise<ListRes
     name: item.name,
     type: item.type,
     description: item.description,
-    author: item.author,
+    authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
     teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
@@ -206,12 +231,13 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
       name: catalogItems.name,
       type: catalogItems.type,
       description: catalogItems.description,
-      author: catalogItems.author,
+      authorName: users.name,
       tags: catalogItems.tags,
       teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
     })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(
       and(
         eq(catalogItems.type, category),
@@ -225,7 +251,7 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
     name: item.name,
     type: item.type,
     description: item.description,
-    author: item.author,
+    authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
     teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
@@ -244,7 +270,7 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
 export async function createPlugin(
   input: CreatePluginInput
 ): Promise<{ success: boolean; id: string; error?: string }> {
-  const { id, type, name, description, content, author, tags, teamTag, readme, files, marketplaceEnabled } = input
+  const { id, type, name, description, content, tags, teamTag, readme, files, marketplaceEnabled } = input
 
   // Check if plugin already exists
   const existing = await db
@@ -257,13 +283,13 @@ export async function createPlugin(
     return { success: false, id, error: `Plugin with ID '${id}' already exists` }
   }
 
+  // Note: authorId should be set by the API route based on authenticated user
   await db.insert(catalogItems).values({
     id,
     type,
     name,
     description: description || '',
     content,
-    author: author || 'unknown',
     tags: tags || [],
     teamTag: (teamTag as TeamTag) || 'general',
     readme: readme || null,
@@ -304,7 +330,7 @@ export async function updatePlugin(
   if (updateFields.name !== undefined) updateData.name = updateFields.name
   if (updateFields.description !== undefined) updateData.description = updateFields.description
   if (updateFields.content !== undefined) updateData.content = updateFields.content
-  if (updateFields.author !== undefined) updateData.author = updateFields.author
+  // Note: authorId is not updated through this API
   if (updateFields.tags !== undefined) updateData.tags = updateFields.tags
   if (updateFields.teamTag !== undefined) updateData.teamTag = updateFields.teamTag
   if (updateFields.readme !== undefined) updateData.readme = updateFields.readme
@@ -411,13 +437,13 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
       .where(eq(catalogItems.id, id))
   } else {
     // Create new item
+    // Note: authorId should be set by API route based on authenticated user
     await db.insert(catalogItems).values({
       id,
       type,
       name,
       content,
       description: description || '',
-      author: 'unknown', // TODO: Get from auth context
       tags: tags || [],
       teamTag: (teamTag as TeamTag) || 'general',
       allowedTools: allowedTools || null,
@@ -455,7 +481,7 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
         type,
         name,
         description: description || '',
-        author: 'unknown', // TODO: Get from auth context
+        authorName: 'Unknown', // TODO: Get from auth context
         tags: tags || [],
         teamTag: (teamTag as TeamTag) || 'general',
         likes: 0,

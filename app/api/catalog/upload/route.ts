@@ -3,7 +3,8 @@ import JSZip from 'jszip'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, PluginFile } from '@/lib/core/types'
-import { ApiErrors, requireAdminAuth } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
 import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:catalog:upload')
@@ -133,8 +134,12 @@ function parseFrontmatter(content: string): { metadata: Record<string, string>; 
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireAdminAuth(request)
-  if (authError) return authError
+  // Check RBAC permission for creating catalog items
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_CREATE, request)
+  if (permissionError) return permissionError
+
+  // Get current user for authorId
+  const currentUser = await getCurrentUser()
 
   try {
     const formData = await request.formData()
@@ -174,12 +179,19 @@ export async function POST(request: NextRequest) {
       return ApiErrors.conflict(`Item with ID '${id}' already exists. Set update=true to overwrite.`)
     }
 
+    // Determine author display name: metadata > user name > email prefix > 'unknown'
+    const authorDisplayName = metadata.author
+      || currentUser?.name
+      || currentUser?.email?.split('@')[0]
+      || 'unknown'
+
     const itemData = {
       id,
       type: itemType,
       name: metadata.name || id,
       description: metadata.description || '',
-      author: metadata.author || 'unknown',
+      author: authorDisplayName,
+      authorId: currentUser?.id || null,
       tags: metadata.tags ? metadata.tags.split(',').map((t) => t.trim()) : [],
       teamTag: (metadata.teamTag as TeamTag) || 'general',
       difficulty: (metadata.difficulty as Difficulty) || null,

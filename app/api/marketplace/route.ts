@@ -19,6 +19,7 @@ export async function GET() {
     ...item,
     tags: item.tags || [],
     dependencies: item.dependencies || [],
+    authorId: item.authorId ?? undefined,
     files: item.files ?? undefined,
     teamTag: item.teamTag ?? undefined,
     difficulty: item.difficulty ?? undefined,

@@ -9,7 +9,7 @@ interface ItemHeroProps {
   type: ItemType
   name: string
   description: string
-  author: string
+  authorName?: string
   tags: string[]
   likes: number
   itemId: string
@@ -35,7 +35,7 @@ export function ItemHero({
   type,
   name,
   description,
-  author,
+  authorName,
   tags,
   likes,
   itemId,
@@ -93,7 +93,7 @@ export function ItemHero({
       </div>
 
       <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
-        <span>@{author}</span>
+        {authorName && <span>@{authorName}</span>}
         {updatedAt && (
           <>
             <span className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />

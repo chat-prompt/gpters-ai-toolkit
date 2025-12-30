@@ -309,7 +309,7 @@ export function matchSearchTokens(item: CatalogItemSummary, tokens: SearchToken[
   const searchableText = [
     item.name,
     item.description,
-    item.author,
+    item.authorName || '',
     item.id,
     ...item.tags.map(t => TAGS[t]?.label || t),
   ].join(' ').toLowerCase()
@@ -342,7 +342,7 @@ function getFieldValue(item: CatalogItemSummary, field: string): string {
     case 'tags':
       return item.tags.map(t => `${t} ${TAGS[t]?.label || ''}`).join(' ')
     case 'author':
-      return item.author
+      return item.authorName || ''
     case 'type':
       return item.type
     case 'difficulty':
@@ -433,7 +433,7 @@ export function findFuzzyMatches(
     const fields = [
       { name: 'name', value: item.name },
       { name: 'description', value: item.description },
-      { name: 'author', value: item.author },
+      { name: 'author', value: item.authorName || '' },
       { name: 'id', value: item.id },
     ]
 
@@ -573,8 +573,8 @@ export function sortItems(items: CatalogItemSummary[], config: SortConfig): Cata
         bVal = b.likes
         break
       case 'author':
-        aVal = a.author.toLowerCase()
-        bVal = b.author.toLowerCase()
+        aVal = (a.authorName || '').toLowerCase()
+        bVal = (b.authorName || '').toLowerCase()
         break
       default:
         return 0

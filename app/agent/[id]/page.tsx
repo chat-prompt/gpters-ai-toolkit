@@ -35,7 +35,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   }
 
   // Fetch related items
-  const relatedItems = await getRelatedItems(item.id, item.tags, item.author, 6)
+  const relatedItems = await getRelatedItems(item.id, item.tags, item.authorId ?? null, 6)
 
   // Check for examples in content
   const hasExamples = parseExamplesFromContent(item.content).length > 0
@@ -81,7 +81,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           itemId={item.id}
           name={item.name}
           description={item.description}
-          author={item.author}
+          authorName={item.authorName}
           tags={item.tags}
           likes={item.likes}
           difficulty={item.difficulty}
@@ -163,7 +163,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           <RelatedItems
             items={relatedItems}
             currentItemTags={item.tags}
-            currentItemAuthor={item.author}
+            currentItemAuthorId={item.authorId}
           />
         </Section>
       )}

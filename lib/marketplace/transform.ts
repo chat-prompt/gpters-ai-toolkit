@@ -25,7 +25,7 @@ export function generateMarketplaceJson(items: CatalogItem[]): MarketplaceJson {
       source: `./plugins/${item.id}`,
       description: item.description,
       version: item.marketplaceVersion || '1.0.0',
-      author: { name: item.author },
+      author: { name: item.authorName || 'Unknown' },
       category: item.type,
       keywords: item.tags || [],
     }))
@@ -46,7 +46,7 @@ export function generatePluginJson(item: CatalogItem): PluginJson {
     name: item.id,
     version: item.marketplaceVersion || '1.0.0',
     description: item.description,
-    author: { name: item.author },
+    author: { name: item.authorName || 'Unknown' },
     keywords: item.tags || [],
   }
 }
@@ -338,7 +338,7 @@ ${typeLabel}
 \`${item.hookEvent}\`${item.hookMatcher ? ` (matcher: \`${item.hookMatcher}\`)` : ''}
 
 ## Author
-${item.author}
+${item.authorName || 'Unknown'}
 
 ## Tags
 ${item.tags?.map((t) => `\`${t}\``).join(', ') || 'None'}
@@ -365,7 +365,7 @@ ${item.description}
 ${typeLabel}
 
 ## Author
-${item.author}
+${item.authorName || 'Unknown'}
 
 ## Tags
 ${item.tags?.map((t) => `\`${t}\``).join(', ') || 'None'}

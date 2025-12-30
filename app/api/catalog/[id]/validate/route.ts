@@ -171,7 +171,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       description: description || '',
       content,
       allowedTools,
-      author: 'preview',
+      authorName: 'preview',
       tags: [],
       likes: 0,
     }

@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       type: item.type as ItemType,
       name: item.name,
       description: item.description,
-      author: item.author,
+      authorId: item.authorId ?? undefined,
       tags: item.tags || [],
       likes: item.likes,
       content: item.content,

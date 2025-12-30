@@ -82,11 +82,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return session
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
         token.role = user.role
       }
+
+      // Refresh role from DB on session update or if role is missing
+      if (trigger === 'update' || !token.role) {
+        try {
+          const email = token.email as string
+          if (email) {
+            const [dbUser] = await db.select({ role: users.role }).from(users).where(eq(users.email, email))
+            if (dbUser) {
+              token.role = dbUser.role as UserRole
+            }
+          }
+        } catch {
+          // Keep existing role on error
+        }
+      }
+
       return token
     },
   },

@@ -43,10 +43,10 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
 interface RelatedItemsProps {
   items: CatalogItemSummary[]
   currentItemTags: string[]
-  currentItemAuthor: string
+  currentItemAuthorId?: string
 }
 
-export function RelatedItems({ items, currentItemTags, currentItemAuthor }: RelatedItemsProps) {
+export function RelatedItems({ items, currentItemTags, currentItemAuthorId }: RelatedItemsProps) {
   if (!items || items.length === 0) {
     return null
   }
@@ -65,7 +65,7 @@ export function RelatedItems({ items, currentItemTags, currentItemAuthor }: Rela
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((item) => {
           const config = TYPE_CONFIG[item.type]
-          const isSameAuthor = item.author === currentItemAuthor
+          const isSameAuthor = currentItemAuthorId && item.authorId === currentItemAuthorId
           const matchingTags = item.tags.filter(tag => currentItemTags.includes(tag))
 
           return (
@@ -124,7 +124,7 @@ export function RelatedItems({ items, currentItemTags, currentItemAuthor }: Rela
 
                 {/* Footer */}
                 <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--border-subtle)]">
-                  <span className="text-[10px] text-[var(--text-muted)]">@{item.author}</span>
+                  {item.authorName && <span className="text-[10px] text-[var(--text-muted)]">@{item.authorName}</span>}
                   {item.likes > 0 && (
                     <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
                       <span className="text-rose-400">♥</span>

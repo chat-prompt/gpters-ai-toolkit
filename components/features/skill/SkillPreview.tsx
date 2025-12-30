@@ -37,7 +37,7 @@ export function SkillPreview({ item, className = '' }: SkillPreviewProps) {
 
         {/* Author and metadata */}
         <div className="flex flex-wrap items-center gap-4 text-sm text-[var(--text-muted)] mb-4">
-          <span>@{item.author}</span>
+          <span>@{item.authorName}</span>
           {item.difficulty && (
             <span
               className={`px-2 py-0.5 rounded-full text-xs ${

@@ -440,18 +440,6 @@ export default function AdminDashboard() {
                 </p>
               </Link>
               <Link
-                href="/admin/authors"
-                className="glass p-6 rounded-xl hover:bg-[var(--bg-secondary)] transition-colors group"
-              >
-                <div className="text-2xl mb-2">👤</div>
-                <h3 className="text-[var(--text-primary)] font-medium group-hover:text-[var(--accent-cyan)] transition-colors">
-                  작성자
-                </h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  콘텐츠 작성자 관리
-                </p>
-              </Link>
-              <Link
                 href="/admin/mcp-servers"
                 className="glass p-6 rounded-xl hover:bg-[var(--bg-secondary)] transition-colors group"
               >

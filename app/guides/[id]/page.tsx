@@ -29,7 +29,7 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         itemId={guide.id}
         name={guide.name}
         description={guide.description}
-        author={guide.author}
+        authorName={guide.authorName}
         tags={guide.tags}
         likes={guide.likes}
         difficulty={guide.difficulty}

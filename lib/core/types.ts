@@ -39,7 +39,9 @@ export interface CatalogItem {
   type: ItemType
   name: string
   description: string
-  author: string
+  authorId?: string // FK to users table
+  authorName?: string // Resolved author name for display
+  authorEmail?: string // Resolved author email for display
   tags: string[]
   teamTag?: TeamTag
   difficulty?: Difficulty

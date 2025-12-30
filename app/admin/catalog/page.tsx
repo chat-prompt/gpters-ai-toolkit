@@ -26,7 +26,8 @@ interface CatalogItem {
   type: string
   name: string
   description: string
-  author: string
+  authorId?: string
+  authorName?: string
   tags: string[]
   teamTag: TeamTag | null
   status: 'draft' | 'published' | null
@@ -275,7 +276,7 @@ export default function CatalogList() {
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-[var(--text-muted)]">
-                      @{item.author}
+                      @{item.authorName || 'Unknown'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">

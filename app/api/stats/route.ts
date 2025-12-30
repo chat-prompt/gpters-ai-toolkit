@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, catalogItems, installations, tags, catalogItemTags } from '@/lib/db'
+import { db, catalogItems, installations, tags, catalogItemTags, users } from '@/lib/db'
 import { ApiErrors } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
-import { gte } from 'drizzle-orm'
+import { gte, eq } from 'drizzle-orm'
 
 const log = createLogger('api:stats')
 
@@ -34,8 +34,19 @@ export async function GET(request: NextRequest) {
     const period = (searchParams.get('period') || '30d') as Period
     const periodStart = getPeriodDate(period)
 
-    // Get all catalog items for type distribution
-    const items = await db.select().from(catalogItems)
+    // Get all catalog items for type distribution (with author names)
+    const items = await db
+      .select({
+        id: catalogItems.id,
+        name: catalogItems.name,
+        type: catalogItems.type,
+        status: catalogItems.status,
+        authorId: catalogItems.authorId,
+        authorName: users.name,
+        createdAt: catalogItems.createdAt,
+      })
+      .from(catalogItems)
+      .leftJoin(users, eq(catalogItems.authorId, users.id))
     const publishedItems = items.filter(i => i.status === 'published')
 
     // Get all installations for the period
@@ -127,7 +138,7 @@ export async function GET(request: NextRequest) {
           id: itemId,
           name: item?.name || 'Unknown',
           type: item?.type || 'unknown',
-          author: item?.author || 'Unknown',
+          authorName: item?.authorName || 'Unknown',
           installCount
         }
       })
@@ -174,7 +185,7 @@ export async function GET(request: NextRequest) {
         id: i.id,
         name: i.name,
         type: i.type,
-        author: i.author,
+        authorName: i.authorName || 'Unknown',
         createdAt: i.createdAt?.toISOString()
       }))
 

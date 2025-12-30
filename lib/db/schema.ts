@@ -30,7 +30,7 @@ export const catalogItems = pgTable('catalog_items', {
   type: itemTypeEnum('type').notNull(),
   name: text('name').notNull(),
   description: text('description').notNull().default(''),
-  author: text('author').notNull().default('unknown'),
+  authorId: text('author_id').references(() => users.id), // FK to users table
   tags: text('tags').array().default([]),
   teamTag: teamTagEnum('team_tag').default('general'),
   difficulty: difficultyEnum('difficulty'),
@@ -76,7 +76,7 @@ export const catalogItems = pgTable('catalog_items', {
   // Performance indexes for common queries
   index('catalog_items_type_idx').on(table.type),
   index('catalog_items_status_idx').on(table.status),
-  index('catalog_items_author_idx').on(table.author),
+  index('catalog_items_author_id_idx').on(table.authorId),
   index('catalog_items_marketplace_enabled_idx').on(table.marketplaceEnabled),
   // Composite index for type + status (common filter combination)
   index('catalog_items_type_status_idx').on(table.type, table.status),
@@ -106,20 +106,6 @@ export type NewUserRecord = typeof users.$inferInsert
 // ============================================
 // Normalized Tables
 // ============================================
-
-// Authors table
-export const authors = pgTable('authors', {
-  id: text('id').primaryKey(), // slug-style id
-  name: text('name').notNull(),
-  email: text('email'),
-  avatarUrl: text('avatar_url'),
-  bio: text('bio'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-})
-
-export type AuthorRecord = typeof authors.$inferSelect
-export type NewAuthorRecord = typeof authors.$inferInsert
 
 // Tags table
 export const tags = pgTable('tags', {

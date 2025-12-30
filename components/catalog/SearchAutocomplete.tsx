@@ -172,16 +172,16 @@ export function SearchAutocomplete({
     // Search authors
     const authors = new Set<string>()
     catalog.forEach(item => {
-      if (item.author.toLowerCase().includes(lowerQuery) && !authors.has(item.author)) {
-        authors.add(item.author)
-        if (!seen.has(`author:${item.author}`)) {
+      if (item.authorName?.toLowerCase().includes(lowerQuery) && !authors.has(item.authorName)) {
+        authors.add(item.authorName)
+        if (!seen.has(`author:${item.authorName}`)) {
           results.push({
             type: 'author',
-            value: item.author,
-            label: `@${item.author}`,
+            value: item.authorName,
+            label: `@${item.authorName}`,
             icon: '👤',
           })
-          seen.add(`author:${item.author}`)
+          seen.add(`author:${item.authorName}`)
         }
       }
     })
