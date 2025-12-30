@@ -15,7 +15,7 @@
     "test:api": "vitest run tests/api",
     "test:all": "pnpm test && pnpm test:e2e",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit push --force",
     "db:studio": "drizzle-kit studio",
     "db:migrate-data": "tsx --env-file=.env.local scripts/migrate-to-db.ts"
   },
