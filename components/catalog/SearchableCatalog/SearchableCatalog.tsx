@@ -42,7 +42,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   return (
     <>
       {/* Search & Filter */}
-      <div className="mt-12 max-w-2xl">
+      <div className="mt-12 max-w-4xl">
         <SearchAutocomplete
           value={searchQuery}
           onChange={setSearchQuery}

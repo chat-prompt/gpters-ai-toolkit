@@ -21,7 +21,7 @@ export default async function Home() {
       {/* Hero Section */}
       <section className="relative z-10 py-20 px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="max-w-3xl">
+          <div className="max-w-4xl">
             <p className="text-[#F26522] text-xs font-medium uppercase tracking-[0.3em] mb-6">
               GPTers AI Automation Hub
             </p>
