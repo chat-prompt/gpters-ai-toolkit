@@ -13,7 +13,7 @@ vi.mock('@/lib/db', () => ({
     name: 'name',
     type: 'type',
     description: 'description',
-    author: 'author',
+    authorId: 'authorId',
     tags: 'tags',
     teamTag: 'teamTag',
     difficulty: 'difficulty',
@@ -32,6 +32,11 @@ vi.mock('@/lib/db', () => ({
     changelog: 'changelog',
     marketplaceEnabled: 'marketplaceEnabled',
     likes: 'likes',
+  },
+  users: {
+    id: 'id',
+    name: 'name',
+    email: 'email',
   },
 }))
 
@@ -79,6 +84,7 @@ import {
 function createMockChain(result: unknown[] = []) {
   return {
     from: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(result),
   }
@@ -97,7 +103,7 @@ describe('MCP Handlers', () => {
           name: 'Test Skill',
           type: 'skill',
           description: 'A test skill',
-          author: 'test-author',
+          authorName: 'test-author',
           tags: ['test'],
           teamTag: 'general',
           difficulty: 'easy',
@@ -178,7 +184,7 @@ describe('MCP Handlers', () => {
         name: 'Test Skill',
         type: 'skill',
         description: 'A test skill',
-        author: 'test-author',
+        authorName: 'test-author',
         tags: ['test'],
         teamTag: 'general',
         difficulty: 'easy',
@@ -223,7 +229,7 @@ describe('MCP Handlers', () => {
         name: 'Minimal Skill',
         type: 'skill',
         description: '',
-        author: 'test',
+        authorName: 'test',
         tags: null,
         teamTag: null,
         difficulty: null,
@@ -256,12 +262,13 @@ describe('MCP Handlers', () => {
   describe('listPlugins', () => {
     it('should list all marketplace-enabled plugins', async () => {
       const mockPlugins = [
-        { id: 'skill-1', name: 'Skill 1', type: 'skill', description: '', author: 'test', tags: [], teamTag: null, difficulty: null },
-        { id: 'skill-2', name: 'Skill 2', type: 'skill', description: '', author: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'skill-1', name: 'Skill 1', type: 'skill', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'skill-2', name: 'Skill 2', type: 'skill', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
       ]
 
       const mockChain = {
         from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockPlugins),
       }
       vi.mocked(db.select).mockReturnValue(mockChain as never)
@@ -274,11 +281,12 @@ describe('MCP Handlers', () => {
 
     it('should filter by category', async () => {
       const mockPlugins = [
-        { id: 'agent-1', name: 'Agent 1', type: 'agent', description: '', author: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'agent-1', name: 'Agent 1', type: 'agent', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
       ]
 
       const mockChain = {
         from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockPlugins),
       }
       vi.mocked(db.select).mockReturnValue(mockChain as never)
@@ -292,6 +300,7 @@ describe('MCP Handlers', () => {
     it('should filter by teamTag', async () => {
       const mockChain = {
         from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([]),
       }
       vi.mocked(db.select).mockReturnValue(mockChain as never)
@@ -305,7 +314,7 @@ describe('MCP Handlers', () => {
   describe('getPluginsByCategory', () => {
     it('should get plugins by category with limit', async () => {
       const mockPlugins = [
-        { id: 'cmd-1', name: 'Command 1', type: 'command', description: '', author: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'cmd-1', name: 'Command 1', type: 'command', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
       ]
 
       const mockChain = createMockChain(mockPlugins)
@@ -582,6 +591,7 @@ describe('MCP Handlers', () => {
     it('should execute list_plugins tool', async () => {
       const mockChain = {
         from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([]),
       }
       vi.mocked(db.select).mockReturnValue(mockChain as never)

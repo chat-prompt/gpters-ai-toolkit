@@ -37,7 +37,7 @@ const mockItems: CatalogItem[] = [
     name: 'Code Reviewer',
     description: 'AI-powered code review tool',
     type: 'skill',
-    author: 'alice',
+    authorName: 'alice',
     tags: ['code-quality', 'automation'],
     difficulty: 'easy',
     teamTag: 'dev',
@@ -52,7 +52,7 @@ const mockItems: CatalogItem[] = [
     name: 'Data Analyzer',
     description: 'Analyze data patterns',
     type: 'agent',
-    author: 'bob',
+    authorName: 'bob',
     tags: ['data', 'analysis'],
     difficulty: 'medium',
     teamTag: 'data',
@@ -67,7 +67,7 @@ const mockItems: CatalogItem[] = [
     name: 'Git Helper',
     description: 'Git command shortcuts',
     type: 'command',
-    author: 'charlie',
+    authorName: 'charlie',
     tags: ['git', 'automation'],
     difficulty: 'hard',
     teamTag: 'dev',
@@ -82,7 +82,7 @@ const mockItems: CatalogItem[] = [
     name: 'Test Runner',
     description: 'Run tests automatically',
     type: 'skill',
-    author: 'alice',
+    authorName: 'alice',
     tags: ['testing', 'automation'],
     difficulty: 'easy',
     teamTag: 'dev',
@@ -366,7 +366,7 @@ describe('sortItems', () => {
   it('should sort by author', () => {
     const config: SortConfig = { field: 'author', direction: 'asc' }
     const result = sortItems(mockItems, config)
-    expect(result[0].author).toBe('alice')
+    expect(result[0].authorName).toBe('alice')
   })
 })
 

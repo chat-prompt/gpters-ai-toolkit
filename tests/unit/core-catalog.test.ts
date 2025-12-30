@@ -25,7 +25,8 @@ vi.mock('@/lib/db', () => ({
     type: { name: 'type' },
     name: { name: 'name' },
     description: { name: 'description' },
-    author: { name: 'author' },
+    authorId: { name: 'authorId' },
+    authorName: { name: 'authorName' },
     tags: { name: 'tags' },
     teamTag: { name: 'teamTag' },
     difficulty: { name: 'difficulty' },
@@ -65,7 +66,7 @@ import {
   getGuides,
   getGuideById,
   getBeginnerItems,
-  getItemsByAuthor,
+  getItemsByAuthorId,
   getRelatedItems,
 } from '@/lib/core/catalog'
 
@@ -76,7 +77,8 @@ function createMockRecord(overrides: Record<string, unknown> = {}) {
     type: 'skill' as const,
     name: 'Test Item',
     description: 'Test description',
-    author: 'Test Author',
+    authorId: 'author-123',
+    authorName: 'Test Author',
     tags: ['tag1', 'tag2'],
     teamTag: 'platform' as const,
     difficulty: 'medium' as const,
@@ -402,15 +404,15 @@ describe('Catalog Module', () => {
     })
   })
 
-  describe('getItemsByAuthor', () => {
-    it('should return all items by author', async () => {
+  describe('getItemsByAuthorId', () => {
+    it('should return all items by author ID', async () => {
       const mockRecords = [
-        createMockRecord({ id: 'item-1', author: 'John' }),
-        createMockRecord({ id: 'item-2', author: 'John' }),
+        createMockRecord({ id: 'item-1', authorId: 'user-123' }),
+        createMockRecord({ id: 'item-2', authorId: 'user-123' }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
-      const result = await getItemsByAuthor('John')
+      const result = await getItemsByAuthorId('user-123')
 
       expect(result).toHaveLength(2)
     })
@@ -418,23 +420,23 @@ describe('Catalog Module', () => {
     it('should return full CatalogItem objects', async () => {
       const mockRecords = [
         createMockRecord({
-          author: 'John',
+          authorId: 'user-123',
           content: '# Full content',
           readme: '# README',
         }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
-      const result = await getItemsByAuthor('John')
+      const result = await getItemsByAuthorId('user-123')
 
       expect(result[0].content).toBe('# Full content')
       expect(result[0].readme).toBe('# README')
     })
 
-    it('should return empty array for unknown author', async () => {
+    it('should return empty array for unknown author ID', async () => {
       mockSelect.mockResolvedValue([])
 
-      const result = await getItemsByAuthor('Unknown')
+      const result = await getItemsByAuthorId('unknown-id')
 
       expect(result).toEqual([])
     })
@@ -443,8 +445,8 @@ describe('Catalog Module', () => {
   describe('getRelatedItems', () => {
     it('should return items with matching tags', async () => {
       const mockRecords = [
-        createMockRecord({ id: 'related-1', tags: ['tag1', 'tag2'], author: 'Other' }),
-        createMockRecord({ id: 'unrelated', tags: ['other'], author: 'Other' }),
+        createMockRecord({ id: 'related-1', tags: ['tag1', 'tag2'], authorId: 'other-user' }),
+        createMockRecord({ id: 'unrelated', tags: ['other'], authorId: 'other-user' }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
@@ -456,12 +458,12 @@ describe('Catalog Module', () => {
 
     it('should prioritize items by same author', async () => {
       const mockRecords = [
-        createMockRecord({ id: 'same-author', tags: ['tag1'], author: 'John' }),
-        createMockRecord({ id: 'diff-author', tags: ['tag1', 'tag2'], author: 'Other' }),
+        createMockRecord({ id: 'same-author', tags: ['tag1'], authorId: 'john-user' }),
+        createMockRecord({ id: 'diff-author', tags: ['tag1', 'tag2'], authorId: 'other-user' }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
-      const result = await getRelatedItems('current-id', ['tag1'], 'John')
+      const result = await getRelatedItems('current-id', ['tag1'], 'john-user')
 
       // Same author should be first (2 bonus + 1 tag = 3 points vs 2 tags = 2 points)
       expect(result[0].id).toBe('same-author')
@@ -469,7 +471,7 @@ describe('Catalog Module', () => {
 
     it('should limit results to specified count', async () => {
       const mockRecords = Array.from({ length: 10 }, (_, i) =>
-        createMockRecord({ id: `item-${i}`, tags: ['common'], author: 'Other' })
+        createMockRecord({ id: `item-${i}`, tags: ['common'], authorId: 'other-user' })
       )
       mockSelect.mockResolvedValue(mockRecords)
 
@@ -480,7 +482,7 @@ describe('Catalog Module', () => {
 
     it('should return empty array when no matching tags', async () => {
       const mockRecords = [
-        createMockRecord({ id: 'item-1', tags: ['unrelated'], author: 'Other' }),
+        createMockRecord({ id: 'item-1', tags: ['unrelated'], authorId: 'other-user' }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
@@ -492,7 +494,7 @@ describe('Catalog Module', () => {
     it('should exclude current item', async () => {
       // The current item should be filtered by the WHERE clause
       const mockRecords = [
-        createMockRecord({ id: 'other-item', tags: ['tag1'], author: 'Other' }),
+        createMockRecord({ id: 'other-item', tags: ['tag1'], authorId: 'other-user' }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
@@ -503,7 +505,7 @@ describe('Catalog Module', () => {
 
     it('should use default limit of 6', async () => {
       const mockRecords = Array.from({ length: 10 }, (_, i) =>
-        createMockRecord({ id: `item-${i}`, tags: ['common'], author: 'Other' })
+        createMockRecord({ id: `item-${i}`, tags: ['common'], authorId: 'other-user' })
       )
       mockSelect.mockResolvedValue(mockRecords)
 
@@ -517,13 +519,13 @@ describe('Catalog Module', () => {
         createMockRecord({
           id: 'older',
           tags: ['tag1', 'tag2'],
-          author: 'Other',
+          authorId: 'other-user',
           updatedAt: new Date('2024-01-01'),
         }),
         createMockRecord({
           id: 'newer',
           tags: ['tag1', 'tag2'],
-          author: 'Other',
+          authorId: 'other-user',
           updatedAt: new Date('2024-01-02'),
         }),
       ]

@@ -20,7 +20,7 @@ function createBaseCatalogItem(overrides: Partial<CatalogItem> = {}): CatalogIte
     type: 'skill',
     description: 'A test item for unit testing',
     content: '# Test Content\n\nThis is test content.',
-    author: 'Test Author',
+    authorName: 'Test Author',
     tags: ['test', 'example'],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -74,7 +74,7 @@ describe('Marketplace Transform', () => {
         createBaseCatalogItem({
           id: 'test-skill',
           description: 'Test description',
-          author: 'Author Name',
+          authorName: 'Author Name',
           tags: ['tag1', 'tag2'],
           marketplaceVersion: '2.0.0',
         }),
@@ -114,7 +114,7 @@ describe('Marketplace Transform', () => {
       const item = createBaseCatalogItem({
         id: 'my-plugin',
         description: 'My plugin description',
-        author: 'Plugin Author',
+        authorName: 'Plugin Author',
         tags: ['tag1', 'tag2'],
         marketplaceVersion: '1.2.3',
       })

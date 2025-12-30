@@ -187,18 +187,18 @@ See `docs/ARCHITECTURE_V2.md` for V2 deploy architecture.
 
 ### Push 전 필수 확인사항
 
-**Git push 전에 반드시 다음 명령어를 실행하여 빌드가 성공하는지 확인:**
+**Git push 전에 반드시 다음 명령어를 실행하여 모든 검증이 통과하는지 확인:**
 
 ```bash
-pnpm build
+pnpm lint && pnpm test && pnpm build
 ```
 
 **체크리스트:**
-- [ ] `pnpm build` 성공 확인 (TypeScript 에러 없음)
 - [ ] `pnpm lint` 통과 확인
-- [ ] `pnpm test` 통과 확인 (관련 테스트가 있는 경우)
+- [ ] `pnpm test` 통과 확인 (**모든 테스트가 통과해야 함**)
+- [ ] `pnpm build` 성공 확인 (TypeScript 에러 없음)
 
-빌드 실패 시 Vercel 배포도 실패하므로, 로컬에서 먼저 빌드를 확인하는 것이 중요합니다.
+빌드나 테스트 실패 시 Vercel 배포도 실패하므로, 로컬에서 먼저 모든 검증을 확인하는 것이 중요합니다.
 
 ### Available Plugins
 
