@@ -48,10 +48,10 @@ export function Header({ user }: HeaderProps) {
             </Link>
 
             {/* Tab Navigation */}
-            <nav className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1">
+            <nav className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 flex-shrink-0">
               <Link
                 href="/getting-started"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isStartTab
                     ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
