@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, mcpServers } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync, apiSuccess } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
 import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:mcp-servers')
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // PUT /api/mcp-servers/[id] - Update an MCP server
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const authError = requireAdminAuth(request)
+  const authError = await requirePermissionAsync(Permissions.METADATA_MANAGE, request)
   if (authError) return authError
 
   try {
@@ -61,7 +62,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/mcp-servers/[id] - Delete an MCP server
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const authError = requireAdminAuth(request)
+  const authError = await requirePermissionAsync(Permissions.METADATA_MANAGE, request)
   if (authError) return authError
 
   try {

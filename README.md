@@ -207,7 +207,6 @@ pnpm lint          # ESLint
 | `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID | ✅ |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 시크릿 | ✅ |
 | `NEXTAUTH_SECRET` | NextAuth 시크릿 | ✅ |
-| `ADMIN_PASSWORD` | 관리자 대시보드 비밀번호 | ✅ |
 | `GH_TOKEN` | GitHub API 토큰 (마켓플레이스 동기화) | |
 | `DEV_BYPASS_AUTH` | 개발 환경 인증 우회 (`true`로 설정) | |
 

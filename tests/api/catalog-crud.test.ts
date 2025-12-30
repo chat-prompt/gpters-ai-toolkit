@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-admin-password'
 
 async function isServerRunning(): Promise<boolean> {
   try {
@@ -31,7 +30,7 @@ describe('Catalog CRUD API', () => {
         await fetch(`${API_BASE_URL}/api/catalog/${testItemId}`, {
           method: 'DELETE',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
       } catch (error) {
@@ -62,7 +61,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(newItem),
       })
@@ -138,7 +137,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(invalidItem),
       })
@@ -169,7 +168,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(agentItem),
       })
@@ -185,7 +184,7 @@ describe('Catalog CRUD API', () => {
       // Cleanup
       await fetch(`${API_BASE_URL}/api/catalog/${agentItem.id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': ADMIN_PASSWORD },
+        headers: { 'x-test-user-role': 'admin' },
       })
     })
 
@@ -209,7 +208,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(commandItem),
       })
@@ -224,7 +223,7 @@ describe('Catalog CRUD API', () => {
       // Cleanup
       await fetch(`${API_BASE_URL}/api/catalog/${commandItem.id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': ADMIN_PASSWORD },
+        headers: { 'x-test-user-role': 'admin' },
       })
     })
   })
@@ -250,7 +249,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(newItem),
       })
@@ -264,7 +263,7 @@ describe('Catalog CRUD API', () => {
       if (serverAvailable && createdItemId) {
         await fetch(`${API_BASE_URL}/api/catalog/${createdItemId}`, {
           method: 'DELETE',
-          headers: { 'x-admin-password': ADMIN_PASSWORD },
+          headers: { 'x-test-user-role': 'admin' },
         })
       }
     })
@@ -315,7 +314,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(newItem),
       })
@@ -329,7 +328,7 @@ describe('Catalog CRUD API', () => {
       if (serverAvailable && createdItemId) {
         await fetch(`${API_BASE_URL}/api/catalog/${createdItemId}`, {
           method: 'DELETE',
-          headers: { 'x-admin-password': ADMIN_PASSWORD },
+          headers: { 'x-test-user-role': 'admin' },
         })
       }
     })
@@ -347,7 +346,7 @@ describe('Catalog CRUD API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(updates),
       })
@@ -413,7 +412,7 @@ describe('Catalog CRUD API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(updates),
       })
@@ -435,7 +434,7 @@ describe('Catalog CRUD API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(updates),
       })
@@ -466,7 +465,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(newItem),
       })
@@ -477,7 +476,7 @@ describe('Catalog CRUD API', () => {
       const deleteResponse = await fetch(`${API_BASE_URL}/api/catalog/${newItem.id}`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
 
@@ -506,7 +505,7 @@ describe('Catalog CRUD API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify(newItem),
       })
@@ -523,7 +522,7 @@ describe('Catalog CRUD API', () => {
       // Cleanup
       await fetch(`${API_BASE_URL}/api/catalog/${newItem.id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': ADMIN_PASSWORD },
+        headers: { 'x-test-user-role': 'admin' },
       })
     })
 
@@ -533,7 +532,7 @@ describe('Catalog CRUD API', () => {
       const response = await fetch(`${API_BASE_URL}/api/catalog/non-existent-id`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
 
@@ -584,7 +583,7 @@ describe('Catalog CRUD API', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
           body: JSON.stringify(skillItem),
         }),
@@ -592,7 +591,7 @@ describe('Catalog CRUD API', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
           body: JSON.stringify(agentItem),
         }),
@@ -600,7 +599,7 @@ describe('Catalog CRUD API', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
           body: JSON.stringify(authorItem),
         }),
@@ -618,15 +617,15 @@ describe('Catalog CRUD API', () => {
       await Promise.all([
         skillItemId && fetch(`${API_BASE_URL}/api/catalog/${skillItemId}`, {
           method: 'DELETE',
-          headers: { 'x-admin-password': ADMIN_PASSWORD },
+          headers: { 'x-test-user-role': 'admin' },
         }),
         agentItemId && fetch(`${API_BASE_URL}/api/catalog/${agentItemId}`, {
           method: 'DELETE',
-          headers: { 'x-admin-password': ADMIN_PASSWORD },
+          headers: { 'x-test-user-role': 'admin' },
         }),
         authorItemId && fetch(`${API_BASE_URL}/api/catalog/${authorItemId}`, {
           method: 'DELETE',
-          headers: { 'x-admin-password': ADMIN_PASSWORD },
+          headers: { 'x-test-user-role': 'admin' },
         }),
       ])
     })

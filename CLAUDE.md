@@ -92,7 +92,6 @@ Key database tables:
 
 Required in `.env.local` (see `.env.example`):
 - `DATABASE_URL` - Neon PostgreSQL connection string
-- `ADMIN_PASSWORD` - Admin dashboard access
 - `GH_TOKEN`, `GH_OWNER`, `GH_REPO`, `GH_BRANCH` - GitHub API for marketplace sync
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - OAuth credentials
 - `DEV_BYPASS_AUTH=true` - Skip auth in development
@@ -116,7 +115,7 @@ plugins/plugin-name/
 ### API Patterns
 
 - API routes use Next.js App Router conventions (`route.ts`)
-- Admin APIs require `ADMIN_PASSWORD` in Authorization header
+- Admin APIs require session with admin role (RBAC)
 - Catalog APIs are public (after auth middleware)
 
 ### MCP Server

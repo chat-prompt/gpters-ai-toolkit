@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, mcpServers } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { ApiErrors, requireAdminAuth, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
 import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:mcp-servers')
@@ -19,7 +20,7 @@ export async function GET() {
 
 // POST /api/mcp-servers - Create a new MCP server
 export async function POST(request: NextRequest) {
-  const authError = requireAdminAuth(request)
+  const authError = await requirePermissionAsync(Permissions.METADATA_MANAGE, request)
   if (authError) return authError
 
   try {

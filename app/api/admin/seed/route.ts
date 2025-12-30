@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags, mcpServers } from '@/lib/db'
 import { TAGS, MCP_SERVERS } from '@/lib/core/types'
-import { ApiErrors, requireAdminAuth, apiSuccess } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync, apiSuccess } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
 import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:admin:seed')
@@ -11,7 +12,7 @@ const log = createLogger('api:admin:seed')
  * Seeds the database with initial data from hardcoded constants
  */
 export async function POST(request: NextRequest) {
-  const authError = requireAdminAuth(request)
+  const authError = await requirePermissionAsync(Permissions.ADMIN_SETTINGS, request)
   if (authError) return authError
 
   try {
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
  * Returns the current seed status (counts)
  */
 export async function GET(request: NextRequest) {
-  const authError = requireAdminAuth(request)
+  const authError = await requirePermissionAsync(Permissions.ADMIN_SETTINGS, request)
   if (authError) return authError
 
   try {

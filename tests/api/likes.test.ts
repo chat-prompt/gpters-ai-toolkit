@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-admin-password'
 
 async function isServerRunning(): Promise<boolean> {
   try {
@@ -30,7 +29,7 @@ describe('Likes API', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-admin-password': ADMIN_PASSWORD,
+        'x-test-user-role': 'admin',
       },
       body: JSON.stringify({
         id: testItemId,
@@ -55,7 +54,7 @@ describe('Likes API', () => {
         await fetch(`${API_BASE_URL}/api/catalog/${testItemId}`, {
           method: 'DELETE',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
       } catch (error) {

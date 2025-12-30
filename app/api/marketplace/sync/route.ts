@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
 import { syncAllToGitHub } from '@/lib/marketplace'
 import type { HookEvent } from '@/lib/core/types'
-import { ApiErrors, requireAdminAuth } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
 import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('api:marketplace:sync')
@@ -14,7 +15,7 @@ const log = createLogger('api:marketplace:sync')
  * Requires admin authentication
  */
 export async function POST(request: NextRequest) {
-  const authError = requireAdminAuth(request)
+  const authError = await requirePermissionAsync(Permissions.ADMIN_SETTINGS, request)
   if (authError) return authError
 
   try {

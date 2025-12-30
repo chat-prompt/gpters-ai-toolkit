@@ -96,39 +96,20 @@ export function apiSuccess<T>(
 }
 
 /**
- * Check admin authentication (legacy - uses password header)
- * @deprecated Use requirePermission from rbac.ts instead
- */
-export function checkAdminAuth(request: NextRequest): boolean {
-  const password = request.headers.get('x-admin-password')
-  return password === process.env.ADMIN_PASSWORD
-}
-
-/**
- * Require admin authentication - returns error response if not authenticated
- * @deprecated Use requirePermission from rbac.ts instead
- */
-export function requireAdminAuth(request: NextRequest): NextResponse | null {
-  if (!checkAdminAuth(request)) {
-    return ApiErrors.unauthorized('Admin authentication required')
-  }
-  return null
-}
-
-/**
  * Require specific permission using RBAC
  * Returns error response if user doesn't have permission, null otherwise
- * Also supports x-admin-password header as fallback for API/testing access
  */
 export async function requirePermissionAsync(
   permission: Permission,
   request?: NextRequest
 ): Promise<NextResponse | null> {
-  // First, check for x-admin-password header (admin fallback for API/testing)
-  if (request) {
-    const password = request.headers.get('x-admin-password')
-    if (password === process.env.ADMIN_PASSWORD) {
-      // Admin password grants admin role, which has all permissions
+  // Test mode bypass: allow x-test-user-role header in test/development environment
+  if (request && (process.env.NODE_ENV === 'test' || process.env.DEV_BYPASS_AUTH === 'true')) {
+    const testRole = request.headers.get('x-test-user-role')
+    if (testRole) {
+      if (!hasPermission(testRole as UserRole, permission)) {
+        return ApiErrors.forbidden(`Permission denied: ${permission}`)
+      }
       return null
     }
   }

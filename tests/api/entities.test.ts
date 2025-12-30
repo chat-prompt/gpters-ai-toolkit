@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-admin-password'
 
 async function isServerRunning(): Promise<boolean> {
   try {
@@ -61,7 +60,7 @@ describe('Tags API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: testTagId,
@@ -85,7 +84,7 @@ describe('Tags API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           label: 'Missing ID',
@@ -104,7 +103,7 @@ describe('Tags API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: testTagId,
@@ -162,7 +161,7 @@ describe('Tags API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           label: 'Updated Test Tag',
@@ -183,7 +182,7 @@ describe('Tags API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           label: 'Updated Tag',
@@ -209,7 +208,7 @@ describe('Tags API', () => {
       const response = await fetch(`${API_BASE_URL}/api/tags/${testTagId}`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
       expect(response.status).toBe(200)
@@ -224,7 +223,7 @@ describe('Tags API', () => {
       const response = await fetch(`${API_BASE_URL}/api/tags/non-existent-tag`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
       expect(response.status).toBe(404)
@@ -280,7 +279,7 @@ describe('Authors API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: testAuthorId,
@@ -304,7 +303,7 @@ describe('Authors API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: 'missing-name',
@@ -323,7 +322,7 @@ describe('Authors API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: testAuthorId,
@@ -381,7 +380,7 @@ describe('Authors API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           name: 'Updated Test Author',
@@ -402,7 +401,7 @@ describe('Authors API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           name: 'Updated Author',
@@ -428,7 +427,7 @@ describe('Authors API', () => {
       const response = await fetch(`${API_BASE_URL}/api/authors/${testAuthorId}`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
       expect(response.status).toBe(200)
@@ -443,7 +442,7 @@ describe('Authors API', () => {
       const response = await fetch(`${API_BASE_URL}/api/authors/non-existent-author`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
       expect(response.status).toBe(404)
@@ -499,7 +498,7 @@ describe('MCP Servers API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: testServerId,
@@ -523,7 +522,7 @@ describe('MCP Servers API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           label: 'Missing ID',
@@ -542,7 +541,7 @@ describe('MCP Servers API', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           id: testServerId,
@@ -600,7 +599,7 @@ describe('MCP Servers API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           label: 'Updated Test Server',
@@ -621,7 +620,7 @@ describe('MCP Servers API', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
         body: JSON.stringify({
           label: 'Updated Server',
@@ -647,7 +646,7 @@ describe('MCP Servers API', () => {
       const response = await fetch(`${API_BASE_URL}/api/mcp-servers/${testServerId}`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
       expect(response.status).toBe(200)
@@ -662,7 +661,7 @@ describe('MCP Servers API', () => {
       const response = await fetch(`${API_BASE_URL}/api/mcp-servers/non-existent-server`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': ADMIN_PASSWORD,
+          'x-test-user-role': 'admin',
         },
       })
       expect(response.status).toBe(404)

@@ -3,10 +3,6 @@ import '@testing-library/jest-dom/vitest'
 
 // Note: NODE_ENV is automatically set to 'test' by vitest
 
-// Set test environment variables
-// Note: For API integration tests, the server must also use ADMIN_PASSWORD=test-admin-password
-process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-admin-password'
-
 // Database isolation:
 // Set TEST_DATABASE_URL in .env.local to use a separate test database
 // This prevents test data from appearing in production

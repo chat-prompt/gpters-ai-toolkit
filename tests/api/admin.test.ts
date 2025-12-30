@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test-admin-password'
 
 async function isServerRunning(): Promise<boolean> {
   try {
@@ -60,7 +59,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/marketplace/sync`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -90,7 +89,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/marketplace/sync`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -114,7 +113,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/marketplace/sync`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -158,7 +157,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
           method: 'GET',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -182,7 +181,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
           method: 'GET',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -229,7 +228,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -261,7 +260,7 @@ describe('Admin API', () => {
         await fetch(`${API_BASE_URL}/api/admin/seed`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -269,7 +268,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
@@ -288,7 +287,7 @@ describe('Admin API', () => {
         const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
           method: 'POST',
           headers: {
-            'x-admin-password': ADMIN_PASSWORD,
+            'x-test-user-role': 'admin',
           },
         })
 
