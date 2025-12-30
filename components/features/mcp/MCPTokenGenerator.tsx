@@ -5,6 +5,10 @@ import { useState } from 'react'
 interface MCPTokenGeneratorProps {
   onSuccess?: () => void
   onCancel?: () => void
+  /** API endpoint for token creation. Defaults to admin endpoint. */
+  apiEndpoint?: '/api/admin/mcp-tokens' | '/api/user/mcp-tokens'
+  /** Whether to show rate limit selection (admin only) */
+  showRateLimitSelect?: boolean
 }
 
 interface GeneratedToken {
@@ -25,7 +29,12 @@ function getMcpEndpointUrl(): string {
   return 'https://your-domain.com/api/mcp'
 }
 
-export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGeneratorProps) {
+export default function MCPTokenGenerator({
+  onSuccess,
+  onCancel,
+  apiEndpoint = '/api/admin/mcp-tokens',
+  showRateLimitSelect = true,
+}: MCPTokenGeneratorProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [expiresIn, setExpiresIn] = useState<string>('never')
@@ -43,15 +52,21 @@ export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGener
     setLoading(true)
 
     try {
-      const res = await fetch('/api/admin/mcp-tokens', {
+      const requestBody: Record<string, unknown> = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        expiresIn: expiresIn === 'never' ? null : parseInt(expiresIn, 10),
+      }
+
+      // Only include rateLimit for admin API
+      if (showRateLimitSelect) {
+        requestBody.rateLimit = parseInt(rateLimit, 10)
+      }
+
+      const res = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || undefined,
-          expiresIn: expiresIn === 'never' ? null : parseInt(expiresIn, 10),
-          rateLimit: parseInt(rateLimit, 10),
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!res.ok) {
@@ -275,7 +290,7 @@ export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGener
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={showRateLimitSelect ? 'grid grid-cols-2 gap-4' : ''}>
         <div>
           <label className="block text-sm text-[var(--text-secondary)] mb-2">
             Expires In
@@ -294,24 +309,26 @@ export default function MCPTokenGenerator({ onSuccess, onCancel }: MCPTokenGener
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm text-[var(--text-secondary)] mb-2">
-            Rate Limit (req/min)
-          </label>
-          <select
-            value={rateLimit}
-            onChange={(e) => setRateLimit(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
-          >
-            <option value="10">10/min (very low)</option>
-            <option value="30">30/min (low)</option>
-            <option value="60">60/min (standard)</option>
-            <option value="100">100/min (default)</option>
-            <option value="200">200/min (high)</option>
-            <option value="500">500/min (very high)</option>
-            <option value="1000">1000/min (unlimited)</option>
-          </select>
-        </div>
+        {showRateLimitSelect && (
+          <div>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+              Rate Limit (req/min)
+            </label>
+            <select
+              value={rateLimit}
+              onChange={(e) => setRateLimit(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+            >
+              <option value="10">10/min (very low)</option>
+              <option value="30">30/min (low)</option>
+              <option value="60">60/min (standard)</option>
+              <option value="100">100/min (default)</option>
+              <option value="200">200/min (high)</option>
+              <option value="500">500/min (very high)</option>
+              <option value="1000">1000/min (unlimited)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {error && (

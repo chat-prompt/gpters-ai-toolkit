@@ -26,7 +26,8 @@
  *    Body: {"query": "database"}
  *
  * Authentication:
- *    Optional Bearer token via Authorization header.
+ *    Required Bearer token via Authorization header.
+ *    Get your token at /profile/tokens
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -155,8 +156,8 @@ interface AuditContext {
 async function handleAuthAndRateLimit(
   request: NextRequest
 ): Promise<{ error?: NextResponse; auth?: McpAuthResult; auditCtx?: AuditContext }> {
-  // Check MCP token authentication
-  const authResult = await withMcpAuth(request, { requireAuth: false })
+  // Check MCP token authentication (required)
+  const authResult = await withMcpAuth(request, { requireAuth: true })
 
   if (authResult.error) {
     return { error: addCorsHeaders(authResult.error) }
@@ -275,9 +276,10 @@ export async function GET(request: NextRequest) {
         description: t.description.split('\n')[0],
       })),
       authentication: {
-        status: auth ? 'authenticated' : 'public',
+        status: auth ? 'authenticated' : 'unauthenticated',
         tokenName: auth?.tokenName,
-        usage: 'Add "Authorization: Bearer mcp_xxx" header for token-based access',
+        required: true,
+        usage: 'Add "Authorization: Bearer mcp_xxx" header. Get your token at /profile/tokens',
       },
       transport: 'Streamable HTTP (MCP 2025-03-26)',
     },
