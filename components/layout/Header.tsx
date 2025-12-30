@@ -30,11 +30,11 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header className="relative z-[1010] border-b border-[var(--border-subtle)]">
-      <div className="max-w-6xl mx-auto px-8 py-5">
+      <div className="max-w-7xl mx-auto px-8 py-5">
         <div className="flex items-center justify-between">
           {/* Logo & Nav */}
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3 flex-shrink-0">
               <Image
                 src="/gpters-logo.svg"
                 alt="GPTers"
@@ -42,7 +42,7 @@ export function Header({ user }: HeaderProps) {
                 height={32}
                 className="rounded-full"
               />
-              <span className="text-lg font-medium text-[var(--text-primary)]">
+              <span className="text-lg font-medium text-[var(--text-primary)] whitespace-nowrap">
                 AI Toolkit
               </span>
             </Link>
