@@ -1,5 +1,5 @@
 import { eq, ne, and, or, isNull, asc } from 'drizzle-orm'
-import { db, catalogItems, packageItems } from '../db'
+import { db, catalogItems, packageItems, users } from '../db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
 
 // ============================================================================
@@ -53,6 +53,7 @@ type SummaryRecord = {
   name: string
   description: string
   authorId: string | null
+  authorName: string | null
   tags: string[] | null
   teamTag: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general' | null
   difficulty: 'easy' | 'medium' | 'hard' | null
@@ -93,6 +94,7 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     name: record.name,
     description: record.description,
     authorId: record.authorId ?? undefined,
+    authorName: record.authorName ?? undefined,
     tags: record.tags || [],
     teamTag: (record.teamTag as CatalogItemSummary['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
@@ -176,14 +178,19 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
 /**
  * Get all published catalog items except guides.
  * Uses optimized column selection to reduce data transfer.
+ * Joins with users table to resolve author names.
  */
 export async function getCatalog(): Promise<CatalogItemSummary[]> {
   // Get all published items except guides (they have their own page)
   // Filter: type != 'guide' AND (status = 'published' OR status IS NULL)
   // Uses composite index: catalog_items_type_status_idx
   const records = await db
-    .select(summaryColumns)
+    .select({
+      ...summaryColumns,
+      authorName: users.name,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(
       and(
         ne(catalogItems.type, 'guide'),
@@ -211,8 +218,12 @@ export async function getItemById(id: string): Promise<CatalogItem | undefined> 
  */
 export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary[]> {
   const records = await db
-    .select(summaryColumns)
+    .select({
+      ...summaryColumns,
+      authorName: users.name,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(
       and(
         eq(catalogItems.type, type),
@@ -228,8 +239,12 @@ export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary
  */
 export async function getGuides(): Promise<CatalogItemSummary[]> {
   const records = await db
-    .select(summaryColumns)
+    .select({
+      ...summaryColumns,
+      authorName: users.name,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(
       and(
         eq(catalogItems.type, 'guide'),
@@ -254,8 +269,12 @@ export async function getGuideById(id: string): Promise<CatalogItem | undefined>
  */
 export async function getBeginnerItems(): Promise<CatalogItemSummary[]> {
   const records = await db
-    .select(summaryColumns)
+    .select({
+      ...summaryColumns,
+      authorName: users.name,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)))
 
   return records
@@ -299,8 +318,12 @@ export async function getRelatedItems(
 ): Promise<CatalogItemSummary[]> {
   // Get all published items except the current one
   const records = await db
-    .select(summaryColumns)
+    .select({
+      ...summaryColumns,
+      authorName: users.name,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
     .where(
       and(
         ne(catalogItems.id, itemId),

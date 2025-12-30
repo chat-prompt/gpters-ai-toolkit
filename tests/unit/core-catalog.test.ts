@@ -12,6 +12,12 @@ vi.mock('@/lib/db', () => ({
       from: (table: unknown) => {
         mockFrom(table)
         return {
+          leftJoin: () => ({
+            where: (condition: unknown) => {
+              mockWhere(condition)
+              return mockSelect()
+            },
+          }),
           where: (condition: unknown) => {
             mockWhere(condition)
             return mockSelect()
@@ -26,7 +32,6 @@ vi.mock('@/lib/db', () => ({
     name: { name: 'name' },
     description: { name: 'description' },
     authorId: { name: 'authorId' },
-    authorName: { name: 'authorName' },
     tags: { name: 'tags' },
     teamTag: { name: 'teamTag' },
     difficulty: { name: 'difficulty' },
@@ -55,6 +60,11 @@ vi.mock('@/lib/db', () => ({
     changelog: { name: 'changelog' },
     createdAt: { name: 'createdAt' },
     updatedAt: { name: 'updatedAt' },
+  },
+  users: {
+    id: { name: 'id' },
+    name: { name: 'name' },
+    email: { name: 'email' },
   },
 }))
 
