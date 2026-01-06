@@ -10,12 +10,28 @@
   },
   "plugins": [
     {
+      "name": "vibe-coder-helper",
+      "source": "./plugins/vibe-coder-helper",
+      "description": "바이브 코딩을 도와주는 친절한 AI 스킬. 복잡한 개념을 쉽게 설명하고, 빠르게 결과물을 만들 수 있도록 가이드합니다.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Unknown"
+      },
+      "category": "skill",
+      "keywords": [
+        "beginner",
+        "productivity",
+        "learning",
+        "code"
+      ]
+    },
+    {
       "name": "data-source-reference",
       "source": "./plugins/data-source-reference",
       "description": "GPTers 플랫폼의 데이터 소스 레퍼런스 - Portal DB와 Airtable 테이블 구조, 동기화 방향, ID 매핑 관계 참조",
       "version": "1.0.0",
       "author": {
-        "name": "gpters-team"
+        "name": "Unknown"
       },
       "category": "skill",
       "keywords": [
@@ -27,27 +43,12 @@
       ]
     },
     {
-      "name": "refactor-guide",
-      "source": "./plugins/refactor-guide",
-      "description": "코드 스멜을 분석하고 리팩토링 가이드를 제공 합니다",
-      "version": "1.0.0",
-      "author": {
-        "name": "primadonna"
-      },
-      "category": "skill",
-      "keywords": [
-        "code",
-        "analysis",
-        "refactoring"
-      ]
-    },
-    {
       "name": "code-reviewer",
       "source": "./plugins/code-reviewer",
-      "description": "코드 리뷰를 수행하고 개선점을 제안하는 서브에이전트",
+      "description": "코드 리뷰를 수행하고 개선점을 제안하는 AI 에이전트. PR 리뷰나 코드 품질 점검에 활용하세요.",
       "version": "1.0.0",
       "author": {
-        "name": "primadonna"
+        "name": "Unknown"
       },
       "category": "agent",
       "keywords": [
@@ -61,7 +62,7 @@
       "description": "Compaction 전에 현재 세션의 대화 내역(transcript)을 자동으로 백업합니다. 중요한 작업 내역을 보존하여 컨텍스트 손실을 방지합니다.",
       "version": "1.0.0",
       "author": {
-        "name": "gpters"
+        "name": "Unknown"
       },
       "category": "hook",
       "keywords": [
