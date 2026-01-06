@@ -23,7 +23,7 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <DetailPageLayout accentColor="emerald" backHref="/guides" backLabel="Back to Guides">
+    <DetailPageLayout accentColor="emerald">
       <ItemHero
         type="guide"
         itemId={guide.id}

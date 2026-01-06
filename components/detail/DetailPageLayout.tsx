@@ -1,11 +1,9 @@
-import Link from 'next/link'
 import { ReactNode } from 'react'
+import { ServerHeader } from '../layout/ServerHeader'
 
 interface DetailPageLayoutProps {
   children: ReactNode
   accentColor: string // e.g., 'cyan', 'purple', 'rose', 'orange', 'emerald'
-  backHref?: string
-  backLabel?: string
 }
 
 const ACCENT_COLORS: Record<string, string> = {
@@ -16,11 +14,9 @@ const ACCENT_COLORS: Record<string, string> = {
   emerald: 'bg-emerald-500',
 }
 
-export function DetailPageLayout({
+export async function DetailPageLayout({
   children,
   accentColor,
-  backHref = '/',
-  backLabel = 'Back to Catalog',
 }: DetailPageLayoutProps) {
   const bgColor = ACCENT_COLORS[accentColor] || ACCENT_COLORS.cyan
 
@@ -33,18 +29,8 @@ export function DetailPageLayout({
         />
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 border-b border-[var(--border-subtle)]">
-        <div className="max-w-5xl mx-auto px-8 py-5">
-          <Link
-            href={backHref}
-            className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors"
-          >
-            <span>←</span>
-            <span>{backLabel}</span>
-          </Link>
-        </div>
-      </header>
+      {/* Full Navigation Header */}
+      <ServerHeader />
 
       <main className="relative z-10 max-w-5xl mx-auto px-8 py-12">
         {children}
