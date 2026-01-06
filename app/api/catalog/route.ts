@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
-import { db, catalogItems } from '@/lib/db'
+import { db, catalogItems, users } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
@@ -30,9 +30,50 @@ export async function GET(request: NextRequest) {
 
     const type = typeParam as ItemType | null
 
+    // Join with users table to get author names
+    const query = db
+      .select({
+        id: catalogItems.id,
+        type: catalogItems.type,
+        name: catalogItems.name,
+        description: catalogItems.description,
+        authorId: catalogItems.authorId,
+        authorName: users.name,
+        tags: catalogItems.tags,
+        teamTag: catalogItems.teamTag,
+        difficulty: catalogItems.difficulty,
+        pluginId: catalogItems.pluginId,
+        estimatedTime: catalogItems.estimatedTime,
+        dependencies: catalogItems.dependencies,
+        likes: catalogItems.likes,
+        content: catalogItems.content,
+        readme: catalogItems.readme,
+        files: catalogItems.files,
+        allowedTools: catalogItems.allowedTools,
+        agentModel: catalogItems.agentModel,
+        agentPermissionMode: catalogItems.agentPermissionMode,
+        agentSkills: catalogItems.agentSkills,
+        commandArgumentHint: catalogItems.commandArgumentHint,
+        commandDisableModelInvocation: catalogItems.commandDisableModelInvocation,
+        hookEvent: catalogItems.hookEvent,
+        hookMatcher: catalogItems.hookMatcher,
+        hookCommand: catalogItems.hookCommand,
+        hookTimeout: catalogItems.hookTimeout,
+        hookBlocking: catalogItems.hookBlocking,
+        marketplaceEnabled: catalogItems.marketplaceEnabled,
+        marketplaceSyncedAt: catalogItems.marketplaceSyncedAt,
+        marketplaceVersion: catalogItems.marketplaceVersion,
+        status: catalogItems.status,
+        changelog: catalogItems.changelog,
+        createdAt: catalogItems.createdAt,
+        updatedAt: catalogItems.updatedAt,
+      })
+      .from(catalogItems)
+      .leftJoin(users, eq(catalogItems.authorId, users.id))
+
     const items = type
-      ? await db.select().from(catalogItems).where(eq(catalogItems.type, type))
-      : await db.select().from(catalogItems)
+      ? await query.where(eq(catalogItems.type, type))
+      : await query
 
     // Return cached response with ETag support
     const response = cachedJsonResponse(items, 'catalogList', request)
