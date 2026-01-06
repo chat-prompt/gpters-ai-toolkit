@@ -4,11 +4,11 @@ GPTers 팀을 위한 올인원 Claude Code 플러그인입니다. 스킬, 에이
 
 ## 빠른 설치 (30초)
 
-**가장 쉬운 방법**: https://company-ai-toolkit.vercel.app/setup 에서 안내를 따르세요.
+**가장 쉬운 방법**: https://company-ai-toolkit.vercel.app/getting-started 에서 안내를 따르세요.
 
 ### 수동 설치
 
-1. 환경변수 설정 (토큰은 /setup 페이지에서 발급)
+1. 환경변수 설정 (토큰은 /getting-started 페이지에서 발급)
 ```bash
 echo 'export GPTERS_MCP_TOKEN="your_token_here"' >> ~/.zshrc && source ~/.zshrc
 ```

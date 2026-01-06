@@ -8,7 +8,7 @@ GPTers 사내 플러그인(스킬, 에이전트, 커맨드, 가이드)을 Claude
 
 ### 웹 설정 마법사 사용 (권장)
 
-1. https://company-ai-toolkit.vercel.app/setup 방문
+1. https://company-ai-toolkit.vercel.app/getting-started 방문
 2. Google 로그인 (@gpters.org)
 3. 표시된 명령어를 터미널에 복사/붙여넣기
 4. Claude Code에서 플러그인 설치 명령어 실행

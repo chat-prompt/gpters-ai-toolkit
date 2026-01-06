@@ -1,287 +1,416 @@
-import { getBeginnerItems } from '@/lib/core/catalog'
-import { ServerHeader } from '@/components/layout/ServerHeader'
-import { DIFFICULTY_LABELS } from '@/lib/core/types'
-import { MCPConfigGenerator } from '@/components/features/mcp/MCPConfigGenerator'
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
-// Revalidate every 60 seconds
-export const revalidate = 60
-
-const LEARNING_PATH = [
-  {
-    step: 1,
-    title: 'Claude Code 기초',
-    description: 'Claude Code가 무엇인지, 어떻게 설치하고 사용하는지 알아봅니다.',
-    icon: '🚀',
-  },
-  {
-    step: 2,
-    title: '첫 번째 스킬 사용하기',
-    description: '이미 만들어진 스킬을 설치하고 실행해봅니다.',
-    icon: '⚡',
-  },
-  {
-    step: 3,
-    title: '나만의 스킬 만들기',
-    description: '간단한 스킬을 직접 작성하고 공유해봅니다.',
-    icon: '✨',
-  },
-]
-
-const TYPE_CONFIG = {
-  skill: { icon: '⚡', color: 'cyan', label: 'Skill' },
-  agent: { icon: '◈', color: 'purple', label: 'Agent' },
-  command: { icon: '▸', color: 'cyan', label: 'Command' },
-  guide: { icon: '📚', color: 'emerald', label: 'Guide' },
-  hook: { icon: '🪝', color: 'orange', label: 'Hook' },
-  package: { icon: '📦', color: 'indigo', label: 'Package' },
+interface TokenInfo {
+  id: string
+  name: string
+  token?: string // Only available when just created
+  expiresAt?: string | null
+  createdAt: string
 }
 
-export default async function GettingStartedPage() {
-  const beginnerItems = await getBeginnerItems()
+interface TokensData {
+  tokens: TokenInfo[]
+  count: number
+  maxTokens: number
+}
 
-  // Curated essentials - items that every beginner should know
-  const essentials = beginnerItems.slice(0, 6)
+type Platform = 'macos' | 'linux' | 'windows'
+
+function detectPlatform(): Platform {
+  if (typeof navigator === 'undefined') return 'macos'
+  const platform = navigator.platform.toLowerCase()
+  if (platform.includes('win')) return 'windows'
+  if (platform.includes('linux')) return 'linux'
+  return 'macos'
+}
+
+function getShellCommand(token: string, platform: Platform): string {
+  if (platform === 'windows') {
+    return `setx GPTERS_MCP_TOKEN "${token}"`
+  }
+  // macOS and Linux use zsh/bash
+  const profile = platform === 'macos' ? '~/.zshrc' : '~/.bashrc'
+  return `echo 'export GPTERS_MCP_TOKEN="${token}"' >> ${profile} && source ${profile}`
+}
+
+function getPluginCommands(): { add: string; install: string } {
+  return {
+    add: '/plugin marketplace add gpters/company-ai-toolkit',
+    install: '/plugin install gpters-toolkit@gpters-marketplace',
+  }
+}
+
+export default function GettingStartedPage() {
+  const [platform, setPlatform] = useState<Platform>('macos')
+  const [existingTokens, setExistingTokens] = useState<TokenInfo[]>([])
+  const [newToken, setNewToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copiedStep, setCopiedStep] = useState<number | null>(null)
+  const [currentStep, setCurrentStep] = useState(1)
+
+  // Detect platform on mount
+  useEffect(() => {
+    setPlatform(detectPlatform())
+  }, [])
+
+  // Fetch existing tokens
+  const fetchTokens = useCallback(async () => {
+    try {
+      const res = await fetch('/api/user/mcp-tokens')
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Redirect to login
+          window.location.href = '/auth/signin?callbackUrl=/getting-started'
+          return
+        }
+        throw new Error('Failed to fetch tokens')
+      }
+      const data: TokensData = await res.json()
+      setExistingTokens(data.tokens)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tokens')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchTokens()
+  }, [fetchTokens])
+
+  // Create a new token for setup
+  async function createSetupToken() {
+    setCreating(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/user/mcp-tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Setup Token (${new Date().toLocaleDateString('ko-KR')})`,
+          description: 'Auto-generated for quick setup',
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to create token')
+      }
+
+      const data = await res.json()
+      setNewToken(data.token)
+      setCurrentStep(2)
+      await fetchTokens()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create token')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function copyToClipboard(text: string, step: number) {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+    }
+    setCopiedStep(step)
+    setTimeout(() => setCopiedStep(null), 2000)
+  }
+
+  const tokenForCommands = newToken || 'YOUR_TOKEN_HERE'
+
+  if (loading) {
+    return (
+      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
+        <div className="text-[var(--text-muted)]">Loading...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen grid-pattern noise-overlay">
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
       </div>
 
-      <ServerHeader />
-
-      <main className="relative z-10 max-w-5xl mx-auto px-8 py-12">
-        {/* Hero */}
-        <div className="mb-16 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--bg-tertiary)] text-[var(--accent-cyan)] text-sm mb-6">
-            <span>🎯</span>
-            <span>Claude Code 입문자를 위한 가이드</span>
-          </div>
-
-          <h1
-            className="text-5xl font-light text-[var(--text-primary)] tracking-tight mb-6"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
+      {/* Header */}
+      <header className="relative z-10 border-b border-[var(--border-subtle)]">
+        <div className="max-w-3xl mx-auto px-8 py-5">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors"
           >
-            시작하기
-          </h1>
+            <span>←</span>
+            <span>Home</span>
+          </Link>
+        </div>
+      </header>
 
-          <p className="text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto">
-            Claude Code를 처음 사용하시나요?
-            <br />
-            이 가이드를 따라하면 빠르게 시작할 수 있습니다.
+      <main className="relative z-10 max-w-3xl mx-auto px-8 py-12">
+        {/* Page Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-3xl font-medium text-[var(--text-primary)] mb-3">
+            GPTers MCP 빠른 설정
+          </h1>
+          <p className="text-[var(--text-secondary)]">
+            3단계로 Claude Code에서 GPTers 마켓플레이스를 사용할 수 있습니다.
           </p>
         </div>
 
-        {/* Learning Path */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-medium text-[var(--text-primary)] mb-8 text-center">
-            학습 경로
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {LEARNING_PATH.map((item, index) => (
-              <div
-                key={item.step}
-                className="glass rounded-2xl p-6 relative animate-fade-up"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-[var(--accent-cyan)] text-black flex items-center justify-center text-sm font-bold">
-                  {item.step}
-                </div>
-                <div className="text-3xl mb-4 mt-2">{item.icon}</div>
-                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-                  {item.title}
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Quick Start Commands */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-medium text-[var(--text-primary)] mb-6">
-            빠른 시작
-          </h2>
-
-          <div className="glass rounded-2xl p-6 mb-6">
-            <h3 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider mb-4">
-              마켓플레이스 추가 (Claude Code 내에서)
-            </h3>
-            <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm">
-              <code className="text-[var(--accent-cyan)]">/plugin marketplace add chat-prompt/gpters-ai-toolkit</code>
-            </div>
-
-            <h3 className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-wider mb-4 mt-8">
-              플러그인 설치 예시
-            </h3>
-            <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm">
-              <code className="text-[var(--accent-cyan)]">/plugin install code-reviewer@gpters-ai-toolkit</code>
+        {/* Platform Selector */}
+        <div className="glass rounded-xl p-4 mb-8">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[var(--text-secondary)]">운영체제 선택:</span>
+            <div className="flex gap-2">
+              {(['macos', 'linux', 'windows'] as Platform[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPlatform(p)}
+                  className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${
+                    platform === p
+                      ? 'bg-[var(--accent-cyan)] text-black font-medium'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {p === 'macos' ? 'macOS' : p === 'linux' ? 'Linux' : 'Windows'}
+                </button>
+              ))}
             </div>
           </div>
+        </div>
 
-          {/* MCP Config Generator */}
-          <MCPConfigGenerator defaultUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/mcp`} />
-        </section>
-
-        {/* Recommended for Beginners */}
-        {essentials.length > 0 && (
-          <section className="mb-16">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-medium text-[var(--text-primary)]">
-                입문자 추천
-              </h2>
-              <Link
-                href="/"
-                className="text-sm text-[var(--accent-cyan)] hover:underline"
-              >
-                전체 카탈로그 보기 →
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {essentials.map((item, index) => {
-                const config = TYPE_CONFIG[item.type]
-                return (
-                  <Link href={`/${item.type}/${item.id}`} key={item.id}>
-                    <div
-                      className="glass rounded-xl p-5 h-full transition-all duration-300 hover:translate-y-[-2px] animate-fade-up"
-                      style={{ animationDelay: `${index * 80}ms` }}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-lg">{config.icon}</span>
-                        <span className="text-[10px] font-semibold tracking-[0.15em] text-[var(--text-muted)] uppercase">
-                          {config.label}
-                        </span>
-                        {item.difficulty && (
-                          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
-                            {DIFFICULTY_LABELS[item.difficulty].label}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="text-base font-medium text-[var(--text-primary)] mb-2 line-clamp-1">
-                        {item.name}
-                      </h3>
-
-                      <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
-                        {item.description}
-                      </p>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </section>
+        {error && (
+          <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            {error}
+          </div>
         )}
 
-        {/* Next Steps */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-medium text-[var(--text-primary)] mb-6">
-            다음 단계
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link href="/">
-              <div className="glass rounded-xl p-6 group hover:translate-y-[-2px] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--accent-cyan)]/10 flex items-center justify-center text-2xl">
-                    🔍
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-cyan)] transition-colors">
-                      카탈로그 탐색
-                    </h3>
-                    <p className="text-sm text-[var(--text-secondary)]">
-                      더 많은 스킬과 에이전트를 찾아보세요
-                    </p>
-                  </div>
-                </div>
+        {/* Setup Steps */}
+        <div className="space-y-6">
+          {/* Step 1: Get Token */}
+          <div className={`glass rounded-2xl p-6 transition-opacity ${currentStep >= 1 ? '' : 'opacity-50'}`}>
+            <div className="flex items-start gap-4">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                newToken || existingTokens.length > 0
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30'
+              }`}>
+                {newToken || existingTokens.length > 0 ? '✓' : '1'}
               </div>
-            </Link>
+              <div className="flex-grow">
+                <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+                  토큰 발급
+                </h2>
 
-            <Link href="/upload">
-              <div className="glass rounded-xl p-6 group hover:translate-y-[-2px] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--accent-purple)]/10 flex items-center justify-center text-2xl">
-                    ✏️
+                {newToken ? (
+                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="text-green-400 text-sm mb-2">토큰이 생성되었습니다!</div>
+                    <div className="font-mono text-xs text-[var(--text-muted)] break-all">
+                      {newToken}
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-purple)] transition-colors">
-                      나만의 스킬 공유
-                    </h3>
+                ) : existingTokens.length > 0 ? (
+                  <div className="space-y-3">
                     <p className="text-sm text-[var(--text-secondary)]">
-                      직접 만든 스킬을 팀과 공유하세요
+                      기존 토큰이 있습니다. 새 토큰을 생성하거나{' '}
+                      <Link href="/profile/tokens" className="text-[var(--accent-cyan)] hover:underline">
+                        토큰 관리 페이지
+                      </Link>
+                      에서 확인하세요.
                     </p>
+                    <button
+                      onClick={createSetupToken}
+                      disabled={creating}
+                      className="px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors disabled:opacity-50"
+                    >
+                      {creating ? '생성 중...' : '새 토큰 생성'}
+                    </button>
                   </div>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/guides">
-              <div className="glass rounded-xl p-6 group hover:translate-y-[-2px] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-2xl">
-                    📚
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-[var(--text-primary)] group-hover:text-emerald-400 transition-colors">
-                      가이드 읽기
-                    </h3>
+                ) : (
+                  <div className="space-y-3">
                     <p className="text-sm text-[var(--text-secondary)]">
-                      단계별 설정 가이드를 확인하세요
+                      Claude Code에서 MCP 서버에 접속하려면 토큰이 필요합니다.
                     </p>
+                    <button
+                      onClick={createSetupToken}
+                      disabled={creating}
+                      className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                      {creating ? '생성 중...' : '토큰 생성하기'}
+                    </button>
                   </div>
-                </div>
+                )}
               </div>
-            </Link>
-
-            <a
-              href="https://docs.anthropic.com/claude-code"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <div className="glass rounded-xl p-6 group hover:translate-y-[-2px] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-2xl">
-                    📖
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-[var(--text-primary)] group-hover:text-orange-400 transition-colors">
-                      공식 문서
-                    </h3>
-                    <p className="text-sm text-[var(--text-secondary)]">
-                      Claude Code 공식 문서 읽기
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </a>
+            </div>
           </div>
-        </section>
 
-        {/* Help */}
-        <section className="text-center py-12 border-t border-[var(--border-subtle)]">
-          <h2 className="text-xl font-medium text-[var(--text-primary)] mb-4">
-            도움이 필요하신가요?
-          </h2>
-          <p className="text-[var(--text-secondary)] mb-6">
-            Slack #claude-code 채널에서 팀원들에게 질문하세요
+          {/* Step 2: Set Environment Variable */}
+          <div className={`glass rounded-2xl p-6 transition-opacity ${currentStep >= 2 || newToken ? '' : 'opacity-50'}`}>
+            <div className="flex items-start gap-4">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                copiedStep === 2
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
+              }`}>
+                {copiedStep === 2 ? '✓' : '2'}
+              </div>
+              <div className="flex-grow">
+                <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+                  터미널에서 토큰 설정
+                </h2>
+                <p className="text-sm text-[var(--text-secondary)] mb-4">
+                  {platform === 'windows' ? 'PowerShell' : '터미널'}을 열고 아래 명령어를 실행하세요:
+                </p>
+
+                <div className="relative">
+                  <pre className="p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-secondary)]">
+                    {getShellCommand(tokenForCommands, platform)}
+                  </pre>
+                  <button
+                    onClick={() => copyToClipboard(getShellCommand(tokenForCommands, platform), 2)}
+                    disabled={!newToken && existingTokens.length === 0}
+                    className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      copiedStep === 2
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
+                    }`}
+                  >
+                    {copiedStep === 2 ? '복사됨!' : '복사'}
+                  </button>
+                </div>
+
+                {platform === 'windows' && (
+                  <p className="mt-3 text-xs text-[var(--text-muted)]">
+                    * Windows에서는 명령어 실행 후 터미널을 재시작해야 합니다.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Step 3: Install Plugin */}
+          <div className={`glass rounded-2xl p-6 transition-opacity ${currentStep >= 2 || newToken ? '' : 'opacity-50'}`}>
+            <div className="flex items-start gap-4">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                copiedStep === 3
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
+              }`}>
+                {copiedStep === 3 ? '✓' : '3'}
+              </div>
+              <div className="flex-grow">
+                <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+                  Claude Code에서 플러그인 설치
+                </h2>
+                <p className="text-sm text-[var(--text-secondary)] mb-4">
+                  Claude Code를 열고 아래 명령어를 순서대로 입력하세요:
+                </p>
+
+                <div className="space-y-3">
+                  {/* Marketplace Add */}
+                  <div>
+                    <div className="text-xs text-[var(--text-muted)] mb-1">1. 마켓플레이스 추가 (최초 1회)</div>
+                    <div className="relative">
+                      <pre className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono text-[var(--accent-cyan)]">
+                        {getPluginCommands().add}
+                      </pre>
+                      <button
+                        onClick={() => copyToClipboard(getPluginCommands().add, 3)}
+                        className={`absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs transition-all ${
+                          copiedStep === 3
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        {copiedStep === 3 ? '✓' : '복사'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Plugin Install */}
+                  <div>
+                    <div className="text-xs text-[var(--text-muted)] mb-1">2. 플러그인 설치</div>
+                    <div className="relative">
+                      <pre className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono text-[var(--accent-cyan)]">
+                        {getPluginCommands().install}
+                      </pre>
+                      <button
+                        onClick={() => copyToClipboard(getPluginCommands().install, 4)}
+                        className={`absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs transition-all ${
+                          copiedStep === 4
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        {copiedStep === 4 ? '✓' : '복사'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Final Step: Restart */}
+          <div className={`glass rounded-2xl p-6 transition-opacity ${currentStep >= 2 || newToken ? '' : 'opacity-50'}`}>
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                4
+              </div>
+              <div className="flex-grow">
+                <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+                  Claude Code 재시작
+                </h2>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  설정을 적용하려면 Claude Code를 완전히 종료했다가 다시 시작하세요.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Success Message */}
+        {(newToken || existingTokens.length > 0) && (
+          <div className="mt-8 p-6 rounded-2xl bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20 text-center">
+            <div className="text-2xl mb-2">🎉</div>
+            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              설정 완료 후 사용 가능한 기능
+            </h3>
+            <div className="text-sm text-[var(--text-secondary)] space-y-1">
+              <p>• 마켓플레이스에서 스킬, 에이전트, 커맨드 검색</p>
+              <p>• Claude Code에서 바로 플러그인 설치</p>
+              <p>• 팀 내 스킬 공유 및 배포</p>
+            </div>
+          </div>
+        )}
+
+        {/* Help Link */}
+        <div className="mt-8 text-center">
+          <p className="text-sm text-[var(--text-muted)]">
+            문제가 있나요?{' '}
+            <Link href="/profile/tokens" className="text-[var(--accent-cyan)] hover:underline">
+              토큰 관리
+            </Link>
+            {' '}또는{' '}
+            <a href="https://github.com/gpters/company-ai-toolkit/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-cyan)] hover:underline">
+              이슈 등록
+            </a>
           </p>
-          <div className="inline-flex gap-4">
-            <a
-              href="https://slack.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-6 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
-            >
-              Slack 열기
-            </a>
-          </div>
-        </section>
+        </div>
       </main>
     </div>
   )
