@@ -2,15 +2,27 @@
 
 GPTers 팀을 위한 올인원 Claude Code 플러그인입니다. 스킬, 에이전트, MCP 서버를 한 번에 설치할 수 있습니다.
 
-## 설치 방법
+## 빠른 설치 (30초)
 
+**가장 쉬운 방법**: https://company-ai-toolkit.vercel.app/setup 에서 안내를 따르세요.
+
+### 수동 설치
+
+1. 환경변수 설정 (토큰은 /setup 페이지에서 발급)
 ```bash
-# 1. 마켓플레이스 추가 (최초 1회)
+echo 'export GPTERS_MCP_TOKEN="your_token_here"' >> ~/.zshrc && source ~/.zshrc
+```
+
+2. Claude Code에서 플러그인 설치
+```bash
+# 마켓플레이스 추가 (최초 1회)
 /plugin marketplace add gpters/company-ai-toolkit
 
-# 2. 올인원 플러그인 설치
-/plugin install gpters-toolkit@company-ai-toolkit
+# 올인원 플러그인 설치
+/plugin install gpters-toolkit@gpters-marketplace
 ```
+
+3. Claude Code 재시작
 
 ## 포함된 기능
 

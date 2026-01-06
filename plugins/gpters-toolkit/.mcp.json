@@ -2,20 +2,12 @@
   "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp.schema.json",
   "mcpServers": {
     "gpters-marketplace": {
-      "type": "http",
-      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
-    },
-    "linear-server": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/linear-mcp-server"]
-    },
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/context7-mcp-server"]
-    },
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/chrome-devtools-mcp-server"]
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/servers/mcp-proxy.mjs"],
+      "env": {
+        "MCP_URL": "https://company-ai-toolkit.vercel.app/api/mcp",
+        "MCP_TOKEN": "${GPTERS_MCP_TOKEN}"
+      }
     }
   }
 }
