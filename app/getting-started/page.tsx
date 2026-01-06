@@ -38,7 +38,7 @@ function getShellCommand(token: string, platform: Platform): string {
 
 function getPluginCommands(): { add: string; install: string } {
   return {
-    add: '/plugin marketplace add gpters/company-ai-toolkit',
+    add: '/plugin marketplace add chat-prompt/gpters-ai-toolkit',
     install: '/plugin install gpters-toolkit@gpters-marketplace',
   }
 }
@@ -406,7 +406,7 @@ export default function GettingStartedPage() {
               토큰 관리
             </Link>
             {' '}또는{' '}
-            <a href="https://github.com/gpters/company-ai-toolkit/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-cyan)] hover:underline">
+            <a href="https://github.com/chat-prompt/gpters-ai-toolkit/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-cyan)] hover:underline">
               이슈 등록
             </a>
           </p>

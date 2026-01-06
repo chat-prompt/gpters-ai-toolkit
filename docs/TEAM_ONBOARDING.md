@@ -48,7 +48,7 @@ setx GPTERS_MCP_TOKEN "mcp_your_token_here"
 Claude Code에서:
 ```bash
 # 마켓플레이스 추가 (1회)
-/plugin marketplace add gpters/company-ai-toolkit
+/plugin marketplace add chat-prompt/gpters-ai-toolkit
 
 # 올인원 플러그인 설치
 /plugin install gpters-toolkit@gpters-marketplace

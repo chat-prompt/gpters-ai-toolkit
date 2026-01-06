@@ -33,7 +33,7 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
   const folderPath = `~/.claude/${paths.folder}/${itemId}/`
   const filePath = `${folderPath}${paths.file}`
 
-  const marketplaceAddCommand = '/plugin marketplace add gpters/company-ai-toolkit'
+  const marketplaceAddCommand = '/plugin marketplace add chat-prompt/gpters-ai-toolkit'
   const marketplaceInstallCommand = `/plugin install ${itemId}@company-ai-toolkit`
   const mcpPromptCommand = `/mcp__gpters-marketplace__${itemId}`
 

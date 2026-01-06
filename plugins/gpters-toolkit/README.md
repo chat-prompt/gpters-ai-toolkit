@@ -16,7 +16,7 @@ echo 'export GPTERS_MCP_TOKEN="your_token_here"' >> ~/.zshrc && source ~/.zshrc
 2. Claude Code에서 플러그인 설치
 ```bash
 # 마켓플레이스 추가 (최초 1회)
-/plugin marketplace add gpters/company-ai-toolkit
+/plugin marketplace add chat-prompt/gpters-ai-toolkit
 
 # 올인원 플러그인 설치
 /plugin install gpters-toolkit@gpters-marketplace
