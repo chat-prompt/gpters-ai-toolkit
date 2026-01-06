@@ -52,12 +52,18 @@ import {
   type AuditResponseStatus,
 } from '@/lib/security/mcp-audit'
 
-// CORS headers for cross-origin requests
+// Force dynamic rendering - never cache this route
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
+// CORS and cache headers for cross-origin requests
+// Cache-Control: no-store prevents Vercel edge caching to avoid stale HTML responses
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Session-Id, Last-Event-ID',
   'Access-Control-Expose-Headers': 'Mcp-Session-Id',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
 }
 
 // In-memory session store (for serverless, consider using Redis/KV in production)
