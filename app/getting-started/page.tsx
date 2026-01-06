@@ -277,7 +277,7 @@ export default function GettingStartedPage() {
                 </p>
 
                 <div className="relative">
-                  <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-secondary)] whitespace-pre-wrap break-all">
+                  <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
                     {getShellCommand(tokenForCommands, platform)}
                   </pre>
                   <button
@@ -325,7 +325,7 @@ export default function GettingStartedPage() {
                   <div>
                     <div className="text-xs text-[var(--text-muted)] mb-1">1. 마켓플레이스 추가 (최초 1회)</div>
                     <div className="relative">
-                      <pre className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono text-[var(--accent-cyan)]">
+                      <pre className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono text-[var(--accent-cyan)]">
                         {getPluginCommands().add}
                       </pre>
                       <button
@@ -345,7 +345,7 @@ export default function GettingStartedPage() {
                   <div>
                     <div className="text-xs text-[var(--text-muted)] mb-1">2. 플러그인 설치</div>
                     <div className="relative">
-                      <pre className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono text-[var(--accent-cyan)]">
+                      <pre className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono text-[var(--accent-cyan)]">
                         {getPluginCommands().install}
                       </pre>
                       <button
