@@ -10,19 +10,22 @@
   },
   "plugins": [
     {
-      "name": "vibe-coder-helper",
-      "source": "./plugins/vibe-coder-helper",
-      "description": "바이브 코딩을 도와주는 친절한 AI 스킬. 복잡한 개념을 쉽게 설명하고, 빠르게 결과물을 만들 수 있도록 가이드합니다.",
+      "name": "claude-code-infrastructure",
+      "source": "./plugins/claude-code-infrastructure",
+      "description": "6개월간의 실전 사용에서 검증된 Claude Code 인프라 패턴: Skills Auto-Activation, Dev Docs, Hooks",
       "version": "1.0.0",
       "author": {
-        "name": "Unknown"
+        "name": "GPTers"
       },
-      "category": "skill",
+      "category": "package",
       "keywords": [
-        "beginner",
+        "infrastructure",
+        "dev-docs",
+        "context",
+        "workflow",
         "productivity",
-        "learning",
-        "code"
+        "skills",
+        "hooks"
       ]
     },
     {
@@ -31,7 +34,7 @@
       "description": "GPTers 플랫폼의 데이터 소스 레퍼런스 - Portal DB와 Airtable 테이블 구조, 동기화 방향, ID 매핑 관계 참조",
       "version": "1.0.0",
       "author": {
-        "name": "Unknown"
+        "name": "GPTers"
       },
       "category": "skill",
       "keywords": [
@@ -43,12 +46,28 @@
       ]
     },
     {
+      "name": "gpters-toolkit",
+      "source": "./plugins/gpters-toolkit",
+      "description": "GPTers 팀을 위한 올인원 Claude Code 플러그인 - 스킬, 에이전트, MCP 서버 통합",
+      "version": "1.0.0",
+      "author": {
+        "name": "GPTers"
+      },
+      "category": "package",
+      "keywords": [
+        "toolkit",
+        "code-review",
+        "refactoring",
+        "productivity"
+      ]
+    },
+    {
       "name": "pre-compact-backup",
       "source": "./plugins/pre-compact-backup",
       "description": "Compaction 전에 현재 세션의 대화 내역(transcript)을 자동으로 백업합니다. 중요한 작업 내역을 보존하여 컨텍스트 손실을 방지합니다.",
       "version": "1.0.0",
       "author": {
-        "name": "Unknown"
+        "name": "GPTers"
       },
       "category": "hook",
       "keywords": [
