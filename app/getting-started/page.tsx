@@ -40,6 +40,15 @@ function getMcpConfigPath(scope: InstallScope): string {
   return scope === 'global' ? '~/.claude/.mcp.json' : '.mcp.json'
 }
 
+// CLI command to add MCP server (recommended - bypasses headers bug)
+function getMcpCliCommand(token: string): string {
+  return `claude mcp add gpters-marketplace \\
+  -e MCP_URL=https://company-ai-toolkit.vercel.app/api/mcp \\
+  -e MCP_TOKEN=${token} \\
+  -- node -e "$(curl -s https://company-ai-toolkit.vercel.app/mcp-proxy.mjs)"`
+}
+
+// Legacy: JSON config (has bug - headers ignored in Claude Code v2.x)
 function getMcpConfigCommand(token: string, scope: InstallScope): string {
   const configPath = getMcpConfigPath(scope)
   return `cat > ${configPath} << 'EOF'
@@ -59,10 +68,12 @@ EOF`
 
 function getMcpServerSnippet(token: string): string {
   return `"gpters-marketplace": {
-  "type": "http",
-  "url": "https://company-ai-toolkit.vercel.app/api/mcp",
-  "headers": {
-    "Authorization": "Bearer ${token}"
+  "type": "stdio",
+  "command": "node",
+  "args": ["-e", "$(curl -s https://company-ai-toolkit.vercel.app/mcp-proxy.mjs)"],
+  "env": {
+    "MCP_URL": "https://company-ai-toolkit.vercel.app/api/mcp",
+    "MCP_TOKEN": "${token}"
   }
 }`
 }
@@ -412,110 +423,77 @@ export default function GettingStartedPage() {
           <div className={`glass rounded-2xl p-6 transition-opacity ${currentStep >= 2 || newToken ? '' : 'opacity-50'}`}>
             <div className="flex items-start gap-4">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                copiedStep === 'mcp' || copiedStep === 'mcp-snippet'
+                copiedStep === 'mcp' || copiedStep === 'mcp-snippet' || copiedStep === 'mcp-cli'
                   ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                   : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
               }`}>
-                {copiedStep === 'mcp' || copiedStep === 'mcp-snippet' ? '✓' : '3'}
+                {copiedStep === 'mcp' || copiedStep === 'mcp-snippet' || copiedStep === 'mcp-cli' ? '✓' : '3'}
               </div>
               <div className="flex-grow">
                 <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
                   MCP 서버 설정
                 </h2>
 
-                {/* Config Path Info */}
-                <div className="mb-4 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[var(--text-muted)]">설정 파일 위치:</span>
-                    <code className="px-2 py-0.5 bg-[var(--bg-secondary)] rounded text-[var(--accent-cyan)]">
-                      {getMcpConfigPath(installScope)}
-                    </code>
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {installScope === 'project' ? '(프로젝트 루트)' : '(홈 디렉토리)'}
-                    </span>
+                {/* Recommended: CLI Command */}
+                <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                  <div className="flex items-center gap-2 text-sm text-green-400 mb-2">
+                    <span>✓</span>
+                    <span className="font-medium">권장: CLI 명령어 (가장 안정적)</span>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mb-3">
+                    {installScope === 'project' ? '프로젝트 루트에서' : '터미널에서'} 아래 명령어를 실행하세요:
+                  </p>
+                  <div className="relative">
+                    <pre className="p-3 pr-16 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-xs font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                      {getMcpCliCommand(tokenForCommands)}
+                    </pre>
+                    <button
+                      onClick={() => copyToClipboard(getMcpCliCommand(tokenForCommands), 'mcp-cli')}
+                      disabled={!newToken && existingTokens.length === 0}
+                      className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium transition-all ${
+                        copiedStep === 'mcp-cli'
+                          ? 'bg-green-500/20 text-green-400'
+                          : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
+                      }`}
+                    >
+                      {copiedStep === 'mcp-cli' ? '✓' : '복사'}
+                    </button>
                   </div>
                 </div>
 
-                {hasExistingMcpJson ? (
-                  <>
-                    {/* Existing .mcp.json - merge guide */}
-                    <p className="text-sm text-[var(--text-secondary)] mb-4">
-                      기존 <code className="px-1 py-0.5 bg-[var(--bg-tertiary)] rounded">{getMcpConfigPath(installScope)}</code> 파일의
-                      <code className="px-1 py-0.5 bg-[var(--bg-tertiary)] rounded">mcpServers</code> 객체 안에 아래 내용을 추가하세요:
+                {/* Alternative: JSON Config */}
+                <details className="mb-4">
+                  <summary className="text-xs text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-secondary)]">
+                    대안: .mcp.json 직접 편집 (고급)
+                  </summary>
+                  <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-2 text-xs mb-2">
+                      <span className="text-[var(--text-muted)]">설정 파일:</span>
+                      <code className="px-2 py-0.5 bg-[var(--bg-secondary)] rounded text-[var(--accent-cyan)]">
+                        {getMcpConfigPath(installScope)}
+                      </code>
+                    </div>
+                    <p className="text-xs text-yellow-400/80 mb-2">
+                      ⚠️ Claude Code v2.x에서 HTTP headers 버그가 있어 권장하지 않습니다
                     </p>
+                    <pre className="p-2 rounded bg-[var(--bg-secondary)] text-xs font-mono overflow-x-auto text-[var(--text-secondary)] whitespace-pre-wrap">
+                      {getMcpServerSnippet(tokenForCommands)}
+                    </pre>
+                  </div>
+                </details>
 
-                    <div className="relative">
-                      <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                        {getMcpServerSnippet(tokenForCommands)}
-                      </pre>
-                      <button
-                        onClick={() => copyToClipboard(getMcpServerSnippet(tokenForCommands), 'mcp-snippet')}
-                        disabled={!newToken && existingTokens.length === 0}
-                        className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                          copiedStep === 'mcp-snippet'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
-                        }`}
-                      >
-                        {copiedStep === 'mcp-snippet' ? '복사됨!' : '복사'}
-                      </button>
-                    </div>
-
-                    {/* Example of merged config */}
-                    <details className="mt-4">
-                      <summary className="text-xs text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-secondary)]">
-                        병합 예시 보기
-                      </summary>
-                      <pre className="mt-2 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-secondary)] overflow-x-auto whitespace-pre">
-{`{
-  "mcpServers": {
-    "existing-server": { ... },
-    ${getMcpServerSnippet(tokenForCommands)}
-  }
-}`}
-                      </pre>
-                    </details>
-                  </>
-                ) : (
-                  <>
-                    {/* New .mcp.json */}
-                    <p className="text-sm text-[var(--text-secondary)] mb-4">
-                      {installScope === 'project' ? '프로젝트 루트에서' : '터미널에서'} 아래 명령어를 실행하여 MCP 서버를 설정하세요:
-                    </p>
-
-                    <div className="relative">
-                      <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                        {getMcpConfigCommand(tokenForCommands, installScope)}
-                      </pre>
-                      <button
-                        onClick={() => copyToClipboard(getMcpConfigCommand(tokenForCommands, installScope), 'mcp')}
-                        disabled={!newToken && existingTokens.length === 0}
-                        className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                          copiedStep === 'mcp'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
-                        }`}
-                      >
-                        {copiedStep === 'mcp' ? '복사됨!' : '복사'}
-                      </button>
-                    </div>
-
-                    {installScope === 'project' && (
-                      <p className="mt-3 text-xs text-[var(--text-muted)]">
-                        * 프로젝트 루트 디렉토리에서 실행하세요. 해당 프로젝트에서만 MCP 서버가 활성화됩니다.
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {/* Git ignore tip for project scope */}
-                {installScope === 'project' && (
-                  <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                    <div className="text-xs text-yellow-400/90">
-                      <strong>Tip:</strong> 토큰이 포함된 <code>.mcp.json</code>은 <code>.gitignore</code>에 추가하는 것을 권장합니다.
-                    </div>
+                {hasExistingMcpJson && (
+                  <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400">
+                    <span className="font-medium">참고:</span> 기존 MCP 서버가 있어도 CLI 명령어로 추가하면 자동으로 병합됩니다.
                   </div>
                 )}
+
+                {/* Security tip */}
+                <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <div className="text-xs text-blue-400/90">
+                    <strong>보안:</strong> CLI 명령어로 추가한 설정은 <code>~/.claude.json</code>에 저장되어 Git에 커밋되지 않습니다.
+                  </div>
+                </div>
               </div>
             </div>
           </div>
