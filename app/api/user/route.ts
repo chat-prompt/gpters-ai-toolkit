@@ -10,6 +10,9 @@ import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 
 const log = createLogger('api:user')
 
+// Development bypass check
+const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true'
+
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute for profile queries
   const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
@@ -18,7 +21,27 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
 
+    // In development with bypass enabled, return mock user data
     if (!session?.user?.email) {
+      if (DEV_BYPASS_AUTH) {
+        return NextResponse.json({
+          user: {
+            id: 'dev-user-id',
+            email: 'dev@gpters.org',
+            name: 'Development User',
+            image: null,
+            lastLoginAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          },
+          items: [],
+          stats: {
+            totalItems: 0,
+            published: 0,
+            drafts: 0,
+            totalLikes: 0,
+          },
+        })
+      }
       return ApiErrors.unauthorized()
     }
 

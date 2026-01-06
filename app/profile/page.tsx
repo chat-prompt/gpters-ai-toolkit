@@ -29,6 +29,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; 
   command: { label: 'Command', icon: '▸', color: 'text-rose-400', href: '/command' },
   hook: { label: 'Hook', icon: '🪝', color: 'text-orange-400', href: '/hook' },
   guide: { label: 'Guide', icon: '📚', color: 'text-emerald-400', href: '/guides' },
+  package: { label: 'Package', icon: '📦', color: 'text-amber-400', href: '/package' },
 }
 
 function formatDate(dateString: string | null): string {
@@ -234,7 +235,7 @@ export default function ProfilePage() {
           ) : (
             <div className="space-y-3">
               {items.map((item) => {
-                const config = TYPE_CONFIG[item.type]
+                const config = TYPE_CONFIG[item.type] || { label: item.type, icon: '📄', color: 'text-gray-400', href: '/item' }
                 return (
                   <Link
                     key={item.id}
