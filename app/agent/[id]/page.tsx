@@ -87,7 +87,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           difficulty={item.difficulty}
           updatedAt={item.updatedAt}
           status={item.status}
-          marketplaceVersion={item.marketplaceVersion}
+          version={item.version}
           extraBadges={
             <>
               <TryItButton itemId={item.id} />
@@ -115,7 +115,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       {item.changelog && (
         <Section id="changelog">
           <ChangelogDisplay
-            version={item.marketplaceVersion}
+            version={item.version}
             changelog={item.changelog}
             updatedAt={item.updatedAt}
           />
@@ -131,7 +131,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           agentPermissionMode={item.agentPermissionMode}
           agentSkills={item.agentSkills}
           allowedTools={item.allowedTools}
-          marketplaceEnabled={item.marketplaceEnabled}
+          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 
@@ -141,7 +141,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           itemId={item.id}
           itemType="agent"
           content={item.content}
-          marketplaceEnabled={item.marketplaceEnabled}
+          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 

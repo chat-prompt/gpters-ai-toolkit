@@ -24,8 +24,8 @@ async function seedDataSourceSkill() {
     pluginId: 'data-source-reference',
     content: skillContent,
     allowedTools: 'Read',
-    marketplaceEnabled: true,
-    marketplaceVersion: '1.0.0',
+    mcpEnabled: true,
+    version: '1.0.0',
   }
 
   try {

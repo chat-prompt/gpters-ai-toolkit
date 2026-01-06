@@ -199,8 +199,8 @@ export async function POST(request: NextRequest) {
       content,
       readme: extracted.readme || null,
       files: extracted.files.length > 0 ? extracted.files : null,
-      marketplaceEnabled: metadata.marketplaceEnabled === 'true',
-      marketplaceVersion: metadata.version || '1.0.0',
+      mcpEnabled: metadata.mcpEnabled === 'true',
+      version: metadata.version || '1.0.0',
       updatedAt: new Date(),
     }
 

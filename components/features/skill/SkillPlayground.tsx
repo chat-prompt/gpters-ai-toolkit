@@ -200,7 +200,7 @@ export function SkillPlayground({ item, baseUrl = '' }: SkillPlaygroundProps) {
             {item.type === 'hook' && '🪝 Hook'}
             {item.type === 'guide' && '📚 Guide'}
           </span>
-          {item.marketplaceEnabled && (
+          {item.mcpEnabled && (
             <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">
               Marketplace
             </span>

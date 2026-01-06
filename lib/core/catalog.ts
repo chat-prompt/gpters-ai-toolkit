@@ -37,10 +37,9 @@ const summaryColumns = {
   hookCommand: catalogItems.hookCommand,
   hookTimeout: catalogItems.hookTimeout,
   hookBlocking: catalogItems.hookBlocking,
-  // Marketplace fields
-  marketplaceEnabled: catalogItems.marketplaceEnabled,
-  marketplaceSyncedAt: catalogItems.marketplaceSyncedAt,
-  marketplaceVersion: catalogItems.marketplaceVersion,
+  // MCP fields
+  mcpEnabled: catalogItems.mcpEnabled,
+  version: catalogItems.version,
   // Status
   status: catalogItems.status,
   createdAt: catalogItems.createdAt,
@@ -72,9 +71,8 @@ type SummaryRecord = {
   hookCommand: string | null
   hookTimeout: number | null
   hookBlocking: boolean | null
-  marketplaceEnabled: boolean | null
-  marketplaceSyncedAt: Date | null
-  marketplaceVersion: string | null
+  mcpEnabled: boolean | null
+  version: string | null
   status: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -115,10 +113,9 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     hookCommand: record.hookCommand ?? undefined,
     hookTimeout: record.hookTimeout ?? undefined,
     hookBlocking: record.hookBlocking ?? undefined,
-    // Marketplace fields
-    marketplaceEnabled: record.marketplaceEnabled ?? false,
-    marketplaceSyncedAt: record.marketplaceSyncedAt?.toISOString(),
-    marketplaceVersion: record.marketplaceVersion ?? undefined,
+    // MCP fields
+    mcpEnabled: record.mcpEnabled ?? false,
+    version: record.version ?? undefined,
     // V2: Status
     status: (record.status as CatalogItemSummary['status']) ?? 'published',
     createdAt: record.createdAt?.toISOString(),
@@ -159,10 +156,9 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     hookCommand: record.hookCommand ?? undefined,
     hookTimeout: record.hookTimeout ?? undefined,
     hookBlocking: record.hookBlocking ?? undefined,
-    // Marketplace fields
-    marketplaceEnabled: record.marketplaceEnabled ?? false,
-    marketplaceSyncedAt: record.marketplaceSyncedAt?.toISOString(),
-    marketplaceVersion: record.marketplaceVersion ?? undefined,
+    // MCP fields
+    mcpEnabled: record.mcpEnabled ?? false,
+    version: record.version ?? undefined,
     // V2: Status and version management
     status: (record.status as CatalogItem['status']) ?? 'published',
     changelog: record.changelog ?? undefined,

@@ -7,9 +7,8 @@ import { trackInstall } from '@/lib/features/track-install'
 interface InstallGuideProps {
   itemId: string
   itemType: 'skill' | 'agent' | 'command'
-  pluginId?: string
   content: string
-  marketplaceEnabled?: boolean
+  mcpEnabled?: boolean
 }
 
 const TYPE_PATHS: Record<string, { folder: string; file: string }> = {
@@ -25,7 +24,7 @@ const INSTALL_STEPS = [
   { id: 'verify', label: '설치 확인' },
 ]
 
-export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceEnabled }: InstallGuideProps) {
+export function InstallGuide({ itemId, itemType, content, mcpEnabled }: InstallGuideProps) {
   const [activeStep, setActiveStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
 
@@ -33,12 +32,10 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
   const folderPath = `~/.claude/${paths.folder}/${itemId}/`
   const filePath = `${folderPath}${paths.file}`
 
-  const marketplaceAddCommand = '/plugin marketplace add chat-prompt/gpters-ai-toolkit'
-  const marketplaceInstallCommand = `/plugin install ${itemId}@company-ai-toolkit`
   const mcpPromptCommand = `/mcp__gpters-marketplace__${itemId}`
 
   // Track installation methods
-  const handleTrack = useCallback((method: 'cli' | 'mcp' | 'plugin' | 'manual_content' | 'manual_folder' | 'manual_file') => {
+  const handleTrack = useCallback((method: 'mcp' | 'manual_content' | 'manual_folder' | 'manual_file') => {
     trackInstall(itemId, method)
   }, [itemId])
 
@@ -57,47 +54,8 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
 
   return (
     <div className="space-y-6">
-      {/* Marketplace Install (CLI) */}
-      {marketplaceEnabled && (
-        <div className="glass rounded-2xl p-6 glow-cyan">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xl">🔌</span>
-            <h3 className="text-lg font-medium text-[var(--text-primary)]">CLI 설치</h3>
-            <span className="text-xs px-2 py-1 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]">
-              추천
-            </span>
-          </div>
-
-          <p className="text-sm text-[var(--text-secondary)] mb-4">
-            Claude Code에서 아래 명령어로 바로 설치할 수 있습니다.
-          </p>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-[var(--text-muted)] mb-2">1. 마켓플레이스 추가 (최초 1회)</p>
-              <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm flex items-center justify-between gap-4">
-                <code className="text-[var(--accent-purple)] break-all">
-                  {marketplaceAddCommand}
-                </code>
-                <CopyButton text={marketplaceAddCommand} />
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-[var(--text-muted)] mb-2">2. 플러그인 설치</p>
-              <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm flex items-center justify-between gap-4">
-                <code className="text-[var(--accent-cyan)] break-all">
-                  {marketplaceInstallCommand}
-                </code>
-                <CopyButton text={marketplaceInstallCommand} onCopy={() => handleTrack('cli')} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* MCP Prompt Usage */}
-      {marketplaceEnabled && (
+      {mcpEnabled && (
         <div className="glass rounded-2xl p-6 glow-purple">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-xl">🔮</span>
@@ -129,30 +87,6 @@ export function InstallGuide({ itemId, itemType, pluginId, content, marketplaceE
               </a>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Quick Install (Plugin) */}
-      {pluginId && (
-        <div className="glass rounded-2xl p-6 glow-cyan">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xl">⚡</span>
-            <h3 className="text-lg font-medium text-[var(--text-primary)]">빠른 설치</h3>
-            <span className="text-xs px-2 py-1 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]">
-              추천
-            </span>
-          </div>
-
-          <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm mb-4 flex items-center justify-between gap-4">
-            <code className="text-[var(--accent-cyan)] break-all">
-              claude plugins install {pluginId}
-            </code>
-            <CopyButton text={`claude plugins install ${pluginId}`} onCopy={() => handleTrack('plugin')} />
-          </div>
-
-          <p className="text-sm text-[var(--text-secondary)]">
-            터미널에서 위 명령어를 실행하면 바로 설치됩니다.
-          </p>
         </div>
       )}
 

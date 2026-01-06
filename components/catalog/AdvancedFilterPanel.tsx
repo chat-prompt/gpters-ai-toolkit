@@ -628,9 +628,9 @@ export function AdvancedFilterPanel({
       {/* Marketplace Filter */}
       <div className="mb-5">
         <MarketplaceFilter
-          value={filters.marketplaceEnabled}
-          counts={counts.marketplaceEnabled}
-          onChange={(value) => onFiltersChange({ marketplaceEnabled: value })}
+          value={filters.mcpEnabled}
+          counts={counts.mcpEnabled}
+          onChange={(value) => onFiltersChange({ mcpEnabled: value })}
         />
       </div>
 
@@ -690,8 +690,8 @@ export function ActiveFiltersBadge({ filters, onRemoveFilter, onClearAll }: Acti
   if (filters.status !== 'all') {
     badges.push({ key: 'status', label: `상태: ${filters.status === 'published' ? '게시됨' : '초안'}` })
   }
-  if (filters.marketplaceEnabled !== null) {
-    badges.push({ key: 'marketplaceEnabled', label: filters.marketplaceEnabled ? 'CLI 지원' : 'CLI 미지원' })
+  if (filters.mcpEnabled !== null) {
+    badges.push({ key: 'mcpEnabled', label: filters.mcpEnabled ? 'CLI 지원' : 'CLI 미지원' })
   }
   if (filters.likesRange.min !== undefined) {
     badges.push({ key: 'likesRange', label: `좋아요 ≥ ${filters.likesRange.min}` })

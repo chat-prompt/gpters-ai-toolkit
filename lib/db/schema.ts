@@ -61,12 +61,11 @@ export const catalogItems = pgTable('catalog_items', {
   hookTimeout: integer('hook_timeout'), // Timeout in milliseconds
   hookBlocking: boolean('hook_blocking').default(true), // Whether hook blocks execution
 
-  // Marketplace integration fields
-  marketplaceEnabled: boolean('marketplace_enabled').default(false),
-  marketplaceSyncedAt: timestamp('marketplace_synced_at', { withTimezone: true }),
-  marketplaceVersion: text('marketplace_version').default('1.0.0'),
+  // MCP integration field
+  mcpEnabled: boolean('mcp_enabled').default(false),
 
-  // V2: Status and version management
+  // Version management
+  version: text('version').default('1.0.0'),
   status: text('status').default('published'), // 'draft' | 'published'
   changelog: text('changelog'), // Latest version changelog
 
@@ -77,7 +76,7 @@ export const catalogItems = pgTable('catalog_items', {
   index('catalog_items_type_idx').on(table.type),
   index('catalog_items_status_idx').on(table.status),
   index('catalog_items_author_id_idx').on(table.authorId),
-  index('catalog_items_marketplace_enabled_idx').on(table.marketplaceEnabled),
+  index('catalog_items_mcp_enabled_idx').on(table.mcpEnabled),
   // Composite index for type + status (common filter combination)
   index('catalog_items_type_status_idx').on(table.type, table.status),
 ])

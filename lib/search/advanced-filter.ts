@@ -80,7 +80,7 @@ export interface FilterState {
   difficulty: Difficulty | ''
   teamTag: TeamTag | ''
   status: 'published' | 'draft' | 'all'
-  marketplaceEnabled: boolean | null  // null = all
+  mcpEnabled: boolean | null  // null = all
   likesRange: RangeFilter
   updatedDateRange: DateRangeFilter
   sort: SortConfig
@@ -104,7 +104,7 @@ export interface FilterCounts {
   difficulties: Record<Difficulty | '', number>
   teamTags: Record<TeamTag | '', number>
   statuses: Record<'published' | 'draft' | 'all', number>
-  marketplaceEnabled: { true: number; false: number; all: number }
+  mcpEnabled: { true: number; false: number; all: number }
 }
 
 /**
@@ -144,7 +144,7 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   difficulty: '',
   teamTag: '',
   status: 'all',
-  marketplaceEnabled: null,
+  mcpEnabled: null,
   likesRange: {},
   updatedDateRange: {},
   sort: { field: 'updatedAt', direction: 'desc' },
@@ -200,7 +200,7 @@ export const FILTER_PRESETS: FilterPreset[] = [
     icon: '⚡',
     description: 'Items that can be installed via CLI',
     filters: {
-      marketplaceEnabled: true,
+      mcpEnabled: true,
     },
   },
   {
@@ -505,8 +505,8 @@ export function applyFilters(items: CatalogItemSummary[], filters: FilterState):
     }
 
     // Marketplace enabled filter
-    if (filters.marketplaceEnabled !== null) {
-      if (item.marketplaceEnabled !== filters.marketplaceEnabled) {
+    if (filters.mcpEnabled !== null) {
+      if (item.mcpEnabled !== filters.mcpEnabled) {
         return false
       }
     }
@@ -609,7 +609,7 @@ export function calculateFilterCounts(
     difficulties: { '': 0, easy: 0, medium: 0, hard: 0 },
     teamTags: { '': 0, general: 0, platform: 0, ai: 0, data: 0, product: 0, infra: 0 },
     statuses: { all: 0, published: 0, draft: 0 },
-    marketplaceEnabled: { true: 0, false: 0, all: 0 },
+    mcpEnabled: { true: 0, false: 0, all: 0 },
   }
 
   // Get items filtered by everything except what we're counting
@@ -618,7 +618,7 @@ export function calculateFilterCounts(
   const baseFiltersExceptDifficulty = { ...currentFilters, difficulty: '' as const }
   const baseFiltersExceptTeamTag = { ...currentFilters, teamTag: '' as const }
   const baseFiltersExceptStatus = { ...currentFilters, status: 'all' as const }
-  const baseFiltersExceptMarketplace = { ...currentFilters, marketplaceEnabled: null }
+  const baseFiltersExceptMarketplace = { ...currentFilters, mcpEnabled: null }
 
   const itemsForTypeCount = applyFilters(items, baseFiltersExceptType)
   const itemsForTagCount = applyFilters(items, baseFiltersExceptTags)
@@ -667,12 +667,12 @@ export function calculateFilterCounts(
   }
 
   // Count marketplace enabled
-  counts.marketplaceEnabled.all = itemsForMarketplaceCount.length
+  counts.mcpEnabled.all = itemsForMarketplaceCount.length
   for (const item of itemsForMarketplaceCount) {
-    if (item.marketplaceEnabled) {
-      counts.marketplaceEnabled.true++
+    if (item.mcpEnabled) {
+      counts.mcpEnabled.true++
     } else {
-      counts.marketplaceEnabled.false++
+      counts.mcpEnabled.false++
     }
   }
 
@@ -707,8 +707,8 @@ export function filterCatalog(
   if (filters.difficulty) appliedFilters.push(`난이도: ${filters.difficulty}`)
   if (filters.teamTag) appliedFilters.push(`팀: ${filters.teamTag}`)
   if (filters.status !== 'all') appliedFilters.push(`상태: ${filters.status}`)
-  if (filters.marketplaceEnabled !== null) {
-    appliedFilters.push(`CLI: ${filters.marketplaceEnabled ? '지원' : '미지원'}`)
+  if (filters.mcpEnabled !== null) {
+    appliedFilters.push(`CLI: ${filters.mcpEnabled ? '지원' : '미지원'}`)
   }
   if (filters.likesRange.min !== undefined) {
     appliedFilters.push(`좋아요 ≥ ${filters.likesRange.min}`)
@@ -867,7 +867,7 @@ export function hasActiveFilters(filters: FilterState): boolean {
     filters.difficulty !== '' ||
     filters.teamTag !== '' ||
     filters.status !== 'all' ||
-    filters.marketplaceEnabled !== null ||
+    filters.mcpEnabled !== null ||
     filters.likesRange.min !== undefined ||
     filters.likesRange.max !== undefined ||
     filters.updatedDateRange.after !== undefined ||
@@ -886,7 +886,7 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.difficulty !== '') count++
   if (filters.teamTag !== '') count++
   if (filters.status !== 'all') count++
-  if (filters.marketplaceEnabled !== null) count++
+  if (filters.mcpEnabled !== null) count++
   if (filters.likesRange.min !== undefined) count++
   if (filters.likesRange.max !== undefined) count++
   if (filters.updatedDateRange.after !== undefined) count++
@@ -907,7 +907,7 @@ export function filterStateFromParams(params: URLSearchParams): Partial<FilterSt
   if (params.has('difficulty')) state.difficulty = params.get('difficulty') as Difficulty
   if (params.has('team')) state.teamTag = params.get('team') as TeamTag
   if (params.has('status')) state.status = params.get('status') as 'published' | 'draft' | 'all'
-  if (params.has('cli')) state.marketplaceEnabled = params.get('cli') === 'true'
+  if (params.has('cli')) state.mcpEnabled = params.get('cli') === 'true'
   if (params.has('likesMin')) state.likesRange = { ...state.likesRange, min: parseInt(params.get('likesMin') || '0') }
   if (params.has('likesMax')) state.likesRange = { ...state.likesRange, max: parseInt(params.get('likesMax') || '0') }
   if (params.has('updatedAfter')) state.updatedDateRange = { ...state.updatedDateRange, after: new Date(params.get('updatedAfter') || '') }
@@ -935,7 +935,7 @@ export function filterStateToParams(filters: FilterState): URLSearchParams {
   if (filters.difficulty) params.set('difficulty', filters.difficulty)
   if (filters.teamTag) params.set('team', filters.teamTag)
   if (filters.status !== 'all') params.set('status', filters.status)
-  if (filters.marketplaceEnabled !== null) params.set('cli', String(filters.marketplaceEnabled))
+  if (filters.mcpEnabled !== null) params.set('cli', String(filters.mcpEnabled))
   if (filters.likesRange.min !== undefined) params.set('likesMin', String(filters.likesRange.min))
   if (filters.likesRange.max !== undefined) params.set('likesMax', String(filters.likesRange.max))
   if (filters.updatedDateRange.after) params.set('updatedAfter', filters.updatedDateRange.after.toISOString())

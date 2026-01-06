@@ -43,7 +43,7 @@ const mockItems: CatalogItem[] = [
     teamTag: 'dev',
     status: 'published',
     likes: 15,
-    marketplaceEnabled: true,
+    mcpEnabled: true,
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-15T00:00:00Z',
   },
@@ -58,7 +58,7 @@ const mockItems: CatalogItem[] = [
     teamTag: 'data',
     status: 'published',
     likes: 8,
-    marketplaceEnabled: true,
+    mcpEnabled: true,
     createdAt: '2025-01-05T00:00:00Z',
     updatedAt: '2025-01-10T00:00:00Z',
   },
@@ -73,7 +73,7 @@ const mockItems: CatalogItem[] = [
     teamTag: 'dev',
     status: 'draft',
     likes: 3,
-    marketplaceEnabled: false,
+    mcpEnabled: false,
     createdAt: '2025-01-10T00:00:00Z',
     updatedAt: '2025-01-20T00:00:00Z',
   },
@@ -88,7 +88,7 @@ const mockItems: CatalogItem[] = [
     teamTag: 'dev',
     status: 'published',
     likes: 20,
-    marketplaceEnabled: true,
+    mcpEnabled: true,
     createdAt: '2025-01-02T00:00:00Z',
     updatedAt: '2025-01-18T00:00:00Z',
   },
@@ -287,10 +287,10 @@ describe('applyFilters', () => {
   })
 
   it('should filter by marketplace enabled', () => {
-    const filters: FilterState = { ...DEFAULT_FILTER_STATE, marketplaceEnabled: true }
+    const filters: FilterState = { ...DEFAULT_FILTER_STATE, mcpEnabled: true }
     const result = applyFilters(mockItems, filters)
     expect(result).toHaveLength(3)
-    expect(result.every(item => item.marketplaceEnabled)).toBe(true)
+    expect(result.every(item => item.mcpEnabled)).toBe(true)
   })
 
   it('should filter by likes range min', () => {
@@ -328,7 +328,7 @@ describe('applyFilters', () => {
       ...DEFAULT_FILTER_STATE,
       type: 'skill',
       difficulty: 'easy',
-      marketplaceEnabled: true
+      mcpEnabled: true
     }
     const result = applyFilters(mockItems, filters)
     expect(result).toHaveLength(2)
@@ -653,7 +653,7 @@ describe('DEFAULT_FILTER_STATE', () => {
     expect(DEFAULT_FILTER_STATE.difficulty).toBe('')
     expect(DEFAULT_FILTER_STATE.teamTag).toBe('')
     expect(DEFAULT_FILTER_STATE.status).toBe('all')
-    expect(DEFAULT_FILTER_STATE.marketplaceEnabled).toBeNull()
+    expect(DEFAULT_FILTER_STATE.mcpEnabled).toBeNull()
     expect(DEFAULT_FILTER_STATE.likesRange).toEqual({})
     expect(DEFAULT_FILTER_STATE.updatedDateRange).toEqual({})
     expect(DEFAULT_FILTER_STATE.sort).toEqual({ field: 'updatedAt', direction: 'desc' })

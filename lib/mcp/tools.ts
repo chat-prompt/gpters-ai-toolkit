@@ -166,7 +166,7 @@ files 필드에 추가 파일(스크립트, 레퍼런스 등)을 배열로 전�
           },
           description: '추가 파일 목록 (스크립트, 레퍼런스 등)',
         },
-        marketplaceEnabled: {
+        mcpEnabled: {
           type: 'boolean',
           description: '마켓플레이스 공개 여부 (기본: false)',
         },
@@ -231,7 +231,7 @@ files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
           },
           description: '새 파일 목록 (기존 파일 교체)',
         },
-        marketplaceEnabled: {
+        mcpEnabled: {
           type: 'boolean',
           description: '마켓플레이스 공개 여부',
         },

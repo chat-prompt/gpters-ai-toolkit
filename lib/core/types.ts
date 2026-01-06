@@ -70,12 +70,11 @@ export interface CatalogItem {
   hookTimeout?: number // 타임아웃 (ms)
   hookBlocking?: boolean // 블로킹 여부
 
-  // Marketplace integration fields
-  marketplaceEnabled?: boolean // Claude Code 마켓플레이스에 등록 여부
-  marketplaceSyncedAt?: string // 마지막 마켓플레이스 동기화 시간
-  marketplaceVersion?: string // 마켓플레이스 버전 (semver)
+  // MCP integration field
+  mcpEnabled?: boolean // MCP 서버에서 활성화 여부
 
-  // V2: Status and version management
+  // Version management
+  version?: string // 버전 (semver)
   status?: 'draft' | 'published' // 배포 상태
   changelog?: string // 최신 버전 변경 내역
 

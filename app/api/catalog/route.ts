@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems, users } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
-import { syncItemToGitHub, updateMarketplaceJson } from '@/lib/marketplace'
 import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -60,9 +59,8 @@ export async function GET(request: NextRequest) {
         hookCommand: catalogItems.hookCommand,
         hookTimeout: catalogItems.hookTimeout,
         hookBlocking: catalogItems.hookBlocking,
-        marketplaceEnabled: catalogItems.marketplaceEnabled,
-        marketplaceSyncedAt: catalogItems.marketplaceSyncedAt,
-        marketplaceVersion: catalogItems.marketplaceVersion,
+        mcpEnabled: catalogItems.mcpEnabled,
+        version: catalogItems.version,
         status: catalogItems.status,
         changelog: catalogItems.changelog,
         createdAt: catalogItems.createdAt,
@@ -116,8 +114,8 @@ export async function POST(request: NextRequest) {
     content,
     readme,
     files,
-    marketplaceEnabled,
-    marketplaceVersion,
+    mcpEnabled,
+    version,
     // Type-specific fields
     allowedTools,
     agentModel,
@@ -155,8 +153,8 @@ export async function POST(request: NextRequest) {
     content,
     readme: readme || null,
     files: (files as PluginFile[]) || null,
-    marketplaceEnabled: marketplaceEnabled || false,
-    marketplaceVersion: marketplaceVersion || '1.0.0',
+    mcpEnabled: mcpEnabled || false,
+    version: version || '1.0.0',
     // Type-specific fields
     allowedTools: allowedTools || null,
     agentModel: (agentModel as AgentModel) || null,
@@ -174,87 +172,7 @@ export async function POST(request: NextRequest) {
 
   await db.insert(catalogItems).values(newItem)
 
-  // Auto-sync to GitHub if marketplace is enabled
-  if (newItem.marketplaceEnabled && newItem.type !== 'guide') {
-    try {
-      const catalogItem = {
-        ...newItem,
-        likes: 0,
-        dependencies: [],
-        authorId: newItem.authorId ?? undefined,
-        teamTag: newItem.teamTag ?? undefined,
-        difficulty: newItem.difficulty ?? undefined,
-        pluginId: newItem.pluginId ?? undefined,
-        estimatedTime: newItem.estimatedTime ?? undefined,
-        readme: newItem.readme ?? undefined,
-        files: newItem.files ?? undefined,
-        marketplaceEnabled: newItem.marketplaceEnabled ?? undefined,
-        marketplaceVersion: newItem.marketplaceVersion ?? undefined,
-        // Type-specific fields
-        allowedTools: newItem.allowedTools ?? undefined,
-        agentModel: (newItem.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
-        agentPermissionMode: (newItem.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
-        agentSkills: newItem.agentSkills ?? undefined,
-        commandArgumentHint: newItem.commandArgumentHint ?? undefined,
-        commandDisableModelInvocation: newItem.commandDisableModelInvocation ?? undefined,
-        // Hook fields
-        hookEvent: (newItem.hookEvent ?? undefined) as HookEvent | undefined,
-        hookMatcher: newItem.hookMatcher ?? undefined,
-        hookCommand: newItem.hookCommand ?? undefined,
-        hookTimeout: newItem.hookTimeout ?? undefined,
-        hookBlocking: newItem.hookBlocking ?? undefined,
-        // V2 fields
-        status: 'published' as const,
-        changelog: undefined,
-      }
-      await syncItemToGitHub(catalogItem)
-
-      // Update marketplace.json
-      const allItems = await db.select().from(catalogItems).where(eq(catalogItems.marketplaceEnabled, true))
-      const allCatalogItems = allItems.map(item => ({
-        ...item,
-        tags: item.tags || [],
-        dependencies: item.dependencies || [],
-        authorId: item.authorId ?? undefined,
-        teamTag: item.teamTag ?? undefined,
-        difficulty: item.difficulty ?? undefined,
-        pluginId: item.pluginId ?? undefined,
-        estimatedTime: item.estimatedTime ?? undefined,
-        readme: item.readme ?? undefined,
-        files: item.files ?? undefined,
-        marketplaceEnabled: item.marketplaceEnabled ?? undefined,
-        marketplaceVersion: item.marketplaceVersion ?? undefined,
-        createdAt: item.createdAt?.toISOString(),
-        updatedAt: item.updatedAt?.toISOString(),
-        marketplaceSyncedAt: item.marketplaceSyncedAt?.toISOString(),
-        // Type-specific fields
-        allowedTools: item.allowedTools ?? undefined,
-        agentModel: (item.agentModel ?? undefined) as import('@/lib/core/types').AgentModel | undefined,
-        agentPermissionMode: (item.agentPermissionMode ?? undefined) as import('@/lib/core/types').AgentPermissionMode | undefined,
-        agentSkills: item.agentSkills ?? undefined,
-        commandArgumentHint: item.commandArgumentHint ?? undefined,
-        commandDisableModelInvocation: item.commandDisableModelInvocation ?? undefined,
-        // Hook fields
-        hookEvent: (item.hookEvent ?? undefined) as HookEvent | undefined,
-        hookMatcher: item.hookMatcher ?? undefined,
-        hookCommand: item.hookCommand ?? undefined,
-        hookTimeout: item.hookTimeout ?? undefined,
-        hookBlocking: item.hookBlocking ?? undefined,
-        // V2 fields
-        status: (item.status as 'draft' | 'published') ?? 'published',
-        changelog: item.changelog ?? undefined,
-      }))
-      await updateMarketplaceJson(allCatalogItems)
-
-      // Update sync timestamp
-      await db.update(catalogItems).set({ marketplaceSyncedAt: new Date() }).where(eq(catalogItems.id, id))
-    } catch (error) {
-      log.error('Failed to sync to marketplace', error)
-      // Don't fail the insert if sync fails
-    }
-  }
-
-    return apiSuccess(newItem, 201)
+  return apiSuccess(newItem, 201)
   } catch (error) {
     log.error('Failed to create catalog item', error)
     return ApiErrors.internalError('Failed to create catalog item')

@@ -27,10 +27,10 @@ vi.mock('@/lib/db', () => ({
     agentSkills: 'agentSkills',
     commandArgumentHint: 'commandArgumentHint',
     commandDisableModelInvocation: 'commandDisableModelInvocation',
-    marketplaceVersion: 'marketplaceVersion',
+    version: 'version',
     status: 'status',
     changelog: 'changelog',
-    marketplaceEnabled: 'marketplaceEnabled',
+    mcpEnabled: 'mcpEnabled',
     likes: 'likes',
   },
   users: {
@@ -198,7 +198,7 @@ describe('MCP Handlers', () => {
         agentSkills: [],
         commandArgumentHint: 'hint',
         commandDisableModelInvocation: false,
-        marketplaceVersion: '1.0.0',
+        version: '1.0.0',
         status: 'published',
         changelog: 'Initial release',
       }
@@ -243,7 +243,7 @@ describe('MCP Handlers', () => {
         agentSkills: null,
         commandArgumentHint: null,
         commandDisableModelInvocation: null,
-        marketplaceVersion: null,
+        version: null,
         status: null,
         changelog: null,
       }
@@ -460,7 +460,7 @@ describe('MCP Handlers', () => {
 
     it('should update existing skill', async () => {
       const mockSelectChain = createMockChain([
-        { id: 'existing-skill', content: 'old content', marketplaceVersion: '1.0.0' },
+        { id: 'existing-skill', content: 'old content', version: '1.0.0' },
       ])
       const mockUpdateChain = {
         set: vi.fn().mockReturnThis(),
@@ -482,25 +482,6 @@ describe('MCP Handlers', () => {
       expect(db.update).toHaveBeenCalled()
     })
 
-    it('should include GitHub sync result', async () => {
-      const mockSelectChain = createMockChain([])
-      const mockInsertChain = {
-        values: vi.fn().mockResolvedValue(undefined),
-      }
-
-      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
-      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
-
-      const result = await deploySkill({
-        type: 'skill',
-        name: 'Test Skill',
-        content: '# Content',
-        status: 'published',
-      })
-
-      expect(result.githubSync).toBeDefined()
-      expect(result.githubSync?.success).toBe(true)
-    })
   })
 
   describe('checkUpdates', () => {
@@ -508,7 +489,7 @@ describe('MCP Handlers', () => {
       const mockSelectChain = {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([
-          { id: 'skill-1', name: 'Skill 1', marketplaceVersion: '2.0.0', changelog: 'Bug fixes' },
+          { id: 'skill-1', name: 'Skill 1', version: '2.0.0', changelog: 'Bug fixes' },
         ]),
       }
       vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
@@ -527,7 +508,7 @@ describe('MCP Handlers', () => {
       const mockSelectChain = {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([
-          { id: 'skill-1', name: 'Skill 1', marketplaceVersion: '1.0.0', changelog: null },
+          { id: 'skill-1', name: 'Skill 1', version: '1.0.0', changelog: null },
         ]),
       }
       vi.mocked(db.select).mockReturnValue(mockSelectChain as never)

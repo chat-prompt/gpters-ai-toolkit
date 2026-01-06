@@ -27,7 +27,7 @@ interface QuickActionGeneratorProps {
   commandArgumentHint?: string
   // Common
   allowedTools?: string
-  marketplaceEnabled?: boolean
+  mcpEnabled?: boolean
 }
 
 export function QuickActionGenerator({
@@ -39,7 +39,7 @@ export function QuickActionGenerator({
   agentSkills,
   commandArgumentHint,
   allowedTools,
-  marketplaceEnabled,
+  mcpEnabled,
 }: QuickActionGeneratorProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
@@ -53,7 +53,7 @@ export function QuickActionGenerator({
     const actions: QuickAction[] = []
 
     // MCP Prompt (available when marketplace is enabled)
-    if (marketplaceEnabled) {
+    if (mcpEnabled) {
       actions.push({
         id: 'mcp-prompt',
         label: 'MCP 프롬프트 호출',
@@ -90,7 +90,7 @@ export function QuickActionGenerator({
       }
 
       // Marketplace install
-      if (marketplaceEnabled) {
+      if (mcpEnabled) {
         actions.push({
           id: 'marketplace-install',
           label: '마켓플레이스 설치',
@@ -309,7 +309,7 @@ export function QuickActionGenerator({
               <li>커맨드는 현재 세션에서 즉시 실행됩니다</li>
             </>
           )}
-          {marketplaceEnabled && (
+          {mcpEnabled && (
             <li>
               MCP 프롬프트는 설치 없이 바로 사용할 수 있습니다
             </li>

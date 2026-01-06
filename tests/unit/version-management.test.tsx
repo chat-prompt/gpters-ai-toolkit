@@ -176,9 +176,9 @@ function createMockCatalogItem(overrides: Partial<CatalogItem> & { id: string; n
 
 describe('checkForUpdates', () => {
   const mockCatalogItems: CatalogItem[] = [
-    createMockCatalogItem({ id: 'plugin-1', name: 'Plugin 1', type: 'skill', marketplaceVersion: '2.0.0' }),
-    createMockCatalogItem({ id: 'plugin-2', name: 'Plugin 2', type: 'agent', marketplaceVersion: '1.5.0' }),
-    createMockCatalogItem({ id: 'plugin-3', name: 'Plugin 3', type: 'command', marketplaceVersion: '1.0.0' }),
+    createMockCatalogItem({ id: 'plugin-1', name: 'Plugin 1', type: 'skill', version: '2.0.0' }),
+    createMockCatalogItem({ id: 'plugin-2', name: 'Plugin 2', type: 'agent', version: '1.5.0' }),
+    createMockCatalogItem({ id: 'plugin-3', name: 'Plugin 3', type: 'command', version: '1.0.0' }),
   ]
 
   it('should find available updates', () => {
@@ -220,9 +220,9 @@ describe('checkForUpdates', () => {
 
   it('should sort updates by priority (major > minor > patch)', () => {
     const catalog: CatalogItem[] = [
-      createMockCatalogItem({ id: 'p1', name: 'P1', type: 'skill', marketplaceVersion: '2.0.0' }),
-      createMockCatalogItem({ id: 'p2', name: 'P2', type: 'skill', marketplaceVersion: '1.1.0' }),
-      createMockCatalogItem({ id: 'p3', name: 'P3', type: 'skill', marketplaceVersion: '1.0.1' }),
+      createMockCatalogItem({ id: 'p1', name: 'P1', type: 'skill', version: '2.0.0' }),
+      createMockCatalogItem({ id: 'p2', name: 'P2', type: 'skill', version: '1.1.0' }),
+      createMockCatalogItem({ id: 'p3', name: 'P3', type: 'skill', version: '1.0.1' }),
     ]
     const installed: InstalledPlugin[] = [
       { id: 'p1', type: 'skill', installedVersion: '1.0.0' },

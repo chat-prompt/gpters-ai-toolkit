@@ -79,7 +79,7 @@ export default async function PackagePage({ params }: { params: Promise<{ id: st
           difficulty={item.difficulty}
           updatedAt={item.updatedAt}
           status={item.status}
-          marketplaceVersion={item.marketplaceVersion}
+          version={item.version}
           extraBadges={
             <>
               <DownloadButton itemId={item.id} itemName={item.name} size="sm" />
@@ -121,7 +121,7 @@ export default async function PackagePage({ params }: { params: Promise<{ id: st
       {item.changelog && (
         <Section id="changelog">
           <ChangelogDisplay
-            version={item.marketplaceVersion}
+            version={item.version}
             changelog={item.changelog}
             updatedAt={item.updatedAt}
           />

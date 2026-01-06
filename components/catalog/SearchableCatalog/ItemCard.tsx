@@ -82,7 +82,7 @@ export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {item.marketplaceEnabled && item.type !== 'guide' && (
+            {item.mcpEnabled && item.type !== 'guide' && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] font-medium tracking-wide border border-[var(--accent-cyan)]/30">
                 CLI READY
               </span>

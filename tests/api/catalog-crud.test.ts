@@ -53,8 +53,8 @@ describe('Catalog CRUD API', () => {
         teamTag: 'general',
         difficulty: 'easy',
         content: '# Test Skill Content\n\nThis is a test skill.',
-        marketplaceEnabled: false,
-        marketplaceVersion: '1.0.0',
+        mcpEnabled: false,
+        version: '1.0.0',
       }
 
       const response = await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -161,7 +161,7 @@ describe('Catalog CRUD API', () => {
         agentPermissionMode: 'default',
         agentSkills: 'skill1,skill2',
         allowedTools: 'Read,Write,Bash',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const response = await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -201,7 +201,7 @@ describe('Catalog CRUD API', () => {
         commandArgumentHint: '[message]',
         commandDisableModelInvocation: true,
         allowedTools: 'Bash',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const response = await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -242,7 +242,7 @@ describe('Catalog CRUD API', () => {
         description: 'Test item for GET operation',
         author: 'test-author',
         content: '# Test Content',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const response = await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -307,7 +307,7 @@ describe('Catalog CRUD API', () => {
         author: 'test-author',
         content: '# Original Content',
         tags: ['original'],
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const response = await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -458,7 +458,7 @@ describe('Catalog CRUD API', () => {
         type: 'skill',
         name: 'Test DELETE Skill',
         content: '# Test Content',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const createResponse = await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -498,7 +498,7 @@ describe('Catalog CRUD API', () => {
         type: 'skill',
         name: 'Test Unauthorized DELETE',
         content: '# Test Content',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       await fetch(`${API_BASE_URL}/api/catalog`, {
@@ -557,7 +557,7 @@ describe('Catalog CRUD API', () => {
         name: 'Test Filter Skill',
         author: 'test-author',
         content: '# Test Skill',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const agentItem = {
@@ -566,7 +566,7 @@ describe('Catalog CRUD API', () => {
         name: 'Test Filter Agent',
         author: 'test-author',
         content: '# Test Agent',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const authorItem = {
@@ -575,7 +575,7 @@ describe('Catalog CRUD API', () => {
         name: 'Test Author Filter Skill',
         author: 'primadonna',
         content: '# Test Author',
-        marketplaceEnabled: false,
+        mcpEnabled: false,
       }
 
       const responses = await Promise.all([

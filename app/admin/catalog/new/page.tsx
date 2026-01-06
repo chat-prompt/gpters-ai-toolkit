@@ -31,8 +31,8 @@ export default function NewCatalogItem() {
   const [readme, setReadme] = useState('')
 
   // Marketplace state
-  const [marketplaceEnabled, setMarketplaceEnabled] = useState(false)
-  const [marketplaceVersion, setMarketplaceVersion] = useState('1.0.0')
+  const [mcpEnabled, setMarketplaceEnabled] = useState(false)
+  const [version, setMarketplaceVersion] = useState('1.0.0')
 
   // Type-specific state
   const [difficulty, setDifficulty] = useState<Difficulty | ''>('')
@@ -144,8 +144,8 @@ export default function NewCatalogItem() {
         estimatedTime: estimatedTime || null,
         content,
         readme: readme || null,
-        marketplaceEnabled,
-        marketplaceVersion: marketplaceVersion || '1.0.0',
+        mcpEnabled,
+        version: version || '1.0.0',
         // Type-specific fields
         allowedTools: allowedTools || null,
         agentModel: agentModel || null,
@@ -396,7 +396,7 @@ export default function NewCatalogItem() {
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={marketplaceEnabled}
+                      checked={mcpEnabled}
                       onChange={(e) => setMarketplaceEnabled(e.target.checked)}
                       className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
                     />
@@ -404,14 +404,14 @@ export default function NewCatalogItem() {
                   </label>
                 </div>
 
-                {marketplaceEnabled && (
+                {mcpEnabled && (
                   <div>
                     <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
                       Version (semver)
                     </label>
                     <input
                       type="text"
-                      value={marketplaceVersion}
+                      value={version}
                       onChange={(e) => setMarketplaceVersion(e.target.value)}
                       placeholder="1.0.0"
                       className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"

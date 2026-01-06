@@ -36,14 +36,14 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         estimatedTime={guide.estimatedTime}
         updatedAt={guide.updatedAt}
         status={guide.status}
-        marketplaceVersion={guide.marketplaceVersion}
+        version={guide.version}
         showLikes={false}
       />
 
       {/* Changelog */}
       {guide.changelog && (
         <ChangelogDisplay
-          version={guide.marketplaceVersion}
+          version={guide.version}
           changelog={guide.changelog}
           updatedAt={guide.updatedAt}
         />

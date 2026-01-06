@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       tags: item.tags || [],
       likes: item.likes,
       content: item.content,
-      marketplaceVersion: item.marketplaceVersion ?? '1.0.0',
+      version: item.version ?? '1.0.0',
       changelog: item.changelog ?? undefined,
       updatedAt: item.updatedAt?.toISOString(),
     }))
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
         id: catalogItems.id,
         type: catalogItems.type,
         name: catalogItems.name,
-        marketplaceVersion: catalogItems.marketplaceVersion,
+        version: catalogItems.version,
         changelog: catalogItems.changelog,
         updatedAt: catalogItems.updatedAt,
       })
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
       id: item.id,
       type: item.type,
       name: item.name,
-      version: item.marketplaceVersion ?? '1.0.0',
+      version: item.version ?? '1.0.0',
       changelog: item.changelog,
       updatedAt: item.updatedAt?.toISOString(),
     }))

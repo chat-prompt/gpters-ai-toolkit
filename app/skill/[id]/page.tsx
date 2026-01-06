@@ -89,7 +89,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           difficulty={item.difficulty}
           updatedAt={item.updatedAt}
           status={item.status}
-          marketplaceVersion={item.marketplaceVersion}
+          version={item.version}
           extraBadges={
             <>
               <TryItButton itemId={item.id} />
@@ -117,7 +117,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
       {item.changelog && (
         <Section id="changelog">
           <ChangelogDisplay
-            version={item.marketplaceVersion}
+            version={item.version}
             changelog={item.changelog}
             updatedAt={item.updatedAt}
           />
@@ -128,7 +128,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
       <Section id="version-history">
         <SkillVersionHistory
           itemId={item.id}
-          currentVersion={item.marketplaceVersion}
+          currentVersion={item.version}
         />
       </Section>
 
@@ -139,7 +139,7 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           itemType="skill"
           pluginId={item.pluginId}
           allowedTools={item.allowedTools}
-          marketplaceEnabled={item.marketplaceEnabled}
+          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 
@@ -148,9 +148,8 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
         <InstallGuide
           itemId={item.id}
           itemType="skill"
-          pluginId={item.pluginId}
           content={item.content}
-          marketplaceEnabled={item.marketplaceEnabled}
+          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 

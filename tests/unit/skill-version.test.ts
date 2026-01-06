@@ -22,7 +22,7 @@ vi.mock('@/lib/db', () => ({
 }))
 
 vi.mock('@/lib/db/schema', () => ({
-  catalogItems: { id: 'id', marketplaceVersion: 'marketplaceVersion' },
+  catalogItems: { id: 'id', version: 'version' },
   itemVersions: { id: 'id', itemId: 'itemId', version: 'version', createdAt: 'createdAt' },
 }))
 

@@ -87,7 +87,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           difficulty={item.difficulty}
           updatedAt={item.updatedAt}
           status={item.status}
-          marketplaceVersion={item.marketplaceVersion}
+          version={item.version}
           extraBadges={
             <>
               <TryItButton itemId={item.id} />
@@ -115,7 +115,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
       {item.changelog && (
         <Section id="changelog">
           <ChangelogDisplay
-            version={item.marketplaceVersion}
+            version={item.version}
             changelog={item.changelog}
             updatedAt={item.updatedAt}
           />
@@ -129,7 +129,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           itemType="command"
           commandArgumentHint={item.commandArgumentHint}
           allowedTools={item.allowedTools}
-          marketplaceEnabled={item.marketplaceEnabled}
+          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 
@@ -139,7 +139,7 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           itemId={item.id}
           itemType="command"
           content={item.content}
-          marketplaceEnabled={item.marketplaceEnabled}
+          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 

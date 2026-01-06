@@ -37,7 +37,7 @@ export interface CreatePluginInput {
   teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
   readme?: string
   files?: PluginFile[]
-  marketplaceEnabled?: boolean
+  mcpEnabled?: boolean
 }
 
 export interface UpdatePluginInput {
@@ -50,7 +50,7 @@ export interface UpdatePluginInput {
   teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
   readme?: string
   files?: PluginFile[]
-  marketplaceEnabled?: boolean
+  mcpEnabled?: boolean
 }
 
 export interface DeletePluginInput {

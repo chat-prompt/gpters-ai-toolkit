@@ -16,7 +16,7 @@ interface ItemHeroProps {
   difficulty?: string
   updatedAt?: string
   status?: 'draft' | 'published'
-  marketplaceVersion?: string
+  version?: string
   estimatedTime?: string
   extraBadges?: ReactNode
   showLikes?: boolean
@@ -42,7 +42,7 @@ export function ItemHero({
   difficulty,
   updatedAt,
   status,
-  marketplaceVersion,
+  version,
   estimatedTime,
   extraBadges,
   showLikes = true,
@@ -67,7 +67,7 @@ export function ItemHero({
           </span>
         )}
         {extraBadges}
-        <StatusBadge status={status} version={marketplaceVersion} />
+        <StatusBadge status={status} version={version} />
       </div>
 
       <h1

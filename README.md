@@ -133,7 +133,7 @@ gpters-ai-toolkit/
 - **기본**: `id`, `name`, `description`, `author`, `status` (draft/published)
 - **콘텐츠**: `content`, `readme`, `files` (추가 파일 배열)
 - **메타데이터**: `tags`, `teamTag`, `difficulty`, `likes`
-- **버전**: `version`, `changelog`, `marketplaceVersion`
+- **버전**: `version`, `changelog`
 - **타임스탬프**: `createdAt`, `updatedAt`
 
 ## API 엔드포인트

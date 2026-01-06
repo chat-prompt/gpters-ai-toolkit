@@ -139,7 +139,7 @@ describe('MCP Tools', () => {
         expect(tool.inputSchema.properties.teamTag).toBeDefined()
         expect(tool.inputSchema.properties.readme).toBeDefined()
         expect(tool.inputSchema.properties.files).toBeDefined()
-        expect(tool.inputSchema.properties.marketplaceEnabled).toBeDefined()
+        expect(tool.inputSchema.properties.mcpEnabled).toBeDefined()
       })
     })
 

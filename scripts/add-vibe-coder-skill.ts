@@ -22,8 +22,8 @@ const vibeCoderSkill = {
   teamTag: 'general' as const,
   difficulty: 'easy' as const,
   allowedTools: 'Read, Write, Edit, Bash, Glob, Grep',
-  marketplaceEnabled: true,
-  marketplaceVersion: '1.0.0',
+  mcpEnabled: true,
+  version: '1.0.0',
   status: 'published' as const,
   content: `# Vibe Coder Helper
 

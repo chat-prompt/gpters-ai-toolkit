@@ -76,7 +76,7 @@ export async function getVersionHistory(
   limit = 20
 ): Promise<VersionHistoryEntry[]> {
   const item = await db
-    .select({ version: catalogItems.marketplaceVersion })
+    .select({ version: catalogItems.version })
     .from(catalogItems)
     .where(eq(catalogItems.id, itemId))
     .limit(1)
@@ -118,7 +118,7 @@ export async function getVersion(versionId: string): Promise<VersionHistoryEntry
 
   const v = versions[0]
   const item = await db
-    .select({ version: catalogItems.marketplaceVersion })
+    .select({ version: catalogItems.version })
     .from(catalogItems)
     .where(eq(catalogItems.id, v.itemId))
     .limit(1)
@@ -181,12 +181,12 @@ export async function createVersionSnapshot(
   const { version, versionType, changelog, createdBy } = options
 
   // Determine version and type
-  let newVersion = version || item.marketplaceVersion || '1.0.0'
+  let newVersion = version || item.version || '1.0.0'
   const newVersionType = versionType || 'patch'
 
   // If no explicit version, auto-increment
-  if (!version && item.marketplaceVersion) {
-    newVersion = incrementVersion(item.marketplaceVersion, newVersionType)
+  if (!version && item.version) {
+    newVersion = incrementVersion(item.version, newVersionType)
   }
 
   // Create snapshot data (convert null to undefined for schema compatibility)
@@ -299,7 +299,7 @@ export async function createVersionOnUpdate(
   }
 
   // Calculate new version
-  const currentVersion = item.marketplaceVersion || '1.0.0'
+  const currentVersion = item.version || '1.0.0'
   const newVersion = incrementVersion(currentVersion, versionType)
 
   // Create version snapshot
@@ -361,7 +361,7 @@ export async function rollbackToVersion(
   // If creating new version, snapshot current state first
   if (createNewVersion) {
     await createVersionSnapshot(currentItem, {
-      version: currentItem.marketplaceVersion || '1.0.0',
+      version: currentItem.version || '1.0.0',
       versionType: 'patch',
       changelog: `Snapshot before rollback to v${targetVersion.version}`,
       createdBy,
@@ -376,7 +376,7 @@ export async function rollbackToVersion(
     .update(catalogItems)
     .set({
       ...restoredData,
-      marketplaceVersion: newVersion,
+      version: newVersion,
       changelog: `Rolled back to v${targetVersion.version}`,
       updatedAt: new Date(),
     })
@@ -384,11 +384,11 @@ export async function rollbackToVersion(
 
   // Create version record for the rollback
   await createVersionSnapshot(
-    { ...currentItem, ...restoredData, marketplaceVersion: newVersion } as CatalogItemRecord,
+    { ...currentItem, ...restoredData, version: newVersion } as CatalogItemRecord,
     {
       version: newVersion,
       versionType: 'patch',
-      changelog: `Rolled back from v${currentItem.marketplaceVersion} to v${targetVersion.version}`,
+      changelog: `Rolled back from v${currentItem.version} to v${targetVersion.version}`,
       createdBy,
     }
   )
@@ -455,7 +455,7 @@ export async function previewRollback(
   }
 
   return {
-    currentVersion: currentItem.marketplaceVersion || '1.0.0',
+    currentVersion: currentItem.version || '1.0.0',
     targetVersion: targetVersion.version,
     changes,
   }

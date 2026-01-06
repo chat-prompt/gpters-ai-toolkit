@@ -53,9 +53,8 @@ vi.mock('@/lib/db', () => ({
     hookCommand: { name: 'hookCommand' },
     hookTimeout: { name: 'hookTimeout' },
     hookBlocking: { name: 'hookBlocking' },
-    marketplaceEnabled: { name: 'marketplaceEnabled' },
-    marketplaceSyncedAt: { name: 'marketplaceSyncedAt' },
-    marketplaceVersion: { name: 'marketplaceVersion' },
+    mcpEnabled: { name: 'mcpEnabled' },
+    version: { name: 'version' },
     status: { name: 'status' },
     changelog: { name: 'changelog' },
     createdAt: { name: 'createdAt' },
@@ -110,9 +109,8 @@ function createMockRecord(overrides: Record<string, unknown> = {}) {
     hookCommand: null,
     hookTimeout: null,
     hookBlocking: null,
-    marketplaceEnabled: true,
-    marketplaceSyncedAt: null,
-    marketplaceVersion: '1.0.0',
+    mcpEnabled: true,
+    version: '1.0.0',
     status: 'published' as const,
     changelog: null,
     createdAt: new Date('2024-01-01'),
@@ -191,13 +189,13 @@ describe('Catalog Module', () => {
       expect(result[0].status).toBe('published')
     })
 
-    it('should set default marketplaceEnabled to false when null', async () => {
-      const mockRecords = [createMockRecord({ marketplaceEnabled: null })]
+    it('should set default mcpEnabled to false when null', async () => {
+      const mockRecords = [createMockRecord({ mcpEnabled: null })]
       mockSelect.mockResolvedValue(mockRecords)
 
       const result = await getCatalog()
 
-      expect(result[0].marketplaceEnabled).toBe(false)
+      expect(result[0].mcpEnabled).toBe(false)
     })
   })
 
@@ -585,14 +583,5 @@ describe('Catalog Module', () => {
       expect(result[0].estimatedTime).toBeUndefined()
     })
 
-    it('should convert marketplaceSyncedAt to ISO string', async () => {
-      const syncDate = new Date('2024-06-15T10:30:00Z')
-      const mockRecords = [createMockRecord({ marketplaceSyncedAt: syncDate })]
-      mockSelect.mockResolvedValue(mockRecords)
-
-      const result = await getCatalog()
-
-      expect(result[0].marketplaceSyncedAt).toContain('2024-06-15')
-    })
   })
 })

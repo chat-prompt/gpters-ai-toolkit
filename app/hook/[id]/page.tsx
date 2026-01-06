@@ -135,7 +135,7 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           likes={item.likes}
           updatedAt={item.updatedAt}
           status={item.status}
-          marketplaceVersion={item.marketplaceVersion}
+          version={item.version}
           extraBadges={extraBadges}
         />
       </Section>

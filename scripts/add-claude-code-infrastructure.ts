@@ -134,8 +134,8 @@ ${skillActivationSh}
     pluginId: 'claude-code-infrastructure',
     content: fullContent,
     allowedTools: 'Read,Write,Edit,Bash',
-    marketplaceEnabled: true,
-    marketplaceVersion: '1.0.0',
+    mcpEnabled: true,
+    version: '1.0.0',
   }
 
   try {
@@ -148,7 +148,7 @@ ${skillActivationSh}
         tags: newItem.tags,
         teamTag: newItem.teamTag,
         allowedTools: newItem.allowedTools,
-        marketplaceVersion: newItem.marketplaceVersion,
+        version: newItem.version,
         updatedAt: new Date(),
       },
     })

@@ -31,7 +31,7 @@ interface CatalogItem {
   tags: string[]
   teamTag: TeamTag | null
   status: 'draft' | 'published' | null
-  marketplaceVersion: string | null
+  version: string | null
   createdAt: string
   updatedAt: string
 }
@@ -262,9 +262,9 @@ export default function CatalogList() {
                           Published
                         </span>
                       )}
-                      {item.marketplaceVersion && (
+                      {item.version && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)] font-mono">
-                          v{item.marketplaceVersion}
+                          v{item.version}
                         </span>
                       )}
                     </div>

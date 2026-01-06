@@ -98,7 +98,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({
           created: false,
           message: 'No changes detected since last version',
-          currentVersion: item.marketplaceVersion,
+          currentVersion: item.version,
         })
       }
 
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       await db
         .update(catalogItems)
         .set({
-          marketplaceVersion: comparison.suggestedVersion,
+          version: comparison.suggestedVersion,
           changelog: changelog || comparison.summary,
           updatedAt: new Date(),
         })
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       await db
         .update(catalogItems)
         .set({
-          marketplaceVersion: version,
+          version: version,
           changelog,
           updatedAt: new Date(),
         })

@@ -142,7 +142,7 @@ export function checkForUpdates(
       continue
     }
 
-    const latestVersion = catalogItem.marketplaceVersion || '1.0.0'
+    const latestVersion = catalogItem.version || '1.0.0'
     const installedVersion = installed.installedVersion || '1.0.0'
 
     if (hasUpdate(installedVersion, latestVersion)) {

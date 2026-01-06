@@ -229,9 +229,9 @@ export const catalogItems = pgTable('catalog_items', {
   status: text('status').default('published'),        // draft | published
   currentVersion: text('current_version').default('1.0.0'),
 
-  // 기존 marketplace 필드는 유지
-  marketplaceEnabled: boolean('marketplace_enabled').default(true),
-  marketplaceSyncedAt: timestamp('marketplace_synced_at'),
+  // MCP integration
+  mcpEnabled: boolean('mcp_enabled').default(false),
+  version: text('version').default('1.0.0'),
 });
 ```
 

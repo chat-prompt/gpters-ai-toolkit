@@ -41,7 +41,7 @@ function generateInstallMd(item: {
   type: ItemType
   description: string
   authorName: string
-  marketplaceVersion?: string | null
+  version?: string | null
   pluginId?: string | null
   dependencies?: string[] | null
 }): string {
@@ -54,8 +54,8 @@ function generateInstallMd(item: {
     `- **Author**: @${item.authorName}`,
   ]
 
-  if (item.marketplaceVersion) {
-    lines.push(`- **Version**: ${item.marketplaceVersion}`)
+  if (item.version) {
+    lines.push(`- **Version**: ${item.version}`)
   }
 
   lines.push('')
@@ -167,7 +167,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         content: catalogItems.content,
         readme: catalogItems.readme,
         files: catalogItems.files,
-        marketplaceVersion: catalogItems.marketplaceVersion,
+        version: catalogItems.version,
         pluginId: catalogItems.pluginId,
         dependencies: catalogItems.dependencies,
       })
@@ -219,7 +219,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       type: item.type as ItemType,
       description: item.description,
       authorName: item.authorName || 'Unknown',
-      marketplaceVersion: item.marketplaceVersion,
+      version: item.version,
       pluginId: item.pluginId,
       dependencies: item.dependencies,
     })

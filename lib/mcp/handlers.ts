@@ -29,7 +29,6 @@ import type {
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
-import { syncItemToGitHub } from '../marketplace'
 
 /**
  * Search plugins by keyword
@@ -60,7 +59,7 @@ export async function searchPlugins(input: SearchPluginsInput): Promise<SearchRe
   }
 
   // Only include marketplace-enabled items
-  conditions.push(eq(catalogItems.marketplaceEnabled, true))
+  conditions.push(eq(catalogItems.mcpEnabled, true))
 
   const whereClause = and(...conditions)
 
@@ -124,7 +123,7 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
       agentSkills: catalogItems.agentSkills,
       commandArgumentHint: catalogItems.commandArgumentHint,
       commandDisableModelInvocation: catalogItems.commandDisableModelInvocation,
-      marketplaceVersion: catalogItems.marketplaceVersion,
+      version: catalogItems.version,
       status: catalogItems.status,
       changelog: catalogItems.changelog,
     })
@@ -159,7 +158,7 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
     commandArgumentHint: item.commandArgumentHint || undefined,
     commandDisableModelInvocation: item.commandDisableModelInvocation || undefined,
     // V2: Version info
-    version: item.marketplaceVersion || '1.0.0',
+    version: item.version || '1.0.0',
     status: item.status || 'published',
     changelog: item.changelog || undefined,
   }
@@ -182,7 +181,7 @@ export async function listPlugins(input: ListPluginsInput = {}): Promise<ListRes
   }
 
   // Only include marketplace-enabled items
-  conditions.push(eq(catalogItems.marketplaceEnabled, true))
+  conditions.push(eq(catalogItems.mcpEnabled, true))
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -241,7 +240,7 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
     .where(
       and(
         eq(catalogItems.type, category),
-        eq(catalogItems.marketplaceEnabled, true)
+        eq(catalogItems.mcpEnabled, true)
       )
     )
     .limit(safeLimit)
@@ -270,7 +269,7 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
 export async function createPlugin(
   input: CreatePluginInput
 ): Promise<{ success: boolean; id: string; error?: string }> {
-  const { id, type, name, description, content, tags, teamTag, readme, files, marketplaceEnabled } = input
+  const { id, type, name, description, content, tags, teamTag, readme, files, mcpEnabled } = input
 
   // Check if plugin already exists
   const existing = await db
@@ -294,7 +293,7 @@ export async function createPlugin(
     teamTag: (teamTag as TeamTag) || 'general',
     readme: readme || null,
     files: files || null,
-    marketplaceEnabled: marketplaceEnabled || false,
+    mcpEnabled: mcpEnabled || false,
     likes: 0,
     dependencies: [],
   })
@@ -335,7 +334,7 @@ export async function updatePlugin(
   if (updateFields.teamTag !== undefined) updateData.teamTag = updateFields.teamTag
   if (updateFields.readme !== undefined) updateData.readme = updateFields.readme
   if (updateFields.files !== undefined) updateData.files = updateFields.files
-  if (updateFields.marketplaceEnabled !== undefined) updateData.marketplaceEnabled = updateFields.marketplaceEnabled
+  if (updateFields.mcpEnabled !== undefined) updateData.mcpEnabled = updateFields.mcpEnabled
 
   await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
 
@@ -396,7 +395,7 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
     .select({
       id: catalogItems.id,
       content: catalogItems.content,
-      marketplaceVersion: catalogItems.marketplaceVersion,
+      version: catalogItems.version,
     })
     .from(catalogItems)
     .where(eq(catalogItems.id, id))
@@ -407,7 +406,7 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
 
   // Determine version
   const versionInfo = determineVersion(
-    existingItem ? { content: existingItem.content, version: existingItem.marketplaceVersion || '1.0.0' } : null,
+    existingItem ? { content: existingItem.content, version: existingItem.version || '1.0.0' } : null,
     content,
     explicitChangelog
   )
@@ -428,10 +427,10 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
         agentModel: agentModel || null,
         agentPermissionMode: agentPermissionMode || null,
         status,
-        marketplaceVersion: versionInfo.version,
+        version: versionInfo.version,
         changelog: versionInfo.changelog,
         files: files || null,
-        marketplaceEnabled: status === 'published',
+        mcpEnabled: status === 'published',
         updatedAt: now,
       })
       .where(eq(catalogItems.id, id))
@@ -450,10 +449,10 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
       agentModel: agentModel || null,
       agentPermissionMode: agentPermissionMode || null,
       status,
-      marketplaceVersion: versionInfo.version,
+      version: versionInfo.version,
       changelog: versionInfo.changelog,
       files: files || null,
-      marketplaceEnabled: status === 'published',
+      mcpEnabled: status === 'published',
       likes: 0,
       dependencies: [],
       createdAt: now,
@@ -466,50 +465,11 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
     success: true,
     id,
     version: versionInfo.version,
-    previousVersion: existingItem?.marketplaceVersion || undefined,
+    previousVersion: existingItem?.version || undefined,
     changelog: versionInfo.changelog,
     status,
     webUrl: `https://company-ai-toolkit.vercel.app/${type}/${id}`,
     installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
-  }
-
-  // Sync to GitHub if published
-  if (status === 'published') {
-    try {
-      const catalogItem: CatalogItem = {
-        id,
-        type,
-        name,
-        description: description || '',
-        authorName: 'Unknown', // TODO: Get from auth context
-        tags: tags || [],
-        teamTag: (teamTag as TeamTag) || 'general',
-        likes: 0,
-        content,
-        allowedTools: allowedTools || undefined,
-        agentModel: agentModel as CatalogItem['agentModel'],
-        agentPermissionMode: agentPermissionMode as CatalogItem['agentPermissionMode'],
-        files: files || undefined,
-        marketplaceEnabled: true,
-        marketplaceVersion: versionInfo.version,
-      }
-
-      const syncResult = await syncItemToGitHub(catalogItem)
-
-      response.githubSync = {
-        success: syncResult.success,
-        filesCreated: syncResult.filesCreated,
-        filesUpdated: syncResult.filesUpdated,
-        errors: syncResult.errors,
-      }
-    } catch (error) {
-      response.githubSync = {
-        success: false,
-        filesCreated: [],
-        filesUpdated: [],
-        errors: [error instanceof Error ? error.message : 'GitHub sync failed'],
-      }
-    }
   }
 
   return response
@@ -531,7 +491,7 @@ export async function checkUpdates(input: CheckUpdatesInput): Promise<CheckUpdat
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
-      marketplaceVersion: catalogItems.marketplaceVersion,
+      version: catalogItems.version,
       changelog: catalogItems.changelog,
     })
     .from(catalogItems)
@@ -539,7 +499,7 @@ export async function checkUpdates(input: CheckUpdatesInput): Promise<CheckUpdat
 
   // Create a map for quick lookup
   const latestVersions = new Map(
-    results.map((r) => [r.id, { name: r.name, version: r.marketplaceVersion || '1.0.0', changelog: r.changelog }])
+    results.map((r) => [r.id, { name: r.name, version: r.version || '1.0.0', changelog: r.changelog }])
   )
 
   const updates: CheckUpdatesResponse['updates'] = []
@@ -810,7 +770,7 @@ export async function listPrompts(): Promise<McpPrompt[]> {
       commandArgumentHint: catalogItems.commandArgumentHint,
     })
     .from(catalogItems)
-    .where(eq(catalogItems.marketplaceEnabled, true))
+    .where(eq(catalogItems.mcpEnabled, true))
 
   return results.map((item) => {
     const prompt: McpPrompt = {

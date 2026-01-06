@@ -189,6 +189,7 @@ describe('MCP Authentication', () => {
       }
       return {
         headers,
+        url: 'http://localhost:3000/api/mcp'
       } as unknown as NextRequest
     }
 
@@ -420,7 +421,10 @@ describe('Database-dependent Functions', () => {
       if (authHeader) {
         headers.set('Authorization', authHeader)
       }
-      return { headers } as unknown as NextRequest
+      return {
+        headers,
+        url: 'http://localhost:3000/api/mcp'
+      } as unknown as NextRequest
     }
 
     it('should return null for requests without auth header', async () => {
@@ -480,7 +484,10 @@ describe('Database-dependent Functions', () => {
       if (authHeader) {
         headers.set('Authorization', authHeader)
       }
-      return { headers } as unknown as NextRequest
+      return {
+        headers,
+        url: 'http://localhost:3000/api/mcp'
+      } as unknown as NextRequest
     }
 
     it('should allow public mode when auth not required', async () => {
