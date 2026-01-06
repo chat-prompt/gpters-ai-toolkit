@@ -76,7 +76,7 @@ const markdownComponents: Components = {
     )
   },
   pre: ({ children }) => (
-    <pre className="bg-[var(--bg-primary)] rounded-xl p-4 my-4 overflow-x-auto">
+    <pre className="bg-[var(--bg-primary)] rounded-xl p-4 my-4 overflow-x-auto font-mono leading-relaxed">
       {children}
     </pre>
   ),
