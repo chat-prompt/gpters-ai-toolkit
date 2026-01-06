@@ -277,7 +277,7 @@ export default function GettingStartedPage() {
                 </p>
 
                 <div className="relative">
-                  <pre className="p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-secondary)]">
+                  <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-secondary)] whitespace-pre-wrap break-all">
                     {getShellCommand(tokenForCommands, platform)}
                   </pre>
                   <button
