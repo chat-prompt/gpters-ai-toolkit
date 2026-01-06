@@ -8,15 +8,14 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
 
-  // Allow auth routes, MCP endpoint, well-known paths, and public files to pass through
+  // Allow auth routes, MCP endpoints, well-known paths, and metadata files to pass through
   if (
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/mcp') ||
     pathname.startsWith('/.well-known') ||
     pathname === '/robots.txt' ||
-    pathname === '/sitemap.xml' ||
-    pathname === '/mcp-proxy.mjs'
+    pathname === '/sitemap.xml'
   ) {
     return NextResponse.next()
   }

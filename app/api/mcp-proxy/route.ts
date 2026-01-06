@@ -1,14 +1,9 @@
-#!/usr/bin/env node
-/**
- * MCP HTTP-to-Stdio Proxy for GPTers AI Toolkit
- *
- * Usage:
- *   claude mcp add gpters-marketplace \
- *     -e MCP_URL=https://company-ai-toolkit.vercel.app/api/mcp \
- *     -e MCP_TOKEN=<your-token> \
- *     -- node -e "$(curl -s https://company-ai-toolkit.vercel.app/mcp-proxy.mjs)"
- */
+import { NextResponse } from 'next/server'
 
+// Serve the MCP proxy script for stdio transport
+// This script converts HTTP MCP to stdio for Claude Code compatibility
+
+const PROXY_SCRIPT = `#!/usr/bin/env node
 import { createInterface } from 'readline';
 
 const MCP_URL = process.env.MCP_URL || 'https://company-ai-toolkit.vercel.app/api/mcp';
@@ -38,7 +33,7 @@ async function sendRequest(jsonRpcRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MCP_TOKEN}`,
+        'Authorization': \`Bearer \${MCP_TOKEN}\`,
       },
       body: JSON.stringify(jsonRpcRequest),
     });
@@ -50,7 +45,7 @@ async function sendRequest(jsonRpcRequest) {
         id: jsonRpcRequest.id,
         error: {
           code: -32000,
-          message: `HTTP ${response.status}: ${error}`,
+          message: \`HTTP \${response.status}: \${error}\`,
         },
       };
     }
@@ -69,7 +64,7 @@ async function sendRequest(jsonRpcRequest) {
 }
 
 function writeResponse(response) {
-  process.stdout.write(JSON.stringify(response) + '\n');
+  process.stdout.write(JSON.stringify(response) + '\\n');
 }
 
 rl.on('line', async (line) => {
@@ -94,3 +89,13 @@ rl.on('line', async (line) => {
 rl.on('close', () => process.exit(0));
 process.on('SIGINT', () => process.exit(0));
 process.on('SIGTERM', () => process.exit(0));
+`
+
+export async function GET() {
+  return new NextResponse(PROXY_SCRIPT, {
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  })
+}

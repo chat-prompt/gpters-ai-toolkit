@@ -45,7 +45,7 @@ function getMcpCliCommand(token: string): string {
   return `claude mcp add gpters-marketplace \\
   -e MCP_URL=https://company-ai-toolkit.vercel.app/api/mcp \\
   -e MCP_TOKEN=${token} \\
-  -- node -e "$(curl -s https://company-ai-toolkit.vercel.app/mcp-proxy.mjs)"`
+  -- node -e "$(curl -s https://company-ai-toolkit.vercel.app/api/mcp-proxy)"`
 }
 
 // Legacy: JSON config (has bug - headers ignored in Claude Code v2.x)
