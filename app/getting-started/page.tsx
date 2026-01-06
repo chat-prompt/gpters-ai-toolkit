@@ -18,6 +18,7 @@ interface TokensData {
 }
 
 type Platform = 'macos' | 'linux' | 'windows'
+type InstallScope = 'global' | 'project'
 
 function detectPlatform(): Platform {
   if (typeof navigator === 'undefined') return 'macos'
@@ -35,8 +36,13 @@ function getShellCommand(token: string, platform: Platform): string {
   return `echo 'export GPTERS_MCP_TOKEN="${token}"' >> ${profile} && source ${profile}`
 }
 
-function getMcpConfigCommand(token: string): string {
-  return `cat >> ~/.claude/.mcp.json << 'EOF'
+function getMcpConfigPath(scope: InstallScope): string {
+  return scope === 'global' ? '~/.claude/.mcp.json' : '.mcp.json'
+}
+
+function getMcpConfigCommand(token: string, scope: InstallScope): string {
+  const configPath = getMcpConfigPath(scope)
+  return `cat >> ${configPath} << 'EOF'
 {
   "mcpServers": {
     "gpters-marketplace": {
@@ -46,6 +52,13 @@ function getMcpConfigCommand(token: string): string {
   }
 }
 EOF`
+}
+
+function getMcpServerSnippet(token: string): string {
+  return `"gpters-marketplace": {
+  "type": "http",
+  "url": "https://company-ai-toolkit.vercel.app/api/mcp?token=${token}"
+}`
 }
 
 function getHookInstallCommand(): string {
@@ -68,6 +81,8 @@ function getSettingsHookConfig(): string {
 
 export default function GettingStartedPage() {
   const [platform, setPlatform] = useState<Platform>('macos')
+  const [installScope, setInstallScope] = useState<InstallScope>('project')
+  const [hasExistingMcpJson, setHasExistingMcpJson] = useState(false)
   const [existingTokens, setExistingTokens] = useState<TokenInfo[]>([])
   const [newToken, setNewToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -191,10 +206,11 @@ export default function GettingStartedPage() {
           </p>
         </div>
 
-        {/* Platform Selector */}
-        <div className="glass rounded-xl p-4 mb-8">
+        {/* Options Selector */}
+        <div className="glass rounded-xl p-4 mb-8 space-y-4">
+          {/* Platform */}
           <div className="flex items-center justify-between">
-            <span className="text-sm text-[var(--text-secondary)]">운영체제 선택:</span>
+            <span className="text-sm text-[var(--text-secondary)]">운영체제:</span>
             <div className="flex gap-2">
               {(['macos', 'linux', 'windows'] as Platform[]).map((p) => (
                 <button
@@ -209,6 +225,70 @@ export default function GettingStartedPage() {
                   {p === 'macos' ? 'macOS' : p === 'linux' ? 'Linux' : 'Windows'}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Install Scope */}
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm text-[var(--text-secondary)]">설치 위치:</span>
+              <span className="text-xs text-[var(--text-muted)] ml-2">
+                {installScope === 'project' ? '(현재 프로젝트에만 적용)' : '(모든 프로젝트에 적용)'}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setInstallScope('project')}
+                className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${
+                  installScope === 'project'
+                    ? 'bg-[var(--accent-purple)] text-white font-medium'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                프로젝트
+              </button>
+              <button
+                onClick={() => setInstallScope('global')}
+                className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${
+                  installScope === 'global'
+                    ? 'bg-[var(--accent-purple)] text-white font-medium'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                글로벌
+              </button>
+            </div>
+          </div>
+
+          {/* Existing .mcp.json */}
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm text-[var(--text-secondary)]">기존 .mcp.json:</span>
+              <span className="text-xs text-[var(--text-muted)] ml-2">
+                {hasExistingMcpJson ? '(설정 병합 가이드 표시)' : '(새 파일 생성)'}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setHasExistingMcpJson(false)}
+                className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${
+                  !hasExistingMcpJson
+                    ? 'bg-[var(--accent-green)] text-black font-medium'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                없음
+              </button>
+              <button
+                onClick={() => setHasExistingMcpJson(true)}
+                className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${
+                  hasExistingMcpJson
+                    ? 'bg-[var(--accent-green)] text-black font-medium'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                있음
+              </button>
             </div>
           </div>
         </div>
@@ -326,40 +406,110 @@ export default function GettingStartedPage() {
           <div className={`glass rounded-2xl p-6 transition-opacity ${currentStep >= 2 || newToken ? '' : 'opacity-50'}`}>
             <div className="flex items-start gap-4">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                copiedStep === 'mcp'
+                copiedStep === 'mcp' || copiedStep === 'mcp-snippet'
                   ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                   : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
               }`}>
-                {copiedStep === 'mcp' ? '✓' : '3'}
+                {copiedStep === 'mcp' || copiedStep === 'mcp-snippet' ? '✓' : '3'}
               </div>
               <div className="flex-grow">
                 <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
                   MCP 서버 설정
                 </h2>
-                <p className="text-sm text-[var(--text-secondary)] mb-4">
-                  터미널에서 아래 명령어를 실행하여 MCP 서버를 추가하세요:
-                </p>
 
-                <div className="relative">
-                  <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                    {getMcpConfigCommand(tokenForCommands)}
-                  </pre>
-                  <button
-                    onClick={() => copyToClipboard(getMcpConfigCommand(tokenForCommands), 'mcp')}
-                    disabled={!newToken && existingTokens.length === 0}
-                    className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      copiedStep === 'mcp'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
-                    }`}
-                  >
-                    {copiedStep === 'mcp' ? '복사됨!' : '복사'}
-                  </button>
+                {/* Config Path Info */}
+                <div className="mb-4 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-[var(--text-muted)]">설정 파일 위치:</span>
+                    <code className="px-2 py-0.5 bg-[var(--bg-secondary)] rounded text-[var(--accent-cyan)]">
+                      {getMcpConfigPath(installScope)}
+                    </code>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {installScope === 'project' ? '(프로젝트 루트)' : '(홈 디렉토리)'}
+                    </span>
+                  </div>
                 </div>
 
-                <p className="mt-3 text-xs text-[var(--text-muted)]">
-                  * 이미 .mcp.json 파일이 있다면, mcpServers 객체에 gpters-marketplace 항목만 추가하세요.
-                </p>
+                {hasExistingMcpJson ? (
+                  <>
+                    {/* Existing .mcp.json - merge guide */}
+                    <p className="text-sm text-[var(--text-secondary)] mb-4">
+                      기존 <code className="px-1 py-0.5 bg-[var(--bg-tertiary)] rounded">{getMcpConfigPath(installScope)}</code> 파일의
+                      <code className="px-1 py-0.5 bg-[var(--bg-tertiary)] rounded">mcpServers</code> 객체 안에 아래 내용을 추가하세요:
+                    </p>
+
+                    <div className="relative">
+                      <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                        {getMcpServerSnippet(tokenForCommands)}
+                      </pre>
+                      <button
+                        onClick={() => copyToClipboard(getMcpServerSnippet(tokenForCommands), 'mcp-snippet')}
+                        disabled={!newToken && existingTokens.length === 0}
+                        className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          copiedStep === 'mcp-snippet'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
+                        }`}
+                      >
+                        {copiedStep === 'mcp-snippet' ? '복사됨!' : '복사'}
+                      </button>
+                    </div>
+
+                    {/* Example of merged config */}
+                    <details className="mt-4">
+                      <summary className="text-xs text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-secondary)]">
+                        병합 예시 보기
+                      </summary>
+                      <pre className="mt-2 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-secondary)] overflow-x-auto whitespace-pre">
+{`{
+  "mcpServers": {
+    "existing-server": { ... },
+    ${getMcpServerSnippet(tokenForCommands)}
+  }
+}`}
+                      </pre>
+                    </details>
+                  </>
+                ) : (
+                  <>
+                    {/* New .mcp.json */}
+                    <p className="text-sm text-[var(--text-secondary)] mb-4">
+                      {installScope === 'project' ? '프로젝트 루트에서' : '터미널에서'} 아래 명령어를 실행하여 MCP 서버를 설정하세요:
+                    </p>
+
+                    <div className="relative">
+                      <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                        {getMcpConfigCommand(tokenForCommands, installScope)}
+                      </pre>
+                      <button
+                        onClick={() => copyToClipboard(getMcpConfigCommand(tokenForCommands, installScope), 'mcp')}
+                        disabled={!newToken && existingTokens.length === 0}
+                        className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          copiedStep === 'mcp'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
+                        }`}
+                      >
+                        {copiedStep === 'mcp' ? '복사됨!' : '복사'}
+                      </button>
+                    </div>
+
+                    {installScope === 'project' && (
+                      <p className="mt-3 text-xs text-[var(--text-muted)]">
+                        * 프로젝트 루트 디렉토리에서 실행하세요. 해당 프로젝트에서만 MCP 서버가 활성화됩니다.
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {/* Git ignore tip for project scope */}
+                {installScope === 'project' && (
+                  <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <div className="text-xs text-yellow-400/90">
+                      <strong>Tip:</strong> 토큰이 포함된 <code>.mcp.json</code>은 <code>.gitignore</code>에 추가하는 것을 권장합니다.
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
