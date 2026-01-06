@@ -214,18 +214,29 @@ export async function validateToken(token: string): Promise<TokenValidationResul
 }
 
 /**
- * Extract bearer token from Authorization header
+ * Extract bearer token from Authorization header or query parameter
+ * Supports both:
+ * - Authorization: Bearer mcp_xxx
+ * - ?token=mcp_xxx (for clients that don't support custom headers)
  */
 export function extractBearerToken(request: NextRequest): string | null {
+  // First, try Authorization header
   const authHeader = request.headers.get('Authorization')
-  if (!authHeader) return null
-
-  const parts = authHeader.split(' ')
-  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
-    return null
+  if (authHeader) {
+    const parts = authHeader.split(' ')
+    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+      return parts[1]
+    }
   }
 
-  return parts[1]
+  // Fallback to query parameter for clients that don't support custom headers
+  const url = new URL(request.url)
+  const tokenParam = url.searchParams.get('token')
+  if (tokenParam) {
+    return tokenParam
+  }
+
+  return null
 }
 
 /**
