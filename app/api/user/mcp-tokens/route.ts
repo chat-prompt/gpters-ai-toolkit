@@ -11,7 +11,7 @@ import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { auth } from '@/lib/core/auth'
 import { db } from '@/lib/db'
-import { mcpTokens } from '@/lib/db/schema'
+import { mcpTokens, users } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import {
   createToken,
@@ -26,6 +26,24 @@ const log = createLogger('api:user:mcp-tokens')
 const MAX_TOKENS_PER_USER = 5
 
 /**
+ * Get the database user ID from session email
+ * This is needed because session.user.id is the OAuth provider ID,
+ * which may differ from the database user ID
+ */
+async function getDbUserId(email: string): Promise<string | null> {
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+    return user?.id ?? null
+  } catch (error) {
+    log.error('Failed to get user ID from email', error)
+    return null
+  }
+}
+
+/**
  * GET /api/user/mcp-tokens
  * List user's own MCP API tokens
  */
@@ -34,11 +52,17 @@ export async function GET(request: NextRequest) {
   if (rateLimitError) return rateLimitError
 
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return ApiErrors.unauthorized()
   }
 
   try {
+    // Get the database user ID from email
+    const userId = await getDbUserId(session.user.email)
+    if (!userId) {
+      return ApiErrors.notFound('User')
+    }
+
     const tokens = await db
       .select({
         id: mcpTokens.id,
@@ -52,7 +76,7 @@ export async function GET(request: NextRequest) {
         createdAt: mcpTokens.createdAt,
       })
       .from(mcpTokens)
-      .where(eq(mcpTokens.createdBy, session.user.id))
+      .where(eq(mcpTokens.createdBy, userId))
       .orderBy(mcpTokens.createdAt)
 
     return NextResponse.json({
@@ -80,16 +104,22 @@ export async function POST(request: NextRequest) {
   if (rateLimitError) return rateLimitError
 
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return ApiErrors.unauthorized()
   }
 
   try {
+    // Get the database user ID from email
+    const userId = await getDbUserId(session.user.email)
+    if (!userId) {
+      return ApiErrors.notFound('User')
+    }
+
     // Check token limit
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(mcpTokens)
-      .where(eq(mcpTokens.createdBy, session.user.id))
+      .where(eq(mcpTokens.createdBy, userId))
 
     const currentCount = Number(countResult?.count || 0)
     if (currentCount >= MAX_TOKENS_PER_USER) {
@@ -132,7 +162,7 @@ export async function POST(request: NextRequest) {
     const options: CreateTokenOptions = {
       name: name.trim(),
       description: description?.trim(),
-      createdBy: session.user.id,
+      createdBy: userId,
       expiresAt,
       rateLimit: 100,
     }
@@ -142,7 +172,7 @@ export async function POST(request: NextRequest) {
     log.info('User MCP token created', {
       tokenId: result.id,
       name: result.name,
-      userId: session.user.id,
+      userId,
     })
 
     // Return the token - this is the ONLY time the raw token is available
@@ -178,11 +208,17 @@ export async function DELETE(request: NextRequest) {
   if (rateLimitError) return rateLimitError
 
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return ApiErrors.unauthorized()
   }
 
   try {
+    // Get the database user ID from email
+    const userId = await getDbUserId(session.user.email)
+    if (!userId) {
+      return ApiErrors.notFound('User')
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const permanent = searchParams.get('permanent') === 'true'
@@ -195,7 +231,7 @@ export async function DELETE(request: NextRequest) {
     const [token] = await db
       .select({ id: mcpTokens.id })
       .from(mcpTokens)
-      .where(and(eq(mcpTokens.id, id), eq(mcpTokens.createdBy, session.user.id)))
+      .where(and(eq(mcpTokens.id, id), eq(mcpTokens.createdBy, userId)))
 
     if (!token) {
       return ApiErrors.notFound('Token')
@@ -206,13 +242,13 @@ export async function DELETE(request: NextRequest) {
     if (permanent) {
       success = await deleteToken(id)
       if (success) {
-        log.info('User MCP token permanently deleted', { tokenId: id, userId: session.user.id })
+        log.info('User MCP token permanently deleted', { tokenId: id, userId })
         return apiSuccess({ message: 'Token permanently deleted', id })
       }
     } else {
       success = await revokeToken(id)
       if (success) {
-        log.info('User MCP token revoked', { tokenId: id, userId: session.user.id })
+        log.info('User MCP token revoked', { tokenId: id, userId })
         return apiSuccess({ message: 'Token revoked', id })
       }
     }
