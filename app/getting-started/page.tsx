@@ -42,12 +42,15 @@ function getMcpConfigPath(scope: InstallScope): string {
 
 function getMcpConfigCommand(token: string, scope: InstallScope): string {
   const configPath = getMcpConfigPath(scope)
-  return `cat >> ${configPath} << 'EOF'
+  return `cat > ${configPath} << 'EOF'
 {
   "mcpServers": {
     "gpters-marketplace": {
       "type": "http",
-      "url": "https://company-ai-toolkit.vercel.app/api/mcp?token=${token}"
+      "url": "https://company-ai-toolkit.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${token}"
+      }
     }
   }
 }
@@ -57,7 +60,10 @@ EOF`
 function getMcpServerSnippet(token: string): string {
   return `"gpters-marketplace": {
   "type": "http",
-  "url": "https://company-ai-toolkit.vercel.app/api/mcp?token=${token}"
+  "url": "https://company-ai-toolkit.vercel.app/api/mcp",
+  "headers": {
+    "Authorization": "Bearer ${token}"
+  }
 }`
 }
 
