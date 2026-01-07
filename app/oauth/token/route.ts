@@ -115,8 +115,9 @@ export async function POST(request: NextRequest) {
       {
         access_token: tokenResult.token,
         token_type: 'Bearer',
-        // No expiration (effectively unlimited)
-        // expires_in: undefined means no expiration
+        // Set very long expiration (10 years in seconds)
+        // Claude Code requires expires_in to be set
+        expires_in: 315360000,
         scope: authCode.scope || undefined,
       },
       {
