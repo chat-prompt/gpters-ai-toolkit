@@ -59,38 +59,6 @@ Claude가 자동으로 관련 플러그인을 검색하고 적용합니다.
 
 ---
 
-## 선택사항: 자동 플러그인 제안 Hook
-
-입력에 따라 관련 플러그인을 자동으로 제안받고 싶다면 Hook을 설치하세요.
-
-### Hook 설치
-
-```bash
-curl -fsSL https://company-ai-toolkit.vercel.app/api/hooks/gpters-plugin-suggest.sh \
-  -o ~/.claude/hooks/gpters-plugin-suggest.sh && \
-  chmod +x ~/.claude/hooks/gpters-plugin-suggest.sh
-```
-
-### settings.json 설정
-
-`~/.claude/settings.json` 파일에 아래 내용을 추가하세요:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "type": "command",
-        "command": "~/.claude/hooks/gpters-plugin-suggest.sh",
-        "timeout": 5000
-      }
-    ]
-  }
-}
-```
-
----
-
 ## 사용 가능한 플러그인
 
 ### 스킬 (Skills)
@@ -120,12 +88,6 @@ curl -fsSL https://company-ai-toolkit.vercel.app/api/hooks/gpters-plugin-suggest
 
 1. @gpters.org 계정으로 로그인했는지 확인
 2. 브라우저 쿠키 삭제 후 다시 로그인
-
-### Hook이 실행되지 않음
-
-1. Hook 스크립트 실행 권한 확인 (`chmod +x`)
-2. `jq` 설치 확인 (`brew install jq` 또는 `apt install jq`)
-3. settings.json 경로 확인
 
 ---
 

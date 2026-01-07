@@ -15,27 +15,9 @@ function getMcpCliCommand(): string {
   return `claude mcp add gpters-marketplace ${MCP_SERVER_URL} -t http`
 }
 
-function getHookInstallCommand(): string {
-  return `curl -fsSL https://company-ai-toolkit.vercel.app/api/hooks/gpters-plugin-suggest.sh -o ~/.claude/hooks/gpters-plugin-suggest.sh && chmod +x ~/.claude/hooks/gpters-plugin-suggest.sh`
-}
-
-function getSettingsHookConfig(): string {
-  return `{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "type": "command",
-        "command": "~/.claude/hooks/gpters-plugin-suggest.sh",
-        "timeout": 5000
-      }
-    ]
-  }
-}`
-}
 
 export default function GettingStartedPage() {
   const [copiedStep, setCopiedStep] = useState<string | null>(null)
-  const [showHookSetup, setShowHookSetup] = useState(false)
 
   async function copyToClipboard(text: string, stepId: string) {
     try {
@@ -214,76 +196,6 @@ export default function GettingStartedPage() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Optional: Hook Setup */}
-        <div className="mt-8">
-          <button
-            onClick={() => setShowHookSetup(!showHookSetup)}
-            className="w-full text-left glass rounded-2xl p-6 hover:bg-[var(--bg-tertiary)] transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">⚡</span>
-                <div>
-                  <h3 className="text-lg font-medium text-[var(--text-primary)]">
-                    선택사항: 자동 플러그인 제안 Hook
-                  </h3>
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    입력에 따라 관련 플러그인을 자동으로 제안받습니다
-                  </p>
-                </div>
-              </div>
-              <span className="text-[var(--text-muted)]">{showHookSetup ? '▲' : '▼'}</span>
-            </div>
-          </button>
-
-          {showHookSetup && (
-            <div className="mt-4 space-y-4 pl-4 border-l-2 border-[var(--border-subtle)]">
-              {/* Hook Install */}
-              <div className="glass rounded-xl p-4">
-                <div className="text-sm text-[var(--text-muted)] mb-2">1. Hook 스크립트 설치</div>
-                <div className="relative">
-                  <pre className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                    {getHookInstallCommand()}
-                  </pre>
-                  <button
-                    onClick={() => copyToClipboard(getHookInstallCommand(), 'hook-install')}
-                    className={`absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs transition-all ${
-                      copiedStep === 'hook-install'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
-                    }`}
-                  >
-                    {copiedStep === 'hook-install' ? '✓' : '복사'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Hook Config */}
-              <div className="glass rounded-xl p-4">
-                <div className="text-sm text-[var(--text-muted)] mb-2">2. settings.json에 hook 설정 추가</div>
-                <p className="text-xs text-[var(--text-secondary)] mb-2">
-                  <code className="px-1 py-0.5 bg-[var(--bg-tertiary)] rounded">~/.claude/settings.json</code> 파일에 아래 내용을 추가하세요:
-                </p>
-                <div className="relative">
-                  <pre className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] whitespace-pre-wrap">
-                    {getSettingsHookConfig()}
-                  </pre>
-                  <button
-                    onClick={() => copyToClipboard(getSettingsHookConfig(), 'hook-config')}
-                    className={`absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs transition-all ${
-                      copiedStep === 'hook-config'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
-                    }`}
-                  >
-                    {copiedStep === 'hook-config' ? '✓' : '복사'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Usage Guide */}

@@ -287,37 +287,15 @@ export async function listPlugins(category?: string) {
 
 ## 5. 팀원 설정 방법
 
-### 5.1 MCP 서버 등록
+### 5.1 MCP 서버 등록 (권장)
 
-팀원의 Claude Code 설정에 MCP 서버 추가:
+터미널에서 CLI 명령어로 등록:
 
-```json
-// ~/.claude/settings.json
-{
-  "mcpServers": {
-    "gpters-marketplace": {
-      "command": "npx",
-      "args": ["-y", "@gpters/marketplace-mcp"],
-      "env": {
-        "API_URL": "https://company-ai-toolkit.vercel.app/api"
-      }
-    }
-  }
-}
+```bash
+claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
 
-또는 HTTP 기반 MCP 서버:
-
-```json
-{
-  "mcpServers": {
-    "gpters-marketplace": {
-      "type": "http",
-      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
-    }
-  }
-}
-```
+브라우저가 열리면 Google 계정 (@gpters.org)으로 로그인하면 완료됩니다.
 
 ### 5.2 프로젝트별 설정 (선택)
 
@@ -429,13 +407,19 @@ POST /api/mcp?action=list
 {"category": "skill"}
 ```
 
-### 🔜 Phase 2: 팀 배포 (예정)
+### ✅ Phase 2: 팀 배포 (완료)
 
-1. MCP 서버 npm 패키지로 배포 (`@gpters/marketplace-mcp`)
-2. 팀원 온보딩 문서 작성
-3. 설정 템플릿 제공
+OAuth 2.1 인증과 CLI 기반 설정으로 구현됨:
 
-### 📋 Phase 3: 고급 기능 (선택)
+```bash
+claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
+```
+
+- ~~npm 패키지 배포~~ → CLI 명령어로 대체
+- 팀원 온보딩 문서: `docs/TEAM_ONBOARDING.md`
+- 설정: 브라우저 OAuth 로그인으로 자동 완료
+
+### 📋 Phase 3: 고급 기능 (선택/미정)
 
 1. 시맨틱 검색 (벡터 임베딩)
 2. 사용 통계 수집
