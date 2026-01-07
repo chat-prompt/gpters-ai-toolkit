@@ -1,13 +1,39 @@
+/**
+ * Content section component for displaying markdown content
+ *
+ * Renders markdown content in a styled card with optional
+ * copy button and customizable icon.
+ */
 import { CopyButton } from '../ui/CopyButton'
 import { MarkdownContent } from '../ui/MarkdownContent'
 
+/**
+ * Props for the ContentSection component
+ */
 interface ContentSectionProps {
+  /** Section title */
   title: string
+  /** Icon emoji for the section header */
   icon?: string
+  /** Markdown content to render */
   content: string
+  /** Whether to show copy button */
   showCopy?: boolean
 }
 
+/**
+ * Styled section with markdown content and copy functionality
+ *
+ * @example
+ * ```tsx
+ * <ContentSection
+ *   title="Documentation"
+ *   icon="📄"
+ *   content={markdownContent}
+ *   showCopy={true}
+ * />
+ * ```
+ */
 export function ContentSection({
   title,
   icon = '📄',

@@ -1,18 +1,37 @@
+/**
+ * Dependency resolver component with tree visualization
+ *
+ * Displays and analyzes dependencies for catalog items,
+ * including transitive dependencies, circular detection,
+ * and recommended installation order.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
 
+/**
+ * Resolved dependency with metadata
+ */
 interface ResolvedDependency {
+  /** Dependency type */
   type: 'mcp' | 'skill' | 'agent' | 'other'
+  /** Dependency identifier */
   id: string
+  /** Display label */
   label: string
+  /** Whether this is a direct dependency */
   direct: boolean
+  /** Depth in dependency tree */
   depth: number
+  /** Whether dependency is available */
   available: boolean
+  /** List of items that require this dependency */
   requiredBy: string[]
+  /** Configuration URL for MCP servers */
   configUrl?: string
+  /** Linked catalog item info */
   catalogItem?: {
     id: string
     name: string
@@ -20,8 +39,13 @@ interface ResolvedDependency {
   }
 }
 
+/**
+ * API response structure for dependency resolution
+ */
 interface DependencyResolutionData {
+  /** Whether resolution succeeded */
   success: boolean
+  /** Resolution data when successful */
   data?: {
     rootId: string
     totalCount: number
@@ -37,14 +61,21 @@ interface DependencyResolutionData {
     circularPaths: string[][]
     installOrder: string[]
   }
+  /** Error message when failed */
   error?: string
 }
 
+/**
+ * Props for the DependencyResolver component
+ */
 interface DependencyResolverProps {
+  /** Item being analyzed */
   itemId: string
+  /** List of dependency strings */
   dependencies: string[]
 }
 
+/** Icon mapping for dependency types */
 const TYPE_ICONS: Record<string, string> = {
   mcp: '🔌',
   skill: '⚡',
@@ -59,6 +90,17 @@ const TYPE_COLORS: Record<string, string> = {
   other: 'border-[var(--border-subtle)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)]',
 }
 
+/**
+ * Interactive dependency analyzer with tree visualization
+ *
+ * @example
+ * ```tsx
+ * <DependencyResolver
+ *   itemId="advanced-skill"
+ *   dependencies={['mcp:github', 'skill:base-helper']}
+ * />
+ * ```
+ */
 export function DependencyResolver({ itemId, dependencies }: DependencyResolverProps) {
   const [resolved, setResolved] = useState<DependencyResolutionData | null>(null)
   const [loading, setLoading] = useState(false)

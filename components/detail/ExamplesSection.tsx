@@ -1,3 +1,9 @@
+/**
+ * Examples section component for displaying usage examples
+ *
+ * Parses and displays code examples from markdown content
+ * with input/output comparison and syntax highlighting.
+ */
 'use client'
 
 import { useState, useMemo, memo } from 'react'
@@ -5,8 +11,13 @@ import { CopyButton } from '../ui/CopyButton'
 import { MarkdownContent } from '../ui/MarkdownContent'
 import { parseExamplesFromContent, type Example } from '@/lib/search/parse-examples'
 
+/**
+ * Props for the ExamplesSection component
+ */
 interface ExamplesSectionProps {
+  /** Markdown content containing examples to parse */
   content: string
+  /** Maximum examples to show before collapse */
   maxVisible?: number
 }
 
@@ -14,10 +25,17 @@ interface ExamplesSectionProps {
 // Sub-Components
 // ============================================================================
 
+/**
+ * Props for the ExampleCard component
+ */
 interface ExampleCardProps {
+  /** Parsed example data */
   example: Example
 }
 
+/**
+ * Individual example card with input/output display
+ */
 const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
   const hasInputOutput = example.input && example.output
 
@@ -90,6 +108,14 @@ const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
 // Main Component
 // ============================================================================
 
+/**
+ * Collapsible section displaying parsed usage examples
+ *
+ * @example
+ * ```tsx
+ * <ExamplesSection content={markdownWithExamples} maxVisible={3} />
+ * ```
+ */
 export const ExamplesSection = memo(function ExamplesSection({
   content,
   maxVisible = 3,

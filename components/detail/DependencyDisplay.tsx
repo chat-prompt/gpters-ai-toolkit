@@ -1,10 +1,21 @@
+/**
+ * Simple dependency display component
+ *
+ * Shows a list of required dependencies with type icons,
+ * links to internal items, and MCP server hints.
+ */
 import Link from 'next/link'
 import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
 
+/**
+ * Props for the DependencyDisplay component
+ */
 interface DependencyDisplayProps {
+  /** List of dependency strings in format "type:id" */
   dependencies: string[]
 }
 
+/** Icon mapping for dependency types */
 const TYPE_ICONS: Record<string, string> = {
   mcp: '🔌',
   skill: '⚡',
@@ -19,6 +30,14 @@ const TYPE_COLORS: Record<string, string> = {
   other: 'border-[var(--border-subtle)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)]',
 }
 
+/**
+ * Displays required dependencies with links and type indicators
+ *
+ * @example
+ * ```tsx
+ * <DependencyDisplay dependencies={['mcp:github', 'skill:helper']} />
+ * ```
+ */
 export function DependencyDisplay({ dependencies }: DependencyDisplayProps) {
   if (!dependencies || dependencies.length === 0) {
     return null

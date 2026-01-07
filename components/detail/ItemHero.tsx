@@ -1,24 +1,48 @@
+/**
+ * Hero section component for catalog item detail pages
+ *
+ * Displays item type, title, description, tags, and metadata
+ * with type-specific styling and interactive like button.
+ */
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { LikeButton } from '../social/LikeButton'
 import { StatusBadge } from '../ui/StatusBadge'
 import { ReactNode } from 'react'
 
+/** Supported catalog item types */
 export type ItemType = 'skill' | 'agent' | 'command' | 'hook' | 'guide' | 'package'
 
+/**
+ * Props for the ItemHero component
+ */
 interface ItemHeroProps {
+  /** Type of catalog item */
   type: ItemType
+  /** Item title */
   name: string
+  /** Item description */
   description: string
+  /** Author username */
   authorName?: string
+  /** Tag keys for the item */
   tags: string[]
+  /** Current like count */
   likes: number
+  /** Unique item identifier */
   itemId: string
+  /** Difficulty level */
   difficulty?: string
+  /** Last update date string */
   updatedAt?: string
+  /** Publication status */
   status?: 'draft' | 'published'
+  /** Version string */
   version?: string
+  /** Estimated completion time */
   estimatedTime?: string
+  /** Additional badges to display */
   extraBadges?: ReactNode
+  /** Whether to show like button */
   showLikes?: boolean
 }
 
@@ -31,6 +55,21 @@ const TYPE_CONFIG: Record<ItemType, { icon: string; label: string; color: string
   package: { icon: '📦', label: 'Package', color: 'text-indigo-400' },
 }
 
+/**
+ * Hero section displaying item metadata and actions
+ *
+ * @example
+ * ```tsx
+ * <ItemHero
+ *   type="skill"
+ *   name="Code Reviewer"
+ *   description="AI-powered code review assistant"
+ *   tags={['automation', 'code-quality']}
+ *   likes={42}
+ *   itemId="code-reviewer"
+ * />
+ * ```
+ */
 export function ItemHero({
   type,
   name,

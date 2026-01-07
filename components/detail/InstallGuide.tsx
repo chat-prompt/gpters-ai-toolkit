@@ -1,13 +1,27 @@
+/**
+ * Installation guide component with step-by-step wizard
+ *
+ * Provides two installation methods:
+ * - MCP prompt invocation (for MCP-enabled items)
+ * - Manual file installation with progress tracking
+ */
 'use client'
 
 import { useState, useCallback } from 'react'
 import { CopyButton } from '../ui/CopyButton'
 import { trackInstall } from '@/lib/features/track-install'
 
+/**
+ * Props for the InstallGuide component
+ */
 interface InstallGuideProps {
+  /** Catalog item identifier */
   itemId: string
+  /** Type of item being installed */
   itemType: 'skill' | 'agent' | 'command'
+  /** Raw content to be installed */
   content: string
+  /** Whether MCP prompt installation is available */
   mcpEnabled?: boolean
 }
 
@@ -24,6 +38,22 @@ const INSTALL_STEPS = [
   { id: 'verify', label: '설치 확인' },
 ]
 
+/**
+ * Interactive installation wizard with MCP and manual options
+ *
+ * Tracks installation method usage and provides step-by-step
+ * guidance for manual file setup.
+ *
+ * @example
+ * ```tsx
+ * <InstallGuide
+ *   itemId="code-reviewer"
+ *   itemType="skill"
+ *   content={skillContent}
+ *   mcpEnabled={true}
+ * />
+ * ```
+ */
 export function InstallGuide({ itemId, itemType, content, mcpEnabled }: InstallGuideProps) {
   const [activeStep, setActiveStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())

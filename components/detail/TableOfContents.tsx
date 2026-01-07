@@ -1,18 +1,36 @@
+/**
+ * Table of contents component with scroll tracking
+ *
+ * Provides sticky navigation for detail pages with
+ * active section highlighting based on scroll position.
+ */
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 
+/**
+ * Table of contents item structure
+ */
 export interface TocItem {
+  /** Element ID to scroll to */
   id: string
+  /** Display label */
   label: string
+  /** Optional icon emoji */
   icon?: string
 }
 
+/**
+ * Props for the TableOfContents component
+ */
 interface TableOfContentsProps {
+  /** List of sections to navigate */
   items: TocItem[]
 }
 
-// Calculate initial active ID based on scroll position
+/**
+ * Calculate initial active section ID based on scroll position
+ */
 function getInitialActiveId(items: TocItem[]): string {
   if (typeof window === 'undefined' || items.length === 0) {
     return items[0]?.id || ''
@@ -30,6 +48,19 @@ function getInitialActiveId(items: TocItem[]): string {
   return items[0]?.id || ''
 }
 
+/**
+ * Sticky table of contents with scroll-aware active highlighting
+ *
+ * @example
+ * ```tsx
+ * <TableOfContents
+ *   items={[
+ *     { id: 'overview', label: 'Overview', icon: '📄' },
+ *     { id: 'install', label: 'Installation', icon: '📥' },
+ *   ]}
+ * />
+ * ```
+ */
 export function TableOfContents({ items }: TableOfContentsProps) {
   // Initialize with first item, will update on mount
   const initialId = useMemo(() => items[0]?.id || '', [items])
@@ -106,14 +137,28 @@ export function TableOfContents({ items }: TableOfContentsProps) {
 }
 
 /**
- * Section wrapper component that adds an ID for TOC navigation
+ * Props for the Section wrapper component
  */
 interface SectionProps {
+  /** Element ID for TOC navigation */
   id: string
+  /** Section content */
   children: React.ReactNode
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Section wrapper that adds scroll offset for TOC navigation
+ *
+ * @example
+ * ```tsx
+ * <Section id="overview">
+ *   <h2>Overview</h2>
+ *   <p>Content here...</p>
+ * </Section>
+ * ```
+ */
 export function Section({ id, children, className = '' }: SectionProps) {
   return (
     <section id={id} className={`scroll-mt-24 ${className}`}>

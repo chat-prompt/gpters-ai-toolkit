@@ -1,7 +1,26 @@
+/**
+ * Draft status banner component
+ *
+ * Displays warning banner for draft items indicating
+ * they are not visible in the public catalog.
+ */
+
+/**
+ * Props for the DraftBanner component
+ */
 interface DraftBannerProps {
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Yellow warning banner for draft status items
+ *
+ * @example
+ * ```tsx
+ * {item.status === 'draft' && <DraftBanner />}
+ * ```
+ */
 export function DraftBanner({ className = '' }: DraftBannerProps) {
   return (
     <div

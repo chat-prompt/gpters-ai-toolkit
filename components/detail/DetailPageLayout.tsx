@@ -1,9 +1,20 @@
+/**
+ * Layout component for catalog item detail pages
+ *
+ * Provides consistent structure with ambient background glow,
+ * navigation header, and centered content container.
+ */
 import { ReactNode } from 'react'
 import { ServerHeader } from '../layout/ServerHeader'
 
+/**
+ * Props for the DetailPageLayout component
+ */
 interface DetailPageLayoutProps {
+  /** Page content to render */
   children: ReactNode
-  accentColor: string // e.g., 'cyan', 'purple', 'rose', 'orange', 'emerald'
+  /** Accent color name for background glow (cyan, purple, rose, orange, emerald) */
+  accentColor: string
 }
 
 const ACCENT_COLORS: Record<string, string> = {
@@ -14,6 +25,17 @@ const ACCENT_COLORS: Record<string, string> = {
   emerald: 'bg-emerald-500',
 }
 
+/**
+ * Server component layout for detail pages with ambient background
+ *
+ * @example
+ * ```tsx
+ * <DetailPageLayout accentColor="cyan">
+ *   <ItemHero {...heroProps} />
+ *   <ContentSection {...contentProps} />
+ * </DetailPageLayout>
+ * ```
+ */
 export async function DetailPageLayout({
   children,
   accentColor,

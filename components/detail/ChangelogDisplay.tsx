@@ -1,9 +1,33 @@
+/**
+ * Changelog display component
+ *
+ * Shows version changelog with formatted date for catalog items.
+ */
+
+/**
+ * Props for the ChangelogDisplay component
+ */
 interface ChangelogDisplayProps {
+  /** Version string */
   version?: string
+  /** Changelog text */
   changelog?: string
+  /** Last update ISO date string */
   updatedAt?: string
 }
 
+/**
+ * Displays version changelog with formatted date
+ *
+ * @example
+ * ```tsx
+ * <ChangelogDisplay
+ *   version="1.2.0"
+ *   changelog="Added new feature X"
+ *   updatedAt="2024-01-15T10:00:00Z"
+ * />
+ * ```
+ */
 export function ChangelogDisplay({ version, changelog, updatedAt }: ChangelogDisplayProps) {
   if (!changelog && !version) return null
 

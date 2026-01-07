@@ -1,6 +1,13 @@
+/**
+ * Related items section component
+ *
+ * Displays grid of related catalog items based on
+ * matching tags and same author relationships.
+ */
 import Link from 'next/link'
 import { CatalogItemSummary, TAGS, DIFFICULTY_LABELS, ItemType } from '@/lib/core/types'
 
+/** Type-specific styling configuration */
 const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: string; border: string }> = {
   skill: {
     label: 'SKILL',
@@ -40,12 +47,30 @@ const TYPE_CONFIG: Record<ItemType, { label: string; icon: string; gradient: str
   },
 }
 
+/**
+ * Props for the RelatedItems component
+ */
 interface RelatedItemsProps {
+  /** Related items to display */
   items: CatalogItemSummary[]
+  /** Tags of the current item for highlighting matches */
   currentItemTags: string[]
+  /** Author ID of current item for "same author" indicator */
   currentItemAuthorId?: string
 }
 
+/**
+ * Grid of related catalog items with tag matching indicators
+ *
+ * @example
+ * ```tsx
+ * <RelatedItems
+ *   items={relatedItems}
+ *   currentItemTags={['automation', 'testing']}
+ *   currentItemAuthorId="author-123"
+ * />
+ * ```
+ */
 export function RelatedItems({ items, currentItemTags, currentItemAuthorId }: RelatedItemsProps) {
   if (!items || items.length === 0) {
     return null
