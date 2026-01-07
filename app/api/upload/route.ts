@@ -43,6 +43,8 @@ export async function POST(request: NextRequest) {
       agentSkills,
       commandArgumentHint,
       commandDisableModelInvocation,
+      // MCP integration - defaults to true so uploaded items are immediately available in MCP
+      mcpEnabled = true,
     } = body
 
     const validation = validateRequired(body, ['id', 'type', 'name', 'content'])
@@ -75,6 +77,8 @@ export async function POST(request: NextRequest) {
       agentSkills: agentSkills || null,
       commandArgumentHint: commandArgumentHint || null,
       commandDisableModelInvocation: commandDisableModelInvocation || false,
+      // MCP integration - defaults to true so uploaded items are immediately available in MCP
+      mcpEnabled,
     }
 
     await db.insert(catalogItems).values(newItem)
