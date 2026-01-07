@@ -74,13 +74,13 @@ const markdownComponents: Components = {
       )
     }
     return (
-      <code className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-emerald-400 text-sm">
+      <code className="px-1.5 py-0.5 rounded bg-[#0d1117] border border-[#30363d] text-emerald-400 text-sm">
         {children}
       </code>
     )
   },
   pre: ({ children }) => (
-    <pre className="bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] rounded-xl p-4 my-4 overflow-x-auto font-mono text-sm leading-relaxed">
+    <pre className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 my-4 overflow-x-auto font-mono text-sm leading-relaxed">
       {children}
     </pre>
   ),
