@@ -179,6 +179,70 @@ See `docs/ARCHITECTURE_V2.md` for V2 deploy architecture.
 - [ ] `pnpm test` 통과 확인
 - [ ] `pnpm lint` 통과 확인
 
+### TSDoc Documentation Requirements
+
+**모든 TypeScript/TSX 파일에 TSDoc 문서화 필수:**
+
+이 프로젝트는 100% TSDoc 커버리지를 유지합니다. 새 파일 생성 또는 기존 파일 수정 시 반드시 TSDoc을 작성하세요.
+
+**필수 TSDoc 요소:**
+
+| 요소 | TSDoc 필수 여부 | 예시 |
+|------|----------------|------|
+| 파일 헤더 | ✅ 필수 | `/** 파일 목적 설명 */` |
+| exported 함수/컴포넌트 | ✅ 필수 | `/** 함수 설명 \n * @param name - 설명 \n * @returns 설명 */` |
+| exported interface/type | ✅ 필수 | `/** 인터페이스 설명 */` |
+| Props interface 속성 | ✅ 필수 | `/** 속성 설명 */ propName: string` |
+| 내부 함수/변수 | ❌ 선택 | 복잡한 로직에만 추가 |
+
+**TSDoc 형식:**
+
+```typescript
+// 파일 헤더 (모든 파일 최상단)
+/**
+ * 파일 목적 한 줄 설명
+ *
+ * 상세 설명 (필요시)
+ */
+
+// 함수/컴포넌트
+/**
+ * 함수 목적 설명
+ *
+ * @param paramName - 파라미터 설명
+ * @returns 반환값 설명
+ */
+export function functionName(paramName: string): Result {
+
+// Interface
+/**
+ * 인터페이스 목적 설명
+ */
+export interface ComponentProps {
+  /** 속성 설명 */
+  propName: string
+  /** 선택적 속성 설명 */
+  optionalProp?: number
+}
+
+// React 컴포넌트
+/**
+ * 컴포넌트 목적 및 사용 케이스 설명
+ */
+export function ComponentName({ prop }: ComponentProps) {
+```
+
+**'use client' 파일:**
+- TSDoc은 `'use client'` 디렉티브 **다음에** 작성
+
+```typescript
+'use client'
+
+/**
+ * 클라이언트 컴포넌트 설명
+ */
+```
+
 ### Push 전 필수 확인사항
 
 **Git push 전에 반드시 다음 명령어를 실행하여 모든 검증이 통과하는지 확인:**
@@ -191,6 +255,7 @@ pnpm lint && pnpm test && pnpm build
 - [ ] `pnpm lint` 통과 확인
 - [ ] `pnpm test` 통과 확인 (**모든 테스트가 통과해야 함**)
 - [ ] `pnpm build` 성공 확인 (TypeScript 에러 없음)
+- [ ] **TSDoc 문서화** - 새로 생성/수정한 파일에 TSDoc 작성 확인
 
 빌드나 테스트 실패 시 Vercel 배포도 실패하므로, 로컬에서 먼저 모든 검증을 확인하는 것이 중요합니다.
 
