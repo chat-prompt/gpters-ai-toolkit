@@ -153,7 +153,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           itemId={item.id}
           itemType="skill"
           content={item.content}
-          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 

@@ -1,9 +1,8 @@
 /**
  * Installation guide component with step-by-step wizard
  *
- * Provides two installation methods:
- * - MCP prompt invocation (for MCP-enabled items)
- * - Manual file installation with progress tracking
+ * Provides manual file installation with progress tracking.
+ * MCP prompt usage is handled by QuickActionGenerator component.
  */
 'use client'
 
@@ -21,8 +20,6 @@ interface InstallGuideProps {
   itemType: 'skill' | 'agent' | 'command'
   /** Raw content to be installed */
   content: string
-  /** Whether MCP prompt installation is available */
-  mcpEnabled?: boolean
 }
 
 const TYPE_PATHS: Record<string, { folder: string; file: string }> = {
@@ -50,11 +47,10 @@ const INSTALL_STEPS = [
  *   itemId="code-reviewer"
  *   itemType="skill"
  *   content={skillContent}
- *   mcpEnabled={true}
  * />
  * ```
  */
-export function InstallGuide({ itemId, itemType, content, mcpEnabled }: InstallGuideProps) {
+export function InstallGuide({ itemId, itemType, content }: InstallGuideProps) {
   const [activeStep, setActiveStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
 
@@ -62,10 +58,8 @@ export function InstallGuide({ itemId, itemType, content, mcpEnabled }: InstallG
   const folderPath = `~/.claude/${paths.folder}/${itemId}/`
   const filePath = `${folderPath}${paths.file}`
 
-  const mcpPromptCommand = `/mcp__gpters-marketplace__${itemId}`
-
   // Track installation methods
-  const handleTrack = useCallback((method: 'mcp' | 'manual_content' | 'manual_folder' | 'manual_file') => {
+  const handleTrack = useCallback((method: 'manual_content' | 'manual_folder' | 'manual_file') => {
     trackInstall(itemId, method)
   }, [itemId])
 
@@ -83,45 +77,7 @@ export function InstallGuide({ itemId, itemType, content, mcpEnabled }: InstallG
   const isAllComplete = completedSteps.size === INSTALL_STEPS.length
 
   return (
-    <div className="space-y-6">
-      {/* MCP Prompt Usage */}
-      {mcpEnabled && (
-        <div className="glass rounded-2xl p-6 glow-purple">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xl">🔮</span>
-            <h3 className="text-lg font-medium text-[var(--text-primary)]">MCP 프롬프트</h3>
-            <span className="text-xs px-2 py-1 rounded-full bg-[var(--accent-purple)]/10 text-[var(--accent-purple)]">
-              설치 없이 사용
-            </span>
-          </div>
-
-          <p className="text-sm text-[var(--text-secondary)] mb-4">
-            MCP 서버를 통해 설치 없이 바로 사용할 수 있습니다. Claude Code에서 다음과 같이 호출하세요.
-          </p>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-[var(--text-muted)] mb-2">프롬프트 호출</p>
-              <div className="bg-[var(--bg-primary)] rounded-xl p-4 font-mono text-sm flex items-center justify-between gap-4">
-                <code className="text-[var(--accent-purple)] break-all">
-                  {mcpPromptCommand}
-                </code>
-                <CopyButton text={mcpPromptCommand} onCopy={() => handleTrack('mcp')} />
-              </div>
-            </div>
-
-            <div className="text-xs text-[var(--text-muted)] p-3 rounded-lg bg-[var(--bg-secondary)]">
-              <strong className="text-[var(--text-primary)]">참고:</strong> MCP 서버가 설정되어 있어야 합니다.{' '}
-              <a href="/getting-started" className="text-[var(--accent-purple)] hover:underline">
-                설정 방법 보기
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual Install */}
-      <div className="glass rounded-2xl p-6">
+    <div className="glass rounded-2xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <span className="text-xl">📁</span>
           <h3 className="text-lg font-medium text-[var(--text-primary)]">수동 설치</h3>
@@ -273,13 +229,12 @@ export function InstallGuide({ itemId, itemType, content, mcpEnabled }: InstallG
           )}
         </div>
 
-        {/* Completion Message */}
-        {isAllComplete && (
-          <div className="mt-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
-            <p className="text-green-400 font-medium">🎉 설치가 완료되었습니다!</p>
-          </div>
-        )}
-      </div>
+      {/* Completion Message */}
+      {isAllComplete && (
+        <div className="mt-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
+          <p className="text-green-400 font-medium">🎉 설치가 완료되었습니다!</p>
+        </div>
+      )}
     </div>
   )
 }

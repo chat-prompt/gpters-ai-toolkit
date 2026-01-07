@@ -143,7 +143,6 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           itemId={item.id}
           itemType="agent"
           content={item.content}
-          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 

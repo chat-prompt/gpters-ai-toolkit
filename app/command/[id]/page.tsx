@@ -143,7 +143,6 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           itemId={item.id}
           itemType="command"
           content={item.content}
-          mcpEnabled={item.mcpEnabled}
         />
       </Section>
 

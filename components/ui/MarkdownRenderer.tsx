@@ -70,7 +70,7 @@ const markdownComponents: Components = {
     const isBlock = className?.includes('language-')
     if (isBlock) {
       return (
-        <code className="text-sm text-emerald-400">{children}</code>
+        <code className="text-sm text-emerald-400 block">{children}</code>
       )
     }
     return (
@@ -80,7 +80,7 @@ const markdownComponents: Components = {
     )
   },
   pre: ({ children }) => (
-    <pre className="bg-[var(--bg-primary)] rounded-xl p-4 my-4 overflow-x-auto font-mono leading-relaxed">
+    <pre className="bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] rounded-xl p-4 my-4 overflow-x-auto font-mono text-sm leading-relaxed">
       {children}
     </pre>
   ),
