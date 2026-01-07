@@ -1,3 +1,9 @@
+/**
+ * Toast notification system
+ *
+ * Provides a context-based toast notification system with support for
+ * success, error, info, and warning messages with auto-dismiss.
+ */
 'use client'
 
 import {
@@ -9,35 +15,77 @@ import {
   type ReactNode,
 } from 'react'
 
-// Toast Types
+// ============================================================================
+// Types
+// ============================================================================
+
+/** Available toast notification types */
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 
+/**
+ * Optional action button for toast notifications
+ */
 interface ToastAction {
+  /** Button label text */
   label: string
+  /** Click handler for the action */
   onClick: () => void
 }
 
+/**
+ * Toast notification data structure
+ */
 interface Toast {
+  /** Unique identifier for the toast */
   id: string
+  /** Visual style and icon type */
   type: ToastType
+  /** Message content to display */
   message: string
+  /** Auto-dismiss duration in milliseconds */
   duration?: number
+  /** Optional action button */
   action?: ToastAction
 }
 
+/**
+ * Toast context value with state and helper methods
+ */
 interface ToastContextType {
+  /** Currently active toasts */
   toasts: Toast[]
+  /** Add a new toast notification */
   addToast: (toast: Omit<Toast, 'id'>) => string
+  /** Remove a toast by ID */
   removeToast: (id: string) => void
+  /** Show a success toast (4s default) */
   success: (message: string, options?: Partial<Omit<Toast, 'id' | 'type' | 'message'>>) => string
+  /** Show an error toast (6s default) */
   error: (message: string, options?: Partial<Omit<Toast, 'id' | 'type' | 'message'>>) => string
+  /** Show an info toast (4s default) */
   info: (message: string, options?: Partial<Omit<Toast, 'id' | 'type' | 'message'>>) => string
+  /** Show a warning toast (5s default) */
   warning: (message: string, options?: Partial<Omit<Toast, 'id' | 'type' | 'message'>>) => string
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-// Toast Provider
+// ============================================================================
+// Provider
+// ============================================================================
+
+/**
+ * Toast notification provider
+ *
+ * Wrap your app with this provider to enable toast notifications.
+ *
+ * @example
+ * ```tsx
+ * <ToastProvider>
+ *   <App />
+ * </ToastProvider>
+ * ```
+ */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
@@ -89,7 +137,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// useToast Hook
+// ============================================================================
+// Hook
+// ============================================================================
+
+/**
+ * Hook to access toast notifications
+ *
+ * Must be used within a ToastProvider.
+ *
+ * @example
+ * ```tsx
+ * const { success, error } = useToast()
+ * success('Operation completed!')
+ * error('Something went wrong')
+ * ```
+ *
+ * @throws Error if used outside of ToastProvider
+ */
 export function useToast() {
   const context = useContext(ToastContext)
   if (context === undefined) {
@@ -98,7 +163,13 @@ export function useToast() {
   return context
 }
 
-// Toast Container
+// ============================================================================
+// Internal Components
+// ============================================================================
+
+/**
+ * Container component for rendering active toasts
+ */
 function ToastContainer({
   toasts,
   onRemove,
@@ -121,7 +192,9 @@ function ToastContainer({
   )
 }
 
-// Toast Item
+/**
+ * Individual toast notification item with animation support
+ */
 function ToastItem({
   toast,
   onRemove,

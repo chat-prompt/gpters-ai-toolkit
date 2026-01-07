@@ -1,10 +1,34 @@
+/**
+ * Status badge component for displaying item status and version
+ *
+ * Shows version badges and draft status indicators for catalog items.
+ */
+
+/**
+ * Props for the StatusBadge component
+ */
 interface StatusBadgeProps {
+  /** The publication status of the item */
   status?: 'draft' | 'published'
+  /** Version string to display (e.g., "1.0.0") */
   version?: string
+  /** Additional CSS classes */
   className?: string
+  /** Badge size variant */
   size?: 'sm' | 'md'
 }
 
+/**
+ * Displays version and status badges for catalog items
+ *
+ * Shows a version badge with the item's version number and optionally
+ * a draft indicator for unpublished items.
+ *
+ * @example
+ * ```tsx
+ * <StatusBadge version="1.2.0" status="draft" size="md" />
+ * ```
+ */
 export function StatusBadge({ status, version, className = '', size = 'sm' }: StatusBadgeProps) {
   const sizeClasses = size === 'md'
     ? 'text-xs px-3 py-1.5'

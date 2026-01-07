@@ -1,10 +1,30 @@
+/**
+ * Copy button component for clipboard operations
+ *
+ * Provides a simple button that copies text to the clipboard with optional callback.
+ */
 'use client'
 
+/**
+ * Props for the CopyButton component
+ */
 interface CopyButtonProps {
+  /** The text content to copy to clipboard */
   text: string
+  /** Optional callback fired after successful copy */
   onCopy?: () => void
 }
 
+/**
+ * A button that copies text to the clipboard when clicked
+ *
+ * Uses the Clipboard API to copy text and provides visual feedback.
+ *
+ * @example
+ * ```tsx
+ * <CopyButton text="npm install package" onCopy={() => console.log('Copied!')} />
+ * ```
+ */
 export function CopyButton({ text, onCopy }: CopyButtonProps) {
   const handleCopy = async () => {
     try {

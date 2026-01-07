@@ -17,7 +17,11 @@ import { memo, useMemo } from 'react'
 // Types
 // ============================================================================
 
+/**
+ * Props for the MarkdownRenderer component
+ */
 interface MarkdownRendererProps {
+  /** Raw markdown string to render */
   content: string
 }
 
@@ -137,6 +141,17 @@ const rehypePlugins = [rehypeSanitize]
 // Main Component
 // ============================================================================
 
+/**
+ * Markdown renderer with GFM support and HTML sanitization
+ *
+ * Renders markdown content with GitHub Flavored Markdown extensions
+ * and security-focused HTML sanitization.
+ *
+ * @example
+ * ```tsx
+ * <MarkdownRenderer content="# Hello **World**" />
+ * ```
+ */
 export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
   // Memoize the processed content to avoid unnecessary re-renders
   const memoizedContent = useMemo(() => content, [content])

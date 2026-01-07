@@ -1,7 +1,26 @@
+/**
+ * Skeleton loading components for content placeholders
+ *
+ * A collection of skeleton components for displaying loading states.
+ * Includes variants for different UI elements like cards, text, headers, etc.
+ */
+
+/**
+ * Props for basic skeleton components
+ */
 interface SkeletonProps {
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Base skeleton element with pulse animation
+ *
+ * @example
+ * ```tsx
+ * <Skeleton className="w-32 h-4" />
+ * ```
+ */
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
     <div
@@ -11,6 +30,11 @@ export function Skeleton({ className = '' }: SkeletonProps) {
   )
 }
 
+/**
+ * Skeleton placeholder for card components
+ *
+ * Displays a card-shaped skeleton with icon, title, and description placeholders.
+ */
 export function SkeletonCard({ className = '' }: SkeletonProps) {
   return (
     <div className={`glass rounded-xl p-5 ${className}`} aria-hidden="true">
@@ -25,6 +49,11 @@ export function SkeletonCard({ className = '' }: SkeletonProps) {
   )
 }
 
+/**
+ * Skeleton placeholder for text blocks
+ *
+ * @param lines - Number of text lines to display
+ */
 export function SkeletonText({ lines = 3 }: { lines?: number }) {
   return (
     <div className="space-y-2" aria-hidden="true">
@@ -38,7 +67,11 @@ export function SkeletonText({ lines = 3 }: { lines?: number }) {
   )
 }
 
-// Skeleton for header - consistent across all pages
+/**
+ * Skeleton placeholder for page header
+ *
+ * Consistent header skeleton used across all pages during loading.
+ */
 export function SkeletonHeader() {
   return (
     <header
@@ -56,7 +89,11 @@ export function SkeletonHeader() {
   )
 }
 
-// Skeleton for detail page hero section
+/**
+ * Skeleton placeholder for detail page hero section
+ *
+ * Includes breadcrumb, title, description, and tag placeholders.
+ */
 export function SkeletonDetailHero() {
   return (
     <div className="mb-8" aria-hidden="true">
@@ -85,7 +122,11 @@ export function SkeletonDetailHero() {
   )
 }
 
-// Skeleton for install/action section
+/**
+ * Skeleton placeholder for action/install cards
+ *
+ * Used for installation guides and action buttons.
+ */
 export function SkeletonActionCard() {
   return (
     <div className="glass rounded-2xl p-6" aria-hidden="true">
@@ -95,7 +136,11 @@ export function SkeletonActionCard() {
   )
 }
 
-// Skeleton for content section with code blocks
+/**
+ * Skeleton placeholder for content sections
+ *
+ * Includes text and code block placeholders for main content areas.
+ */
 export function SkeletonContent() {
   return (
     <div className="glass rounded-2xl p-8" aria-hidden="true">
@@ -109,7 +154,11 @@ export function SkeletonContent() {
   )
 }
 
-// Skeleton for list page with filters
+/**
+ * Skeleton placeholder for list pages with filters and cards
+ *
+ * @param cardCount - Number of card skeletons to display
+ */
 export function SkeletonListPage({ cardCount = 6 }: { cardCount?: number }) {
   return (
     <div aria-hidden="true">
@@ -137,7 +186,12 @@ export function SkeletonListPage({ cardCount = 6 }: { cardCount?: number }) {
   )
 }
 
-// Skeleton for table
+/**
+ * Skeleton placeholder for data tables
+ *
+ * @param rows - Number of table rows to display
+ * @param cols - Number of table columns to display
+ */
 export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
     <div className="glass rounded-xl overflow-hidden" aria-hidden="true">
@@ -165,7 +219,11 @@ export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
   )
 }
 
-// Skeleton for sidebar/navigation
+/**
+ * Skeleton placeholder for sidebar navigation
+ *
+ * Displays a search bar and navigation link placeholders.
+ */
 export function SkeletonSidebar() {
   return (
     <div className="w-64 space-y-4" aria-hidden="true">
@@ -179,7 +237,11 @@ export function SkeletonSidebar() {
   )
 }
 
-// Skeleton for avatar with text
+/**
+ * Skeleton placeholder for avatar with text
+ *
+ * @param size - Avatar size variant (sm, md, lg)
+ */
 export function SkeletonAvatar({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizeClasses = {
     sm: 'w-6 h-6',

@@ -1,3 +1,10 @@
+/**
+ * Lazy-loaded Markdown content wrapper with skeleton loading
+ *
+ * This module provides a lightweight wrapper that dynamically imports the heavy
+ * markdown rendering libraries (react-markdown, remark-gfm, rehype-sanitize)
+ * to reduce initial bundle size.
+ */
 'use client'
 
 import dynamic from 'next/dynamic'
@@ -7,8 +14,13 @@ import { memo } from 'react'
 // Types
 // ============================================================================
 
+/**
+ * Props for the MarkdownContent component
+ */
 interface MarkdownContentProps {
+  /** Raw markdown string to render */
   content: string
+  /** Additional CSS classes for the wrapper */
   className?: string
 }
 
@@ -16,6 +28,11 @@ interface MarkdownContentProps {
 // Skeleton Loader
 // ============================================================================
 
+/**
+ * Loading skeleton shown while markdown libraries are being loaded
+ *
+ * Displays a placeholder UI that mimics typical markdown content structure.
+ */
 function MarkdownSkeleton() {
   return (
     <div className="animate-pulse space-y-4">

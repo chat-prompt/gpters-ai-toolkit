@@ -1,3 +1,14 @@
+/**
+ * Optimized image components with automatic loading states and fallbacks
+ *
+ * A collection of image components optimized for different use cases
+ * including avatars, logos, category images, and responsive images.
+ * Features include:
+ * - Automatic placeholder generation
+ * - Loading skeletons
+ * - Error fallbacks
+ * - Lazy loading with intersection observer
+ */
 'use client'
 
 import Image, { ImageProps } from 'next/image'
@@ -18,6 +29,9 @@ import {
 // Types
 // ============================================================================
 
+/**
+ * Props for the OptimizedImage component
+ */
 interface OptimizedImageProps extends Omit<ImageProps, 'placeholder'> {
   /**
    * Image use case for automatic optimization
@@ -49,39 +63,75 @@ interface OptimizedImageProps extends Omit<ImageProps, 'placeholder'> {
   blurColor?: string
 }
 
+/**
+ * Props for the Avatar component
+ */
 interface AvatarProps {
+  /** Image source URL (optional, shows fallback if missing) */
   src?: string | null
+  /** Alt text for accessibility */
   alt: string
+  /** Predefined avatar size */
   size?: keyof typeof AVATAR_SIZES
+  /** Text to use for fallback initial (defaults to alt) */
   fallbackText?: string
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Props for the Logo component
+ */
 interface LogoProps {
+  /** Logo image source URL */
   src: string
+  /** Alt text for accessibility */
   alt: string
+  /** Predefined logo size */
   size?: keyof typeof LOGO_SIZES
+  /** Additional CSS classes */
   className?: string
+  /** Load with priority (above the fold) */
   priority?: boolean
 }
 
+/**
+ * Props for the CategoryImage component
+ */
 interface CategoryImageProps {
+  /** Image source URL */
   src: string
+  /** Alt text for accessibility */
   alt: string
+  /** Catalog item category for placeholder color */
   category: 'skill' | 'agent' | 'command' | 'guide'
+  /** Image width in pixels */
   width: number
+  /** Image height in pixels */
   height: number
+  /** Additional CSS classes */
   className?: string
+  /** Load with priority (above the fold) */
   priority?: boolean
 }
 
+/**
+ * Props for the ResponsiveImage component
+ */
 interface ResponsiveImageProps {
+  /** Image source URL */
   src: string
+  /** Alt text for accessibility */
   alt: string
+  /** Aspect ratio (width/height) for container */
   aspectRatio?: number
+  /** Additional CSS classes for the image */
   className?: string
+  /** Additional CSS classes for the container */
   containerClassName?: string
+  /** Load with priority (above the fold) */
   priority?: boolean
+  /** Use fill mode instead of fixed dimensions */
   fill?: boolean
 }
 
@@ -91,6 +141,19 @@ interface ResponsiveImageProps {
 
 /**
  * Enhanced Image component with automatic optimization based on use case
+ *
+ * Features automatic placeholder generation, loading skeletons, and error fallbacks.
+ *
+ * @example
+ * ```tsx
+ * <OptimizedImage
+ *   src="/hero.jpg"
+ *   alt="Hero image"
+ *   useCase="hero"
+ *   width={1200}
+ *   height={600}
+ * />
+ * ```
  */
 export function OptimizedImage({
   useCase = 'card',
@@ -210,7 +273,14 @@ export function OptimizedImage({
 // ============================================================================
 
 /**
- * Optimized avatar component with fallback
+ * Optimized avatar component with fallback initial
+ *
+ * Shows user's initial as fallback when image is unavailable.
+ *
+ * @example
+ * ```tsx
+ * <Avatar src={user.image} alt={user.name} size="lg" />
+ * ```
  */
 export function Avatar({
   src,
@@ -257,7 +327,14 @@ export function Avatar({
 // ============================================================================
 
 /**
- * Optimized logo component
+ * Optimized logo component with predefined sizes
+ *
+ * Automatically handles SVG optimization.
+ *
+ * @example
+ * ```tsx
+ * <Logo src="/logo.svg" alt="Company Logo" size="lg" />
+ * ```
  */
 export function Logo({
   src,
@@ -286,7 +363,14 @@ export function Logo({
 // ============================================================================
 
 /**
- * Image with category-based placeholder
+ * Image with category-based placeholder color
+ *
+ * Uses catalog item type to determine placeholder color.
+ *
+ * @example
+ * ```tsx
+ * <CategoryImage src="/skill-icon.png" alt="Skill" category="skill" width={64} height={64} />
+ * ```
  */
 export function CategoryImage({
   src,
@@ -320,6 +404,13 @@ export function CategoryImage({
 
 /**
  * Fully responsive image with proper sizing
+ *
+ * Supports both fill mode and fixed dimensions with aspect ratio.
+ *
+ * @example
+ * ```tsx
+ * <ResponsiveImage src="/banner.jpg" alt="Banner" aspectRatio={16/9} />
+ * ```
  */
 export function ResponsiveImage({
   src,
@@ -386,12 +477,23 @@ export function ResponsiveImage({
 // ImageWithSkeleton Component
 // ============================================================================
 
+/**
+ * Props for the ImageWithSkeleton component
+ */
 interface ImageWithSkeletonProps extends Omit<ImageProps, 'onLoad'> {
+  /** Additional CSS classes for the skeleton */
   skeletonClassName?: string
 }
 
 /**
- * Image with loading skeleton
+ * Image with loading skeleton animation
+ *
+ * Shows a pulsing skeleton while the image loads.
+ *
+ * @example
+ * ```tsx
+ * <ImageWithSkeleton src="/photo.jpg" alt="Photo" width={400} height={300} />
+ * ```
  */
 export function ImageWithSkeleton({
   skeletonClassName = '',
@@ -424,13 +526,25 @@ export function ImageWithSkeleton({
 // LazyImage Component
 // ============================================================================
 
+/**
+ * Props for the LazyImage component
+ */
 interface LazyImageProps extends ImageProps {
+  /** Intersection observer threshold (0-1) */
   threshold?: number
+  /** Intersection observer root margin */
   rootMargin?: string
 }
 
 /**
  * Image with intersection observer for deferred loading
+ *
+ * Only loads the image when it enters the viewport.
+ *
+ * @example
+ * ```tsx
+ * <LazyImage src="/gallery.jpg" alt="Gallery" width={800} height={600} threshold={0.2} />
+ * ```
  */
 export function LazyImage({
   threshold = 0.1,
@@ -499,14 +613,33 @@ export function LazyImage({
 // OGImage Component (for metadata)
 // ============================================================================
 
+/**
+ * Props for OG image metadata generation
+ */
 interface OGImageProps {
+  /** Page title for the OG image */
   title: string
+  /** Page description (reserved for future dynamic OG generation) */
   description?: string
+  /** Catalog item type for color theming */
   type?: 'skill' | 'agent' | 'command' | 'guide'
 }
 
 /**
- * Generate OG image metadata (for use in generateMetadata)
+ * Generate OG image metadata for Next.js generateMetadata
+ *
+ * @returns Metadata object for OpenGraph images
+ *
+ * @example
+ * ```typescript
+ * export async function generateMetadata({ params }) {
+ *   return {
+ *     openGraph: {
+ *       images: [getOGImageMetadata({ title: 'My Skill', type: 'skill' })]
+ *     }
+ *   }
+ * }
+ * ```
  */
 export function getOGImageMetadata({ title, description: _description, type }: OGImageProps) {
   const typeColors: Record<string, string> = {
