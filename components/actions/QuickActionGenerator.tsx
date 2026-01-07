@@ -118,17 +118,6 @@ export function QuickActionGenerator({
         })
       }
 
-      // Marketplace install
-      if (mcpEnabled) {
-        actions.push({
-          id: 'marketplace-install',
-          label: '마켓플레이스 설치',
-          description: 'GPTers 마켓플레이스에서 설치',
-          command: `/plugin install ${itemId}@company-ai-toolkit`,
-          icon: '🏪',
-          color: 'blue',
-        })
-      }
     }
 
     if (itemType === 'agent') {
