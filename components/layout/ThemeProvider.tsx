@@ -1,24 +1,61 @@
+/**
+ * Theme provider with dark/light/system mode support
+ *
+ * Manages theme state with localStorage persistence, system preference
+ * detection, and smooth theme transitions.
+ */
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
+/** Available theme options */
 type Theme = 'dark' | 'light' | 'system'
+
+/** Resolved theme after system preference is applied */
 type ResolvedTheme = 'dark' | 'light'
 
+/**
+ * Theme context value type
+ */
 interface ThemeContextType {
+  /** Current theme setting (may be 'system') */
   theme: Theme
+  /** Actual applied theme (dark or light) */
   resolvedTheme: ResolvedTheme
+  /** Set the theme preference */
   setTheme: (theme: Theme) => void
+  /** Cycle through themes: dark -> light -> system */
   toggleTheme: () => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+/**
+ * Get the system's preferred color scheme
+ *
+ * @returns 'dark' or 'light' based on prefers-color-scheme media query
+ */
 function getSystemTheme(): ResolvedTheme {
   if (typeof window === 'undefined') return 'dark'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+/**
+ * Theme provider component with localStorage persistence
+ *
+ * Features:
+ * - Persists theme choice to localStorage
+ * - Respects system color scheme preference
+ * - Smooth transitions between themes
+ * - Listens for system preference changes
+ *
+ * @example
+ * ```tsx
+ * <ThemeProvider>
+ *   <App />
+ * </ThemeProvider>
+ * ```
+ */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system')
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('dark')
@@ -112,6 +149,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
+/**
+ * Hook to access theme context
+ *
+ * @returns Theme context with theme, resolvedTheme, setTheme, and toggleTheme
+ * @throws Error if used outside of ThemeProvider
+ *
+ * @example
+ * ```tsx
+ * const { theme, toggleTheme } = useTheme()
+ * ```
+ */
 export function useTheme() {
   const context = useContext(ThemeContext)
   if (context === undefined) {

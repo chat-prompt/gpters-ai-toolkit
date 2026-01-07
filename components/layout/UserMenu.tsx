@@ -1,3 +1,9 @@
+/**
+ * User dropdown menu component with profile and admin links
+ *
+ * Displays user avatar, name, and role badge with a dropdown menu
+ * containing profile, admin (if authorized), and logout options.
+ */
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
@@ -7,20 +13,47 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { UserRole } from '@/lib/security/rbac'
 
+/**
+ * Props for the UserMenu component
+ */
 interface UserMenuProps {
+  /** Authenticated user information */
   user: {
+    /** User's display name */
     name?: string | null
+    /** User's email address */
     email?: string | null
+    /** User's avatar image URL */
     image?: string | null
+    /** User's RBAC role */
     role?: UserRole
   }
 }
 
-// Check if user has admin access (viewer, editor, or admin can access admin panel)
+/**
+ * Check if a user role has admin panel access
+ *
+ * @param role - User's RBAC role
+ * @returns true if user can access admin panel
+ */
 function hasAdminAccess(role?: UserRole): boolean {
   return role === 'admin' || role === 'editor' || role === 'viewer'
 }
 
+/**
+ * User dropdown menu with profile, admin, and logout actions
+ *
+ * Features:
+ * - Click-to-toggle dropdown
+ * - Click outside to close
+ * - Keyboard shortcut (Cmd+Shift+A) for admin panel
+ * - Role-based admin link visibility
+ *
+ * @example
+ * ```tsx
+ * <UserMenu user={session.user} />
+ * ```
+ */
 export function UserMenu({ user }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)

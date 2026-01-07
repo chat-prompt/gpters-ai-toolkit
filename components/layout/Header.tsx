@@ -1,3 +1,9 @@
+/**
+ * Client-side header component with navigation and user actions
+ *
+ * Renders the main navigation header with tab navigation, theme toggle,
+ * user menu, and admin controls based on user authentication state.
+ */
 'use client'
 
 import Link from 'next/link'
@@ -10,15 +16,41 @@ import { MCPStatus } from '../features/mcp/MCPStatus'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
 import type { UserRole } from '@/lib/security/rbac'
 
+/**
+ * Props for the Header component
+ */
 interface HeaderProps {
+  /** Authenticated user information (optional) */
   user?: {
+    /** User's display name */
     name?: string | null
+    /** User's email address */
     email?: string | null
+    /** User's avatar image URL */
     image?: string | null
+    /** User's RBAC role */
     role?: UserRole
   } | null
 }
 
+/**
+ * Main navigation header with tab-style navigation
+ *
+ * Features:
+ * - Logo with home link
+ * - Tab navigation (Getting Started, Catalog, Guides, Prompts, Stats)
+ * - MCP server status indicator
+ * - Theme toggle
+ * - Update notification bell (authenticated users)
+ * - Admin quick menu (authorized users)
+ * - Share button
+ * - User dropdown menu
+ *
+ * @example
+ * ```tsx
+ * <Header user={session?.user} />
+ * ```
+ */
 export function Header({ user }: HeaderProps) {
   const pathname = usePathname()
 

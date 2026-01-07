@@ -1,8 +1,25 @@
+/**
+ * Theme toggle button with visual indicator
+ *
+ * Cycles through dark, light, and system themes with appropriate icons.
+ * Shows a dot indicator when system theme is active.
+ */
 'use client'
 
 import { useTheme } from './ThemeProvider'
 import { useEffect, useState } from 'react'
 
+/**
+ * Theme toggle button component
+ *
+ * Displays the current theme state with an icon and cycles through
+ * themes on click: dark -> light -> system -> dark.
+ *
+ * @example
+ * ```tsx
+ * <ThemeToggle />
+ * ```
+ */
 export function ThemeToggle() {
   const { theme, resolvedTheme, toggleTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
