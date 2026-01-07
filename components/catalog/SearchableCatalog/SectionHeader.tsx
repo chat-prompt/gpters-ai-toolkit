@@ -1,6 +1,19 @@
+/**
+ * Section header component for catalog item type groupings
+ *
+ * Displays a styled header with icon, title, count, and decorative line.
+ */
 import { memo } from 'react'
 import type { SectionHeaderProps } from './types'
 
+/**
+ * Section header with icon, title, and item count
+ *
+ * @example
+ * ```tsx
+ * <SectionHeader icon="⚡" title="Skills" count={42} accentColor="text-cyan-400" />
+ * ```
+ */
 export const SectionHeader = memo(function SectionHeader({
   icon,
   title,

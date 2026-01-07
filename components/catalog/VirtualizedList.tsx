@@ -1,3 +1,18 @@
+/**
+ * Virtualized list and pagination components
+ *
+ * A collection of components for efficient rendering of large lists:
+ * - PaginationControls: Full pagination UI with page numbers
+ * - SimplePagination: Minimal prev/next pagination
+ * - VirtualList: Virtualized scrolling for lists
+ * - VirtualGrid: Virtualized scrolling for grids
+ * - InfiniteScroll: Intersection observer based infinite loading
+ * - LoadMoreButton: Manual load more trigger
+ *
+ * Also exports hooks:
+ * - usePaginatedList: Hook for paginated data management
+ * - useResponsivePagination: Hook for responsive page sizes
+ */
 'use client'
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
@@ -20,6 +35,9 @@ import {
 // Pagination Controls Component
 // ============================================================================
 
+/**
+ * Props for the PaginationControls component
+ */
 interface PaginationControlsProps {
   pageInfo: PageInfo
   onPageChange: (page: number) => void
@@ -29,6 +47,18 @@ interface PaginationControlsProps {
   compact?: boolean
 }
 
+/**
+ * Full pagination controls with page numbers and size selector
+ *
+ * @example
+ * ```tsx
+ * <PaginationControls
+ *   pageInfo={pageInfo}
+ *   onPageChange={setPage}
+ *   onPageSizeChange={setPageSize}
+ * />
+ * ```
+ */
 export function PaginationControls({
   pageInfo,
   onPageChange,
@@ -127,12 +157,26 @@ export function PaginationControls({
 // Simple Pagination Component
 // ============================================================================
 
+/**
+ * Props for the SimplePagination component
+ */
 interface SimplePaginationProps {
+  /** Current page number (1-based) */
   currentPage: number
+  /** Total number of pages */
   totalPages: number
+  /** Callback when page changes */
   onPageChange: (page: number) => void
 }
 
+/**
+ * Minimal pagination with prev/next buttons
+ *
+ * @example
+ * ```tsx
+ * <SimplePagination currentPage={1} totalPages={10} onPageChange={setPage} />
+ * ```
+ */
 export function SimplePagination({
   currentPage,
   totalPages,
@@ -169,17 +213,43 @@ export function SimplePagination({
 // Virtual List Component
 // ============================================================================
 
+/**
+ * Props for the VirtualList component
+ */
 interface VirtualListProps<T> {
+  /** Array of items to render */
   items: T[]
+  /** Height of each item in pixels */
   itemHeight: number
+  /** Height of the scroll container in pixels */
   containerHeight: number
+  /** Number of items to render outside visible area */
   overscan?: number
+  /** Render function for each item */
   renderItem: (item: T, index: number) => React.ReactNode
+  /** Callback when scrolled near the end */
   onEndReached?: () => void
+  /** Distance from end to trigger onEndReached (px) */
   endReachedThreshold?: number
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Virtualized list for efficient rendering of large datasets
+ *
+ * Only renders visible items plus overscan buffer for smooth scrolling.
+ *
+ * @example
+ * ```tsx
+ * <VirtualList
+ *   items={items}
+ *   itemHeight={80}
+ *   containerHeight={600}
+ *   renderItem={(item, i) => <ItemRow item={item} key={i} />}
+ * />
+ * ```
+ */
 export function VirtualList<T>({
   items,
   itemHeight,
@@ -254,19 +324,48 @@ export function VirtualList<T>({
 // Virtual Grid Component
 // ============================================================================
 
+/**
+ * Props for the VirtualGrid component
+ */
 interface VirtualGridProps<T> {
+  /** Array of items to render */
   items: T[]
+  /** Height of each row in pixels */
   rowHeight: number
+  /** Height of the scroll container in pixels */
   containerHeight: number
+  /** Number of items per row */
   itemsPerRow: number
+  /** Gap between items in pixels */
   gap?: number
+  /** Number of rows to render outside visible area */
   overscan?: number
+  /** Render function for each item */
   renderItem: (item: T, index: number) => React.ReactNode
+  /** Callback when scrolled near the end */
   onEndReached?: () => void
+  /** Distance from end to trigger onEndReached (px) */
   endReachedThreshold?: number
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Virtualized grid for efficient rendering of large datasets
+ *
+ * Renders items in a grid layout, only showing visible rows.
+ *
+ * @example
+ * ```tsx
+ * <VirtualGrid
+ *   items={items}
+ *   rowHeight={200}
+ *   containerHeight={600}
+ *   itemsPerRow={3}
+ *   renderItem={(item, i) => <Card item={item} key={i} />}
+ * />
+ * ```
+ */
 export function VirtualGrid<T>({
   items,
   rowHeight,
@@ -364,17 +463,44 @@ export function VirtualGrid<T>({
 // Infinite Scroll Container
 // ============================================================================
 
+/**
+ * Props for the InfiniteScroll component
+ */
 interface InfiniteScrollProps {
+  /** Content to render */
   children: React.ReactNode
+  /** Whether more items can be loaded */
   hasMore: boolean
+  /** Whether currently loading */
   isLoading: boolean
+  /** Callback to load more items */
   onLoadMore: () => void
+  /** Intersection observer root margin (px) */
   threshold?: number
+  /** Custom loading indicator */
   loader?: React.ReactNode
+  /** Message when all items loaded */
   endMessage?: React.ReactNode
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Infinite scroll container using Intersection Observer
+ *
+ * Automatically loads more items when scrolled near the bottom.
+ *
+ * @example
+ * ```tsx
+ * <InfiniteScroll
+ *   hasMore={hasNextPage}
+ *   isLoading={isLoading}
+ *   onLoadMore={fetchNextPage}
+ * >
+ *   {items.map(item => <Item key={item.id} {...item} />)}
+ * </InfiniteScroll>
+ * ```
+ */
 export function InfiniteScroll({
   children,
   hasMore,
@@ -446,14 +572,33 @@ export function InfiniteScroll({
 // Paginated List Hook
 // ============================================================================
 
+/**
+ * Options for the usePaginatedList hook
+ */
 interface UsePaginatedListOptions<T> {
+  /** Full array of items */
   items: T[]
+  /** Starting page number */
   initialPage?: number
+  /** Starting page size */
   initialPageSize?: PageSize
+  /** Callback when page changes */
   onPageChange?: (page: number) => void
+  /** Callback when page size changes */
   onPageSizeChange?: (size: PageSize) => void
 }
 
+/**
+ * Hook for managing paginated data
+ *
+ * @example
+ * ```tsx
+ * const { items, pageInfo, setPage, setPageSize } = usePaginatedList({
+ *   items: allItems,
+ *   initialPageSize: 24,
+ * })
+ * ```
+ */
 export function usePaginatedList<T>({
   items,
   initialPage = 1,
@@ -512,6 +657,16 @@ export function usePaginatedList<T>({
 // Responsive Pagination Hook
 // ============================================================================
 
+/**
+ * Hook for responsive page size based on viewport width
+ *
+ * Automatically adjusts page size based on screen size.
+ *
+ * @example
+ * ```tsx
+ * const { pageSize, setPageSize } = useResponsivePagination()
+ * ```
+ */
 export function useResponsivePagination(initialPageSize?: PageSize) {
   const [pageSize, setPageSize] = useState<PageSize>(initialPageSize || 24)
 
@@ -537,14 +692,36 @@ export function useResponsivePagination(initialPageSize?: PageSize) {
 // Load More Button
 // ============================================================================
 
+/**
+ * Props for the LoadMoreButton component
+ */
 interface LoadMoreButtonProps {
+  /** Click handler to load more items */
   onClick: () => void
+  /** Whether currently loading */
   isLoading: boolean
+  /** Whether more items available */
   hasMore: boolean
+  /** Number of items currently loaded */
   loadedCount: number
+  /** Total number of items (for progress display) */
   totalCount?: number
 }
 
+/**
+ * Manual load more button with progress indicator
+ *
+ * @example
+ * ```tsx
+ * <LoadMoreButton
+ *   onClick={loadMore}
+ *   isLoading={isLoading}
+ *   hasMore={hasNext}
+ *   loadedCount={items.length}
+ *   totalCount={totalCount}
+ * />
+ * ```
+ */
 export function LoadMoreButton({
   onClick,
   isLoading,

@@ -1,3 +1,9 @@
+/**
+ * Catalog item card component
+ *
+ * Displays a single catalog item with type icon, title, description,
+ * tags, author, and metadata badges.
+ */
 import { memo } from 'react'
 import Link from 'next/link'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
@@ -5,6 +11,23 @@ import { TeamTagBadge } from '../../social/TeamTagSelector'
 import { TYPE_CONFIG } from './constants'
 import type { ItemCardProps } from './types'
 
+/**
+ * Animated catalog item card with hover effects
+ *
+ * Features:
+ * - Type-specific gradient glow on hover
+ * - Draft status indicator
+ * - Team tag badge
+ * - Difficulty badge
+ * - CLI ready indicator
+ * - Plugin link indicator
+ * - Likes count
+ *
+ * @example
+ * ```tsx
+ * <ItemCard item={catalogItem} index={0} />
+ * ```
+ */
 export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
   const config = TYPE_CONFIG[item.type]
   const isDraft = item.status === 'draft'

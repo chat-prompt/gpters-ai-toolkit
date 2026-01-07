@@ -1,3 +1,12 @@
+/**
+ * Main catalog component with search, filtering, and categorized display
+ *
+ * Provides a full-featured catalog browsing experience with:
+ * - Autocomplete search with natural language support
+ * - Type-based filtering (skills, agents, commands, hooks, packages)
+ * - Tag, difficulty, and team filters
+ * - Categorized grid display with animation
+ */
 'use client'
 
 import Link from 'next/link'
@@ -8,6 +17,20 @@ import { SectionHeader } from './SectionHeader'
 import { useSearchFilters } from './useSearchFilters'
 import type { SearchableCatalogProps } from './types'
 
+/**
+ * Searchable catalog with filtering and categorized grid display
+ *
+ * Features:
+ * - Full-text search with autocomplete
+ * - Type, tag, difficulty, and team filtering
+ * - "Did you mean" suggestions for no results
+ * - Animated card display with staggered animation
+ *
+ * @example
+ * ```tsx
+ * <SearchableCatalog catalog={catalogItems} />
+ * ```
+ */
 export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   const {
     searchQuery,

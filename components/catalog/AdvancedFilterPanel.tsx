@@ -1,3 +1,13 @@
+/**
+ * Advanced filtering panel for catalog search
+ *
+ * Provides comprehensive filtering capabilities including:
+ * - Quick filter presets for common use cases
+ * - Tag filtering with AND/OR operators
+ * - Team, difficulty, and status filters
+ * - Likes and date range filters
+ * - Custom filter save/load functionality
+ */
 'use client'
 
 import { useState, useCallback } from 'react'
@@ -21,12 +31,21 @@ import { TAGS, DIFFICULTY_LABELS, TEAM_TAGS, TeamTag, Difficulty } from '@/lib/c
 // Filter Preset Button
 // ============================================================================
 
+/**
+ * Props for the PresetButton component
+ */
 interface PresetButtonProps {
+  /** Filter preset configuration */
   preset: FilterPreset
+  /** Whether this preset is currently active */
   isActive: boolean
+  /** Callback when button is clicked */
   onClick: () => void
 }
 
+/**
+ * Quick filter preset button with icon and label
+ */
 function PresetButton({ preset, isActive, onClick }: PresetButtonProps) {
   return (
     <button
@@ -48,11 +67,19 @@ function PresetButton({ preset, isActive, onClick }: PresetButtonProps) {
 // Sort Selector
 // ============================================================================
 
+/**
+ * Props for the SortSelector component
+ */
 interface SortSelectorProps {
+  /** Current sort configuration */
   value: SortConfig
+  /** Callback when sort changes */
   onChange: (config: SortConfig) => void
 }
 
+/**
+ * Dropdown selector for sorting options
+ */
 function SortSelector({ value, onChange }: SortSelectorProps) {
   return (
     <div className="flex items-center gap-2">
@@ -82,15 +109,27 @@ function SortSelector({ value, onChange }: SortSelectorProps) {
 // Tag Filter with Counts
 // ============================================================================
 
+/**
+ * Props for the TagFilterWithCounts component
+ */
 interface TagFilterWithCountsProps {
+  /** List of available tag keys */
   availableTags: string[]
+  /** Currently selected tag keys */
   selectedTags: string[]
+  /** Logical operator for multiple tags */
   tagsOperator: 'AND' | 'OR'
+  /** Item count per tag */
   counts: Record<string, number>
+  /** Callback when a tag is toggled */
   onTagToggle: (tag: string) => void
+  /** Callback when operator changes */
   onOperatorChange: (op: 'AND' | 'OR') => void
 }
 
+/**
+ * Tag filter buttons with item counts and AND/OR operator toggle
+ */
 function TagFilterWithCounts({
   availableTags,
   selectedTags,
@@ -163,12 +202,21 @@ function TagFilterWithCounts({
 // Likes Range Filter
 // ============================================================================
 
+/**
+ * Props for the LikesRangeFilter component
+ */
 interface LikesRangeFilterProps {
+  /** Minimum likes threshold */
   min?: number
+  /** Maximum likes threshold */
   max?: number
+  /** Callback when range changes */
   onChange: (range: { min?: number; max?: number }) => void
 }
 
+/**
+ * Numeric range inputs for filtering by likes count
+ */
 function LikesRangeFilter({ min, max, onChange }: LikesRangeFilterProps) {
   return (
     <div>
@@ -208,12 +256,21 @@ function LikesRangeFilter({ min, max, onChange }: LikesRangeFilterProps) {
 // Date Range Filter
 // ============================================================================
 
+/**
+ * Props for the DateRangeFilter component
+ */
 interface DateRangeFilterProps {
+  /** Filter items updated after this date */
   after?: Date
+  /** Filter items updated before this date */
   before?: Date
+  /** Callback when date range changes */
   onChange: (range: { after?: Date; before?: Date }) => void
 }
 
+/**
+ * Date picker inputs for filtering by update date range
+ */
 function DateRangeFilter({ after, before, onChange }: DateRangeFilterProps) {
   const formatDate = (date: Date) => date.toISOString().split('T')[0]
 
@@ -253,12 +310,21 @@ function DateRangeFilter({ after, before, onChange }: DateRangeFilterProps) {
 // Status Filter
 // ============================================================================
 
+/**
+ * Props for the StatusFilter component
+ */
 interface StatusFilterProps {
+  /** Current status filter value */
   value: 'published' | 'draft' | 'all'
+  /** Item counts per status */
   counts: { published: number; draft: number; all: number }
+  /** Callback when status changes */
   onChange: (status: 'published' | 'draft' | 'all') => void
 }
 
+/**
+ * Toggle buttons for filtering by publication status
+ */
 function StatusFilter({ value, counts, onChange }: StatusFilterProps) {
   const options: Array<{ value: 'published' | 'draft' | 'all'; label: string }> = [
     { value: 'all', label: '전체' },
@@ -295,12 +361,21 @@ function StatusFilter({ value, counts, onChange }: StatusFilterProps) {
 // Marketplace Filter
 // ============================================================================
 
+/**
+ * Props for the MarketplaceFilter component
+ */
 interface MarketplaceFilterProps {
+  /** Current CLI support filter (true=enabled, false=disabled, null=all) */
   value: boolean | null
+  /** Item counts per CLI support status */
   counts: { true: number; false: number; all: number }
+  /** Callback when filter changes */
   onChange: (value: boolean | null) => void
 }
 
+/**
+ * Toggle buttons for filtering by CLI/marketplace support
+ */
 function MarketplaceFilter({ value, counts, onChange }: MarketplaceFilterProps) {
   const options: Array<{ value: boolean | null; label: string; count: number }> = [
     { value: null, label: '전체', count: counts.all },
@@ -337,12 +412,21 @@ function MarketplaceFilter({ value, counts, onChange }: MarketplaceFilterProps) 
 // Saved Filter Modal
 // ============================================================================
 
+/**
+ * Props for the SaveFilterModal component
+ */
 interface SaveFilterModalProps {
+  /** Whether the modal is visible */
   isOpen: boolean
+  /** Callback to close the modal */
   onClose: () => void
+  /** Callback when filter is saved with a name */
   onSave: (name: string) => void
 }
 
+/**
+ * Modal dialog for saving current filters with a custom name
+ */
 function SaveFilterModal({ isOpen, onClose, onSave }: SaveFilterModalProps) {
   const [name, setName] = useState('')
 
@@ -390,12 +474,21 @@ function SaveFilterModal({ isOpen, onClose, onSave }: SaveFilterModalProps) {
 // Saved Filters Panel
 // ============================================================================
 
+/**
+ * Props for the SavedFiltersPanel component
+ */
 interface SavedFiltersPanelProps {
+  /** List of user-saved filter configurations */
   savedFilters: SavedFilter[]
+  /** Callback to apply a saved filter */
   onApply: (filters: FilterState) => void
+  /** Callback to delete a saved filter */
   onDelete: (id: string) => void
 }
 
+/**
+ * Panel displaying saved filter presets with apply/delete actions
+ */
 function SavedFiltersPanel({ savedFilters, onApply, onDelete }: SavedFiltersPanelProps) {
   if (savedFilters.length === 0) return null
 
@@ -433,14 +526,39 @@ function SavedFiltersPanel({ savedFilters, onApply, onDelete }: SavedFiltersPane
 // Main Advanced Filter Panel
 // ============================================================================
 
+/**
+ * Props for the AdvancedFilterPanel component
+ */
 interface AdvancedFilterPanelProps {
+  /** Current filter state */
   filters: FilterState
+  /** Item counts for each filter option */
   counts: FilterCounts
+  /** Available tag keys for filtering */
   availableTags: string[]
+  /** Callback when any filter changes */
   onFiltersChange: (filters: Partial<FilterState>) => void
+  /** Callback to reset all filters */
   onReset: () => void
 }
 
+/**
+ * Main advanced filtering panel with all filter options
+ *
+ * Combines quick presets, sorting, team/difficulty/status filters,
+ * tag selection, range filters, and saved filter management.
+ *
+ * @example
+ * ```tsx
+ * <AdvancedFilterPanel
+ *   filters={filterState}
+ *   counts={filterCounts}
+ *   availableTags={['automation', 'database']}
+ *   onFiltersChange={handleFilterChange}
+ *   onReset={handleReset}
+ * />
+ * ```
+ */
 export function AdvancedFilterPanel({
   filters,
   counts,
@@ -669,12 +787,33 @@ export function AdvancedFilterPanel({
 // Active Filters Badge Bar
 // ============================================================================
 
+/**
+ * Props for the ActiveFiltersBadge component
+ */
 interface ActiveFiltersBadgeProps {
+  /** Current filter state to display */
   filters: FilterState
+  /** Callback to remove a specific filter */
   onRemoveFilter: (key: keyof FilterState, value?: string) => void
+  /** Callback to clear all filters */
   onClearAll: () => void
 }
 
+/**
+ * Horizontal badge bar showing active filters with remove buttons
+ *
+ * Displays each active filter as a removable badge and provides
+ * a "clear all" button for quick reset.
+ *
+ * @example
+ * ```tsx
+ * <ActiveFiltersBadge
+ *   filters={filterState}
+ *   onRemoveFilter={(key) => clearFilter(key)}
+ *   onClearAll={resetFilters}
+ * />
+ * ```
+ */
 export function ActiveFiltersBadge({ filters, onRemoveFilter, onClearAll }: ActiveFiltersBadgeProps) {
   const badges: Array<{ key: keyof FilterState; label: string; value?: string }> = []
 
@@ -742,12 +881,31 @@ export function ActiveFiltersBadge({ filters, onRemoveFilter, onClearAll }: Acti
 // Filter Summary Stats
 // ============================================================================
 
+/**
+ * Props for the FilterSummary component
+ */
 interface FilterSummaryProps {
+  /** Total number of items before filtering */
   totalCount: number
+  /** Number of items after filtering */
   filteredCount: number
+  /** Current sort configuration */
   sortedBy: SortConfig
 }
 
+/**
+ * Summary line showing filtered item count and current sort order
+ *
+ * @example
+ * ```tsx
+ * <FilterSummary
+ *   totalCount={100}
+ *   filteredCount={42}
+ *   sortedBy={{ field: 'updatedAt', direction: 'desc' }}
+ * />
+ * // Renders: "42개 항목 (전체 100개 중) | 정렬: 최근 업데이트"
+ * ```
+ */
 export function FilterSummary({ totalCount, filteredCount, sortedBy }: FilterSummaryProps) {
   const isFiltered = filteredCount !== totalCount
 

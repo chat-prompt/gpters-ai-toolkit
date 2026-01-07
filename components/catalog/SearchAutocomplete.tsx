@@ -1,3 +1,11 @@
+/**
+ * Search autocomplete component with NLP support
+ *
+ * Provides real-time search suggestions combining:
+ * - Server-side full-text search (FTS) for accurate results
+ * - Client-side natural language processing for Korean queries
+ * - Tag, author, and item suggestions with type indicators
+ */
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
@@ -10,13 +18,23 @@ import {
 } from '@/lib/search/search-utils'
 import { useSearchSuggestions } from '@/lib/search/use-server-search'
 
+/**
+ * Search suggestion item
+ */
 interface Suggestion {
+  /** Type of suggestion (item, tag, author, nlp, hint, or server) */
   type: 'item' | 'tag' | 'author' | 'nlp' | 'hint' | 'server'
+  /** Unique identifier or value for the suggestion */
   value: string
+  /** Display label for the suggestion */
   label: string
+  /** Optional icon emoji for the suggestion */
   icon?: string
+  /** Item type for item suggestions */
   itemType?: ItemType
+  /** Optional description text */
   description?: string
+  /** Type of match that produced this suggestion */
   matchType?: 'exact' | 'keyword' | 'fuzzy' | 'natural' | 'fts'
 }
 
@@ -29,17 +47,46 @@ const TYPE_ICONS: Record<ItemType, string> = {
   package: '📦',
 }
 
+/**
+ * Props for the SearchAutocomplete component
+ */
 interface SearchAutocompleteProps {
+  /** Current search input value */
   value: string
+  /** Callback when search value changes */
   onChange: (value: string) => void
+  /** Callback when a suggestion is selected */
   onSelect?: (suggestion: Suggestion) => void
+  /** Catalog items to search through */
   catalog: CatalogItemSummary[]
+  /** Placeholder text for input */
   placeholder?: string
+  /** Additional CSS classes */
   className?: string
   /** Use server-side FTS for suggestions (default: true) */
   useServerSearch?: boolean
 }
 
+/**
+ * Search autocomplete input with intelligent suggestions
+ *
+ * Features:
+ * - Hybrid search combining server FTS and client-side NLP
+ * - Korean language support with keyword extraction
+ * - Match type badges (FTS, EXACT, KEYWORD, NL)
+ * - Keyboard navigation (↑↓ arrows, Enter, Escape)
+ * - Direct navigation to items on selection
+ *
+ * @example
+ * ```tsx
+ * <SearchAutocomplete
+ *   value={searchQuery}
+ *   onChange={setSearchQuery}
+ *   catalog={items}
+ *   useServerSearch={true}
+ * />
+ * ```
+ */
 export function SearchAutocomplete({
   value,
   onChange,
