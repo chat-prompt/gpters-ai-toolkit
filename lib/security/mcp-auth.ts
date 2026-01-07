@@ -281,14 +281,25 @@ export async function authenticateMcpRequest(
 
 /**
  * Create MCP authentication error response
+ * For 401 responses, includes WWW-Authenticate header for OAuth discovery
  */
 export function mcpAuthError(message: string, status: 401 | 403 = 401): NextResponse {
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
+
+  const headers: Record<string, string> = {}
+
+  // RFC 6750: Include WWW-Authenticate header for 401 responses
+  // This enables OAuth 2.1 discovery for MCP clients
+  if (status === 401) {
+    headers['WWW-Authenticate'] = `Bearer resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`
+  }
+
   return NextResponse.json(
     {
       error: message,
       code: status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN',
     },
-    { status }
+    { status, headers }
   )
 }
 
