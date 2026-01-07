@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
+import { SERVER_INFO, MCP_TOOLS } from '@/lib/mcp'
 import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
 
@@ -76,7 +76,7 @@ export async function GET(_request: NextRequest) {
           name: SERVER_INFO.name,
           version: SERVER_INFO.version,
           description: SERVER_INFO.description,
-          toolsCount: MARKETPLACE_TOOLS.length,
+          toolsCount: MCP_TOOLS.length,
         },
         health: {
           database: dbStatus,

@@ -35,7 +35,7 @@ GPTers 팀을 위한 Claude Code 스킬, 에이전트, 커맨드, 가이드, 훅
 터미널에서 아래 명령어를 실행하세요:
 
 ```bash
-claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
+claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
 
 브라우저에서 Google (@gpters.org) 로그인 후 자동 연결됩니다.
@@ -58,7 +58,7 @@ gpters-ai-toolkit/
 │   ├── api/                      # API 라우트
 │   │   ├── catalog/              # 카탈로그 CRUD + ZIP 다운로드
 │   │   ├── mcp/                  # MCP 서버 엔드포인트 + 상태
-│   │   ├── marketplace/          # GitHub 마켓플레이스 동기화
+│   │   ├── marketplace/          # GitHub 플러그인 동기화
 │   │   ├── installations/        # 설치 추적
 │   │   ├── updates/              # 버전 체크
 │   │   ├── admin/                # 관리자 API
@@ -88,7 +88,7 @@ gpters-ai-toolkit/
 ├── lib/                          # 비즈니스 로직
 │   ├── db/                       # Drizzle ORM 스키마
 │   ├── mcp/                      # MCP 서버 구현
-│   ├── marketplace/              # 마켓플레이스 동기화
+│   ├── marketplace/              # 플러그인 동기화
 │   ├── catalog.ts                # 카탈로그 CRUD
 │   ├── parse-examples.ts         # 예시 파싱 유틸리티
 │   ├── auth.ts                   # 인증 설정

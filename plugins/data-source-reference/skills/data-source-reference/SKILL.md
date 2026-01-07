@@ -16,11 +16,11 @@ GPTers 플랫폼의 데이터 구조와 동기화 정책을 빠르게 참조할 
 ## 설치 방법
 
 ```bash
-# 1. 마켓플레이스 추가 (최초 1회)
-/plugin marketplace add chat-prompt/gpters-ai-toolkit
+# 1. MCP 서버 추가 (최초 1회)
+claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
 
-# 2. 스킬 설치
-/plugin install data-source-reference@gpters-ai-toolkit
+# 2. 스킬 호출
+/mcp__gpters-ai-toolkit__data-source-reference
 ```
 
 또는 프로젝트 스킬로 직접 사용:

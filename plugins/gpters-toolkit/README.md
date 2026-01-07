@@ -7,7 +7,7 @@ GPTers 팀을 위한 Claude Code MCP 플러그인입니다.
 **터미널에서 한 줄 실행**:
 
 ```bash
-claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
+claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
 
 브라우저가 열리면 **Google 계정으로 로그인**하세요. 완료!
@@ -42,9 +42,9 @@ claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp 
 ### 명시적 호출
 
 ```
-/mcp__gpters-marketplace__data-source-reference
-/mcp__gpters-marketplace__refactor-guide
-/mcp__gpters-marketplace__code-reviewer
+/mcp__gpters-ai-toolkit__data-source-reference
+/mcp__gpters-ai-toolkit__refactor-guide
+/mcp__gpters-ai-toolkit__code-reviewer
 ```
 
 ## 문의

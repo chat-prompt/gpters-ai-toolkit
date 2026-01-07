@@ -14,8 +14,11 @@ gpters-team
 ## Installation
 
 ```bash
-/plugin marketplace add chat-prompt/gpters-ai-toolkit
-/plugin install data-source-reference@gpters-ai-toolkit
+# MCP 서버 추가 (최초 1회)
+claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
+
+# 스킬 호출
+/mcp__gpters-ai-toolkit__data-source-reference
 ```
 
 ---

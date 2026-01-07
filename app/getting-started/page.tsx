@@ -12,7 +12,7 @@ import Link from 'next/link'
 const MCP_SERVER_URL = 'https://company-ai-toolkit.vercel.app/api/mcp'
 
 function getMcpCliCommand(): string {
-  return `claude mcp add gpters-marketplace ${MCP_SERVER_URL} -t http`
+  return `claude mcp add gpters-ai-toolkit ${MCP_SERVER_URL} -t http`
 }
 
 
@@ -190,7 +190,7 @@ export default function GettingStartedPage() {
 
                 <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
                   <div className="text-xs font-mono text-[var(--text-muted)]">
-                    gpters-marketplace: https://company-ai-toolkit.vercel.app/api/mcp <span className="text-green-400">✓ Connected</span>
+                    gpters-ai-toolkit: https://company-ai-toolkit.vercel.app/api/mcp <span className="text-green-400">✓ Connected</span>
                   </div>
                 </div>
               </div>
@@ -215,9 +215,9 @@ export default function GettingStartedPage() {
             <div>
               <div className="text-sm font-medium text-[var(--text-primary)] mb-2">직접 호출</div>
               <div className="text-sm text-[var(--text-secondary)] font-mono space-y-1">
-                <p>/mcp__gpters-marketplace__code-reviewer</p>
-                <p>/mcp__gpters-marketplace__data-source-reference</p>
-                <p>/mcp__gpters-marketplace__refactor-guide</p>
+                <p>/mcp__gpters-ai-toolkit__code-reviewer</p>
+                <p>/mcp__gpters-ai-toolkit__data-source-reference</p>
+                <p>/mcp__gpters-ai-toolkit__refactor-guide</p>
               </div>
             </div>
           </div>

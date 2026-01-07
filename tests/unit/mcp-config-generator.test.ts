@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest'
 
 interface MCPConfig {
   mcpServers: {
-    'gpters-marketplace': {
+    'gpters-ai-toolkit': {
       type: string
       url: string
     }
@@ -18,7 +18,7 @@ function generateMCPConfig(url: string): MCPConfig {
   const serverUrl = url.trim() || 'https://your-url/api/mcp'
   return {
     mcpServers: {
-      'gpters-marketplace': {
+      'gpters-ai-toolkit': {
         type: 'http',
         url: serverUrl,
       },
@@ -34,7 +34,7 @@ describe('MCP Config Generator', () => {
 
       expect(config).toEqual({
         mcpServers: {
-          'gpters-marketplace': {
+          'gpters-ai-toolkit': {
             type: 'http',
             url: 'https://example.com/api/mcp',
           },
@@ -47,7 +47,7 @@ describe('MCP Config Generator', () => {
 
       expect(config).toEqual({
         mcpServers: {
-          'gpters-marketplace': {
+          'gpters-ai-toolkit': {
             type: 'http',
             url: 'https://your-url/api/mcp',
           },
@@ -60,7 +60,7 @@ describe('MCP Config Generator', () => {
 
       expect(config).toEqual({
         mcpServers: {
-          'gpters-marketplace': {
+          'gpters-ai-toolkit': {
             type: 'http',
             url: 'https://example.com/api/mcp',
           },
@@ -73,7 +73,7 @@ describe('MCP Config Generator', () => {
 
       expect(config).toEqual({
         mcpServers: {
-          'gpters-marketplace': {
+          'gpters-ai-toolkit': {
             type: 'http',
             url: 'https://your-url/api/mcp',
           },
@@ -92,16 +92,16 @@ describe('MCP Config Generator', () => {
       // Check JSON structure
       const parsed = JSON.parse(jsonString)
       expect(parsed.mcpServers).toBeDefined()
-      expect(parsed.mcpServers['gpters-marketplace']).toBeDefined()
-      expect(parsed.mcpServers['gpters-marketplace'].type).toBe('http')
-      expect(parsed.mcpServers['gpters-marketplace'].url).toBe(url)
+      expect(parsed.mcpServers['gpters-ai-toolkit']).toBeDefined()
+      expect(parsed.mcpServers['gpters-ai-toolkit'].type).toBe('http')
+      expect(parsed.mcpServers['gpters-ai-toolkit'].url).toBe(url)
     })
 
     it('preserves URL exactly as provided (no modifications)', () => {
       const url = 'https://custom-domain.com:8080/custom/path/mcp'
       const config = generateMCPConfig(url)
 
-      expect(config.mcpServers['gpters-marketplace'].url).toBe(url)
+      expect(config.mcpServers['gpters-ai-toolkit'].url).toBe(url)
     })
   })
 
@@ -113,7 +113,7 @@ describe('MCP Config Generator', () => {
 
       // Check that indentation is correct (2 spaces)
       expect(jsonString).toContain('  "mcpServers"')
-      expect(jsonString).toContain('    "gpters-marketplace"')
+      expect(jsonString).toContain('    "gpters-ai-toolkit"')
     })
 
     it('matches expected output format from requirements', () => {
@@ -123,7 +123,7 @@ describe('MCP Config Generator', () => {
 
       const expectedFormat = `{
   "mcpServers": {
-    "gpters-marketplace": {
+    "gpters-ai-toolkit": {
       "type": "http",
       "url": "https://your-url/api/mcp"
     }

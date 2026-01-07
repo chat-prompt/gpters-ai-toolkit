@@ -65,11 +65,11 @@ Claude: skill 로드 후 가이드라인 적용
 
 ## Installation
 
-### Via GPTers Marketplace
+### Via GPTers MCP
 
 ```bash
 # MCP 서버 연결 후
-/mcp__gpters-marketplace__get_plugin_content claude-code-infrastructure
+/mcp__gpters-ai-toolkit__get_plugin_content claude-code-infrastructure
 ```
 
 ### Manual Installation

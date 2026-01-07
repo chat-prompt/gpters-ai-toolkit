@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
-  MARKETPLACE_TOOLS,
+  MCP_TOOLS,
   getToolByName,
   getAllToolNames,
 } from '@/lib/mcp/tools'
 
 describe('MCP Tools', () => {
-  describe('MARKETPLACE_TOOLS', () => {
+  describe('MCP_TOOLS', () => {
     it('should contain expected tools', () => {
-      const toolNames = MARKETPLACE_TOOLS.map((t) => t.name)
+      const toolNames = MCP_TOOLS.map((t) => t.name)
 
       expect(toolNames).toContain('search_plugins')
       expect(toolNames).toContain('get_plugin_content')
@@ -22,11 +22,11 @@ describe('MCP Tools', () => {
     })
 
     it('should have 9 tools total', () => {
-      expect(MARKETPLACE_TOOLS).toHaveLength(9)
+      expect(MCP_TOOLS).toHaveLength(9)
     })
 
     describe('search_plugins tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'search_plugins')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'search_plugins')!
 
       it('should have correct schema', () => {
         expect(tool.inputSchema.type).toBe('object')
@@ -60,7 +60,7 @@ describe('MCP Tools', () => {
     })
 
     describe('get_plugin_content tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'get_plugin_content')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'get_plugin_content')!
 
       it('should have correct schema', () => {
         expect(tool.inputSchema.type).toBe('object')
@@ -74,7 +74,7 @@ describe('MCP Tools', () => {
     })
 
     describe('list_plugins tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'list_plugins')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'list_plugins')!
 
       it('should have no required fields', () => {
         expect(tool.inputSchema.required).toBeUndefined()
@@ -87,7 +87,7 @@ describe('MCP Tools', () => {
     })
 
     describe('get_plugins_by_category tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'get_plugins_by_category')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'get_plugins_by_category')!
 
       it('should require category', () => {
         expect(tool.inputSchema.required).toContain('category')
@@ -100,7 +100,7 @@ describe('MCP Tools', () => {
     })
 
     describe('create_plugin tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'create_plugin')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'create_plugin')!
 
       it('should require id, type, name, content', () => {
         expect(tool.inputSchema.required).toContain('id')
@@ -124,7 +124,7 @@ describe('MCP Tools', () => {
     })
 
     describe('update_plugin tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'update_plugin')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'update_plugin')!
 
       it('should only require id', () => {
         expect(tool.inputSchema.required).toEqual(['id'])
@@ -144,7 +144,7 @@ describe('MCP Tools', () => {
     })
 
     describe('delete_plugin tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'delete_plugin')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'delete_plugin')!
 
       it('should only require id', () => {
         expect(tool.inputSchema.required).toEqual(['id'])
@@ -152,7 +152,7 @@ describe('MCP Tools', () => {
     })
 
     describe('deploy_skill tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'deploy_skill')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'deploy_skill')!
 
       it('should require type, name, content', () => {
         expect(tool.inputSchema.required).toContain('type')
@@ -172,7 +172,7 @@ describe('MCP Tools', () => {
     })
 
     describe('check_updates tool', () => {
-      const tool = MARKETPLACE_TOOLS.find((t) => t.name === 'check_updates')!
+      const tool = MCP_TOOLS.find((t) => t.name === 'check_updates')!
 
       it('should require installations', () => {
         expect(tool.inputSchema.required).toContain('installations')
@@ -192,7 +192,7 @@ describe('MCP Tools', () => {
     })
 
     describe('all tools have descriptions', () => {
-      MARKETPLACE_TOOLS.forEach((tool) => {
+      MCP_TOOLS.forEach((tool) => {
         it(`${tool.name} should have description`, () => {
           expect(tool.description).toBeDefined()
           expect(tool.description.length).toBeGreaterThan(10)
@@ -201,7 +201,7 @@ describe('MCP Tools', () => {
     })
 
     describe('all tools have valid input schemas', () => {
-      MARKETPLACE_TOOLS.forEach((tool) => {
+      MCP_TOOLS.forEach((tool) => {
         it(`${tool.name} should have valid input schema`, () => {
           expect(tool.inputSchema).toBeDefined()
           expect(tool.inputSchema.type).toBe('object')
@@ -224,7 +224,7 @@ describe('MCP Tools', () => {
     })
 
     it('should return all tools correctly', () => {
-      MARKETPLACE_TOOLS.forEach((expectedTool) => {
+      MCP_TOOLS.forEach((expectedTool) => {
         const tool = getToolByName(expectedTool.name)
         expect(tool).toBe(expectedTool)
       })
@@ -234,7 +234,7 @@ describe('MCP Tools', () => {
   describe('getAllToolNames', () => {
     it('should return all tool names', () => {
       const names = getAllToolNames()
-      expect(names).toHaveLength(MARKETPLACE_TOOLS.length)
+      expect(names).toHaveLength(MCP_TOOLS.length)
     })
 
     it('should contain all expected names', () => {
@@ -252,7 +252,7 @@ describe('MCP Tools', () => {
 
     it('should return names in order', () => {
       const names = getAllToolNames()
-      const expectedOrder = MARKETPLACE_TOOLS.map((t) => t.name)
+      const expectedOrder = MCP_TOOLS.map((t) => t.name)
       expect(names).toEqual(expectedOrder)
     })
   })

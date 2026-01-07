@@ -1,12 +1,12 @@
 /**
- * MCP Server for GPTers Marketplace
+ * MCP Server for GPTers AI Toolkit
  *
  * This module provides both:
  * 1. Standalone MCP server (for stdio transport)
  * 2. HTTP handler (for REST API endpoint)
  */
 
-import { MARKETPLACE_TOOLS } from './tools'
+import { MCP_TOOLS } from './tools'
 import { executeTool, listPrompts, getPrompt } from './handlers'
 import type { McpToolResponse, McpPromptResult, GetPromptInput } from './types'
 
@@ -36,9 +36,9 @@ interface McpResponse {
 
 // Server info
 const SERVER_INFO = {
-  name: 'gpters-marketplace',
+  name: 'gpters-ai-toolkit',
   version: '1.0.0',
-  description: 'GPTers AI Toolkit Marketplace MCP Server',
+  description: 'GPTers AI Toolkit MCP Server',
 }
 
 // Protocol version
@@ -63,7 +63,7 @@ function handleInitialize(): McpResponse['result'] {
  */
 function handleToolsList(): McpResponse['result'] {
   return {
-    tools: MARKETPLACE_TOOLS.map((tool) => ({
+    tools: MCP_TOOLS.map((tool) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
@@ -268,7 +268,7 @@ export async function handleSimpleRequest(
         return {
           success: true,
           data: {
-            tools: MARKETPLACE_TOOLS.map((t) => ({
+            tools: MCP_TOOLS.map((t) => ({
               name: t.name,
               description: t.description.split('\n')[0], // First line only
             })),

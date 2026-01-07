@@ -1,16 +1,16 @@
 /**
- * MCP Tool Definitions for GPTers Marketplace
+ * MCP Tool Definitions for GPTers AI Toolkit
  *
  * These tools allow Claude Code to search and retrieve plugins
- * from the GPTers marketplace dynamically.
+ * from the GPTers catalog dynamically.
  */
 
 import type { McpTool } from './types'
 
-export const MARKETPLACE_TOOLS: McpTool[] = [
+export const MCP_TOOLS: McpTool[] = [
   {
     name: 'search_plugins',
-    description: `마켓플레이스에서 플러그인을 검색합니다.
+    description: `카탈로그에서 플러그인을 검색합니다.
 키워드와 매칭되는 스킬, 에이전트, 커맨드를 반환합니다.
 검색은 이름, 설명, 태그를 대상으로 수행됩니다.
 
@@ -64,7 +64,7 @@ export const MARKETPLACE_TOOLS: McpTool[] = [
   },
   {
     name: 'list_plugins',
-    description: `마켓플레이스의 모든 플러그인 목록을 조회합니다.
+    description: `카탈로그의 모든 플러그인 목록을 조회합니다.
 카테고리나 팀 태그로 필터링할 수 있습니다.
 전체 목록을 확인하거나 특정 유형의 플러그인을 찾을 때 유용합니다.`,
     inputSchema: {
@@ -105,7 +105,7 @@ export const MARKETPLACE_TOOLS: McpTool[] = [
   },
   {
     name: 'create_plugin',
-    description: `새 플러그인을 마켓플레이스에 생성합니다.
+    description: `새 플러그인을 카탈로그에 생성합니다.
 스킬, 에이전트, 커맨드, 가이드, 훅을 생성할 수 있습니다.
 content 필드에 메인 콘텐츠(SKILL.md 등)를 전달하고,
 files 필드에 추가 파일(스크립트, 레퍼런스 등)을 배열로 전달할 수 있습니다.
@@ -168,7 +168,7 @@ files 필드에 추가 파일(스크립트, 레퍼런스 등)을 배열로 전�
         },
         mcpEnabled: {
           type: 'boolean',
-          description: '마켓플레이스 공개 여부 (기본: false)',
+          description: 'MCP 공개 여부 (기본: false)',
         },
       },
       required: ['id', 'type', 'name', 'content'],
@@ -233,7 +233,7 @@ files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
         },
         mcpEnabled: {
           type: 'boolean',
-          description: '마켓플레이스 공개 여부',
+          description: 'MCP 공개 여부',
         },
       },
       required: ['id'],
@@ -366,9 +366,9 @@ installations: [
 ]
 
 export function getToolByName(name: string): McpTool | undefined {
-  return MARKETPLACE_TOOLS.find((tool) => tool.name === name)
+  return MCP_TOOLS.find((tool) => tool.name === name)
 }
 
 export function getAllToolNames(): string[] {
-  return MARKETPLACE_TOOLS.map((tool) => tool.name)
+  return MCP_TOOLS.map((tool) => tool.name)
 }

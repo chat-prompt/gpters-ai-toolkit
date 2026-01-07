@@ -27,11 +27,11 @@
  *
  * Authentication:
  *    OAuth 2.1 authentication via Authorization header.
- *    Use: claude mcp add gpters-marketplace https://[host]/api/mcp -t http
+ *    Use: claude mcp add gpters-ai-toolkit https://[host]/api/mcp -t http
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
+import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MCP_TOOLS } from '@/lib/mcp'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { withOAuthAuth, type OAuthAuthResult } from '@/lib/security/oauth-tokens'
 import {
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
         name: SERVER_INFO.name,
         version: SERVER_INFO.version,
         description: SERVER_INFO.description,
-        tools: MARKETPLACE_TOOLS.map((t) => ({
+        tools: MCP_TOOLS.map((t) => ({
           name: t.name,
           description: t.description.split('\n')[0],
         })),
@@ -277,7 +277,7 @@ export async function GET(request: NextRequest) {
         'POST /api/mcp?action=get': 'Get plugin content (pluginId)',
         'POST /api/mcp?action=list': 'List all plugins (category)',
       },
-      tools: MARKETPLACE_TOOLS.map((t) => ({
+      tools: MCP_TOOLS.map((t) => ({
         name: t.name,
         description: t.description.split('\n')[0],
       })),
@@ -286,7 +286,7 @@ export async function GET(request: NextRequest) {
         userId: auth?.userId,
         clientId: auth?.clientId,
         required: true,
-        usage: 'OAuth 2.1 authentication required. Run: claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http',
+        usage: 'OAuth 2.1 authentication required. Run: claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http',
       },
       transport: 'Streamable HTTP (MCP 2025-03-26)',
     },

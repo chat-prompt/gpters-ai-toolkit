@@ -16,7 +16,7 @@ vi.mock('@/lib/mcp/handlers', () => ({
 
 // Mock the tools
 vi.mock('@/lib/mcp/tools', () => ({
-  MARKETPLACE_TOOLS: [
+  MCP_TOOLS: [
     {
       name: 'search_plugins',
       description: 'Search plugins',
@@ -46,7 +46,7 @@ describe('MCP Server', () => {
 
   describe('SERVER_INFO', () => {
     it('should have correct name', () => {
-      expect(SERVER_INFO.name).toBe('gpters-marketplace')
+      expect(SERVER_INFO.name).toBe('gpters-ai-toolkit')
     })
 
     it('should have version', () => {
@@ -79,7 +79,7 @@ describe('MCP Server', () => {
         expect(response.result).toBeDefined()
         expect(response.result.protocolVersion).toBe(PROTOCOL_VERSION)
         expect(response.result.serverInfo).toBeDefined()
-        expect(response.result.serverInfo.name).toBe('gpters-marketplace')
+        expect(response.result.serverInfo.name).toBe('gpters-ai-toolkit')
         expect(response.result.capabilities.tools).toBeDefined()
         expect(response.result.capabilities.prompts).toBeDefined()
       })

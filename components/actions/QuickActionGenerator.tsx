@@ -66,7 +66,7 @@ export function QuickActionGenerator({
         id: 'mcp-prompt',
         label: 'MCP 프롬프트 호출',
         description: '설치 없이 MCP 서버를 통해 바로 실행',
-        command: `/mcp__gpters-marketplace__${itemId}`,
+        command: `/mcp__gpters-ai-toolkit__${itemId}`,
         icon: '🔮',
         color: 'purple',
         badge: '추천',

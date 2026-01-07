@@ -1,8 +1,8 @@
 /**
- * GPTers Marketplace MCP Server
+ * GPTers AI Toolkit MCP Server
  *
  * This module provides MCP (Model Context Protocol) server functionality
- * for the GPTers AI Toolkit marketplace.
+ * for the GPTers AI Toolkit catalog.
  *
  * Usage:
  *
@@ -34,7 +34,7 @@ export type {
 } from './types'
 
 // Export tools
-export { MARKETPLACE_TOOLS, getToolByName, getAllToolNames } from './tools'
+export { MCP_TOOLS, getToolByName, getAllToolNames } from './tools'
 
 // Export handlers
 export {

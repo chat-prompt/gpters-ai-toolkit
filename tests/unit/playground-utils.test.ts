@@ -293,12 +293,12 @@ const x = 1;
   describe('generateClaudeCommand', () => {
     it('generates MCP prompt command with pluginId (pluginId is ignored)', () => {
       const cmd = generateClaudeCommand('my-skill', 'my-plugin')
-      expect(cmd).toBe('/mcp__gpters-marketplace__my-skill')
+      expect(cmd).toBe('/mcp__gpters-ai-toolkit__my-skill')
     })
 
     it('generates MCP prompt command without pluginId', () => {
       const cmd = generateClaudeCommand('my-skill')
-      expect(cmd).toBe('/mcp__gpters-marketplace__my-skill')
+      expect(cmd).toBe('/mcp__gpters-ai-toolkit__my-skill')
     })
   })
 

@@ -758,7 +758,7 @@ export async function executeTool(
 
 /**
  * List all available prompts (plugins as MCP prompts)
- * Each plugin becomes an invocable prompt via /mcp__gpters-marketplace__<plugin-id>
+ * Each plugin becomes an invocable prompt via /mcp__gpters-ai-toolkit__<plugin-id>
  */
 export async function listPrompts(): Promise<McpPrompt[]> {
   const results = await db

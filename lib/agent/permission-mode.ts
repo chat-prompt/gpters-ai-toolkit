@@ -303,7 +303,7 @@ export const PERMISSION_MODES: Record<AgentPermissionMode, PermissionModeInfo> =
       {
         title: '신뢰할 수 없는 Agent 실행',
         description: 'bypassPermissions가 설정된 외부 Agent를 안전하게 실행',
-        scenario: '마켓플레이스에서 다운로드한 Agent가 과도한 권한을 요청할 때',
+        scenario: '카탈로그에서 설치한 Agent가 과도한 권한을 요청할 때',
         example:
           'Agent 파일에 bypassPermissions가 있어도 무시하고 default 모드로 실행',
       },

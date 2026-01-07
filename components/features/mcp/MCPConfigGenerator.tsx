@@ -30,7 +30,7 @@ export function MCPConfigGenerator({ defaultUrl }: MCPConfigGeneratorProps) {
     return JSON.stringify(
       {
         mcpServers: {
-          'gpters-marketplace': {
+          'gpters-ai-toolkit': {
             type: 'http',
             url: serverUrl,
           },
@@ -146,7 +146,7 @@ export function MCPConfigGenerator({ defaultUrl }: MCPConfigGeneratorProps) {
           <p className="text-xs text-[var(--text-muted)]">
             <strong className="text-[var(--text-primary)]">참고:</strong>{' '}
             기존에 <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">mcpServers</code> 설정이 있다면,
-            <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">gpters-marketplace</code> 항목만 추가하세요.
+            <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">gpters-ai-toolkit</code> 항목만 추가하세요.
           </p>
         </div>
       </div>

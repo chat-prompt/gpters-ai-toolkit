@@ -134,8 +134,8 @@ The project includes an MCP (Model Context Protocol) server for dynamic plugin d
 
 **Available Prompts**:
 - All plugins are also exposed as MCP prompts
-- Invoke via `/mcp__gpters-marketplace__<plugin-id>`
-- Example: `/mcp__gpters-marketplace__code-reviewer`
+- Invoke via `/mcp__gpters-ai-toolkit__<plugin-id>`
+- Example: `/mcp__gpters-ai-toolkit__code-reviewer`
 
 **Usage Modes**:
 ```bash
@@ -152,7 +152,7 @@ POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": {"
 
 **Claude Code Integration** (OAuth 2.1):
 ```bash
-claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
+claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
 
 브라우저에서 Google (@gpters.org) 로그인 후 자동 연결됩니다.
@@ -261,7 +261,7 @@ pnpm lint && pnpm test && pnpm build
 
 ### Available Plugins
 
-이 프로젝트는 다음 플러그인을 마켓플레이스에서 제공합니다:
+이 프로젝트는 다음 플러그인을 카탈로그에서 제공합니다:
 
 - **claude-code-infrastructure** - Dev Docs 패턴, Context 보존 워크플로우
 - **code-reviewer** - 코드 리뷰 서브에이전트

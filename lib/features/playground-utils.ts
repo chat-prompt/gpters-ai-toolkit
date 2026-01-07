@@ -276,7 +276,7 @@ export function getFileExtension(language: string): string {
  * functional method to use items from this platform.
  */
 export function generateClaudeCommand(itemId: string, _pluginId?: string): string {
-  return `/mcp__gpters-marketplace__${itemId}`
+  return `/mcp__gpters-ai-toolkit__${itemId}`
 }
 
 /**
