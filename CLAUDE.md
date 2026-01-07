@@ -150,18 +150,12 @@ POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/list"}
 POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": {"name": "code-reviewer"}}
 ```
 
-**Claude Code Integration**:
-```json
-// ~/.claude/settings.json
-{
-  "mcpServers": {
-    "gpters-marketplace": {
-      "type": "http",
-      "url": "https://[deployed-url]/api/mcp"
-    }
-  }
-}
+**Claude Code Integration** (OAuth 2.1):
+```bash
+claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
+
+브라우저에서 Google (@gpters.org) 로그인 후 자동 연결됩니다.
 
 See `docs/AUTO_PLUGIN_DISCOVERY.md` for detailed documentation.
 See `docs/TEAM_ONBOARDING.md` for team member setup guide.

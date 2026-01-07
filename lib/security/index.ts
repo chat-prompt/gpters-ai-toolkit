@@ -5,7 +5,7 @@
  */
 
 export * from './rbac'
-export * from './mcp-auth'
+export * from './oauth-tokens'
 export * from './mcp-validation'
 export * from './mcp-audit'
 export * from './security-audit'

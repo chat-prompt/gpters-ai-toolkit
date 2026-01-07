@@ -226,31 +226,6 @@ export type InstallationRecord = typeof installations.$inferSelect
 export type NewInstallationRecord = typeof installations.$inferInsert
 
 // ============================================
-// MCP API Tokens Table
-// ============================================
-
-export const mcpTokens = pgTable('mcp_tokens', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the token
-  name: text('name').notNull(), // Human-readable name/description
-  description: text('description'), // Optional longer description
-  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }), // null = never expires
-  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
-  usageCount: integer('usage_count').notNull().default(0),
-  rateLimit: integer('rate_limit').default(100), // requests per minute
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-}, (table) => [
-  index('mcp_tokens_token_hash_idx').on(table.tokenHash),
-  index('mcp_tokens_is_active_idx').on(table.isActive),
-])
-
-export type McpTokenRecord = typeof mcpTokens.$inferSelect
-export type NewMcpTokenRecord = typeof mcpTokens.$inferInsert
-
-// ============================================
 // OAuth 2.1 Tables (for MCP native auth)
 // ============================================
 
@@ -287,9 +262,31 @@ export const oauthCodes = pgTable('oauth_codes', {
 export type OAuthCodeRecord = typeof oauthCodes.$inferSelect
 export type NewOAuthCodeRecord = typeof oauthCodes.$inferInsert
 
+// OAuth Access Tokens - Issued after successful OAuth flow
+export const oauthAccessTokens = pgTable('oauth_access_tokens', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of token
+  clientId: text('client_id').notNull().references(() => oauthClients.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  scope: text('scope'), // Optional scopes
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  usageCount: integer('usage_count').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('oauth_access_tokens_token_hash_idx').on(table.tokenHash),
+  index('oauth_access_tokens_user_id_idx').on(table.userId),
+  index('oauth_access_tokens_client_id_idx').on(table.clientId),
+])
+
+export type OAuthAccessTokenRecord = typeof oauthAccessTokens.$inferSelect
+export type NewOAuthAccessTokenRecord = typeof oauthAccessTokens.$inferInsert
+
 // Relations for OAuth tables
 export const oauthClientsRelations = relations(oauthClients, ({ many }) => ({
   codes: many(oauthCodes),
+  accessTokens: many(oauthAccessTokens),
 }))
 
 export const oauthCodesRelations = relations(oauthCodes, ({ one }) => ({
@@ -299,6 +296,17 @@ export const oauthCodesRelations = relations(oauthCodes, ({ one }) => ({
   }),
   user: one(users, {
     fields: [oauthCodes.userId],
+    references: [users.id],
+  }),
+}))
+
+export const oauthAccessTokensRelations = relations(oauthAccessTokens, ({ one }) => ({
+  client: one(oauthClients, {
+    fields: [oauthAccessTokens.clientId],
+    references: [oauthClients.id],
+  }),
+  user: one(users, {
+    fields: [oauthAccessTokens.userId],
     references: [users.id],
   }),
 }))
@@ -430,8 +438,8 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   method: text('method').notNull(), // JSON-RPC method or REST action (e.g., 'tools/call', 'search')
   tool: text('tool'), // Tool name if applicable (e.g., 'search_plugins', 'get_plugin_content')
 
-  // Authentication
-  tokenId: text('token_id').references(() => mcpTokens.id, { onDelete: 'set null' }),
+  // Authentication (OAuth access token)
+  accessTokenId: text('access_token_id').references(() => oauthAccessTokens.id, { onDelete: 'set null' }),
   isAuthenticated: boolean('is_authenticated').notNull().default(false),
 
   // Client info (masked for privacy)
@@ -449,7 +457,7 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('mcp_audit_logs_created_at_idx').on(table.createdAt),
-  index('mcp_audit_logs_token_id_idx').on(table.tokenId),
+  index('mcp_audit_logs_access_token_id_idx').on(table.accessTokenId),
   index('mcp_audit_logs_method_idx').on(table.method),
   index('mcp_audit_logs_response_status_idx').on(table.responseStatus),
   // Composite index for common queries
@@ -461,8 +469,8 @@ export type NewMcpAuditLogRecord = typeof mcpAuditLogs.$inferInsert
 
 // Relations for MCP audit logs
 export const mcpAuditLogsRelations = relations(mcpAuditLogs, ({ one }) => ({
-  token: one(mcpTokens, {
-    fields: [mcpAuditLogs.tokenId],
-    references: [mcpTokens.id],
+  accessToken: one(oauthAccessTokens, {
+    fields: [mcpAuditLogs.accessTokenId],
+    references: [oauthAccessTokens.id],
   }),
 }))

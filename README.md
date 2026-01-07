@@ -30,20 +30,15 @@ GPTers 팀을 위한 Claude Code 스킬, 에이전트, 커맨드, 가이드, 훅
 
 ## 빠른 시작
 
-### 1. MCP 서버 연결 (권장)
+### 1. MCP 서버 연결 (OAuth 인증)
 
-`~/.claude/settings.json`에 추가:
+터미널에서 아래 명령어를 실행하세요:
 
-```json
-{
-  "mcpServers": {
-    "gpters-marketplace": {
-      "type": "http",
-      "url": "https://company-ai-toolkit.vercel.app/api/mcp"
-    }
-  }
-}
+```bash
+claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
+
+브라우저에서 Google (@gpters.org) 로그인 후 자동 연결됩니다.
 
 ### 2. 사용하기
 
@@ -266,9 +261,9 @@ pnpm db:studio      # Drizzle Studio
 ## 보안
 
 - **인증**: NextAuth v5 + Google OAuth (@gpters.org 도메인만)
+- **MCP 인증**: OAuth 2.1 (브라우저 로그인)
 - **권한**: RBAC (admin, editor, viewer 역할)
-- **Rate Limiting**: IP 기반 및 토큰 기반 제한
-- **API 토큰**: MCP 접근용 SHA-256 해시 토큰
+- **Rate Limiting**: IP 기반 제한
 - **개발 모드**: `DEV_BYPASS_AUTH=true`로 인증 우회
 
 ## 문서

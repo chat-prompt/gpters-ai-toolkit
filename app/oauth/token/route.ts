@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthCode, consumeAuthCode, verifyPkce, getClient, verifyClientSecret } from '@/lib/security/oauth'
-import { createToken } from '@/lib/security/mcp-auth'
+import { createAccessToken } from '@/lib/security/oauth-tokens'
 import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('oauth-token')
@@ -93,15 +93,11 @@ export async function POST(request: NextRequest) {
     // Consume the authorization code (single use)
     await consumeAuthCode(code)
 
-    // Create MCP token
-    const client = await getClient(clientId)
-    const tokenResult = await createToken({
-      name: `OAuth: ${client?.name || clientId}`,
-      description: `OAuth token for ${client?.name || clientId}`,
-      createdBy: authCode.userId,
-      // No expiration - user can revoke manually
-      expiresAt: undefined,
-      rateLimit: 100,
+    // Create OAuth access token
+    const tokenResult = await createAccessToken({
+      clientId,
+      userId: authCode.userId,
+      scope: authCode.scope || undefined,
     })
 
     log.info('Access token issued via OAuth', {

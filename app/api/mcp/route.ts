@@ -33,7 +33,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MARKETPLACE_TOOLS } from '@/lib/mcp'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
-import { withMcpAuth, type McpAuthResult } from '@/lib/security/mcp-auth'
+import { withOAuthAuth, type OAuthAuthResult } from '@/lib/security/oauth-tokens'
 import {
   MAX_REQUEST_SIZE,
   isRequestSizeValid,
@@ -82,7 +82,7 @@ function generateSessionId(): string {
 /**
  * Validate and refresh session
  */
-function validateSession(sessionId: string | null): boolean {
+function _validateSession(sessionId: string | null): boolean {
   if (!sessionId) return true // New session allowed
 
   const session = sessions.get(sessionId)
@@ -161,9 +161,9 @@ interface AuditContext {
  */
 async function handleAuthAndRateLimit(
   request: NextRequest
-): Promise<{ error?: NextResponse; auth?: McpAuthResult; auditCtx?: AuditContext }> {
-  // Check MCP token authentication (required)
-  const authResult = await withMcpAuth(request, { requireAuth: true })
+): Promise<{ error?: NextResponse; auth?: OAuthAuthResult; auditCtx?: AuditContext }> {
+  // Check OAuth authentication (required)
+  const authResult = await withOAuthAuth(request, { requireAuth: true })
 
   if (authResult.error) {
     return { error: addCorsHeaders(authResult.error) }
@@ -283,9 +283,10 @@ export async function GET(request: NextRequest) {
       })),
       authentication: {
         status: auth ? 'authenticated' : 'unauthenticated',
-        tokenName: auth?.tokenName,
+        userId: auth?.userId,
+        clientId: auth?.clientId,
         required: true,
-        usage: 'Add "Authorization: Bearer mcp_xxx" header. Get your token at /profile/tokens',
+        usage: 'OAuth 2.1 authentication required. Run: claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http',
       },
       transport: 'Streamable HTTP (MCP 2025-03-26)',
     },

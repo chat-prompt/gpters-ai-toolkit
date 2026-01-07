@@ -14,7 +14,7 @@ import { db } from '@/lib/db'
 import { mcpAuditLogs } from '@/lib/db/schema'
 import { lt, count, eq, and, gte, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
-import type { McpAuthResult } from './mcp-auth'
+import type { OAuthAuthResult } from './oauth-tokens'
 
 const log = createLogger('mcp-audit')
 
@@ -51,7 +51,7 @@ export type AuditResponseStatus = 'success' | 'error' | 'rate_limited'
 export interface McpAuditEntry {
   method: string              // JSON-RPC method or REST action
   tool?: string               // Tool name if applicable
-  tokenId?: string            // Token ID if authenticated
+  accessTokenId?: string      // OAuth Access Token ID if authenticated
   isAuthenticated: boolean
   ipHash: string              // Hashed IP address
   userAgent?: string
@@ -150,12 +150,12 @@ function extractToolName(body: unknown): string | undefined {
  */
 export async function createAuditContext(
   request: NextRequest,
-  auth?: McpAuthResult
+  auth?: OAuthAuthResult
 ): Promise<{
   ipHash: string
   userAgent?: string
   isAuthenticated: boolean
-  tokenId?: string
+  accessTokenId?: string
 }> {
   const clientIp = getClientIp(request)
   const ipHash = await hashString(clientIp)
@@ -165,7 +165,7 @@ export async function createAuditContext(
     ipHash,
     userAgent,
     isAuthenticated: !!auth?.authenticated,
-    tokenId: auth?.tokenId,
+    accessTokenId: auth?.accessTokenId,
   }
 }
 
@@ -177,7 +177,7 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
     await db.insert(mcpAuditLogs).values({
       method: entry.method,
       tool: entry.tool,
-      tokenId: entry.tokenId,
+      accessTokenId: entry.accessTokenId,
       isAuthenticated: entry.isAuthenticated,
       ipHash: entry.ipHash,
       userAgent: entry.userAgent,
@@ -205,7 +205,7 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
  */
 export async function withMcpAudit<T>(
   request: NextRequest,
-  auth: McpAuthResult | undefined,
+  auth: OAuthAuthResult | undefined,
   body: unknown,
   action: string,
   handler: () => Promise<{ result: T; success: boolean; error?: { code?: string; message?: string } }>
@@ -258,7 +258,7 @@ export async function withMcpAudit<T>(
  */
 export async function logRateLimitEvent(
   request: NextRequest,
-  auth?: McpAuthResult
+  auth?: OAuthAuthResult
 ): Promise<void> {
   const context = await createAuditContext(request, auth)
 

@@ -4,64 +4,32 @@ GPTers 사내 플러그인(스킬, 에이전트, 커맨드, 가이드)을 Claude
 
 ---
 
-## 빠른 시작 (2분)
+## 빠른 시작 (1분)
 
-### 웹 설정 마법사 사용 (권장)
+### Step 1: MCP 서버 추가
 
-1. https://company-ai-toolkit.vercel.app/getting-started 방문
-2. Google 로그인 (@gpters.org)
-3. 표시된 명령어를 터미널에 순서대로 복사/붙여넣기
-4. Claude Code 재시작
-5. 완료!
+터미널에서 아래 명령어를 실행하세요:
 
----
-
-## 수동 설치
-
-### 1단계: 토큰 발급
-
-1. https://company-ai-toolkit.vercel.app/profile/tokens 방문
-2. Google 로그인 후 "새 토큰 생성" 클릭
-3. 토큰 복사
-
-### 2단계: 환경변수 설정
-
-**macOS (zsh)**:
 ```bash
-echo 'export GPTERS_MCP_TOKEN="mcp_your_token_here"' >> ~/.zshrc && source ~/.zshrc
+claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
 
-**Linux (bash)**:
+> **참고**: 프로젝트별로 설정하려면 프로젝트 루트에서 실행하세요. 글로벌 설정은 `-s user` 옵션을 추가하세요.
+
+### Step 2: 브라우저 로그인
+
+Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다:
+
+1. 브라우저가 자동으로 열립니다
+2. Google 계정 (@gpters.org)으로 로그인
+3. 완료!
+
+### 연결 확인
+
 ```bash
-echo 'export GPTERS_MCP_TOKEN="mcp_your_token_here"' >> ~/.bashrc && source ~/.bashrc
+claude mcp list
+# gpters-marketplace: ... ✓ Connected
 ```
-
-**Windows (PowerShell)**:
-```powershell
-setx GPTERS_MCP_TOKEN "mcp_your_token_here"
-# 터미널 재시작 필요
-```
-
-### 3단계: MCP 서버 설정
-
-`~/.claude/.mcp.json` 파일에 아래 내용을 추가하세요:
-
-```json
-{
-  "mcpServers": {
-    "gpters-marketplace": {
-      "type": "http",
-      "url": "https://company-ai-toolkit.vercel.app/api/mcp?token=YOUR_TOKEN_HERE"
-    }
-  }
-}
-```
-
-> **참고**: 이미 `.mcp.json` 파일이 있다면, `mcpServers` 객체에 `gpters-marketplace` 항목만 추가하세요.
-
-### 4단계: Claude Code 재시작
-
-설정을 적용하려면 Claude Code를 완전히 종료 후 재시작하세요.
 
 ---
 
@@ -138,17 +106,20 @@ curl -fsSL https://company-ai-toolkit.vercel.app/api/hooks/gpters-plugin-suggest
 
 ## 문제 해결
 
-### "토큰이 만료되었거나 유효하지 않습니다"
-
-1. https://company-ai-toolkit.vercel.app/profile/tokens 에서 새 토큰 발급
-2. `.mcp.json` 파일의 URL에서 토큰 업데이트
-3. Claude Code 재시작
-
 ### "MCP 서버에 연결할 수 없습니다"
 
-1. `.mcp.json` 파일이 올바른 위치에 있는지 확인 (`~/.claude/.mcp.json`)
-2. 토큰이 URL에 포함되어 있는지 확인
-3. Claude Code 완전히 재시작
+1. MCP 서버가 추가되었는지 확인: `claude mcp list`
+2. 서버 제거 후 다시 추가:
+   ```bash
+   claude mcp remove gpters-marketplace
+   claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
+   ```
+3. 브라우저에서 다시 로그인
+
+### "인증 실패" 또는 "401 Unauthorized"
+
+1. @gpters.org 계정으로 로그인했는지 확인
+2. 브라우저 쿠키 삭제 후 다시 로그인
 
 ### Hook이 실행되지 않음
 
@@ -161,8 +132,8 @@ curl -fsSL https://company-ai-toolkit.vercel.app/api/hooks/gpters-plugin-suggest
 ## 인증 관련
 
 - **@gpters.org 계정만 사용 가능**: 사내 인원 전용입니다
-- **토큰 관리**: https://company-ai-toolkit.vercel.app/profile/tokens 에서 토큰 발급/취소/갱신
-- **토큰 유효기간**: 기본 무제한 (필요 시 만료일 설정 가능)
+- **OAuth 2.1 인증**: 브라우저 로그인만으로 자동 연결됩니다
+- **토큰 복사 불필요**: 환경변수 설정이나 토큰 관리가 필요 없습니다
 
 ---
 

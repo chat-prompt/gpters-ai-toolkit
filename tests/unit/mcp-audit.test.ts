@@ -27,7 +27,7 @@ vi.mock('@/lib/db/schema', () => ({
     id: 'id',
     method: 'method',
     tool: 'tool',
-    tokenId: 'token_id',
+    accessTokenId: 'access_token_id',
     isAuthenticated: 'is_authenticated',
     ipHash: 'ip_hash',
     userAgent: 'user_agent',
@@ -38,7 +38,7 @@ vi.mock('@/lib/db/schema', () => ({
     errorMessage: 'error_message',
     createdAt: 'created_at',
   },
-  mcpTokens: {
+  oauthAccessTokens: {
     id: 'id',
   },
 }))
@@ -158,7 +158,7 @@ describe('MCP Audit Logging', () => {
       interface McpAuditEntry {
         method: string
         tool?: string
-        tokenId?: string
+        accessTokenId?: string
         isAuthenticated: boolean
         ipHash: string
         userAgent?: string
@@ -187,7 +187,7 @@ describe('MCP Audit Logging', () => {
       interface McpAuditEntry {
         method: string
         tool?: string
-        tokenId?: string
+        accessTokenId?: string
         isAuthenticated: boolean
         ipHash: string
         userAgent?: string
@@ -202,7 +202,7 @@ describe('MCP Audit Logging', () => {
         method: 'jsonrpc:tools/call',
         tool: 'search_plugins',
         isAuthenticated: true,
-        tokenId: 'token-123',
+        accessTokenId: 'access-token-123',
         ipHash: 'xyz789hash',
         responseStatus: 'error',
         responseTime: 120,
