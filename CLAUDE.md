@@ -55,7 +55,7 @@ pnpm db:migrate-data        # Run data migration script
 
 ```
 app/
-├── api/              # API routes (catalog, auth, marketplace, admin)
+├── api/              # API routes (catalog, auth, mcp, admin)
 ├── admin/            # Admin dashboard (catalog CRUD, tags, authors)
 ├── auth/             # Auth pages (signin, signout, error)
 ├── guides/           # Guide pages
@@ -66,7 +66,7 @@ app/
 lib/
 ├── db/               # Drizzle schema and connection
 ├── mcp/              # MCP server for plugin discovery
-├── marketplace/      # GitHub marketplace sync utilities
+├── features/         # Feature-specific utilities
 ├── auth.ts           # NextAuth configuration
 ├── catalog.ts        # Catalog data access functions
 ├── types.ts          # TypeScript types and constants
@@ -92,7 +92,7 @@ Key database tables:
 
 Required in `.env.local` (see `.env.example`):
 - `DATABASE_URL` - Neon PostgreSQL connection string
-- `GH_TOKEN`, `GH_OWNER`, `GH_REPO`, `GH_BRANCH` - GitHub API for marketplace sync
+- `GH_TOKEN`, `GH_OWNER`, `GH_REPO`, `GH_BRANCH` - GitHub API for plugin sync
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - OAuth credentials
 - `DEV_BYPASS_AUTH=true` - Skip auth in development
 

@@ -58,7 +58,7 @@ gpters-ai-toolkit/
 │   ├── api/                      # API 라우트
 │   │   ├── catalog/              # 카탈로그 CRUD + ZIP 다운로드
 │   │   ├── mcp/                  # MCP 서버 엔드포인트 + 상태
-│   │   ├── marketplace/          # GitHub 플러그인 동기화
+│   │   ├── upload/               # 플러그인 업로드
 │   │   ├── installations/        # 설치 추적
 │   │   ├── updates/              # 버전 체크
 │   │   ├── admin/                # 관리자 API
@@ -88,7 +88,7 @@ gpters-ai-toolkit/
 ├── lib/                          # 비즈니스 로직
 │   ├── db/                       # Drizzle ORM 스키마
 │   ├── mcp/                      # MCP 서버 구현
-│   ├── marketplace/              # 플러그인 동기화
+│   ├── features/                 # 기능별 유틸리티
 │   ├── catalog.ts                # 카탈로그 CRUD
 │   ├── parse-examples.ts         # 예시 파싱 유틸리티
 │   ├── auth.ts                   # 인증 설정
@@ -202,7 +202,7 @@ pnpm lint          # ESLint
 | `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID | ✅ |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 시크릿 | ✅ |
 | `NEXTAUTH_SECRET` | NextAuth 시크릿 | ✅ |
-| `GH_TOKEN` | GitHub API 토큰 (마켓플레이스 동기화) | |
+| `GH_TOKEN` | GitHub API 토큰 (플러그인 동기화) | |
 | `DEV_BYPASS_AUTH` | 개발 환경 인증 우회 (`true`로 설정) | |
 
 ## 스크립트
