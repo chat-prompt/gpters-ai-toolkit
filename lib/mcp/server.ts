@@ -13,9 +13,14 @@ import type { McpToolResponse, McpPromptResult, GetPromptInput } from './types'
 // MCP Protocol types
 interface McpRequest {
   jsonrpc: '2.0'
-  id: string | number
+  id?: string | number | null  // Optional for notifications
   method: string
   params?: Record<string, unknown>
+}
+
+// Check if request is a notification (no id field)
+function isNotification(request: McpRequest): boolean {
+  return request.id === undefined
 }
 
 interface McpResponse {
@@ -94,23 +99,35 @@ async function handlePromptsGet(params: GetPromptInput): Promise<McpPromptResult
 
 /**
  * Process a single MCP request
+ * Returns null for notifications (per JSON-RPC 2.0 spec, notifications don't get responses)
  */
-export async function processRequest(request: McpRequest): Promise<McpResponse> {
+export async function processRequest(request: McpRequest): Promise<McpResponse | null> {
   const { id, method, params } = request
+
+  // Handle notifications (no response expected)
+  // Per JSON-RPC 2.0: "The Server MUST NOT reply to a Notification"
+  if (isNotification(request)) {
+    // Just acknowledge known notifications silently
+    if (method === 'notifications/initialized' ||
+        method === 'notifications/cancelled' ||
+        method.startsWith('notifications/')) {
+      return null  // No response for notifications
+    }
+  }
 
   try {
     switch (method) {
       case 'initialize':
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           result: handleInitialize(),
         }
 
       case 'tools/list':
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           result: handleToolsList(),
         }
 
@@ -119,7 +136,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
         const result = await handleToolsCall(toolParams)
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           result,
         }
       }
@@ -128,7 +145,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
         const result = await handlePromptsList()
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           result,
         }
       }
@@ -138,7 +155,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
         if (!promptParams?.name) {
           return {
             jsonrpc: '2.0',
-            id,
+            id: id!,
             error: {
               code: -32602,
               message: 'Missing required parameter: name',
@@ -149,7 +166,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
         if (!result) {
           return {
             jsonrpc: '2.0',
-            id,
+            id: id!,
             error: {
               code: -32602,
               message: `Prompt not found: ${promptParams.name}`,
@@ -158,7 +175,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
         }
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           result,
         }
       }
@@ -166,14 +183,14 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
       case 'ping':
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           result: {},
         }
 
       default:
         return {
           jsonrpc: '2.0',
-          id,
+          id: id!,
           error: {
             code: -32601,
             message: `Method not found: ${method}`,
@@ -184,7 +201,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return {
       jsonrpc: '2.0',
-      id,
+      id: id!,
       error: {
         code: -32603,
         message: errorMessage,
@@ -196,14 +213,17 @@ export async function processRequest(request: McpRequest): Promise<McpResponse> 
 /**
  * HTTP Handler for MCP requests
  * Used by Next.js API route
+ * Returns null for notifications (no response should be sent)
  */
-export async function handleHttpRequest(body: unknown): Promise<McpResponse | McpResponse[]> {
+export async function handleHttpRequest(body: unknown): Promise<McpResponse | McpResponse[] | null> {
   // Handle batch requests
   if (Array.isArray(body)) {
     const responses = await Promise.all(
       body.map((req) => processRequest(req as McpRequest))
     )
-    return responses
+    // Filter out null responses (notifications)
+    const validResponses = responses.filter((r): r is McpResponse => r !== null)
+    return validResponses.length > 0 ? validResponses : null
   }
 
   // Handle single request

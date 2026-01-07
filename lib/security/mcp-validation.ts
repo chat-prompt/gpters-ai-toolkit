@@ -92,9 +92,11 @@ export const listRequestSchema = z.object({
 })
 
 // JSON-RPC request schema
+// Note: 'id' is optional for notifications (per JSON-RPC 2.0 spec)
+// Notifications are requests without an 'id' that don't expect a response
 export const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal('2.0'),
-  id: z.union([z.string(), z.number(), z.null()]),
+  id: z.union([z.string(), z.number(), z.null()]).optional(),
   method: z.string().min(1).max(100),
   params: z.record(z.string(), z.unknown()).optional(),
 })

@@ -526,6 +526,17 @@ export async function POST(request: NextRequest) {
     const tool = extractToolFromBody(body)
     const response = await handleHttpRequest(body)
 
+    // Handle notifications (null response means no response should be sent)
+    // Per JSON-RPC 2.0 spec and MCP: notifications don't expect a response
+    if (response === null) {
+      await logAudit(`jsonrpc:${rpcMethod}`, tool, 'success', body)
+      // Return 202 Accepted for notifications (no body)
+      return new NextResponse(null, {
+        status: 202,
+        headers: corsHeaders,
+      })
+    }
+
     // Check if response contains error
     const hasError = response && typeof response === 'object' && 'error' in response
 
