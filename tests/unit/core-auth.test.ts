@@ -94,23 +94,23 @@ describe('Auth Module', () => {
 
   describe('Module Exports', () => {
     it('should export handlers', async () => {
-      const module = await import('@/lib/core/auth')
-      expect(module.handlers).toBeDefined()
+      const authModule = await import('@/lib/core/auth')
+      expect(authModule.handlers).toBeDefined()
     })
 
     it('should export signIn function', async () => {
-      const module = await import('@/lib/core/auth')
-      expect(module.signIn).toBeDefined()
+      const authModule = await import('@/lib/core/auth')
+      expect(authModule.signIn).toBeDefined()
     })
 
     it('should export signOut function', async () => {
-      const module = await import('@/lib/core/auth')
-      expect(module.signOut).toBeDefined()
+      const authModule = await import('@/lib/core/auth')
+      expect(authModule.signOut).toBeDefined()
     })
 
     it('should export auth function', async () => {
-      const module = await import('@/lib/core/auth')
-      expect(module.auth).toBeDefined()
+      const authModule = await import('@/lib/core/auth')
+      expect(authModule.auth).toBeDefined()
     })
   })
 

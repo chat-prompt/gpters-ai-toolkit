@@ -135,7 +135,7 @@ describe('Stats API', () => {
           expect(item.id).toBeDefined()
           expect(item.name).toBeDefined()
           expect(item.type).toBeDefined()
-          expect(item.author).toBeDefined()
+          expect(item.authorName).toBeDefined()
           expect(typeof item.installCount).toBe('number')
         }
 
@@ -192,7 +192,7 @@ describe('Stats API', () => {
           expect(item.id).toBeDefined()
           expect(item.name).toBeDefined()
           expect(item.type).toBeDefined()
-          expect(item.author).toBeDefined()
+          expect(item.authorName).toBeDefined()
           expect(item.createdAt).toBeDefined()
         }
 

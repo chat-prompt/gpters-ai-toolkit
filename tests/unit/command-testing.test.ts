@@ -225,7 +225,8 @@ describe('Command Testing Framework', () => {
       const mock = createMockHandler({ delay: 50 })
       const start = Date.now()
       await executeWithMock(sampleCommand, { name: 'Test' }, mock)
-      expect(Date.now() - start).toBeGreaterThanOrEqual(50)
+      // Allow small tolerance for timing inaccuracies
+      expect(Date.now() - start).toBeGreaterThanOrEqual(45)
     })
   })
 

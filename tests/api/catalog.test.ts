@@ -50,19 +50,7 @@ describe('Catalog API', () => {
     })
   })
 
-  describe('GET /api/authors', () => {
-    it('should return authors list', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/authors`)
-      expect([200, 401, 307]).toContain(response.status)
-
-      if (response.status === 200) {
-        const data = await response.json()
-        expect(Array.isArray(data)).toBe(true)
-      }
-    })
-  })
+  // Note: /api/authors endpoint was removed - author info stored in catalog_items.authorId
 
   describe('GET /api/mcp-servers', () => {
     it('should return MCP servers list', async () => {

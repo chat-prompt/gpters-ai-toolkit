@@ -8,9 +8,10 @@ import { getGuideById, getGuides } from '@/lib/core/catalog'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
 import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
-import { MarkdownContent } from '@/components/ui/MarkdownContent'
+import { ContentSection } from '@/components/detail/ContentSection'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 
 export const revalidate = 60
 export const dynamicParams = true
@@ -30,6 +31,17 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
 
   return (
     <DetailPageLayout accentColor="emerald">
+      {/* Back Navigation */}
+      <nav className="mb-6">
+        <Link
+          href="/guides"
+          className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent-emerald)] transition-colors"
+        >
+          <span>←</span>
+          <span>가이드 목록</span>
+        </Link>
+      </nav>
+
       <ItemHero
         type="guide"
         itemId={guide.id}
@@ -43,7 +55,7 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         updatedAt={guide.updatedAt}
         status={guide.status}
         version={guide.version}
-        showLikes={false}
+        showLikes={true}
       />
 
       {/* Changelog */}
@@ -56,24 +68,11 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
       )}
 
       {/* Guide Content */}
-      <div className="glass rounded-2xl p-8 mb-8" style={{ boxShadow: '0 0 30px rgba(16,185,129,0.1)' }}>
-        <article className="prose prose-invert prose-emerald max-w-none">
-          <MarkdownContent content={guide.content} />
-        </article>
-      </div>
+      <ContentSection title="guide.md" icon="📚" content={guide.content} />
 
       {/* README */}
       {guide.readme && (
-        <div className="glass rounded-2xl p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-xl">📖</span>
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">추가 정보</h2>
-          </div>
-
-          <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-            <MarkdownContent content={guide.readme} />
-          </div>
-        </div>
+        <ContentSection title="README.md" icon="📖" content={guide.readme} />
       )}
 
       {/* Admin Edit Button */}

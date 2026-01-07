@@ -48,7 +48,7 @@ describe('Catalog CRUD API', () => {
         type: 'skill',
         name: 'Test Skill',
         description: 'A test skill for API testing',
-        author: 'test-author',
+        // Note: authorId is a FK to users table, not a string field
         tags: ['testing', 'api'],
         teamTag: 'general',
         difficulty: 'easy',
@@ -72,7 +72,6 @@ describe('Catalog CRUD API', () => {
       expect(data.id).toBe(newItem.id)
       expect(data.name).toBe(newItem.name)
       expect(data.type).toBe(newItem.type)
-      expect(data.author).toBe(newItem.author)
       expect(data.description).toBe(newItem.description)
 
       // Store test item ID for cleanup
@@ -443,8 +442,8 @@ describe('Catalog CRUD API', () => {
 
       const data = await response.json()
       expect(data.name).toBe('Partially Updated Skill')
-      // Other fields should remain unchanged
-      expect(data.author).toBe('test-author')
+      // Other fields should remain unchanged - type should still be 'skill'
+      expect(data.type).toBe('skill')
     })
   })
 

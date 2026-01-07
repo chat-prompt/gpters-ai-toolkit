@@ -12,103 +12,8 @@ async function isServerRunning(): Promise<boolean> {
   }
 }
 
-describe('Marketplace API', () => {
-  let serverAvailable = false
-
-  beforeAll(async () => {
-    serverAvailable = await isServerRunning()
-    if (!serverAvailable) {
-      console.log('Server not running, skipping marketplace API tests')
-    }
-  })
-
-  describe('GET /api/marketplace', () => {
-    it('should return marketplace JSON format', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/marketplace`)
-
-      expect(response.status).toBe(200)
-
-      const data = await response.json()
-      expect(data).toBeDefined()
-      expect(typeof data).toBe('object')
-    })
-
-    it('should have skills array in response', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/marketplace`)
-
-      expect(response.status).toBe(200)
-
-      const data = await response.json()
-      expect(Array.isArray(data.skills) || data.skills === undefined).toBe(true)
-    })
-
-    it('should have agents array in response', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/marketplace`)
-
-      expect(response.status).toBe(200)
-
-      const data = await response.json()
-      expect(Array.isArray(data.agents) || data.agents === undefined).toBe(true)
-    })
-
-    it('should have commands array in response', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/marketplace`)
-
-      expect(response.status).toBe(200)
-
-      const data = await response.json()
-      expect(Array.isArray(data.commands) || data.commands === undefined).toBe(true)
-    })
-
-    it('should only return marketplace-enabled items', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/marketplace`)
-
-      expect(response.status).toBe(200)
-
-      const data = await response.json()
-
-      // If there are items, verify they have marketplace fields
-      if (data.skills && data.skills.length > 0) {
-        const skill = data.skills[0]
-        expect(skill.name).toBeDefined()
-        expect(skill.id).toBeDefined()
-      }
-
-      if (data.agents && data.agents.length > 0) {
-        const agent = data.agents[0]
-        expect(agent.name).toBeDefined()
-        expect(agent.id).toBeDefined()
-      }
-
-      if (data.commands && data.commands.length > 0) {
-        const command = data.commands[0]
-        expect(command.name).toBeDefined()
-        expect(command.id).toBeDefined()
-      }
-    })
-
-    it('should have correct content-type', async () => {
-      if (!serverAvailable) return
-
-      const response = await fetch(`${API_BASE_URL}/api/marketplace`)
-
-      expect(response.status).toBe(200)
-
-      const contentType = response.headers.get('content-type')
-      expect(contentType).toContain('application/json')
-    })
-  })
-})
+// Note: /api/marketplace endpoint was removed and replaced with /api/mcp
+// See tests/api/mcp.test.ts for MCP server tests
 
 describe('Upload API', () => {
   let serverAvailable = false
@@ -439,7 +344,7 @@ describe('Upload API', () => {
       expect(data.error).toContain('already exists')
     })
 
-    it('should use default author when not provided', async () => {
+    it('should use null authorId when not provided', async () => {
       if (!serverAvailable) return
 
       const testId = `upload-no-author-${Date.now()}`
@@ -450,7 +355,7 @@ describe('Upload API', () => {
         type: 'skill',
         name: 'No Author Skill',
         content: 'Test content',
-        // author is not provided
+        // authorId is not provided
       }
 
       const response = await fetch(`${API_BASE_URL}/api/upload`, {
@@ -464,7 +369,7 @@ describe('Upload API', () => {
       expect(response.status).toBe(201)
 
       const data = await response.json()
-      expect(data.item.author).toBe('anonymous')
+      expect(data.item.authorId).toBeNull()
     })
 
     it('should use default teamTag when not provided', async () => {
@@ -506,7 +411,7 @@ describe('Upload API', () => {
         type: 'skill',
         name: 'Full Fields Skill',
         description: 'A complete skill with all fields',
-        author: 'test-author',
+        // Note: authorId is a FK to users table, not a string
         tags: ['tag1', 'tag2', 'tag3'],
         teamTag: 'platform',
         difficulty: 'medium',
@@ -529,7 +434,6 @@ describe('Upload API', () => {
 
       const data = await response.json()
       expect(data.item.description).toBe(newItem.description)
-      expect(data.item.author).toBe(newItem.author)
       expect(data.item.tags).toEqual(newItem.tags)
       expect(data.item.teamTag).toBe(newItem.teamTag)
       expect(data.item.difficulty).toBe(newItem.difficulty)

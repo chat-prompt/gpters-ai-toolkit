@@ -33,7 +33,6 @@ export {
 export { PluginDependencyGraph } from './PluginDependencyGraph'
 export { SecurityAuditPanel } from './SecurityAuditPanel'
 export { PluginVerification } from './PluginVerification'
-export { MarketplaceStatsDashboard, PeriodSelector } from './MarketplaceStats'
 export { PerformanceDashboard } from './PerformanceDashboard'
 export { PluginUpdateBanner } from './PluginUpdateBanner'
 export { TypeGuidePanel } from './TypeGuidePanel'

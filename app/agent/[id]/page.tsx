@@ -149,7 +149,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
       {/* Agent Content */}
       <Section id="content">
-        <ContentSection title={`${item.id}.md`} content={item.content} />
+        <ContentSection title="agent.md" content={item.content} />
       </Section>
 
       {/* README */}
