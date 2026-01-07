@@ -4,33 +4,15 @@ GPTers 팀을 위한 Claude Code MCP 플러그인입니다.
 
 ## 빠른 설치 (30초)
 
-**가장 쉬운 방법**: https://company-ai-toolkit.vercel.app/getting-started 에서 안내를 따르세요.
+**터미널에서 한 줄 실행**:
 
-### 수동 설치
-
-1. **토큰 발급**: https://company-ai-toolkit.vercel.app/getting-started 에서 발급
-
-2. **환경변수 설정** (터미널):
 ```bash
-echo 'export GPTERS_MCP_TOKEN="YOUR_TOKEN_HERE"' >> ~/.zshrc && source ~/.zshrc
+claude mcp add gpters-marketplace https://company-ai-toolkit.vercel.app/api/mcp -t http
 ```
 
-3. **프록시 스크립트 다운로드**:
-```bash
-curl -fsSL https://company-ai-toolkit.vercel.app/api/mcp-proxy -o ~/.claude/gpters-mcp-proxy.mjs
-```
+브라우저가 열리면 **Google 계정으로 로그인**하세요. 완료!
 
-4. **MCP 서버 추가** (터미널):
-```bash
-claude mcp add gpters-marketplace \
-  -e MCP_URL=https://company-ai-toolkit.vercel.app/api/mcp \
-  -e MCP_TOKEN=$GPTERS_MCP_TOKEN \
-  -- node ~/.claude/gpters-mcp-proxy.mjs
-```
-
-5. **Claude Code 재시작**
-
-> ⚠️ HTTP transport의 headers 버그로 인해 stdio proxy 방식을 사용합니다.
+> OAuth 2.1 인증을 사용합니다. `@gpters.org` 도메인 계정만 사용 가능합니다.
 
 ## 포함된 기능
 
@@ -63,32 +45,6 @@ claude mcp add gpters-marketplace \
 /mcp__gpters-marketplace__data-source-reference
 /mcp__gpters-marketplace__refactor-guide
 /mcp__gpters-marketplace__code-reviewer
-```
-
-## 선택사항: 자동 제안 Hook
-
-입력에 따라 관련 플러그인을 자동으로 제안받고 싶다면:
-
-```bash
-# Hook 설치
-curl -fsSL https://company-ai-toolkit.vercel.app/api/hooks/gpters-plugin-suggest.sh \
-  -o ~/.claude/hooks/gpters-plugin-suggest.sh && \
-  chmod +x ~/.claude/hooks/gpters-plugin-suggest.sh
-```
-
-`~/.claude/settings.json`에 추가:
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "type": "command",
-        "command": "~/.claude/hooks/gpters-plugin-suggest.sh",
-        "timeout": 5000
-      }
-    ]
-  }
-}
 ```
 
 ## 문의
