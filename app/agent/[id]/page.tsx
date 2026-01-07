@@ -132,10 +132,6 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       <Section id="quick-actions" className="mb-8">
         <QuickActionGenerator
           itemId={item.id}
-          itemType="agent"
-          agentModel={item.agentModel}
-          agentPermissionMode={item.agentPermissionMode}
-          agentSkills={item.agentSkills}
           allowedTools={item.allowedTools}
           mcpEnabled={item.mcpEnabled}
         />

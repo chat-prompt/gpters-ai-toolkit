@@ -291,14 +291,14 @@ const x = 1;
   })
 
   describe('generateClaudeCommand', () => {
-    it('generates install command with pluginId', () => {
+    it('generates MCP prompt command with pluginId (pluginId is ignored)', () => {
       const cmd = generateClaudeCommand('my-skill', 'my-plugin')
-      expect(cmd).toBe('/install my-plugin')
+      expect(cmd).toBe('/mcp__gpters-marketplace__my-skill')
     })
 
-    it('generates skill command without pluginId', () => {
+    it('generates MCP prompt command without pluginId', () => {
       const cmd = generateClaudeCommand('my-skill')
-      expect(cmd).toBe('/skill my-skill')
+      expect(cmd).toBe('/mcp__gpters-marketplace__my-skill')
     })
   })
 

@@ -132,8 +132,6 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
       <Section id="quick-actions" className="mb-8">
         <QuickActionGenerator
           itemId={item.id}
-          itemType="command"
-          commandArgumentHint={item.commandArgumentHint}
           allowedTools={item.allowedTools}
           mcpEnabled={item.mcpEnabled}
         />

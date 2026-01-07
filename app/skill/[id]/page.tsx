@@ -142,8 +142,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
       <Section id="quick-actions" className="mb-8">
         <QuickActionGenerator
           itemId={item.id}
-          itemType="skill"
-          pluginId={item.pluginId}
           allowedTools={item.allowedTools}
           mcpEnabled={item.mcpEnabled}
         />

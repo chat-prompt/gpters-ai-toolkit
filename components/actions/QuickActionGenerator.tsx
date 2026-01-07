@@ -8,7 +8,6 @@
 
 import { useState, useCallback } from 'react'
 import { CopyButton } from '../ui/CopyButton'
-import type { ItemType, AgentModel, AgentPermissionMode } from '@/lib/core/types'
 
 /** Quick action configuration */
 interface QuickAction {
@@ -32,41 +31,21 @@ interface QuickAction {
 interface QuickActionGeneratorProps {
   /** Catalog item ID */
   itemId: string
-  /** Type of catalog item */
-  itemType: ItemType
-  /** Plugin ID for skill installation (skill-specific) */
-  pluginId?: string
-  /** Agent model configuration (agent-specific) */
-  agentModel?: AgentModel
-  /** Agent permission mode (agent-specific) */
-  agentPermissionMode?: AgentPermissionMode
-  /** Comma-separated skill IDs (agent-specific) */
-  agentSkills?: string
-  /** Argument hint for command (command-specific) */
-  commandArgumentHint?: string
-  /** Comma-separated allowed tools */
+  /** Comma-separated allowed tools (informational) */
   allowedTools?: string
-  /** Whether MCP marketplace is enabled */
+  /** Whether MCP is enabled for this item */
   mcpEnabled?: boolean
 }
 
 /**
  * Quick action cards for catalog items
  *
- * Generates context-aware quick actions based on item type:
- * - Skill: invoke, plugin install, marketplace install
- * - Agent: run, prompt example, skills list
- * - Command: execute, usage example
- * - Common: MCP prompt, allowed tools
+ * Generates MCP prompt command for items with MCP enabled.
+ * Only MCP prompts are functional - local installation commands
+ * are not supported by this platform.
  */
 export function QuickActionGenerator({
   itemId,
-  itemType,
-  pluginId,
-  agentModel,
-  agentPermissionMode,
-  agentSkills,
-  commandArgumentHint,
   allowedTools,
   mcpEnabled,
 }: QuickActionGeneratorProps) {
@@ -77,11 +56,11 @@ export function QuickActionGenerator({
     setTimeout(() => setCopiedId(null), 2000)
   }, [])
 
-  // Generate quick actions based on item type
+  // Generate quick actions - only MCP prompt is functional
   const generateActions = (): QuickAction[] => {
     const actions: QuickAction[] = []
 
-    // MCP Prompt (available when marketplace is enabled)
+    // MCP Prompt - the only functional action
     if (mcpEnabled) {
       actions.push({
         id: 'mcp-prompt',
@@ -94,112 +73,12 @@ export function QuickActionGenerator({
       })
     }
 
-    // Type-specific actions
-    if (itemType === 'skill') {
-      // Skill activation
-      actions.push({
-        id: 'skill-invoke',
-        label: '스킬 호출',
-        description: 'Claude Code에서 스킬을 직접 호출',
-        command: `/skill ${itemId}`,
-        icon: '⚡',
-        color: 'cyan',
-      })
-
-      // Plugin install (if pluginId exists)
-      if (pluginId) {
-        actions.push({
-          id: 'plugin-install',
-          label: '플러그인 설치',
-          description: 'CLI로 플러그인 직접 설치',
-          command: `claude plugins install ${pluginId}`,
-          icon: '📦',
-          color: 'green',
-        })
-      }
-
-    }
-
-    if (itemType === 'agent') {
-      // Agent execution with options
-      let agentCommand = `/agent ${itemId}`
-      const options: string[] = []
-
-      if (agentModel && agentModel !== 'inherit') {
-        options.push(`--model ${agentModel}`)
-      }
-      if (agentPermissionMode && agentPermissionMode !== 'default') {
-        options.push(`--permission-mode ${agentPermissionMode}`)
-      }
-
-      if (options.length > 0) {
-        agentCommand += ` ${options.join(' ')}`
-      }
-
-      actions.push({
-        id: 'agent-run',
-        label: '에이전트 실행',
-        description: '에이전트를 실행하고 작업 시작',
-        command: agentCommand,
-        icon: '🤖',
-        color: 'purple',
-      })
-
-      // Agent with prompt example
-      actions.push({
-        id: 'agent-prompt',
-        label: '에이전트 + 프롬프트',
-        description: '에이전트에 작업 지시와 함께 실행',
-        command: `/agent ${itemId} "작업 내용을 입력하세요"`,
-        icon: '💬',
-        color: 'indigo',
-      })
-
-      // If agent has skills, show skill loading command
-      if (agentSkills) {
-        const skillsList = agentSkills.split(',').map(s => s.trim()).slice(0, 3)
-        actions.push({
-          id: 'agent-skills',
-          label: '사용 스킬 목록',
-          description: '이 에이전트가 로드하는 스킬들',
-          command: skillsList.map(s => `/skill ${s}`).join('\n'),
-          icon: '🧰',
-          color: 'teal',
-        })
-      }
-    }
-
-    if (itemType === 'command') {
-      // Command execution
-      const argHint = commandArgumentHint || ''
-      actions.push({
-        id: 'command-run',
-        label: '커맨드 실행',
-        description: '슬래시 커맨드로 바로 실행',
-        command: `/${itemId}${argHint ? ` ${argHint}` : ''}`,
-        icon: '⌘',
-        color: 'rose',
-      })
-
-      // Command with example args
-      if (commandArgumentHint) {
-        actions.push({
-          id: 'command-example',
-          label: '사용 예시',
-          description: '인자와 함께 사용하는 예시',
-          command: `/${itemId} ${commandArgumentHint.replace(/\[|\]/g, '')}`,
-          icon: '📝',
-          color: 'orange',
-        })
-      }
-    }
-
-    // Common: Allowed tools info
+    // Informational: Allowed tools (not executable, just info)
     if (allowedTools) {
       actions.push({
         id: 'allowed-tools',
         label: '허용된 도구',
-        description: '이 아이템이 사용할 수 있는 Claude Code 도구',
+        description: '이 아이템이 사용할 수 있는 Claude Code 도구 (참고용)',
         command: allowedTools,
         icon: '🔧',
         color: 'gray',
@@ -303,35 +182,9 @@ export function QuickActionGenerator({
           💡 사용 팁
         </h4>
         <ul className="text-xs text-[var(--text-muted)] space-y-1">
-          {itemType === 'skill' && (
-            <>
-              <li>
-                <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">/skill list</code>로 설치된 스킬 목록 확인
-              </li>
-              <li>스킬은 컨텍스트에 자동으로 로드됩니다</li>
-            </>
-          )}
-          {itemType === 'agent' && (
-            <>
-              <li>
-                <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">--model opus</code>로 모델 변경 가능
-              </li>
-              <li>에이전트는 독립적인 세션에서 실행됩니다</li>
-            </>
-          )}
-          {itemType === 'command' && (
-            <>
-              <li>
-                <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">Tab</code>으로 자동완성 가능
-              </li>
-              <li>커맨드는 현재 세션에서 즉시 실행됩니다</li>
-            </>
-          )}
-          {mcpEnabled && (
-            <li>
-              MCP 프롬프트는 설치 없이 바로 사용할 수 있습니다
-            </li>
-          )}
+          <li>MCP 프롬프트는 설치 없이 바로 사용할 수 있습니다</li>
+          <li>MCP 서버 설정이 필요합니다 (<a href="/getting-started" className="text-[var(--accent-purple)] hover:underline">설정 방법</a>)</li>
+          <li>프롬프트 호출 시 Claude Code가 자동으로 내용을 불러옵니다</li>
         </ul>
       </div>
     </div>

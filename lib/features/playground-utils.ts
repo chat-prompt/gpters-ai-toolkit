@@ -270,13 +270,13 @@ export function getFileExtension(language: string): string {
 }
 
 /**
- * Generate Claude Code command for a skill
+ * Generate MCP prompt command for a catalog item
+ *
+ * Returns the MCP prompt invocation command which is the only
+ * functional method to use items from this platform.
  */
-export function generateClaudeCommand(skillId: string, pluginId?: string): string {
-  if (pluginId) {
-    return `/install ${pluginId}`
-  }
-  return `/skill ${skillId}`
+export function generateClaudeCommand(itemId: string, _pluginId?: string): string {
+  return `/mcp__gpters-marketplace__${itemId}`
 }
 
 /**
