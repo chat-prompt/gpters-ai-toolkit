@@ -189,7 +189,7 @@ export async function validateToken(token: string): Promise<TokenValidationResul
     db.update(mcpTokens)
       .set({
         lastUsedAt: new Date(),
-        usageCount: sql`${mcpTokens.usageCount} + 1`,
+        usageCount: sql`"usage_count" + 1`,
       })
       .where(eq(mcpTokens.id, tokenRecord.id))
       .catch((err) => {
