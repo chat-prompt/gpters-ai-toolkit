@@ -1,3 +1,9 @@
+/**
+ * Guide detail page
+ *
+ * Displays detailed content for a specific guide or tutorial
+ * with markdown rendering and changelog display.
+ */
 import { getGuideById, getGuides } from '@/lib/core/catalog'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'

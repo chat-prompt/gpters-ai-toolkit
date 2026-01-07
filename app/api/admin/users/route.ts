@@ -1,3 +1,10 @@
+/**
+ * Admin user management API route
+ *
+ * GET: List all users with roles and stats
+ * PATCH: Update user role
+ * Requires USERS_VIEW/USERS_EDIT permissions
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'

@@ -1,3 +1,9 @@
+/**
+ * Command argument hint editor barrel exports
+ *
+ * Exports all components, types, constants, and utilities
+ * for the argument hint editor feature.
+ */
 export { CommandArgumentHintEditor } from './CommandArgumentHintEditor'
 export { ArgumentRow } from './ArgumentRow'
 export { UsagePreview } from './UsagePreview'

@@ -1,3 +1,9 @@
+/**
+ * Command argument hint editor component
+ *
+ * Visual editor for defining command arguments with support for
+ * multiple types, validation rules, autocomplete, and reordering.
+ */
 'use client'
 
 import { useCallback } from 'react'
@@ -7,7 +13,12 @@ import { createDefaultHint } from './utils'
 import type { ArgumentHint, ArgumentHintEditorProps } from './types'
 
 /**
- * Main CommandArgumentHintEditor component
+ * Command argument hint editor
+ *
+ * Provides CRUD interface for managing command arguments with:
+ * - Add/edit/delete argument definitions
+ * - Drag-and-drop reordering
+ * - Live usage preview
  */
 export function CommandArgumentHintEditor({
   hints,

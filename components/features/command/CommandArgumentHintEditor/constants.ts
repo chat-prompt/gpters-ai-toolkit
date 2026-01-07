@@ -1,7 +1,12 @@
+/**
+ * Constants for command argument hint editor
+ *
+ * Defines available argument types with labels and descriptions.
+ */
 import type { ArgumentTypeOption } from './types'
 
 /**
- * Argument type options with descriptions
+ * Available argument type options for selection
  */
 export const ARGUMENT_TYPES: ArgumentTypeOption[] = [
   { value: 'text', label: 'Text', description: 'Single line text input' },

@@ -1,3 +1,9 @@
+/**
+ * Admin catalog management page
+ *
+ * Displays paginated catalog items with filtering, bulk operations,
+ * and status management. Supports role-based permissions.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'

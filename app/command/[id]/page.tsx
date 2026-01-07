@@ -1,3 +1,9 @@
+/**
+ * Command detail page
+ *
+ * Displays detailed information about a specific slash command including
+ * content, installation guide, usage examples, and related items.
+ */
 import { getItemById, getCatalog, getRelatedItems } from '@/lib/core/catalog'
 import { parseExamplesFromContent } from '@/lib/search/parse-examples'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'

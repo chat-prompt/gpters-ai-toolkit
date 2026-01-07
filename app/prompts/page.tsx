@@ -1,3 +1,9 @@
+/**
+ * Prompts page
+ *
+ * Library of effective prompt examples for Claude Code
+ * with categorization and copy-to-clipboard functionality.
+ */
 import Link from 'next/link'
 import { PromptExamplesLibrary } from '@/components/admin/PromptExamplesLibrary'
 import { ServerHeader } from '@/components/layout/ServerHeader'

@@ -1,16 +1,30 @@
+/**
+ * Template generator hook for skill wizard
+ *
+ * Generates category-specific markdown templates based on
+ * wizard form inputs and selected configuration.
+ */
 import { useMemo } from 'react'
 import type { TemplateCategory, TemplateCategoryInfo, GeneratedTemplate } from './types'
 import type { ClaudeTool } from '@/lib/data/type-config'
 
+/** Parameters for useTemplateGenerator hook */
 interface UseTemplateGeneratorParams {
+  /** Selected category configuration */
   categoryInfo: TemplateCategoryInfo | null
+  /** User-provided skill name */
   skillName: string
+  /** User-provided skill description */
   skillDescription: string
+  /** Selected category identifier */
   selectedCategory: TemplateCategory | null
+  /** Selected Claude tools */
   selectedTools: ClaudeTool[]
+  /** Generated or custom skill ID */
   generatedId: string
 }
 
+/** Generate data reference category template */
 function generateDataReferenceTemplate(
   skillName: string,
   skillDescription: string,
@@ -67,6 +81,7 @@ ${bestPracticesFormatted}
 `
 }
 
+/** Generate workflow automation category template */
 function generateWorkflowAutomationTemplate(
   skillName: string,
   skillDescription: string,
@@ -130,6 +145,7 @@ ${bestPracticesFormatted}
 `
 }
 
+/** Generate code analysis category template */
 function generateCodeAnalysisTemplate(
   skillName: string,
   skillDescription: string,
@@ -204,6 +220,7 @@ ${bestPracticesFormatted}
 `
 }
 
+/** Generate documentation category template */
 function generateDocumentationTemplate(
   skillName: string,
   skillDescription: string,
@@ -277,6 +294,7 @@ ${bestPracticesFormatted}
 `
 }
 
+/** Generate testing category template */
 function generateTestingTemplate(
   skillName: string,
   skillDescription: string,
@@ -360,6 +378,12 @@ pnpm test --coverage
 `
 }
 
+/**
+ * Hook for generating skill templates
+ *
+ * @param params - Template generation parameters
+ * @returns Generated content string and full template object
+ */
 export function useTemplateGenerator({
   categoryInfo,
   skillName,

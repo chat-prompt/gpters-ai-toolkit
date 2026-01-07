@@ -1,3 +1,11 @@
+/**
+ * OAuth 2.1 Token Endpoint
+ *
+ * Exchanges authorization codes for access tokens with PKCE verification.
+ * Supports the authorization_code grant type only per OAuth 2.1 spec.
+ *
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.3
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthCode, consumeAuthCode, verifyPkce, getClient, verifyClientSecret } from '@/lib/security/oauth'
 import { createAccessToken } from '@/lib/security/oauth-tokens'

@@ -1,3 +1,9 @@
+/**
+ * Security audit API route
+ *
+ * POST: Run security audit on catalog items or raw content
+ * Analyzes for potential security issues and risks
+ */
 import { NextRequest } from 'next/server'
 import { ApiErrors, apiSuccess } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'

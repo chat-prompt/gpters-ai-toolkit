@@ -1,3 +1,9 @@
+/**
+ * Statistics page
+ *
+ * Public analytics dashboard displaying platform usage statistics,
+ * installation trends, and popular items.
+ */
 import { ServerHeader } from '@/components/layout/ServerHeader'
 import { StatsDashboard } from '@/components/admin/StatsDashboard'
 

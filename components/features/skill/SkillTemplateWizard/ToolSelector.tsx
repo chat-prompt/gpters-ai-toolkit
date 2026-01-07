@@ -1,14 +1,32 @@
+/**
+ * Tool selector component for wizard
+ *
+ * Grid of selectable Claude Code tools with toggle selection,
+ * recommended tool indicators, and tool descriptions.
+ */
 import { CLAUDE_TOOLS, ClaudeTool } from '@/lib/data/type-config'
 import type { TemplateCategoryInfo } from './types'
 
+/** Props for ToolSelector component */
 interface ToolSelectorProps {
+  /** Currently selected tool list */
   selectedTools: ClaudeTool[]
+  /** Handler for toggling tool selection */
   onToolToggle: (tool: ClaudeTool) => void
+  /** Handler to clear all tool selections */
   onClearAll: () => void
+  /** Handler to reset to category recommended tools */
   onResetToRecommended: () => void
+  /** Category info for recommended tool indicators */
   categoryInfo: TemplateCategoryInfo | null
 }
 
+/**
+ * Claude tool selection grid
+ *
+ * Displays all available Claude tools with toggle selection,
+ * recommended badges, and quick action buttons.
+ */
 export function ToolSelector({
   selectedTools,
   onToolToggle,

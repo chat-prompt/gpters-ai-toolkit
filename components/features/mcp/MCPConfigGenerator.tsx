@@ -1,12 +1,26 @@
+/**
+ * MCP configuration generator component
+ *
+ * Generates Claude Code MCP server configuration JSON based on
+ * user-provided URL. Includes copy functionality and step-by-step
+ * setup instructions.
+ */
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
 import { CopyButton } from '../../ui/CopyButton'
 
+/** Props for MCPConfigGenerator component */
 interface MCPConfigGeneratorProps {
+  /** Default URL to pre-populate the input field */
   defaultUrl?: string
 }
 
+/**
+ * MCP configuration generator with setup instructions
+ *
+ * Generates settings.json configuration for Claude Code MCP integration.
+ */
 export function MCPConfigGenerator({ defaultUrl }: MCPConfigGeneratorProps) {
   const [url, setUrl] = useState(defaultUrl || '')
   const [copied, setCopied] = useState(false)

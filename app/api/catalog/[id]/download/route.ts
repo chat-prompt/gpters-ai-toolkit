@@ -1,3 +1,9 @@
+/**
+ * Catalog item download API route
+ *
+ * GET: Download catalog item files as a ZIP archive
+ * HEAD: Get file count and estimated size without downloading
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems, users } from '@/lib/db'

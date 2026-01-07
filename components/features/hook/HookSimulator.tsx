@@ -1,3 +1,9 @@
+/**
+ * Hook simulator component
+ *
+ * Interactive testing environment for Claude Code hooks with
+ * environment variable expansion, validation, and scenario testing.
+ */
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
@@ -14,13 +20,26 @@ import {
   type SimulatedEnvironment,
 } from '@/lib/plugin/hook-simulator'
 
+/** Simulation execution mode */
 type SimulationMode = 'single' | 'scenarios'
 
+/** Environment variable key-value pair for simulation */
 interface EnvironmentVariable {
+  /** Variable name */
   key: string
+  /** Variable value */
   value: string
 }
 
+/**
+ * Hook testing simulator
+ *
+ * Provides sandbox environment for testing hooks without execution:
+ * - Event type selection with available environment variables
+ * - Custom environment variable injection
+ * - Single execution or multi-scenario testing modes
+ * - Detailed result analysis with issue reporting
+ */
 export function HookSimulator() {
   const [event, setEvent] = useState<HookEvent>('PreToolUse')
   const [command, setCommand] = useState('')

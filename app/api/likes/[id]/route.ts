@@ -1,3 +1,9 @@
+/**
+ * Likes API route
+ *
+ * POST: Increment like count for a catalog item
+ * Rate limited to prevent spam
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, sql } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'

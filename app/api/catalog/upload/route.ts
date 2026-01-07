@@ -1,3 +1,9 @@
+/**
+ * Catalog item upload API route
+ *
+ * POST: Upload a catalog item from ZIP file
+ * Extracts content, validates, and creates/updates item
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import JSZip from 'jszip'
 import { eq } from 'drizzle-orm'

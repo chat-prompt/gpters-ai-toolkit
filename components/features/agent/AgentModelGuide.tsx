@@ -1,3 +1,9 @@
+/**
+ * Agent model guide component
+ *
+ * Interactive guide for selecting Claude models with comparison table,
+ * task-based recommender, priority sliders, and cost calculator.
+ */
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
@@ -14,13 +20,23 @@ import {
 } from '@/lib/agent/model-guide'
 import { AgentModel } from '@/lib/core/types'
 
+/** Props for AgentModelGuide component */
 interface AgentModelGuideProps {
+  /** Callback when a model is selected */
   onSelect?: (model: AgentModel) => void
+  /** Currently selected model */
   currentModel?: AgentModel
+  /** Whether to show comparison table */
   showComparison?: boolean
+  /** Whether to show cost calculator */
   showCalculator?: boolean
 }
 
+/**
+ * Interactive model selection guide
+ *
+ * Features comparison table, priority-based recommender, and cost calculator.
+ */
 export function AgentModelGuide({
   onSelect,
   currentModel,
@@ -180,7 +196,7 @@ export function AgentModelGuide({
   )
 }
 
-// Priority selector component
+/** Priority level selector (low/medium/high) */
 function PrioritySelector({
   label,
   value,
@@ -220,7 +236,7 @@ function PrioritySelector({
   )
 }
 
-// Model comparison table
+/** Model comparison table with selection */
 function ModelComparisonTable({
   currentModel,
   onSelect,
@@ -318,7 +334,7 @@ function ModelComparisonTable({
   )
 }
 
-// Recommendation result component
+/** Recommendation result with reasoning and scores */
 function RecommendationResult({
   recommendation,
   onSelect,
@@ -410,7 +426,7 @@ function RecommendationResult({
   )
 }
 
-// Score bar component
+/** Score visualization bar */
 function ScoreBar({
   label,
   value,
@@ -437,7 +453,7 @@ function ScoreBar({
   )
 }
 
-// Cost calculator component
+/** Interactive cost calculator for model comparison */
 function CostCalculator() {
   const [inputTokens, setInputTokens] = useState(10000)
   const [outputTokens, setOutputTokens] = useState(5000)
@@ -559,7 +575,7 @@ function CostCalculator() {
   )
 }
 
-// Simple model display component
+/** Simple model badge display */
 export function ModelDisplay({ model }: { model: AgentModel }) {
   if (model === 'inherit') {
     return (

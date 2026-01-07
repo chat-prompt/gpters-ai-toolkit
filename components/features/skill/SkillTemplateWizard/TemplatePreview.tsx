@@ -1,15 +1,33 @@
+/**
+ * Template preview component for wizard
+ *
+ * Displays generated template with summary cards, copy/download
+ * actions, and installation instructions.
+ */
 import { CopyButton } from '../../../ui/CopyButton'
 import type { TemplateCategoryInfo } from './types'
 import type { ClaudeTool } from '@/lib/data/type-config'
 
+/** Props for TemplatePreview component */
 interface TemplatePreviewProps {
+  /** Selected category information */
   categoryInfo: TemplateCategoryInfo | null
+  /** Generated skill ID */
   generatedId: string
+  /** List of selected tools */
   selectedTools: ClaudeTool[]
+  /** Generated markdown template content */
   generatedContent: string
+  /** Handler for downloading template file */
   onDownload: () => void
 }
 
+/**
+ * Generated template preview and export
+ *
+ * Shows template summary, code preview with syntax highlighting,
+ * copy/download buttons, and next steps guide.
+ */
 export function TemplatePreview({
   categoryInfo,
   generatedId,

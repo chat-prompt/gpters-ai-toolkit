@@ -1,3 +1,8 @@
+/**
+ * Command detail page loading state
+ *
+ * Displays skeleton UI while command detail content is loading.
+ */
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 
 export default function Loading() {

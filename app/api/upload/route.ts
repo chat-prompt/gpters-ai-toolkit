@@ -1,3 +1,9 @@
+/**
+ * Public catalog item upload API route
+ *
+ * POST: Create or update a catalog item via JSON payload
+ * No authentication required - for internal team use with trust-based access.
+ */
 import { NextRequest } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/core/types'

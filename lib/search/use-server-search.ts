@@ -1,3 +1,9 @@
+/**
+ * Server search React hooks
+ *
+ * Provides React hooks for server-side catalog search using
+ * PostgreSQL full-text search with debouncing and suggestions.
+ */
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'

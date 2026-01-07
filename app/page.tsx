@@ -1,3 +1,9 @@
+/**
+ * Home page
+ *
+ * Main landing page displaying the searchable catalog of
+ * skills, agents, commands, hooks, and guides.
+ */
 import { getCatalog } from '@/lib/core/catalog'
 import { SearchableCatalog } from '@/components/catalog/SearchableCatalog'
 import { ServerHeader } from '@/components/layout/ServerHeader'

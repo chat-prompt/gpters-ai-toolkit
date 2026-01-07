@@ -1,3 +1,9 @@
+/**
+ * Hook template library component
+ *
+ * Browsable library of pre-built hook templates with search,
+ * category filtering, and expandable configuration details.
+ */
 'use client'
 
 import { useState, useMemo } from 'react'
@@ -9,6 +15,7 @@ import {
   type HookTemplateCategory,
 } from '@/lib/data/hook-templates'
 
+/** Props for HookTemplateLibrary component */
 interface HookTemplateLibraryProps {
   /** Callback when a template is selected for use */
   onSelectTemplate?: (template: HookTemplate) => void
@@ -16,6 +23,12 @@ interface HookTemplateLibraryProps {
   compact?: boolean
 }
 
+/**
+ * Hook template library with search and filtering
+ *
+ * Displays searchable grid of hook templates organized by category.
+ * Each template card expands to show command, configuration, and usage examples.
+ */
 export function HookTemplateLibrary({ onSelectTemplate, compact = false }: HookTemplateLibraryProps) {
   const [selectedCategory, setSelectedCategory] = useState<HookTemplateCategory | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')

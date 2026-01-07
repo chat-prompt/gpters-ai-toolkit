@@ -1,3 +1,9 @@
+/**
+ * Sign in page
+ *
+ * Authentication page with Google OAuth login for @gpters.org
+ * domain users. Redirects authenticated users to callback URL.
+ */
 import { signIn } from '@/lib/core/auth'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/core/auth'

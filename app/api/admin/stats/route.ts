@@ -1,3 +1,9 @@
+/**
+ * Admin statistics API route
+ *
+ * GET: Retrieve dashboard statistics including counts and trends
+ * Requires CATALOG_VIEW permission
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, catalogItems, users } from '@/lib/db'
 import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'

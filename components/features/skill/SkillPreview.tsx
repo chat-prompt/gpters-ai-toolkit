@@ -1,3 +1,9 @@
+/**
+ * Skill preview component
+ *
+ * Renders a preview of a catalog item including metadata,
+ * dependencies, usage examples, and markdown content.
+ */
 'use client'
 
 import { MarkdownContent } from '../../ui/MarkdownContent'
@@ -5,11 +11,20 @@ import { TAGS, DIFFICULTY_LABELS, parseDependency } from '@/lib/core/types'
 import { extractUsageExamples, type CodeBlock } from '@/lib/features/playground-utils'
 import type { CatalogItem } from '@/lib/core/types'
 
+/** Props for SkillPreview component */
 interface SkillPreviewProps {
+  /** Catalog item to preview */
   item: CatalogItem
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Skill preview panel with metadata and content
+ *
+ * Displays item header, tags, dependencies, usage examples,
+ * and rendered markdown content.
+ */
 export function SkillPreview({ item, className = '' }: SkillPreviewProps) {
   const usageExamples = extractUsageExamples(item.content)
 

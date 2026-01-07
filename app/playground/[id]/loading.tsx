@@ -1,3 +1,8 @@
+/**
+ * Playground page loading state
+ *
+ * Displays skeleton UI while playground editor is loading.
+ */
 import { Skeleton } from '@/components/ui/Skeleton'
 
 export default function Loading() {

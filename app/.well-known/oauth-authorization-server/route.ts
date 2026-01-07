@@ -1,7 +1,12 @@
+/**
+ * OAuth 2.0 Authorization Server Metadata Endpoint
+ *
+ * Publishes OAuth server metadata per RFC 8414 for client discovery.
+ * Required for MCP OAuth 2.1 support with Claude Code integration.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc8414
+ */
 import { NextResponse } from 'next/server'
-
-// OAuth 2.0 Authorization Server Metadata (RFC 8414)
-// Required for MCP OAuth 2.1 support with Claude Code
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
 

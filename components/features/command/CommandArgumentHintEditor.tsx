@@ -1,3 +1,11 @@
+/**
+ * Command argument hint editor component
+ *
+ * Re-exports from the CommandArgumentHintEditor folder for backwards compatibility.
+ * The main editor allows defining and configuring command arguments with types,
+ * validation rules, and autocomplete options.
+ */
+
 // Re-export from new folder structure for backwards compatibility
 export {
   CommandArgumentHintEditor,

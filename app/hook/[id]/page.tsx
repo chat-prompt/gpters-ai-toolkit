@@ -1,3 +1,9 @@
+/**
+ * Hook detail page
+ *
+ * Displays detailed information about a specific Claude Code hook
+ * including event configuration, security analysis, and settings snippets.
+ */
 import { getItemById, getCatalog } from '@/lib/core/catalog'
 import { HOOK_EVENTS } from '@/lib/core/types'
 import type { HookEvent } from '@/lib/core/types'

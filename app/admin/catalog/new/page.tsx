@@ -1,3 +1,9 @@
+/**
+ * New catalog item page
+ *
+ * Form for creating new catalog items with type-specific fields,
+ * content editor, and metadata configuration.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'

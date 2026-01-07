@@ -1,16 +1,37 @@
+/**
+ * Basic info form component for wizard
+ *
+ * Collects skill name, description, and optional custom ID
+ * with auto-generated ID preview and best practices display.
+ */
 import type { TemplateCategoryInfo } from './types'
 
+/** Props for BasicInfoForm component */
 interface BasicInfoFormProps {
+  /** Current skill name value */
   skillName: string
+  /** Handler for skill name changes */
   onSkillNameChange: (name: string) => void
+  /** Current skill description value */
   skillDescription: string
+  /** Handler for description changes */
   onSkillDescriptionChange: (description: string) => void
+  /** Custom skill ID override */
   customId: string
+  /** Handler for custom ID changes */
   onCustomIdChange: (id: string) => void
+  /** Auto-generated ID from skill name */
   generatedId: string
+  /** Selected category info for best practices */
   categoryInfo: TemplateCategoryInfo | null
 }
 
+/**
+ * Skill basic information form
+ *
+ * Form fields for skill name, description, and ID with
+ * auto-generation and category-specific best practices.
+ */
 export function BasicInfoForm({
   skillName,
   onSkillNameChange,

@@ -1,3 +1,9 @@
+/**
+ * Guides listing page
+ *
+ * Displays all available guides and tutorials for Claude Code
+ * vibe coding techniques and best practices.
+ */
 import { getGuides } from '@/lib/core/catalog'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'

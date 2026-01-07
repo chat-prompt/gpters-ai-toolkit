@@ -1,3 +1,10 @@
+/**
+ * Skill template wizard re-exports
+ *
+ * Provides backwards compatibility exports from the refactored
+ * folder structure for the skill template wizard feature.
+ */
+
 // Re-export from new folder structure for backwards compatibility
 export {
   SkillTemplateWizard,

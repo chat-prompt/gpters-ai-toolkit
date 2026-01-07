@@ -1,3 +1,9 @@
+/**
+ * Package detail page
+ *
+ * Displays detailed information about a curated package bundle
+ * including contained items, dependencies, and installation guide.
+ */
 import { getPackageWithContents, getCatalog, getRelatedItems } from '@/lib/core/catalog'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'

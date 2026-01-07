@@ -1,3 +1,8 @@
+/**
+ * Profile page loading state
+ *
+ * Displays skeleton UI while user profile content is loading.
+ */
 import { Skeleton } from '@/components/ui/Skeleton'
 
 export default function Loading() {

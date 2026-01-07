@@ -1,3 +1,9 @@
+/**
+ * Auth error page
+ *
+ * Displays authentication error messages with explanations
+ * for access denied, configuration, and verification failures.
+ */
 import Link from 'next/link'
 import Image from 'next/image'
 

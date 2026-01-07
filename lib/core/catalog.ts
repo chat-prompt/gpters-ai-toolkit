@@ -1,3 +1,9 @@
+/**
+ * Catalog data access layer
+ *
+ * Provides optimized database queries for catalog items including
+ * list views, detail views, filtering, and package management.
+ */
 import { eq, ne, and, or, isNull, asc } from 'drizzle-orm'
 import { db, catalogItems, packageItems, users } from '../db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'

@@ -1,3 +1,9 @@
+/**
+ * Database schema definitions
+ *
+ * Drizzle ORM schema for PostgreSQL including tables for
+ * catalog items, users, tags, MCP servers, and related entities.
+ */
 import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 

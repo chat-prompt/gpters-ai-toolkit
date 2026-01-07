@@ -1,3 +1,11 @@
+/**
+ * MCP servers API route
+ *
+ * GET: List all MCP servers
+ * POST: Create a new MCP server (requires METADATA_MANAGE permission)
+ * PATCH: Update an existing MCP server (requires METADATA_MANAGE permission)
+ * DELETE: Delete an MCP server (requires METADATA_MANAGE permission)
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, mcpServers } from '@/lib/db'
 import { eq } from 'drizzle-orm'

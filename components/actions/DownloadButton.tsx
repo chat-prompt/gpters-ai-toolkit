@@ -1,13 +1,29 @@
+/**
+ * Download button component for catalog items
+ *
+ * Provides a download button that fetches catalog item files
+ * as a ZIP archive with loading states and error handling.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 
+/** Props for DownloadButton component */
 interface DownloadButtonProps {
+  /** Catalog item ID to download */
   itemId: string
+  /** Display name for the item (used in tooltip) */
   itemName: string
+  /** Button size variant */
   size?: 'sm' | 'md' | 'lg'
 }
 
+/**
+ * Format bytes into human-readable size string
+ *
+ * @param bytes - Number of bytes to format
+ * @returns Formatted string with appropriate unit (B, KB, MB)
+ */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -16,6 +32,12 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+/**
+ * Catalog item download button
+ *
+ * Downloads a catalog item's files as a ZIP archive. Shows
+ * file count and size info, handles loading and error states.
+ */
 export function DownloadButton({ itemId, itemName, size = 'md' }: DownloadButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

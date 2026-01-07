@@ -1,13 +1,29 @@
+/**
+ * Like button component for catalog items
+ *
+ * Allows users to like catalog items with animated
+ * feedback and optimistic UI updates.
+ */
 'use client'
 
 import { useState, useTransition } from 'react'
 
+/** Props for LikeButton component */
 interface LikeButtonProps {
+  /** Catalog item ID to like */
   itemId: string
+  /** Initial like count to display */
   initialLikes: number
+  /** Button size variant */
   size?: 'sm' | 'md' | 'lg'
 }
 
+/**
+ * Catalog item like button
+ *
+ * Displays current like count and allows one-time liking
+ * with animation feedback and API integration.
+ */
 export function LikeButton({ itemId, initialLikes, size = 'md' }: LikeButtonProps) {
   const [likes, setLikes] = useState(initialLikes)
   const [hasLiked, setHasLiked] = useState(false)

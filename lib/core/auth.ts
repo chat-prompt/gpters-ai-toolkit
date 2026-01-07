@@ -1,3 +1,9 @@
+/**
+ * NextAuth.js authentication configuration
+ *
+ * Configures Google OAuth with @gpters.org domain restriction,
+ * user session management, and role-based access control.
+ */
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
 import { db } from '@/lib/db'

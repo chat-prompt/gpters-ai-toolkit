@@ -1,3 +1,9 @@
+/**
+ * Plugin updates check API route
+ *
+ * POST: Check for available updates for installed plugins
+ * Returns update availability and version details
+ */
 import { NextRequest } from 'next/server'
 import { inArray } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'

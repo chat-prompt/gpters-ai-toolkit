@@ -1,15 +1,25 @@
+/**
+ * Skill version history component
+ *
+ * Displays version timeline with changelog, version type badges,
+ * and rollback functionality for admins.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'
 import type { VersionHistoryEntry } from '@/lib/versioning/skill-version'
 
+/** Props for SkillVersionHistory component */
 interface SkillVersionHistoryProps {
+  /** Catalog item ID to fetch versions for */
   itemId: string
+  /** Currently active version string */
   currentVersion?: string
+  /** Whether to show admin actions like rollback */
   isAdmin?: boolean
 }
 
-// Version type badge component
+/** Version type badge showing major/minor/patch */
 function VersionTypeBadge({ type }: { type: 'major' | 'minor' | 'patch' }) {
   const config = {
     major: {
@@ -38,7 +48,7 @@ function VersionTypeBadge({ type }: { type: 'major' | 'minor' | 'patch' }) {
   )
 }
 
-// Single version entry component
+/** Single version entry in the timeline */
 function VersionEntry({
   entry,
   isCurrent,
@@ -142,7 +152,7 @@ function VersionEntry({
   )
 }
 
-// Rollback confirmation modal
+/** Rollback confirmation modal dialog */
 function RollbackModal({
   isOpen,
   onClose,
@@ -189,6 +199,12 @@ function RollbackModal({
   )
 }
 
+/**
+ * Skill version history with timeline and rollback
+ *
+ * Fetches and displays version history with expandable changelog,
+ * current version indicator, and admin rollback functionality.
+ */
 export function SkillVersionHistory({ itemId, currentVersion, isAdmin }: SkillVersionHistoryProps) {
   const [versions, setVersions] = useState<VersionHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)

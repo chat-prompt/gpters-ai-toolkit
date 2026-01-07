@@ -1,3 +1,9 @@
+/**
+ * Database connection module
+ *
+ * Configures and exports the Drizzle ORM instance connected to
+ * Neon PostgreSQL serverless database with test environment support.
+ */
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import * as schema from './schema'

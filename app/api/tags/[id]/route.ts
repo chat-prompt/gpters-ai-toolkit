@@ -1,3 +1,10 @@
+/**
+ * Single tag API route
+ *
+ * GET: Get a single tag by ID
+ * PATCH: Update a tag (requires METADATA_MANAGE permission)
+ * DELETE: Delete a tag (requires METADATA_MANAGE permission)
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags } from '@/lib/db'
 import { eq } from 'drizzle-orm'

@@ -1,7 +1,12 @@
+/**
+ * OAuth 2.0 Protected Resource Metadata Endpoint
+ *
+ * Publishes protected resource metadata per RFC 9449.
+ * Indicates the authorization server for the MCP API resource.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc9449
+ */
 import { NextResponse } from 'next/server'
-
-// OAuth 2.0 Protected Resource Metadata (RFC 9449)
-// Indicates where the authorization server metadata can be found
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
 

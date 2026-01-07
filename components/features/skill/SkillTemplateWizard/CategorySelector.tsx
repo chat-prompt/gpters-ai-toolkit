@@ -1,11 +1,27 @@
+/**
+ * Category selector component for wizard
+ *
+ * Grid of selectable template categories with icons,
+ * descriptions, and recommended tool previews.
+ */
 import type { TemplateCategory, TemplateCategoryInfo } from './types'
 
+/** Props for CategorySelector component */
 interface CategorySelectorProps {
+  /** Available template categories */
   categories: TemplateCategoryInfo[]
+  /** Currently selected category ID */
   selectedCategory: TemplateCategory | null
+  /** Handler for category selection */
   onSelect: (category: TemplateCategory) => void
 }
 
+/**
+ * Template category selection grid
+ *
+ * Displays category cards with visual indicators for selection
+ * and previews of recommended tools.
+ */
 export function CategorySelector({
   categories,
   selectedCategory,

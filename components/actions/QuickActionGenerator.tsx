@@ -1,35 +1,64 @@
+/**
+ * Quick action generator component
+ *
+ * Generates and displays type-specific quick action buttons
+ * for catalog items with copy-to-clipboard functionality.
+ */
 'use client'
 
 import { useState, useCallback } from 'react'
 import { CopyButton } from '../ui/CopyButton'
 import type { ItemType, AgentModel, AgentPermissionMode } from '@/lib/core/types'
 
+/** Quick action configuration */
 interface QuickAction {
+  /** Unique action identifier */
   id: string
+  /** Display label for the action */
   label: string
+  /** Brief description of what the action does */
   description: string
+  /** Command or text to copy */
   command: string
+  /** Emoji icon for the action */
   icon: string
+  /** Color theme for styling */
   color: string
+  /** Optional badge text (e.g., "추천") */
   badge?: string
 }
 
+/** Props for QuickActionGenerator component */
 interface QuickActionGeneratorProps {
+  /** Catalog item ID */
   itemId: string
+  /** Type of catalog item */
   itemType: ItemType
-  // Skill-specific
+  /** Plugin ID for skill installation (skill-specific) */
   pluginId?: string
-  // Agent-specific
+  /** Agent model configuration (agent-specific) */
   agentModel?: AgentModel
+  /** Agent permission mode (agent-specific) */
   agentPermissionMode?: AgentPermissionMode
+  /** Comma-separated skill IDs (agent-specific) */
   agentSkills?: string
-  // Command-specific
+  /** Argument hint for command (command-specific) */
   commandArgumentHint?: string
-  // Common
+  /** Comma-separated allowed tools */
   allowedTools?: string
+  /** Whether MCP marketplace is enabled */
   mcpEnabled?: boolean
 }
 
+/**
+ * Quick action cards for catalog items
+ *
+ * Generates context-aware quick actions based on item type:
+ * - Skill: invoke, plugin install, marketplace install
+ * - Agent: run, prompt example, skills list
+ * - Command: execute, usage example
+ * - Common: MCP prompt, allowed tools
+ */
 export function QuickActionGenerator({
   itemId,
   itemType,

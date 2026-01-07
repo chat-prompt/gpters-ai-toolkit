@@ -1,3 +1,9 @@
+/**
+ * Installations tracking API route
+ *
+ * POST: Track a new installation event
+ * GET: Get installation statistics for an item or user
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
 import { db, installations, catalogItems } from '@/lib/db'

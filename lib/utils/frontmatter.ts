@@ -1,3 +1,9 @@
+/**
+ * Frontmatter parsing utilities
+ *
+ * Parses YAML frontmatter from markdown content and generates
+ * slugified IDs from item names for catalog items.
+ */
 import type { ItemType, Difficulty } from '../core/types'
 
 export interface ParsedFrontmatter {

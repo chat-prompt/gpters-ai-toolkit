@@ -1,3 +1,11 @@
+/**
+ * Tags API route
+ *
+ * GET: List all tags
+ * POST: Create a new tag (requires METADATA_MANAGE permission)
+ * PATCH: Update an existing tag (requires METADATA_MANAGE permission)
+ * DELETE: Delete a tag (requires METADATA_MANAGE permission)
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags } from '@/lib/db'
 import { eq } from 'drizzle-orm'

@@ -1,3 +1,9 @@
+/**
+ * Comment section component for catalog items
+ *
+ * Full-featured comment system with nested replies, likes,
+ * editing, and deletion capabilities. Requires authentication.
+ */
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
@@ -6,30 +12,54 @@ import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import Image from 'next/image'
 
+/** Comment author information */
 interface CommentUser {
+  /** User ID */
   id: string
+  /** Display name */
   name: string | null
+  /** Avatar image URL */
   image: string | null
 }
 
+/** Comment data structure */
 interface Comment {
+  /** Unique comment identifier */
   id: string
+  /** Comment text content */
   content: string
+  /** Number of likes */
   likes: number
+  /** Whether comment has been edited */
   isEdited: boolean
+  /** Creation timestamp */
   createdAt: string | null
+  /** Last update timestamp */
   updatedAt: string | null
+  /** Parent comment ID for replies */
   parentId: string | null
+  /** Comment author */
   user: CommentUser
+  /** Nested reply comments */
   replies?: Comment[]
+  /** Whether current user has liked */
   hasLiked?: boolean
 }
 
+/** Props for CommentSection component */
 interface CommentSectionProps {
+  /** Catalog item ID to fetch comments for */
   itemId: string
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Catalog item comment section
+ *
+ * Displays comments with nested replies (up to 3 levels),
+ * supports adding, editing, deleting comments and likes.
+ */
 export function CommentSection({ itemId, className = '' }: CommentSectionProps) {
   const { data: session, status } = useSession()
   const [comments, setComments] = useState<Comment[]>([])

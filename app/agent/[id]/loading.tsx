@@ -1,3 +1,8 @@
+/**
+ * Agent detail page loading state
+ *
+ * Displays skeleton UI while agent detail content is loading.
+ */
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 
 export default function Loading() {

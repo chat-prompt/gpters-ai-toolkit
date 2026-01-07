@@ -1,3 +1,12 @@
+/**
+ * OAuth 2.1 Authorization Endpoint
+ *
+ * Handles the authorization code grant flow with PKCE support.
+ * Validates client, redirect URI, and creates authorization codes
+ * for authenticated users per RFC 6749 and OAuth 2.1 spec.
+ *
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.1
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
 import { db } from '@/lib/db'

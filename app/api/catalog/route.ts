@@ -1,3 +1,9 @@
+/**
+ * Catalog API route
+ *
+ * GET: List all catalog items with optional type filtering
+ * POST: Create a new catalog item (requires authentication)
+ */
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems, users } from '@/lib/db'

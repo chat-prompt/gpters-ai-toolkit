@@ -1,3 +1,9 @@
+/**
+ * Edit catalog item page
+ *
+ * Form for editing existing catalog items with security audit,
+ * version management, and status controls.
+ */
 'use client'
 
 import { useState, useEffect, use, useCallback } from 'react'

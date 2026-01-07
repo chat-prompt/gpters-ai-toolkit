@@ -1,3 +1,9 @@
+/**
+ * Skill playground component
+ *
+ * Interactive code viewer with side-by-side or stacked layout,
+ * line numbers, font size controls, and preview panel.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -6,17 +12,28 @@ import { SkillPreview } from './SkillPreview'
 import { addLineNumbers, generateClaudeCommand, countLines } from '@/lib/features/playground-utils'
 import type { CatalogItem } from '@/lib/core/types'
 
+/** Props for SkillPlayground component */
 interface SkillPlaygroundProps {
+  /** Catalog item to display in playground */
   item: CatalogItem
+  /** Base URL for share link generation */
   baseUrl?: string
 }
 
+/** Font size pixel values */
 const FONT_SIZE_MAP: Record<FontSize, string> = {
   small: '12px',
   medium: '14px',
   large: '16px',
 }
 
+/**
+ * Interactive skill playground with editor and preview
+ *
+ * Features line-numbered code display, layout toggle,
+ * font size controls, copy functionality, and Claude Code
+ * command generation.
+ */
 export function SkillPlayground({ item, baseUrl = '' }: SkillPlaygroundProps) {
   const [layout, setLayout] = useState<LayoutMode>('side-by-side')
   const [fontSize, setFontSize] = useState<FontSize>('medium')

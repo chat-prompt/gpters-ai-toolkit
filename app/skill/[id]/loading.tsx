@@ -1,3 +1,8 @@
+/**
+ * Skill detail page loading state
+ *
+ * Displays skeleton UI while skill detail content is loading.
+ */
 import {
   SkeletonHeader,
   SkeletonDetailHero,

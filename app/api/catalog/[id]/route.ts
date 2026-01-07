@@ -1,3 +1,10 @@
+/**
+ * Single catalog item API route
+ *
+ * GET: Retrieve a catalog item by ID
+ * PUT: Update a catalog item (requires authentication)
+ * DELETE: Delete a catalog item (requires authentication)
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'

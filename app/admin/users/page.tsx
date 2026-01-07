@@ -1,3 +1,9 @@
+/**
+ * Admin user management page
+ *
+ * Displays user list with role management, last login tracking,
+ * and search functionality. Admin-only access.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'

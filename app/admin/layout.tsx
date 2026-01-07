@@ -1,3 +1,9 @@
+/**
+ * Admin layout
+ *
+ * Layout wrapper for admin pages providing navigation sidebar,
+ * role-based access control, and authentication state management.
+ */
 'use client'
 
 import { ReactNode } from 'react'

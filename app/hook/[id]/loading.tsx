@@ -1,3 +1,8 @@
+/**
+ * Hook detail page loading state
+ *
+ * Displays skeleton UI while hook detail content is loading.
+ */
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 
 export default function Loading() {

@@ -1,3 +1,9 @@
+/**
+ * Admin tags management page
+ *
+ * CRUD interface for managing catalog item tags with
+ * color customization and description editing.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'

@@ -1,3 +1,9 @@
+/**
+ * Public statistics API route
+ *
+ * GET: Retrieve platform-wide statistics including item counts,
+ * installations, and trending content for the stats dashboard.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, catalogItems, installations, tags, catalogItemTags, users } from '@/lib/db'
 import { ApiErrors } from '@/lib/utils/api-utils'

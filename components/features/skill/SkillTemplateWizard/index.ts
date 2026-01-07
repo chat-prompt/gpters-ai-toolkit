@@ -1,3 +1,9 @@
+/**
+ * Skill template wizard barrel exports
+ *
+ * Exports all components, hooks, constants, and types
+ * for the skill template wizard feature.
+ */
 export { SkillTemplateWizard } from './SkillTemplateWizard'
 export { WizardProgress } from './WizardProgress'
 export { CategorySelector } from './CategorySelector'

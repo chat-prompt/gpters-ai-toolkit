@@ -1,3 +1,11 @@
+/**
+ * Core type definitions
+ *
+ * Defines shared types, interfaces, and constants used throughout
+ * the catalog system including item types, tags, and metadata.
+ */
+
+/** Available catalog item types */
 export type ItemType = 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
 
 // Plugin file (script, reference, etc.)

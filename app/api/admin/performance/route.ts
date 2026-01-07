@@ -1,3 +1,9 @@
+/**
+ * Admin performance metrics API route
+ *
+ * Provides performance monitoring data including response times,
+ * aggregated metrics, and raw metric records for admin dashboard.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { getPerformanceSummary, getAggregatedMetrics, getMetrics, formatDuration } from '@/lib/utils/performance'
 import { requirePermissionAsync } from '@/lib/utils/api-utils'

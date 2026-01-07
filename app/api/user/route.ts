@@ -1,3 +1,9 @@
+/**
+ * User profile API route
+ *
+ * GET: Retrieve current user profile with authored items
+ * Supports development bypass for testing
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
 import { db } from '@/lib/db'

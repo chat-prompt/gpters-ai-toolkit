@@ -1,8 +1,16 @@
+/**
+ * Usage preview component for argument editor
+ *
+ * Displays a live preview of the command syntax
+ * based on defined argument hints.
+ */
 import { memo } from 'react'
 import type { UsagePreviewProps } from './types'
 
 /**
- * Usage preview component showing command syntax
+ * Command usage syntax preview
+ *
+ * Shows formatted command syntax with required and optional arguments.
  */
 export const UsagePreview = memo(function UsagePreview({ hints }: UsagePreviewProps) {
   if (hints.length === 0) {

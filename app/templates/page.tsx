@@ -1,3 +1,9 @@
+/**
+ * Templates page
+ *
+ * Interactive wizard for generating skill templates with
+ * customizable patterns, examples, and best practices.
+ */
 'use client'
 
 import Link from 'next/link'

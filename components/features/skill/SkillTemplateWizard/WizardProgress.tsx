@@ -1,11 +1,27 @@
+/**
+ * Wizard progress indicator component
+ *
+ * Displays step progress with clickable navigation
+ * for completed steps and visual indicators.
+ */
 import type { WizardStep } from './types'
 
+/** Props for WizardProgress component */
 interface WizardProgressProps {
+  /** Array of wizard step configurations */
   steps: WizardStep[]
+  /** Current active step index (0-based) */
   currentStep: number
+  /** Handler for clicking on previous steps */
   onStepClick: (step: number) => void
 }
 
+/**
+ * Step progress indicator with navigation
+ *
+ * Shows numbered steps with completion states and allows
+ * clicking on completed steps to navigate back.
+ */
 export function WizardProgress({ steps, currentStep, onStepClick }: WizardProgressProps) {
   return (
     <div className="flex items-center gap-2 mb-8">

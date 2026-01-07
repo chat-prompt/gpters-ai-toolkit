@@ -1,3 +1,9 @@
+/**
+ * Playground page
+ *
+ * Interactive sandbox for testing and previewing catalog items
+ * with mock conversation simulation and content editing.
+ */
 import { getItemById, getCatalog } from '@/lib/core/catalog'
 import { SkillPlayground } from '@/components/features/skill/SkillPlayground'
 import Link from 'next/link'

@@ -1,3 +1,9 @@
+/**
+ * User profile page
+ *
+ * Displays the authenticated user's profile information,
+ * authored catalog items, and activity statistics.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'

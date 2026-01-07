@@ -1,3 +1,9 @@
+/**
+ * Root layout
+ *
+ * Application root layout providing global styles, fonts,
+ * metadata, and context providers for the entire application.
+ */
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Newsreader } from "next/font/google";

@@ -1,3 +1,9 @@
+/**
+ * Upload page
+ *
+ * Form interface for creating and submitting new catalog items
+ * with markdown editing, frontmatter support, and file upload.
+ */
 'use client'
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'

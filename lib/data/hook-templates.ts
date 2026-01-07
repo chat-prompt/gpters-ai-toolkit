@@ -1,3 +1,9 @@
+/**
+ * Hook template definitions
+ *
+ * Predefined hook templates organized by category (session, tool,
+ * notification, security) for Claude Code hook configuration.
+ */
 import type { HookEvent } from '../core/types'
 
 // Hook template categories

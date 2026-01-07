@@ -1,3 +1,9 @@
+/**
+ * Argument row component for hint editor
+ *
+ * Collapsible row for editing a single argument definition with
+ * type selection, validation rules, and autocomplete settings.
+ */
 'use client'
 
 import { useState, useCallback } from 'react'
@@ -5,7 +11,10 @@ import { ARGUMENT_TYPES } from './constants'
 import type { ArgumentHint, ArgumentRowProps, ArgumentHintType, AutocompleteConfig, ValidationRule } from './types'
 
 /**
- * Single argument row component
+ * Single argument editor row
+ *
+ * Expandable row showing argument name, type, and required flag
+ * with collapsible section for advanced options.
  */
 export function ArgumentRow({
   hint,

@@ -1,3 +1,9 @@
+/**
+ * Hook configuration JSON generator component
+ *
+ * Interactive form for generating Claude Code hook settings.json
+ * configurations with event selection, matcher options, and validation.
+ */
 'use client'
 
 import { useState, useMemo } from 'react'
@@ -22,19 +28,37 @@ const TOOL_MATCHERS = [
   'NotebookEdit',
 ]
 
+/** Hook configuration state */
 interface HookConfig {
+  /** Hook event type trigger */
   event: HookEvent
+  /** Matcher pattern for the event */
   matcher: string
+  /** Shell command to execute */
   command: string
+  /** Execution timeout in milliseconds */
   timeout: number
+  /** Whether hook blocks Claude execution */
   blocking: boolean
 }
 
+/** Form validation error messages */
 interface ValidationErrors {
+  /** Command input validation error */
   command?: string
+  /** Matcher selection validation error */
   matcher?: string
 }
 
+/**
+ * Hook configuration JSON generator
+ *
+ * Provides form UI for building hook configurations with:
+ * - Event type selection with descriptions
+ * - Dynamic matcher options based on event
+ * - Command input with environment variable hints
+ * - Live JSON preview with copy functionality
+ */
 export function HookConfigGenerator() {
   const [config, setConfig] = useState<HookConfig>({
     event: 'PreCompact',

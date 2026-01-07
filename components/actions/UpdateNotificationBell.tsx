@@ -1,9 +1,17 @@
+/**
+ * Update notification bell component
+ *
+ * Displays a notification bell with badge showing available
+ * plugin updates. Includes dropdown with update list, dismiss,
+ * and remind later functionality.
+ */
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { PluginUpdate, UpdateCheckResult } from '@/lib/plugin/updates'
 
+/** Props for UpdateNotificationBell component */
 interface UpdateNotificationBellProps {
   /** Initial updates to display (from server-side fetch) */
   initialUpdates?: PluginUpdate[]
@@ -13,10 +21,21 @@ interface UpdateNotificationBellProps {
   checkInterval?: number
 }
 
+/** LocalStorage key for dismissed updates */
 const STORAGE_KEY = 'plugin-updates-dismissed'
+
+/** LocalStorage key for remind later timestamps */
 const REMIND_LATER_KEY = 'plugin-updates-remind-later'
+
+/** Duration until remind later expires (24 hours) */
 const REMIND_DURATION = 24 * 60 * 60 * 1000 // 24 hours
 
+/**
+ * Plugin update notification bell
+ *
+ * Shows available updates with badge count, dropdown menu,
+ * auto-refresh, and dismiss/remind later actions.
+ */
 export function UpdateNotificationBell({
   initialUpdates = [],
   autoCheck = true,
@@ -266,16 +285,24 @@ export function UpdateNotificationBell({
   )
 }
 
-/**
- * Individual update item in the dropdown
- */
+/** Props for UpdateItem component */
 interface UpdateItemProps {
+  /** Update data to display */
   update: PluginUpdate
+  /** Handler for dismissing the update */
   onDismiss: () => void
+  /** Handler for remind later action */
   onRemindLater: () => void
+  /** Handler for navigation (closes dropdown) */
   onNavigate: () => void
 }
 
+/**
+ * Individual update item in the dropdown
+ *
+ * Displays update type badge, version change, changelog,
+ * and action buttons for dismiss/remind later.
+ */
 function UpdateItem({
   update,
   onDismiss,

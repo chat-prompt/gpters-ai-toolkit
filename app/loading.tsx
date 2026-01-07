@@ -1,3 +1,9 @@
+/**
+ * Root loading state component
+ *
+ * Displays skeleton UI with ambient gradients while the main
+ * page content is loading via React Suspense.
+ */
 import { SkeletonHeader, SkeletonListPage } from '@/components/ui/Skeleton'
 
 export default function Loading() {

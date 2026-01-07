@@ -1,3 +1,10 @@
+/**
+ * Single MCP server API route
+ *
+ * GET: Get a single MCP server by ID
+ * PATCH: Update an MCP server (requires METADATA_MANAGE permission)
+ * DELETE: Delete an MCP server (requires METADATA_MANAGE permission)
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, mcpServers } from '@/lib/db'
 import { eq } from 'drizzle-orm'

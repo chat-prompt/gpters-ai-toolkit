@@ -1,10 +1,10 @@
-'use client'
-
 /**
- * Hook Security Validator Component
+ * Hook security validator component
  *
- * Interactive UI for validating hook command security
+ * Interactive UI for validating hook command security with
+ * risk scoring, severity badges, and safe alternative suggestions.
  */
+'use client'
 
 import { useState, useCallback } from 'react'
 import {
@@ -19,10 +19,15 @@ import {
 } from '@/lib/plugin/hook-security'
 import { cn } from '@/lib/utils'
 
+/** Props for HookSecurityValidator component */
 interface HookSecurityValidatorProps {
+  /** Pre-filled command to validate */
   initialCommand?: string
+  /** Callback when validation completes */
   onValidationComplete?: (result: SecurityValidationResult) => void
+  /** Whether to show security rules reference table */
   showRules?: boolean
+  /** Additional CSS classes */
   className?: string
 }
 
@@ -45,6 +50,15 @@ const CATEGORY_LABELS: Record<RiskCategory, string> = {
   resource: '리소스',
 }
 
+/**
+ * Hook command security validator
+ *
+ * Analyzes shell commands for security risks and provides:
+ * - Risk scoring with severity levels
+ * - Categorized security warnings
+ * - Safe alternative suggestions
+ * - Optional security rules reference
+ */
 export function HookSecurityValidator({
   initialCommand = '',
   onValidationComplete,
@@ -255,10 +269,13 @@ export function HookSecurityValidator({
   )
 }
 
+/** Props for RiskCard component */
 interface RiskCardProps {
+  /** Security risk to display */
   risk: SecurityRisk
 }
 
+/** Individual security risk card with expandable details */
 function RiskCard({ risk }: RiskCardProps) {
   const [expanded, setExpanded] = useState(false)
   const config = SEVERITY_CONFIG[risk.severity]

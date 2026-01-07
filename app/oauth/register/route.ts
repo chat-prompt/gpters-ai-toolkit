@@ -1,3 +1,11 @@
+/**
+ * OAuth 2.0 Dynamic Client Registration Endpoint
+ *
+ * Allows clients to register themselves dynamically per RFC 7591.
+ * Returns client credentials that can be used for OAuth flows.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7591
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { registerClient } from '@/lib/security/oauth'
 import { createLogger } from '@/lib/core/logger'

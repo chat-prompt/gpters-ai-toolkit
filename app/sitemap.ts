@@ -1,6 +1,17 @@
+/**
+ * Dynamic sitemap generator
+ *
+ * Generates XML sitemap for search engine indexing.
+ * Includes static pages and all catalog item detail pages.
+ */
 import type { MetadataRoute } from 'next'
 import { getCatalog } from '@/lib/core/catalog'
 
+/**
+ * Generate sitemap entries for all public pages
+ *
+ * @returns Array of sitemap entries with URLs and metadata
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://company-ai-toolkit.vercel.app'
   const catalog = await getCatalog()

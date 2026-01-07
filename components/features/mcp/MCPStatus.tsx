@@ -1,29 +1,46 @@
+/**
+ * MCP server status indicator component
+ *
+ * Displays real-time connection status with the MCP server,
+ * including health metrics, database latency, and error states.
+ * Features auto-refresh at configurable intervals.
+ */
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
+/** MCP server status data from the API */
 interface MCPStatusData {
+  /** Overall server status */
   status: 'connected' | 'degraded' | 'error'
+  /** Server information */
   serverInfo: {
     name: string
     version: string
     description?: string
     toolsCount?: number
   }
+  /** Health check details */
   health?: {
     database: 'healthy' | 'degraded' | 'error'
     dbLatency?: number | null
     responseTime?: number
   }
+  /** ISO timestamp of last request */
   lastRequest?: string | null
+  /** Total request count */
   requestCount?: number
+  /** ISO timestamp of this status check */
   timestamp: string
+  /** Error message if status check failed */
   error?: string
 }
 
+/** Connection status type for UI display */
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking'
 
+/** Props for MCPStatus component */
 interface MCPStatusProps {
   /** Interval in ms to check status (default: 30 seconds) */
   checkInterval?: number
@@ -31,6 +48,12 @@ interface MCPStatusProps {
   autoCheck?: boolean
 }
 
+/**
+ * MCP server status indicator with dropdown details
+ *
+ * Shows connection status dot and expandable panel with
+ * server info, health metrics, and troubleshooting links.
+ */
 export function MCPStatus({
   checkInterval = 30000,
   autoCheck = true,

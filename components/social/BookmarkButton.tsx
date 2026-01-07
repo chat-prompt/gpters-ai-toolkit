@@ -1,3 +1,9 @@
+/**
+ * Bookmark components for catalog items
+ *
+ * Provides bookmark button, badge, list, and filter components
+ * with localStorage persistence and reactive state management.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -13,29 +19,48 @@ import {
 // Types
 // ============================================================================
 
+/** Props for BookmarkButton component */
 interface BookmarkButtonProps {
+  /** Item data to bookmark */
   item: {
+    /** Unique item identifier */
     id: string
+    /** Type of catalog item */
     type: 'skill' | 'agent' | 'command' | 'guide' | 'hook'
+    /** Display name of the item */
     name: string
   }
+  /** Button size variant */
   size?: 'sm' | 'md' | 'lg'
+  /** Button display variant */
   variant?: 'default' | 'icon' | 'text'
+  /** Whether to show text label */
   showLabel?: boolean
+  /** Additional CSS classes */
   className?: string
+  /** Callback when bookmark state changes */
   onToggle?: (isBookmarked: boolean) => void
 }
 
+/** Props for BookmarkBadge component */
 interface BookmarkBadgeProps {
+  /** Number of bookmarks to display */
   count: number
+  /** Additional CSS classes */
   className?: string
 }
 
+/** Props for BookmarkedItemsList component */
 interface BookmarkedItemsListProps {
+  /** List of bookmarked items to display */
   items: BookmarkedItem[]
+  /** Handler for removing a bookmark */
   onRemove?: (id: string) => void
+  /** Handler for clicking on an item */
   onItemClick?: (id: string) => void
+  /** Message to show when list is empty */
   emptyMessage?: string
+  /** Additional CSS classes */
   className?: string
 }
 
@@ -166,11 +191,19 @@ export function BookmarkButton({
 // BookmarkIcon Component
 // ============================================================================
 
+/** Props for BookmarkIcon component */
 interface BookmarkIconProps {
+  /** Whether to show filled icon */
   filled?: boolean
+  /** CSS classes for sizing */
   className?: string
 }
 
+/**
+ * Bookmark SVG icon
+ *
+ * Renders filled or outlined bookmark icon based on state.
+ */
 export function BookmarkIcon({ filled = false, className = 'w-5 h-5' }: BookmarkIconProps) {
   if (filled) {
     return (
@@ -328,13 +361,23 @@ export function BookmarkedItemsList({
 // BookmarkTypeFilter Component
 // ============================================================================
 
+/** Props for BookmarkTypeFilter component */
 interface BookmarkTypeFilterProps {
+  /** Currently selected filter type */
   selected: string | null
+  /** Bookmark count per type */
   counts: Record<string, number>
+  /** Handler for filter change */
   onChange: (type: string | null) => void
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Type filter buttons for bookmarks
+ *
+ * Displays filter buttons for each item type with counts.
+ */
 export function BookmarkTypeFilter({
   selected,
   counts,

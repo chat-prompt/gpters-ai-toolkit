@@ -1,3 +1,9 @@
+/**
+ * Admin MCP servers management page
+ *
+ * CRUD interface for managing MCP server metadata with
+ * documentation URL and description editing.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'

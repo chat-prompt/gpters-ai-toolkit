@@ -1,3 +1,10 @@
+/**
+ * Authentication middleware
+ *
+ * Protects all routes with NextAuth session validation.
+ * Allows public access to auth, OAuth, MCP, and metadata endpoints.
+ * Supports development bypass via DEV_BYPASS_AUTH environment variable.
+ */
 import { auth } from '@/lib/core/auth'
 import { NextResponse } from 'next/server'
 

@@ -1,3 +1,9 @@
+/**
+ * Skill detail page
+ *
+ * Displays detailed information about a specific skill including
+ * content, installation guide, dependencies, changelog, and version history.
+ */
 import { getItemById, getCatalog, getRelatedItems } from '@/lib/core/catalog'
 import { parseExamplesFromContent } from '@/lib/search/parse-examples'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'

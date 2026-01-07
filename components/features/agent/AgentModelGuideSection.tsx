@@ -1,3 +1,9 @@
+/**
+ * Agent model guide section component
+ *
+ * Collapsible guide section showing Claude model comparison,
+ * task-based recommendations, and cost visualization.
+ */
 'use client'
 
 import { useState, useMemo } from 'react'
@@ -9,8 +15,11 @@ import {
 } from '@/lib/agent/model-guide'
 import { AgentModel } from '@/lib/core/types'
 
+/** Props for AgentModelGuideSection component */
 interface AgentModelGuideSectionProps {
+  /** Currently selected model */
   currentModel?: AgentModel
+  /** Whether to expand the section by default */
   defaultExpanded?: boolean
 }
 

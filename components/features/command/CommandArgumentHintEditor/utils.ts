@@ -1,7 +1,13 @@
+/**
+ * Utility functions for command argument hint editor
+ *
+ * Provides helpers for ID generation, default values,
+ * serialization, and validation.
+ */
 import type { ArgumentHint } from './types'
 
 /**
- * Generate unique ID
+ * Generate unique ID for argument hints
  */
 export function generateId(): string {
   return `arg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`

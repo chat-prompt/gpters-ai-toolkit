@@ -1,3 +1,9 @@
+/**
+ * Agent permission mode selector component
+ *
+ * Interactive selector for Claude Code agent permission modes with
+ * recommendation engine, security level badges, and detailed mode cards.
+ */
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
@@ -13,15 +19,28 @@ import {
 } from '@/lib/agent/permission-mode'
 import { AgentPermissionMode } from '@/lib/core/types'
 
+/** Props for AgentPermissionModeSelector component */
 interface AgentPermissionModeSelectorProps {
+  /** Currently selected permission mode */
   value?: AgentPermissionMode
+  /** Callback when mode selection changes */
   onChange?: (mode: AgentPermissionMode) => void
+  /** Whether to show recommendation banner */
   showRecommendation?: boolean
+  /** Context for generating recommendations */
   context?: Partial<RecommendationCriteria>
+  /** Use compact dropdown mode */
   compact?: boolean
+  /** Disable interaction (display only) */
   readOnly?: boolean
 }
 
+/**
+ * Permission mode selector with cards and recommendations
+ *
+ * Features mode cards, security badges, context-aware recommendations,
+ * and detailed expanded view with use cases.
+ */
 export function AgentPermissionModeSelector({
   value,
   onChange,
@@ -94,7 +113,7 @@ export function AgentPermissionModeSelector({
   )
 }
 
-// Compact selector for forms
+/** Compact dropdown selector for forms */
 function CompactModeSelector({
   modes,
   selectedMode,
@@ -132,7 +151,7 @@ function CompactModeSelector({
   )
 }
 
-// Recommendation banner component
+/** Recommendation banner with apply button */
 function RecommendationBanner({
   recommendation,
   onSelect,
@@ -179,7 +198,7 @@ function RecommendationBanner({
   )
 }
 
-// Mode card component
+/** Expandable permission mode card */
 function ModeCard({
   modeInfo,
   isSelected,
@@ -307,7 +326,7 @@ function ModeCard({
   )
 }
 
-// Security badge component
+/** Security level badge (low/medium/high/critical) */
 function SecurityBadge({ level }: { level: SecurityLevel }) {
   const info = SECURITY_LEVELS[level]
   return (
@@ -319,7 +338,7 @@ function SecurityBadge({ level }: { level: SecurityLevel }) {
   )
 }
 
-// Selected mode details panel
+/** Selected mode details panel with validation */
 function SelectedModeDetails({
   modeInfo,
   context,
@@ -381,10 +400,10 @@ function SelectedModeDetails({
   )
 }
 
-// Export sub-components for flexibility
+/** Exported sub-components for flexible composition */
 export { ModeCard, SecurityBadge, RecommendationBanner, SelectedModeDetails }
 
-// Permission Mode Comparison component
+/** Side-by-side permission mode comparison */
 export function PermissionModeComparison({
   mode1,
   mode2,
@@ -443,7 +462,7 @@ export function PermissionModeComparison({
   )
 }
 
-// Simple display component for showing current mode
+/** Simple badge display for current permission mode */
 export function PermissionModeDisplay({ mode }: { mode: AgentPermissionMode }) {
   const info = PERMISSION_MODES[mode]
   const securityInfo = SECURITY_LEVELS[info.securityLevel]

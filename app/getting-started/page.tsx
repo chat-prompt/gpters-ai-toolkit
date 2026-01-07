@@ -1,3 +1,9 @@
+/**
+ * Getting started page
+ *
+ * Interactive onboarding guide for setting up the MCP server
+ * integration and Claude Code hooks with step-by-step instructions.
+ */
 'use client'
 
 import { useState } from 'react'

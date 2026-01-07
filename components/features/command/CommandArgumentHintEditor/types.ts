@@ -1,4 +1,11 @@
 /**
+ * Type definitions for command argument hint editor
+ *
+ * Defines types for argument hints, validation rules,
+ * autocomplete configuration, and component props.
+ */
+
+/**
  * Argument types supported by commands
  */
 export type ArgumentHintType =

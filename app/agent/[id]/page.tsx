@@ -1,3 +1,9 @@
+/**
+ * Agent detail page
+ *
+ * Displays detailed information about a specific agent including
+ * content, installation guide, dependencies, and related items.
+ */
 import { getItemById, getCatalog, getRelatedItems } from '@/lib/core/catalog'
 import { parseExamplesFromContent } from '@/lib/search/parse-examples'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'

@@ -1,3 +1,8 @@
+/**
+ * Guides list page loading state
+ *
+ * Displays skeleton UI while guides list is loading.
+ */
 import { Skeleton, SkeletonCard, SkeletonHeader } from '@/components/ui/Skeleton'
 
 export default function Loading() {

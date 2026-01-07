@@ -1,3 +1,9 @@
+/**
+ * Skill template wizard main component
+ *
+ * Multi-step wizard for creating Claude Code skill templates
+ * with category selection, basic info, tool configuration, and preview.
+ */
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'

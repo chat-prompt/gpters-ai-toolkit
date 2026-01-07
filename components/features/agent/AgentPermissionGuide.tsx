@@ -1,3 +1,9 @@
+/**
+ * Agent permission guide component
+ *
+ * Visual guide explaining Claude Code agent permission modes with
+ * security levels, use cases, and detailed mode information.
+ */
 'use client'
 
 import { useState } from 'react'
@@ -9,6 +15,7 @@ import {
 } from '@/lib/agent/permission-mode'
 import { AgentPermissionMode } from '@/lib/core/types'
 
+/** Props for AgentPermissionGuide component */
 interface AgentPermissionGuideProps {
   /** Currently selected mode to highlight */
   currentMode?: AgentPermissionMode
@@ -144,7 +151,7 @@ export function AgentPermissionGuide({
   )
 }
 
-// Permission Mode Card Component
+/** Permission mode card with expandable details */
 function PermissionModeCard({
   modeInfo,
   isSelected,
@@ -321,7 +328,7 @@ function PermissionModeCard({
   )
 }
 
-// Compact Mode Card for smaller spaces
+/** Compact mode card for smaller spaces */
 function CompactModeCard({
   modeInfo,
   isSelected,
@@ -358,7 +365,7 @@ function CompactModeCard({
   )
 }
 
-// Security Level Badge
+/** Security level badge with size variants */
 function SecurityLevelBadge({ level, size = 'md' }: { level: SecurityLevel; size?: 'sm' | 'md' }) {
   const info = SECURITY_LEVELS[level]
 
@@ -381,7 +388,7 @@ function SecurityLevelBadge({ level, size = 'md' }: { level: SecurityLevel; size
   )
 }
 
-// Security Mode Badge for header display
+/** Security mode badge for header display */
 function SecurityModeBadge({ mode }: { mode: AgentPermissionMode }) {
   const modeInfo = PERMISSION_MODES[mode]
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
@@ -400,7 +407,7 @@ function SecurityModeBadge({ mode }: { mode: AgentPermissionMode }) {
   )
 }
 
-// Security Level Legend
+/** Security level legend explaining all levels */
 function SecurityLevelLegend() {
   return (
     <div className="p-4 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
@@ -422,7 +429,7 @@ function SecurityLevelLegend() {
   )
 }
 
-// Display-only component for showing current mode in detail pages
+/** Display-only component for showing current mode in detail pages */
 export function AgentPermissionModeDisplay({ mode }: { mode: AgentPermissionMode }) {
   const modeInfo = PERMISSION_MODES[mode]
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
@@ -445,7 +452,7 @@ export function AgentPermissionModeDisplay({ mode }: { mode: AgentPermissionMode
   )
 }
 
-// Standalone mode info section for agent detail pages
+/** Standalone mode info section for agent detail pages */
 export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const modeInfo = PERMISSION_MODES[mode]

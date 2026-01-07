@@ -1,3 +1,9 @@
+/**
+ * Admin seed data API route
+ *
+ * POST: Seed database with initial tags and MCP servers
+ * Requires ADMIN_SETTINGS permission
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, tags, mcpServers } from '@/lib/db'
 import { TAGS, MCP_SERVERS } from '@/lib/core/types'

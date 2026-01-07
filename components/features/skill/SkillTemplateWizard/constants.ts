@@ -1,5 +1,11 @@
+/**
+ * Constants for skill template wizard
+ *
+ * Defines template categories with metadata and wizard step configuration.
+ */
 import type { TemplateCategoryInfo, WizardStep } from './types'
 
+/** Available template category configurations */
 export const TEMPLATE_CATEGORIES: TemplateCategoryInfo[] = [
   {
     id: 'data-reference',
@@ -78,6 +84,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategoryInfo[] = [
   },
 ]
 
+/** Wizard step configuration in order */
 export const WIZARD_STEPS: WizardStep[] = [
   { id: 'category', label: '템플릿 선택', description: '스킬 유형 선택' },
   { id: 'basic', label: '기본 정보', description: '이름과 설명 입력' },

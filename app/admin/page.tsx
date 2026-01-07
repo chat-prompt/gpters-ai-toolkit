@@ -1,3 +1,9 @@
+/**
+ * Admin dashboard page
+ *
+ * Main admin dashboard displaying statistics, recent activity,
+ * draft items, and quick links to management sections.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
