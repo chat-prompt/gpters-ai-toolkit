@@ -251,6 +251,59 @@ export type McpTokenRecord = typeof mcpTokens.$inferSelect
 export type NewMcpTokenRecord = typeof mcpTokens.$inferInsert
 
 // ============================================
+// OAuth 2.1 Tables (for MCP native auth)
+// ============================================
+
+// OAuth Clients - Dynamic Client Registration (RFC 7591)
+export const oauthClients = pgTable('oauth_clients', {
+  id: text('id').primaryKey(), // client_id (UUID)
+  secretHash: text('secret_hash'), // SHA-256 hash of client_secret (null for public clients)
+  name: text('name').notNull(),
+  redirectUris: jsonb('redirect_uris').$type<string[]>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type OAuthClientRecord = typeof oauthClients.$inferSelect
+export type NewOAuthClientRecord = typeof oauthClients.$inferInsert
+
+// OAuth Authorization Codes - PKCE required
+export const oauthCodes = pgTable('oauth_codes', {
+  code: text('code').primaryKey(), // Authorization code (UUID)
+  clientId: text('client_id').notNull().references(() => oauthClients.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  codeChallenge: text('code_challenge').notNull(), // PKCE code_challenge
+  codeChallengeMethod: text('code_challenge_method').notNull().default('S256'), // S256 only
+  redirectUri: text('redirect_uri').notNull(),
+  scope: text('scope'), // Optional scopes
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('oauth_codes_client_id_idx').on(table.clientId),
+  index('oauth_codes_user_id_idx').on(table.userId),
+  index('oauth_codes_expires_at_idx').on(table.expiresAt),
+])
+
+export type OAuthCodeRecord = typeof oauthCodes.$inferSelect
+export type NewOAuthCodeRecord = typeof oauthCodes.$inferInsert
+
+// Relations for OAuth tables
+export const oauthClientsRelations = relations(oauthClients, ({ many }) => ({
+  codes: many(oauthCodes),
+}))
+
+export const oauthCodesRelations = relations(oauthCodes, ({ one }) => ({
+  client: one(oauthClients, {
+    fields: [oauthCodes.clientId],
+    references: [oauthClients.id],
+  }),
+  user: one(users, {
+    fields: [oauthCodes.userId],
+    references: [users.id],
+  }),
+}))
+
+// ============================================
 // Item Version History Table
 // ============================================
 

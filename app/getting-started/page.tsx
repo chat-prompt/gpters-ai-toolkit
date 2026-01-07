@@ -40,16 +40,22 @@ function getMcpConfigPath(scope: InstallScope): string {
   return scope === 'global' ? '~/.claude/.mcp.json' : '.mcp.json'
 }
 
+// CLI command to download proxy script
+function getProxyDownloadCommand(): string {
+  return `curl -fsSL https://company-ai-toolkit.vercel.app/api/mcp-proxy -o ~/.claude/gpters-mcp-proxy.mjs`
+}
+
 // CLI command to add MCP server (recommended - bypasses headers bug)
 function getMcpCliCommand(token: string): string {
   return `claude mcp add gpters-marketplace \\
   -e MCP_URL=https://company-ai-toolkit.vercel.app/api/mcp \\
   -e MCP_TOKEN=${token} \\
-  -- node -e "$(curl -s https://company-ai-toolkit.vercel.app/api/mcp-proxy)"`
+  -- node ~/.claude/gpters-mcp-proxy.mjs`
 }
 
 // Legacy: JSON config (has bug - headers ignored in Claude Code v2.x)
-function getMcpConfigCommand(token: string, scope: InstallScope): string {
+// Keeping for reference but not used
+function _getMcpConfigCommand(token: string, scope: InstallScope): string {
   const configPath = getMcpConfigPath(scope)
   return `cat > ${configPath} << 'EOF'
 {
@@ -70,7 +76,7 @@ function getMcpServerSnippet(token: string): string {
   return `"gpters-marketplace": {
   "type": "stdio",
   "command": "node",
-  "args": ["-e", "$(curl -s https://company-ai-toolkit.vercel.app/mcp-proxy.mjs)"],
+  "args": ["~/.claude/gpters-mcp-proxy.mjs"],
   "env": {
     "MCP_URL": "https://company-ai-toolkit.vercel.app/api/mcp",
     "MCP_TOKEN": "${token}"
@@ -436,28 +442,54 @@ export default function GettingStartedPage() {
 
                 {/* Recommended: CLI Command */}
                 <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <div className="flex items-center gap-2 text-sm text-green-400 mb-2">
+                  <div className="flex items-center gap-2 text-sm text-green-400 mb-3">
                     <span>✓</span>
                     <span className="font-medium">권장: CLI 명령어 (가장 안정적)</span>
                   </div>
-                  <p className="text-xs text-[var(--text-muted)] mb-3">
-                    {installScope === 'project' ? '프로젝트 루트에서' : '터미널에서'} 아래 명령어를 실행하세요:
-                  </p>
-                  <div className="relative">
-                    <pre className="p-3 pr-16 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-xs font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                      {getMcpCliCommand(tokenForCommands)}
-                    </pre>
-                    <button
-                      onClick={() => copyToClipboard(getMcpCliCommand(tokenForCommands), 'mcp-cli')}
-                      disabled={!newToken && existingTokens.length === 0}
-                      className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium transition-all ${
-                        copiedStep === 'mcp-cli'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
-                      }`}
-                    >
-                      {copiedStep === 'mcp-cli' ? '✓' : '복사'}
-                    </button>
+
+                  {/* Step 3-1: Download proxy script */}
+                  <div className="mb-3">
+                    <p className="text-xs text-[var(--text-muted)] mb-2">
+                      3-1. 프록시 스크립트 다운로드:
+                    </p>
+                    <div className="relative">
+                      <pre className="p-2 pr-14 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-xs font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                        {getProxyDownloadCommand()}
+                      </pre>
+                      <button
+                        onClick={() => copyToClipboard(getProxyDownloadCommand(), 'proxy-download')}
+                        className={`absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs font-medium transition-all ${
+                          copiedStep === 'proxy-download'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        {copiedStep === 'proxy-download' ? '✓' : '복사'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Step 3-2: Add MCP server */}
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)] mb-2">
+                      3-2. {installScope === 'project' ? '프로젝트 루트에서' : '터미널에서'} MCP 서버 추가:
+                    </p>
+                    <div className="relative">
+                      <pre className="p-2 pr-14 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-xs font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                        {getMcpCliCommand(tokenForCommands)}
+                      </pre>
+                      <button
+                        onClick={() => copyToClipboard(getMcpCliCommand(tokenForCommands), 'mcp-cli')}
+                        disabled={!newToken && existingTokens.length === 0}
+                        className={`absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs font-medium transition-all ${
+                          copiedStep === 'mcp-cli'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50'
+                        }`}
+                      >
+                        {copiedStep === 'mcp-cli' ? '✓' : '복사'}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

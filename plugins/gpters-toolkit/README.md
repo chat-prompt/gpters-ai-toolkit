@@ -2,27 +2,35 @@
 
 GPTers 팀을 위한 Claude Code MCP 플러그인입니다.
 
-## 빠른 설치 (2분)
+## 빠른 설치 (30초)
 
 **가장 쉬운 방법**: https://company-ai-toolkit.vercel.app/getting-started 에서 안내를 따르세요.
 
 ### 수동 설치
 
-1. 토큰 발급 (/getting-started 페이지에서)
+1. **토큰 발급**: https://company-ai-toolkit.vercel.app/getting-started 에서 발급
 
-2. MCP 서버 설정 (`~/.claude/.mcp.json`):
-```json
-{
-  "mcpServers": {
-    "gpters-marketplace": {
-      "type": "http",
-      "url": "https://company-ai-toolkit.vercel.app/api/mcp?token=YOUR_TOKEN_HERE"
-    }
-  }
-}
+2. **환경변수 설정** (터미널):
+```bash
+echo 'export GPTERS_MCP_TOKEN="YOUR_TOKEN_HERE"' >> ~/.zshrc && source ~/.zshrc
 ```
 
-3. Claude Code 재시작
+3. **프록시 스크립트 다운로드**:
+```bash
+curl -fsSL https://company-ai-toolkit.vercel.app/api/mcp-proxy -o ~/.claude/gpters-mcp-proxy.mjs
+```
+
+4. **MCP 서버 추가** (터미널):
+```bash
+claude mcp add gpters-marketplace \
+  -e MCP_URL=https://company-ai-toolkit.vercel.app/api/mcp \
+  -e MCP_TOKEN=$GPTERS_MCP_TOKEN \
+  -- node ~/.claude/gpters-mcp-proxy.mjs
+```
+
+5. **Claude Code 재시작**
+
+> ⚠️ HTTP transport의 headers 버그로 인해 stdio proxy 방식을 사용합니다.
 
 ## 포함된 기능
 

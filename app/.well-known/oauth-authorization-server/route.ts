@@ -1,17 +1,24 @@
 import { NextResponse } from 'next/server'
 
 // OAuth 2.0 Authorization Server Metadata (RFC 8414)
-// Claude Code attempts OAuth discovery before falling back to Bearer token auth
-// Return 404 with proper JSON to indicate OAuth is not supported
+// Required for MCP OAuth 2.1 support with Claude Code
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
 
 export async function GET() {
   return NextResponse.json(
     {
-      error: 'oauth_not_supported',
-      error_description: 'This MCP server uses Bearer token authentication. OAuth is not supported.',
+      issuer: BASE_URL,
+      authorization_endpoint: `${BASE_URL}/oauth/authorize`,
+      token_endpoint: `${BASE_URL}/oauth/token`,
+      registration_endpoint: `${BASE_URL}/oauth/register`,
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code'],
+      code_challenge_methods_supported: ['S256'], // PKCE required, S256 only
+      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+      service_documentation: `${BASE_URL}/docs/mcp-oauth`,
     },
     {
-      status: 404,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, max-age=3600',
