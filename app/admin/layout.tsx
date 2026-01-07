@@ -96,7 +96,6 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     { href: '/admin', label: 'Dashboard', exact: true },
     { href: '/admin/catalog', label: 'Catalog' },
     { href: '/admin/users', label: 'Users' },
-    { href: '/admin/mcp-tokens', label: 'MCP Tokens' },
   ]
 
   return (

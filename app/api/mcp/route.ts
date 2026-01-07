@@ -26,8 +26,8 @@
  *    Body: {"query": "database"}
  *
  * Authentication:
- *    Required Bearer token via Authorization header.
- *    Get your token at /profile/tokens
+ *    OAuth 2.1 authentication via Authorization header.
+ *    Use: claude mcp add gpters-marketplace https://[host]/api/mcp -t http
  */
 
 import { NextRequest, NextResponse } from 'next/server'
