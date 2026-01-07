@@ -1,3 +1,10 @@
+/**
+ * Changelog viewer component
+ *
+ * Parses and displays changelog content organized by version sections.
+ * Supports filtering changes between specific versions and expandable
+ * section display with "show more" functionality.
+ */
 'use client'
 
 import { useState, useMemo } from 'react'

@@ -1,9 +1,15 @@
+/**
+ * Statistics dashboard component
+ *
+ * Displays comprehensive analytics including installation trends,
+ * type distribution, popular items, and recent activity.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
-// Types
+/** Trend data point for charts */
 interface TrendData {
   date?: string
   week?: string
@@ -101,7 +107,7 @@ const METHOD_LABELS: Record<string, string> = {
   manual_file: 'File Path',
 }
 
-// Chart components
+/** Bar chart component for category distribution */
 function BarChart({ data, labelKey, valueKey, maxBars = 10 }: {
   data: Array<Record<string, unknown>>
   labelKey: string
@@ -137,6 +143,7 @@ function BarChart({ data, labelKey, valueKey, maxBars = 10 }: {
   )
 }
 
+/** Line chart component for trend visualization */
 function LineChart({ data, dateKey, valueKey }: {
   data: TrendData[]
   dateKey: 'date' | 'week' | 'month'
@@ -269,6 +276,7 @@ function formatDateLabel(date: string, type: 'date' | 'week' | 'month'): string 
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+/** Pie/donut chart component for distribution visualization */
 function PieChart({ data, colorMap }: {
   data: Record<string, number>
   colorMap: Record<string, string>
@@ -342,6 +350,7 @@ function PieChart({ data, colorMap }: {
   )
 }
 
+/** Summary statistic card component */
 function StatCard({ title, value, subtitle, icon }: {
   title: string
   value: string | number
@@ -364,7 +373,17 @@ function StatCard({ title, value, subtitle, icon }: {
   )
 }
 
-// Main dashboard component
+/**
+ * Main statistics dashboard component
+ *
+ * Fetches and displays comprehensive analytics for the catalog,
+ * including trends, distributions, and activity feeds.
+ *
+ * @example
+ * ```tsx
+ * <StatsDashboard />
+ * ```
+ */
 export function StatsDashboard() {
   const [period, setPeriod] = useState<Period>('30d')
   const [trendType, setTrendType] = useState<TrendType>('daily')
@@ -653,6 +672,7 @@ export function StatsDashboard() {
   )
 }
 
+/** Format relative time from date string */
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString)
   const now = new Date()

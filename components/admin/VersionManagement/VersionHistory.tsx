@@ -1,3 +1,10 @@
+/**
+ * Version history component
+ *
+ * Displays a timeline of version releases with version badges,
+ * release dates, change summaries, and current version indicator.
+ * Supports expandable list with "show more" functionality.
+ */
 'use client'
 
 import { useState } from 'react'

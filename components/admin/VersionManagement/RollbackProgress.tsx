@@ -1,3 +1,10 @@
+/**
+ * Rollback progress component
+ *
+ * Displays the progress of a rollback operation with a progress bar,
+ * current step indicator, and visual step timeline showing completed,
+ * current, and pending steps.
+ */
 import { getRollbackStatusLabel, ROLLBACK_STEPS } from '@/lib/plugin/rollback'
 import type { RollbackProgressProps } from './types'
 

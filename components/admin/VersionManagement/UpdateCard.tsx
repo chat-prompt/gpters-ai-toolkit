@@ -1,3 +1,10 @@
+/**
+ * Update card component
+ *
+ * Displays information about a single available plugin update
+ * including version comparison, update type, changelog preview,
+ * and action buttons for updating or viewing full changelog.
+ */
 import { UpdateTypeBadge } from './UpdateTypeBadge'
 import { VersionComparison } from './VersionComparison'
 import type { UpdateCardProps } from './types'

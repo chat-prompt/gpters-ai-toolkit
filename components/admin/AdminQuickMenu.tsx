@@ -1,3 +1,9 @@
+/**
+ * Admin quick access menu component
+ *
+ * Provides a dropdown menu with quick access to admin functions,
+ * including context-aware edit actions and content creation shortcuts.
+ */
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
@@ -5,7 +11,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { UserRole } from '@/lib/security/rbac'
 
+/**
+ * Props for AdminQuickMenu component
+ */
 interface AdminQuickMenuProps {
+  /** Current user's role for permission checks */
   userRole?: UserRole | null
 }
 

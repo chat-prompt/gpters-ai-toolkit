@@ -1,15 +1,26 @@
+/**
+ * Plugin update notification banner components
+ *
+ * Displays update notifications for installed plugins with version info,
+ * changelog preview, and action buttons for updating or dismissing.
+ */
 'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { PluginUpdate } from '@/lib/plugin/updates'
 
+/** Props for PluginUpdateBanner component */
 interface PluginUpdateBannerProps {
+  /** Plugin update information */
   update: PluginUpdate
+  /** Callback when user dismisses the update */
   onDismiss?: () => void
+  /** Callback when user requests to be reminded later */
   onRemindLater?: () => void
 }
 
+/** Style configuration for update types (major, minor, patch) */
 const UPDATE_TYPE_STYLES = {
   major: {
     badge: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -28,12 +39,19 @@ const UPDATE_TYPE_STYLES = {
   },
 }
 
+/** Display labels for update types */
 const UPDATE_TYPE_LABELS = {
   major: 'Major Update',
   minor: 'Minor Update',
   patch: 'Patch',
 }
 
+/**
+ * Individual plugin update banner
+ *
+ * Displays update notification with version comparison,
+ * expandable changelog, and action buttons.
+ */
 export function PluginUpdateBanner({
   update,
   onDismiss,
@@ -184,16 +202,24 @@ export function PluginUpdateBanner({
   )
 }
 
-/**
- * Container component that shows multiple update banners stacked
- */
+/** Props for PluginUpdateBannerList component */
 interface PluginUpdateBannerListProps {
+  /** Array of available updates */
   updates: PluginUpdate[]
+  /** Callback when user dismisses an update */
   onDismiss?: (updateId: string) => void
+  /** Callback when user requests to be reminded later */
   onRemindLater?: (updateId: string) => void
+  /** Maximum number of banners to show before collapsing */
   maxVisible?: number
 }
 
+/**
+ * Container for multiple update banners
+ *
+ * Displays a stacked list of update banners with show/hide functionality
+ * for managing multiple updates efficiently.
+ */
 export function PluginUpdateBannerList({
   updates,
   onDismiss,

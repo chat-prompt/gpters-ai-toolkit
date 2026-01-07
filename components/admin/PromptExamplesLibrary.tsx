@@ -1,3 +1,9 @@
+/**
+ * Prompt examples library components
+ *
+ * Provides a searchable, filterable library of prompt examples
+ * with categories, difficulty levels, and copy functionality.
+ */
 'use client'
 
 import { useState, useMemo, useCallback, memo } from 'react'
@@ -16,11 +22,15 @@ import { DIFFICULTY_LABELS, Difficulty } from '@/lib/core/types'
 // Sub-Components
 // ============================================================================
 
+/** Props for PromptCard component */
 interface PromptCardProps {
+  /** Prompt example data */
   example: PromptExample
+  /** Callback when prompt is copied */
   onCopy: (text: string) => void
 }
 
+/** Individual prompt example card with expandable content */
 const PromptCard = memo(function PromptCard({
   example,
   onCopy,
@@ -160,13 +170,19 @@ const PromptCard = memo(function PromptCard({
   )
 })
 
+/** Props for CategoryFilter component */
 interface CategoryFilterProps {
+  /** Available categories */
   categories: PromptCategory[]
+  /** Currently active category filter */
   activeCategory: PromptCategory | 'all'
+  /** Callback when category changes */
   onCategoryChange: (category: PromptCategory | 'all') => void
+  /** Count of prompts per category */
   counts: Record<PromptCategory | 'all', number>
 }
 
+/** Category filter button group */
 const CategoryFilter = memo(function CategoryFilter({
   categories,
   activeCategory,
@@ -212,10 +228,18 @@ const CategoryFilter = memo(function CategoryFilter({
 // Main Component
 // ============================================================================
 
+/** Props for PromptExamplesLibrary component */
 export interface PromptExamplesLibraryProps {
+  /** Maximum number of prompts to display */
   maxVisible?: number
 }
 
+/**
+ * Full prompt examples library with search and filtering
+ *
+ * Features category tabs, difficulty filters, tag selection,
+ * and full-text search across all prompt examples.
+ */
 export function PromptExamplesLibrary({
   maxVisible,
 }: PromptExamplesLibraryProps = {}) {
@@ -478,12 +502,17 @@ export function PromptExamplesLibrary({
 // Compact Version for embedding in other pages
 // ============================================================================
 
+/** Props for PromptExamplesCompact component */
 export interface PromptExamplesCompactProps {
+  /** Optional category filter */
   category?: PromptCategory
+  /** Maximum items to show */
   maxItems?: number
+  /** Whether to show "View all" link */
   showViewAll?: boolean
 }
 
+/** Compact prompt examples for embedding in other pages */
 export function PromptExamplesCompact({
   category,
   maxItems = 3,

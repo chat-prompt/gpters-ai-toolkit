@@ -1,3 +1,9 @@
+/**
+ * Version check hook
+ *
+ * Provides version checking functionality with loading state,
+ * error handling, and update availability detection.
+ */
 'use client'
 
 import { useState, useCallback } from 'react'

@@ -1,3 +1,10 @@
+/**
+ * Rollback card component
+ *
+ * Displays an installation snapshot with metadata (files, size, date),
+ * expiration status, scope selection (full/files only/config only),
+ * and action buttons for rollback or preview.
+ */
 'use client'
 
 import { useState, useCallback } from 'react'

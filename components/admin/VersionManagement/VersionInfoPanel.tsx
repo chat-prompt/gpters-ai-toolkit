@@ -1,3 +1,10 @@
+/**
+ * Version info panel component
+ *
+ * Comprehensive panel displaying current and latest versions,
+ * update availability notification, installation dates,
+ * and integrated changelog viewer.
+ */
 import { compareVersions } from '@/lib/plugin/updates'
 import { VersionBadge } from './VersionBadge'
 import { VersionComparison } from './VersionComparison'

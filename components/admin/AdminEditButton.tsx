@@ -1,11 +1,21 @@
+/**
+ * Admin floating edit button component
+ *
+ * Displays a floating action button for editing catalog items,
+ * visible only to users with editor or admin role.
+ */
 import Link from 'next/link'
 import { auth } from '@/lib/core/auth'
 import { canEdit } from '@/lib/security/rbac'
 import type { UserRole } from '@/lib/security/rbac'
 
+/**
+ * Props for AdminEditButton component
+ */
 interface AdminEditButtonProps {
+  /** ID of the catalog item to edit */
   itemId: string
-  /** URL to redirect back to after saving. Defaults to current page. */
+  /** URL to redirect back to after saving */
   returnUrl?: string
 }
 

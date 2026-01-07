@@ -1,3 +1,9 @@
+/**
+ * Version badge component
+ *
+ * Displays a version number with appropriate styling based on type
+ * (current, latest, or update) and configurable size.
+ */
 import { useMemo } from 'react'
 import { normalizeVersion, isValidVersion } from '@/lib/plugin/updates'
 import type { VersionBadgeProps } from './types'

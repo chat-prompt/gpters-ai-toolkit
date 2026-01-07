@@ -1,9 +1,16 @@
+/**
+ * Type-specific form fields component
+ *
+ * Renders dynamic form fields based on catalog item type,
+ * including difficulty, tools, agent settings, command options, and hook configuration.
+ */
 'use client'
 
 import { CLAUDE_TOOLS, AGENT_MODELS, AGENT_PERMISSION_MODES, TYPE_CONFIG } from '@/lib/data/type-config'
 import type { ItemType, AgentModel, AgentPermissionMode, Difficulty, HookEvent } from '@/lib/core/types'
 import { DIFFICULTY_LABELS, HOOK_EVENTS } from '@/lib/core/types'
 
+/** Props for TypeSpecificFields component */
 interface TypeSpecificFieldsProps {
   type: ItemType
   values: {
@@ -22,9 +29,20 @@ interface TypeSpecificFieldsProps {
     hookTimeout: number | ''
     hookBlocking: boolean
   }
+  /** Callback for field value changes */
   onChange: (field: string, value: string | boolean | number) => void
 }
 
+/**
+ * Dynamic form fields for type-specific catalog item properties
+ *
+ * Renders appropriate fields based on item type:
+ * - skill: difficulty, allowed tools
+ * - agent: model, permission mode, skills, allowed tools
+ * - command: argument hint, disable model invocation
+ * - hook: event, matcher, command, timeout, blocking
+ * - guide: difficulty, estimated time
+ */
 export function TypeSpecificFields({ type, values, onChange }: TypeSpecificFieldsProps) {
   const config = TYPE_CONFIG[type]
   const { fields } = config

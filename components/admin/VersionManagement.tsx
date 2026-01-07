@@ -1,3 +1,10 @@
+/**
+ * Version management component exports
+ *
+ * Re-exports all version management components from the
+ * VersionManagement folder for backwards compatibility.
+ */
+
 // Re-export from new folder structure for backwards compatibility
 export {
   VersionBadge,

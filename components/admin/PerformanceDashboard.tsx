@@ -1,7 +1,14 @@
+/**
+ * Performance monitoring dashboard
+ *
+ * Displays real-time performance metrics including request counts,
+ * success rates, response times, and detailed metric breakdowns.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 
+/** Performance summary data structure */
 interface PerformanceSummary {
   totalRequests: number
   successRate: number
@@ -31,6 +38,11 @@ interface AggregatedMetric {
   lastUpdated: number
 }
 
+/**
+ * Main performance monitoring dashboard component
+ *
+ * Features auto-refresh, type filtering, and detailed metrics table
+ */
 export function PerformanceDashboard() {
   const [summary, setSummary] = useState<PerformanceSummary | null>(null)
   const [metrics, setMetrics] = useState<AggregatedMetric[]>([])
@@ -281,6 +293,7 @@ export function PerformanceDashboard() {
   )
 }
 
+/** Props for SummaryCard component */
 interface SummaryCardProps {
   title: string
   value: string
@@ -288,6 +301,7 @@ interface SummaryCardProps {
   status?: 'success' | 'warning' | 'error'
 }
 
+/** Summary statistic card with optional status indicator */
 function SummaryCard({ title, value, subtitle, status }: SummaryCardProps) {
   return (
     <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--border-subtle)]">

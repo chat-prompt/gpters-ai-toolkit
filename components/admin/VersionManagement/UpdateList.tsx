@@ -1,3 +1,10 @@
+/**
+ * Update list component
+ *
+ * Displays a list of all available plugin updates with summary header,
+ * major update warnings, "update all" action, and individual update cards.
+ * Shows success state when all plugins are up to date.
+ */
 import { UpdateCard } from './UpdateCard'
 import type { UpdateListProps } from './types'
 

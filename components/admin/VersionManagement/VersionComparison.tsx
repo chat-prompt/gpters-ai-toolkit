@@ -1,3 +1,9 @@
+/**
+ * Version comparison component
+ *
+ * Displays current and latest versions side-by-side with an
+ * arrow indicator when an update is available.
+ */
 import { useMemo } from 'react'
 import { compareVersions } from '@/lib/plugin/updates'
 import { VersionBadge } from './VersionBadge'

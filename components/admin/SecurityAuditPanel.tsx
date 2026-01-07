@@ -1,3 +1,9 @@
+/**
+ * Security audit panel component
+ *
+ * Provides security scanning and vulnerability detection for catalog items.
+ * Displays risk assessment, issue categorization, and recommendations.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -13,17 +19,34 @@ import {
   sortIssuesByRisk,
 } from '@/lib/security/security-audit'
 
+/** Props for SecurityAuditPanel component */
 interface SecurityAuditPanelProps {
+  /** Catalog item ID to audit */
   itemId?: string
+  /** Raw content to audit (alternative to itemId) */
   content?: string
+  /** Hook command to audit */
   hookCommand?: string
+  /** Callback when audit completes */
   onAuditComplete?: (result: SecurityAuditResult) => void
+  /** Whether to run audit automatically on mount */
   autoRun?: boolean
+  /** Additional CSS classes */
   className?: string
 }
 
+/** Audit execution status */
 type AuditStatus = 'idle' | 'running' | 'completed' | 'error'
 
+/**
+ * Security audit panel with vulnerability detection
+ *
+ * Features:
+ * - Real-time security scanning via API
+ * - Risk level categorization (critical, high, medium, low)
+ * - Expandable issue details with recommendations
+ * - Auto-run option for automated workflows
+ */
 export function SecurityAuditPanel({
   itemId,
   content,
@@ -299,12 +322,19 @@ export function SecurityAuditPanel({
   )
 }
 
-// Compact version for inline display
+/**
+ * Compact security audit badge for list views
+ *
+ * Displays audit status as a small badge with pass/fail indication.
+ * Useful for inline display in catalog lists.
+ */
 export function SecurityAuditBadge({
   result,
   onClick,
 }: {
+  /** Audit result to display (null if not yet audited) */
   result: SecurityAuditResult | null
+  /** Click handler to open full audit panel */
   onClick?: () => void
 }) {
   if (!result) {

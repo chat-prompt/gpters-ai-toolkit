@@ -1,3 +1,9 @@
+/**
+ * Marketplace statistics dashboard components
+ *
+ * Provides comprehensive plugin analytics including rankings,
+ * trend insights, download history, and sentiment analysis.
+ */
 'use client'
 
 import { useState, useMemo } from 'react'
@@ -17,10 +23,9 @@ import {
   getRankingCategoryLabel,
 } from '@/lib/plugin/marketplace-stats'
 
-// ============================================
-// Main Dashboard Component
-// ============================================
-
+/**
+ * Props for MarketplaceStatsDashboard component
+ */
 interface MarketplaceStatsDashboardProps {
   plugins: PluginStats[]
   initialPeriod?: TimePeriod
@@ -29,6 +34,14 @@ interface MarketplaceStatsDashboardProps {
   showTrends?: boolean
 }
 
+/**
+ * Main marketplace statistics dashboard
+ *
+ * @example
+ * ```tsx
+ * <MarketplaceStatsDashboard plugins={pluginData} />
+ * ```
+ */
 export function MarketplaceStatsDashboard({
   plugins,
   initialPeriod = 'week',
@@ -75,15 +88,13 @@ export function MarketplaceStatsDashboard({
   )
 }
 
-// ============================================
-// Period Selector
-// ============================================
-
+/** Props for PeriodSelector component */
 interface PeriodSelectorProps {
   period: TimePeriod
   onChange: (period: TimePeriod) => void
 }
 
+/** Time period selector for filtering statistics */
 export function PeriodSelector({ period, onChange }: PeriodSelectorProps) {
   const periods: TimePeriod[] = ['day', 'week', 'month', 'quarter', 'year', 'all']
 
@@ -106,15 +117,13 @@ export function PeriodSelector({ period, onChange }: PeriodSelectorProps) {
   )
 }
 
-// ============================================
-// Ranking Category Selector
-// ============================================
-
+/** Props for RankingCategorySelector component */
 interface RankingCategorySelectorProps {
   category: RankingCategory
   onChange: (category: RankingCategory) => void
 }
 
+/** Dropdown selector for ranking category */
 export function RankingCategorySelector({ category, onChange }: RankingCategorySelectorProps) {
   const categories: RankingCategory[] = ['downloads', 'installs', 'rating', 'reviews', 'trending', 'new']
 
@@ -133,14 +142,12 @@ export function RankingCategorySelector({ category, onChange }: RankingCategoryS
   )
 }
 
-// ============================================
-// Marketplace Overview Card
-// ============================================
-
+/** Props for MarketplaceOverviewCard component */
 interface MarketplaceOverviewCardProps {
   overview: MarketplaceOverview
 }
 
+/** Overview card showing marketplace summary statistics */
 export function MarketplaceOverviewCard({ overview }: MarketplaceOverviewCardProps) {
   const stats = [
     {
@@ -187,10 +194,7 @@ export function MarketplaceOverviewCard({ overview }: MarketplaceOverviewCardPro
   )
 }
 
-// ============================================
-// Stat Card
-// ============================================
-
+/** Props for StatCard component */
 interface StatCardProps {
   label: string
   value: string
@@ -198,6 +202,7 @@ interface StatCardProps {
   icon: string
 }
 
+/** Individual statistic card with optional change indicator */
 export function StatCard({ label, value, change, icon }: StatCardProps) {
   const changeInfo = change !== undefined ? formatChange(change) : null
 
@@ -217,15 +222,13 @@ export function StatCard({ label, value, change, icon }: StatCardProps) {
   )
 }
 
-// ============================================
-// Ranking Table
-// ============================================
-
+/** Props for RankingTable component */
 interface RankingTableProps {
   rankings: RankingEntry[]
   category: RankingCategory
 }
 
+/** Table displaying plugin rankings with stats */
 export function RankingTable({ rankings, category: _category }: RankingTableProps) {
   if (rankings.length === 0) {
     return (
@@ -258,14 +261,12 @@ export function RankingTable({ rankings, category: _category }: RankingTableProp
   )
 }
 
-// ============================================
-// Ranking Row
-// ============================================
-
+/** Props for RankingRow component */
 interface RankingRowProps {
   entry: RankingEntry
 }
 
+/** Single row in the ranking table */
 export function RankingRow({ entry }: RankingRowProps) {
   const rankIcon = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : ''
 
@@ -310,15 +311,13 @@ export function RankingRow({ entry }: RankingRowProps) {
   )
 }
 
-// ============================================
-// Trend Insights List
-// ============================================
-
+/** Props for TrendInsightsList component */
 interface TrendInsightsListProps {
   plugin: PluginStats
   period: TimePeriod
 }
 
+/** List of trend insights for a plugin */
 export function TrendInsightsList({ plugin, period }: TrendInsightsListProps) {
   const analysis = useMemo(() => analyzeTrends(plugin, period), [plugin, period])
 
@@ -339,14 +338,12 @@ export function TrendInsightsList({ plugin, period }: TrendInsightsListProps) {
   )
 }
 
-// ============================================
-// Trend Insight Card
-// ============================================
-
+/** Props for TrendInsightCard component */
 interface TrendInsightCardProps {
   insight: TrendInsight
 }
 
+/** Card displaying a single trend insight */
 export function TrendInsightCard({ insight }: TrendInsightCardProps) {
   const typeConfig = {
     growth: { icon: '📈', color: 'text-green-400', border: 'border-green-500/30', bg: 'bg-green-500/10' },
@@ -389,16 +386,14 @@ export function TrendInsightCard({ insight }: TrendInsightCardProps) {
   )
 }
 
-// ============================================
-// Plugin Stats Card
-// ============================================
-
+/** Props for PluginStatsCard component */
 interface PluginStatsCardProps {
   stats: PluginStats
   showTrends?: boolean
   compact?: boolean
 }
 
+/** Detailed plugin statistics card */
 export function PluginStatsCard({ stats, showTrends = true, compact = false }: PluginStatsCardProps) {
   const trendIcon = stats.trends.trendDirection === 'up' ? '📈' : stats.trends.trendDirection === 'down' ? '📉' : '➡️'
 
@@ -467,15 +462,13 @@ export function PluginStatsCard({ stats, showTrends = true, compact = false }: P
   )
 }
 
-// ============================================
-// Rating Distribution
-// ============================================
-
+/** Props for RatingDistribution component */
 interface RatingDistributionProps {
   distribution: { 1: number; 2: number; 3: number; 4: number; 5: number }
   total: number
 }
 
+/** Rating distribution bar chart */
 export function RatingDistribution({ distribution, total }: RatingDistributionProps) {
   const stars = [5, 4, 3, 2, 1] as const
 
@@ -502,14 +495,12 @@ export function RatingDistribution({ distribution, total }: RatingDistributionPr
   )
 }
 
-// ============================================
-// Sentiment Bar
-// ============================================
-
+/** Props for SentimentBar component */
 interface SentimentBarProps {
   sentiment: { positive: number; neutral: number; negative: number }
 }
 
+/** Sentiment analysis visualization bar */
 export function SentimentBar({ sentiment }: SentimentBarProps) {
   const total = sentiment.positive + sentiment.neutral + sentiment.negative
   if (total === 0) {
@@ -536,15 +527,13 @@ export function SentimentBar({ sentiment }: SentimentBarProps) {
   )
 }
 
-// ============================================
-// Download History Chart (Simple Bar Chart)
-// ============================================
-
+/** Props for DownloadHistoryChart component */
 interface DownloadHistoryChartProps {
   history: { date: string; value: number }[]
   height?: number
 }
 
+/** Download history bar chart (last 14 days) */
 export function DownloadHistoryChart({ history, height = 120 }: DownloadHistoryChartProps) {
   if (history.length === 0) {
     return <p className="text-sm text-gray-500">데이터 없음</p>
@@ -581,10 +570,7 @@ export function DownloadHistoryChart({ history, height = 120 }: DownloadHistoryC
   )
 }
 
-// ============================================
-// Quick Stats Badge
-// ============================================
-
+/** Props for QuickStatsBadge component */
 interface QuickStatsBadgeProps {
   downloads: number
   rating: number
@@ -592,6 +578,7 @@ interface QuickStatsBadgeProps {
   size?: 'sm' | 'md'
 }
 
+/** Compact stats badge showing downloads, rating, and reviews */
 export function QuickStatsBadge({ downloads, rating, reviews, size = 'md' }: QuickStatsBadgeProps) {
   const sizeClasses = size === 'sm' ? 'gap-2 text-xs' : 'gap-3 text-sm'
 
@@ -604,15 +591,13 @@ export function QuickStatsBadge({ downloads, rating, reviews, size = 'md' }: Qui
   )
 }
 
-// ============================================
-// Trend Direction Badge
-// ============================================
-
+/** Props for TrendDirectionBadge component */
 interface TrendDirectionBadgeProps {
   direction: 'up' | 'down' | 'stable'
   growthRate?: number
 }
 
+/** Badge showing trend direction with optional growth rate */
 export function TrendDirectionBadge({ direction, growthRate }: TrendDirectionBadgeProps) {
   const config = {
     up: { icon: '📈', label: '상승', color: 'text-green-400', bg: 'bg-green-500/10' },

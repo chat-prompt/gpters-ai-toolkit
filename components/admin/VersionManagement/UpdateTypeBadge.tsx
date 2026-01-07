@@ -1,3 +1,9 @@
+/**
+ * Update type badge component
+ *
+ * Displays semantic versioning update type (major, minor, patch)
+ * with color-coded styling and optional description.
+ */
 import { getUpdateTypeDescription } from '@/lib/plugin/updates'
 import type { UpdateTypeBadgeProps } from './types'
 

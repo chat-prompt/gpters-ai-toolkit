@@ -1,19 +1,39 @@
+/**
+ * Playground toolbar component
+ *
+ * Provides layout controls, font size options, theme toggle,
+ * and share functionality for the code playground.
+ */
 'use client'
 
 import { useTheme } from '../layout/ThemeProvider'
 import { useState, useEffect } from 'react'
 
+/** Layout mode options for playground display */
 export type LayoutMode = 'side-by-side' | 'stacked'
+
+/** Font size options */
 export type FontSize = 'small' | 'medium' | 'large'
 
+/** Props for PlaygroundToolbar component */
 interface PlaygroundToolbarProps {
+  /** Current layout mode */
   layout: LayoutMode
+  /** Callback when layout changes */
   onLayoutChange: (layout: LayoutMode) => void
+  /** Current font size */
   fontSize: FontSize
+  /** Callback when font size changes */
   onFontSizeChange: (size: FontSize) => void
+  /** URL to share */
   shareUrl: string
 }
 
+/**
+ * Toolbar with playground display controls
+ *
+ * Features layout toggle, font size controls, theme switch, and share button.
+ */
 export function PlaygroundToolbar({
   layout,
   onLayoutChange,

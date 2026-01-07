@@ -1,3 +1,9 @@
+/**
+ * Plugin dependency graph visualization components
+ *
+ * Provides SVG-based dependency graph visualization with interactive
+ * nodes, cycle detection, impact analysis, and export capabilities.
+ */
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
@@ -22,6 +28,7 @@ import {
 // Main Graph Visualization Component
 // ============================================
 
+/** Props for PluginDependencyGraph component */
 interface PluginDependencyGraphProps {
   graph: DependencyGraph
   onNodeClick?: (node: GraphNode) => void
@@ -29,9 +36,19 @@ interface PluginDependencyGraphProps {
   layoutOptions?: GraphLayoutOptions
   filterOptions?: GraphFilterOptions
   width?: number
+  /** Graph height in pixels */
   height?: number
 }
 
+/**
+ * Interactive SVG dependency graph visualization
+ *
+ * Renders plugin dependencies as a directed graph with:
+ * - Color-coded nodes by installation status
+ * - Highlighted paths on hover
+ * - Cycle detection visualization
+ * - Node selection with detail panel
+ */
 export function PluginDependencyGraph({
   graph,
   onNodeClick,
@@ -135,6 +152,7 @@ export function PluginDependencyGraph({
 // Node Circle Component
 // ============================================
 
+/** Props for NodeCircle component */
 interface NodeCircleProps {
   node: GraphNode
   isSelected: boolean
@@ -142,9 +160,11 @@ interface NodeCircleProps {
   isRelated: boolean
   onClick: () => void
   onMouseEnter: () => void
+  /** Mouse leave handler */
   onMouseLeave: () => void
 }
 
+/** SVG node circle with label and version */
 function NodeCircle({
   node,
   isSelected,
@@ -233,12 +253,17 @@ function NodeCircle({
 // Edge Line Component
 // ============================================
 
+/** Props for EdgeLine component */
 interface EdgeLineProps {
+  /** Edge data */
   edge: GraphEdge
+  /** All graph nodes for coordinate lookup */
   nodes: GraphNode[]
+  /** Whether edge should be highlighted */
   isHighlighted: boolean
 }
 
+/** SVG edge line with arrow */
 function EdgeLine({ edge, nodes, isHighlighted }: EdgeLineProps) {
   const sourceNode = nodes.find((n) => n.id === edge.source)
   const targetNode = nodes.find((n) => n.id === edge.target)
@@ -285,6 +310,7 @@ function EdgeLine({ edge, nodes, isHighlighted }: EdgeLineProps) {
 // Graph Legend
 // ============================================
 
+/** Graph legend showing node and edge type meanings */
 function GraphLegend() {
   return (
     <div className="mt-4 flex flex-wrap gap-4 text-sm">
@@ -316,10 +342,13 @@ function GraphLegend() {
 // Graph Statistics Panel
 // ============================================
 
+/** Props for GraphStatisticsPanel component */
 interface GraphStatisticsPanelProps {
+  /** Dependency graph to analyze */
   graph: DependencyGraph
 }
 
+/** Displays graph statistics in a grid */
 export function GraphStatisticsPanel({ graph }: GraphStatisticsPanelProps) {
   const stats = useMemo(() => getGraphStatistics(graph), [graph])
 
@@ -341,6 +370,7 @@ export function GraphStatisticsPanel({ graph }: GraphStatisticsPanelProps) {
   )
 }
 
+/** Individual statistic display item */
 function StatItem({ label, value, color = 'text-white' }: { label: string; value: string | number; color?: string }) {
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-3">
@@ -354,10 +384,13 @@ function StatItem({ label, value, color = 'text-white' }: { label: string; value
 // Cycle Detection Panel
 // ============================================
 
+/** Props for CycleDetectionPanel component */
 interface CycleDetectionPanelProps {
+  /** Dependency graph to check for cycles */
   graph: DependencyGraph
 }
 
+/** Displays circular dependency detection results */
 export function CycleDetectionPanel({ graph }: CycleDetectionPanelProps) {
   const result = useMemo(() => detectCircularDependencies(graph), [graph])
 
@@ -413,10 +446,13 @@ export function CycleDetectionPanel({ graph }: CycleDetectionPanelProps) {
 // Impact Analysis Panel
 // ============================================
 
+/** Props for ImpactAnalysisPanel component */
 interface ImpactAnalysisPanelProps {
+  /** Impact analysis result */
   analysis: ImpactAnalysis
 }
 
+/** Displays plugin change impact analysis */
 export function ImpactAnalysisPanel({ analysis }: ImpactAnalysisPanelProps) {
   return (
     <div className="space-y-4">
@@ -489,12 +525,17 @@ export function ImpactAnalysisPanel({ analysis }: ImpactAnalysisPanelProps) {
 // Node Details Panel
 // ============================================
 
+/** Props for NodeDetailsPanel component */
 interface NodeDetailsPanelProps {
+  /** Selected node to show details for */
   node: GraphNode
+  /** Full dependency graph */
   graph: DependencyGraph
+  /** Close panel callback */
   onClose: () => void
 }
 
+/** Detailed node information panel */
 export function NodeDetailsPanel({ node, graph, onClose }: NodeDetailsPanelProps) {
   const dependencies = useMemo(() => getDirectDependencies(graph, node.id), [graph, node.id])
   const dependents = useMemo(() => getDirectDependents(graph, node.id), [graph, node.id])
@@ -555,6 +596,7 @@ export function NodeDetailsPanel({ node, graph, onClose }: NodeDetailsPanelProps
   )
 }
 
+/** Small node badge for dependency lists */
 function NodeBadge({ node }: { node: GraphNode }) {
   const config = NODE_STATUS_CONFIG[node.status]
   return (
@@ -568,10 +610,13 @@ function NodeBadge({ node }: { node: GraphNode }) {
 // Mermaid Export
 // ============================================
 
+/** Props for MermaidExport component */
 interface MermaidExportProps {
+  /** Graph to export */
   graph: DependencyGraph
 }
 
+/** Export graph as Mermaid diagram code */
 export function MermaidExport({ graph }: MermaidExportProps) {
   const [copied, setCopied] = useState(false)
   const mermaidCode = useMemo(() => exportToMermaid(graph), [graph])
@@ -604,13 +649,19 @@ export function MermaidExport({ graph }: MermaidExportProps) {
 // Graph Controls
 // ============================================
 
+/** Props for GraphControls component */
 interface GraphControlsProps {
+  /** Current layout options */
   layoutOptions: GraphLayoutOptions
+  /** Current filter options */
   filterOptions: GraphFilterOptions
+  /** Layout change callback */
   onLayoutChange: (options: GraphLayoutOptions) => void
+  /** Filter change callback */
   onFilterChange: (options: GraphFilterOptions) => void
 }
 
+/** Graph visualization control panel */
 export function GraphControls({
   layoutOptions,
   filterOptions,

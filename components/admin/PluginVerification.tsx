@@ -1,3 +1,9 @@
+/**
+ * Plugin verification and certification components
+ *
+ * Displays plugin security verification status, developer certification,
+ * security scan results, and safety recommendations before installation.
+ */
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
@@ -17,14 +23,30 @@ import {
   DEFAULT_VERIFICATION_CONFIG,
 } from '@/lib/plugin/verification'
 
+/** Props for PluginVerification component */
 interface PluginVerificationProps {
+  /** Verification result from plugin analysis */
   result: PluginVerificationResult
+  /** Callback when user confirms installation */
   onInstall?: () => void
+  /** Callback when user rejects installation */
   onReject?: () => void
+  /** Verification configuration options */
   config?: VerificationConfig
+  /** Whether to show full verification report option */
   showFullReport?: boolean
 }
 
+/**
+ * Main plugin verification component
+ *
+ * Displays comprehensive verification information including:
+ * - Risk level assessment
+ * - Developer certification and reputation
+ * - Security scan findings
+ * - Warnings and recommendations
+ * - Safety status and install/reject actions
+ */
 export function PluginVerification({
   result,
   onInstall,
@@ -115,7 +137,7 @@ export function PluginVerification({
   )
 }
 
-// Verification header component
+/** Verification header with plugin name and risk level */
 function VerificationHeader({ result }: { result: PluginVerificationResult }) {
   const riskConfig = RISK_LEVELS[result.riskLevel]
 
@@ -138,7 +160,7 @@ function VerificationHeader({ result }: { result: PluginVerificationResult }) {
   )
 }
 
-// Risk badge component
+/** Risk level badge with color-coded display */
 export function RiskBadge({ level, size = 'md' }: { level: RiskLevel; size?: 'sm' | 'md' }) {
   const config = RISK_LEVELS[level]
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'
@@ -152,7 +174,7 @@ export function RiskBadge({ level, size = 'md' }: { level: RiskLevel; size?: 'sm
   )
 }
 
-// Developer card component
+/** Developer information card with certification and badges */
 function DeveloperCard({ developer }: { developer: DeveloperInfo }) {
   const certConfig = CERTIFICATION_LEVELS[developer.certificationLevel]
 
@@ -199,7 +221,7 @@ function DeveloperCard({ developer }: { developer: DeveloperInfo }) {
   )
 }
 
-// Certification badge component
+/** Developer certification level badge */
 export function CertificationBadge({
   level,
   size = 'sm',
@@ -217,7 +239,7 @@ export function CertificationBadge({
   )
 }
 
-// Security scan card component
+/** Security scan results card with severity breakdown */
 function SecurityScanCard({
   scan,
   showFindings,
@@ -276,7 +298,7 @@ function SecurityScanCard({
   )
 }
 
-// Severity stat component
+/** Individual severity count statistic */
 function SeverityStat({
   label,
   count,
@@ -296,7 +318,7 @@ function SeverityStat({
   )
 }
 
-// Finding card component
+/** Security finding detail card */
 function FindingCard({ finding }: { finding: SecurityFinding }) {
   const severityConfig = getSeverityConfig(finding.severity)
   const categoryConfig = SECURITY_CATEGORIES[finding.category]
@@ -323,7 +345,7 @@ function FindingCard({ finding }: { finding: SecurityFinding }) {
   )
 }
 
-// Warnings card component
+/** Warnings list card */
 function WarningsCard({
   warnings,
 }: {
@@ -354,7 +376,7 @@ function WarningsCard({
   )
 }
 
-// Recommendations card component
+/** Recommendations list card */
 function RecommendationsCard({
   recommendations,
 }: {
@@ -374,7 +396,7 @@ function RecommendationsCard({
   )
 }
 
-// Safety status component
+/** Installation safety status indicator */
 function SafetyStatus({
   safetyCheck,
   result,
@@ -414,7 +436,7 @@ function SafetyStatus({
   )
 }
 
-// Compact verification badge for list views
+/** Compact verification badge for list views */
 export function PluginVerificationBadge({
   result,
 }: {
@@ -428,7 +450,7 @@ export function PluginVerificationBadge({
   )
 }
 
-// Simple verification status indicator
+/** Simple verification status indicator */
 export function VerificationStatus({
   status,
 }: {

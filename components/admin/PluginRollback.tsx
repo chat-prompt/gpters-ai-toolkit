@@ -1,3 +1,9 @@
+/**
+ * Plugin rollback management components
+ *
+ * Provides installation snapshot management, rollback configuration,
+ * preview, progress tracking, and rollback history display.
+ */
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
@@ -25,12 +31,21 @@ import {
 // Main Rollback Panel
 // ============================================
 
+/** Props for PluginRollbackPanel component */
 interface PluginRollbackPanelProps {
+  /** Available installation snapshots */
   snapshots: InstallationSnapshot[]
+  /** Callback to execute rollback operation */
   onRollback: (snapshot: InstallationSnapshot, options: RollbackOptions) => Promise<void>
+  /** Callback to delete a snapshot */
   onDeleteSnapshot?: (snapshotId: string) => void
 }
 
+/**
+ * Main rollback management panel
+ *
+ * Displays snapshot list with storage summary and rollback dialog.
+ */
 export function PluginRollbackPanel({
   snapshots,
   onRollback,
@@ -99,10 +114,13 @@ export function PluginRollbackPanel({
 // Snapshot Storage Summary
 // ============================================
 
+/** Props for SnapshotStorageSummary component */
 interface SnapshotStorageSummaryProps {
+  /** Storage summary data */
   summary: ReturnType<typeof getSnapshotStorageSummary>
 }
 
+/** Displays snapshot storage statistics in a grid */
 export function SnapshotStorageSummary({ summary }: SnapshotStorageSummaryProps) {
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -130,12 +148,17 @@ export function SnapshotStorageSummary({ summary }: SnapshotStorageSummaryProps)
 // Snapshot Card
 // ============================================
 
+/** Props for SnapshotCard component */
 interface SnapshotCardProps {
+  /** Snapshot data to display */
   snapshot: InstallationSnapshot
+  /** Callback when snapshot is selected for rollback */
   onSelect: () => void
+  /** Callback to delete the snapshot */
   onDelete?: () => void
 }
 
+/** Individual snapshot card with rollback and delete actions */
 export function SnapshotCard({ snapshot, onSelect, onDelete }: SnapshotCardProps) {
   const expired = isSnapshotExpired(snapshot)
   const daysLeft = getDaysUntilExpiry(snapshot)
@@ -236,12 +259,22 @@ export function SnapshotCard({ snapshot, onSelect, onDelete }: SnapshotCardProps
 // Rollback Dialog
 // ============================================
 
+/** Props for RollbackDialog component */
 interface RollbackDialogProps {
+  /** Snapshot to rollback to */
   snapshot: InstallationSnapshot
+  /** Callback when rollback is confirmed */
   onConfirm: (options: RollbackOptions) => void
+  /** Callback when dialog is cancelled */
   onCancel: () => void
 }
 
+/**
+ * Rollback configuration dialog
+ *
+ * Allows configuration of rollback scope, file selection,
+ * options, and preview before execution.
+ */
 export function RollbackDialog({ snapshot, onConfirm, onCancel }: RollbackDialogProps) {
   const [scope, setScope] = useState<RollbackScope>('full')
   const [selectedFiles, setSelectedFiles] = useState<string[]>([])
@@ -434,12 +467,17 @@ export function RollbackDialog({ snapshot, onConfirm, onCancel }: RollbackDialog
 // File Selection Item
 // ============================================
 
+/** Props for FileSelectionItem component */
 interface FileSelectionItemProps {
+  /** File change data */
   file: FileChange
+  /** Whether this file is selected */
   selected: boolean
+  /** Toggle selection callback */
   onToggle: () => void
 }
 
+/** Individual file selection checkbox item */
 function FileSelectionItem({ file, selected, onToggle }: FileSelectionItemProps) {
   const typeColors = {
     created: 'text-green-400',
@@ -471,11 +509,15 @@ function FileSelectionItem({ file, selected, onToggle }: FileSelectionItemProps)
 // Rollback Preview
 // ============================================
 
+/** Props for RollbackPreview component */
 interface RollbackPreviewProps {
+  /** Preview data from rollback configuration */
   preview: ReturnType<typeof getRollbackPreview>
+  /** Dry run simulation result (if enabled) */
   dryRunResult: ReturnType<typeof simulateRollback> | null
 }
 
+/** Rollback preview with file counts and estimated duration */
 function RollbackPreview({ preview, dryRunResult }: RollbackPreviewProps) {
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
@@ -516,10 +558,13 @@ function RollbackPreview({ preview, dryRunResult }: RollbackPreviewProps) {
 // Rollback Progress
 // ============================================
 
+/** Props for RollbackProgress component */
 interface RollbackProgressProps {
+  /** Current rollback operation state */
   operation: RollbackOperation
 }
 
+/** Rollback progress indicator with step tracking */
 export function RollbackProgress({ operation }: RollbackProgressProps) {
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
@@ -585,7 +630,9 @@ export function RollbackProgress({ operation }: RollbackProgressProps) {
 // Rollback History
 // ============================================
 
+/** Props for RollbackHistory component */
 interface RollbackHistoryProps {
+  /** Array of past rollback operations */
   history: Array<{
     id: string
     pluginName: string
@@ -599,6 +646,7 @@ interface RollbackHistoryProps {
   }>
 }
 
+/** Rollback history list with status and details */
 export function RollbackHistory({ history }: RollbackHistoryProps) {
   if (history.length === 0) {
     return (
@@ -657,13 +705,19 @@ export function RollbackHistory({ history }: RollbackHistoryProps) {
 // Compact Rollback Button
 // ============================================
 
+/** Props for RollbackButton component */
 interface RollbackButtonProps {
+  /** Snapshot to rollback to */
   snapshot: InstallationSnapshot
+  /** Callback when button is clicked */
   onRollback: () => void
+  /** Button size variant */
   size?: 'sm' | 'md'
+  /** Whether button is disabled */
   disabled?: boolean
 }
 
+/** Compact rollback action button */
 export function RollbackButton({ snapshot, onRollback, size = 'md', disabled }: RollbackButtonProps) {
   const validation = validateSnapshotForRollback(snapshot)
   const isDisabled = disabled || !validation.valid || isSnapshotExpired(snapshot)

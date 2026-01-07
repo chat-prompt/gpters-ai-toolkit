@@ -1,13 +1,28 @@
+/**
+ * Type guide panel component
+ *
+ * Displays type-specific guidance for creating catalog items,
+ * including field hints, syntax highlights, and best practices.
+ */
 'use client'
 
 import { TYPE_CONFIG } from '@/lib/data/type-config'
 import type { ItemType } from '@/lib/core/types'
 
+/** Props for TypeGuidePanel component */
 interface TypeGuidePanelProps {
+  /** Item type to show guidance for */
   type: ItemType
+  /** Additional CSS classes */
   className?: string
 }
 
+/**
+ * Displays contextual guidance panel for catalog item types
+ *
+ * Shows type-specific documentation, field hints, and syntax highlights
+ * to help users create well-structured catalog items.
+ */
 export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
   const config = TYPE_CONFIG[type]
   const { guide } = config
