@@ -757,83 +757,110 @@ export async function executeTool(
 }
 
 /**
- * List all available prompts (plugins as MCP prompts)
- * Each plugin becomes an invocable prompt via /mcp__gpters-ai-toolkit__<plugin-id>
+ * GPTers Setup Skill Content
+ * This is the only prompt exposed via MCP - it bootstraps the hook/CLAUDE.md setup
  */
-export async function listPrompts(): Promise<McpPrompt[]> {
-  const results = await db
-    .select({
-      id: catalogItems.id,
-      name: catalogItems.name,
-      type: catalogItems.type,
-      description: catalogItems.description,
-      commandArgumentHint: catalogItems.commandArgumentHint,
-    })
-    .from(catalogItems)
-    .where(eq(catalogItems.mcpEnabled, true))
+const GPTERS_SETUP_SKILL = {
+  id: 'gpters-setup',
+  name: 'GPTers AI Toolkit 설정',
+  description: 'Hook과 CLAUDE.md를 설치하여 팀 공유 스킬을 자연스럽게 사용할 수 있게 합니다.',
+  content: `# GPTers AI Toolkit 설정
 
-  return results.map((item) => {
-    const prompt: McpPrompt = {
-      name: item.id,
-      description: `[${item.type}] ${item.description}`,
-    }
+이 스킬은 GPTers 팀 공유 플러그인을 자연스럽게 사용할 수 있도록 프로젝트를 설정합니다.
 
-    // Add arguments for commands
-    if (item.type === 'command' && item.commandArgumentHint) {
-      prompt.arguments = [
-        {
-          name: 'args',
-          description: item.commandArgumentHint,
-          required: false,
-        },
-      ]
-    }
+## 설치할 파일
 
-    return prompt
-  })
+### 1. CLAUDE.md (프로젝트 루트에 추가 또는 병합)
+
+\`\`\`markdown
+# GPTers AI Toolkit 연동
+
+## 플러그인 검색 규칙
+
+새 작업 시작 전, 관련 플러그인이 있는지 확인하세요:
+
+\\\`\\\`\\\`
+gpters-ai-toolkit search_plugins("키워드")
+\\\`\\\`\\\`
+
+### 추천 검색어
+
+| 작업 | 검색어 |
+|------|--------|
+| DB 스키마/테이블 구조 | data-source |
+| 코드 리팩토링 | refactor |
+| 코드 리뷰 | review |
+| 배포/공유 | deploy |
+
+## 플러그인 배포
+
+만든 스킬을 팀과 공유하려면:
+
+\\\`\\\`\\\`
+gpters-ai-toolkit deploy_skill(type="skill", name="스킬명", content="...")
+\\\`\\\`\\\`
+\`\`\`
+
+### 2. .claude/settings.json (Hook 설정)
+
+\`\`\`json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Task",
+        "command": "echo '💡 Tip: gpters-ai-toolkit search_plugins로 팀 공유 플러그인 검색'",
+        "blocking": false
+      }
+    ]
+  }
+}
+\`\`\`
+
+## 설치 방법
+
+1. 위 CLAUDE.md 내용을 프로젝트 루트의 CLAUDE.md에 추가하세요
+2. .claude/settings.json 파일을 생성하고 Hook 설정을 추가하세요
+3. 이후 작업 시 자연스럽게 플러그인 검색 힌트가 표시됩니다
+
+## 확인
+
+설치 후 다음 명령으로 플러그인 검색이 되는지 확인:
+
+\`\`\`
+gpters-ai-toolkit search_plugins("")
+\`\`\`
+`,
 }
 
 /**
- * Get a specific prompt by name
- * Returns the plugin content as a prompt message
+ * List all available prompts
+ * Only exposes gpters-setup for bootstrapping - catalog items are discovered via search
  */
+export async function listPrompts(): Promise<McpPrompt[]> {
+  return [
+    {
+      name: GPTERS_SETUP_SKILL.id,
+      description: GPTERS_SETUP_SKILL.description,
+    },
+  ]
+}
+
 export async function getPrompt(input: GetPromptInput): Promise<McpPromptResult | null> {
-  const { name, arguments: args } = input
+  const { name } = input
 
-  const results = await db
-    .select()
-    .from(catalogItems)
-    .where(eq(catalogItems.id, name))
-    .limit(1)
-
-  if (results.length === 0) {
+  if (name !== GPTERS_SETUP_SKILL.id) {
     return null
   }
 
-  const item = results[0]
-
-  // Build the prompt content
-  let promptContent = `## ${item.name}\n\n`
-  promptContent += `**Type:** ${item.type}\n`
-  promptContent += `**Description:** ${item.description}\n\n`
-
-  if (item.content) {
-    promptContent += `---\n\n${item.content}`
-  }
-
-  // Append arguments if provided (for commands)
-  if (args?.args) {
-    promptContent += `\n\n---\n\n**Arguments:** ${args.args}`
-  }
-
   return {
-    description: item.description,
+    description: GPTERS_SETUP_SKILL.description,
     messages: [
       {
         role: 'user',
         content: {
           type: 'text',
-          text: promptContent,
+          text: GPTERS_SETUP_SKILL.content,
         },
       },
     ],

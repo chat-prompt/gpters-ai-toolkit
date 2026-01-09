@@ -645,77 +645,31 @@ describe('MCP Handlers', () => {
   })
 
   describe('listPrompts', () => {
-    it('should list all marketplace-enabled items as prompts', async () => {
-      const mockItems = [
-        { id: 'skill-1', name: 'Skill 1', type: 'skill', description: 'A skill', commandArgumentHint: null },
-        { id: 'command-1', name: 'Command 1', type: 'command', description: 'A command', commandArgumentHint: 'arg1 arg2' },
-      ]
-
-      const mockChain = {
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue(mockItems),
-      }
-      vi.mocked(db.select).mockReturnValue(mockChain as never)
-
+    it('should return only gpters-setup prompt', async () => {
       const result = await listPrompts()
 
-      expect(result).toHaveLength(2)
-      expect(result[0].name).toBe('skill-1')
-      expect(result[0].description).toBe('[skill] A skill')
-      expect(result[1].arguments).toBeDefined()
-      expect(result[1].arguments?.[0].name).toBe('args')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('gpters-setup')
+      expect(result[0].description).toContain('Hook')
     })
   })
 
   describe('getPrompt', () => {
-    it('should return prompt content when found', async () => {
-      const mockItem = {
-        id: 'test-skill',
-        name: 'Test Skill',
-        type: 'skill',
-        description: 'A test skill',
-        content: '# Skill Instructions',
-      }
-
-      const mockChain = createMockChain([mockItem])
-      vi.mocked(db.select).mockReturnValue(mockChain as never)
-
-      const result = await getPrompt({ name: 'test-skill' })
+    it('should return gpters-setup content', async () => {
+      const result = await getPrompt({ name: 'gpters-setup' })
 
       expect(result).not.toBeNull()
       expect(result?.messages).toHaveLength(1)
       expect(result?.messages[0].role).toBe('user')
-      expect(result?.messages[0].content.text).toContain('Test Skill')
-      expect(result?.messages[0].content.text).toContain('# Skill Instructions')
+      expect(result?.messages[0].content.text).toContain('GPTers AI Toolkit')
+      expect(result?.messages[0].content.text).toContain('CLAUDE.md')
+      expect(result?.messages[0].content.text).toContain('hooks')
     })
 
-    it('should return null when prompt not found', async () => {
-      const mockChain = createMockChain([])
-      vi.mocked(db.select).mockReturnValue(mockChain as never)
-
+    it('should return null for other prompts', async () => {
       const result = await getPrompt({ name: 'nonexistent' })
 
       expect(result).toBeNull()
-    })
-
-    it('should include arguments in prompt content', async () => {
-      const mockItem = {
-        id: 'test-command',
-        name: 'Test Command',
-        type: 'command',
-        description: 'A test command',
-        content: '# Command',
-      }
-
-      const mockChain = createMockChain([mockItem])
-      vi.mocked(db.select).mockReturnValue(mockChain as never)
-
-      const result = await getPrompt({
-        name: 'test-command',
-        arguments: { args: '--verbose' },
-      })
-
-      expect(result?.messages[0].content.text).toContain('--verbose')
     })
   })
 })
