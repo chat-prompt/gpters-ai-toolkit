@@ -270,3 +270,32 @@ pnpm lint && pnpm test && pnpm build
 
 See `plugins/` directory for all available plugins.
 See `docs/CLAUDE_CODE_INFRASTRUCTURE.md` for Claude Code infrastructure patterns.
+
+### 팀 플러그인 활용 가이드
+
+새 작업 시작 전, 관련 팀 공유 플러그인이 있는지 확인하세요:
+
+```
+gpters-ai-toolkit search_plugins("키워드")
+```
+
+**추천 검색어:**
+
+| 작업 | 검색어 |
+|------|--------|
+| DB 스키마/테이블 구조 | data-source |
+| 코드 리팩토링 | refactor |
+| 코드 리뷰 | review |
+| 문서 작성 | writing |
+
+**플러그인 배포** - 만든 스킬을 팀과 공유하려면:
+
+```
+gpters-ai-toolkit deploy_skill(type="skill", name="스킬명", content="...")
+```
+
+**개선 제안** - 다른 사람의 플러그인에 개선을 제안하려면:
+
+```
+gpters-ai-toolkit suggest_improvement(pluginId="플러그인ID", title="제목", description="설명")
+```
