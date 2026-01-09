@@ -140,6 +140,27 @@ export function MCPConfigGenerator({ defaultUrl }: MCPConfigGeneratorProps) {
               <span>Claude Code를 재시작하세요</span>
             </div>
           </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] flex items-center justify-center text-xs font-medium">
+              5
+            </span>
+            <div>
+              <span>초기 설정을 완료하세요:</span>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-[var(--text-muted)]">
+                  Claude Code에서 다음 중 하나를 실행하여 Hook과 CLAUDE.md를 설치하세요:
+                </p>
+                <div className="flex items-center gap-2 bg-[var(--bg-primary)] rounded-lg p-2">
+                  <code className="text-[var(--accent-cyan)] text-xs font-mono">
+                    &quot;GPTers 설정해줘&quot;
+                  </code>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">
+                  이후 작업 시 자동으로 팀 공유 플러그인 검색이 안내됩니다.
+                </p>
+              </div>
+            </div>
+          </li>
         </ol>
 
         <div className="mt-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
