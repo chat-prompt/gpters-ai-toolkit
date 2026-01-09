@@ -323,6 +323,9 @@ export const oauthAccessTokensRelations = relations(oauthAccessTokens, ({ one })
 
 export const versionTypeEnum = pgEnum('version_type', ['major', 'minor', 'patch'])
 
+// Suggestion status for collaboration workflow
+export const suggestionStatusEnum = pgEnum('suggestion_status', ['pending', 'accepted', 'rejected'])
+
 export const itemVersions = pgTable('item_versions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
@@ -478,5 +481,55 @@ export const mcpAuditLogsRelations = relations(mcpAuditLogs, ({ one }) => ({
   accessToken: one(oauthAccessTokens, {
     fields: [mcpAuditLogs.accessTokenId],
     references: [oauthAccessTokens.id],
+  }),
+}))
+
+// ============================================
+// Suggestions Table (Collaboration)
+// ============================================
+
+export const suggestions = pgTable('suggestions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  pluginId: text('plugin_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  diff: text('diff'),
+  
+  status: suggestionStatusEnum('status').notNull().default('pending'),
+  
+  suggestedBy: text('suggested_by').references(() => users.id, { onDelete: 'set null' }),
+  suggestedByName: text('suggested_by_name'),
+  
+  resolvedBy: text('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolveComment: text('resolve_comment'),
+  
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('suggestions_plugin_id_idx').on(table.pluginId),
+  index('suggestions_status_idx').on(table.status),
+  index('suggestions_suggested_by_idx').on(table.suggestedBy),
+  index('suggestions_created_at_idx').on(table.createdAt),
+])
+
+export type SuggestionRecord = typeof suggestions.$inferSelect
+export type NewSuggestionRecord = typeof suggestions.$inferInsert
+
+export const suggestionsRelations = relations(suggestions, ({ one }) => ({
+  plugin: one(catalogItems, {
+    fields: [suggestions.pluginId],
+    references: [catalogItems.id],
+  }),
+  suggestedByUser: one(users, {
+    fields: [suggestions.suggestedBy],
+    references: [users.id],
+    relationName: 'suggestedBy',
+  }),
+  resolvedByUser: one(users, {
+    fields: [suggestions.resolvedBy],
+    references: [users.id],
+    relationName: 'resolvedBy',
   }),
 }))

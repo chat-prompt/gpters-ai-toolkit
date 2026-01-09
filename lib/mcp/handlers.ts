@@ -4,8 +4,8 @@
  * Database query handlers for each MCP tool.
  */
 
-import { db, catalogItems, users } from '../db'
-import { ilike, or, eq, and, sql, inArray } from 'drizzle-orm'
+import { db, catalogItems, users, suggestions } from '../db'
+import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
   GetPluginContentInput,
@@ -26,6 +26,13 @@ import type {
   McpToolResponse,
   McpPrompt,
   McpPromptResult,
+  SuggestImprovementInput,
+  SuggestImprovementResponse,
+  ListSuggestionsInput,
+  ListSuggestionsResponse,
+  SuggestionSummary,
+  ResolveSuggestionInput,
+  ResolveSuggestionResponse,
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
@@ -528,9 +535,201 @@ export async function checkUpdates(input: CheckUpdatesInput): Promise<CheckUpdat
   return { updates, upToDate }
 }
 
-/**
- * Execute a tool call and return MCP-formatted response
- */
+export async function suggestImprovement(input: SuggestImprovementInput): Promise<SuggestImprovementResponse> {
+  const { pluginId, title, description, diff, suggestedByName } = input
+
+  const plugin = await db
+    .select({ id: catalogItems.id, name: catalogItems.name })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, pluginId))
+    .limit(1)
+
+  if (plugin.length === 0) {
+    return {
+      success: false,
+      suggestionId: '',
+      pluginId,
+      pluginName: '',
+      message: `플러그인 '${pluginId}'을(를) 찾을 수 없습니다`,
+    }
+  }
+
+  const suggestionId = crypto.randomUUID()
+  const now = new Date()
+
+  await db.insert(suggestions).values({
+    id: suggestionId,
+    pluginId,
+    title,
+    description,
+    diff: diff || null,
+    status: 'pending',
+    suggestedByName: suggestedByName || null,
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  return {
+    success: true,
+    suggestionId,
+    pluginId,
+    pluginName: plugin[0].name,
+    message: `'${plugin[0].name}'에 대한 개선 제안이 등록되었습니다. 원작자가 검토 후 수락/거부합니다.`,
+  }
+}
+
+export async function listSuggestions(input: ListSuggestionsInput = {}): Promise<ListSuggestionsResponse> {
+  const { pluginId, status = 'all', limit = 20 } = input
+  const safeLimit = Math.min(Math.max(1, limit), 50)
+
+  const conditions = []
+
+  if (pluginId) {
+    conditions.push(eq(suggestions.pluginId, pluginId))
+  }
+
+  if (status && status !== 'all') {
+    conditions.push(eq(suggestions.status, status))
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+  const results = await db
+    .select({
+      id: suggestions.id,
+      pluginId: suggestions.pluginId,
+      pluginName: catalogItems.name,
+      title: suggestions.title,
+      description: suggestions.description,
+      status: suggestions.status,
+      suggestedByName: suggestions.suggestedByName,
+      createdAt: suggestions.createdAt,
+      resolvedAt: suggestions.resolvedAt,
+      resolveComment: suggestions.resolveComment,
+    })
+    .from(suggestions)
+    .leftJoin(catalogItems, eq(suggestions.pluginId, catalogItems.id))
+    .where(whereClause)
+    .orderBy(desc(suggestions.createdAt))
+    .limit(safeLimit)
+
+  const suggestionList: SuggestionSummary[] = results.map((r) => ({
+    id: r.id,
+    pluginId: r.pluginId,
+    pluginName: r.pluginName || 'Unknown',
+    title: r.title,
+    description: r.description,
+    status: r.status,
+    suggestedByName: r.suggestedByName,
+    createdAt: r.createdAt?.toISOString() || '',
+    resolvedAt: r.resolvedAt?.toISOString() || null,
+    resolveComment: r.resolveComment,
+  }))
+
+  return {
+    suggestions: suggestionList,
+    total: suggestionList.length,
+  }
+}
+
+export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<ResolveSuggestionResponse> {
+  const { suggestionId, action, comment } = input
+
+  const suggestion = await db
+    .select({
+      id: suggestions.id,
+      pluginId: suggestions.pluginId,
+      status: suggestions.status,
+      diff: suggestions.diff,
+    })
+    .from(suggestions)
+    .where(eq(suggestions.id, suggestionId))
+    .limit(1)
+
+  if (suggestion.length === 0) {
+    return {
+      success: false,
+      suggestionId,
+      action,
+      pluginId: '',
+      pluginName: '',
+      message: `제안 '${suggestionId}'을(를) 찾을 수 없습니다`,
+    }
+  }
+
+  if (suggestion[0].status !== 'pending') {
+    return {
+      success: false,
+      suggestionId,
+      action,
+      pluginId: suggestion[0].pluginId,
+      pluginName: '',
+      message: `이미 처리된 제안입니다 (상태: ${suggestion[0].status})`,
+    }
+  }
+
+  const plugin = await db
+    .select({ id: catalogItems.id, name: catalogItems.name, version: catalogItems.version })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, suggestion[0].pluginId))
+    .limit(1)
+
+  if (plugin.length === 0) {
+    return {
+      success: false,
+      suggestionId,
+      action,
+      pluginId: suggestion[0].pluginId,
+      pluginName: '',
+      message: '연결된 플러그인을 찾을 수 없습니다',
+    }
+  }
+
+  const now = new Date()
+  const newStatus = action === 'accept' ? 'accepted' : 'rejected'
+
+  await db
+    .update(suggestions)
+    .set({
+      status: newStatus,
+      resolvedAt: now,
+      resolveComment: comment || null,
+      updatedAt: now,
+    })
+    .where(eq(suggestions.id, suggestionId))
+
+  let newVersion: string | undefined
+
+  if (action === 'accept') {
+    const currentVersion = plugin[0].version || '1.0.0'
+    const [major, minor, patch] = currentVersion.split('.').map(Number)
+    newVersion = `${major}.${minor}.${patch + 1}`
+
+    await db
+      .update(catalogItems)
+      .set({
+        version: newVersion,
+        changelog: `제안 수락: ${suggestion[0].diff ? '코드 변경 반영' : '개선 사항 반영'}`,
+        updatedAt: now,
+      })
+      .where(eq(catalogItems.id, plugin[0].id))
+  }
+
+  const actionText = action === 'accept' ? '수락' : '거부'
+  const versionText = newVersion ? ` (v${newVersion})` : ''
+
+  return {
+    success: true,
+    suggestionId,
+    action,
+    pluginId: plugin[0].id,
+    pluginName: plugin[0].name,
+    newVersion,
+    message: `'${plugin[0].name}'에 대한 제안이 ${actionText}되었습니다${versionText}`,
+  }
+}
+
+
 export async function executeTool(
   toolName: string,
   args: Record<string, unknown>
@@ -728,6 +927,86 @@ export async function executeTool(
               text: JSON.stringify(result, null, 2),
             },
           ],
+        }
+      }
+
+      case 'suggest_improvement': {
+        const input = args as unknown as SuggestImprovementInput
+        if (!input.pluginId || !input.title || !input.description) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required fields: pluginId, title, description',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await suggestImprovement(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'list_suggestions': {
+        const input = args as unknown as ListSuggestionsInput
+        const result = await listSuggestions(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        }
+      }
+
+      case 'resolve_suggestion': {
+        const input = args as unknown as ResolveSuggestionInput
+        if (!input.suggestionId || !input.action) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required fields: suggestionId, action',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        if (input.action !== 'accept' && input.action !== 'reject') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'action must be "accept" or "reject"',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await resolveSuggestion(input)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
         }
       }
 
