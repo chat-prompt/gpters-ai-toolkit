@@ -38,6 +38,21 @@ vi.mock('@/lib/db', () => ({
     name: 'name',
     email: 'email',
   },
+  suggestions: {
+    id: 'id',
+    pluginId: 'pluginId',
+    title: 'title',
+    description: 'description',
+    diff: 'diff',
+    status: 'status',
+    suggestedBy: 'suggestedBy',
+    suggestedByName: 'suggestedByName',
+    resolvedBy: 'resolvedBy',
+    resolvedAt: 'resolvedAt',
+    resolveComment: 'resolveComment',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  },
 }))
 
 // Mock the marketplace sync
@@ -75,6 +90,9 @@ import {
   deletePlugin,
   deploySkill,
   checkUpdates,
+  suggestImprovement,
+  listSuggestions,
+  resolveSuggestion,
   executeTool,
   listPrompts,
   getPrompt,
@@ -548,6 +566,237 @@ describe('MCP Handlers', () => {
     })
   })
 
+  describe('suggestImprovement', () => {
+    it('should create a new suggestion for existing plugin', async () => {
+      const mockSelectChain = createMockChain([{ id: 'test-plugin', name: 'Test Plugin' }])
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      const result = await suggestImprovement({
+        pluginId: 'test-plugin',
+        title: 'Fix bug',
+        description: 'This fixes a critical bug',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.pluginId).toBe('test-plugin')
+      expect(result.pluginName).toBe('Test Plugin')
+      expect(result.suggestionId).toBeDefined()
+      expect(db.insert).toHaveBeenCalled()
+    })
+
+    it('should fail if plugin not found', async () => {
+      const mockSelectChain = createMockChain([])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await suggestImprovement({
+        pluginId: 'nonexistent',
+        title: 'Fix bug',
+        description: 'This fixes a bug',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('찾을 수 없습니다')
+    })
+
+    it('should include optional diff and suggestedByName', async () => {
+      const mockSelectChain = createMockChain([{ id: 'test-plugin', name: 'Test Plugin' }])
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      const result = await suggestImprovement({
+        pluginId: 'test-plugin',
+        title: 'Add feature',
+        description: 'Add new feature',
+        diff: '+ new code',
+        suggestedByName: 'John Doe',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockInsertChain.values).toHaveBeenCalled()
+    })
+  })
+
+  describe('listSuggestions', () => {
+    it('should list all suggestions', async () => {
+      const mockSuggestions = [
+        {
+          id: 'suggestion-1',
+          pluginId: 'plugin-1',
+          pluginName: 'Plugin 1',
+          title: 'Fix bug',
+          description: 'Bug fix',
+          status: 'pending',
+          suggestedByName: 'John',
+          createdAt: new Date(),
+          resolvedAt: null,
+          resolveComment: null,
+        },
+      ]
+
+      const mockChain = {
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue(mockSuggestions),
+      }
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      const result = await listSuggestions()
+
+      expect(result.suggestions).toHaveLength(1)
+      expect(result.total).toBe(1)
+    })
+
+    it('should filter by pluginId', async () => {
+      const mockChain = {
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+      }
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      await listSuggestions({ pluginId: 'specific-plugin' })
+
+      expect(mockChain.where).toHaveBeenCalled()
+    })
+
+    it('should filter by status', async () => {
+      const mockChain = {
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+      }
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      await listSuggestions({ status: 'pending' })
+
+      expect(mockChain.where).toHaveBeenCalled()
+    })
+
+    it('should cap limit at 50', async () => {
+      const mockChain = {
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+      }
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      await listSuggestions({ limit: 100 })
+
+      expect(mockChain.limit).toHaveBeenCalledWith(50)
+    })
+  })
+
+  describe('resolveSuggestion', () => {
+    it('should accept a suggestion and bump version', async () => {
+      // First call: find suggestion
+      const suggestionResult = [{ id: 'suggestion-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
+      // Second call: find plugin
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+
+      let callCount = 0
+      vi.mocked(db.select).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) {
+          return createMockChain(suggestionResult) as never
+        }
+        return createMockChain(pluginResult) as never
+      })
+
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await resolveSuggestion({
+        suggestionId: 'suggestion-1',
+        action: 'accept',
+        comment: 'Good suggestion!',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.action).toBe('accept')
+      expect(result.newVersion).toBe('1.0.1')
+      expect(result.message).toContain('수락')
+    })
+
+    it('should reject a suggestion without version bump', async () => {
+      const suggestionResult = [{ id: 'suggestion-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+
+      let callCount = 0
+      vi.mocked(db.select).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) {
+          return createMockChain(suggestionResult) as never
+        }
+        return createMockChain(pluginResult) as never
+      })
+
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await resolveSuggestion({
+        suggestionId: 'suggestion-1',
+        action: 'reject',
+        comment: 'Not applicable',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.action).toBe('reject')
+      expect(result.newVersion).toBeUndefined()
+      expect(result.message).toContain('거부')
+    })
+
+    it('should fail if suggestion not found', async () => {
+      const mockSelectChain = createMockChain([])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await resolveSuggestion({
+        suggestionId: 'nonexistent',
+        action: 'accept',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('찾을 수 없습니다')
+    })
+
+    it('should fail if suggestion already resolved', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'suggestion-1', pluginId: 'plugin-1', status: 'accepted', diff: null },
+      ])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await resolveSuggestion({
+        suggestionId: 'suggestion-1',
+        action: 'accept',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('이미 처리된')
+    })
+  })
+
   describe('executeTool', () => {
     beforeEach(() => {
       const mockChain = createMockChain([])
@@ -623,6 +872,92 @@ describe('MCP Handlers', () => {
 
       expect(result.isError).toBe(true)
       expect(result.content[0].text).toContain('Missing required field: installations')
+    })
+
+    it('should execute suggest_improvement tool', async () => {
+      const mockSelectChain = createMockChain([{ id: 'test-plugin', name: 'Test Plugin' }])
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      const result = await executeTool('suggest_improvement', {
+        pluginId: 'test-plugin',
+        title: 'Fix bug',
+        description: 'Bug fix description',
+      })
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeFalsy()
+    })
+
+    it('should return error for suggest_improvement without required fields', async () => {
+      const result = await executeTool('suggest_improvement', { pluginId: 'test' })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    it('should execute list_suggestions tool', async () => {
+      const mockChain = {
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+      }
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      const result = await executeTool('list_suggestions', {})
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeUndefined()
+    })
+
+    it('should execute resolve_suggestion tool', async () => {
+      const suggestionResult = [{ id: 'sug-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+
+      let callCount = 0
+      vi.mocked(db.select).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) {
+          return createMockChain(suggestionResult) as never
+        }
+        return createMockChain(pluginResult) as never
+      })
+
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await executeTool('resolve_suggestion', {
+        suggestionId: 'sug-1',
+        action: 'accept',
+      })
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeFalsy()
+    })
+
+    it('should return error for resolve_suggestion without required fields', async () => {
+      const result = await executeTool('resolve_suggestion', { suggestionId: 'sug-1' })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    it('should return error for resolve_suggestion with invalid action', async () => {
+      const result = await executeTool('resolve_suggestion', {
+        suggestionId: 'sug-1',
+        action: 'invalid',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('action must be')
     })
 
     it('should return error for unknown tool', async () => {

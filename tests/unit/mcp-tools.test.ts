@@ -19,10 +19,13 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('delete_plugin')
       expect(toolNames).toContain('deploy_skill')
       expect(toolNames).toContain('check_updates')
+      expect(toolNames).toContain('suggest_improvement')
+      expect(toolNames).toContain('list_suggestions')
+      expect(toolNames).toContain('resolve_suggestion')
     })
 
-    it('should have 9 tools total', () => {
-      expect(MCP_TOOLS).toHaveLength(9)
+    it('should have 12 tools total', () => {
+      expect(MCP_TOOLS).toHaveLength(12)
     })
 
     describe('search_plugins tool', () => {
