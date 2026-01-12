@@ -3,20 +3,49 @@ import {
   MCP_TOOLS,
   getToolByName,
   getAllToolNames,
+  ADMIN_TOOL_NAMES,
+  isAdminTool,
 } from '@/lib/mcp/tools'
 
 describe('MCP Tools', () => {
-  describe('MCP_TOOLS', () => {
-    it('should contain expected tools', () => {
+  describe('Admin tools', () => {
+    it('should define admin tool names', () => {
+      expect(ADMIN_TOOL_NAMES).toContain('create_plugin')
+      expect(ADMIN_TOOL_NAMES).toContain('update_plugin')
+      expect(ADMIN_TOOL_NAMES).toContain('delete_plugin')
+      expect(ADMIN_TOOL_NAMES).toHaveLength(3)
+    })
+
+    it('should correctly identify admin tools', () => {
+      expect(isAdminTool('create_plugin')).toBe(true)
+      expect(isAdminTool('update_plugin')).toBe(true)
+      expect(isAdminTool('delete_plugin')).toBe(true)
+      expect(isAdminTool('search_plugins')).toBe(false)
+      expect(isAdminTool('deploy_skill')).toBe(false)
+    })
+
+    it('should not expose admin tools in MCP_TOOLS', () => {
+      const toolNames = MCP_TOOLS.map((t) => t.name)
+      expect(toolNames).not.toContain('create_plugin')
+      expect(toolNames).not.toContain('update_plugin')
+      expect(toolNames).not.toContain('delete_plugin')
+    })
+
+    it('should still allow finding admin tools via getToolByName (internal use)', () => {
+      expect(getToolByName('create_plugin')).toBeDefined()
+      expect(getToolByName('update_plugin')).toBeDefined()
+      expect(getToolByName('delete_plugin')).toBeDefined()
+    })
+  })
+
+  describe('MCP_TOOLS (public tools)', () => {
+    it('should contain expected public tools', () => {
       const toolNames = MCP_TOOLS.map((t) => t.name)
 
       expect(toolNames).toContain('search_plugins')
       expect(toolNames).toContain('get_plugin_content')
       expect(toolNames).toContain('list_plugins')
       expect(toolNames).toContain('get_plugins_by_category')
-      expect(toolNames).toContain('create_plugin')
-      expect(toolNames).toContain('update_plugin')
-      expect(toolNames).toContain('delete_plugin')
       expect(toolNames).toContain('deploy_skill')
       expect(toolNames).toContain('check_updates')
       expect(toolNames).toContain('suggest_improvement')
@@ -24,8 +53,8 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('resolve_suggestion')
     })
 
-    it('should have 12 tools total', () => {
-      expect(MCP_TOOLS).toHaveLength(12)
+    it('should have 9 public tools total (12 - 3 admin)', () => {
+      expect(MCP_TOOLS).toHaveLength(9)
     })
 
     describe('search_plugins tool', () => {
@@ -99,58 +128,6 @@ describe('MCP Tools', () => {
       it('should have category enum without "all"', () => {
         expect(tool.inputSchema.properties.category.enum).toContain('skill')
         expect(tool.inputSchema.properties.category.enum).not.toContain('all')
-      })
-    })
-
-    describe('create_plugin tool', () => {
-      const tool = MCP_TOOLS.find((t) => t.name === 'create_plugin')!
-
-      it('should require id, type, name, content', () => {
-        expect(tool.inputSchema.required).toContain('id')
-        expect(tool.inputSchema.required).toContain('type')
-        expect(tool.inputSchema.required).toContain('name')
-        expect(tool.inputSchema.required).toContain('content')
-      })
-
-      it('should have type enum including hook', () => {
-        expect(tool.inputSchema.properties.type.enum).toContain('skill')
-        expect(tool.inputSchema.properties.type.enum).toContain('agent')
-        expect(tool.inputSchema.properties.type.enum).toContain('command')
-        expect(tool.inputSchema.properties.type.enum).toContain('guide')
-        expect(tool.inputSchema.properties.type.enum).toContain('hook')
-      })
-
-      it('should have files array property', () => {
-        expect(tool.inputSchema.properties.files.type).toBe('array')
-        expect(tool.inputSchema.properties.files.items.type).toBe('object')
-      })
-    })
-
-    describe('update_plugin tool', () => {
-      const tool = MCP_TOOLS.find((t) => t.name === 'update_plugin')!
-
-      it('should only require id', () => {
-        expect(tool.inputSchema.required).toEqual(['id'])
-      })
-
-      it('should have all optional update fields', () => {
-        expect(tool.inputSchema.properties.name).toBeDefined()
-        expect(tool.inputSchema.properties.description).toBeDefined()
-        expect(tool.inputSchema.properties.content).toBeDefined()
-        expect(tool.inputSchema.properties.author).toBeDefined()
-        expect(tool.inputSchema.properties.tags).toBeDefined()
-        expect(tool.inputSchema.properties.teamTag).toBeDefined()
-        expect(tool.inputSchema.properties.readme).toBeDefined()
-        expect(tool.inputSchema.properties.files).toBeDefined()
-        expect(tool.inputSchema.properties.mcpEnabled).toBeDefined()
-      })
-    })
-
-    describe('delete_plugin tool', () => {
-      const tool = MCP_TOOLS.find((t) => t.name === 'delete_plugin')!
-
-      it('should only require id', () => {
-        expect(tool.inputSchema.required).toEqual(['id'])
       })
     })
 
@@ -235,22 +212,26 @@ describe('MCP Tools', () => {
   })
 
   describe('getAllToolNames', () => {
-    it('should return all tool names', () => {
+    it('should return all public tool names', () => {
       const names = getAllToolNames()
       expect(names).toHaveLength(MCP_TOOLS.length)
     })
 
-    it('should contain all expected names', () => {
+    it('should contain all expected public names', () => {
       const names = getAllToolNames()
       expect(names).toContain('search_plugins')
       expect(names).toContain('get_plugin_content')
       expect(names).toContain('list_plugins')
       expect(names).toContain('get_plugins_by_category')
-      expect(names).toContain('create_plugin')
-      expect(names).toContain('update_plugin')
-      expect(names).toContain('delete_plugin')
       expect(names).toContain('deploy_skill')
       expect(names).toContain('check_updates')
+    })
+
+    it('should not contain admin tool names', () => {
+      const names = getAllToolNames()
+      expect(names).not.toContain('create_plugin')
+      expect(names).not.toContain('update_plugin')
+      expect(names).not.toContain('delete_plugin')
     })
 
     it('should return names in order', () => {

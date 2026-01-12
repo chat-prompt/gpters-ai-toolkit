@@ -7,7 +7,25 @@
 
 import type { McpTool } from './types'
 
-export const MCP_TOOLS: McpTool[] = [
+/**
+ * 관리자 전용 도구 이름 목록
+ * 이 도구들은 MCP tools/list에서 숨겨지며, 호출 시 권한 에러를 반환합니다.
+ */
+export const ADMIN_TOOL_NAMES = ['create_plugin', 'update_plugin', 'delete_plugin'] as const
+
+export type AdminToolName = (typeof ADMIN_TOOL_NAMES)[number]
+
+/**
+ * 도구가 관리자 전용인지 확인
+ */
+export function isAdminTool(toolName: string): toolName is AdminToolName {
+  return ADMIN_TOOL_NAMES.includes(toolName as AdminToolName)
+}
+
+/**
+ * 모든 도구 정의 (관리자 도구 포함 - 내부용)
+ */
+const ALL_TOOLS: McpTool[] = [
   {
     name: 'search_plugins',
     description: `카탈로그에서 플러그인을 검색합니다.
@@ -461,10 +479,25 @@ installations: [
   },
 ]
 
+/**
+ * 공개 도구 목록 (MCP tools/list에서 반환)
+ * 관리자 도구는 제외됩니다.
+ */
+export const MCP_TOOLS: McpTool[] = ALL_TOOLS.filter(
+  (tool) => !isAdminTool(tool.name)
+)
+
+/**
+ * 이름으로 도구 찾기 (관리자 도구 포함)
+ * 내부적으로 도구 실행 시 사용됩니다.
+ */
 export function getToolByName(name: string): McpTool | undefined {
-  return MCP_TOOLS.find((tool) => tool.name === name)
+  return ALL_TOOLS.find((tool) => tool.name === name)
 }
 
+/**
+ * 공개 도구 이름 목록 반환
+ */
 export function getAllToolNames(): string[] {
   return MCP_TOOLS.map((tool) => tool.name)
 }

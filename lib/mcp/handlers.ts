@@ -734,6 +734,22 @@ export async function executeTool(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<McpToolResponse> {
+  // 관리자 도구 호출 차단
+  const { isAdminTool } = await import('./tools')
+  if (isAdminTool(toolName)) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            error: `'${toolName}'은(는) 관리자 전용 도구입니다. 일반 사용자는 'deploy_skill' 도구를 사용해주세요.`,
+          }),
+        },
+      ],
+      isError: true,
+    }
+  }
+
   try {
     switch (toolName) {
       case 'search_plugins': {

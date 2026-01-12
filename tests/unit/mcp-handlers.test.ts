@@ -839,25 +839,25 @@ describe('MCP Handlers', () => {
       expect(result.isError).toBeUndefined()
     })
 
-    it('should return error for create_plugin with missing fields', async () => {
+    it('should block create_plugin as admin-only tool', async () => {
       const result = await executeTool('create_plugin', { name: 'Test' })
 
       expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain('Missing required fields')
+      expect(result.content[0].text).toContain('관리자 전용 도구')
     })
 
-    it('should return error for update_plugin without id', async () => {
+    it('should block update_plugin as admin-only tool', async () => {
       const result = await executeTool('update_plugin', { name: 'Test' })
 
       expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain('Missing required field: id')
+      expect(result.content[0].text).toContain('관리자 전용 도구')
     })
 
-    it('should return error for delete_plugin without id', async () => {
+    it('should block delete_plugin as admin-only tool', async () => {
       const result = await executeTool('delete_plugin', {})
 
       expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain('Missing required field: id')
+      expect(result.content[0].text).toContain('관리자 전용 도구')
     })
 
     it('should return error for deploy_skill with missing fields', async () => {
