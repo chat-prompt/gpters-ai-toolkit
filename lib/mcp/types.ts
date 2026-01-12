@@ -267,5 +267,7 @@ export interface ResolveSuggestionResponse {
   pluginId: string
   pluginName: string
   newVersion?: string
+  /** diff가 있었고 content에 자동 적용되었는지 여부 */
+  contentApplied?: boolean
   message: string
 }

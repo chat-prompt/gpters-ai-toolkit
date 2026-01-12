@@ -699,24 +699,34 @@ export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<
     .where(eq(suggestions.id, suggestionId))
 
   let newVersion: string | undefined
+  let contentApplied = false
 
   if (action === 'accept') {
     const currentVersion = plugin[0].version || '1.0.0'
     const [major, minor, patch] = currentVersion.split('.').map(Number)
     newVersion = `${major}.${minor}.${patch + 1}`
 
+    // diff가 있으면 content도 함께 업데이트
+    const updateData: Record<string, unknown> = {
+      version: newVersion,
+      changelog: `제안 수락: ${suggestion[0].diff ? '코드 변경 반영' : '개선 사항 반영'}`,
+      updatedAt: now,
+    }
+
+    if (suggestion[0].diff) {
+      updateData.content = suggestion[0].diff
+      contentApplied = true
+    }
+
     await db
       .update(catalogItems)
-      .set({
-        version: newVersion,
-        changelog: `제안 수락: ${suggestion[0].diff ? '코드 변경 반영' : '개선 사항 반영'}`,
-        updatedAt: now,
-      })
+      .set(updateData)
       .where(eq(catalogItems.id, plugin[0].id))
   }
 
   const actionText = action === 'accept' ? '수락' : '거부'
   const versionText = newVersion ? ` (v${newVersion})` : ''
+  const contentText = contentApplied ? ' - 내용이 자동으로 적용되었습니다' : ''
 
   return {
     success: true,
@@ -725,7 +735,8 @@ export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<
     pluginId: plugin[0].id,
     pluginName: plugin[0].name,
     newVersion,
-    message: `'${plugin[0].name}'에 대한 제안이 ${actionText}되었습니다${versionText}`,
+    contentApplied,
+    message: `'${plugin[0].name}'에 대한 제안이 ${actionText}되었습니다${versionText}${contentText}`,
   }
 }
 

@@ -734,7 +734,46 @@ describe('MCP Handlers', () => {
       expect(result.success).toBe(true)
       expect(result.action).toBe('accept')
       expect(result.newVersion).toBe('1.0.1')
+      expect(result.contentApplied).toBe(false)
       expect(result.message).toContain('수락')
+    })
+
+    it('should accept a suggestion with diff and apply content', async () => {
+      const newContent = '# Updated Content\nThis is the new content.'
+      const suggestionResult = [{ id: 'suggestion-2', pluginId: 'plugin-1', status: 'pending', diff: newContent }]
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+
+      let callCount = 0
+      vi.mocked(db.select).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) {
+          return createMockChain(suggestionResult) as never
+        }
+        return createMockChain(pluginResult) as never
+      })
+
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await resolveSuggestion({
+        suggestionId: 'suggestion-2',
+        action: 'accept',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.action).toBe('accept')
+      expect(result.newVersion).toBe('1.0.1')
+      expect(result.contentApplied).toBe(true)
+      expect(result.message).toContain('수락')
+      expect(result.message).toContain('자동으로 적용')
+
+      // Verify content was included in update
+      expect(mockUpdateChain.set).toHaveBeenCalledWith(
+        expect.objectContaining({ content: newContent })
+      )
     })
 
     it('should reject a suggestion without version bump', async () => {
