@@ -1115,8 +1115,12 @@ gpters-ai-toolkit deploy_skill(type="skill", name="스킬명", content="...")
     "PreToolUse": [
       {
         "matcher": "Task",
-        "command": "echo '💡 Tip: gpters-ai-toolkit search_plugins로 팀 공유 플러그인 검색'",
-        "blocking": false
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '💡 Tip: gpters-ai-toolkit search_plugins로 팀 공유 플러그인 검색'"
+          }
+        ]
       }
     ]
   }
