@@ -704,11 +704,13 @@ describe('MCP Handlers', () => {
   })
 
   describe('resolveSuggestion', () => {
+    const ownerUserId = 'owner-user-123'
+
     it('should accept a suggestion and bump version', async () => {
       // First call: find suggestion
       const suggestionResult = [{ id: 'suggestion-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
-      // Second call: find plugin
-      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+      // Second call: find plugin (includes authorId for ownership check)
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0', authorId: ownerUserId }]
 
       let callCount = 0
       vi.mocked(db.select).mockImplementation(() => {
@@ -725,11 +727,14 @@ describe('MCP Handlers', () => {
       }
       vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
 
-      const result = await resolveSuggestion({
-        suggestionId: 'suggestion-1',
-        action: 'accept',
-        comment: 'Good suggestion!',
-      })
+      const result = await resolveSuggestion(
+        {
+          suggestionId: 'suggestion-1',
+          action: 'accept',
+          comment: 'Good suggestion!',
+        },
+        ownerUserId
+      )
 
       expect(result.success).toBe(true)
       expect(result.action).toBe('accept')
@@ -741,7 +746,7 @@ describe('MCP Handlers', () => {
     it('should accept a suggestion with diff and apply content', async () => {
       const newContent = '# Updated Content\nThis is the new content.'
       const suggestionResult = [{ id: 'suggestion-2', pluginId: 'plugin-1', status: 'pending', diff: newContent }]
-      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0', authorId: ownerUserId }]
 
       let callCount = 0
       vi.mocked(db.select).mockImplementation(() => {
@@ -758,10 +763,13 @@ describe('MCP Handlers', () => {
       }
       vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
 
-      const result = await resolveSuggestion({
-        suggestionId: 'suggestion-2',
-        action: 'accept',
-      })
+      const result = await resolveSuggestion(
+        {
+          suggestionId: 'suggestion-2',
+          action: 'accept',
+        },
+        ownerUserId
+      )
 
       expect(result.success).toBe(true)
       expect(result.action).toBe('accept')
@@ -778,7 +786,7 @@ describe('MCP Handlers', () => {
 
     it('should reject a suggestion without version bump', async () => {
       const suggestionResult = [{ id: 'suggestion-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
-      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0', authorId: ownerUserId }]
 
       let callCount = 0
       vi.mocked(db.select).mockImplementation(() => {
@@ -795,11 +803,14 @@ describe('MCP Handlers', () => {
       }
       vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
 
-      const result = await resolveSuggestion({
-        suggestionId: 'suggestion-1',
-        action: 'reject',
-        comment: 'Not applicable',
-      })
+      const result = await resolveSuggestion(
+        {
+          suggestionId: 'suggestion-1',
+          action: 'reject',
+          comment: 'Not applicable',
+        },
+        ownerUserId
+      )
 
       expect(result.success).toBe(true)
       expect(result.action).toBe('reject')
@@ -921,11 +932,15 @@ describe('MCP Handlers', () => {
       vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
       vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
 
-      const result = await executeTool('suggest_improvement', {
-        pluginId: 'test-plugin',
-        title: 'Fix bug',
-        description: 'Bug fix description',
-      })
+      const result = await executeTool(
+        'suggest_improvement',
+        {
+          pluginId: 'test-plugin',
+          title: 'Fix bug',
+          description: 'Bug fix description',
+        },
+        'user-123'
+      )
 
       expect(result.content).toHaveLength(1)
       expect(result.isError).toBeFalsy()
@@ -955,8 +970,11 @@ describe('MCP Handlers', () => {
     })
 
     it('should execute resolve_suggestion tool', async () => {
+      const testUserId = 'owner-user-123'
       const suggestionResult = [{ id: 'sug-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
-      const pluginResult = [{ id: 'plugin-1', name: 'Plugin 1', version: '1.0.0' }]
+      const pluginResult = [
+        { id: 'plugin-1', name: 'Plugin 1', version: '1.0.0', authorId: testUserId },
+      ]
 
       let callCount = 0
       vi.mocked(db.select).mockImplementation(() => {
@@ -973,13 +991,71 @@ describe('MCP Handlers', () => {
       }
       vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
 
+      const result = await executeTool(
+        'resolve_suggestion',
+        {
+          suggestionId: 'sug-1',
+          action: 'accept',
+        },
+        testUserId
+      )
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeFalsy()
+    })
+
+    it('should reject resolve_suggestion if not plugin owner', async () => {
+      const ownerUserId = 'owner-user-123'
+      const otherUserId = 'other-user-456'
+      const suggestionResult = [{ id: 'sug-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
+      const pluginResult = [
+        { id: 'plugin-1', name: 'Plugin 1', version: '1.0.0', authorId: ownerUserId },
+      ]
+
+      let callCount = 0
+      vi.mocked(db.select).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) {
+          return createMockChain(suggestionResult) as never
+        }
+        return createMockChain(pluginResult) as never
+      })
+
+      const result = await executeTool(
+        'resolve_suggestion',
+        {
+          suggestionId: 'sug-1',
+          action: 'accept',
+        },
+        otherUserId
+      )
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('소유자가 아닙니다')
+    })
+
+    it('should reject resolve_suggestion without authentication', async () => {
+      const suggestionResult = [{ id: 'sug-1', pluginId: 'plugin-1', status: 'pending', diff: null }]
+      const pluginResult = [
+        { id: 'plugin-1', name: 'Plugin 1', version: '1.0.0', authorId: 'owner-123' },
+      ]
+
+      let callCount = 0
+      vi.mocked(db.select).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) {
+          return createMockChain(suggestionResult) as never
+        }
+        return createMockChain(pluginResult) as never
+      })
+
       const result = await executeTool('resolve_suggestion', {
         suggestionId: 'sug-1',
         action: 'accept',
       })
 
-      expect(result.content).toHaveLength(1)
-      expect(result.isError).toBeFalsy()
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('인증이 필요합니다')
     })
 
     it('should return error for resolve_suggestion without required fields', async () => {

@@ -47,14 +47,15 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('list_plugins')
       expect(toolNames).toContain('get_plugins_by_category')
       expect(toolNames).toContain('deploy_skill')
+      expect(toolNames).toContain('undeploy_skill')
       expect(toolNames).toContain('check_updates')
       expect(toolNames).toContain('suggest_improvement')
       expect(toolNames).toContain('list_suggestions')
       expect(toolNames).toContain('resolve_suggestion')
     })
 
-    it('should have 9 public tools total (12 - 3 admin)', () => {
-      expect(MCP_TOOLS).toHaveLength(9)
+    it('should have 10 public tools total (13 - 3 admin)', () => {
+      expect(MCP_TOOLS).toHaveLength(10)
     })
 
     describe('search_plugins tool', () => {
@@ -151,6 +152,23 @@ describe('MCP Tools', () => {
       })
     })
 
+    describe('undeploy_skill tool', () => {
+      const tool = MCP_TOOLS.find((t) => t.name === 'undeploy_skill')!
+
+      it('should require id', () => {
+        expect(tool.inputSchema.required).toContain('id')
+      })
+
+      it('should have id property', () => {
+        expect(tool.inputSchema.properties.id).toBeDefined()
+        expect(tool.inputSchema.properties.id.type).toBe('string')
+      })
+
+      it('should have description mentioning ownership', () => {
+        expect(tool.description).toContain('본인')
+      })
+    })
+
     describe('check_updates tool', () => {
       const tool = MCP_TOOLS.find((t) => t.name === 'check_updates')!
 
@@ -224,6 +242,7 @@ describe('MCP Tools', () => {
       expect(names).toContain('list_plugins')
       expect(names).toContain('get_plugins_by_category')
       expect(names).toContain('deploy_skill')
+      expect(names).toContain('undeploy_skill')
       expect(names).toContain('check_updates')
     })
 

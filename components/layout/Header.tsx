@@ -12,7 +12,6 @@ import { usePathname } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 import { UpdateNotificationBell } from '../actions/UpdateNotificationBell'
-import { MCPStatus } from '../features/mcp/MCPStatus'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
 import type { UserRole } from '@/lib/security/rbac'
 
@@ -39,7 +38,6 @@ interface HeaderProps {
  * Features:
  * - Logo with home link
  * - Tab navigation (Getting Started, Catalog, Guides, Prompts, Stats)
- * - MCP server status indicator
  * - Theme toggle
  * - Update notification bell (authenticated users)
  * - Admin quick menu (authorized users)
@@ -136,7 +134,6 @@ export function Header({ user }: HeaderProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            <MCPStatus />
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
             {user && <AdminQuickMenu userRole={user.role} />}

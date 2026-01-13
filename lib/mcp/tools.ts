@@ -276,7 +276,7 @@ files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
   // V2: Deploy and version management tools
   {
     name: 'deploy_skill',
-    description: `스킬/에이전트/커맨드를 GPTers 팀에 배포합니다.
+    description: `스킬/에이전트/커맨드/가이드를 GPTers 팀에 배포합니다.
 
 현재 대화에서 만든 스킬을 팀과 공유할 때 사용합니다.
 버전은 자동으로 관리됩니다:
@@ -285,13 +285,14 @@ files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
 
 예시:
 - 새 스킬 배포: type="skill", name="코드 리뷰어", content="..."
+- 새 가이드 배포: type="guide", name="Git 사용법", content="..."
 - 기존 스킬 업데이트: id="code-reviewer", content="...", changelog="보안 체크 추가"`,
     inputSchema: {
       type: 'object',
       properties: {
         type: {
           type: 'string',
-          enum: ['skill', 'agent', 'command', 'hook'],
+          enum: ['skill', 'agent', 'command', 'guide', 'hook'],
           description: '배포할 항목 타입',
         },
         name: {
@@ -348,6 +349,28 @@ files 필드를 전달하면 기존 파일 목록이 완전히 교체됩니다.
         },
       },
       required: ['type', 'name', 'content'],
+    },
+  },
+  {
+    name: 'undeploy_skill',
+    description: `본인이 배포한 스킬/에이전트/커맨드를 삭제합니다.
+
+플러그인 제작자만 자신의 플러그인을 삭제할 수 있습니다.
+다른 사람의 플러그인은 삭제할 수 없습니다.
+
+예시:
+- 내 스킬 삭제: id="my-code-reviewer"
+
+주의: 이 작업은 되돌릴 수 없습니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: '삭제할 플러그인 ID',
+        },
+      },
+      required: ['id'],
     },
   },
   {

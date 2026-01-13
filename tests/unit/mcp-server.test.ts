@@ -126,7 +126,7 @@ describe('MCP Server', () => {
           },
         })
 
-        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' })
+        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' }, undefined, undefined)
         expect(response.jsonrpc).toBe('2.0')
         expect(response.id).toBe(4)
         expect(response.result).toBeDefined()
@@ -140,7 +140,7 @@ describe('MCP Server', () => {
           params: { name: 'search_plugins' },
         })
 
-        expect(executeTool).toHaveBeenCalledWith('search_plugins', {})
+        expect(executeTool).toHaveBeenCalledWith('search_plugins', {}, undefined, undefined)
       })
     })
 
@@ -294,7 +294,7 @@ describe('MCP Server', () => {
       it('should call search_plugins tool', async () => {
         const result = await handleSimpleRequest('search', { query: 'test' })
 
-        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' })
+        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' }, undefined, undefined)
         expect(result.success).toBe(true)
         expect(result.data).toBeDefined()
       })
@@ -304,7 +304,7 @@ describe('MCP Server', () => {
       it('should call get_plugin_content tool', async () => {
         const result = await handleSimpleRequest('get', { pluginId: 'test-skill' })
 
-        expect(executeTool).toHaveBeenCalledWith('get_plugin_content', { pluginId: 'test-skill' })
+        expect(executeTool).toHaveBeenCalledWith('get_plugin_content', { pluginId: 'test-skill' }, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -313,7 +313,7 @@ describe('MCP Server', () => {
       it('should call list_plugins tool', async () => {
         const result = await handleSimpleRequest('list', {})
 
-        expect(executeTool).toHaveBeenCalledWith('list_plugins', {})
+        expect(executeTool).toHaveBeenCalledWith('list_plugins', {}, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -342,7 +342,7 @@ describe('MCP Server', () => {
           type: 'skill',
           name: 'New Skill',
           content: '# Content',
-        })
+        }, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -357,7 +357,7 @@ describe('MCP Server', () => {
         expect(executeTool).toHaveBeenCalledWith('update_plugin', {
           id: 'test-skill',
           name: 'Updated Name',
-        })
+        }, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -366,7 +366,7 @@ describe('MCP Server', () => {
       it('should call delete_plugin tool', async () => {
         const result = await handleSimpleRequest('delete', { id: 'test-skill' })
 
-        expect(executeTool).toHaveBeenCalledWith('delete_plugin', { id: 'test-skill' })
+        expect(executeTool).toHaveBeenCalledWith('delete_plugin', { id: 'test-skill' }, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })

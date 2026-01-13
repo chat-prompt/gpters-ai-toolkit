@@ -74,12 +74,16 @@ function handleToolsList(): McpResponse['result'] {
 /**
  * Handle tools/call request
  */
-async function handleToolsCall(params: {
-  name: string
-  arguments?: Record<string, unknown>
-}): Promise<McpToolResponse> {
+async function handleToolsCall(
+  params: {
+    name: string
+    arguments?: Record<string, unknown>
+  },
+  userId?: string,
+  userRole?: string
+): Promise<McpToolResponse> {
   const { name, arguments: args = {} } = params
-  return executeTool(name, args)
+  return executeTool(name, args, userId, userRole)
 }
 
 /**
@@ -100,8 +104,16 @@ async function handlePromptsGet(params: GetPromptInput): Promise<McpPromptResult
 /**
  * Process a single MCP request
  * Returns null for notifications (per JSON-RPC 2.0 spec, notifications don't get responses)
+ *
+ * @param request - MCP JSON-RPC request
+ * @param userId - Authenticated user ID (for ownership-based operations)
+ * @param userRole - Authenticated user's role (for admin override)
  */
-export async function processRequest(request: McpRequest): Promise<McpResponse | null> {
+export async function processRequest(
+  request: McpRequest,
+  userId?: string,
+  userRole?: string
+): Promise<McpResponse | null> {
   const { id, method, params } = request
 
   // Handle notifications (no response expected)
@@ -133,7 +145,7 @@ export async function processRequest(request: McpRequest): Promise<McpResponse |
 
       case 'tools/call': {
         const toolParams = params as { name: string; arguments?: Record<string, unknown> }
-        const result = await handleToolsCall(toolParams)
+        const result = await handleToolsCall(toolParams, userId, userRole)
         return {
           jsonrpc: '2.0',
           id: id!,
@@ -214,12 +226,20 @@ export async function processRequest(request: McpRequest): Promise<McpResponse |
  * HTTP Handler for MCP requests
  * Used by Next.js API route
  * Returns null for notifications (no response should be sent)
+ *
+ * @param body - JSON-RPC request body
+ * @param userId - Authenticated user ID (for ownership-based operations)
+ * @param userRole - Authenticated user's role (for admin override)
  */
-export async function handleHttpRequest(body: unknown): Promise<McpResponse | McpResponse[] | null> {
+export async function handleHttpRequest(
+  body: unknown,
+  userId?: string,
+  userRole?: string
+): Promise<McpResponse | McpResponse[] | null> {
   // Handle batch requests
   if (Array.isArray(body)) {
     const responses = await Promise.all(
-      body.map((req) => processRequest(req as McpRequest))
+      body.map((req) => processRequest(req as McpRequest, userId, userRole))
     )
     // Filter out null responses (notifications)
     const validResponses = responses.filter((r): r is McpResponse => r !== null)
@@ -227,21 +247,28 @@ export async function handleHttpRequest(body: unknown): Promise<McpResponse | Mc
   }
 
   // Handle single request
-  return processRequest(body as McpRequest)
+  return processRequest(body as McpRequest, userId, userRole)
 }
 
 /**
  * Simple REST API handler (non-JSON-RPC)
  * For easier integration without full MCP client
+ *
+ * @param action - API action (search, get, list, etc.)
+ * @param params - Action parameters
+ * @param userId - Authenticated user ID (for ownership-based operations)
+ * @param userRole - Authenticated user's role (for admin override)
  */
 export async function handleSimpleRequest(
   action: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  userId?: string,
+  userRole?: string
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   try {
     switch (action) {
       case 'search': {
-        const result = await executeTool('search_plugins', params)
+        const result = await executeTool('search_plugins', params, userId, userRole)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -249,7 +276,7 @@ export async function handleSimpleRequest(
       }
 
       case 'get': {
-        const result = await executeTool('get_plugin_content', params)
+        const result = await executeTool('get_plugin_content', params, userId, userRole)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -257,7 +284,7 @@ export async function handleSimpleRequest(
       }
 
       case 'list': {
-        const result = await executeTool('list_plugins', params)
+        const result = await executeTool('list_plugins', params, userId, userRole)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -277,7 +304,7 @@ export async function handleSimpleRequest(
       }
 
       case 'create': {
-        const result = await executeTool('create_plugin', params)
+        const result = await executeTool('create_plugin', params, userId, userRole)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -285,7 +312,7 @@ export async function handleSimpleRequest(
       }
 
       case 'update': {
-        const result = await executeTool('update_plugin', params)
+        const result = await executeTool('update_plugin', params, userId, userRole)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -293,7 +320,7 @@ export async function handleSimpleRequest(
       }
 
       case 'delete': {
-        const result = await executeTool('delete_plugin', params)
+        const result = await executeTool('delete_plugin', params, userId, userRole)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),

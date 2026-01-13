@@ -33,6 +33,8 @@ import type {
   SuggestionSummary,
   ResolveSuggestionInput,
   ResolveSuggestionResponse,
+  UndeploySkillInput,
+  UndeploySkillResponse,
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
@@ -376,8 +378,14 @@ export async function deletePlugin(
 /**
  * Deploy a skill/agent/command to the marketplace
  * Handles both new deployments and updates with automatic versioning
+ *
+ * @param input - Deploy skill input
+ * @param authorId - Authenticated user ID (for setting ownership)
  */
-export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillResponse> {
+export async function deploySkill(
+  input: DeploySkillInput,
+  authorId?: string
+): Promise<DeploySkillResponse> {
   const {
     type,
     name,
@@ -442,8 +450,7 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
       })
       .where(eq(catalogItems.id, id))
   } else {
-    // Create new item
-    // Note: authorId should be set by API route based on authenticated user
+    // Create new item with authorId from authenticated user
     await db.insert(catalogItems).values({
       id,
       type,
@@ -462,6 +469,7 @@ export async function deploySkill(input: DeploySkillInput): Promise<DeploySkillR
       mcpEnabled: status === 'published',
       likes: 0,
       dependencies: [],
+      authorId: authorId || null,
       createdAt: now,
       updatedAt: now,
     })
@@ -535,7 +543,16 @@ export async function checkUpdates(input: CheckUpdatesInput): Promise<CheckUpdat
   return { updates, upToDate }
 }
 
-export async function suggestImprovement(input: SuggestImprovementInput): Promise<SuggestImprovementResponse> {
+/**
+ * Suggest an improvement to an existing plugin
+ *
+ * @param input - Suggestion input
+ * @param userId - Authenticated user ID (for tracking who suggested)
+ */
+export async function suggestImprovement(
+  input: SuggestImprovementInput,
+  userId?: string
+): Promise<SuggestImprovementResponse> {
   const { pluginId, title, description, diff, suggestedByName } = input
 
   const plugin = await db
@@ -564,6 +581,7 @@ export async function suggestImprovement(input: SuggestImprovementInput): Promis
     description,
     diff: diff || null,
     status: 'pending',
+    suggestedBy: userId || null,
     suggestedByName: suggestedByName || null,
     createdAt: now,
     updatedAt: now,
@@ -632,7 +650,19 @@ export async function listSuggestions(input: ListSuggestionsInput = {}): Promise
   }
 }
 
-export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<ResolveSuggestionResponse> {
+/**
+ * Resolve (accept or reject) a suggestion
+ * Only the plugin owner or an admin can resolve suggestions for plugins
+ *
+ * @param input - Resolve suggestion input
+ * @param userId - Authenticated user ID (required for ownership check)
+ * @param userRole - Authenticated user's role (admin can override ownership check)
+ */
+export async function resolveSuggestion(
+  input: ResolveSuggestionInput,
+  userId?: string,
+  userRole?: string
+): Promise<ResolveSuggestionResponse> {
   const { suggestionId, action, comment } = input
 
   const suggestion = await db
@@ -669,7 +699,12 @@ export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<
   }
 
   const plugin = await db
-    .select({ id: catalogItems.id, name: catalogItems.name, version: catalogItems.version })
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      version: catalogItems.version,
+      authorId: catalogItems.authorId,
+    })
     .from(catalogItems)
     .where(eq(catalogItems.id, suggestion[0].pluginId))
     .limit(1)
@@ -685,6 +720,31 @@ export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<
     }
   }
 
+  // Check ownership - must be authenticated and be the plugin author (or admin)
+  if (!userId) {
+    return {
+      success: false,
+      suggestionId,
+      action,
+      pluginId: plugin[0].id,
+      pluginName: plugin[0].name,
+      message: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+    }
+  }
+
+  // Admin can resolve any suggestion, others can only resolve for their own plugins
+  const hasAdminRole = userRole === 'admin'
+  if (plugin[0].authorId !== userId && !hasAdminRole) {
+    return {
+      success: false,
+      suggestionId,
+      action,
+      pluginId: plugin[0].id,
+      pluginName: plugin[0].name,
+      message: `본인이 배포한 플러그인의 제안만 처리할 수 있습니다. '${plugin[0].name}'의 소유자가 아닙니다.`,
+    }
+  }
+
   const now = new Date()
   const newStatus = action === 'accept' ? 'accepted' : 'rejected'
 
@@ -692,6 +752,7 @@ export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<
     .update(suggestions)
     .set({
       status: newStatus,
+      resolvedBy: userId,
       resolvedAt: now,
       resolveComment: comment || null,
       updatedAt: now,
@@ -740,10 +801,87 @@ export async function resolveSuggestion(input: ResolveSuggestionInput): Promise<
   }
 }
 
+/**
+ * Undeploy (delete) a skill that the user owns
+ * Only allows deletion if the authenticated user is the author or an admin
+ *
+ * @param input - Undeploy skill input with plugin ID
+ * @param userId - Authenticated user ID (required for ownership check)
+ * @param userRole - Authenticated user's role (admin can override ownership check)
+ */
+export async function undeploySkill(
+  input: UndeploySkillInput,
+  userId?: string,
+  userRole?: string
+): Promise<UndeploySkillResponse> {
+  const { id } = input
+
+  // Check if plugin exists and get author info
+  const existing = await db
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      authorId: catalogItems.authorId,
+    })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (existing.length === 0) {
+    return {
+      success: false,
+      id,
+      message: `플러그인 '${id}'을(를) 찾을 수 없습니다`,
+    }
+  }
+
+  const plugin = existing[0]
+
+  // Check ownership - must be authenticated and be the author (or admin)
+  if (!userId) {
+    return {
+      success: false,
+      id,
+      name: plugin.name,
+      message: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+    }
+  }
+
+  // Admin can delete any plugin, others can only delete their own
+  const hasAdminRole = userRole === 'admin'
+  if (plugin.authorId !== userId && !hasAdminRole) {
+    return {
+      success: false,
+      id,
+      name: plugin.name,
+      message: `본인이 배포한 플러그인만 삭제할 수 있습니다. '${plugin.name}'의 소유자가 아닙니다.`,
+    }
+  }
+
+  // Delete the plugin
+  await db.delete(catalogItems).where(eq(catalogItems.id, id))
+
+  const adminNote = hasAdminRole && plugin.authorId !== userId ? ' (관리자 권한으로 삭제)' : ''
+  return {
+    success: true,
+    id,
+    name: plugin.name,
+    message: `'${plugin.name}'이(가) 성공적으로 삭제되었습니다.${adminNote}`,
+  }
+}
+
+/**
+ * Check if the user has admin role
+ */
+function isAdmin(userRole?: string): boolean {
+  return userRole === 'admin'
+}
 
 export async function executeTool(
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  userId?: string,
+  userRole?: string
 ): Promise<McpToolResponse> {
   // 관리자 도구 호출 차단
   const { isAdminTool } = await import('./tools')
@@ -919,7 +1057,34 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await deploySkill(input)
+        const result = await deploySkill(input, userId)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'undeploy_skill': {
+        const input = args as unknown as UndeploySkillInput
+        if (!input.id) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required field: id',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await undeploySkill(input, userId, userRole)
         return {
           content: [
             {
@@ -972,7 +1137,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await suggestImprovement(input)
+        const result = await suggestImprovement(input, userId)
         return {
           content: [
             {
@@ -1025,7 +1190,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await resolveSuggestion(input)
+        const result = await resolveSuggestion(input, userId, userRole)
         return {
           content: [
             {

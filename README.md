@@ -13,7 +13,6 @@ GPTers 팀을 위한 Claude Code 스킬, 에이전트, 커맨드, 가이드, 훅
 - **MCP 서버** - Claude Code에서 직접 플러그인 검색 및 사용
 - **자연어 검색** - "코드 리뷰 도와주는 스킬 찾아줘" 같은 요청 지원
 - **V2 배포 시스템** - 대화 중 만든 스킬을 즉시 팀과 공유
-- **MCP 상태 모니터링** - 헤더에서 실시간 서버 상태 확인
 
 ### 상세 페이지 기능
 - **사용 예시 자동 추출** - 마크다운에서 Examples 섹션 파싱 및 표시
@@ -79,7 +78,6 @@ gpters-ai-toolkit/
 │   ├── ExamplesSection.tsx       # 사용 예시 표시
 │   ├── RelatedItems.tsx          # 관련 아이템 추천
 │   ├── DownloadButton.tsx        # ZIP 다운로드
-│   ├── MCPStatus.tsx             # MCP 상태 인디케이터
 │   ├── InstallGuide.tsx          # 설치 가이드
 │   ├── MCPConfigGenerator.tsx    # MCP 설정 생성기
 │   ├── HookConfigGenerator.tsx   # 훅 설정 마법사
@@ -150,7 +148,6 @@ gpters-ai-toolkit/
 | 메소드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
 | `POST` | `/api/mcp` | JSON-RPC 2.0 요청 처리 |
-| `GET` | `/api/mcp/status` | 서버 상태 및 헬스 체크 |
 | `POST` | `/api/mcp?action=search` | 플러그인 검색 (REST) |
 | `POST` | `/api/mcp?action=get` | 플러그인 조회 (REST) |
 | `POST` | `/api/mcp?action=list` | 전체 목록 (REST) |
@@ -253,7 +250,6 @@ pnpm db:studio      # Drizzle Studio
 | 컴포넌트 | 설명 |
 |----------|------|
 | `DownloadButton` | ZIP 다운로드 버튼 |
-| `MCPStatus` | MCP 서버 상태 인디케이터 |
 | `MCPConfigGenerator` | MCP 설정 생성기 |
 | `HookConfigGenerator` | 훅 설정 마법사 |
 | `DraftBanner` | 드래프트 상태 배너 |

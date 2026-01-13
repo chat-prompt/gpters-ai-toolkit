@@ -368,8 +368,12 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
 
   // Handle auth and rate limiting
-  const { error, auditCtx } = await handleAuthAndRateLimit(request)
+  const { error, auth, auditCtx } = await handleAuthAndRateLimit(request)
   if (error) return error
+
+  // Extract userId and userRole from authentication for ownership-based operations
+  const userId = auth?.userId
+  const userRole = auth?.userRole
 
   // Session management for Streamable HTTP transport
   const incomingSessionId = request.headers.get('mcp-session-id')
@@ -490,7 +494,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const result = await handleSimpleRequest(action, validationResult.data || body)
+      const result = await handleSimpleRequest(action, validationResult.data || body, userId, userRole)
 
       // Log the request
       await logAudit(
@@ -525,7 +529,7 @@ export async function POST(request: NextRequest) {
 
     const rpcMethod = (body as Record<string, unknown>)?.method as string
     const tool = extractToolFromBody(body)
-    const response = await handleHttpRequest(body)
+    const response = await handleHttpRequest(body, userId, userRole)
 
     // Handle notifications (null response means no response should be sent)
     // Per JSON-RPC 2.0 spec and MCP: notifications don't expect a response

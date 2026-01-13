@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { oauthAccessTokens } from '@/lib/db/schema'
+import { oauthAccessTokens, users } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 
@@ -96,6 +96,7 @@ export interface AccessTokenValidationResult {
   userId?: string
   clientId?: string
   scope?: string
+  userRole?: string
   error?: string
 }
 
@@ -105,6 +106,7 @@ export interface OAuthAuthResult {
   userId?: string
   clientId?: string
   scope?: string
+  userRole?: string
   error?: string
 }
 
@@ -161,7 +163,7 @@ export async function validateAccessToken(
     // Hash the token
     const tokenHash = await hashToken(token)
 
-    // Look up in database
+    // Look up in database with user role (left join to handle missing user)
     const [tokenRecord] = await db
       .select({
         id: oauthAccessTokens.id,
@@ -170,8 +172,10 @@ export async function validateAccessToken(
         scope: oauthAccessTokens.scope,
         isActive: oauthAccessTokens.isActive,
         expiresAt: oauthAccessTokens.expiresAt,
+        userRole: users.role,
       })
       .from(oauthAccessTokens)
+      .leftJoin(users, eq(oauthAccessTokens.userId, users.id))
       .where(eq(oauthAccessTokens.tokenHash, tokenHash))
 
     if (!tokenRecord) {
@@ -195,13 +199,14 @@ export async function validateAccessToken(
       return { valid: false, error: 'Token has expired' }
     }
 
-    // Update usage statistics (non-blocking)
-    db.update(oauthAccessTokens)
+    // Update usage statistics (non-blocking, fire-and-forget)
+    void db.update(oauthAccessTokens)
       .set({
         lastUsedAt: new Date(),
-        usageCount: sql`"usage_count" + 1`,
+        usageCount: sql`${oauthAccessTokens.usageCount} + 1`,
       })
       .where(eq(oauthAccessTokens.id, tokenRecord.id))
+      .execute()
       .catch((err) => {
         log.error('Failed to update access token usage', err)
       })
@@ -210,6 +215,7 @@ export async function validateAccessToken(
       accessTokenId: tokenRecord.id,
       userId: tokenRecord.userId,
       clientId: tokenRecord.clientId,
+      userRole: tokenRecord.userRole,
     })
 
     return {
@@ -218,6 +224,7 @@ export async function validateAccessToken(
       userId: tokenRecord.userId,
       clientId: tokenRecord.clientId,
       scope: tokenRecord.scope ?? undefined,
+      userRole: tokenRecord.userRole ?? undefined,
     }
   } catch (error) {
     log.error('Access token validation error', error)
@@ -254,6 +261,7 @@ export async function authenticateOAuthRequest(
     userId: result.userId,
     clientId: result.clientId,
     scope: result.scope,
+    userRole: result.userRole,
   }
 }
 

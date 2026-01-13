@@ -271,3 +271,15 @@ export interface ResolveSuggestionResponse {
   contentApplied?: boolean
   message: string
 }
+
+// Undeploy (delete own plugin) inputs
+export interface UndeploySkillInput {
+  id: string
+}
+
+export interface UndeploySkillResponse {
+  success: boolean
+  id: string
+  name?: string
+  message: string
+}
