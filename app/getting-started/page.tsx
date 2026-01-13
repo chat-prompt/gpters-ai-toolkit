@@ -9,7 +9,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
-const MCP_SERVER_URL = 'https://company-ai-toolkit.vercel.app/api/mcp'
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
+const MCP_SERVER_URL = `${BASE_URL}/api/mcp`
 
 function getMcpCliCommand(): string {
   return `claude mcp add gpters-ai-toolkit ${MCP_SERVER_URL} -t http`
@@ -190,7 +191,7 @@ export default function GettingStartedPage() {
 
                 <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
                   <div className="text-xs font-mono text-[var(--text-muted)]">
-                    gpters-ai-toolkit: https://company-ai-toolkit.vercel.app/api/mcp <span className="text-green-400">✓ Connected</span>
+                    gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
                   </div>
                 </div>
               </div>

@@ -13,7 +13,7 @@ import { getCatalog } from '@/lib/core/catalog'
  * @returns Array of sitemap entries with URLs and metadata
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://company-ai-toolkit.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
   const catalog = await getCatalog()
 
   const staticPages: MetadataRoute.Sitemap = [

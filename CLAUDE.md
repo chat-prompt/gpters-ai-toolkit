@@ -152,7 +152,7 @@ POST /api/mcp  {"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": {"
 
 **Claude Code Integration** (OAuth 2.1):
 ```bash
-claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
+claude mcp add gpters-ai-toolkit https://ai-toolkit.gpters.org/api/mcp -t http
 ```
 
 브라우저에서 Google (@gpters.org) 로그인 후 자동 연결됩니다.

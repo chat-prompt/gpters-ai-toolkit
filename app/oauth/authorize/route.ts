@@ -18,7 +18,7 @@ import { createLogger } from "@/lib/core/logger";
 const log = createLogger("oauth-authorize");
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_BASE_URL || "https://company-ai-toolkit.vercel.app";
+  process.env.NEXT_PUBLIC_BASE_URL || "https://ai-toolkit.gpters.org";
 
 // OAuth 2.1 Authorization Endpoint
 // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.1

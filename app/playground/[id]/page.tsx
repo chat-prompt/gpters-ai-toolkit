@@ -96,7 +96,7 @@ export default async function PlaygroundPage({
   const typeLabel = getTypeLabel(item.type)
 
   // Get base URL for sharing
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-primary)]">

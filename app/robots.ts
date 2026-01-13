@@ -12,7 +12,7 @@ import type { MetadataRoute } from 'next'
  * @returns Robots.txt rules and sitemap reference
  */
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://company-ai-toolkit.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
 
   return {
     rules: [

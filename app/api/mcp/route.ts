@@ -289,7 +289,7 @@ export async function GET(request: NextRequest) {
         userId: auth?.userId,
         clientId: auth?.clientId,
         required: true,
-        usage: 'OAuth 2.1 authentication required. Run: claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http',
+        usage: `OAuth 2.1 authentication required. Run: claude mcp add gpters-ai-toolkit ${process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'}/api/mcp -t http`,
       },
       transport: 'Streamable HTTP (MCP 2025-03-26)',
     },

@@ -270,7 +270,7 @@ export async function authenticateOAuthRequest(
  * For 401 responses, includes WWW-Authenticate header for OAuth discovery
  */
 export function oauthAuthError(message: string, status: 401 | 403 = 401): NextResponse {
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
 
   const headers: Record<string, string> = {}
 
