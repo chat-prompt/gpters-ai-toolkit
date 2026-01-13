@@ -128,8 +128,12 @@ export function DownloadButton({ itemId, itemName, size = 'md' }: DownloadButton
     lg: 'text-lg',
   }
 
+  const infoText = fileInfo && !isLoading && !error
+    ? `${fileInfo.fileCount} files (${formatBytes(fileInfo.estimatedSize)})`
+    : null
+
   return (
-    <div className="inline-flex flex-col items-start gap-1">
+    <div className="inline-flex items-center gap-1">
       <button
         onClick={handleDownload}
         disabled={isLoading}
@@ -158,22 +162,11 @@ export function DownloadButton({ itemId, itemName, size = 'md' }: DownloadButton
             </svg>
           )}
         </span>
-        <span>{isLoading ? 'Downloading...' : error ? 'Error' : 'ZIP'}</span>
+        <span>
+          {isLoading ? '...' : error ? 'Error' : 'ZIP'}
+          {infoText && <span className="text-[var(--text-muted)] ml-1 font-normal">{infoText}</span>}
+        </span>
       </button>
-
-      {/* File info (optional display) */}
-      {fileInfo && !isLoading && !error && (
-        <span className="text-[10px] text-[var(--text-muted)] pl-1">
-          {fileInfo.fileCount} files ({formatBytes(fileInfo.estimatedSize)})
-        </span>
-      )}
-
-      {/* Error message */}
-      {error && (
-        <span className="text-[10px] text-red-400 pl-1">
-          {error}
-        </span>
-      )}
     </div>
   )
 }

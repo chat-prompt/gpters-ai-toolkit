@@ -7,6 +7,7 @@
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { LikeButton } from '../social/LikeButton'
 import { StatusBadge } from '../ui/StatusBadge'
+import { VersionPopover } from '../ui/VersionPopover'
 import { ReactNode } from 'react'
 
 /** Supported catalog item types */
@@ -106,7 +107,8 @@ export function ItemHero({
           </span>
         )}
         {extraBadges}
-        <StatusBadge status={status} version={version} />
+        {version && <VersionPopover version={version} itemId={itemId} size="sm" />}
+        {status === 'draft' && <StatusBadge status={status} />}
       </div>
 
       <h1
