@@ -32,7 +32,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MCP_TOOLS } from '@/lib/mcp'
-import { withRateLimit, RateLimitPresets, getBaseUrl, getMcpCommand } from '@/lib/utils'
+import { withRateLimit, RateLimitPresets, getMcpCommand } from '@/lib/utils'
 import { withOAuthAuth, type OAuthAuthResult } from '@/lib/security/oauth-tokens'
 import {
   MAX_REQUEST_SIZE,
