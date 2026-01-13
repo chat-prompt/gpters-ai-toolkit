@@ -202,29 +202,32 @@ export async function GET(request: NextRequest) {
 
   // SSE stream mode (Streamable HTTP transport)
   if (accept.includes('text/event-stream')) {
-    // In serverless environment, accept any session ID without validation
-    // Each serverless instance has its own memory, so session state is not shared
-
-    // Create SSE stream
+    const SSE_TIMEOUT = 55000
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
-        // Send initial connection event
         const connectEvent = `event: open\ndata: {"status":"connected"}\n\n`
         controller.enqueue(encoder.encode(connectEvent))
 
-        // Send periodic keepalive (every 30 seconds)
         const keepaliveInterval = setInterval(() => {
           try {
             controller.enqueue(encoder.encode(': keepalive\n\n'))
           } catch {
             clearInterval(keepaliveInterval)
           }
-        }, 30000)
+        }, 15000)
 
-        // Clean up on close
+        const closeTimeout = setTimeout(() => {
+          clearInterval(keepaliveInterval)
+          try {
+            controller.enqueue(encoder.encode('event: timeout\ndata: {"reconnect":true}\n\n'))
+            controller.close()
+          } catch {}
+        }, SSE_TIMEOUT)
+
         request.signal.addEventListener('abort', () => {
           clearInterval(keepaliveInterval)
+          clearTimeout(closeTimeout)
           controller.close()
         })
       },
