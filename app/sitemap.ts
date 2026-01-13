@@ -6,6 +6,7 @@
  */
 import type { MetadataRoute } from 'next'
 import { getCatalog } from '@/lib/core/catalog'
+import { getBaseUrl } from '@/lib/utils'
 
 /**
  * Generate sitemap entries for all public pages
@@ -13,7 +14,7 @@ import { getCatalog } from '@/lib/core/catalog'
  * @returns Array of sitemap entries with URLs and metadata
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
+  const baseUrl = getBaseUrl()
   const catalog = await getCatalog()
 
   const staticPages: MetadataRoute.Sitemap = [

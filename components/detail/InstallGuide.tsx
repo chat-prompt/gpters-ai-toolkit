@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { CopyButton } from '../ui/CopyButton'
+import { getMcpCommand } from '@/lib/utils/config'
 
 interface InstallGuideProps {
   itemId: string
@@ -9,11 +10,11 @@ interface InstallGuideProps {
   content: string
 }
 
+const mcpCommand = getMcpCommand()
+
 export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
   const [showManual, setShowManual] = useState(false)
 
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
-  const mcpCommand = `claude mcp add gpters-ai-toolkit ${BASE_URL}/api/mcp -t http`
   const searchCommand = `gpters-ai-toolkit search_plugins("${itemId}")`
   const getCommand = `gpters-ai-toolkit get_plugin_content("${itemId}")`
 

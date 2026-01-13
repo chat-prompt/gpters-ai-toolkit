@@ -14,11 +14,9 @@ import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getClient, createAuthCode } from "@/lib/security/oauth";
 import { createLogger } from "@/lib/core/logger";
+import { getBaseUrl } from "@/lib/utils";
 
 const log = createLogger("oauth-authorize");
-
-const BASE_URL =
-  process.env.NEXT_PUBLIC_BASE_URL || "https://ai-toolkit.gpters.org";
 
 // OAuth 2.1 Authorization Endpoint
 // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.1
@@ -115,7 +113,7 @@ export async function GET(request: NextRequest) {
   if (!session?.user?.email) {
     // Not logged in - redirect to signin with callback
     const callbackUrl = request.nextUrl.toString();
-    const signinUrl = new URL("/auth/signin", BASE_URL);
+    const signinUrl = new URL("/auth/signin", getBaseUrl());
     signinUrl.searchParams.set("callbackUrl", callbackUrl);
 
     log.info("Redirecting to signin for OAuth authorization", { clientId });

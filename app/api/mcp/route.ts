@@ -32,7 +32,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MCP_TOOLS } from '@/lib/mcp'
-import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { withRateLimit, RateLimitPresets, getBaseUrl, getMcpCommand } from '@/lib/utils'
 import { withOAuthAuth, type OAuthAuthResult } from '@/lib/security/oauth-tokens'
 import {
   MAX_REQUEST_SIZE,
@@ -289,7 +289,7 @@ export async function GET(request: NextRequest) {
         userId: auth?.userId,
         clientId: auth?.clientId,
         required: true,
-        usage: `OAuth 2.1 authentication required. Run: claude mcp add gpters-ai-toolkit ${process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'}/api/mcp -t http`,
+        usage: `OAuth 2.1 authentication required. Run: ${getMcpCommand()}`,
       },
       transport: 'Streamable HTTP (MCP 2025-03-26)',
     },

@@ -38,6 +38,7 @@ import type {
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
+import { getBaseUrl } from '../utils'
 
 /**
  * Search plugins by keyword
@@ -476,7 +477,7 @@ export async function deploySkill(
   }
 
   // Build response
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
+  const BASE_URL = getBaseUrl()
 
   const response: DeploySkillResponse = {
     success: true,

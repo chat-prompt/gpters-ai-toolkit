@@ -9,6 +9,7 @@ import { SkillPlayground } from '@/components/features/skill/SkillPlayground'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import { getBaseUrl } from '@/lib/utils'
 
 export const revalidate = 60
 export const dynamicParams = true
@@ -96,7 +97,7 @@ export default async function PlaygroundPage({
   const typeLabel = getTypeLabel(item.type)
 
   // Get base URL for sharing
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
+  const baseUrl = getBaseUrl()
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-primary)]">
