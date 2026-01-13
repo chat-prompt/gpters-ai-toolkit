@@ -8,6 +8,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Newsreader } from "next/font/google";
 import { Providers } from "@/components/layout/Providers";
+import { getBaseUrl } from "@/lib/utils/config";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +31,7 @@ const newsreader = Newsreader({
 const siteConfig = {
   name: "GPTers AI Toolkit",
   description: "Claude Code 스킬, 에이전트, 프롬프트, 커맨드를 찾아보세요. GPTers 팀원들이 만든 리소스를 플러그인으로 바로 설치하거나 복사해서 사용할 수 있습니다.",
-  url: "https://company-ai-toolkit.vercel.app",
+  url: getBaseUrl(),
   ogImage: "/og-image.png",
   keywords: [
     "Claude Code",

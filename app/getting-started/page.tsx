@@ -8,12 +8,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { getMcpServerUrl, getMcpCommand } from '@/lib/utils/config'
 
-const MCP_SERVER_URL = 'https://company-ai-toolkit.vercel.app/api/mcp'
-
-function getMcpCliCommand(): string {
-  return `claude mcp add gpters-ai-toolkit ${MCP_SERVER_URL} -t http`
-}
+const MCP_SERVER_URL = getMcpServerUrl()
 
 
 export default function GettingStartedPage() {
@@ -84,10 +81,10 @@ export default function GettingStartedPage() {
 
                 <div className="relative">
                   <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                    {getMcpCliCommand()}
+                    {getMcpCommand()}
                   </pre>
                   <button
-                    onClick={() => copyToClipboard(getMcpCliCommand(), 'cli')}
+                    onClick={() => copyToClipboard(getMcpCommand(), 'cli')}
                     className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                       copiedStep === 'cli'
                         ? 'bg-green-500/20 text-green-400'
@@ -190,7 +187,7 @@ export default function GettingStartedPage() {
 
                 <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
                   <div className="text-xs font-mono text-[var(--text-muted)]">
-                    gpters-ai-toolkit: https://company-ai-toolkit.vercel.app/api/mcp <span className="text-green-400">✓ Connected</span>
+                    gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
                   </div>
                 </div>
               </div>

@@ -38,6 +38,7 @@ import type {
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
+import { getBaseUrl } from '../utils'
 
 /**
  * Search plugins by keyword
@@ -476,6 +477,8 @@ export async function deploySkill(
   }
 
   // Build response
+  const BASE_URL = getBaseUrl()
+
   const response: DeploySkillResponse = {
     success: true,
     id,
@@ -483,7 +486,7 @@ export async function deploySkill(
     previousVersion: existingItem?.version || undefined,
     changelog: versionInfo.changelog,
     status,
-    webUrl: `https://company-ai-toolkit.vercel.app/${type}/${id}`,
+    webUrl: `${BASE_URL}/${type}/${id}`,
     installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
   }
 

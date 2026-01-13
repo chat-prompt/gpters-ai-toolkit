@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { CopyButton } from '../ui/CopyButton'
+import { getMcpCommand } from '@/lib/utils/config'
 
 interface InstallGuideProps {
   itemId: string
   itemType: 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
   content: string
 }
+
+const mcpCommand = getMcpCommand()
 
 export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
   const [showManual, setShowManual] = useState(false)
@@ -38,9 +41,9 @@ export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
             <span className="text-sm text-[var(--text-secondary)]">MCP 서버 연결 (최초 1회)</span>
             <div className="mt-2 flex items-center gap-2 bg-[var(--bg-primary)] rounded-lg p-2">
               <code className="text-[var(--accent-cyan)] text-xs font-mono break-all">
-                claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http
+                {mcpCommand}
               </code>
-              <CopyButton text="claude mcp add gpters-ai-toolkit https://company-ai-toolkit.vercel.app/api/mcp -t http" />
+              <CopyButton text={mcpCommand} />
             </div>
           </div>
         </div>

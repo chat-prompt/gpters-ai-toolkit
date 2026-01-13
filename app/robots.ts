@@ -5,6 +5,7 @@
  * Allows public pages while blocking admin, API, and upload routes.
  */
 import type { MetadataRoute } from 'next'
+import { getBaseUrl } from '@/lib/utils'
 
 /**
  * Generate robots.txt configuration
@@ -12,7 +13,7 @@ import type { MetadataRoute } from 'next'
  * @returns Robots.txt rules and sitemap reference
  */
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://company-ai-toolkit.vercel.app'
+  const baseUrl = getBaseUrl()
 
   return {
     rules: [

@@ -10,6 +10,7 @@ import { db } from '@/lib/db'
 import { oauthAccessTokens, users } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
+import { getBaseUrl } from '../utils'
 
 const log = createLogger('oauth-tokens')
 
@@ -270,7 +271,7 @@ export async function authenticateOAuthRequest(
  * For 401 responses, includes WWW-Authenticate header for OAuth discovery
  */
 export function oauthAuthError(message: string, status: 401 | 403 = 401): NextResponse {
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
+  const BASE_URL = getBaseUrl()
 
   const headers: Record<string, string> = {}
 

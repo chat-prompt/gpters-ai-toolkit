@@ -5,3 +5,6 @@
 export function cn(...inputs: (string | undefined | null | false)[]): string {
   return inputs.filter(Boolean).join(' ')
 }
+
+// Re-export everything from utils directory
+export * from './utils/index'
