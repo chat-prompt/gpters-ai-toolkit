@@ -48,3 +48,7 @@ yarn-error.log*
 next-env.d.ts
 .env*.local
 .idea/
+
+# Claude/Playwright local data
+.claude-plugin/
+.playwright-mcp/
