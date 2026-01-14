@@ -1249,22 +1249,32 @@ const GPTERS_SETUP_SKILL = {
 \`\`\`markdown
 # GPTers AI Toolkit 연동
 
-## 플러그인 검색 규칙
+## 스킬 자동 활성화 (필수)
 
-새 작업 시작 전, 관련 플러그인이 있는지 확인하세요:
+새로운 유형의 작업 시작 시 **반드시** 관련 스킬을 검색하세요:
+
+1. 작업 키워드로 검색
+2. 결과가 있으면 get_plugin_content로 내용 확인
+3. 스킬 지침에 따라 작업 수행
 
 \\\`\\\`\\\`
 gpters-ai-toolkit search_plugins("키워드")
+gpters-ai-toolkit get_plugin_content("스킬ID")
 \\\`\\\`\\\`
 
-### 추천 검색어
+**이 규칙은 SKIP 불가.**
 
-| 작업 | 검색어 |
-|------|--------|
-| DB 스키마/테이블 구조 | data-source |
+### 검색 키워드 예시
+
+| 작업 유형 | 검색어 |
+|----------|--------|
+| 개발 로그, 사례글 작성 | devlog, writing |
 | 코드 리팩토링 | refactor |
-| 코드 리뷰 | review |
-| 배포/공유 | deploy |
+| PDF 변환 | pdf |
+| Airtable 연동 | airtable |
+| Hook 설정 | hooks |
+| 배포/도메인 | deploy, domain |
+| DB 접근 | database, postgresql |
 
 ## 플러그인 배포
 
@@ -1280,13 +1290,12 @@ gpters-ai-toolkit deploy_skill(type="skill", name="스킬명", content="...")
 \`\`\`json
 {
   "hooks": {
-    "PreToolUse": [
+    "UserPromptSubmit": [
       {
-        "matcher": "Task",
         "hooks": [
           {
             "type": "command",
-            "command": "echo '💡 Tip: gpters-ai-toolkit search_plugins로 팀 공유 플러그인 검색'"
+            "command": "echo '🔍 새 작업? search_plugins로 관련 스킬 확인하세요'"
           }
         ]
       }
@@ -1299,7 +1308,7 @@ gpters-ai-toolkit deploy_skill(type="skill", name="스킬명", content="...")
 
 1. 위 CLAUDE.md 내용을 프로젝트 루트의 CLAUDE.md에 추가하세요
 2. .claude/settings.json 파일을 생성하고 Hook 설정을 추가하세요
-3. 이후 작업 시 자연스럽게 플러그인 검색 힌트가 표시됩니다
+3. 이후 모든 입력 시 스킬 검색 리마인더가 표시됩니다
 
 ## 확인
 
