@@ -50,10 +50,11 @@ export async function searchPlugins(input: SearchPluginsInput): Promise<SearchRe
 
   const searchPattern = `%${query}%`
 
-  // Build search condition
+  // Build search condition - search across name, description, tags, and readme
   const searchCondition = or(
     ilike(catalogItems.name, searchPattern),
     ilike(catalogItems.description, searchPattern),
+    ilike(catalogItems.readme, searchPattern),
     sql`array_to_string(${catalogItems.tags}, ',') ILIKE ${searchPattern}`
   )
 

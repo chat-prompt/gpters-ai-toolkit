@@ -86,18 +86,19 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
     )
   }
 
-  // Search condition - hybrid FTS + trigram
+  // Search condition - hybrid FTS + trigram (searches name, description, readme, content, tags)
   if (hasKorean) {
-    // Korean search using trigram similarity
+    // Korean search using trigram similarity on search_text (includes readme)
     conditions.push(
       sql`(
         ${catalogItems.name} % ${sanitizedQuery} OR
         ${catalogItems.description} % ${sanitizedQuery} OR
+        ${catalogItems.readme} % ${sanitizedQuery} OR
         search_text % ${sanitizedQuery}
       )`
     )
   } else {
-    // English search using FTS with trigram fallback
+    // English search using FTS with trigram fallback (search_vector includes readme)
     const tsQuery = sanitizedQuery
       .split(/\s+/)
       .filter(Boolean)
@@ -108,7 +109,8 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
       or(
         sql`search_vector @@ to_tsquery('english', ${tsQuery})`,
         sql`${catalogItems.name} % ${sanitizedQuery}`,
-        sql`${catalogItems.description} % ${sanitizedQuery}`
+        sql`${catalogItems.description} % ${sanitizedQuery}`,
+        sql`${catalogItems.readme} % ${sanitizedQuery}`
       )
     )
   }
