@@ -85,13 +85,13 @@ const markdownComponents: Components = {
     </pre>
   ),
   ul: ({ children }) => (
-    <ul className="mb-4 space-y-2">{children}</ul>
+    <ul className="mb-4 space-y-1 list-disc pl-6 [&_ul]:mt-1 [&_ul]:mb-0">{children}</ul>
   ),
   ol: ({ children }) => (
-    <ol className="mb-4 space-y-2 list-decimal list-inside">{children}</ol>
+    <ol className="mb-4 space-y-1 list-decimal pl-6 [&_ol]:mt-1 [&_ol]:mb-0">{children}</ol>
   ),
   li: ({ children }) => (
-    <li className="text-[var(--text-secondary)]">{children}</li>
+    <li className="text-[var(--text-secondary)] pl-1">{children}</li>
   ),
   table: ({ children }) => (
     <div className="table-wrapper overflow-x-auto my-6 rounded-xl border border-[var(--border-subtle)]">

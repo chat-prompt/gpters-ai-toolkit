@@ -13,6 +13,7 @@ interface InstallGuideProps {
 const mcpCommand = getMcpCommand()
 
 export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const [showManual, setShowManual] = useState(false)
 
   const searchCommand = `gpters-ai-toolkit search_plugins("${itemId}")`
@@ -20,15 +21,25 @@ export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
 
   return (
     <div className="glass rounded-2xl p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-xl">🔌</span>
-        <h3 className="text-lg font-medium text-[var(--text-primary)]">MCP로 사용하기</h3>
-        <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]">
-          권장
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">🔌</span>
+          <h3 className="text-lg font-medium text-[var(--text-primary)]">MCP로 사용하기</h3>
+          <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]">
+            권장
+          </span>
+        </div>
+        <span className="text-[var(--text-muted)] transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          ▼
         </span>
-      </div>
+      </button>
 
-      <p className="text-sm text-[var(--text-secondary)] mb-6">
+      {isExpanded && (
+      <>
+      <p className="text-sm text-[var(--text-secondary)] mb-6 mt-4">
         MCP 연결 후 Claude Code에서 바로 검색하여 사용하세요. 별도 설치가 필요 없습니다.
       </p>
 
@@ -111,6 +122,8 @@ export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   )

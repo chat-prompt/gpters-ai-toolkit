@@ -49,6 +49,7 @@ export function QuickActionGenerator({
   allowedTools,
   mcpEnabled,
 }: QuickActionGeneratorProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const handleCopy = useCallback((actionId: string) => {
@@ -111,82 +112,89 @@ export function QuickActionGenerator({
 
   return (
     <div className="glass rounded-2xl p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-xl">🚀</span>
-        <h3 className="text-lg font-medium text-[var(--text-primary)]">퀵 액션</h3>
-        <span className="text-xs text-[var(--text-muted)]">
-          Claude Code에서 바로 사용
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">🚀</span>
+          <h3 className="text-lg font-medium text-[var(--text-primary)]">퀵 액션</h3>
+          <span className="text-xs text-[var(--text-muted)]">
+            Claude Code에서 바로 사용
+          </span>
+        </div>
+        <span className="text-[var(--text-muted)] transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          ▼
         </span>
-      </div>
+      </button>
 
-      <div className="space-y-3">
-        {actions.map((action) => {
-          const colors = getColorClasses(action.color)
-          const isCopied = copiedId === action.id
-          const isMultiLine = action.command.includes('\n')
+      {isExpanded && (
+        <>
+          <div className="space-y-3 mt-6">
+            {actions.map((action) => {
+              const colors = getColorClasses(action.color)
+              const isCopied = copiedId === action.id
+              const isMultiLine = action.command.includes('\n')
 
-          return (
-            <div
-              key={action.id}
-              className={`relative rounded-xl border ${colors.border} ${colors.bg} p-4 transition-all hover:scale-[1.01]`}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-4 mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{action.icon}</span>
-                  <span className={`font-medium ${colors.text}`}>{action.label}</span>
-                  {action.badge && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
-                      {action.badge}
-                    </span>
+              return (
+                <div
+                  key={action.id}
+                  className={`relative rounded-xl border ${colors.border} ${colors.bg} p-4 transition-all hover:scale-[1.01]`}
+                >
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{action.icon}</span>
+                      <span className={`font-medium ${colors.text}`}>{action.label}</span>
+                      {action.badge && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
+                          {action.badge}
+                        </span>
+                      )}
+                    </div>
+                    <CopyButton
+                      text={action.command}
+                      onCopy={() => handleCopy(action.id)}
+                    />
+                  </div>
+
+                  <p className="text-sm text-[var(--text-muted)] mb-3">
+                    {action.description}
+                  </p>
+
+                  <div className="bg-[var(--bg-primary)] rounded-lg p-3 overflow-x-auto">
+                    {isMultiLine ? (
+                      <pre className={`text-sm font-mono ${colors.text} whitespace-pre-wrap break-all`}>
+                        {action.command}
+                      </pre>
+                    ) : (
+                      <code className={`text-sm font-mono ${colors.text} break-all`}>
+                        {action.command}
+                      </code>
+                    )}
+                  </div>
+
+                  {isCopied && (
+                    <div className="absolute top-4 right-4 flex items-center gap-1 text-xs text-green-400 animate-fade-in">
+                      <span>Copied!</span>
+                    </div>
                   )}
                 </div>
-                <CopyButton
-                  text={action.command}
-                  onCopy={() => handleCopy(action.id)}
-                />
-              </div>
+              )
+            })}
+          </div>
 
-              {/* Description */}
-              <p className="text-sm text-[var(--text-muted)] mb-3">
-                {action.description}
-              </p>
-
-              {/* Command Preview */}
-              <div className="bg-[var(--bg-primary)] rounded-lg p-3 overflow-x-auto">
-                {isMultiLine ? (
-                  <pre className={`text-sm font-mono ${colors.text} whitespace-pre-wrap break-all`}>
-                    {action.command}
-                  </pre>
-                ) : (
-                  <code className={`text-sm font-mono ${colors.text} break-all`}>
-                    {action.command}
-                  </code>
-                )}
-              </div>
-
-              {/* Copied indicator */}
-              {isCopied && (
-                <div className="absolute top-4 right-4 flex items-center gap-1 text-xs text-green-400 animate-fade-in">
-                  <span>Copied!</span>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Tips section */}
-      <div className="mt-6 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-        <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">
-          💡 사용 팁
-        </h4>
-        <ul className="text-xs text-[var(--text-muted)] space-y-1">
-          <li>MCP 프롬프트는 설치 없이 바로 사용할 수 있습니다</li>
-          <li>MCP 서버 설정이 필요합니다 (<a href="/getting-started" className="text-[var(--accent-purple)] hover:underline">설정 방법</a>)</li>
-          <li>프롬프트 호출 시 Claude Code가 자동으로 내용을 불러옵니다</li>
-        </ul>
-      </div>
+          <div className="mt-6 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
+            <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">
+              💡 사용 팁
+            </h4>
+            <ul className="text-xs text-[var(--text-muted)] space-y-1">
+              <li>MCP 프롬프트는 설치 없이 바로 사용할 수 있습니다</li>
+              <li>MCP 서버 설정이 필요합니다 (<a href="/getting-started" className="text-[var(--accent-purple)] hover:underline">설정 방법</a>)</li>
+              <li>프롬프트 호출 시 Claude Code가 자동으로 내용을 불러옵니다</li>
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   )
 }
