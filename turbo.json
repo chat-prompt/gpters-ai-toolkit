@@ -19,6 +19,10 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    "test:api": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$"]
+    },
     "test:e2e": {
       "dependsOn": ["build"],
       "inputs": ["$TURBO_DEFAULT$"]
