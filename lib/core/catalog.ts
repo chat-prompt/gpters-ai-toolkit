@@ -256,13 +256,18 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
   return records.map(toSummaryObject)
 }
 
-export async function getGuideById(id: string): Promise<CatalogItem | undefined> {
+export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | undefined> {
   const [record] = await db
     .select()
     .from(catalogItems)
-    .where(eq(catalogItems.id, id))
+    .where(
+      and(
+        eq(catalogItems.type, 'guide'),
+        or(eq(catalogItems.id, idOrPluginId), eq(catalogItems.pluginId, idOrPluginId))
+      )
+    )
 
-  if (!record || record.type !== 'guide') return undefined
+  if (!record) return undefined
   return toPlainObject(record)
 }
 

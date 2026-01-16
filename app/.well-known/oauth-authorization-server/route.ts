@@ -7,10 +7,10 @@
  * @see https://datatracker.ietf.org/doc/html/rfc8414
  */
 import { NextResponse } from 'next/server'
-
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://company-ai-toolkit.vercel.app'
+import { getBaseUrl } from '@/lib/utils/config'
 
 export async function GET() {
+  const BASE_URL = getBaseUrl()
   return NextResponse.json(
     {
       issuer: BASE_URL,
