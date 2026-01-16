@@ -109,8 +109,8 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          pnpm start &
-          sleep 5
+          pnpm --filter @gpters/web start &
+          sleep 10
           PLAYWRIGHT_TEST_BASE_URL=http://localhost:3000 pnpm test:e2e
 
       - name: Upload Playwright report
