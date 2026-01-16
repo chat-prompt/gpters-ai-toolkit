@@ -102,7 +102,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
+        run: pnpm --filter @gpters/web exec playwright install chromium --with-deps
 
       - name: Build application
         run: pnpm build
