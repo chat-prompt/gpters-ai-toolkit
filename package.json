@@ -9,6 +9,7 @@
     "start": "turbo start",
     "lint": "turbo lint",
     "test": "turbo test",
+    "test:api": "turbo test:api",
     "test:e2e": "turbo test:e2e",
     "typecheck": "turbo typecheck",
     "db:generate": "turbo db:generate",
