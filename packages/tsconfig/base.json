@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -6,18 +7,16 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "esModuleInterop": true,
+    "allowJs": true,
     "strict": true,
+    "strictNullChecks": true,
+    "noEmit": true,
     "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
     "declaration": true,
     "declarationMap": true,
     "incremental": true
   },
-  "references": [
-    { "path": "./packages/tsconfig" },
-    { "path": "./packages/db" },
-    { "path": "./packages/lib" },
-    { "path": "./apps/web" }
-  ],
-  "files": [],
-  "exclude": ["node_modules", "**/node_modules", "**/dist", "**/.next", "**/.turbo"]
+  "exclude": ["node_modules", "dist", ".turbo"]
 }
