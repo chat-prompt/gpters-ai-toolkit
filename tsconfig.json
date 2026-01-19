@@ -16,7 +16,8 @@
     { "path": "./packages/tsconfig" },
     { "path": "./packages/db" },
     { "path": "./packages/lib" },
-    { "path": "./apps/web" }
+    { "path": "./apps/web" },
+    { "path": "./apps/opencode-plugin" }
   ],
   "files": [],
   "exclude": ["node_modules", "**/node_modules", "**/dist", "**/.next", "**/.turbo"]

@@ -1,0 +1,47 @@
+{
+  "name": "@gpters-internal/opencode",
+  "version": "0.0.0",
+  "description": "GPTers OpenCode Plugin",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly",
+    "dev": "bun build src/index.ts --outdir dist --target bun --format esm --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "publishConfig": {
+    "registry": "https://verdaccio.gpters.org",
+    "access": "restricted"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "gpters"
+  ],
+  "author": "GPTers",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gpters/gpters-ai-toolkit.git",
+    "directory": "apps/opencode-plugin"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.1.19"
+  },
+  "devDependencies": {
+    "@gpters/tsconfig": "workspace:*",
+    "bun-types": "latest",
+    "typescript": "^5"
+  }
+}

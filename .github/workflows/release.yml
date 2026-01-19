@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'opencode-v*'
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build --filter=@gpters-internal/opencode
+
+      - name: Configure Verdaccio registry
+        run: |
+          echo "@gpters-internal:registry=https://verdaccio.gpters.org" >> .npmrc
+          echo "//verdaccio.gpters.org/:_authToken=\${VERDACCIO_TOKEN}" >> .npmrc
+
+      - name: Publish
+        run: pnpm publish --filter=@gpters-internal/opencode --no-git-checks
+        env:
+          VERDACCIO_TOKEN: ${{ secrets.VERDACCIO_TOKEN }}
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/opencode-v}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "@gpters-internal/opencode v${{ steps.version.outputs.version }}"
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
