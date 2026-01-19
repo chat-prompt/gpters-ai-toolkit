@@ -3,6 +3,8 @@ name: Release
 on:
   push:
     branches: [main]
+    paths:
+      - 'apps/opencode-plugin/**'
   workflow_dispatch:
 
 jobs:
@@ -44,15 +46,3 @@ jobs:
         run: pnpm publish --filter=@gpters-internal/opencode --no-git-checks
         env:
           VERDACCIO_TOKEN: ${{ secrets.VERDACCIO_TOKEN }}
-
-      - name: Get version from tag
-        id: version
-        run: echo "version=${GITHUB_REF#refs/tags/opencode-v}" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: "@gpters-internal/opencode v${{ steps.version.outputs.version }}"
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
