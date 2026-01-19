@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@gpters/tsconfig": "workspace:*",
+    "@opencode-ai/sdk": "^1.1.25",
     "bun-types": "latest",
     "typescript": "^5"
   }
