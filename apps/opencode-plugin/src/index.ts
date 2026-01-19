@@ -1,16 +1,21 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { COMMAND_PRD_REVIEW } from "./commands/prd-review"
+import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
 
 const COMMAND_PREFIX = 'gpters'
 const PREFIX = "*Working with GPTers AI Toolkit*\n\n"
 
-export const GPTersPlugin: Plugin = async ({ directory, client }) => {
+export const GPTersPlugin: Plugin = async (ctx) => {
+  const { directory, client } = ctx
   console.log("[GPTers Plugin] Loaded:", directory)
 
   const processedMessages = new Set<string>()
+  const autoUpdateChecker = createAutoUpdateCheckerHook(ctx)
 
   return {
-    event: async () => { },
+    event: async (eventData) => {
+      autoUpdateChecker.event(eventData)
+    },
 
     "experimental.text.complete": async (input, output) => {
       const key = `${input.sessionID}-${input.messageID}`
