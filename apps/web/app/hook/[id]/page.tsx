@@ -4,7 +4,7 @@
  * Displays detailed information about a specific Claude Code hook
  * including event configuration, security analysis, and settings snippets.
  */
-import { getItemById, getCatalog } from '@/lib/core/catalog'
+import { getItemById } from '@/lib/core/catalog'
 import { HOOK_EVENTS } from '@/lib/core/types'
 import type { HookEvent } from '@/lib/core/types'
 import { validateHookSecurity } from '@/lib/plugin/hook-security'
@@ -19,15 +19,7 @@ import { DownloadButton } from '@/components/actions/DownloadButton'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { notFound } from 'next/navigation'
 
-export const revalidate = 60
-export const dynamicParams = true
-
-export async function generateStaticParams() {
-  const catalog = await getCatalog()
-  return catalog
-    .filter(item => item.type === 'hook')
-    .map(item => ({ id: item.id }))
-}
+export const dynamic = 'force-dynamic'
 
 function generateHookSettingsSnippet(item: {
   hookEvent: HookEvent

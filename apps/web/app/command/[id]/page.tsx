@@ -4,7 +4,7 @@
  * Displays detailed information about a specific slash command including
  * content, installation guide, usage examples, and related items.
  */
-import { getItemById, getCatalog, getRelatedItems } from '@/lib/core/catalog'
+import { getItemById, getRelatedItems } from '@/lib/core/catalog'
 import { parseExamplesFromContent } from '@/lib/search/parse-examples'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
@@ -22,15 +22,7 @@ import { ExamplesSection } from '@/components/detail/ExamplesSection'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { notFound } from 'next/navigation'
 
-export const revalidate = 60
-export const dynamicParams = true
-
-export async function generateStaticParams() {
-  const catalog = await getCatalog()
-  return catalog
-    .filter(item => item.type === 'command')
-    .map(item => ({ id: item.id }))
-}
+export const dynamic = 'force-dynamic'
 
 export default async function CommandPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

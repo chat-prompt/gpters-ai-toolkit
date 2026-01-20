@@ -4,7 +4,7 @@
  * Displays detailed content for a specific guide or tutorial
  * with markdown rendering and changelog display.
  */
-import { getGuideById, getGuides } from '@/lib/core/catalog'
+import { getGuideById } from '@/lib/core/catalog'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
 import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
@@ -13,13 +13,7 @@ import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
-export const revalidate = 60
-export const dynamicParams = true
-
-export async function generateStaticParams() {
-  const guides = await getGuides()
-  return guides.map(guide => ({ id: guide.id }))
-}
+export const dynamic = 'force-dynamic'
 
 export default async function GuidePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
