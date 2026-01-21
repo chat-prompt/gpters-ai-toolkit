@@ -1,15 +1,19 @@
 import { spawn } from "node:child_process"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 export type DialogResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
-function getDialogPath(pluginDir: string): string {
-  return join(pluginDir, "bin", "dialog")
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+function getDialogPath(): string {
+  return join(__dirname, "bin", "dialog")
 }
 
-function runDialog(pluginDir: string, args: string[]): Promise<DialogResult<string>> {
+function runDialog(args: string[]): Promise<DialogResult<string>> {
   return new Promise((resolve) => {
-    const dialogPath = getDialogPath(pluginDir)
+    const dialogPath = getDialogPath()
     const child = spawn(dialogPath, args, { stdio: ["inherit", "pipe", "pipe"] })
 
     let stdout = ""
@@ -33,44 +37,40 @@ function runDialog(pluginDir: string, args: string[]): Promise<DialogResult<stri
 }
 
 export async function showYesNo(
-  pluginDir: string,
   options: { message: string; title?: string }
 ): Promise<DialogResult<boolean>> {
   const args = ["yesno", "--message", options.message]
   if (options.title) args.push("--title", options.title)
 
-  const result = await runDialog(pluginDir, args)
+  const result = await runDialog(args)
   if (!result.ok) return result
 
   return { ok: true, value: result.value.toLowerCase() === "true" }
 }
 
 export async function showSelect(
-  pluginDir: string,
   options: { items: string[]; title?: string }
 ): Promise<DialogResult<string>> {
   const args = ["select", "--items", options.items.join(",")]
   if (options.title) args.push("--title", options.title)
 
-  return runDialog(pluginDir, args)
+  return runDialog(args)
 }
 
 export async function showMarkdown(
-  pluginDir: string,
   options: { content: string; title?: string }
 ): Promise<DialogResult<string>> {
   const args = ["md", "--content", options.content]
   if (options.title) args.push("--title", options.title)
 
-  return runDialog(pluginDir, args)
+  return runDialog(args)
 }
 
 export async function showGitBranchPicker(
-  pluginDir: string,
   options?: { title?: string }
 ): Promise<DialogResult<string>> {
   const args = ["git"]
   if (options?.title) args.push("--title", options.title)
 
-  return runDialog(pluginDir, args)
+  return runDialog(args)
 }

@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { COMMAND_PRD_REVIEW } from "./commands/prd-review"
 import { GptersConfigManager } from "./config"
 import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
+import { createAutoCommitHook } from "./hooks/auto-commit"
 import { showYesNo } from "./utils/dialog"
 
 const COMMAND_PREFIX = 'gpters'
@@ -13,12 +14,17 @@ export const GPTersPlugin: Plugin = async (ctx) => {
   const processedMessages = new Set<string>()
   const promptedSessions = new Set<string>()
   const autoUpdateChecker = createAutoUpdateCheckerHook(ctx)
+  const autoCommitHook = createAutoCommitHook(ctx)
   const configManager = GptersConfigManager.getInstance(directory)
 
 
   return {
     event: async (eventData) => {
       autoUpdateChecker.event(eventData)
+
+      if (configManager.getAutoCommit()) {
+        await autoCommitHook.event(eventData)
+      }
     },
 
     "chat.message": async (input) => {
@@ -34,7 +40,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
 
         if (!preferPlanMode) return
 
-        const result = await showYesNo(directory, {
+        const result = await showYesNo({
           message: "Plan 모드 사용을 권장해요. 무시하고 일반 모드로 계속하시겠어요?\n<tab>으로 agent를 변경할 수 있어요.",
           title: "GPTers"
         })
