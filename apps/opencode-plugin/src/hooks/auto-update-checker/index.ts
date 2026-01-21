@@ -20,7 +20,7 @@ export function createAutoUpdateCheckerHook(ctx: PluginInput) {
       setTimeout(async () => {
         const cachedVersion = getCachedVersion()
 
-        showStartupToast(ctx, cachedVersion).catch(() => {})
+        showStartupToast(ctx, cachedVersion).catch(() => { })
 
         runBackgroundUpdateCheck(ctx).catch(err => {
           console.error("[gpters-plugin] Background update check failed:", err)
@@ -122,9 +122,7 @@ async function showStartupToast(ctx: PluginInput, version: string | null): Promi
         duration: 3000,
       },
     })
-    .catch(() => {})
-
-  console.log(`[gpters-plugin] Startup toast shown: v${displayVersion}`)
+    .catch(() => { })
 }
 
 async function showUpdateAvailableToast(
@@ -146,7 +144,7 @@ async function showUpdateAvailableToast(
         duration: 8000,
       },
     })
-    .catch(() => {})
+    .catch(() => { })
 
   console.log(`[gpters-plugin] Update available toast shown: v${latestVersion}`)
 }
@@ -171,7 +169,7 @@ async function showAutoUpdatedToast(
         duration: 8000,
       },
     })
-    .catch(() => {})
+    .catch(() => { })
 
   console.log(`[gpters-plugin] Auto-updated toast shown: v${oldVersion} → v${newVersion}`)
 }
