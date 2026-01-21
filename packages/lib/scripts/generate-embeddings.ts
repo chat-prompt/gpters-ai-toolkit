@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import { db, catalogItems } from '@gpters/db'
 import { isNull, eq } from 'drizzle-orm'
 import { generateEmbedding, prepareTextForEmbedding } from '../src/search/embedding'
