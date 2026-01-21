@@ -37,11 +37,12 @@
     "directory": "apps/opencode-plugin"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.1.19"
+    "@opencode-ai/plugin": "^1.1.28",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@gpters/tsconfig": "workspace:*",
-    "@opencode-ai/sdk": "^1.1.25",
+    "@opencode-ai/sdk": "^1.1.28",
     "bun-types": "latest",
     "typescript": "^5"
   }
