@@ -35,10 +35,26 @@ import type {
   ResolveSuggestionResponse,
   UndeploySkillInput,
   UndeploySkillResponse,
+  SemanticSearchInput,
+  SemanticSearchResult,
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
 import { getBaseUrl } from '../utils'
+import { generateEmbedding, prepareTextForEmbedding } from '../search/embedding'
+import { semanticSearch as semanticSearchImpl } from '../search/vector-search'
+
+async function updateItemEmbedding(id: string, item: { name: string; description: string; content?: string | null; tags?: string[] | null; readme?: string | null }): Promise<void> {
+  try {
+    const text = prepareTextForEmbedding(item)
+    if (!text) return
+
+    const embedding = await generateEmbedding(text)
+    await db.update(catalogItems).set({ embedding }).where(eq(catalogItems.id, id))
+  } catch (error) {
+    console.error(`Failed to generate embedding for ${id}:`, error)
+  }
+}
 
 /**
  * Search plugins by keyword
@@ -309,6 +325,8 @@ export async function createPlugin(
     dependencies: [],
   })
 
+  updateItemEmbedding(id, { name, description: description || '', content, tags, readme }).catch(() => {})
+
   return { success: true, id }
 }
 
@@ -348,6 +366,26 @@ export async function updatePlugin(
   if (updateFields.mcpEnabled !== undefined) updateData.mcpEnabled = updateFields.mcpEnabled
 
   await db.update(catalogItems).set(updateData).where(eq(catalogItems.id, id))
+
+  const shouldUpdateEmbedding = updateFields.name !== undefined || 
+    updateFields.description !== undefined || 
+    updateFields.content !== undefined || 
+    updateFields.tags !== undefined ||
+    updateFields.readme !== undefined
+
+  if (shouldUpdateEmbedding) {
+    const [current] = await db.select({
+      name: catalogItems.name,
+      description: catalogItems.description,
+      content: catalogItems.content,
+      tags: catalogItems.tags,
+      readme: catalogItems.readme,
+    }).from(catalogItems).where(eq(catalogItems.id, id)).limit(1)
+
+    if (current) {
+      updateItemEmbedding(id, current).catch(() => {})
+    }
+  }
 
   return { success: true, id }
 }
@@ -477,7 +515,8 @@ export async function deploySkill(
     })
   }
 
-  // Build response
+  updateItemEmbedding(id, { name, description: description || '', content, tags }).catch(() => {})
+
   const BASE_URL = getBaseUrl()
 
   const response: DeploySkillResponse = {
@@ -905,6 +944,50 @@ export async function executeTool(
 
   try {
     switch (toolName) {
+      case 'semantic_search': {
+        const input = args as unknown as SemanticSearchInput
+        if (!input.query) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: 'Missing required field: query' }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const searchResult = await semanticSearchImpl({
+          query: input.query,
+          type: input.category,
+          limit: Math.min(input.limit || 5, 20),
+        })
+        const result: SemanticSearchResult = {
+          plugins: searchResult.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            description: item.description,
+            authorName: 'Unknown',
+            tags: item.tags || [],
+            teamTag: item.teamTag || undefined,
+            difficulty: item.difficulty || undefined,
+            relevanceScore: item.similarity,
+          })),
+          total: searchResult.total,
+          query: input.query,
+          searchTime: searchResult.searchTime,
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        }
+      }
+
       case 'search_plugins': {
         const result = await searchPlugins(args as unknown as SearchPluginsInput)
         return {

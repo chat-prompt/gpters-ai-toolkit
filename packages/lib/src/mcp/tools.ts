@@ -27,6 +27,36 @@ export function isAdminTool(toolName: string): toolName is AdminToolName {
  */
 const ALL_TOOLS: McpTool[] = [
   {
+    name: 'semantic_search',
+    description: `의미 기반으로 플러그인을 검색합니다.
+자연어로 질문하면 의미적으로 유사한 플러그인을 찾습니다.
+키워드 검색(search_plugins)과 달리 의도를 이해하여 검색합니다.
+
+예시:
+- "코드 품질을 높이는 도구" → 코드 리뷰, 리팩토링 관련 플러그인
+- "데이터베이스 작업 도와줘" → DB 스키마, 쿼리 관련 플러그인
+- "문서 작성할 때 쓸만한 것" → 문서화, 마크다운 관련 플러그인`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '자연어 검색 쿼리 (예: "코드 리뷰 도와주는 도구", "DB 관련 작업")',
+        },
+        category: {
+          type: 'string',
+          enum: ['skill', 'agent', 'command', 'guide', 'all'],
+          description: '플러그인 카테고리 필터 (기본: all)',
+        },
+        limit: {
+          type: 'number',
+          description: '최대 결과 수 (기본: 5, 최대: 20)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'search_plugins',
     description: `카탈로그에서 플러그인을 검색합니다.
 키워드와 매칭되는 스킬, 에이전트, 커맨드를 반환합니다.

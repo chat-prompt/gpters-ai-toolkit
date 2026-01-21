@@ -283,3 +283,16 @@ export interface UndeploySkillResponse {
   name?: string
   message: string
 }
+
+export interface SemanticSearchInput {
+  query: string
+  category?: ItemType | 'all'
+  limit?: number
+}
+
+export interface SemanticSearchResult {
+  plugins: PluginSummary[]
+  total: number
+  query: string
+  searchTime: number
+}

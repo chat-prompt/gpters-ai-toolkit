@@ -14,9 +14,11 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate-embeddings": "npx tsx scripts/generate-embeddings.ts"
   },
   "dependencies": {
+    "@google/genai": "^0.14.0",
     "@gpters/db": "workspace:*",
     "@octokit/rest": "^21.1.1",
     "date-fns": "^4.1.0",
