@@ -3,6 +3,9 @@ import { getCachedVersion, findPluginEntry, getLatestVersionInfo, updatePinnedVe
 import { invalidatePackage } from "./cache"
 import { PACKAGE_NAME, CACHE_DIR } from "./constants"
 import { spawn } from "node:child_process"
+import { createLogger } from "../../utils/logger"
+
+const logger = createLogger("gpters-plugin")
 
 export function createAutoUpdateCheckerHook(ctx: PluginInput) {
   let hasChecked = false
@@ -23,7 +26,7 @@ export function createAutoUpdateCheckerHook(ctx: PluginInput) {
         showStartupToast(ctx, cachedVersion).catch(() => { })
 
         runBackgroundUpdateCheck(ctx).catch(err => {
-          console.error("[gpters-plugin] Background update check failed:", err)
+          logger.error("Background update check failed", err)
         })
       }, 0)
     },
@@ -33,40 +36,40 @@ export function createAutoUpdateCheckerHook(ctx: PluginInput) {
 async function runBackgroundUpdateCheck(ctx: PluginInput): Promise<void> {
   const pluginInfo = findPluginEntry(ctx.directory)
   if (!pluginInfo) {
-    console.log("[gpters-plugin] Plugin not found in config")
+    logger.debug("Plugin not found in config")
     return
   }
 
   const cachedVersion = getCachedVersion()
   const currentVersion = cachedVersion ?? pluginInfo.pinnedVersion
   if (!currentVersion) {
-    console.log("[gpters-plugin] No version found (cached or pinned)")
+    logger.debug("No version found (cached or pinned)")
     return
   }
 
   const latestInfo = await getLatestVersionInfo()
   if (!latestInfo) {
-    console.log("[gpters-plugin] Failed to fetch latest version")
+    logger.warn("Failed to fetch latest version")
     return
   }
 
   const { version: latestVersion, publishedAt } = latestInfo
 
   if (currentVersion === latestVersion) {
-    console.log("[gpters-plugin] Already on latest version:", latestVersion)
+    logger.debug("Already on latest version", latestVersion)
     return
   }
 
-  console.log(`[gpters-plugin] Update available: ${currentVersion} → ${latestVersion}`)
+  logger.info(`Update available: ${currentVersion} → ${latestVersion}`)
 
   if (pluginInfo.isPinned) {
     const updated = updatePinnedVersion(pluginInfo.configPath, pluginInfo.entry, latestVersion)
     if (!updated) {
       await showUpdateAvailableToast(ctx, latestVersion, publishedAt)
-      console.log("[gpters-plugin] Failed to update pinned version in config")
+      logger.warn("Failed to update pinned version in config")
       return
     }
-    console.log(`[gpters-plugin] Config updated: ${pluginInfo.entry} → ${PACKAGE_NAME}@${latestVersion}`)
+    logger.info(`Config updated: ${pluginInfo.entry} → ${PACKAGE_NAME}@${latestVersion}`)
   }
 
   invalidatePackage(PACKAGE_NAME)
@@ -75,10 +78,10 @@ async function runBackgroundUpdateCheck(ctx: PluginInput): Promise<void> {
 
   if (installSuccess) {
     await showAutoUpdatedToast(ctx, currentVersion, latestVersion, publishedAt)
-    console.log(`[gpters-plugin] Update installed: ${currentVersion} → ${latestVersion}`)
+    logger.info(`Update installed: ${currentVersion} → ${latestVersion}`)
   } else {
     await showUpdateAvailableToast(ctx, latestVersion, publishedAt)
-    console.log("[gpters-plugin] bun install failed; falling back to notification-only")
+    logger.warn("bun install failed; falling back to notification-only")
   }
 }
 
@@ -146,7 +149,7 @@ async function showUpdateAvailableToast(
     })
     .catch(() => { })
 
-  console.log(`[gpters-plugin] Update available toast shown: v${latestVersion}`)
+  logger.debug(`Update available toast shown: v${latestVersion}`)
 }
 
 async function showAutoUpdatedToast(
@@ -171,5 +174,5 @@ async function showAutoUpdatedToast(
     })
     .catch(() => { })
 
-  console.log(`[gpters-plugin] Auto-updated toast shown: v${oldVersion} → v${newVersion}`)
+  logger.debug(`Auto-updated toast shown: v${oldVersion} → v${newVersion}`)
 }

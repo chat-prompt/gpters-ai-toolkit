@@ -3,13 +3,12 @@ import { execSync } from "node:child_process"
 import { HOOK_NAME, AUTO_COMMIT_TASK_PROMPT, COOLDOWN_MS, FAST_MODEL } from "./constants"
 import { GIT_MASTER_SKILL } from "./git-master-skill"
 import type { Todo, AutoCommitState, GitStatus } from "./types"
+import { createLogger } from "../../utils/logger"
+
+const logger = createLogger(HOOK_NAME)
 
 function log(message: string, data?: unknown): void {
-  if (data) {
-    console.log(`[${HOOK_NAME}] ${message}`, JSON.stringify(data))
-  } else {
-    console.log(`[${HOOK_NAME}] ${message}`)
-  }
+  logger.debug(message, data)
 }
 
 function getGitStatus(directory: string): GitStatus | null {

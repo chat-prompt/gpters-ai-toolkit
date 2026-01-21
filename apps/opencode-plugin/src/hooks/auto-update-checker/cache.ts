@@ -1,6 +1,9 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { CACHE_DIR, PACKAGE_NAME } from "./constants"
+import { createLogger } from "../../utils/logger"
+
+const logger = createLogger("gpters-plugin")
 
 interface BunLockfile {
   workspaces?: {
@@ -36,7 +39,7 @@ function removeFromBunLock(packageName: string): boolean {
 
     if (modified) {
       fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2))
-      console.log(`[gpters-plugin] Removed from bun.lock: ${packageName}`)
+      logger.debug(`Removed from bun.lock: ${packageName}`)
     }
 
     return modified
@@ -56,7 +59,7 @@ export function invalidatePackage(packageName: string = PACKAGE_NAME): boolean {
 
     if (fs.existsSync(pkgDir)) {
       fs.rmSync(pkgDir, { recursive: true, force: true })
-      console.log(`[gpters-plugin] Package removed: ${pkgDir}`)
+      logger.debug(`Package removed: ${pkgDir}`)
       packageRemoved = true
     }
 
@@ -66,7 +69,7 @@ export function invalidatePackage(packageName: string = PACKAGE_NAME): boolean {
       if (pkgJson.dependencies?.[packageName]) {
         delete pkgJson.dependencies[packageName]
         fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
-        console.log(`[gpters-plugin] Dependency removed from package.json: ${packageName}`)
+        logger.debug(`Dependency removed from package.json: ${packageName}`)
         dependencyRemoved = true
       }
     }
@@ -74,13 +77,13 @@ export function invalidatePackage(packageName: string = PACKAGE_NAME): boolean {
     lockRemoved = removeFromBunLock(packageName)
 
     if (!packageRemoved && !dependencyRemoved && !lockRemoved) {
-      console.log(`[gpters-plugin] Package not found, nothing to invalidate: ${packageName}`)
+      logger.debug(`Package not found, nothing to invalidate: ${packageName}`)
       return false
     }
 
     return true
   } catch (err) {
-    console.error("[gpters-plugin] Failed to invalidate package:", err)
+    logger.error("Failed to invalidate package", err)
     return false
   }
 }

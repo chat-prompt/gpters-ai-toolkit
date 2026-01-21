@@ -13,6 +13,9 @@ import {
   NPMRC_PATH,
   getWindowsAppdataDir,
 } from "./constants"
+import { createLogger } from "../../utils/logger"
+
+const logger = createLogger("gpters-plugin")
 
 function stripJsonComments(json: string): string {
   return json
@@ -112,7 +115,7 @@ export function updatePinnedVersion(configPath: string, oldEntry: string, newVer
 
     const pluginMatch = content.match(/"plugin"\s*:\s*\[/)
     if (!pluginMatch || pluginMatch.index === undefined) {
-      console.log(`[gpters-plugin] No "plugin" array found in ${configPath}`)
+      logger.debug(`No "plugin" array found in ${configPath}`)
       return false
     }
 
@@ -134,7 +137,7 @@ export function updatePinnedVersion(configPath: string, oldEntry: string, newVer
     const regex = new RegExp(`["']${escapedOldEntry}["']`)
 
     if (!regex.test(pluginArrayContent)) {
-      console.log(`[gpters-plugin] Entry "${oldEntry}" not found in plugin array of ${configPath}`)
+      logger.debug(`Entry "${oldEntry}" not found in plugin array of ${configPath}`)
       return false
     }
 
@@ -142,15 +145,15 @@ export function updatePinnedVersion(configPath: string, oldEntry: string, newVer
     const updatedContent = before + updatedPluginArray + after
 
     if (updatedContent === content) {
-      console.log(`[gpters-plugin] No changes made to ${configPath}`)
+      logger.debug(`No changes made to ${configPath}`)
       return false
     }
 
     fs.writeFileSync(configPath, updatedContent, "utf-8")
-    console.log(`[gpters-plugin] Updated ${configPath}: ${oldEntry} → ${newEntry}`)
+    logger.info(`Updated ${configPath}: ${oldEntry} → ${newEntry}`)
     return true
   } catch (err) {
-    console.error(`[gpters-plugin] Failed to update config file ${configPath}:`, err)
+    logger.error(`Failed to update config file ${configPath}`, err)
     return false
   }
 }
@@ -173,7 +176,7 @@ export async function getLatestVersionInfo(): Promise<VersionInfo | null> {
     })
 
     if (!response.ok) {
-      console.error(`[gpters-plugin] Verdaccio API error: ${response.status}`)
+      logger.error(`Verdaccio API error: ${response.status}`)
       return null
     }
 
@@ -181,7 +184,7 @@ export async function getLatestVersionInfo(): Promise<VersionInfo | null> {
     const latestVersion = data["dist-tags"]?.latest
 
     if (!latestVersion) {
-      console.error("[gpters-plugin] No latest version found in dist-tags")
+      logger.error("No latest version found in dist-tags")
       return null
     }
 
@@ -189,7 +192,7 @@ export async function getLatestVersionInfo(): Promise<VersionInfo | null> {
 
     return { version: latestVersion, publishedAt }
   } catch (err) {
-    console.error("[gpters-plugin] Failed to fetch latest version:", err)
+    logger.error("Failed to fetch latest version", err)
     return null
   } finally {
     clearTimeout(timeoutId)

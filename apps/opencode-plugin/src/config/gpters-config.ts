@@ -5,6 +5,9 @@ import {
   DEFAULT_CONFIG,
   type GptersConfig,
 } from "./schema"
+import { createLogger } from "../utils/logger"
+
+const logger = createLogger("gpters-config")
 
 const CONFIG_FILENAME = "gpters.json"
 
@@ -52,7 +55,7 @@ export class GptersConfigManager {
       this.cachedConfig = validated
       return validated
     } catch (error) {
-      console.warn(`[gpters-config] Failed to read config, using defaults: ${error}`)
+      logger.warn(`Failed to read config, using defaults: ${error}`)
       return { ...DEFAULT_CONFIG }
     }
   }
