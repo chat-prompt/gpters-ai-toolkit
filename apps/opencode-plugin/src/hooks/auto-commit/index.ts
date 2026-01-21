@@ -1,7 +1,7 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { execSync } from "node:child_process"
-import { HOOK_NAME, AUTO_COMMIT_TASK_PROMPT, COOLDOWN_MS, FAST_MODEL } from "./constants"
-import { GIT_MASTER_SKILL } from "./git-master-skill"
+import { HOOK_NAME, COOLDOWN_MS } from "./constants"
+import { COMMIT_AGENT_NAME } from "../../commands/commit"
 import type { Todo, AutoCommitState, GitStatus } from "./types"
 import { createLogger } from "../../utils/logger"
 
@@ -52,16 +52,6 @@ function getGitStatus(directory: string): GitStatus | null {
   }
 }
 
-function formatTodoContext(todos: Todo[]): string {
-  const completedTodos = todos.filter((t) => t.status === "completed")
-
-  if (completedTodos.length === 0) {
-    return "No completed todos found."
-  }
-
-  return completedTodos.map((t) => `- [x] ${t.content}`).join("\n")
-}
-
 function areAllTodosComplete(todos: Todo[]): boolean {
   if (todos.length === 0) return false
   return todos.every((t) => t.status === "completed" || t.status === "cancelled")
@@ -71,7 +61,6 @@ export function createAutoCommitHook(ctx: PluginInput) {
   const { directory, client } = ctx
 
   const stateMap = new Map<string, AutoCommitState>()
-  const autoCommitSessions = new Set<string>()
 
   function getState(sessionID: string): AutoCommitState {
     let state = stateMap.get(sessionID)
@@ -89,31 +78,31 @@ export function createAutoCommitHook(ctx: PluginInput) {
   async function showToast(title: string, message: string, variant: "info" | "success" | "error" = "info"): Promise<void> {
     await client.tui.showToast({
       body: { title, message, variant, duration: 3000 },
-    }).catch(() => {})
+    }).catch(() => { })
   }
 
-  async function triggerAutoCommit(parentSessionID: string, todos: Todo[]): Promise<void> {
-    const state = getState(parentSessionID)
+  async function triggerAutoCommit(sessionID: string): Promise<void> {
+    const state = getState(sessionID)
 
     const now = Date.now()
     if (now - state.lastCommitAttempt < COOLDOWN_MS) {
-      log("Skipped: cooldown active", { parentSessionID })
+      log("Skipped: cooldown active", { sessionID })
       return
     }
 
     if (state.isProcessing) {
-      log("Skipped: already processing", { parentSessionID })
+      log("Skipped: already processing", { sessionID })
       return
     }
 
     const gitStatus = getGitStatus(directory)
     if (!gitStatus) {
-      log("Skipped: not a git repository or git error", { parentSessionID })
+      log("Skipped: not a git repository or git error", { sessionID })
       return
     }
 
     if (!gitStatus.hasChanges) {
-      log("Skipped: no changes to commit", { parentSessionID })
+      log("Skipped: no changes to commit", { sessionID })
       return
     }
 
@@ -121,12 +110,10 @@ export function createAutoCommitHook(ctx: PluginInput) {
     state.lastCommitAttempt = now
 
     try {
-      const todoContext = formatTodoContext(todos)
-      const prompt = AUTO_COMMIT_TASK_PROMPT.replace("{TODO_CONTEXT}", todoContext)
       const fileCount = gitStatus.staged.length + gitStatus.unstaged.length + gitStatus.untracked.length
 
-      log("Creating auto-commit session", {
-        parentSessionID,
+      log("Triggering auto-commit subtask", {
+        sessionID,
         staged: gitStatus.staged.length,
         unstaged: gitStatus.unstaged.length,
         untracked: gitStatus.untracked.length,
@@ -134,38 +121,21 @@ export function createAutoCommitHook(ctx: PluginInput) {
 
       await showToast("Auto-commit", `Creating commits for ${fileCount} file(s)...`, "info")
 
-      const createResult = await client.session.create({
-        body: {
-          parentID: parentSessionID,
-          title: "Auto-commit: Create atomic commits",
-        },
-        query: {
-          directory,
-        },
-      })
-
-      if (createResult.error) {
-        log("Failed to create session", { error: createResult.error })
-        await showToast("Auto-commit", "Failed to create session", "error")
-        return
-      }
-
-      const sessionID = createResult.data.id
-      autoCommitSessions.add(sessionID)
-      log("Session created", { sessionID, parentSessionID })
-
       await client.session.prompt({
         path: { id: sessionID },
         body: {
-          model: FAST_MODEL,
-          system: GIT_MASTER_SKILL,
-          parts: [{ type: "text", text: prompt }],
+          parts: [{
+            type: "subtask",
+            prompt: "Create atomic commits for current changes",
+            description: "Auto-commit",
+            agent: COMMIT_AGENT_NAME,
+          }],
         },
       })
 
-      log("Auto-commit agent triggered", { sessionID })
+      log("Auto-commit triggered as subtask", { sessionID })
     } catch (err) {
-      log("Failed to trigger auto-commit", { parentSessionID, error: String(err) })
+      log("Failed to trigger auto-commit", { sessionID, error: String(err) })
       await showToast("Auto-commit", "Failed to trigger auto-commit", "error")
     } finally {
       state.isProcessing = false
@@ -189,13 +159,6 @@ export function createAutoCommitHook(ctx: PluginInput) {
       if (event.type === "session.idle") {
         const sessionID = props?.sessionID as string | undefined
         if (!sessionID) return
-
-        if (autoCommitSessions.has(sessionID)) {
-          autoCommitSessions.delete(sessionID)
-          log("Auto-commit session completed", { sessionID })
-          await showToast("Auto-commit", "Commits created successfully!", "success")
-          return
-        }
 
         log("session.idle detected", { sessionID })
 
@@ -243,7 +206,7 @@ export function createAutoCommitHook(ctx: PluginInput) {
 
         state.completedTodoIds = currentCompletedIds
 
-        await triggerAutoCommit(sessionID, todos)
+        await triggerAutoCommit(sessionID)
       }
     },
   }

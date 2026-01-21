@@ -1,12 +1,16 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { COMMAND_PRD_REVIEW } from "./commands/prd-review"
+import { COMMAND_COMMIT, COMMIT_AGENT_NAME, COMMIT_AGENT_CONFIG } from "./commands/commit"
 import { GptersConfigManager } from "./config"
 import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
 import { createAutoCommitHook } from "./hooks/auto-commit"
 import { showYesNo } from "./utils/dialog"
+import { createLogger } from "./utils/logger"
 
 const COMMAND_PREFIX = 'gpters'
 const PREFIX = "*Working with GPTers AI Toolkit*\n\n"
+
+const logger = createLogger("main")
 
 export const GPTersPlugin: Plugin = async (ctx) => {
   const { directory, client } = ctx
@@ -17,6 +21,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
   const autoCommitHook = createAutoCommitHook(ctx)
   const configManager = GptersConfigManager.getInstance(directory)
 
+  logger.info("Plugin started")
 
   return {
     event: async (eventData) => {
@@ -71,6 +76,10 @@ export const GPTersPlugin: Plugin = async (ctx) => {
 
       config.command ??= {}
       config.command[`${COMMAND_PREFIX}:prd-review`] = COMMAND_PRD_REVIEW
+      config.command[`${COMMAND_PREFIX}:commit`] = COMMAND_COMMIT
+
+      config.agent ??= {}
+      config.agent[COMMIT_AGENT_NAME] = COMMIT_AGENT_CONFIG
     }
   }
 }

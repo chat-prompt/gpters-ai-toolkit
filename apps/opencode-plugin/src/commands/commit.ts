@@ -1,4 +1,9 @@
-export const GIT_MASTER_SKILL = `
+import type { Config, AgentConfig } from "@opencode-ai/sdk"
+
+export const COMMIT_AGENT_NAME = "commit"
+export const COMMIT_COMMAND_NAME = "gpters:commit"
+
+export const COMMIT_AGENT_PROMPT = `
 # Git Master Agent
 
 You are a Git expert combining three specializations:
@@ -257,3 +262,28 @@ HISTORY:
 4. **NEVER group by file type** - group by feature/module
 5. **NEVER leave working directory dirty** - complete all changes
 `.trim()
+
+export const COMMIT_AGENT_CONFIG: AgentConfig = {
+  prompt: COMMIT_AGENT_PROMPT,
+  description: "Git Master agent for creating atomic commits",
+  mode: "subagent",
+  model: "anthropic/claude-sonnet-4-20250514",
+}
+
+const COMMIT_COMMAND_TEMPLATE = `
+Create atomic commit(s) for the current changes.
+
+**INSTRUCTIONS:**
+1. Run git status to see all changes
+2. Detect commit style from git log -30
+3. Create atomic commits following the repository's conventions
+4. Do NOT push - just commit locally
+
+Now execute the git-master workflow.
+`.trim()
+
+export const COMMAND_COMMIT: NonNullable<Config['command']>[string] = {
+  template: COMMIT_COMMAND_TEMPLATE,
+  description: 'Create atomic commits for current changes using Git Master agent',
+  agent: COMMIT_AGENT_NAME,
+}
