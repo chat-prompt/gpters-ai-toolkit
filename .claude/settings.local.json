@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__gpters-ai-toolkit-local__semantic_search"
+    ]
+  }
+}

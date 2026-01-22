@@ -18,12 +18,18 @@ importers:
   apps/opencode-plugin:
     dependencies:
       '@opencode-ai/plugin':
-        specifier: ^1.1.19
-        version: 1.1.25
+        specifier: ^1.1.28
+        version: 1.1.28
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
     devDependencies:
       '@gpters/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@opencode-ai/sdk':
+        specifier: ^1.1.28
+        version: 1.1.28
       bun-types:
         specifier: latest
         version: 1.3.6
@@ -1175,11 +1181,11 @@ packages:
   '@octokit/types@14.1.0':
     resolution: {integrity: sha512-1y6DgTy8Jomcpu33N+p5w58l6xyt55Ar2I91RPiIA0xCJBXyUAhXCcmZaDWSANiha7R9a6qJJ2CRomGPZ6f46g==}
 
-  '@opencode-ai/plugin@1.1.25':
-    resolution: {integrity: sha512-oTUWS446H/j7z3pdzo3cOrB5N87XZ/RKdgPD8yHv/rLX92B4YQHjOqggVQ56Q+1VEnN0jxzhoqRylv/0ZEts/Q==}
+  '@opencode-ai/plugin@1.1.28':
+    resolution: {integrity: sha512-EGHjxobzEC2HffJmXtTgWCtmyp6dRELLw/VGtEPsNPkg2wQ21G1RqxpuipNzR+730K2MSElw/bdAr1zNhd2T6A==}
 
-  '@opencode-ai/sdk@1.1.25':
-    resolution: {integrity: sha512-mWUX489ArEF2ICg3iZsx2VQaGS3Z2j/dwAJDacao9t7dGDzjOIaacPw2weZ10zld7XmT9V9C0PM/A5lDZ52J+w==}
+  '@opencode-ai/sdk@1.1.28':
+    resolution: {integrity: sha512-fR5mPWu4O6Pu1u+Bj5eUpZix1PCOSSDh7GeE/KyM5pFEqLLoxcNjon5XRMNVggGI4zEFjq48pxdpP4z4mbGeew==}
 
   '@panva/hkdf@1.2.1':
     resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
@@ -4680,12 +4686,12 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 25.1.0
 
-  '@opencode-ai/plugin@1.1.25':
+  '@opencode-ai/plugin@1.1.28':
     dependencies:
-      '@opencode-ai/sdk': 1.1.25
+      '@opencode-ai/sdk': 1.1.28
       zod: 4.1.8
 
-  '@opencode-ai/sdk@1.1.25': {}
+  '@opencode-ai/sdk@1.1.28': {}
 
   '@panva/hkdf@1.2.1': {}
 

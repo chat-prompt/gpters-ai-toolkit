@@ -15,7 +15,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly",
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly && cp -r bin dist/",
     "dev": "bun build src/index.ts --outdir dist --target bun --format esm --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
@@ -37,10 +37,12 @@
     "directory": "apps/opencode-plugin"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.1.19"
+    "@opencode-ai/plugin": "^1.1.28",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@gpters/tsconfig": "workspace:*",
+    "@opencode-ai/sdk": "^1.1.28",
     "bun-types": "latest",
     "typescript": "^5"
   }
