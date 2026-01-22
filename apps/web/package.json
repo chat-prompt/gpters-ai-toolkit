@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "pnpm run with-env -- next dev",
+    "with-env": "dotenv -e ../../.env",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -43,6 +44,7 @@
     "@vitejs/plugin-react": "^5.1.2",
     "@vitest/coverage-v8": "^4.0.16",
     "dotenv": "^17.2.3",
+    "dotenv-cli": "^8.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.0",
     "happy-dom": "^20.0.11",

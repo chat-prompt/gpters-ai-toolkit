@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, vector } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -75,15 +75,16 @@ export const catalogItems = pgTable('catalog_items', {
   status: text('status').default('published'), // 'draft' | 'published'
   changelog: text('changelog'), // Latest version changelog
 
+  // Vector embedding for semantic search (3072 dimensions for Gemini gemini-embedding-001)
+  embedding: vector('embedding', { dimensions: 3072 }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
-  // Performance indexes for common queries
   index('catalog_items_type_idx').on(table.type),
   index('catalog_items_status_idx').on(table.status),
   index('catalog_items_author_id_idx').on(table.authorId),
   index('catalog_items_mcp_enabled_idx').on(table.mcpEnabled),
-  // Composite index for type + status (common filter combination)
   index('catalog_items_type_status_idx').on(table.type, table.status),
 ])
 

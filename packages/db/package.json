@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push --force",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:migrate": "npx tsx src/migrate.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
