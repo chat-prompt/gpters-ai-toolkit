@@ -15,6 +15,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
     hasChecked: false,
     sessionId: null,
     pendingAction: null,
+    isMainSession: false,
   }
 
   async function showToast(title: string, message: string, variant: "info" | "success" | "warning" | "error", duration = 5000) {
@@ -141,13 +142,18 @@ export function createBranchGuardHook(ctx: PluginInput) {
 
       const props = event.properties as { info?: { id: string; parentID?: string } } | undefined
 
-      if (props?.info?.parentID) return
-
+      const isMainSession = !props?.info?.parentID
+      state.isMainSession = isMainSession
       state.sessionId = props?.info?.id ?? null
       state.hasChecked = false
       state.pendingAction = null
 
-      logger.info(`Session created: ${state.sessionId}`)
+      if (!isMainSession) {
+        logger.info(`Subtask session detected: ${state.sessionId}, skipping branch guard`)
+        return
+      }
+
+      logger.info(`Main session created: ${state.sessionId}`)
     },
 
     "chat.message": async (
@@ -155,6 +161,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
       output: { parts: Array<{ type: string; text?: string }> }
     ) => {
       if (!BRANCH_GUARD_CONFIG.enabled) return
+      if (!state.isMainSession) return
 
       if (state.pendingAction) {
         const userMessage = extractMessageContent(output)
@@ -232,6 +239,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
       input: { sessionID: string; messageID: string; partID: string },
       output: { text: string }
     ) => {
+      if (!state.isMainSession) return
       if (!state.pendingAction) return
 
       const { type, suggestedBranch, existingBranch } = state.pendingAction

@@ -22,6 +22,7 @@ export interface BranchGuardState {
   hasChecked: boolean
   sessionId: string | null
   pendingAction: PendingAction | null
+  isMainSession: boolean
 }
 
 export interface GitCommandResult {
