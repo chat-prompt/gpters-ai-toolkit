@@ -5,6 +5,7 @@ export const gptersConfigSchema = z.object({
   version: z.literal(1),
   preferPlanMode: z.boolean().default(true),
   autoCommit: z.boolean().default(true),
+  branchGuard: z.boolean().default(true),
 })
 
 export type GptersConfig = z.infer<typeof gptersConfigSchema>
@@ -13,4 +14,5 @@ export const DEFAULT_CONFIG: GptersConfig = {
   version: 1,
   preferPlanMode: true,
   autoCommit: true,
+  branchGuard: true,
 }

@@ -286,7 +286,7 @@ export const GIT_PUSH_PR_AGENT_CONFIG: AgentConfig = {
   prompt: GIT_PUSH_PR_AGENT_PROMPT,
   description: "Push current branch and create PR with template",
   mode: "subagent",
-  model: "anthropic/claude-sonnet-4-20250514",
+  model: "antigravity-gemini-3-flash",
 }
 
 const GIT_PUSH_PR_COMMAND_TEMPLATE = `

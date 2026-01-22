@@ -5,6 +5,7 @@ import { COMMAND_GIT_PUSH_PR, GIT_PUSH_PR_AGENT_NAME, GIT_PUSH_PR_AGENT_CONFIG }
 import { GptersConfigManager } from "./config"
 import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
 import { createAutoCommitHook } from "./hooks/auto-commit"
+import { createBranchGuardHook } from "./hooks/branch-guard"
 import { showYesNo } from "./utils/dialog"
 import { createLogger } from "./utils/logger"
 
@@ -18,6 +19,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
   const promptedSessions = new Set<string>()
   const autoUpdateChecker = createAutoUpdateCheckerHook(ctx)
   const autoCommitHook = createAutoCommitHook(ctx)
+  const branchGuardHook = createBranchGuardHook(ctx)
   const configManager = GptersConfigManager.getInstance(directory)
 
   logger.info("Plugin started")
@@ -25,13 +27,14 @@ export const GPTersPlugin: Plugin = async (ctx) => {
   return {
     event: async (eventData) => {
       autoUpdateChecker.event(eventData)
+      branchGuardHook.event(eventData)
 
       if (configManager.getAutoCommit()) {
         await autoCommitHook.event(eventData)
       }
     },
 
-    "chat.message": async (input) => {
+    "chat.message": async (input, output) => {
       const { sessionID, agent } = input
 
       const preferPlanMeodeCheck = async () => {
@@ -62,6 +65,17 @@ export const GPTersPlugin: Plugin = async (ctx) => {
         }, 100)
       }
       await preferPlanMeodeCheck()
+
+
+      if (configManager.getBranchGuard()) {
+        await branchGuardHook["chat.message"]?.(input, output)
+      }
+    },
+
+    "experimental.text.complete": async (input, output) => {
+      if (configManager.getBranchGuard()) {
+        await branchGuardHook["experimental.text.complete"]?.(input, output)
+      }
     },
 
     config: async (config) => {
