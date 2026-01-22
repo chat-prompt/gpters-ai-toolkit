@@ -8,7 +8,8 @@ import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
 import { createAutoCommitHook } from "./hooks/auto-commit"
 import { createBranchGuardHook } from "./hooks/branch-guard"
 import { createPluginSetupHook } from "./hooks/plugin-setup"
-import { showYesNo } from "./utils/dialog"
+import { createPreferPlanModeHook } from "./hooks/prefer-plan-mode"
+
 import { createLogger } from "./utils/logger"
 
 const COMMAND_PREFIX = 'gpters'
@@ -16,13 +17,13 @@ const COMMAND_PREFIX = 'gpters'
 const logger = createLogger("main")
 
 export const GPTersPlugin: Plugin = async (ctx) => {
-  const { directory, client } = ctx
+  const { directory } = ctx
 
-  const promptedSessions = new Set<string>()
   const autoUpdateChecker = createAutoUpdateCheckerHook(ctx)
   const autoCommitHook = createAutoCommitHook(ctx)
   const branchGuardHook = createBranchGuardHook(ctx)
   const pluginSetupHook = createPluginSetupHook(ctx)
+  const preferPlanModeHook = createPreferPlanModeHook(ctx)
   const configManager = GptersConfigManager.getInstance(directory)
 
   logger.info("Plugin started")
@@ -39,37 +40,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
     },
 
     "chat.message": async (input, output) => {
-      const { sessionID, agent } = input
-
-      const preferPlanMeodeCheck = async () => {
-        if (!configManager.getPreferPlanMode()) return
-
-        if (!input.messageID) return
-        if (agent !== "Sisyphus") return
-        if (promptedSessions.has(sessionID)) return
-        promptedSessions.add(sessionID)
-
-        const messagesRes = await client.session.messages({ path: { id: sessionID } })
-        const hasAIMessage = messagesRes?.data?.some((m) => m.info.role === 'assistant')
-        if (hasAIMessage) return
-
-        const result = await showYesNo({
-          message: "Plan 모드 사용을 권장해요. 무시하고 일반 모드로 계속하시겠어요?\n\n*<tab>으로 agent를 변경할 수 있어요.",
-          title: "Agent 선택",
-          yesText: "Plan없이 계속",
-          noText: "중단"
-        })
-
-        if (result.ok && result.value) {
-          return
-        }
-
-        setTimeout(async () => {
-          await client.session.abort({ path: { id: input.sessionID } })
-        }, 100)
-      }
-      await preferPlanMeodeCheck()
-
+      await preferPlanModeHook["chat.message"]?.(input)
 
       if (configManager.getBranchGuard()) {
         await branchGuardHook["chat.message"]?.(input, output)
@@ -90,9 +61,10 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       config.mcp ??= {}
       config.mcp = {
         "gpters-ai-toolkit": {
-          type: "remote",
           enabled: true,
-          url: "https://ai-toolkit.gpters.org/api/mcp"
+          type: "remote",
+          url: "https://ai-toolkit.gpters.org/api/mcp",
+          oauth: {}
         }
       }
 
