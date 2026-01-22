@@ -37,10 +37,12 @@ function runDialog(args: string[]): Promise<DialogResult<string>> {
 }
 
 export async function showYesNo(
-  options: { message: string; title?: string }
+  options: { message: string; title?: string; yesText?: string; noText?: string }
 ): Promise<DialogResult<boolean>> {
   const args = ["yesno", "--message", options.message]
   if (options.title) args.push("--title", options.title)
+  if (options.yesText) args.push("--yes-text", options.yesText)
+  if (options.noText) args.push("--no-text", options.noText)
 
   const result = await runDialog(args)
   if (!result.ok) return result
