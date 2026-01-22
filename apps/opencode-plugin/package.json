@@ -1,6 +1,6 @@
 {
   "name": "@gpters-internal/opencode",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "GPTers OpenCode Plugin",
   "type": "module",
   "main": "dist/index.js",
