@@ -1,10 +1,10 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import type { BranchGuardState, PendingBranchChoice } from "./types"
+import type { BranchGuardState, PendingAction } from "./types"
 import { BRANCH_GUARD_CONFIG } from "./config"
-import { getCurrentBranch, getExistingBranches, isProtectedBranch, isGitRepository, findSimilarBranch } from "./detector"
+import { getCurrentBranch, getExistingBranches, isProtectedBranch, isGitRepository, findSimilarBranch, filterMergedBranches } from "./detector"
 import { generateBranchName } from "./name-extractor"
 import { hasUncommittedChanges, stashChanges, popStash } from "./stash-manager"
-import { syncWithOrigin } from "./git-sync"
+import { syncWithOrigin, getMergedBranches, checkBranchMerged } from "./git-sync"
 import { createBranch, checkoutBranch } from "./creator"
 import { createLogger } from "../../utils/logger"
 
@@ -14,7 +14,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
   const state: BranchGuardState = {
     hasChecked: false,
     sessionId: null,
-    pendingBranchChoice: null,
+    pendingAction: null,
   }
 
   async function showToast(title: string, message: string, variant: "info" | "success" | "warning" | "error", duration = 5000) {
@@ -70,18 +70,69 @@ export function createBranchGuardHook(ctx: PluginInput) {
     return textPart?.text ?? ""
   }
 
-  function detectUserChoice(message: string): "existing" | "new" | null {
+  function detectUserChoice(message: string): "existing" | "new" | "skip" | null {
     const lower = message.toLowerCase()
 
-    if (lower.includes("기존") || lower.includes("1") || lower.includes("existing") || lower.includes("use existing")) {
+    if (lower.includes("기존") || lower.includes("1") || lower.includes("existing")) {
       return "existing"
     }
 
-    if (lower.includes("새") || lower.includes("2") || lower.includes("new") || lower.includes("create new")) {
+    if (lower.includes("새") || lower.includes("생성") || lower.includes("2") || lower.includes("new") || lower.includes("create")) {
       return "new"
     }
 
+    if (lower.includes("스킵") || lower.includes("skip") || lower.includes("3") || lower.includes("그냥") || lower.includes("넘어")) {
+      return "skip"
+    }
+
     return null
+  }
+
+  async function handleProtectedBranch(currentBranch: string, userMessage: string) {
+    let hasStashed = false
+    const hasChanges = await hasUncommittedChanges(ctx.directory)
+    if (hasChanges) {
+      const stashResult = await stashChanges(ctx.directory, "[branch-guard] Auto stash before branch switch")
+      if (stashResult.success) {
+        hasStashed = true
+        await showToast("📦 변경사항 임시 저장", "작업 중이던 내용을 stash 했습니다", "info", 3000)
+        logger.info("Changes stashed")
+      } else {
+        logger.error(`Failed to stash: ${stashResult.error}`)
+      }
+    }
+
+    const syncResult = await syncWithOrigin(ctx.directory)
+    if (syncResult.success) {
+      await showToast("🔄 브랜치 최신화", `${currentBranch} 브랜치를 최신 상태로 업데이트했습니다`, "info", 3000)
+      logger.info(`Synced ${currentBranch} with origin`)
+    } else {
+      logger.warn(`Failed to sync: ${syncResult.error}`)
+    }
+
+    const suggestedBranch = generateBranchName(userMessage)
+
+    const localBranches = await getExistingBranches(ctx.directory, BRANCH_GUARD_CONFIG.branchPrefix)
+    const mergedBranches = await getMergedBranches(ctx.directory)
+    const activeBranches = filterMergedBranches(localBranches, mergedBranches)
+    const similarBranch = findSimilarBranch(suggestedBranch, activeBranches)
+
+    if (similarBranch) {
+      state.pendingAction = {
+        type: "choose_branch",
+        suggestedBranch,
+        existingBranch: similarBranch,
+        hasStashed,
+      }
+      logger.info(`Similar branch found: ${similarBranch}, waiting for user choice`)
+    } else {
+      state.pendingAction = {
+        type: "confirm_create",
+        suggestedBranch,
+        hasStashed,
+      }
+      logger.info(`No similar branch, asking to create: ${suggestedBranch}`)
+    }
   }
 
   return {
@@ -94,7 +145,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
 
       state.sessionId = props?.info?.id ?? null
       state.hasChecked = false
-      state.pendingBranchChoice = null
+      state.pendingAction = null
 
       logger.info(`Session created: ${state.sessionId}`)
     },
@@ -105,20 +156,28 @@ export function createBranchGuardHook(ctx: PluginInput) {
     ) => {
       if (!BRANCH_GUARD_CONFIG.enabled) return
 
-      if (state.pendingBranchChoice) {
+      if (state.pendingAction) {
         const userMessage = extractMessageContent(output)
         const choice = detectUserChoice(userMessage)
 
         if (choice) {
-          const { existing, suggested, hasStashed } = state.pendingBranchChoice
+          const { suggestedBranch, existingBranch, hasStashed } = state.pendingAction
 
-          if (choice === "existing") {
-            await handleBranchCheckout(existing, hasStashed)
-          } else {
-            await handleBranchCreation(suggested, hasStashed)
+          if (choice === "existing" && existingBranch) {
+            await handleBranchCheckout(existingBranch, hasStashed)
+          } else if (choice === "new") {
+            await handleBranchCreation(suggestedBranch, hasStashed)
+          } else if (choice === "skip") {
+            await showToast("⏭️ 브랜치 생성 스킵", "현재 브랜치에서 계속합니다", "info", 3000)
+            if (hasStashed) {
+              const popResult = await popStash(ctx.directory)
+              if (popResult.success) {
+                await showToast("📦 변경사항 복원", "stash 했던 내용을 복원했습니다", "info", 3000)
+              }
+            }
           }
 
-          state.pendingBranchChoice = null
+          state.pendingAction = null
         }
         return
       }
@@ -133,49 +192,39 @@ export function createBranchGuardHook(ctx: PluginInput) {
       }
 
       const currentBranch = await getCurrentBranch(ctx.directory)
-      if (!isProtectedBranch(currentBranch)) {
-        logger.info(`On ${currentBranch}, not protected, skipping`)
+      if (!currentBranch) {
+        logger.info("Could not determine current branch")
         return
       }
 
-      logger.info(`Protected branch detected: ${currentBranch}`)
-
-      let hasStashed = false
-      const hasChanges = await hasUncommittedChanges(ctx.directory)
-      if (hasChanges) {
-        const stashResult = await stashChanges(ctx.directory, "[branch-guard] Auto stash before branch switch")
-        if (stashResult.success) {
-          hasStashed = true
-          await showToast("📦 변경사항 임시 저장", "작업 중이던 내용을 stash 했습니다", "info", 3000)
-          logger.info("Changes stashed")
-        } else {
-          logger.error(`Failed to stash: ${stashResult.error}`)
-        }
-      }
-
-      const syncResult = await syncWithOrigin(ctx.directory)
-      if (syncResult.success) {
-        await showToast("🔄 브랜치 최신화", `${currentBranch} 브랜치를 최신 상태로 업데이트했습니다`, "info", 3000)
-        logger.info(`Synced ${currentBranch} with origin`)
-      } else {
-        logger.warn(`Failed to sync: ${syncResult.error}`)
-      }
-
       const userMessage = extractMessageContent(output)
-      const suggestedBranch = generateBranchName(userMessage)
 
-      const existingBranches = await getExistingBranches(ctx.directory, BRANCH_GUARD_CONFIG.branchPrefix)
-      const similarBranch = findSimilarBranch(suggestedBranch, existingBranches)
-
-      if (similarBranch) {
-        state.pendingBranchChoice = {
-          existing: similarBranch,
-          suggested: suggestedBranch,
-          hasStashed,
-        }
-        logger.info(`Similar branch found: ${similarBranch}, waiting for user choice`)
+      if (isProtectedBranch(currentBranch)) {
+        logger.info(`Case A: Protected branch detected: ${currentBranch}`)
+        await handleProtectedBranch(currentBranch, userMessage)
       } else {
-        await handleBranchCreation(suggestedBranch, hasStashed)
+        logger.info(`Case B: Feature branch detected: ${currentBranch}`)
+
+        const { merged, prNumber } = await checkBranchMerged(ctx.directory, currentBranch)
+
+        if (merged) {
+          await showToast(
+            "✅ 브랜치 머지 완료",
+            `${currentBranch}가 이미 머지되었습니다 (PR #${prNumber}). main으로 이동합니다.`,
+            "success",
+            5000
+          )
+          logger.info(`Branch ${currentBranch} was merged (PR #${prNumber}), switching to main`)
+
+          const checkoutResult = await checkoutBranch(ctx.directory, "main")
+          if (checkoutResult.success) {
+            await handleProtectedBranch("main", userMessage)
+          } else {
+            logger.error(`Failed to checkout main: ${checkoutResult.error}`)
+          }
+        } else {
+          logger.info(`Branch ${currentBranch} not merged, continuing on current branch`)
+        }
       }
     },
 
@@ -183,26 +232,43 @@ export function createBranchGuardHook(ctx: PluginInput) {
       input: { sessionID: string; messageID: string; partID: string },
       output: { text: string }
     ) => {
-      if (!state.pendingBranchChoice) return
+      if (!state.pendingAction) return
 
-      const { existing, suggested } = state.pendingBranchChoice
+      const { type, suggestedBranch, existingBranch } = state.pendingAction
 
-      const choicePrompt = `---
+      let choicePrompt: string
+
+      if (type === "choose_branch" && existingBranch) {
+        choicePrompt = `---
 🛡️ **브랜치 선택이 필요합니다**
 
-기존에 비슷한 작업 브랜치가 있어요:
-- 기존: \`${existing}\`
-- 새로 만들기: \`${suggested}\`
+비슷한 작업 브랜치가 있습니다:
+- 기존: \`${existingBranch}\`
+- 새로: \`${suggestedBranch}\`
 
 **어떤 브랜치를 사용할까요?**
-1. "기존 브랜치" - \`${existing}\` 사용
-2. "새 브랜치" - \`${suggested}\` 새로 생성
-
-(원하시는 옵션을 말씀해주세요)
+1. "기존" - \`${existingBranch}\` 사용
+2. "새로" - \`${suggestedBranch}\` 새로 생성
+3. "스킵" - 현재 브랜치에서 계속
 
 ---
 
 `
+      } else {
+        choicePrompt = `---
+🛡️ **브랜치 생성 확인**
+
+보호된 브랜치에서 작업하려고 합니다.
+새 브랜치 \`${suggestedBranch}\`를 생성할까요?
+
+1. "생성" - 새 브랜치에서 작업
+2. "스킵" - 현재 브랜치에서 계속
+
+---
+
+`
+      }
+
       output.text = choicePrompt + output.text
     },
   }
