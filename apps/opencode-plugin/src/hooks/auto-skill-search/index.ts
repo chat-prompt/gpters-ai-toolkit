@@ -14,8 +14,26 @@ function extractMessageContent(output: { parts: Array<{ type: string; text?: str
 
 export function createAutoSkillSearchHook(ctx: PluginInput) {
   const processedSessions = new Set<string>()
+  const state = {
+    isMainSession: false,
+    sessionId: null as string | null,
+  }
 
   return {
+    event: async ({ event }: { event: { type: string; properties?: unknown } }) => {
+      if (event.type !== "session.created") return
+
+      const props = event.properties as { info?: { id: string; parentID?: string } } | undefined
+      const isMainSession = !props?.info?.parentID
+
+      state.isMainSession = isMainSession
+      state.sessionId = props?.info?.id ?? null
+
+      if (!isMainSession) {
+        logger.info(`Subtask session detected: ${state.sessionId}, skipping auto-skill-search`)
+      }
+    },
+
     "chat.message": async (
       input: {
         sessionID: string
@@ -27,10 +45,11 @@ export function createAutoSkillSearchHook(ctx: PluginInput) {
         parts: Part[]
       }
     ) => {
-      const { sessionID, messageID, agent } = input
+      if (!state.isMainSession) return
+
+      const { sessionID, messageID } = input
 
       if (!messageID) return
-      if (agent && agent !== "Sisyphus" && agent !== "build" && agent !== "plan") return
 
       try {
         const messageText = extractMessageContent(output as { parts: Array<{ type: string; text?: string }> })
@@ -52,20 +71,19 @@ export function createAutoSkillSearchHook(ctx: PluginInput) {
           logger.info(`USS keyword detected in session ${sessionID}, triggering skill search`)
           searchQuery = messageText.replace(/\buss\b/gi, '').trim()
         }
-
-        const subtaskPart = {
-          id: crypto.randomUUID(),
-          sessionID,
-          messageID,
-          type: 'subtask' as const,
-          prompt: `사용자가 다음 작업을 요청했습니다: "${searchQuery}"
+        await ctx.client.session.prompt({
+          path: { id: sessionID },
+          body: {
+            parts: [{
+              type: "subtask",
+              description: '스킬 검색',
+              prompt: `사용자가 다음 작업을 요청했습니다: "${searchQuery}"
 
 이 작업에 맞는 스킬을 찾아 main context에 로드해주세요.`,
-          description: 'Skill Search',
-          agent: SKILL_SEARCH_AGENT_NAME,
-        }
-
-        output.parts.push(subtaskPart as Part)
+              agent: SKILL_SEARCH_AGENT_NAME,
+            }],
+          },
+        })
         logger.info(`Subtask created for skill search: ${searchQuery}`)
       } catch (error) {
         logger.error("Error in auto-skill-search hook", error)
