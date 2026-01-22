@@ -9,14 +9,12 @@ import { showYesNo } from "./utils/dialog"
 import { createLogger } from "./utils/logger"
 
 const COMMAND_PREFIX = 'gpters'
-const PREFIX = "*Working with GPTers AI Toolkit*\n\n"
 
 const logger = createLogger("main")
 
 export const GPTersPlugin: Plugin = async (ctx) => {
   const { directory, client } = ctx
 
-  const processedMessages = new Set<string>()
   const promptedSessions = new Set<string>()
   const autoUpdateChecker = createAutoUpdateCheckerHook(ctx)
   const autoCommitHook = createAutoCommitHook(ctx)
@@ -37,14 +35,16 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       const { sessionID, agent } = input
 
       const preferPlanMeodeCheck = async () => {
+        if (!configManager.getPreferPlanMode()) return
+
         if (!input.messageID) return
         if (agent !== "Sisyphus") return
         if (promptedSessions.has(sessionID)) return
         promptedSessions.add(sessionID)
 
-        const preferPlanMode = configManager.getPreferPlanMode()
-
-        if (!preferPlanMode) return
+        const messagesRes = await client.session.messages({ path: { id: sessionID } })
+        const hasAIMessage = messagesRes?.data?.some((m) => m.info.role === 'assistant')
+        if (hasAIMessage) return
 
         const result = await showYesNo({
           message: "Plan 모드 사용을 권장해요. 무시하고 일반 모드로 계속하시겠어요?\n\n*<tab>으로 agent를 변경할 수 있어요.",
@@ -62,14 +62,6 @@ export const GPTersPlugin: Plugin = async (ctx) => {
         }, 100)
       }
       await preferPlanMeodeCheck()
-    },
-
-    "experimental.text.complete": async (input, output) => {
-      const key = `${input.sessionID}-${input.messageID}`
-      if (processedMessages.has(key)) return
-
-      processedMessages.add(key)
-      output.text = PREFIX + output.text
     },
 
     config: async (config) => {
