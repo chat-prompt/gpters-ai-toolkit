@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { COMMAND_PRD_REVIEW } from "./commands/prd-review"
 import { COMMAND_COMMIT, COMMIT_AGENT_NAME, COMMIT_AGENT_CONFIG } from "./commands/commit"
+import { COMMAND_GIT_PUSH_PR, GIT_PUSH_PR_AGENT_NAME, GIT_PUSH_PR_AGENT_CONFIG } from "./commands/git-push-pr"
 import { GptersConfigManager } from "./config"
 import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
 import { createAutoCommitHook } from "./hooks/auto-commit"
@@ -46,8 +47,10 @@ export const GPTersPlugin: Plugin = async (ctx) => {
         if (!preferPlanMode) return
 
         const result = await showYesNo({
-          message: "Plan 모드 사용을 권장해요. 무시하고 일반 모드로 계속하시겠어요?\n<tab>으로 agent를 변경할 수 있어요.",
-          title: "GPTers"
+          message: "Plan 모드 사용을 권장해요. 무시하고 일반 모드로 계속하시겠어요?\n\n*<tab>으로 agent를 변경할 수 있어요.",
+          title: "Agent 선택",
+          yesText: "Plan없이 계속",
+          noText: "중단"
         })
 
         if (result.ok && result.value) {
@@ -77,9 +80,11 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       config.command ??= {}
       config.command[`${COMMAND_PREFIX}:prd-review`] = COMMAND_PRD_REVIEW
       config.command[`${COMMAND_PREFIX}:commit`] = COMMAND_COMMIT
+      config.command[`${COMMAND_PREFIX}:git-push-pr`] = COMMAND_GIT_PUSH_PR
 
       config.agent ??= {}
       config.agent[COMMIT_AGENT_NAME] = COMMIT_AGENT_CONFIG
+      config.agent[GIT_PUSH_PR_AGENT_NAME] = GIT_PUSH_PR_AGENT_CONFIG
     }
   }
 }
