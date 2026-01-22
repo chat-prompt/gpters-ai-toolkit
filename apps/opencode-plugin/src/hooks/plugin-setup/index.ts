@@ -1,5 +1,4 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import { openBrowser } from "../../utils/browser"
 import { showYesNo } from "../../utils/dialog"
 import { createLogger } from "../../utils/logger"
 import { PLUGIN_SETUP_COMMAND_NAME } from "../../commands/plugin-setup"
@@ -102,22 +101,6 @@ async function handleNeedsAuth(ctx: PluginInput): Promise<void> {
   const { client } = ctx
 
   try {
-    const authRes = await client.mcp.auth.start({
-      path: { name: MCP_NAME }
-    })
-
-    const authorizationUrl = authRes.data?.authorizationUrl
-    if (!authorizationUrl) {
-      await showErrorToast(ctx, "인증 URL을 받지 못했습니다")
-      logger.error("No authorization URL received")
-      return
-    }
-
-    const browserOpened = await openBrowser(authorizationUrl)
-    if (!browserOpened) {
-      logger.warn("Failed to open browser automatically")
-    }
-
     await client.tui.showToast({
       body: {
         title: "GPTers 로그인",
@@ -125,12 +108,31 @@ async function handleNeedsAuth(ctx: PluginInput): Promise<void> {
         variant: "info",
         duration: 5000,
       }
-    }).catch(() => {})
+    }).catch(() => { })
 
-    logger.info("OAuth flow started", { url: authorizationUrl })
+    const authRes = await client.mcp.auth.authenticate({
+      path: { name: MCP_NAME },
+    })
+
+    const resultStatus = authRes.data as McpStatus | undefined
+
+    if (resultStatus?.status === "connected") {
+      await client.tui.showToast({
+        body: {
+          title: "로그인 완료",
+          message: "GPTers AI Toolkit에 성공적으로 연결되었습니다.",
+          variant: "success",
+          duration: 5000,
+        }
+      }).catch(() => { })
+      logger.info("OAuth authentication completed successfully")
+    } else {
+      await showErrorToast(ctx, "인증에 실패했습니다")
+      logger.error("OAuth authentication failed", { status: resultStatus })
+    }
   } catch (error) {
-    logger.error("OAuth start failed", error)
-    await showErrorToast(ctx, "인증 시작에 실패했습니다")
+    logger.error("OAuth authentication failed", error)
+    await showErrorToast(ctx, "인증 중 오류가 발생했습니다")
   }
 }
 
@@ -142,5 +144,5 @@ async function showErrorToast(ctx: PluginInput, message: string): Promise<void> 
       variant: "error",
       duration: 5000,
     }
-  }).catch(() => {})
+  }).catch(() => { })
 }
