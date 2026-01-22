@@ -67,3 +67,69 @@ export async function syncWithOrigin(cwd: string): Promise<GitCommandResult> {
 
   return { success: true }
 }
+
+export async function getMergedBranches(cwd: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    const child = spawn("gh", ["pr", "list", "--state", "merged", "--limit", "100", "--json", "headRefName"], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let stdout = ""
+
+    child.stdout.on("data", (data) => {
+      stdout += data
+    })
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve([])
+        return
+      }
+      try {
+        const prs = JSON.parse(stdout) as Array<{ headRefName: string }>
+        resolve(prs.map((pr) => pr.headRefName))
+      } catch {
+        resolve([])
+      }
+    })
+
+    child.on("error", () => {
+      resolve([])
+    })
+  })
+}
+
+export async function checkBranchMerged(cwd: string, branchName: string): Promise<{ merged: boolean; prNumber?: number }> {
+  return new Promise((resolve) => {
+    const child = spawn("gh", ["pr", "list", "--head", branchName, "--state", "merged", "--json", "number"], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let stdout = ""
+
+    child.stdout.on("data", (data) => {
+      stdout += data
+    })
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve({ merged: false })
+        return
+      }
+      try {
+        const prs = JSON.parse(stdout) as Array<{ number: number }>
+        if (prs.length > 0) {
+          resolve({ merged: true, prNumber: prs[0].number })
+        } else {
+          resolve({ merged: false })
+        }
+      } catch {
+        resolve({ merged: false })
+      }
+    })
+
+    child.on("error", () => {
+      resolve({ merged: false })
+    })
+  })
+}
