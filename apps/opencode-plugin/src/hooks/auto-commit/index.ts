@@ -1,4 +1,5 @@
 import type { PluginInput } from "@opencode-ai/plugin"
+import type { FileDiff } from "@opencode-ai/sdk"
 import { execSync } from "node:child_process"
 import { HOOK_NAME, COOLDOWN_MS } from "./constants"
 import { COMMIT_AGENT_NAME } from "../../commands/commit"
@@ -106,28 +107,43 @@ export function createAutoCommitHook(ctx: PluginInput) {
       return
     }
 
+    let sessionFiles: string[] = []
+    try {
+      const diffResponse = await client.session.diff({ path: { id: sessionID } })
+      const diffs = (diffResponse.data ?? diffResponse) as FileDiff[]
+      sessionFiles = diffs.map(d => d.file)
+      log("Session diff retrieved", { sessionID, fileCount: sessionFiles.length, files: sessionFiles })
+    } catch (err) {
+      log("Failed to get session diff, skipping auto-commit", { sessionID, error: String(err) })
+      return
+    }
+
+    if (sessionFiles.length === 0) {
+      log("Skipped: no session-specific changes to commit", { sessionID })
+      return
+    }
+
     state.isProcessing = true
     state.lastCommitAttempt = now
 
     try {
-      const fileCount = gitStatus.staged.length + gitStatus.unstaged.length + gitStatus.untracked.length
-
-      log("Triggering auto-commit subtask", {
+      log("Triggering auto-commit subtask for session files", {
         sessionID,
-        staged: gitStatus.staged.length,
-        unstaged: gitStatus.unstaged.length,
-        untracked: gitStatus.untracked.length,
+        sessionFileCount: sessionFiles.length,
+        sessionFiles,
       })
 
-      await showToast("Auto-commit", `Creating commits for ${fileCount} file(s)...`, "info")
+      await showToast("Auto-commit", `Creating commits for ${sessionFiles.length} session file(s)...`, "info")
+
+      const fileListForPrompt = sessionFiles.map(f => `- ${f}`).join('\n')
 
       await client.session.prompt({
         path: { id: sessionID },
         body: {
           parts: [{
             type: "subtask",
-            prompt: "Create atomic commits for current changes",
-            description: "Auto-commit",
+            prompt: `Create atomic commits for ONLY these session-changed files:\n${fileListForPrompt}\n\n**IMPORTANT**: Do NOT stage or commit any other files. Only commit the files listed above.`,
+            description: "Auto-commit (session only)",
             agent: COMMIT_AGENT_NAME,
           }],
         },
@@ -178,7 +194,8 @@ export function createAutoCommitHook(ctx: PluginInput) {
         }
 
         if (!todos || todos.length === 0) {
-          log("No todos found", { sessionID })
+          log("No todos found, checking for file changes", { sessionID })
+          await triggerAutoCommit(sessionID)
           return
         }
 
