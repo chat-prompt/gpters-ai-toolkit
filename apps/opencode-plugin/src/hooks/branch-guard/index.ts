@@ -4,6 +4,7 @@ import { BRANCH_GUARD_CONFIG } from "./config"
 import { getCurrentBranch, getExistingBranches, isProtectedBranch, isGitRepository, findSimilarBranch } from "./detector"
 import { generateBranchName } from "./name-extractor"
 import { hasUncommittedChanges, stashChanges, popStash } from "./stash-manager"
+import { syncWithOrigin } from "./git-sync"
 import { createBranch, checkoutBranch } from "./creator"
 import { createLogger } from "../../utils/logger"
 
@@ -150,6 +151,14 @@ export function createBranchGuardHook(ctx: PluginInput) {
         } else {
           logger.error(`Failed to stash: ${stashResult.error}`)
         }
+      }
+
+      const syncResult = await syncWithOrigin(ctx.directory)
+      if (syncResult.success) {
+        await showToast("🔄 브랜치 최신화", `${currentBranch} 브랜치를 최신 상태로 업데이트했습니다`, "info", 3000)
+        logger.info(`Synced ${currentBranch} with origin`)
+      } else {
+        logger.warn(`Failed to sync: ${syncResult.error}`)
       }
 
       const userMessage = extractMessageContent(output)
