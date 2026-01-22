@@ -30,7 +30,6 @@ export function createAutoSkillSearchHook(ctx: PluginInput) {
       const { sessionID, messageID, agent } = input
 
       if (!messageID) return
-      if (processedSessions.has(sessionID)) return
       if (agent && agent !== "Sisyphus" && agent !== "build" && agent !== "plan") return
 
       try {

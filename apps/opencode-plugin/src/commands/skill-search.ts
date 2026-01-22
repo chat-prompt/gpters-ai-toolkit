@@ -110,7 +110,7 @@ export const SKILL_SEARCH_AGENT_CONFIG: AgentConfig = {
   prompt: SKILL_SEARCH_AGENT_PROMPT,
   description: "작업에 맞는 스킬을 찾아 main context에 로드하는 에이전트",
   mode: "subagent",
-  model: "anthropic/claude-sonnet-4-20250514",
+  model: "anthropic/claude-haiku-4-5-20251001 ",
 }
 
 const SKILL_SEARCH_COMMAND_TEMPLATE = `
