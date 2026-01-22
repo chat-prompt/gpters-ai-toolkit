@@ -80,7 +80,7 @@ export class GptersConfigManager {
 
   getPreferPlanMode(): boolean {
     const config = this.read()
-    return config.preferPlanMode ?? true
+    return config.preferPlanMode ?? false
   }
 
   setPreferPlanMode(value: boolean): void {

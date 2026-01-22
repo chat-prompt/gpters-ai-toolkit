@@ -37,12 +37,21 @@ export function createAutoSkillSearchHook(ctx: PluginInput) {
         if (!messageText) return
 
         const lowerText = messageText.toLowerCase()
-        if (!lowerText.includes(USS_KEYWORD)) return
+        const isFirstMessage = !processedSessions.has(sessionID)
+        const hasUssKeyword = lowerText.includes(USS_KEYWORD)
+
+        if (!isFirstMessage && !hasUssKeyword) return
 
         processedSessions.add(sessionID)
-        logger.info(`USS keyword detected in session ${sessionID}, triggering skill search`)
 
-        const searchQuery = messageText.replace(/\buss\b/gi, '').trim()
+        let searchQuery: string
+        if (isFirstMessage) {
+          logger.info(`First message in session ${sessionID}, triggering skill search`)
+          searchQuery = messageText.trim()
+        } else {
+          logger.info(`USS keyword detected in session ${sessionID}, triggering skill search`)
+          searchQuery = messageText.replace(/\buss\b/gi, '').trim()
+        }
 
         const subtaskPart = {
           id: crypto.randomUUID(),

@@ -141,7 +141,7 @@ export const COMMIT_AGENT_CONFIG: AgentConfig = {
   prompt: COMMIT_AGENT_PROMPT,
   description: "상세한 커밋 메시지를 작성하는 Git 커밋 에이전트",
   mode: "subagent",
-  model: "google/antigravity-gemini-3-flash",
+  model: "anthropic/claude-haiku-4-5-20251001",
 }
 
 const COMMIT_COMMAND_TEMPLATE = `

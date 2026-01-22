@@ -43,7 +43,10 @@ export const GPTersPlugin: Plugin = async (ctx) => {
     },
 
     "chat.message": async (input, output) => {
-      await preferPlanModeHook["chat.message"]?.(input)
+      const preferPlanMode = await preferPlanModeHook["chat.message"]?.(input)
+      if (preferPlanMode === 'abort') {
+        return
+      }
 
       if (configManager.getBranchGuard()) {
         await branchGuardHook["chat.message"]?.(input, output)
@@ -52,11 +55,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       await autoSkillSearchHook["chat.message"]?.(input, output)
     },
 
-    "experimental.text.complete": async (input, output) => {
-      if (configManager.getBranchGuard()) {
-        await branchGuardHook["experimental.text.complete"]?.(input, output)
-      }
-    },
+    "experimental.text.complete": async (input, output) => { },
 
     config: async (config) => {
       config.permission ??= {}

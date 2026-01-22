@@ -29,12 +29,14 @@ export function createPreferPlanModeHook(ctx: PluginInput) {
       })
 
       if (result.ok && result.value) {
-        return
+        return 'continue'
       }
 
       setTimeout(async () => {
         await client.session.abort({ path: { id: input.sessionID } })
       }, 100)
+
+      return 'abort'
     }
   }
 }
