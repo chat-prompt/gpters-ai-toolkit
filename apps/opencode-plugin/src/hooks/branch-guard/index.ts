@@ -1,4 +1,4 @@
-import type { PluginInput } from "@opencode-ai/plugin"
+import type { PluginInput, Hooks } from "@opencode-ai/plugin"
 import type { BranchGuardState, PendingAction } from "./types"
 import { BRANCH_GUARD_CONFIG } from "./config"
 import { getCurrentBranch, getExistingBranches, isProtectedBranch, isGitRepository, findSimilarBranch, filterMergedBranches } from "./detector"
@@ -10,7 +10,9 @@ import { createLogger } from "../../utils/logger"
 
 const logger = createLogger("branch-guard")
 
-export function createBranchGuardHook(ctx: PluginInput) {
+type BranchGuardHook = Pick<Required<Hooks>, 'event' | 'chat.message' | 'experimental.text.complete'>
+
+export function createBranchGuardHook(ctx: PluginInput): BranchGuardHook {
   const state: BranchGuardState = {
     hasChecked: false,
     sessionId: null,
