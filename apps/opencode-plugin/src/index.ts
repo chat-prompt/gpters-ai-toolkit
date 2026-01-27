@@ -67,13 +67,11 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       config.permission['question'] = 'allow'
 
       config.mcp ??= {}
-      config.mcp = {
-        "gpters-ai-toolkit": {
-          enabled: true,
-          type: "remote",
-          url: "https://ai-toolkit.gpters.org/api/mcp",
-          oauth: {}
-        }
+      config.mcp["gpters-ai-toolkit"] = {
+        enabled: true,
+        type: "remote",
+        url: "https://ai-toolkit.gpters.org/api/mcp",
+        oauth: {}
       }
 
       config.command ??= {}
