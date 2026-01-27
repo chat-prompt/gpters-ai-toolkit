@@ -79,8 +79,7 @@ export class GptersConfigManager {
   }
 
   getPreferPlanMode(): boolean {
-    const config = this.read()
-    return config.preferPlanMode ?? true
+    return false
   }
 
   setPreferPlanMode(value: boolean): void {
@@ -88,8 +87,9 @@ export class GptersConfigManager {
   }
 
   getAutoCommit(): boolean {
-    const config = this.read()
-    return config.autoCommit ?? true
+    // const config = this.read()
+    // return config.autoCommit ?? true
+    return false
   }
 
   setAutoCommit(value: boolean): void {
