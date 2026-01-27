@@ -1,6 +1,6 @@
 {
   "name": "@gpters-internal/opencode",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "GPTers OpenCode Plugin",
   "type": "module",
   "main": "dist/index.js",
@@ -15,7 +15,6 @@
     "dist"
   ],
   "scripts": {
-    "postinstall": "chmod +x dist/bin/dialog 2>/dev/null || true",
     "build": "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly && cp -r bin dist/",
     "dev": "bun build src/index.ts --outdir dist --target bun --format esm --watch",
     "typecheck": "tsc --noEmit",

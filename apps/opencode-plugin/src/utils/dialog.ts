@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { chmodSync, accessSync, constants } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -11,9 +12,18 @@ function getDialogPath(): string {
   return join(__dirname, "bin", "dialog")
 }
 
+function ensureExecutable(path: string): void {
+  try {
+    accessSync(path, constants.X_OK)
+  } catch {
+    chmodSync(path, 0o755)
+  }
+}
+
 function runDialog(args: string[]): Promise<DialogResult<string>> {
   return new Promise((resolve) => {
     const dialogPath = getDialogPath()
+    ensureExecutable(dialogPath)
     const child = spawn(dialogPath, args, { stdio: ["inherit", "pipe", "pipe"] })
 
     let stdout = ""
