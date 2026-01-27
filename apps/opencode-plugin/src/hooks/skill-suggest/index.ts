@@ -24,7 +24,7 @@ function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
   if (skills.length === 0) return ""
 
   const skillLines = skills.map(s => `- **${s.name}** (id: ${s.id}): ${s.description}`).join("\n")
-  
+
   return `
 <available-skills>
 ## Available Skills
@@ -40,7 +40,7 @@ ${skillLines}
 
 export function createSkillSuggestHook(ctx: PluginInput) {
   const processedMessages = new Set<string>()
-  
+
   return {
     "chat.message": async (
       input: {
@@ -53,7 +53,8 @@ export function createSkillSuggestHook(ctx: PluginInput) {
         parts: Part[]
       }
     ) => {
-      if (!input.agent?.includes("Sisyphus")) return
+      logger.info(`skill-suggest hook ${input.agent} ${input.messageID}`)
+      if (input.agent?.toLowerCase() !== "sisyphus") return
 
       const { sessionID, messageID } = input
 
@@ -62,11 +63,12 @@ export function createSkillSuggestHook(ctx: PluginInput) {
 
       try {
         const messageText = extractMessageContent(output as { parts: Array<{ type: string; text?: string }> })
-        if (!messageText || messageText.length < 10) return
+        logger.info(`Searching skills for session ${sessionID} with message ${messageText} ${JSON.stringify(output)}`)
+        if (!messageText || messageText.length < 3) return
 
         logger.info(`Searching skills for session ${sessionID}`)
         const skills = await searchSkills(messageText, { category: "skill", limit: 5 })
-        
+
         if (skills.length > 0) {
           sessionSkillCache.set(sessionID, {
             lastQuery: messageText,
@@ -85,9 +87,9 @@ export function createSkillSuggestHook(ctx: PluginInput) {
       output: { system: string[] }
     ) => {
       const cached = sessionSkillCache.get(input.sessionID)
-      
+
       if (!cached) return
-      
+
       if (Date.now() - cached.timestamp > CACHE_TTL) {
         sessionSkillCache.delete(input.sessionID)
         return
