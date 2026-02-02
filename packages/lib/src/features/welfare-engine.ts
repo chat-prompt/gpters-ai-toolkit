@@ -181,7 +181,7 @@ export async function getWelfareEngineStats(
       .limit(3)
 
     // Fetch skill details for top skills
-    const topSkills = await Promise.all(
+    const topSkillsRaw = await Promise.all(
       topSkillViews.map(async (view) => {
         const [item] = await db
           .select({
@@ -194,11 +194,12 @@ export async function getWelfareEngineStats(
 
         return {
           id: view.pluginId,
-          name: item?.name || 'Unknown',
+          name: item?.name,
           views: view.count,
         }
       })
     )
+    const topSkills = topSkillsRaw.filter((s): s is { id: string; name: string; views: number } => !!s.name)
 
     // Get quality metrics
     const [qualityResult] = await db
@@ -249,7 +250,9 @@ export async function getWelfareEngineStats(
           gte(mcpAuditLogs.createdAt, startDate),
           lte(mcpAuditLogs.createdAt, endDate),
           sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' IS NOT NULL`,
-          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' != ''`
+          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' != ''`,
+          sql`LENGTH(${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query') <= 100`,
+          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' NOT LIKE '[%'`
         )
       )
       .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`)
