@@ -47,31 +47,55 @@ interface JsonRpcResponse {
   }
 }
 
-interface AuthEntry {
-  type: string
-  access: string
-  refresh: string
-  expires: number
+/**
+ * MCP Auth Entry structure stored in mcp-auth.json
+ */
+interface McpAuthEntry {
+  clientInfo?: {
+    clientId: string
+    clientSecret?: string
+    clientIdIssuedAt?: number
+  }
+  serverUrl?: string
+  tokens?: {
+    accessToken: string
+    refreshToken?: string
+    expiresAt: number  // Unix timestamp in seconds
+    scope?: string
+  }
+  oauthState?: string
 }
 
-function getAuthFilePath(): string {
+function getMcpAuthFilePath(): string {
   const home = homedir()
   if (process.platform === "win32") {
-    return join(process.env.LOCALAPPDATA || join(home, "AppData", "Local"), "opencode", "auth.json")
+    return join(process.env.LOCALAPPDATA || join(home, "AppData", "Local"), "opencode", "mcp-auth.json")
   }
-  return join(home, ".local", "share", "opencode", "auth.json")
+  return join(home, ".local", "share", "opencode", "mcp-auth.json")
 }
 
 function loadAccessToken(): string | undefined {
   try {
-    const authPath = getAuthFilePath()
-    const authData = JSON.parse(readFileSync(authPath, "utf-8")) as Record<string, AuthEntry>
+    const authPath = getMcpAuthFilePath()
+    const authData = JSON.parse(readFileSync(authPath, "utf-8")) as Record<string, McpAuthEntry>
     const entry = authData[MCP_SERVER_NAME]
-    if (entry?.access && entry.expires > Date.now()) {
-      return entry.access
+    
+    if (!entry?.tokens?.accessToken) {
+      logger.warn("MCP token not found")
+      return undefined
     }
-    logger.warn("MCP token expired or missing")
-    return undefined
+    
+    // expiresAt is in seconds (Unix timestamp), Date.now() is in milliseconds
+    const nowInSeconds = Date.now() / 1000
+    if (entry.tokens.expiresAt <= nowInSeconds) {
+      logger.warn("MCP token expired", { 
+        expiresAt: entry.tokens.expiresAt, 
+        now: nowInSeconds 
+      })
+      return undefined
+    }
+    
+    return entry.tokens.accessToken
   } catch (error) {
     logger.error("Failed to load auth token", error)
     return undefined
