@@ -44,10 +44,8 @@ export interface WelfareEngineMetrics {
   }
   /** Secondary metrics */
   secondary: {
-    /** New contributors in period */
-    newContributors: number
-    /** Popular search queries */
-    popularQueries: Array<{ query: string; count: number }>
+    /** Contributors who published skills in period */
+    contributors: Array<{ name: string; skillCount: number }>
   }
 }
 
@@ -76,14 +74,7 @@ export interface SkillViewRanking {
   authorName?: string
 }
 
-/**
- * Popular search query entry
- */
-export interface PopularSearchQuery {
-  query: string
-  count: number
-  lastSearched: Date
-}
+
 
 /**
  * Get welfare engine statistics for a date range
@@ -222,10 +213,10 @@ export async function getWelfareEngineStats(
         ? (Number(qualityResult.success) / qualityResult.total) * 100
         : 0
 
-    // Get new contributors
-    const [newContributorsResult] = await db
+    const contributorsData = await db
       .select({
-        count: sql<number>`COUNT(DISTINCT ${catalogItems.authorId})`,
+        authorId: catalogItems.authorId,
+        skillCount: count(),
       })
       .from(catalogItems)
       .where(
@@ -235,29 +226,23 @@ export async function getWelfareEngineStats(
           sql`${catalogItems.authorId} IS NOT NULL`
         )
       )
-
-    // Get popular search queries
-    const popularQueries = await db
-      .select({
-        query: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`,
-        count: count(),
-      })
-      .from(mcpAuditLogs)
-      .where(
-        and(
-          sql`${mcpAuditLogs.tool} IN ('search_plugins', 'semantic_search')`,
-          eq(mcpAuditLogs.responseStatus, 'success'),
-          gte(mcpAuditLogs.createdAt, startDate),
-          lte(mcpAuditLogs.createdAt, endDate),
-          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' IS NOT NULL`,
-          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' != ''`,
-          sql`LENGTH(${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query') <= 100`,
-          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' NOT LIKE '[%'`
-        )
-      )
-      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`)
+      .groupBy(catalogItems.authorId)
       .orderBy(desc(count()))
       .limit(10)
+
+    const contributors = await Promise.all(
+      contributorsData.map(async (c) => {
+        const [user] = await db
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, c.authorId!))
+          .limit(1)
+        return {
+          name: user?.name || 'Unknown',
+          skillCount: c.skillCount,
+        }
+      })
+    )
 
     return {
       accumulation: {
@@ -276,11 +261,7 @@ export async function getWelfareEngineStats(
         avgResponseTime: Math.round(qualityResult?.avgTime || 0),
       },
       secondary: {
-        newContributors: newContributorsResult?.count || 0,
-        popularQueries: popularQueries.map((q) => ({
-          query: q.query,
-          count: q.count,
-        })),
+        contributors: contributors.filter((c) => c.name !== 'Unknown'),
       },
     }
   } catch (error) {
@@ -327,8 +308,7 @@ export async function getSkillViewRanking(
       .orderBy(desc(count()))
       .limit(limit)
 
-    // Fetch skill details
-    const rankings = await Promise.all(
+    const rankingsRaw = await Promise.all(
       skillViews.map(async (view) => {
         const [item] = await db
           .select({
@@ -341,8 +321,10 @@ export async function getSkillViewRanking(
           .where(eq(catalogItems.id, view.pluginId))
           .limit(1)
 
+        if (!item) return null
+
         let authorName: string | undefined
-        if (item?.authorId) {
+        if (item.authorId) {
           const [author] = await db
             .select({ name: users.name })
             .from(users)
@@ -353,68 +335,17 @@ export async function getSkillViewRanking(
 
         return {
           id: view.pluginId,
-          name: item?.name || 'Unknown',
-          type: item?.type || 'unknown',
+          name: item.name,
+          type: item.type,
           views: view.count,
           authorName,
         }
       })
     )
 
-    return rankings
+    return rankingsRaw.filter((r) => r !== null) as SkillViewRanking[]
   } catch (error) {
     log.error('Failed to get skill view ranking', error)
-    throw error
-  }
-}
-
-/**
- * Get popular search queries
- *
- * @param limit - Maximum number of results (default: 10)
- * @param startDate - Start of the period (optional)
- * @param endDate - End of the period (optional)
- * @returns Array of popular search queries
- */
-export async function getPopularSearchQueries(
-  limit = 10,
-  startDate?: Date,
-  endDate?: Date
-): Promise<PopularSearchQuery[]> {
-  try {
-    const conditions = [
-      sql`${mcpAuditLogs.tool} IN ('search_plugins', 'semantic_search')`,
-      eq(mcpAuditLogs.responseStatus, 'success'),
-      sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' IS NOT NULL`,
-      sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' != ''`,
-    ]
-
-    if (startDate) {
-      conditions.push(gte(mcpAuditLogs.createdAt, startDate))
-    }
-    if (endDate) {
-      conditions.push(lte(mcpAuditLogs.createdAt, endDate))
-    }
-
-    const queries = await db
-      .select({
-        query: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`,
-        count: count(),
-        lastSearched: sql<Date>`MAX(${mcpAuditLogs.createdAt})`,
-      })
-      .from(mcpAuditLogs)
-      .where(and(...conditions))
-      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`)
-      .orderBy(desc(count()))
-      .limit(limit)
-
-    return queries.map((q) => ({
-      query: q.query,
-      count: q.count,
-      lastSearched: q.lastSearched,
-    }))
-  } catch (error) {
-    log.error('Failed to get popular search queries', error)
     throw error
   }
 }

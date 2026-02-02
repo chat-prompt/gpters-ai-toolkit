@@ -5,7 +5,6 @@ import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import {
   getWelfareEngineStats,
   getSkillViewRanking,
-  getPopularSearchQueries,
   generateWeeklyReport,
   getWeeklyComparison,
 } from '@/lib/features/welfare-engine'
@@ -89,10 +88,9 @@ export async function GET(request: NextRequest) {
 
     const { startDate, endDate } = getPeriodDates(period, customStart, customEnd)
 
-    const [stats, skillRanking, popularQueries] = await Promise.all([
+    const [stats, skillRanking] = await Promise.all([
       getWelfareEngineStats(startDate, endDate),
       getSkillViewRanking(10, startDate, endDate),
-      getPopularSearchQueries(10, startDate, endDate),
     ])
 
     const response = {
@@ -102,7 +100,7 @@ export async function GET(request: NextRequest) {
       metrics: stats,
       rankings: {
         skills: skillRanking,
-        queries: popularQueries,
+        contributors: stats.secondary.contributors,
       },
     }
 

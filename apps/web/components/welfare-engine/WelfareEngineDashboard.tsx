@@ -20,8 +20,7 @@ interface WelfareEngineMetrics {
     avgResponseTime: number
   }
   secondary: {
-    newContributors: number
-    popularQueries: Array<{ query: string; count: number }>
+    contributors: Array<{ name: string; skillCount: number }>
   }
 }
 
@@ -33,10 +32,9 @@ interface SkillRanking {
   authorName?: string
 }
 
-interface PopularQuery {
-  query: string
-  count: number
-  lastSearched: string
+interface Contributor {
+  name: string
+  skillCount: number
 }
 
 interface StatsResponse {
@@ -46,7 +44,7 @@ interface StatsResponse {
   metrics: WelfareEngineMetrics
   rankings: {
     skills: SkillRanking[]
-    queries: PopularQuery[]
+    contributors: Contributor[]
   }
 }
 
@@ -277,10 +275,10 @@ export function WelfareEngineDashboard() {
 
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-            인기 검색어
+            배포자 목록
           </h3>
           <div className="space-y-2">
-            {rankings.queries.slice(0, 10).map((query, idx) => (
+            {rankings.contributors.slice(0, 10).map((contributor, idx) => (
               <div
                 key={idx}
                 className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)] last:border-0"
@@ -289,10 +287,10 @@ export function WelfareEngineDashboard() {
                   <span className="text-sm font-mono text-[var(--text-muted)] w-6">
                     #{idx + 1}
                   </span>
-                  <span className="text-[var(--text-primary)]">{query.query}</span>
+                  <span className="text-[var(--text-primary)]">{contributor.name}</span>
                 </div>
                 <span className="text-sm font-medium text-[var(--text-secondary)]">
-                  {query.count}
+                  {contributor.skillCount}개
                 </span>
               </div>
             ))}
