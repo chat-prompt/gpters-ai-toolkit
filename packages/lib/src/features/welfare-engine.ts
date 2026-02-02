@@ -163,7 +163,7 @@ export async function getWelfareEngineStats(
     // Get top 3 viewed skills
     const topSkillViews = await db
       .select({
-        pluginId: sql<string>`${mcpAuditLogs.requestParams}->>'pluginId'`,
+        pluginId: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`,
         count: count(),
       })
       .from(mcpAuditLogs)
@@ -173,10 +173,10 @@ export async function getWelfareEngineStats(
           eq(mcpAuditLogs.responseStatus, 'success'),
           gte(mcpAuditLogs.createdAt, startDate),
           lte(mcpAuditLogs.createdAt, endDate),
-          sql`${mcpAuditLogs.requestParams}->>'pluginId' IS NOT NULL`
+          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId' IS NOT NULL`
         )
       )
-      .groupBy(sql`${mcpAuditLogs.requestParams}->>'pluginId'`)
+      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`)
       .orderBy(desc(count()))
       .limit(3)
 
@@ -238,7 +238,7 @@ export async function getWelfareEngineStats(
     // Get popular search queries
     const popularQueries = await db
       .select({
-        query: sql<string>`${mcpAuditLogs.requestParams}->>'query'`,
+        query: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`,
         count: count(),
       })
       .from(mcpAuditLogs)
@@ -248,11 +248,11 @@ export async function getWelfareEngineStats(
           eq(mcpAuditLogs.responseStatus, 'success'),
           gte(mcpAuditLogs.createdAt, startDate),
           lte(mcpAuditLogs.createdAt, endDate),
-          sql`${mcpAuditLogs.requestParams}->>'query' IS NOT NULL`,
-          sql`${mcpAuditLogs.requestParams}->>'query' != ''`
+          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' IS NOT NULL`,
+          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' != ''`
         )
       )
-      .groupBy(sql`${mcpAuditLogs.requestParams}->>'query'`)
+      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`)
       .orderBy(desc(count()))
       .limit(10)
 
@@ -303,7 +303,7 @@ export async function getSkillViewRanking(
     const conditions = [
       eq(mcpAuditLogs.tool, 'get_plugin_content'),
       eq(mcpAuditLogs.responseStatus, 'success'),
-      sql`${mcpAuditLogs.requestParams}->>'pluginId' IS NOT NULL`,
+      sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId' IS NOT NULL`,
     ]
 
     if (startDate) {
@@ -315,12 +315,12 @@ export async function getSkillViewRanking(
 
     const skillViews = await db
       .select({
-        pluginId: sql<string>`${mcpAuditLogs.requestParams}->>'pluginId'`,
+        pluginId: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`,
         count: count(),
       })
       .from(mcpAuditLogs)
       .where(and(...conditions))
-      .groupBy(sql`${mcpAuditLogs.requestParams}->>'pluginId'`)
+      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`)
       .orderBy(desc(count()))
       .limit(limit)
 
@@ -382,8 +382,8 @@ export async function getPopularSearchQueries(
     const conditions = [
       sql`${mcpAuditLogs.tool} IN ('search_plugins', 'semantic_search')`,
       eq(mcpAuditLogs.responseStatus, 'success'),
-      sql`${mcpAuditLogs.requestParams}->>'query' IS NOT NULL`,
-      sql`${mcpAuditLogs.requestParams}->>'query' != ''`,
+      sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' IS NOT NULL`,
+      sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query' != ''`,
     ]
 
     if (startDate) {
@@ -395,13 +395,13 @@ export async function getPopularSearchQueries(
 
     const queries = await db
       .select({
-        query: sql<string>`${mcpAuditLogs.requestParams}->>'query'`,
+        query: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`,
         count: count(),
         lastSearched: sql<Date>`MAX(${mcpAuditLogs.createdAt})`,
       })
       .from(mcpAuditLogs)
       .where(and(...conditions))
-      .groupBy(sql`${mcpAuditLogs.requestParams}->>'query'`)
+      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'query'`)
       .orderBy(desc(count()))
       .limit(limit)
 
