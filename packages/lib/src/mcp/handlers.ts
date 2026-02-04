@@ -40,6 +40,7 @@ import type {
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
+import { createVersionSnapshot } from '../versioning/skill-version'
 import { getBaseUrl } from '../utils'
 import { generateEmbedding, prepareTextForEmbedding } from '../search/embedding'
 import { semanticSearch as semanticSearchImpl } from '../search/vector-search'
@@ -522,6 +523,26 @@ export async function deploySkill(
         updatedAt: now,
       })
       .where(eq(catalogItems.id, id))
+
+    // Create version snapshot for tracking updates
+    const [updatedItem] = await db
+      .select()
+      .from(catalogItems)
+      .where(eq(catalogItems.id, id))
+      .limit(1)
+
+    if (updatedItem) {
+      await createVersionSnapshot(updatedItem, {
+        version: versionInfo.version,
+        versionType: versionInfo.changelog?.includes('major') ? 'major' : 
+                     versionInfo.changelog?.includes('minor') ? 'minor' : 'patch',
+        changelog: versionInfo.changelog || undefined,
+        createdBy: authorId || undefined,
+      }).catch((err) => {
+        // Log but don't fail the deploy if version snapshot fails
+        console.error('Failed to create version snapshot:', err)
+      })
+    }
   } else {
     // Create new item with authorId from authenticated user
     await db.insert(catalogItems).values({
