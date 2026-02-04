@@ -105,14 +105,52 @@ pnpm typecheck
 
 ### 로컬 테스트
 
+> `file://` 프로토콜은 작동하지 않습니다. plugins 디렉토리 + 심볼릭 링크 방식을 사용하세요.
+
+#### 1. 심볼릭 링크 생성
+
 ```bash
-# opencode.json에 로컬 경로 추가
+# plugins 디렉토리 생성 및 심볼릭 링크
+mkdir -p ~/.config/opencode/plugins
+ln -sf /absolute/path/to/gpters-ai-toolkit/apps/opencode-plugin/dist/index.js ~/.config/opencode/plugins/gpters-plugin.js
+```
+
+#### 2. opencode.json 설정
+
+`~/.config/opencode/opencode.json`의 plugin 배열에 추가:
+
+```json
 {
   "plugin": [
-    "file:///absolute/path/to/gpters-ai-toolkit/apps/opencode-plugin/dist/index.js"
+    "gpters-plugin"
   ]
 }
 ```
+
+> 파일명(확장자 제외)으로 참조합니다.
+
+#### 3. 개발 워크플로우
+
+```bash
+# 코드 수정 후
+pnpm build
+
+# OpenCode 재시작 (심볼릭 링크가 자동으로 최신 빌드 참조)
+```
+
+#### 4. 배포 버전으로 전환
+
+로컬 테스트 완료 후 배포 버전으로 전환:
+
+```json
+{
+  "plugin": [
+    "@gpters-internal/opencode@latest"
+  ]
+}
+```
+
+> 심볼릭 링크는 삭제하지 않아도 됩니다. 나중에 다시 개발할 때 설정만 바꾸면 됩니다.
 
 ## 배포
 
