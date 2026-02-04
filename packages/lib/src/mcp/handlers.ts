@@ -421,10 +421,12 @@ export async function deletePlugin(
  *
  * @param input - Deploy skill input
  * @param authorId - Authenticated user ID (for setting ownership)
+ * @param userRole - Authenticated user's role (admin can override ownership check)
  */
 export async function deploySkill(
   input: DeploySkillInput,
-  authorId?: string
+  authorId?: string,
+  userRole?: string
 ): Promise<DeploySkillResponse> {
   const {
     type,
@@ -451,6 +453,7 @@ export async function deploySkill(
       id: catalogItems.id,
       content: catalogItems.content,
       version: catalogItems.version,
+      authorId: catalogItems.authorId,
     })
     .from(catalogItems)
     .where(eq(catalogItems.id, id))
@@ -458,6 +461,36 @@ export async function deploySkill(
 
   const isUpdate = existing.length > 0
   const existingItem = isUpdate ? existing[0] : null
+
+  // Check ownership for updates - only author or admin can update
+  if (isUpdate && existingItem) {
+    if (!authorId) {
+      return {
+        success: false,
+        id,
+        version: existingItem.version || '1.0.0',
+        changelog: '',
+        status: 'published',
+        webUrl: '',
+        installHint: '',
+        error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+      }
+    }
+
+    const hasAdminRole = userRole === 'admin'
+    if (existingItem.authorId !== authorId && !hasAdminRole) {
+      return {
+        success: false,
+        id,
+        version: existingItem.version || '1.0.0',
+        changelog: '',
+        status: 'published',
+        webUrl: '',
+        installHint: '',
+        error: `본인이 배포한 플러그인만 업데이트할 수 있습니다. '${name}'의 소유자가 아닙니다.`,
+      }
+    }
+  }
 
   // Determine version
   const versionInfo = determineVersion(
@@ -1144,7 +1177,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await deploySkill(input, userId)
+        const result = await deploySkill(input, userId, userRole)
         return {
           content: [
             {
