@@ -80,7 +80,7 @@ export function createLogger(
   prefix: string,
   options: LoggerOptions = {}
 ): LoggerInstance {
-  const { enableFileLog = true, enableConsole = false } = options
+  const { enableFileLog = true, enableConsole = true } = options
 
   function log(level: LogLevel, message: string, data?: unknown): void {
     if (!shouldLog(level)) return

@@ -97,8 +97,9 @@ export class GptersConfigManager {
   }
 
   getBranchGuard(): boolean {
-    const config = this.read()
-    return config.branchGuard ?? true
+    // const config = this.read()
+    // return config.branchGuard ?? true
+    return false
   }
 
   setBranchGuard(value: boolean): void {

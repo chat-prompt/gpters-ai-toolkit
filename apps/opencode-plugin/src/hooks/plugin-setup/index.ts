@@ -46,7 +46,7 @@ async function runPluginSetup(ctx: PluginInput): Promise<void> {
       return
     }
 
-    logger.info("MCP status check", { status: mcpStatus.status })
+    logger.debug("MCP status check", { status: mcpStatus.status })
 
     switch (mcpStatus.status) {
       case "connected":
@@ -89,7 +89,7 @@ async function handleAlreadyConnected(ctx: PluginInput): Promise<void> {
 
   try {
     await ctx.client.mcp.auth.remove({ path: { name: MCP_NAME } })
-    logger.info("Removed existing auth for re-login")
+    logger.debug("Removed existing auth for re-login")
     await handleNeedsAuth(ctx)
   } catch (error) {
     logger.error("Failed to remove existing auth", error)

@@ -53,7 +53,7 @@ export function createSkillSuggestHook(ctx: PluginInput) {
         parts: Part[]
       }
     ) => {
-      logger.info(`skill-suggest hook ${input.agent} ${input.messageID}`)
+      logger.debug(`skill-suggest hook ${input.agent} ${input.messageID}`)
       if (input.agent?.toLowerCase() !== "sisyphus") return
 
       const { sessionID, messageID } = input
@@ -63,10 +63,10 @@ export function createSkillSuggestHook(ctx: PluginInput) {
 
       try {
         const messageText = extractMessageContent(output as { parts: Array<{ type: string; text?: string }> })
-        logger.info(`Searching skills for session ${sessionID} with message ${messageText} ${JSON.stringify(output)}`)
+        logger.debug(`Searching skills for session ${sessionID}, message: "${messageText.slice(0, 50)}..."`)
         if (!messageText || messageText.length < 3) return
 
-        logger.info(`Searching skills for session ${sessionID}`)
+        logger.debug(`Searching skills for session ${sessionID}`)
         const skills = await searchSkills(messageText, { category: "skill", limit: 5 })
 
         if (skills.length > 0) {
@@ -75,7 +75,7 @@ export function createSkillSuggestHook(ctx: PluginInput) {
             skills,
             timestamp: Date.now(),
           })
-          logger.info(`Found ${skills.length} skills for session ${sessionID}`)
+          logger.debug(`Found ${skills.length} skills for session ${sessionID}`)
         }
       } catch (error) {
         logger.error("Error in skill-suggest hook", error)
@@ -98,7 +98,7 @@ export function createSkillSuggestHook(ctx: PluginInput) {
       const skillsPrompt = formatAvailableSkillsPrompt(cached.skills)
       if (skillsPrompt) {
         output.system.push(skillsPrompt)
-        logger.info(`Injected ${cached.skills.length} skills into system prompt`)
+        logger.debug(`Injected ${cached.skills.length} skills into system prompt`)
       }
     },
   }

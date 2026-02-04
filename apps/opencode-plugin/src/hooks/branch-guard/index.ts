@@ -33,7 +33,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
 
     if (result.success) {
       await showToast("✨ 새 작업 브랜치 생성", suggestedBranch, "success")
-      logger.info(`Created branch: ${suggestedBranch}`)
+      logger.debug(`Created branch: ${suggestedBranch}`)
 
       if (hasStashed) {
         const popResult = await popStash(ctx.directory)
@@ -52,7 +52,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
 
     if (result.success) {
       await showToast("✅ 기존 브랜치로 전환", branchName, "success")
-      logger.info(`Checked out branch: ${branchName}`)
+      logger.debug(`Checked out branch: ${branchName}`)
 
       if (hasStashed) {
         const popResult = await popStash(ctx.directory)
@@ -79,7 +79,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
       if (stashResult.success) {
         hasStashed = true
         await showToast("📦 변경사항 임시 저장", "작업 중이던 내용을 stash 했습니다", "info", 3000)
-        logger.info("Changes stashed")
+        logger.debug("Changes stashed")
       } else {
         logger.error(`Failed to stash: ${stashResult.error}`)
       }
@@ -88,7 +88,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
     const syncResult = await syncWithOrigin(ctx.directory)
     if (syncResult.success) {
       await showToast("🔄 브랜치 최신화", `${currentBranch} 브랜치를 최신 상태로 업데이트했습니다`, "info", 3000)
-      logger.info(`Synced ${currentBranch} with origin`)
+      logger.debug(`Synced ${currentBranch} with origin`)
     } else {
       logger.warn(`Failed to sync: ${syncResult.error}`)
     }
@@ -140,7 +140,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
 
   async function handleSkip(hasStashed: boolean) {
     await showToast("⏭️ 브랜치 생성 스킵", "현재 브랜치에서 계속합니다", "info", 3000)
-    logger.info("User skipped branch creation")
+    logger.debug("User skipped branch creation")
     if (hasStashed) {
       const popResult = await popStash(ctx.directory)
       if (popResult.success) {
@@ -161,11 +161,11 @@ export function createBranchGuardHook(ctx: PluginInput) {
       state.hasChecked = false
 
       if (!isMainSession) {
-        logger.info(`Subtask session detected: ${state.sessionId}, skipping branch guard`)
+        logger.debug(`Subtask session detected: ${state.sessionId}, skipping branch guard`)
         return
       }
 
-      logger.info(`Main session created: ${state.sessionId}`)
+      logger.debug(`Main session created: ${state.sessionId}`)
     },
 
     "chat.message": async (
@@ -179,23 +179,23 @@ export function createBranchGuardHook(ctx: PluginInput) {
 
       const isGitRepo = await isGitRepository(ctx.directory)
       if (!isGitRepo) {
-        logger.info("Not a git repository, skipping")
+        logger.debug("Not a git repository, skipping")
         return
       }
 
       const currentBranch = await getCurrentBranch(ctx.directory)
       if (!currentBranch) {
-        logger.info("Could not determine current branch")
+        logger.debug("Could not determine current branch")
         return
       }
 
       const userMessage = extractMessageContent(output)
 
       if (isProtectedBranch(currentBranch)) {
-        logger.info(`Case A: Protected branch detected: ${currentBranch}`)
+        logger.debug(`Case A: Protected branch detected: ${currentBranch}`)
         await handleProtectedBranch(currentBranch, userMessage)
       } else {
-        logger.info(`Case B: Feature branch detected: ${currentBranch}`)
+        logger.debug(`Case B: Feature branch detected: ${currentBranch}`)
 
         const { merged, prNumber } = await checkBranchMerged(ctx.directory, currentBranch)
 
@@ -206,7 +206,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
             "success",
             5000
           )
-          logger.info(`Branch ${currentBranch} was merged (PR #${prNumber}), switching to main`)
+          logger.debug(`Branch ${currentBranch} was merged (PR #${prNumber}), switching to main`)
 
           const checkoutResult = await checkoutBranch(ctx.directory, "main")
           if (checkoutResult.success) {
@@ -215,7 +215,7 @@ export function createBranchGuardHook(ctx: PluginInput) {
             logger.error(`Failed to checkout main: ${checkoutResult.error}`)
           }
         } else {
-          logger.info(`Branch ${currentBranch} not merged, continuing on current branch`)
+          logger.debug(`Branch ${currentBranch} not merged, continuing on current branch`)
         }
       }
     },
