@@ -62,7 +62,12 @@ async function runPluginSetup(ctx: PluginInput): Promise<void> {
         break
 
       case "failed":
-        await showErrorToast(ctx, `연결 실패: ${mcpStatus.error}`)
+        if (mcpStatus.error?.includes("OAuth") || mcpStatus.error?.includes("auth")) {
+          logger.debug("OAuth-related failure, attempting auth flow")
+          await handleNeedsAuth(ctx)
+        } else {
+          await showErrorToast(ctx, `연결 실패: ${mcpStatus.error}`)
+        }
         break
 
       case "disabled":
