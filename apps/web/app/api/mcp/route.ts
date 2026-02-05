@@ -30,6 +30,7 @@
  *    Use: claude mcp add gpters-ai-toolkit https://[host]/api/mcp -t http
  */
 
+import { after } from 'next/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MCP_TOOLS } from '@/lib/mcp'
 import { withRateLimit, RateLimitPresets, getMcpCommand } from '@/lib/utils'
@@ -178,7 +179,7 @@ async function handleAuthAndRateLimit(
     const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
     if (rateLimitError) {
       // Log rate limit event
-      await logRateLimitEvent(request, authResult.auth)
+      after(() => logRateLimitEvent(request, authResult.auth))
       return { error: addCorsHeaders(rateLimitError), auditCtx }
     }
   }
@@ -392,8 +393,8 @@ export async function POST(request: NextRequest) {
     return response
   }
 
-  // Helper to log audit entry
-  const logAudit = async (
+  // Helper to log audit entry (fire-and-forget via after())
+  const logAudit = (
     method: string,
     tool: string | undefined,
     status: AuditResponseStatus,
@@ -402,15 +403,18 @@ export async function POST(request: NextRequest) {
   ) => {
     if (!auditCtx) return
 
-    await logMcpRequest({
-      method,
-      tool,
-      ...auditCtx,
-      requestParams: maskRequestBody(body),
-      responseStatus: status,
-      responseTime: Date.now() - startTime,
-      errorCode: errorInfo?.code,
-      errorMessage: errorInfo?.message,
+    const responseTime = Date.now() - startTime
+    after(async () => {
+      await logMcpRequest({
+        method,
+        tool,
+        ...auditCtx,
+        requestParams: maskRequestBody(body),
+        responseStatus: status,
+        responseTime,
+        errorCode: errorInfo?.code,
+        errorMessage: errorInfo?.message,
+      })
     })
   }
 
@@ -418,7 +422,7 @@ export async function POST(request: NextRequest) {
     // Check request size
     const contentLength = request.headers.get('content-length')
     if (!isRequestSizeValid(contentLength ? parseInt(contentLength, 10) : null)) {
-      await logAudit('size_check', undefined, 'error', undefined, {
+      logAudit('size_check', undefined, 'error', undefined, {
         code: 'REQUEST_TOO_LARGE',
         message: `Request body too large. Maximum size is ${MAX_REQUEST_SIZE / 1024}KB`,
       })
@@ -435,7 +439,7 @@ export async function POST(request: NextRequest) {
 
     // Validate action parameter
     if (action && containsDangerousPatterns(action)) {
-      await logAudit('invalid_action', undefined, 'error', undefined, {
+      logAudit('invalid_action', undefined, 'error', undefined, {
         code: 'INVALID_ACTION',
         message: 'Invalid action parameter',
       })
@@ -468,7 +472,7 @@ export async function POST(request: NextRequest) {
           validationResult = { success: true, data: body }
           break
         default:
-          await logAudit(`rest:${action}`, undefined, 'error', body, {
+          logAudit(`rest:${action}`, undefined, 'error', body, {
             code: 'UNKNOWN_ACTION',
             message: `Unknown action: ${action}`,
           })
@@ -485,7 +489,7 @@ export async function POST(request: NextRequest) {
         const errorMessage = typeof validationError === 'string'
           ? validationError
           : (validationError as { message?: string })?.message || 'Validation failed'
-        await logAudit(`rest:${action}`, undefined, 'error', body, {
+        logAudit(`rest:${action}`, undefined, 'error', body, {
           code: 'VALIDATION_ERROR',
           message: errorMessage,
         })
@@ -499,8 +503,7 @@ export async function POST(request: NextRequest) {
 
       const result = await handleSimpleRequest(action, validationResult.data || body, userId, userRole)
 
-      // Log the request
-      await logAudit(
+      logAudit(
         `rest:${action}`,
         undefined,
         result.success ? 'success' : 'error',
@@ -518,7 +521,7 @@ export async function POST(request: NextRequest) {
     const rpcValidation = validateJsonRpcRequest(body)
     if (!rpcValidation.success) {
       const rpcError = rpcValidation.error
-      await logAudit('jsonrpc', extractToolFromBody(body), 'error', body, {
+      logAudit('jsonrpc', extractToolFromBody(body), 'error', body, {
         code: 'VALIDATION_ERROR',
         message: rpcError.message || 'Validation failed',
       })
@@ -537,7 +540,7 @@ export async function POST(request: NextRequest) {
     // Handle notifications (null response means no response should be sent)
     // Per JSON-RPC 2.0 spec and MCP: notifications don't expect a response
     if (response === null) {
-      await logAudit(`jsonrpc:${rpcMethod}`, tool, 'success', body)
+      logAudit(`jsonrpc:${rpcMethod}`, tool, 'success', body)
       // Return 202 Accepted for notifications (no body)
       return new NextResponse(null, {
         status: 202,
@@ -558,7 +561,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await logAudit(
+    logAudit(
       `jsonrpc:${rpcMethod}`,
       tool,
       hasError ? 'error' : 'success',
@@ -585,8 +588,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
-    // Log the parse error
-    await logAudit('parse_error', undefined, 'error', undefined, {
+    logAudit('parse_error', undefined, 'error', undefined, {
       code: 'PARSE_ERROR',
       message: errorMessage,
     })
