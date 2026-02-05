@@ -51,10 +51,8 @@ function removeFromBunLock(packageName: string): boolean {
 export function invalidatePackage(packageName: string = PACKAGE_NAME): boolean {
   try {
     const pkgDir = path.join(CACHE_DIR, "node_modules", packageName)
-    const pkgJsonPath = path.join(CACHE_DIR, "package.json")
 
     let packageRemoved = false
-    let dependencyRemoved = false
     let lockRemoved = false
 
     if (fs.existsSync(pkgDir)) {
@@ -63,20 +61,9 @@ export function invalidatePackage(packageName: string = PACKAGE_NAME): boolean {
       packageRemoved = true
     }
 
-    if (fs.existsSync(pkgJsonPath)) {
-      const content = fs.readFileSync(pkgJsonPath, "utf-8")
-      const pkgJson = JSON.parse(content)
-      if (pkgJson.dependencies?.[packageName]) {
-        delete pkgJson.dependencies[packageName]
-        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
-        logger.debug(`Dependency removed from package.json: ${packageName}`)
-        dependencyRemoved = true
-      }
-    }
-
     lockRemoved = removeFromBunLock(packageName)
 
-    if (!packageRemoved && !dependencyRemoved && !lockRemoved) {
+    if (!packageRemoved && !lockRemoved) {
       logger.debug(`Package not found, nothing to invalidate: ${packageName}`)
       return false
     }
