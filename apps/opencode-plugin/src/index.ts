@@ -45,7 +45,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
         return
       }
 
-      await skillSuggestHook["chat.message"]?.(input, output)
+      skillSuggestHook["chat.message"]?.(input, output)
     },
 
     "experimental.chat.system.transform": async (input, output) => {
