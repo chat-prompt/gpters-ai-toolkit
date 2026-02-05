@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, vector } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, halfvec } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -76,7 +76,8 @@ export const catalogItems = pgTable('catalog_items', {
   changelog: text('changelog'), // Latest version changelog
 
   // Vector embedding for semantic search (3072 dimensions for Gemini gemini-embedding-001)
-  embedding: vector('embedding', { dimensions: 3072 }),
+  // Uses halfvec (16-bit float) instead of vector (32-bit) to support HNSW indexing up to 4000 dims
+  embedding: halfvec('embedding', { dimensions: 3072 }),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

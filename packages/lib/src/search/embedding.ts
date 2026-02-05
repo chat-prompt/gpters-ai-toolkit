@@ -3,6 +3,46 @@ import { GoogleGenAI } from '@google/genai'
 const EMBEDDING_MODEL = 'gemini-embedding-001'
 const EMBEDDING_DIMENSIONS = 3072
 
+const CACHE_MAX_SIZE = 200
+const CACHE_TTL_MS = 30 * 60 * 1000
+
+interface CacheEntry {
+  embedding: number[]
+  createdAt: number
+}
+
+const embeddingCache = new Map<string, CacheEntry>()
+
+function evictExpiredEntries(): void {
+  const now = Date.now()
+  for (const [key, entry] of embeddingCache) {
+    if (now - entry.createdAt > CACHE_TTL_MS) {
+      embeddingCache.delete(key)
+    }
+  }
+}
+
+function getCached(key: string): number[] | undefined {
+  const entry = embeddingCache.get(key)
+  if (!entry) return undefined
+  if (Date.now() - entry.createdAt > CACHE_TTL_MS) {
+    embeddingCache.delete(key)
+    return undefined
+  }
+  return entry.embedding
+}
+
+function setCache(key: string, embedding: number[]): void {
+  if (embeddingCache.size >= CACHE_MAX_SIZE) {
+    evictExpiredEntries()
+    if (embeddingCache.size >= CACHE_MAX_SIZE) {
+      const oldest = embeddingCache.keys().next().value
+      if (oldest) embeddingCache.delete(oldest)
+    }
+  }
+  embeddingCache.set(key, { embedding, createdAt: Date.now() })
+}
+
 let geminiClient: GoogleGenAI | null = null
 
 function getGeminiClient(): GoogleGenAI {
@@ -17,19 +57,24 @@ function getGeminiClient(): GoogleGenAI {
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const client = getGeminiClient()
   const input = text.replaceAll('\n', ' ').trim()
 
   if (!input) {
     throw new Error('Cannot generate embedding for empty text')
   }
 
+  const cached = getCached(input)
+  if (cached) return cached
+
+  const client = getGeminiClient()
   const response = await client.models.embedContent({
     model: EMBEDDING_MODEL,
     contents: input,
   })
 
-  return response.embeddings?.[0]?.values ?? []
+  const embedding = response.embeddings?.[0]?.values ?? []
+  setCache(input, embedding)
+  return embedding
 }
 
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
