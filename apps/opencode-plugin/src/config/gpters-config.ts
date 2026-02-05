@@ -96,16 +96,6 @@ export class GptersConfigManager {
     this.write({ autoCommit: value })
   }
 
-  getBranchGuard(): boolean {
-    // const config = this.read()
-    // return config.branchGuard ?? true
-    return false
-  }
-
-  setBranchGuard(value: boolean): void {
-    this.write({ branchGuard: value })
-  }
-
   getConfigPath(): string {
     return this.configPath
   }

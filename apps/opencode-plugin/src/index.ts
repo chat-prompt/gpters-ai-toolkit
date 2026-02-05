@@ -7,7 +7,6 @@ import { COMMAND_PLUGIN_SETUP } from "./commands/plugin-setup"
 import { GptersConfigManager } from "./config"
 import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker"
 import { createAutoCommitHook } from "./hooks/auto-commit"
-import { createBranchGuardHook } from "./hooks/branch-guard"
 import { createPluginSetupHook } from "./hooks/plugin-setup"
 import { createPreferPlanModeHook } from "./hooks/prefer-plan-mode"
 import { createSkillSuggestHook } from "./hooks/skill-suggest"
@@ -23,7 +22,6 @@ export const GPTersPlugin: Plugin = async (ctx) => {
 
   const autoUpdateChecker = createAutoUpdateCheckerHook(ctx)
   const autoCommitHook = createAutoCommitHook(ctx)
-  const branchGuardHook = createBranchGuardHook(ctx)
   const pluginSetupHook = createPluginSetupHook(ctx)
   const preferPlanModeHook = createPreferPlanModeHook(ctx)
   const skillSuggestHook = createSkillSuggestHook(ctx)
@@ -34,7 +32,6 @@ export const GPTersPlugin: Plugin = async (ctx) => {
   return {
     event: async (eventData) => {
       autoUpdateChecker.event(eventData)
-      branchGuardHook.event(eventData)
       await pluginSetupHook.event(eventData)
 
       if (configManager.getAutoCommit()) {
@@ -46,10 +43,6 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       const preferPlanMode = await preferPlanModeHook["chat.message"]?.(input)
       if (preferPlanMode === 'abort') {
         return
-      }
-
-      if (configManager.getBranchGuard()) {
-        await branchGuardHook["chat.message"]?.(input, output)
       }
 
       await skillSuggestHook["chat.message"]?.(input, output)
