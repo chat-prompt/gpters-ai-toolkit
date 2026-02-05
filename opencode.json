@@ -1,9 +1,0 @@
-{
-  "plugin": [
-    "./apps/opencode-plugin/dist/index.js"
-  ],
-  "permission": {
-    "question": "allow"
-  },
-  "$schema": "https://opencode.ai/config.json"
-}

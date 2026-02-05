@@ -1095,28 +1095,15 @@ describe('MCP Handlers', () => {
   })
 
   describe('listPrompts', () => {
-    it('should return only gpters-setup prompt', async () => {
+    it('should return empty array', async () => {
       const result = await listPrompts()
 
-      expect(result).toHaveLength(1)
-      expect(result[0].name).toBe('gpters-setup')
-      expect(result[0].description).toContain('Hook')
+      expect(result).toHaveLength(0)
     })
   })
 
   describe('getPrompt', () => {
-    it('should return gpters-setup content', async () => {
-      const result = await getPrompt({ name: 'gpters-setup' })
-
-      expect(result).not.toBeNull()
-      expect(result?.messages).toHaveLength(1)
-      expect(result?.messages[0].role).toBe('user')
-      expect(result?.messages[0].content.text).toContain('GPTers AI Toolkit')
-      expect(result?.messages[0].content.text).toContain('CLAUDE.md')
-      expect(result?.messages[0].content.text).toContain('hooks')
-    })
-
-    it('should return null for other prompts', async () => {
+    it('should return null for any prompt', async () => {
       const result = await getPrompt({ name: 'nonexistent' })
 
       expect(result).toBeNull()

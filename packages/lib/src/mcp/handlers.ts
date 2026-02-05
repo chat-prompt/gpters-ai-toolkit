@@ -1369,125 +1369,12 @@ export async function executeTool(
 }
 
 /**
- * GPTers Setup Skill Content
- * This is the only prompt exposed via MCP - it bootstraps the hook/CLAUDE.md setup
- */
-const GPTERS_SETUP_SKILL = {
-  id: 'gpters-setup',
-  name: 'GPTers AI Toolkit 설정',
-  description: 'Hook과 CLAUDE.md를 설치하여 팀 공유 스킬을 자연스럽게 사용할 수 있게 합니다.',
-  content: `# GPTers AI Toolkit 설정
-
-이 스킬은 GPTers 팀 공유 플러그인을 자연스럽게 사용할 수 있도록 프로젝트를 설정합니다.
-
-## 설치할 파일
-
-### 1. CLAUDE.md (프로젝트 루트에 추가 또는 병합)
-
-\`\`\`markdown
-# GPTers AI Toolkit 연동
-
-## 스킬 자동 활성화 (필수)
-
-새로운 유형의 작업 시작 시 **반드시** 관련 스킬을 검색하세요:
-
-1. 작업 키워드로 검색
-2. 결과가 있으면 get_plugin_content로 내용 확인
-3. 스킬 지침에 따라 작업 수행
-
-\\\`\\\`\\\`
-gpters-ai-toolkit search_plugins("키워드")
-gpters-ai-toolkit get_plugin_content("스킬ID")
-\\\`\\\`\\\`
-
-**이 규칙은 SKIP 불가.**
-
-### 검색 키워드 예시
-
-| 작업 유형 | 검색어 |
-|----------|--------|
-| 개발 로그, 사례글 작성 | devlog, writing |
-| 코드 리팩토링 | refactor |
-| PDF 변환 | pdf |
-| Airtable 연동 | airtable |
-| Hook 설정 | hooks |
-| 배포/도메인 | deploy, domain |
-| DB 접근 | database, postgresql |
-
-## 플러그인 배포
-
-만든 스킬을 팀과 공유하려면:
-
-\\\`\\\`\\\`
-gpters-ai-toolkit deploy_skill(type="skill", name="스킬명", content="...")
-\\\`\\\`\\\`
-\`\`\`
-
-### 2. .claude/settings.json (Hook 설정)
-
-\`\`\`json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '🔍 새 작업? search_plugins로 관련 스킬 확인하세요'"
-          }
-        ]
-      }
-    ]
-  }
-}
-\`\`\`
-
-## 설치 방법
-
-1. 위 CLAUDE.md 내용을 프로젝트 루트의 CLAUDE.md에 추가하세요
-2. .claude/settings.json 파일을 생성하고 Hook 설정을 추가하세요
-3. 이후 모든 입력 시 스킬 검색 리마인더가 표시됩니다
-
-## 확인
-
-설치 후 다음 명령으로 플러그인 검색이 되는지 확인:
-
-\`\`\`
-gpters-ai-toolkit search_plugins("")
-\`\`\`
-`,
-}
-
-/**
  * List all available prompts
- * Only exposes gpters-setup for bootstrapping - catalog items are discovered via search
  */
 export async function listPrompts(): Promise<McpPrompt[]> {
-  return [
-    {
-      name: GPTERS_SETUP_SKILL.id,
-      description: GPTERS_SETUP_SKILL.description,
-    },
-  ]
+  return []
 }
 
 export async function getPrompt(input: GetPromptInput): Promise<McpPromptResult | null> {
-  const { name } = input
-
-  if (name !== GPTERS_SETUP_SKILL.id) {
-    return null
-  }
-
-  return {
-    description: GPTERS_SETUP_SKILL.description,
-    messages: [
-      {
-        role: 'user',
-        content: {
-          type: 'text',
-          text: GPTERS_SETUP_SKILL.content,
-        },
-      },
-    ],
-  }
+  return null
 }
