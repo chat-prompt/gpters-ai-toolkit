@@ -2,7 +2,10 @@ import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
 import { sql, eq, and, gt, desc } from 'drizzle-orm'
 import { cosineDistance } from 'drizzle-orm'
 import { generateEmbedding } from './embedding'
+import { createLogger } from '../core/logger'
 import type { ItemType } from '../core/types'
+
+const log = createLogger('vector-search')
 
 export interface SemanticSearchOptions {
   query: string
@@ -31,7 +34,9 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     return { items: [], total: 0, searchTime: 0 }
   }
 
+  const embeddingStart = Date.now()
   const queryEmbedding = await generateEmbedding(trimmedQuery)
+  const embeddingMs = Date.now() - embeddingStart
 
   const similarity = sql<number>`1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)})`
 
@@ -45,6 +50,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     conditions.push(eq(catalogItems.type, type))
   }
 
+  const dbStart = Date.now()
   const results = await db
     .select({
       id: catalogItems.id,
@@ -86,8 +92,16 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     .where(and(...conditions))
     .orderBy(desc(similarity))
     .limit(limit)
+  const dbMs = Date.now() - dbStart
 
   const searchTime = Date.now() - startTime
+
+  log.info('Semantic search completed', {
+    embeddingMs,
+    dbMs,
+    totalMs: searchTime,
+    resultCount: results.length,
+  })
 
   return {
     items: results as Array<CatalogItemRecord & { similarity: number }>,

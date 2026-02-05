@@ -4,7 +4,10 @@
  * Database query handlers for each MCP tool.
  */
 
+import { createLogger } from '../core/logger'
 import { db, catalogItems, users, suggestions } from '@gpters/db'
+
+const log = createLogger('mcp-handler')
 import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
@@ -53,7 +56,7 @@ async function updateItemEmbedding(id: string, item: { name: string; description
     const embedding = await generateEmbedding(text)
     await db.update(catalogItems).set({ embedding }).where(eq(catalogItems.id, id))
   } catch (error) {
-    console.error(`Failed to generate embedding for ${id}:`, error)
+    log.error(`Failed to generate embedding for ${id}`, error)
   }
 }
 
@@ -540,7 +543,7 @@ export async function deploySkill(
         createdBy: authorId || undefined,
       }).catch((err) => {
         // Log but don't fail the deploy if version snapshot fails
-        console.error('Failed to create version snapshot:', err)
+        log.error('Failed to create version snapshot', err)
       })
     }
   } else {
@@ -996,6 +999,7 @@ export async function executeTool(
     }
   }
 
+  const startTime = Date.now()
   try {
     switch (toolName) {
       case 'semantic_search': {
@@ -1356,6 +1360,7 @@ export async function executeTool(
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    log.error('Tool execution failed', error, { tool: toolName, duration: Date.now() - startTime })
     return {
       content: [
         {
@@ -1365,6 +1370,8 @@ export async function executeTool(
       ],
       isError: true,
     }
+  } finally {
+    log.info('Tool executed', { tool: toolName, duration: Date.now() - startTime })
   }
 }
 

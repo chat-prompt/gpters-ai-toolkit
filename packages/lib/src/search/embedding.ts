@@ -1,4 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
+import { createLogger } from '../core/logger'
+
+const log = createLogger('embedding')
 
 const EMBEDDING_MODEL = 'gemini-embedding-001'
 const EMBEDDING_DIMENSIONS = 3072
@@ -23,12 +26,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     throw new Error('Cannot generate embedding for empty text')
   }
 
+  const start = Date.now()
   const client = getGeminiClient()
   const response = await client.models.embedContent({
     model: EMBEDDING_MODEL,
     contents: input,
   })
 
+  log.info('Gemini embedding generated', { duration: Date.now() - start })
   return response.embeddings?.[0]?.values ?? []
 }
 
