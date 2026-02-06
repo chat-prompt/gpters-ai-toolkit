@@ -399,6 +399,53 @@ export async function batchResolveDependencies(
 }
 
 /**
+ * Resolve agent dependencies to ResolvedAgent format for subagent configuration
+ *
+ * @param itemId - The catalog item ID to resolve agent dependencies for
+ * @returns Array of resolved agents (published only) with prompt, model, and description
+ * @throws Error if item not found
+ */
+export async function resolveAgentsAsConfig(itemId: string): Promise<Array<{
+  id: string
+  prompt: string
+  description: string
+  model: string
+}>> {
+  const result = await resolveAllDependencies(itemId)
+
+  const resolvedAgents: Array<{
+    id: string
+    prompt: string
+    description: string
+    model: string
+  }> = []
+
+  for (const dep of result.catalogDependencies) {
+    if (dep.type !== 'agent') continue
+    if (!dep.catalogItem) continue
+
+    const catalogItem = dep.catalogItem as unknown as {
+      id: string
+      content: string
+      description: string
+      agentModel: string | null
+      status: string
+    }
+
+    if (catalogItem.status !== 'published') continue
+
+    resolvedAgents.push({
+      id: catalogItem.id,
+      prompt: catalogItem.content,
+      description: catalogItem.description,
+      model: catalogItem.agentModel || 'sonnet',
+    })
+  }
+
+  return resolvedAgents
+}
+
+/**
  * Generate MCP server configuration snippet
  */
 export function generateMcpConfig(mcpDependencies: ResolvedDependency[]): {

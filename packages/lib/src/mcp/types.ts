@@ -72,6 +72,7 @@ export interface DeploySkillInput {
   status?: 'draft' | 'published'
   changelog?: string             // What changed in this version
   files?: PluginFile[]
+  dependencies?: string[]        // Agent dependencies with agent: prefix
 }
 
 export interface DeploySkillResponse {
