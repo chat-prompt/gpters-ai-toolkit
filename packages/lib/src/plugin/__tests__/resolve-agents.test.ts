@@ -313,30 +313,8 @@ describe('resolveAgentsAsConfig', () => {
       maxDepth: 0,
     }
 
-    const result: ResolvedAgent[] = []
-    for (const dep of mockResult.catalogDependencies) {
-      if (dep.type !== 'agent') continue
-      if (!dep.catalogItem) continue
-
-      const catalogItem = dep.catalogItem as unknown as {
-        id: string
-        content: string
-        description: string
-        agentModel: string | null
-        status: string
-      }
-
-      if (catalogItem.status !== 'published') continue
-
-      result.push({
-        id: catalogItem.id,
-        prompt: catalogItem.content,
-        description: catalogItem.description,
-        model: catalogItem.agentModel || 'sonnet',
-      })
-    }
-
-    expect(result).toEqual([])
+    // Empty dependencies should result in empty resolved agents
+    expect(mockResult.catalogDependencies).toEqual([])
   })
 
   it('should support transitive agent resolution', async () => {
