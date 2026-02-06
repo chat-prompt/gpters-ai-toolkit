@@ -151,6 +151,23 @@ export interface PluginContent {
   changelog?: string
 }
 
+/**
+ * Resolved agent configuration suitable for use as a subagent.
+ *
+ * Represents an agent with all necessary configuration resolved and ready
+ * to be invoked as a subagent in Claude Code.
+ */
+export interface ResolvedAgent {
+  /** Agent identifier */
+  id: string
+  /** System prompt/instructions for the agent */
+  prompt: string
+  /** Description of what this agent does */
+  description: string
+  /** AI model identifier (mapped from agentModel field) */
+  model: string
+}
+
 export interface SearchResult {
   plugins: PluginSummary[]
   total: number
