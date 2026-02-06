@@ -150,6 +150,8 @@ export interface PluginContent {
   version?: string
   status?: string
   changelog?: string
+  // Resolved agent dependencies (when applicable)
+  resolvedAgents?: ResolvedAgent[]
 }
 
 /**
