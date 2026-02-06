@@ -6,6 +6,7 @@
 
 import { createLogger } from '../core/logger'
 import { db, catalogItems, users, suggestions } from '@gpters/db'
+import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 
 const log = createLogger('mcp-handler')
 import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
@@ -169,6 +170,15 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
 
   const item = results[0]
 
+  // Resolve agent dependencies if this is a skill with agent dependencies
+  let resolvedAgents: Awaited<ReturnType<typeof resolveAgentsAsConfig>> | undefined
+  if (item.type === 'skill' && item.dependencies && item.dependencies.length > 0) {
+    const hasAgentDeps = item.dependencies.some((dep) => dep.startsWith('agent:'))
+    if (hasAgentDeps) {
+      resolvedAgents = await resolveAgentsAsConfig(pluginId)
+    }
+  }
+
   return {
     id: item.id,
     name: item.name,
@@ -192,6 +202,8 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
     version: item.version || '1.0.0',
     status: item.status || 'published',
     changelog: item.changelog || undefined,
+    // Resolved agent dependencies
+    resolvedAgents: resolvedAgents && resolvedAgents.length > 0 ? resolvedAgents : undefined,
   }
 }
 
