@@ -7,9 +7,12 @@
  */
 
 import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
-import { sql, eq, and, or, desc, asc } from 'drizzle-orm'
+import { sql, eq, and, or, desc, asc, isNull } from 'drizzle-orm'
 import type { ItemType, TeamTag } from '../core/types'
 
+/**
+ * Search options for catalog item queries
+ */
 export interface SearchOptions {
   query: string
   type?: ItemType | 'all'
@@ -19,6 +22,10 @@ export interface SearchOptions {
   sortBy?: 'relevance' | 'newest' | 'popular' | 'name'
   teamTag?: string
   tags?: string[]
+  /** Current organization ID for access control filtering */
+  currentOrgId?: string
+  /** User role for super admin bypass */
+  userRole?: string
 }
 
 export interface FTSSearchResult {
@@ -34,6 +41,9 @@ export interface FTSSearchResult {
  * Uses hybrid approach:
  * 1. PostgreSQL FTS for English (tsvector with ranking)
  * 2. Trigram similarity for Korean/mixed content
+ *
+ * @param options - Search options including org filtering params
+ * @returns Search results with items, total count, and metadata
  */
 export async function searchCatalogItems(options: SearchOptions): Promise<FTSSearchResult> {
   const startTime = Date.now()
@@ -46,6 +56,8 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
     sortBy = 'relevance',
     teamTag,
     tags,
+    currentOrgId,
+    userRole,
   } = options
 
   // Sanitize query
@@ -82,6 +94,28 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
     conditions.push(
       sql`${catalogItems.tags} && ARRAY[${sql.join(tags.map(t => sql`${t}`), sql`, `)}]::text[]`
     )
+  }
+
+  // Organization access control filtering
+  // Super admins see everything; regular users get org-scoped results
+  if (userRole && userRole === 'super_admin') {
+    // Super admin bypass - no org filter
+  } else {
+    const orgAccessConditions = currentOrgId
+      ? or(
+          eq(catalogItems.orgId, currentOrgId),
+          eq(catalogItems.visibility, 'public'),
+          and(
+            eq(catalogItems.visibility, 'shared'),
+            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
+          ),
+          isNull(catalogItems.orgId)
+        )
+      : or(
+          eq(catalogItems.visibility, 'public'),
+          isNull(catalogItems.orgId)
+        )
+    conditions.push(orgAccessConditions)
   }
 
   // Search condition - hybrid FTS + trigram (searches name, description, readme, content, tags)
@@ -167,6 +201,9 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
 
 /**
  * Get all items without search query
+ *
+ * @param options - Search options including org filtering params
+ * @returns Search results with items, total count, and metadata
  */
 async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSearchResult> {
   const startTime = Date.now()
@@ -178,6 +215,8 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
     sortBy = 'newest',
     teamTag,
     tags,
+    currentOrgId,
+    userRole,
   } = options
 
   const conditions = []
@@ -198,6 +237,27 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
     conditions.push(
       sql`${catalogItems.tags} && ARRAY[${sql.join(tags.map(t => sql`${t}`), sql`, `)}]::text[]`
     )
+  }
+
+  // Organization access control filtering
+  if (userRole && userRole === 'super_admin') {
+    // Super admin bypass - no org filter
+  } else {
+    const orgAccessConditions = currentOrgId
+      ? or(
+          eq(catalogItems.orgId, currentOrgId),
+          eq(catalogItems.visibility, 'public'),
+          and(
+            eq(catalogItems.visibility, 'shared'),
+            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
+          ),
+          isNull(catalogItems.orgId)
+        )
+      : or(
+          eq(catalogItems.visibility, 'public'),
+          isNull(catalogItems.orgId)
+        )
+    conditions.push(orgAccessConditions)
   }
 
   let orderByClause
@@ -244,10 +304,18 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
 
 /**
  * Get search suggestions based on partial input (PostgreSQL-based)
+ *
+ * @param query - Partial search query
+ * @param limit - Maximum number of suggestions (default: 5)
+ * @param currentOrgId - Current organization ID for access control filtering
+ * @param userRole - User role for super admin bypass
+ * @returns Array of suggestion objects with name, type, and id
  */
 export async function getFTSSearchSuggestions(
   query: string,
-  limit = 5
+  limit = 5,
+  currentOrgId?: string,
+  userRole?: string
 ): Promise<{ name: string; type: ItemType; id: string }[]> {
   if (!query.trim()) return []
 
@@ -264,6 +332,29 @@ export async function getFTSSearchSuggestions(
     )
   }
 
+  const conditions = [condition, eq(catalogItems.status, 'published')]
+
+  // Organization access control filtering
+  if (userRole && userRole === 'super_admin') {
+    // Super admin bypass - no org filter
+  } else {
+    const orgAccessConditions = currentOrgId
+      ? or(
+          eq(catalogItems.orgId, currentOrgId),
+          eq(catalogItems.visibility, 'public'),
+          and(
+            eq(catalogItems.visibility, 'shared'),
+            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
+          ),
+          isNull(catalogItems.orgId)
+        )
+      : or(
+          eq(catalogItems.visibility, 'public'),
+          isNull(catalogItems.orgId)
+        )
+    conditions.push(orgAccessConditions)
+  }
+
   const results = await db
     .select({
       id: catalogItems.id,
@@ -271,7 +362,7 @@ export async function getFTSSearchSuggestions(
       type: catalogItems.type,
     })
     .from(catalogItems)
-    .where(and(condition, eq(catalogItems.status, 'published')))
+    .where(and(...conditions))
     .orderBy(hasKorean
       ? sql`similarity(${catalogItems.name}, ${sanitizedQuery}) DESC`
       : sql`CASE WHEN ${catalogItems.name} ILIKE ${`${sanitizedQuery}%`} THEN 0 ELSE 1 END, ${catalogItems.name}`
