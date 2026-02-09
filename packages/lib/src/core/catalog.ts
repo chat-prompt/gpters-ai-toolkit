@@ -273,9 +273,13 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
 }
 
 export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | undefined> {
-  const [record] = await db
-    .select()
+  const [result] = await db
+    .select({
+      item: catalogItems,
+      orgName: organizations.name,
+    })
     .from(catalogItems)
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         eq(catalogItems.type, 'guide'),
@@ -283,8 +287,13 @@ export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | 
       )
     )
 
-  if (!record) return undefined
-  return toPlainObject(record)
+  if (!result) return undefined
+  
+  const item = toPlainObject(result.item)
+  return {
+    ...item,
+    orgName: result.orgName ?? undefined,
+  }
 }
 
 /**
