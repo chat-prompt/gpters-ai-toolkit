@@ -52,6 +52,8 @@ import {
   logRateLimitEvent,
   type AuditResponseStatus,
 } from '@/lib/security/mcp-audit'
+import { db, orgMemberships } from '@gpters/db'
+import { eq } from 'drizzle-orm'
 
 // Force dynamic rendering - never cache this route
 export const dynamic = 'force-dynamic'
@@ -154,6 +156,24 @@ interface AuditContext {
   userAgent?: string
   isAuthenticated: boolean
   tokenId?: string
+}
+
+/**
+ * Get user's current organization ID from database
+ * Returns the first org membership found for the user
+ */
+async function getUserOrgId(userId: string): Promise<string | undefined> {
+  try {
+    const [membership] = await db
+      .select({ orgId: orgMemberships.orgId })
+      .from(orgMemberships)
+      .where(eq(orgMemberships.userId, userId))
+      .limit(1)
+    
+    return membership?.orgId
+  } catch (error) {
+    return undefined
+  }
 }
 
 /**
@@ -378,6 +398,9 @@ export async function POST(request: NextRequest) {
   // Extract userId and userRole from authentication for ownership-based operations
   const userId = auth?.userId
   const userRole = auth?.userRole
+  
+  // Get user's organization context for org-based filtering
+  const orgId = userId ? await getUserOrgId(userId) : undefined
 
   // Session management for Streamable HTTP transport
   const incomingSessionId = request.headers.get('mcp-session-id')
@@ -501,7 +524,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const result = await handleSimpleRequest(action, validationResult.data || body, userId, userRole)
+      const result = await handleSimpleRequest(action, validationResult.data || body, userId, userRole, orgId)
 
       logAudit(
         `rest:${action}`,
@@ -535,7 +558,7 @@ export async function POST(request: NextRequest) {
 
     const rpcMethod = (body as Record<string, unknown>)?.method as string
     const tool = extractToolFromBody(body)
-    const response = await handleHttpRequest(body, userId, userRole)
+    const response = await handleHttpRequest(body, userId, userRole, orgId)
 
     // Handle notifications (null response means no response should be sent)
     // Per JSON-RPC 2.0 spec and MCP: notifications don't expect a response

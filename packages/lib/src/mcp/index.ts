@@ -42,6 +42,7 @@ export {
   getPluginContent,
   listPlugins,
   getPluginsByCategory,
+  deploySkill,
   executeTool,
   listPrompts,
   getPrompt,
