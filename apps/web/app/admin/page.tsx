@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import { useOrgContext } from '@/lib/hooks/useOrgContext'
 import type { UserRole } from '@/lib/security/rbac'
 
 interface Stats {
@@ -102,13 +103,20 @@ export default function AdminDashboard() {
   useAdminAuth() // For layout protection
   const { data: session } = useSession()
   const userRole = session?.user?.role as UserRole | undefined
+  const { currentOrgId } = useOrgContext()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishingId, setPublishingId] = useState<string | null>(null)
+  const [viewAll, setViewAll] = useState(false)
+  const isSuperAdmin = userRole === 'super_admin'
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/stats')
+      const url = new URL('/api/admin/stats', window.location.origin)
+      if (viewAll && isSuperAdmin) {
+        url.searchParams.append('viewAll', 'true')
+      }
+      const res = await fetch(url.toString())
       const dashboardData = await res.json()
       setData(dashboardData)
     } catch (error) {
@@ -116,9 +124,10 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [viewAll, isSuperAdmin])
 
   useEffect(() => {
+    setLoading(true)
     fetchData()
   }, [fetchData])
 
@@ -184,6 +193,31 @@ export default function AdminDashboard() {
         <p className="text-[var(--text-secondary)]">
           GPTers AI Toolkit 관리 센터
         </p>
+        
+        {/* Organization Context Indicator */}
+        <div className="flex items-center justify-between gap-4 mt-4">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+            <span>🏢</span>
+            <span>Viewing:</span>
+            <span className="text-[var(--text-primary)] font-medium">
+              {viewAll ? 'All Organizations' : (currentOrgId ? `Org: ${currentOrgId}` : 'Current Organization')}
+            </span>
+          </div>
+          
+          {/* Super Admin Toggle */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setViewAll(!viewAll)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                viewAll
+                  ? 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'
+              }`}
+            >
+              {viewAll ? '📊 All Organizations' : '🏢 Current Org'}
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
