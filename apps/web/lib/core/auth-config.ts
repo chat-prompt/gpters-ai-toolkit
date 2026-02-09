@@ -124,46 +124,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return session
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = user.role
-        token.orgIds = user.orgIds
       }
 
-      if (trigger === 'update' || !token.role || !token.orgIds) {
-        try {
-          const email = token.email as string
-          if (email) {
-            const [dbUser] = await db
-              .select({ 
-                id: users.id,
-                role: users.role 
+      try {
+        const email = token.email as string
+        if (email) {
+          const [dbUser] = await db
+            .select({ 
+              id: users.id,
+              role: users.role 
+            })
+            .from(users)
+            .where(eq(users.email, email))
+
+          if (dbUser) {
+            token.role = dbUser.role as UserRole
+
+            const userOrgMemberships = await db
+              .select({
+                orgId: orgMemberships.orgId,
+                role: orgMemberships.role,
               })
-              .from(users)
-              .where(eq(users.email, email))
+              .from(orgMemberships)
+              .where(eq(orgMemberships.userId, dbUser.id))
 
-            if (dbUser) {
-              token.role = dbUser.role as UserRole
-
-              const userOrgMemberships = await db
-                .select({
-                  orgId: orgMemberships.orgId,
-                  role: orgMemberships.role,
-                })
-                .from(orgMemberships)
-                .where(eq(orgMemberships.userId, dbUser.id))
-
-              if (userOrgMemberships.length > 0) {
-                token.orgIds = userOrgMemberships.map(m => m.orgId)
+            if (userOrgMemberships.length > 0) {
+              token.orgIds = userOrgMemberships.map(m => m.orgId)
+              if (!token.currentOrgId || !token.orgIds.includes(token.currentOrgId as string)) {
                 token.currentOrgId = userOrgMemberships[0].orgId
                 token.orgRole = userOrgMemberships[0].role as OrgRole
+              } else {
+                const currentMembership = userOrgMemberships.find(m => m.orgId === token.currentOrgId)
+                if (currentMembership) {
+                  token.orgRole = currentMembership.role as OrgRole
+                }
               }
             }
           }
-        } catch {
-          // Keep existing values on error
         }
+      } catch {
+        // Keep existing token values on DB error
       }
 
       return token

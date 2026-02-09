@@ -137,13 +137,15 @@ export function UserMenu({ user }: UserMenuProps) {
             </p>
             {user.role && (
               <span className={`inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-[10px] font-medium ${
-                user.role === 'admin'
+                user.role === 'super_admin'
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                  : user.role === 'admin'
                   ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                   : user.role === 'editor'
                   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                   : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
               }`}>
-                {user.role === 'admin' ? 'Admin' : user.role === 'editor' ? 'Editor' : 'Viewer'}
+                {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : user.role === 'editor' ? 'Editor' : 'Viewer'}
               </span>
             )}
           </div>

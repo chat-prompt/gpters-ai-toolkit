@@ -16,6 +16,9 @@ import { auth } from '@/lib/core/auth'
 
 const log = createLogger('api:organizations')
 
+/** Development bypass check */
+const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true'
+
 /**
  * GET /api/organizations
  * List organizations accessible to the current user
@@ -30,6 +33,10 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) {
+      if (DEV_BYPASS_AUTH) {
+        const allOrgs = await db.select().from(organizations)
+        return NextResponse.json({ organizations: allOrgs, total: allOrgs.length })
+      }
       return ApiErrors.unauthorized()
     }
 
