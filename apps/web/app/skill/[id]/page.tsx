@@ -19,6 +19,7 @@ import { TryItButton } from '@/components/actions/TryItButton'
 import { DownloadButton } from '@/components/actions/DownloadButton'
 import { RelatedItems } from '@/components/detail/RelatedItems'
 import { ExamplesSection } from '@/components/detail/ExamplesSection'
+import { FilesSection } from '@/components/detail/FilesSection'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { notFound } from 'next/navigation'
 
@@ -49,6 +50,10 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
 
   if (item.dependencies && item.dependencies.length > 0) {
     tocItems.push({ id: 'dependencies', label: '의존성', icon: '🔗' })
+  }
+
+  if (item.files && item.files.length > 0) {
+    tocItems.push({ id: 'files', label: '추가 파일', icon: '📁' })
   }
 
   if (item.changelog) {
@@ -106,6 +111,13 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
       {item.dependencies && item.dependencies.length > 0 && (
         <Section id="dependencies">
           <DependencyDisplay dependencies={item.dependencies} />
+        </Section>
+      )}
+
+      {/* Files */}
+      {item.files && item.files.length > 0 && (
+        <Section id="files">
+          <FilesSection files={item.files} />
         </Section>
       )}
 

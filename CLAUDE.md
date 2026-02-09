@@ -88,6 +88,26 @@ Key database tables:
 - `authors`, `tags`, `mcp_servers` - Normalized reference data
 - `catalog_item_tags` - Many-to-many junction table
 
+#### Files Field & FileType
+
+Catalog items can include additional files via `files` field (JSON array):
+
+```typescript
+files: [
+  { name: "scripts/run.mjs", content: "...", type: "script" },
+  { name: "references/guide.md", content: "...", type: "reference" }
+]
+```
+
+| FileType | Purpose | Claude Action |
+|----------|---------|---------------|
+| `script` | Executable scripts (js, sh, py) | Run with node/bash |
+| `reference` | Reference docs/guides | Read for context |
+| `template` | Project templates | Copy to destination |
+| `config` | Configuration files | Add to settings |
+
+Type is auto-inferred from filename if not specified.
+
 ### Environment Variables
 
 Required in `.env.local` (see `.env.example`):

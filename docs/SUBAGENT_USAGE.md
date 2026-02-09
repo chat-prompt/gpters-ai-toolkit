@@ -132,9 +132,43 @@ await deploy_skill({
   type: "skill",
   name: "코드 리뷰 스킬",
   content: "# 코드 리뷰 스킬\n\n이 스킬은 code-reviewer agent를 활용합니다...",
-  dependencies: ["agent:code-reviewer", "agent:security-checker"]
+  dependencies: ["agent:code-reviewer", "agent:security-checker"],
+  files: [
+    {
+      name: "scripts/analyze.mjs",
+      content: "// 분석 스크립트...",
+      type: "script"  // node/bash로 실행
+    },
+    {
+      name: "templates/report.md",
+      content: "# 리뷰 리포트 템플릿...",
+      type: "template"  // 프로젝트에 복사
+    },
+    {
+      name: "references/coding-standards.md",
+      content: "# 코딩 표준 가이드...",
+      type: "reference"  // 컨텍스트로 활용
+    }
+  ]
 })
 ```
+
+## 파일 타입 (FileType)
+
+skill에 추가 파일을 포함할 때 `type` 필드로 파일의 용도를 지정합니다:
+
+| 타입 | 용도 | Claude 동작 |
+|------|------|-------------|
+| `script` | 실행 스크립트 (js, mjs, sh, py) | node/bash로 실행 |
+| `reference` | 참조 문서, 가이드 | 컨텍스트로 활용 |
+| `template` | 프로젝트 템플릿 파일 | 프로젝트에 복사 |
+| `config` | 설정 파일 (json, yaml) | 설정에 추가/병합 |
+
+**자동 추론**: `type`을 지정하지 않으면 파일명에서 자동으로 추론합니다:
+- `scripts/*.mjs` → `script`
+- `references/*.md` → `reference`
+- `templates/*` → `template`
+- `*.config.json`, `mcp-config.json` → `config`
 
 ## 주의사항
 
