@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { CatalogItem, TAGS } from '@/lib/core/types'
+import { useOrgContext } from '@/lib/hooks/useOrgContext'
 
 interface UserProfile {
   user: {
@@ -27,6 +28,13 @@ interface UserProfile {
     drafts: number
     totalLikes: number
   }
+}
+
+interface Organization {
+  id: string
+  name: string
+  slug: string
+  role: string
 }
 
 const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; href: string }> = {
@@ -65,8 +73,10 @@ function formatRelativeTime(dateString: string | null): string {
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [orgs, setOrgs] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { currentOrgId, switchOrg } = useOrgContext()
 
   useEffect(() => {
     async function fetchProfile() {
@@ -84,6 +94,22 @@ export default function ProfilePage() {
       }
     }
     fetchProfile()
+  }, [])
+
+  useEffect(() => {
+    async function fetchOrganizations() {
+      try {
+        const res = await fetch('/api/organizations')
+        if (!res.ok) {
+          throw new Error('Failed to fetch organizations')
+        }
+        const data = await res.json()
+        setOrgs(data.organizations || [])
+      } catch (err) {
+        console.error('Failed to load organizations:', err)
+      }
+    }
+    fetchOrganizations()
   }, [])
 
   if (loading) {
@@ -170,6 +196,39 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Organizations */}
+        <div className="glass rounded-2xl p-8 mb-8">
+          <h2 className="text-lg font-medium text-[var(--text-primary)] mb-6 flex items-center gap-2">
+            🏢 Organizations
+          </h2>
+          <div className="space-y-3">
+            {orgs.map(org => (
+              <div key={org.id} className="flex items-center justify-between p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
+                <div className="flex items-center gap-3">
+                  <span className="text-[var(--text-primary)] font-medium">{org.name}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)] uppercase tracking-wider">
+                    {org.role.replace('org_', '')}
+                  </span>
+                  {org.id === currentOrgId && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30">
+                      Current
+                    </span>
+                  )}
+                </div>
+                {org.id !== currentOrgId && (
+                  <button onClick={() => switchOrg(org.id)}
+                    className="text-xs text-[var(--accent-cyan)] hover:underline">
+                    Switch to
+                  </button>
+                )}
+              </div>
+            ))}
+            {orgs.length === 0 && (
+              <p className="text-[var(--text-muted)] text-sm">No organization memberships found.</p>
+            )}
           </div>
         </div>
 

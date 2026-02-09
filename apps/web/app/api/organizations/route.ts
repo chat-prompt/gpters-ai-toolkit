@@ -46,7 +46,8 @@ export async function GET(request: NextRequest) {
     let orgList
 
     if (isSuperAdmin(userRole)) {
-      orgList = await db
+      // Super admin: get all orgs with their role (if they're a member)
+      const allOrgs = await db
         .select({
           id: organizations.id,
           name: organizations.name,
@@ -58,9 +59,26 @@ export async function GET(request: NextRequest) {
           updatedAt: organizations.updatedAt,
         })
         .from(organizations)
-    } else {
+
+      // Get memberships for super admin
       const memberships = await db
-        .select({ orgId: orgMemberships.orgId })
+        .select({ orgId: orgMemberships.orgId, role: orgMemberships.role })
+        .from(orgMemberships)
+        .where(eq(orgMemberships.userId, userId))
+
+      const membershipMap = new Map(memberships.map(m => [m.orgId, m.role]))
+
+      orgList = allOrgs.map(org => ({
+        ...org,
+        role: membershipMap.get(org.id) || 'org_viewer',
+      }))
+    } else {
+      // Regular user: get only orgs they belong to with their role
+      const memberships = await db
+        .select({ 
+          orgId: orgMemberships.orgId,
+          role: orgMemberships.role,
+        })
         .from(orgMemberships)
         .where(eq(orgMemberships.userId, userId))
 
@@ -70,7 +88,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ organizations: [], total: 0 })
       }
 
-      orgList = await db
+      const orgs = await db
         .select({
           id: organizations.id,
           name: organizations.name,
@@ -83,6 +101,13 @@ export async function GET(request: NextRequest) {
         })
         .from(organizations)
         .where(inArray(organizations.id, orgIds))
+
+      const membershipMap = new Map(memberships.map(m => [m.orgId, m.role]))
+
+      orgList = orgs.map(org => ({
+        ...org,
+        role: membershipMap.get(org.id) || 'org_viewer',
+      }))
     }
 
     return NextResponse.json({

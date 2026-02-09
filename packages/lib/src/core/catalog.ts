@@ -5,7 +5,7 @@
  * list views, detail views, filtering, and package management.
  */
 import { eq, ne, and, or, isNull, asc } from 'drizzle-orm'
-import { db, catalogItems, packageItems, users, isDatabaseAvailable } from '@gpters/db'
+import { db, catalogItems, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
 
 // ============================================================================
@@ -212,10 +212,22 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
 // ============================================================================
 
 export async function getItemById(id: string): Promise<CatalogItem | undefined> {
-  const [record] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
+  const [result] = await db
+    .select({
+      item: catalogItems,
+      orgName: organizations.name,
+    })
+    .from(catalogItems)
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
+    .where(eq(catalogItems.id, id))
 
-  if (!record) return undefined
-  return toPlainObject(record)
+  if (!result) return undefined
+  
+  const item = toPlainObject(result.item)
+  return {
+    ...item,
+    orgName: result.orgName ?? undefined,
+  }
 }
 
 /**
