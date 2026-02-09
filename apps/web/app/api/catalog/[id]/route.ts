@@ -1,9 +1,9 @@
 /**
- * Single catalog item API route
+ * Single catalog item API route with org-based access control
  *
- * GET: Retrieve a catalog item by ID
- * PUT: Update a catalog item (requires authentication)
- * DELETE: Delete a catalog item (requires authentication)
+ * GET: Retrieve a catalog item by ID (with org access validation)
+ * PUT: Update a catalog item (requires authentication and org ownership)
+ * DELETE: Delete a catalog item (requires authentication and org ownership)
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
@@ -12,9 +12,10 @@ import type { ItemType, Difficulty, TeamTag } from '@/lib/core/types'
 import { ApiErrors, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
-import { Permissions } from '@/lib/security/rbac'
+import { Permissions, isSuperAdmin, type UserRole } from '@/lib/security/rbac'
 import { cachedJsonResponse, addSurrogateKey } from '@/lib/utils/api-cache'
 import { createVersionOnUpdate } from '@/lib/versioning/skill-version'
+import { auth } from '@/lib/core/auth'
 
 const log = createLogger('api:catalog')
 
@@ -23,7 +24,6 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  // Rate limit: 100 requests per minute for item queries
   const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
   if (rateLimitError) return rateLimitError
 
@@ -35,13 +35,47 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return ApiErrors.notFound('Catalog item')
     }
 
-    // Return cached response with ETag support
-    const response = cachedJsonResponse(item, 'catalogItem', request)
+    const session = await auth()
+    const currentOrgId = session?.user?.currentOrgId
+    const userRole = session?.user?.role
 
-    // Add surrogate keys for CDN cache invalidation
-    addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+    if (userRole && isSuperAdmin(userRole as UserRole)) {
+      const response = cachedJsonResponse(item, 'catalogItem', request)
+      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+      return response
+    }
 
-    return response
+    const itemOrgId = item.orgId
+    const itemVisibility = item.visibility
+
+    if (!itemOrgId) {
+      const response = cachedJsonResponse(item, 'catalogItem', request)
+      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+      return response
+    }
+
+    if (itemVisibility === 'public') {
+      const response = cachedJsonResponse(item, 'catalogItem', request)
+      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+      return response
+    }
+
+    if (itemOrgId === currentOrgId) {
+      const response = cachedJsonResponse(item, 'catalogItem', request)
+      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+      return response
+    }
+
+    if (itemVisibility === 'shared' && currentOrgId) {
+      const sharedWithOrgs = item.sharedWithOrgs as string[] | null
+      if (sharedWithOrgs && sharedWithOrgs.includes(currentOrgId)) {
+        const response = cachedJsonResponse(item, 'catalogItem', request)
+        addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+        return response
+      }
+    }
+
+    return ApiErrors.notFound('Catalog item')
   } catch (error) {
     log.error('Failed to fetch catalog item', error)
     return ApiErrors.internalError('Failed to fetch catalog item')
@@ -49,16 +83,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  // Rate limit: 60 requests per minute for admin operations
   const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
 
-  // Check RBAC permission for editing catalog items
   const permissionError = await requirePermissionAsync(Permissions.CATALOG_EDIT, request)
   if (permissionError) return permissionError
 
-  // Get current user for version tracking
   const currentUser = await getCurrentUser()
+  const session = await auth()
+  const currentOrgId = session?.user?.currentOrgId
+  const userRole = session?.user?.role
 
   try {
     const { id } = await params
@@ -67,6 +101,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const [existing] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
 
     if (!existing) {
+      return ApiErrors.notFound('Catalog item')
+    }
+
+    const isSuperAdminUser = userRole && isSuperAdmin(userRole as UserRole)
+    if (!isSuperAdminUser && existing.orgId && existing.orgId !== currentOrgId) {
       return ApiErrors.notFound('Catalog item')
     }
 
@@ -136,19 +175,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  // Rate limit: 60 requests per minute for admin operations
   const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
 
-  // Check RBAC permission for deleting catalog items (admin only)
   const permissionError = await requirePermissionAsync(Permissions.CATALOG_DELETE, request)
   if (permissionError) return permissionError
+
+  const session = await auth()
+  const currentOrgId = session?.user?.currentOrgId
+  const userRole = session?.user?.role
 
   try {
     const { id } = await params
     const [existing] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
 
     if (!existing) {
+      return ApiErrors.notFound('Catalog item')
+    }
+
+    const isSuperAdminUser = userRole && isSuperAdmin(userRole as UserRole)
+    if (!isSuperAdminUser && existing.orgId && existing.orgId !== currentOrgId) {
       return ApiErrors.notFound('Catalog item')
     }
 

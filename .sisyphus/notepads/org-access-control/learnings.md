@@ -301,3 +301,82 @@ export async function GET(request: NextRequest) {
 
 **Commit**: `feat(api): add organization management API (CRUD, members, domains)`
 
+
+## Organization-based Catalog Filtering Implementation
+
+### Changes Made
+
+#### 1. Type Extensions (packages/lib/src/core/types.ts)
+Added org-related fields to CatalogItem interface:
+- `orgId?: string` - Organization owner
+- `visibility?: 'private' | 'shared' | 'public'` - Visibility level
+- `forkedFrom?: string` - Original item if fork
+- `forkCount?: number` - Number of times forked
+- `sharedWithOrgs?: string[]` - Organization IDs shared with
+
+#### 2. API Route Modifications
+
+**GET /api/catalog (List)**:
+- Added org-based filtering using JSONB containment for shared items
+- Super admin sees all items
+- Regular users see: own org items + public items + shared items + legacy (orgId=null)
+- Filter formula: `(orgId = currentOrgId) OR (visibility = 'public') OR (visibility = 'shared' AND currentOrgId IN sharedWithOrgs) OR (orgId IS NULL)`
+
+**POST /api/catalog (Create)**:
+- Auto-assigns `orgId` from `session.user.currentOrgId`
+- Defaults `visibility` to 'private'
+- Initializes `sharedWithOrgs` as empty array
+- Sets `forkCount` to 0
+
+**GET /api/catalog/[id] (Detail)**:
+- Returns 404 (not 403!) for unauthorized access
+- Access rules:
+  - super_admin: allow all
+  - orgId=null: allow (backward compat)
+  - visibility='public': allow all
+  - orgId=currentOrgId: allow
+  - visibility='shared' AND currentOrgId IN sharedWithOrgs: allow
+  - else: 404
+
+**PUT/DELETE /api/catalog/[id]**:
+- Only allow if `orgId = currentOrgId` OR `isSuperAdmin`
+- Returns 404 (not 403!) for unauthorized attempts
+
+#### 3. Catalog.ts Updates (packages/lib/src/core/catalog.ts)
+- Extended `summaryColumns` to include org fields
+- Updated `SummaryRecord` type with org fields
+- Updated `toSummaryObject()` and `toPlainObject()` converters
+
+#### 4. Tests Created (apps/web/tests/api/catalog-org-filter.test.ts)
+Comprehensive test coverage for:
+- List filtering by org and visibility
+- Single item access validation
+- Create with auto org assignment
+- Update/delete org ownership checks
+- Visibility level enforcement
+- Backward compatibility (orgId=null)
+
+### Key Patterns
+
+**JSONB Containment for Shared Items**:
+```typescript
+sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
+```
+
+**404 vs 403 for Security**:
+Always return 404 for non-accessible items (not 403) to avoid information disclosure.
+
+**Backward Compatibility**:
+Items with `orgId = null` remain accessible to all users for migration compatibility.
+
+**Type Safety**:
+Use `isSuperAdmin(userRole as UserRole)` instead of `any` for proper type checking.
+
+### Testing Notes
+
+Tests require DATABASE_URL to be set. Structure is comprehensive and covers:
+- Multi-org scenarios
+- Visibility transitions
+- Super admin privileges
+- Legacy data handling
+
