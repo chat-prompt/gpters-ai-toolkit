@@ -6,7 +6,7 @@
  */
 import { NextRequest } from 'next/server'
 import { eq, and, or, isNull, sql } from 'drizzle-orm'
-import { db, catalogItems, users } from '@/lib/db'
+import { db, catalogItems, users, organizations } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
         status: catalogItems.status,
         changelog: catalogItems.changelog,
         orgId: catalogItems.orgId,
+        orgName: organizations.name,
         visibility: catalogItems.visibility,
         forkedFrom: catalogItems.forkedFrom,
         forkCount: catalogItems.forkCount,
@@ -80,6 +81,7 @@ export async function GET(request: NextRequest) {
       })
       .from(catalogItems)
       .leftJoin(users, eq(catalogItems.authorId, users.id))
+      .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
 
     const whereConditions = []
     

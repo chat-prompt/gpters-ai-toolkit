@@ -9,11 +9,13 @@
 import { useState, useEffect, use, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import type { TeamTag } from '@/lib/core/types'
 import { TeamTagSelector } from '@/components/social/TeamTagSelector'
 import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/admin/SecurityAuditPanel'
 import type { SecurityAuditResult } from '@/lib/security/security-audit'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import { useOrgContext } from '@/lib/hooks/useOrgContext'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
@@ -29,18 +31,21 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   const searchParams = useSearchParams()
   const returnUrl = searchParams.get('returnUrl')
   useAdminAuth() // For layout protection
+  const { data: session } = useSession()
+  const { currentOrgId } = useOrgContext()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [securityAuditResult, setSecurityAuditResult] = useState<SecurityAuditResult | null>(null)
   const [showSecurityPanel, setShowSecurityPanel] = useState(false)
+  const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
 
   const [formData, setFormData] = useState({
     id: '',
     type: 'skill' as typeof ITEM_TYPES[number],
     name: '',
     description: '',
-    authorName: '', // Read-only, for display purposes
+    authorName: '',
     tags: '',
     teamTag: 'general' as TeamTag,
     difficulty: '' as '' | typeof DIFFICULTIES[number],
@@ -52,6 +57,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     version: '1.0.0',
     status: 'published' as typeof STATUSES[number],
     changelog: '',
+    orgId: '',
+    visibility: 'private' as 'private' | 'shared' | 'public',
   })
 
   const fetchItem = useCallback(async () => {

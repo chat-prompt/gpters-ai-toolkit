@@ -8,6 +8,8 @@ import { memo } from 'react'
 import Link from 'next/link'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { TeamTagBadge } from '../../social/TeamTagSelector'
+import { OrgBadge } from '../../ui/OrgBadge'
+import { VisibilityBadge } from '../../ui/VisibilityBadge'
 import { TYPE_CONFIG } from './constants'
 import type { ItemCardProps } from './types'
 
@@ -91,6 +93,14 @@ export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
               {TAGS[tag]?.label || tag}
             </span>
           ))}
+        </div>
+
+        {/* Org & Visibility Badges */}
+        <div className="flex items-center gap-2 mb-4">
+          <OrgBadge orgName={item.orgName ?? null} size="sm" />
+          {item.visibility && item.visibility !== 'private' && (
+            <VisibilityBadge visibility={item.visibility} size="sm" />
+          )}
         </div>
 
         {/* Footer */}

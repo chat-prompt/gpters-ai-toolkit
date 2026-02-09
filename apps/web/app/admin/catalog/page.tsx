@@ -13,18 +13,20 @@ import type { TeamTag } from '@/lib/core/types'
 import { TEAM_TAGS } from '@/lib/core/types'
 import { TeamTagBadge } from '@/components/social/TeamTagSelector'
 import type { UserRole } from '@/lib/security/rbac'
+import { OrgBadge } from '@/components/ui/OrgBadge'
+import { VisibilityBadge } from '@/components/ui/VisibilityBadge'
 
 // RBAC helper functions
 function canCreate(role: UserRole | undefined): boolean {
-  return role === 'admin' || role === 'editor'
+  return role === 'super_admin' || role === 'admin' || role === 'editor'
 }
 
 function canEdit(role: UserRole | undefined): boolean {
-  return role === 'admin' || role === 'editor'
+  return role === 'super_admin' || role === 'admin' || role === 'editor'
 }
 
 function canDelete(role: UserRole | undefined): boolean {
-  return role === 'admin'
+  return role === 'super_admin' || role === 'admin'
 }
 
 interface CatalogItem {
@@ -38,6 +40,8 @@ interface CatalogItem {
   teamTag: TeamTag | null
   status: 'draft' | 'published' | null
   version: string | null
+  orgId: string | null
+  visibility: 'private' | 'shared' | 'public' | null
   createdAt: string
   updatedAt: string
 }
@@ -56,15 +60,24 @@ const TYPE_ICONS: Record<string, string> = {
   guide: '📚',
 }
 
+interface Organization {
+  id: string
+  name: string
+  slug: string
+}
+
 export default function CatalogList() {
   const { data: session } = useSession()
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [teamFilter, setTeamFilter] = useState<TeamTag | 'all'>('all')
+  const [orgFilter, setOrgFilter] = useState<string>('all')
+  const [organizations, setOrganizations] = useState<Organization[]>([])
 
   // Get user role from session
   const userRole = session?.user?.role as UserRole | undefined
+  const isSuperAdmin = userRole === 'super_admin'
 
   const fetchItems = useCallback(async () => {
     try {
@@ -79,9 +92,24 @@ export default function CatalogList() {
     }
   }, [filter])
 
+  const fetchOrganizations = useCallback(async () => {
+    if (!isSuperAdmin) return
+    try {
+      const res = await fetch('/api/organizations')
+      const data = await res.json()
+      setOrganizations(data.organizations || [])
+    } catch (error) {
+      console.error('Failed to fetch organizations:', error)
+    }
+  }, [isSuperAdmin])
+
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
+
+  useEffect(() => {
+    fetchOrganizations()
+  }, [fetchOrganizations])
 
   async function handleDelete(id: string) {
     if (!canDelete(userRole)) {
@@ -112,10 +140,23 @@ export default function CatalogList() {
   const filters = ['all', 'skill', 'agent', 'command', 'guide']
   const teamFilters: (TeamTag | 'all')[] = ['all', ...Object.keys(TEAM_TAGS) as TeamTag[]]
 
-  // Filter items by team tag (client-side)
-  const filteredItems = teamFilter === 'all'
-    ? items
-    : items.filter(item => item.teamTag === teamFilter)
+  // Create org lookup map
+  const orgMap = new Map(organizations.map(org => [org.id, org.name]))
+
+  // Filter items by team tag and org (client-side)
+  let filteredItems = items
+  
+  if (teamFilter !== 'all') {
+    filteredItems = filteredItems.filter(item => item.teamTag === teamFilter)
+  }
+  
+  if (orgFilter !== 'all') {
+    if (orgFilter === 'legacy') {
+      filteredItems = filteredItems.filter(item => item.orgId === null)
+    } else {
+      filteredItems = filteredItems.filter(item => item.orgId === orgFilter)
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-8 py-12">
@@ -180,6 +221,45 @@ export default function CatalogList() {
             )
           })}
         </div>
+        {/* Org Filters (super_admin only) */}
+        {isSuperAdmin && organizations.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider self-center mr-2">Org:</span>
+            <button
+              onClick={() => setOrgFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                orgFilter === 'all'
+                  ? 'bg-[var(--accent-cyan)] text-black border-transparent'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setOrgFilter('legacy')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                orgFilter === 'legacy'
+                  ? 'bg-[var(--accent-cyan)] text-black border-transparent'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Legacy
+            </button>
+            {organizations.map((org) => (
+              <button
+                key={org.id}
+                onClick={() => setOrgFilter(org.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                  orgFilter === org.id
+                    ? 'bg-[var(--accent-cyan)] text-black border-transparent'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                }`}
+              >
+                🏢 {org.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -226,6 +306,12 @@ export default function CatalogList() {
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
                   Team
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
+                  Organization
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
+                  Visibility
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
                   Author
@@ -279,6 +365,12 @@ export default function CatalogList() {
                     {item.teamTag && (
                       <TeamTagBadge tag={item.teamTag} size="sm" />
                     )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <OrgBadge orgName={item.orgId ? (orgMap.get(item.orgId) || item.orgId) : null} size="sm" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <VisibilityBadge visibility={item.visibility ?? null} size="sm" />
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-[var(--text-muted)]">
