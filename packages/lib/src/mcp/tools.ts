@@ -369,13 +369,25 @@ const ALL_TOOLS: McpTool[] = [
           items: {
             type: 'object',
             properties: {
-              name: { type: 'string' },
-              content: { type: 'string' },
-              type: { type: 'string' },
+              name: {
+                type: 'string',
+                description: '파일 경로 (예: scripts/run.mjs, templates/config.json)',
+              },
+              content: { type: 'string', description: '파일 내용' },
+              type: {
+                type: 'string',
+                enum: ['script', 'reference', 'template', 'config'],
+                description: `파일 타입:
+- script: 실행 스크립트 (node/bash로 실행)
+- reference: 참조 문서 (컨텍스트로 활용)
+- template: 템플릿 (프로젝트에 복사)
+- config: 설정 파일 (설정에 추가)
+미지정 시 파일명에서 자동 추론`,
+              },
             },
             required: ['name', 'content'],
           },
-          description: '추가 파일들',
+          description: '추가 파일들 (스크립트, 템플릿, 참조 문서 등)',
         },
       },
       required: ['type', 'name', 'content'],
