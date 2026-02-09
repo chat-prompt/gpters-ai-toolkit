@@ -355,6 +355,20 @@ const ALL_TOOLS: McpTool[] = [
           type: 'string',
           description: '허용된 도구 (스킬용, 쉼표 구분)',
         },
+        agentModel: {
+          type: 'string',
+          enum: ['sonnet', 'opus', 'haiku', 'inherit'],
+          description: '에이전트 모델 (기본: inherit)',
+        },
+        agentPermissionMode: {
+          type: 'string',
+          enum: ['default', 'acceptEdits', 'bypassPermissions', 'plan', 'ignore'],
+          description: '에이전트 권한 모드 (기본: default)',
+        },
+        agentSkills: {
+          type: 'string',
+          description: '에이전트에 로드할 스킬 목록 (쉼표 구분, 예: "git-master,code-reviewer")',
+        },
         status: {
           type: 'string',
           enum: ['draft', 'published'],

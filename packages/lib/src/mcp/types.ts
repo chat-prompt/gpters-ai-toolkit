@@ -66,9 +66,10 @@ export interface DeploySkillInput {
   description?: string
   tags?: string[]
   teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
-  allowedTools?: string          // For skills
-  agentModel?: string            // For agents
-  agentPermissionMode?: string   // For agents
+  allowedTools?: string
+  agentModel?: string
+  agentPermissionMode?: string
+  agentSkills?: string
   status?: 'draft' | 'published'
   changelog?: string             // What changed in this version
   files?: PluginFile[]
