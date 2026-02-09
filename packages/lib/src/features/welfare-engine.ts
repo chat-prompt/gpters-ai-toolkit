@@ -417,6 +417,65 @@ export async function generateWeeklyReport(weekStart: Date): Promise<string> {
 }
 
 /**
+ * Weekly stats entry for multi-week trend
+ */
+export interface WeeklyStats {
+  weekStart: string
+  weekEnd: string
+  weekLabel: string
+  newSkills: number
+  newUpdates: number
+  views: number
+  searches: number
+  successRate: number
+}
+
+/**
+ * Get statistics for multiple weeks
+ *
+ * @param numWeeks - Number of weeks to retrieve (default: 8)
+ * @returns Array of weekly statistics, most recent first
+ */
+export async function getMultiWeekStats(numWeeks = 8): Promise<WeeklyStats[]> {
+  try {
+    const results: WeeklyStats[] = []
+    const now = new Date()
+    
+    for (let i = 0; i < numWeeks; i++) {
+      const weekEnd = new Date(now)
+      weekEnd.setDate(weekEnd.getDate() - (i * 7))
+      const dayOfWeek = weekEnd.getDay()
+      weekEnd.setDate(weekEnd.getDate() - dayOfWeek + (dayOfWeek === 0 ? 0 : 7))
+      weekEnd.setHours(23, 59, 59, 999)
+      
+      const weekStart = new Date(weekEnd)
+      weekStart.setDate(weekStart.getDate() - 6)
+      weekStart.setHours(0, 0, 0, 0)
+      
+      const stats = await getWelfareEngineStats(weekStart, weekEnd)
+      
+      const formatDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`
+      
+      results.push({
+        weekStart: weekStart.toISOString(),
+        weekEnd: weekEnd.toISOString(),
+        weekLabel: `${formatDate(weekStart)} - ${formatDate(weekEnd)}`,
+        newSkills: stats.accumulation.newSkills,
+        newUpdates: stats.accumulation.newUpdates,
+        views: stats.utilization.totalViews,
+        searches: stats.utilization.totalSearches,
+        successRate: stats.quality.successRate,
+      })
+    }
+    
+    return results
+  } catch (error) {
+    log.error('Failed to get multi-week stats', error)
+    throw error
+  }
+}
+
+/**
  * Get weekly comparison data
  *
  * @param weekStart - Start date of the current week

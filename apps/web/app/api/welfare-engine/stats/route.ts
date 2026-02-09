@@ -7,6 +7,7 @@ import {
   getSkillViewRanking,
   generateWeeklyReport,
   getWeeklyComparison,
+  getMultiWeekStats,
 } from '@/lib/features/welfare-engine'
 
 const log = createLogger('api:welfare-engine:stats')
@@ -64,6 +65,14 @@ export async function GET(request: NextRequest) {
     const customStart = searchParams.get('startDate') || undefined
     const customEnd = searchParams.get('endDate') || undefined
     const weeklyReport = searchParams.get('weeklyReport') === 'true'
+
+    const weeklyTrend = searchParams.get('weeklyTrend') === 'true'
+    const numWeeks = parseInt(searchParams.get('numWeeks') || '8', 10)
+
+    if (weeklyTrend) {
+      const weeks = await getMultiWeekStats(Math.min(numWeeks, 12))
+      return NextResponse.json({ weeks })
+    }
 
     if (weeklyReport) {
       const weekStartParam = searchParams.get('weekStart')

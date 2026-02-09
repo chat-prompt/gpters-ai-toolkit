@@ -60,12 +60,24 @@ type _WeeklyReportResponse = {
   }
 }
 
+interface WeeklyTrendData {
+  weekStart: string
+  weekEnd: string
+  weekLabel: string
+  newSkills: number
+  newUpdates: number
+  views: number
+  searches: number
+  successRate: number
+}
+
 type Period = '7d' | '30d' | '90d'
 
 export function WelfareEngineDashboard() {
   const [period, setPeriod] = useState<Period>('30d')
   const [data, setData] = useState<StatsResponse | null>(null)
   const [weeklyReport, setWeeklyReport] = useState<string | null>(null)
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -96,10 +108,22 @@ export function WelfareEngineDashboard() {
     }
   }, [])
 
+  const fetchWeeklyTrend = useCallback(async () => {
+    try {
+      const response = await fetch('/api/welfare-engine/stats?weeklyTrend=true&numWeeks=8')
+      if (!response.ok) throw new Error('Failed to fetch weekly trend')
+      const result = await response.json()
+      setWeeklyTrend(result.weeks || [])
+    } catch (err) {
+      console.error('Failed to fetch weekly trend:', err)
+    }
+  }, [])
+
   useEffect(() => {
     fetchStats()
     fetchWeeklyReport()
-  }, [fetchStats, fetchWeeklyReport])
+    fetchWeeklyTrend()
+  }, [fetchStats, fetchWeeklyReport, fetchWeeklyTrend])
 
   const copyReport = useCallback(() => {
     if (weeklyReport) {
@@ -297,6 +321,58 @@ export function WelfareEngineDashboard() {
           </div>
         </div>
       </div>
+
+      {weeklyTrend.length > 0 && (
+        <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
+            📈 주간별 트렌드
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border-subtle)]">
+                  <th className="text-left py-3 px-2 text-[var(--text-muted)] font-medium">주차</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">신규 스킬</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">업데이트</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">조회수</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">검색</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">성공률</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weeklyTrend.map((week, idx) => (
+                  <tr 
+                    key={week.weekStart} 
+                    className={`border-b border-[var(--border-subtle)] last:border-0 ${idx === 0 ? 'bg-[#F26522]/5' : ''}`}
+                  >
+                    <td className="py-3 px-2 text-[var(--text-primary)]">
+                      {idx === 0 && <span className="text-[#F26522] mr-1">●</span>}
+                      {week.weekLabel}
+                    </td>
+                    <td className="text-right py-3 px-2 text-[var(--text-primary)] font-medium">
+                      {week.newSkills > 0 ? `+${week.newSkills}` : week.newSkills}
+                    </td>
+                    <td className="text-right py-3 px-2 text-[var(--text-secondary)]">
+                      {week.newUpdates}
+                    </td>
+                    <td className="text-right py-3 px-2 text-[var(--text-secondary)]">
+                      {week.views.toLocaleString()}
+                    </td>
+                    <td className="text-right py-3 px-2 text-[var(--text-secondary)]">
+                      {week.searches.toLocaleString()}
+                    </td>
+                    <td className="text-right py-3 px-2">
+                      <span className={week.successRate >= 95 ? 'text-[#10B981]' : week.successRate >= 90 ? 'text-[#F59E0B]' : 'text-[#EF4444]'}>
+                        {week.successRate.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {weeklyReport && (
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
