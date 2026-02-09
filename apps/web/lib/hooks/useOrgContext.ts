@@ -44,7 +44,9 @@ export function useOrgContext(): OrgContext {
 
   const switchOrg = useCallback(
     async (orgId: string) => {
-      if (!session?.user?.orgIds?.includes(orgId)) {
+      // If session has orgIds, validate membership; otherwise allow the switch
+      // and let the server-side middleware validate on next request
+      if (session?.user?.orgIds && session.user.orgIds.length > 0 && !session.user.orgIds.includes(orgId)) {
         console.error('Cannot switch to org: user is not a member')
         return
       }

@@ -72,12 +72,14 @@ export function OrgSwitcher() {
     }
   }, [isOpen])
 
-  if (!orgIds || orgIds.length === 0) {
+  const effectiveOrgIds = orgIds && orgIds.length > 0 ? orgIds : organizations.map(org => org.id)
+
+  if (effectiveOrgIds.length === 0 && !isLoadingOrgs) {
     return null
   }
 
   const currentOrg = organizations.find(org => org.id === currentOrgId)
-  const hasMultipleOrgs = orgIds.length > 1
+  const hasMultipleOrgs = effectiveOrgIds.length > 1
   const isDisabled = !hasMultipleOrgs || isLoadingOrgs || isSwitching
 
   const handleOrgSwitch = async (orgId: string) => {
