@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
         name: i.name,
         type: i.type,
         status: i.status,
-        authorName: i.authorName || 'Unknown',
+        author: i.authorName || 'Unknown',
         updatedAt: i.updatedAt,
       }))
 
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
         name: i.name,
         type: i.type,
         likes: i.likes || 0,
-        authorName: i.authorName || 'Unknown',
+        author: i.authorName || 'Unknown',
       }))
 
     // Get draft items for quick publish
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         id: i.id,
         name: i.name,
         type: i.type,
-        authorName: i.authorName || 'Unknown',
+        author: i.authorName || 'Unknown',
         updatedAt: i.updatedAt,
       }))
 
