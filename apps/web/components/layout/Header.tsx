@@ -88,7 +88,7 @@ export function Header({ user }: HeaderProps) {
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                시작하기
+                Tutorial
               </Link>
               <Link
                 href="/"
