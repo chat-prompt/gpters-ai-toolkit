@@ -15,6 +15,13 @@ import {
   Permissions,
   ROLE_LABELS,
   type UserRole,
+  hasOrgPermission,
+  hasOrgRoleOrHigher,
+  isValidOrgRole,
+  getAllOrgRoles,
+  ORG_ROLE_LABELS,
+  isSuperAdmin,
+  type OrgRole,
 } from '@/lib/security/rbac'
 
 // Mock auth module for server-side function tests
@@ -577,6 +584,294 @@ describe('Server-side RBAC Functions', () => {
 
       expect(result).not.toBeNull()
       expect(result?.type).toBe('forbidden')
+    })
+  })
+
+  describe('requireSuperAdmin', () => {
+    it('should return unauthorized error when user is not authenticated', async () => {
+      mockAuth.mockResolvedValue(null)
+
+      const { requireSuperAdmin } = await import('@/lib/security/rbac')
+      const result = await requireSuperAdmin()
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('unauthorized')
+      expect(result?.status).toBe(401)
+    })
+
+    it('should return forbidden error when user is not super_admin', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'admin' } })
+
+      const { requireSuperAdmin } = await import('@/lib/security/rbac')
+      const result = await requireSuperAdmin()
+
+      expect(result).not.toBeNull()
+      expect(result?.type).toBe('forbidden')
+    })
+
+    it('should return null when user is super_admin', async () => {
+      mockAuth.mockResolvedValue({ user: { role: 'super_admin' } })
+
+      const { requireSuperAdmin } = await import('@/lib/security/rbac')
+      const result = await requireSuperAdmin()
+
+      expect(result).toBeNull()
+    })
+  })
+})
+
+// New tests for super_admin and organization roles
+describe('Super Admin Role', () => {
+  describe('super_admin permissions', () => {
+    it('has all admin permissions', () => {
+      const superAdminPerms = getPermissionsForRole('super_admin')
+      const adminPerms = getPermissionsForRole('admin')
+      
+      adminPerms.forEach(perm => {
+        expect(superAdminPerms).toContain(perm)
+      })
+    })
+
+    it('has organization management permissions', () => {
+      expect(hasPermission('super_admin', Permissions.ORGS_VIEW)).toBe(true)
+      expect(hasPermission('super_admin', Permissions.ORGS_MANAGE)).toBe(true)
+      expect(hasPermission('super_admin', Permissions.ORGS_CREATE)).toBe(true)
+      expect(hasPermission('super_admin', Permissions.SUPER_ADMIN_ACCESS)).toBe(true)
+    })
+
+    it('admin does not have super admin permissions', () => {
+      expect(hasPermission('admin', Permissions.ORGS_VIEW)).toBe(false)
+      expect(hasPermission('admin', Permissions.ORGS_MANAGE)).toBe(false)
+      expect(hasPermission('admin', Permissions.ORGS_CREATE)).toBe(false)
+      expect(hasPermission('admin', Permissions.SUPER_ADMIN_ACCESS)).toBe(false)
+    })
+  })
+
+  describe('super_admin hierarchy', () => {
+    it('super_admin is higher than admin', () => {
+      expect(hasRoleOrHigher('super_admin', 'admin')).toBe(true)
+    })
+
+    it('super_admin is higher than editor', () => {
+      expect(hasRoleOrHigher('super_admin', 'editor')).toBe(true)
+    })
+
+    it('super_admin is higher than viewer', () => {
+      expect(hasRoleOrHigher('super_admin', 'viewer')).toBe(true)
+    })
+
+    it('admin is not higher than super_admin', () => {
+      expect(hasRoleOrHigher('admin', 'super_admin')).toBe(false)
+    })
+  })
+
+  describe('isSuperAdmin helper', () => {
+    it('returns true for super_admin role', () => {
+      expect(isSuperAdmin('super_admin')).toBe(true)
+    })
+
+    it('returns false for admin role', () => {
+      expect(isSuperAdmin('admin')).toBe(false)
+    })
+
+    it('returns false for editor role', () => {
+      expect(isSuperAdmin('editor')).toBe(false)
+    })
+
+    it('returns false for viewer role', () => {
+      expect(isSuperAdmin('viewer')).toBe(false)
+    })
+
+    it('returns false for undefined', () => {
+      expect(isSuperAdmin(undefined)).toBe(false)
+    })
+
+    it('returns false for null', () => {
+      expect(isSuperAdmin(null)).toBe(false)
+    })
+  })
+
+  describe('getAllRoles with super_admin', () => {
+    it('returns all four roles including super_admin', () => {
+      const roles = getAllRoles()
+      expect(roles).toHaveLength(4)
+      expect(roles).toContain('super_admin')
+      expect(roles).toContain('admin')
+      expect(roles).toContain('editor')
+      expect(roles).toContain('viewer')
+    })
+
+    it('returns roles in hierarchy order', () => {
+      const roles = getAllRoles()
+      expect(roles[0]).toBe('viewer')
+      expect(roles[1]).toBe('editor')
+      expect(roles[2]).toBe('admin')
+      expect(roles[3]).toBe('super_admin')
+    })
+  })
+
+  describe('isValidRole with super_admin', () => {
+    it('returns true for super_admin', () => {
+      expect(isValidRole('super_admin')).toBe(true)
+    })
+  })
+
+  describe('ROLE_LABELS with super_admin', () => {
+    it('has label for super_admin', () => {
+      expect(ROLE_LABELS.super_admin).toBeDefined()
+      expect(ROLE_LABELS.super_admin.label).toBe('Super Admin')
+      expect(ROLE_LABELS.super_admin.description).toBeDefined()
+      expect(ROLE_LABELS.super_admin.color).toBeDefined()
+    })
+  })
+})
+
+describe('Organization Role System', () => {
+  describe('hasOrgPermission', () => {
+    it('returns true when org_admin has CATALOG_DELETE permission', () => {
+      expect(hasOrgPermission('org_admin', Permissions.CATALOG_DELETE)).toBe(true)
+    })
+
+    it('returns false when org_editor has CATALOG_DELETE permission', () => {
+      expect(hasOrgPermission('org_editor', Permissions.CATALOG_DELETE)).toBe(false)
+    })
+
+    it('returns true when org_editor has CATALOG_CREATE permission', () => {
+      expect(hasOrgPermission('org_editor', Permissions.CATALOG_CREATE)).toBe(true)
+    })
+
+    it('returns true when org_viewer has CATALOG_VIEW permission', () => {
+      expect(hasOrgPermission('org_viewer', Permissions.CATALOG_VIEW)).toBe(true)
+    })
+
+    it('returns false when org_viewer has CATALOG_CREATE permission', () => {
+      expect(hasOrgPermission('org_viewer', Permissions.CATALOG_CREATE)).toBe(false)
+    })
+
+    it('returns false for undefined role', () => {
+      expect(hasOrgPermission(undefined, Permissions.CATALOG_VIEW)).toBe(false)
+    })
+
+    it('returns false for null role', () => {
+      expect(hasOrgPermission(null, Permissions.CATALOG_VIEW)).toBe(false)
+    })
+  })
+
+  describe('hasOrgRoleOrHigher', () => {
+    it('org_admin is higher than org_viewer', () => {
+      expect(hasOrgRoleOrHigher('org_admin', 'org_viewer')).toBe(true)
+    })
+
+    it('org_admin is higher than org_editor', () => {
+      expect(hasOrgRoleOrHigher('org_admin', 'org_editor')).toBe(true)
+    })
+
+    it('org_admin equals org_admin', () => {
+      expect(hasOrgRoleOrHigher('org_admin', 'org_admin')).toBe(true)
+    })
+
+    it('org_editor is higher than org_viewer', () => {
+      expect(hasOrgRoleOrHigher('org_editor', 'org_viewer')).toBe(true)
+    })
+
+    it('org_editor is not higher than org_admin', () => {
+      expect(hasOrgRoleOrHigher('org_editor', 'org_admin')).toBe(false)
+    })
+
+    it('org_viewer is not higher than org_editor', () => {
+      expect(hasOrgRoleOrHigher('org_viewer', 'org_editor')).toBe(false)
+    })
+
+    it('org_viewer equals org_viewer', () => {
+      expect(hasOrgRoleOrHigher('org_viewer', 'org_viewer')).toBe(true)
+    })
+
+    it('returns false for undefined role', () => {
+      expect(hasOrgRoleOrHigher(undefined, 'org_viewer')).toBe(false)
+    })
+
+    it('returns false for null role', () => {
+      expect(hasOrgRoleOrHigher(null, 'org_viewer')).toBe(false)
+    })
+  })
+
+  describe('isValidOrgRole', () => {
+    it('returns true for valid org roles', () => {
+      expect(isValidOrgRole('org_admin')).toBe(true)
+      expect(isValidOrgRole('org_editor')).toBe(true)
+      expect(isValidOrgRole('org_viewer')).toBe(true)
+    })
+
+    it('returns false for invalid org roles', () => {
+      expect(isValidOrgRole('admin')).toBe(false)
+      expect(isValidOrgRole('org_superadmin')).toBe(false)
+      expect(isValidOrgRole('')).toBe(false)
+      expect(isValidOrgRole(null)).toBe(false)
+      expect(isValidOrgRole(undefined)).toBe(false)
+      expect(isValidOrgRole(123)).toBe(false)
+    })
+  })
+
+  describe('getAllOrgRoles', () => {
+    it('returns all three org roles', () => {
+      const roles = getAllOrgRoles()
+      expect(roles).toHaveLength(3)
+      expect(roles).toContain('org_admin')
+      expect(roles).toContain('org_editor')
+      expect(roles).toContain('org_viewer')
+    })
+
+    it('returns roles in hierarchy order (lowest to highest)', () => {
+      const roles = getAllOrgRoles()
+      expect(roles[0]).toBe('org_viewer')
+      expect(roles[1]).toBe('org_editor')
+      expect(roles[2]).toBe('org_admin')
+    })
+  })
+
+  describe('ORG_ROLE_LABELS', () => {
+    it('has labels for all org roles', () => {
+      expect(ORG_ROLE_LABELS.org_admin).toBeDefined()
+      expect(ORG_ROLE_LABELS.org_editor).toBeDefined()
+      expect(ORG_ROLE_LABELS.org_viewer).toBeDefined()
+    })
+
+    it('each org role has label, description, and color', () => {
+      const roles: OrgRole[] = ['org_admin', 'org_editor', 'org_viewer']
+      roles.forEach(role => {
+        expect(ORG_ROLE_LABELS[role].label).toBeDefined()
+        expect(ORG_ROLE_LABELS[role].description).toBeDefined()
+        expect(ORG_ROLE_LABELS[role].color).toBeDefined()
+      })
+    })
+  })
+
+  describe('Org permission matrix', () => {
+    it('org_viewer has only view permissions', () => {
+      expect(hasOrgPermission('org_viewer', Permissions.CATALOG_VIEW)).toBe(true)
+      expect(hasOrgPermission('org_viewer', Permissions.METADATA_VIEW)).toBe(true)
+      expect(hasOrgPermission('org_viewer', Permissions.CATALOG_CREATE)).toBe(false)
+      expect(hasOrgPermission('org_viewer', Permissions.CATALOG_EDIT)).toBe(false)
+      expect(hasOrgPermission('org_viewer', Permissions.CATALOG_DELETE)).toBe(false)
+    })
+
+    it('org_editor can create and edit but not delete', () => {
+      expect(hasOrgPermission('org_editor', Permissions.CATALOG_VIEW)).toBe(true)
+      expect(hasOrgPermission('org_editor', Permissions.CATALOG_CREATE)).toBe(true)
+      expect(hasOrgPermission('org_editor', Permissions.CATALOG_EDIT)).toBe(true)
+      expect(hasOrgPermission('org_editor', Permissions.METADATA_MANAGE)).toBe(true)
+      expect(hasOrgPermission('org_editor', Permissions.CATALOG_DELETE)).toBe(false)
+      expect(hasOrgPermission('org_editor', Permissions.USERS_MANAGE)).toBe(false)
+    })
+
+    it('org_admin has full org permissions', () => {
+      expect(hasOrgPermission('org_admin', Permissions.CATALOG_VIEW)).toBe(true)
+      expect(hasOrgPermission('org_admin', Permissions.CATALOG_CREATE)).toBe(true)
+      expect(hasOrgPermission('org_admin', Permissions.CATALOG_EDIT)).toBe(true)
+      expect(hasOrgPermission('org_admin', Permissions.CATALOG_DELETE)).toBe(true)
+      expect(hasOrgPermission('org_admin', Permissions.USERS_VIEW)).toBe(true)
+      expect(hasOrgPermission('org_admin', Permissions.USERS_MANAGE)).toBe(true)
+      expect(hasOrgPermission('org_admin', Permissions.METADATA_MANAGE)).toBe(true)
     })
   })
 })
