@@ -98,11 +98,11 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
-  // Nav items
   const navItems = [
     { href: '/admin', label: 'Dashboard', exact: true },
     { href: '/admin/catalog', label: 'Catalog' },
     { href: '/admin/users', label: 'Users' },
+    { href: '/admin/organizations', label: 'Organizations' },
   ]
 
   return (
