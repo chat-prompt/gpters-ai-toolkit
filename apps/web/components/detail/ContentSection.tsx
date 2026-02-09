@@ -22,6 +22,17 @@ interface ContentSectionProps {
 }
 
 /**
+ * Remove YAML frontmatter from markdown content
+ *
+ * @param content - Raw markdown content possibly containing frontmatter
+ * @returns Content with frontmatter removed
+ */
+function removeFrontmatter(content: string): string {
+  const frontmatterRegex = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/
+  return content.replace(frontmatterRegex, '').trim()
+}
+
+/**
  * Styled section with markdown content and copy functionality
  *
  * @example
@@ -40,6 +51,8 @@ export function ContentSection({
   content,
   showCopy = true,
 }: ContentSectionProps) {
+  const cleanContent = removeFrontmatter(content)
+
   return (
     <div className="glass rounded-2xl p-8 mb-8">
       <div className="flex items-center justify-between mb-6">
@@ -47,11 +60,11 @@ export function ContentSection({
           <span className="text-xl">{icon}</span>
           <h2 className="text-lg font-medium text-[var(--text-primary)]">{title}</h2>
         </div>
-        {showCopy && <CopyButton text={content} />}
+        {showCopy && <CopyButton text={cleanContent} />}
       </div>
 
       <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
-        <MarkdownContent content={content} />
+        <MarkdownContent content={cleanContent} />
       </div>
     </div>
   )
