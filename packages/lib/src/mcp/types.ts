@@ -152,6 +152,10 @@ export interface PluginContent {
   changelog?: string
   // Resolved agent dependencies (when applicable)
   resolvedAgents?: ResolvedAgent[]
+  // Usage hint for Claude when resolvedAgents are present
+  agentUsageHint?: string
+  // Usage hint for Claude when files are present
+  filesUsageHint?: string
 }
 
 /**

@@ -61,6 +61,83 @@ async function updateItemEmbedding(id: string, item: { name: string; description
   }
 }
 
+type PluginFileWithType = { name: string; content: string; type?: string }
+
+function normalizeFileType(type: string): string {
+  const scriptTypes = ['javascript', 'typescript', 'bash', 'shell', 'python', 'ruby']
+  if (scriptTypes.includes(type.toLowerCase())) return 'script'
+  return type
+}
+
+function inferFileType(file: PluginFileWithType): string {
+  if (file.type) return normalizeFileType(file.type)
+  
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const name = file.name.toLowerCase()
+  
+  if (['js', 'mjs', 'ts', 'sh', 'bash', 'py', 'rb'].includes(ext)) return 'script'
+  if (name.includes('template') || name.includes('example')) return 'template'
+  if (['json', 'yaml', 'yml', 'toml', 'ini', 'env'].includes(ext)) return 'config'
+  if (name.startsWith('references/') || name.includes('guide') || name.includes('rule')) return 'reference'
+  if (['md', 'txt', 'rst'].includes(ext)) return 'reference'
+  
+  return 'reference'
+}
+
+function generateFilesUsageHint(files: PluginFileWithType[]): string {
+  const grouped: Record<string, PluginFileWithType[]> = {
+    script: [],
+    template: [],
+    config: [],
+    reference: [],
+  }
+  
+  for (const file of files) {
+    const type = inferFileType(file)
+    if (grouped[type]) {
+      grouped[type].push(file)
+    } else {
+      grouped.reference.push(file)
+    }
+  }
+  
+  const hints: string[] = [`이 스킬에는 ${files.length}개의 파일이 포함되어 있습니다.\n`]
+  
+  if (grouped.script.length > 0) {
+    hints.push(`🔧 **실행 스크립트** (node/bash로 실행)`)
+    for (const f of grouped.script) {
+      hints.push(`- \`${f.name}\``)
+    }
+    hints.push('')
+  }
+  
+  if (grouped.template.length > 0) {
+    hints.push(`📋 **템플릿** (프로젝트에 복사)`)
+    for (const f of grouped.template) {
+      hints.push(`- \`${f.name}\``)
+    }
+    hints.push('')
+  }
+  
+  if (grouped.config.length > 0) {
+    hints.push(`⚙️ **설정 파일** (프로젝트 설정에 추가)`)
+    for (const f of grouped.config) {
+      hints.push(`- \`${f.name}\``)
+    }
+    hints.push('')
+  }
+  
+  if (grouped.reference.length > 0) {
+    hints.push(`📚 **참조 문서** (컨텍스트로 활용)`)
+    for (const f of grouped.reference) {
+      hints.push(`- \`${f.name}\``)
+    }
+    hints.push('')
+  }
+  
+  return hints.join('\n').trim()
+}
+
 /**
  * Search plugins by keyword
  * Searches across name, description, and tags
@@ -204,6 +281,18 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
     changelog: item.changelog || undefined,
     // Resolved agent dependencies
     resolvedAgents: resolvedAgents && resolvedAgents.length > 0 ? resolvedAgents : undefined,
+    agentUsageHint: resolvedAgents && resolvedAgents.length > 0
+      ? `이 스킬에는 ${resolvedAgents.length}개의 서브에이전트가 포함되어 있습니다.\n` +
+        `서브에이전트 실행: Task(OpenCode: delegate_task)로 prompt를 전달하세요.\n\n` +
+        resolvedAgents.map(a => 
+          `## ${a.id} (model: ${a.model})\n` +
+          `${a.description}\n\n` +
+          `**Prompt:**\n\`\`\`\n${a.prompt}\n\`\`\``
+        ).join('\n\n---\n\n')
+      : undefined,
+    filesUsageHint: item.files && item.files.length > 0
+      ? generateFilesUsageHint(item.files)
+      : undefined,
   }
 }
 
@@ -458,6 +547,7 @@ export async function deploySkill(
     status = 'published',
     changelog: explicitChangelog,
     files,
+    dependencies,
   } = input
 
   // Generate ID from name if not provided
@@ -534,6 +624,7 @@ export async function deploySkill(
         version: versionInfo.version,
         changelog: versionInfo.changelog,
         files: files || null,
+        dependencies: dependencies || [],
         mcpEnabled: status === 'published',
         updatedAt: now,
       })
@@ -577,7 +668,7 @@ export async function deploySkill(
       files: files || null,
       mcpEnabled: status === 'published',
       likes: 0,
-      dependencies: [],
+      dependencies: dependencies || [],
       authorId: authorId || null,
       createdAt: now,
       updatedAt: now,

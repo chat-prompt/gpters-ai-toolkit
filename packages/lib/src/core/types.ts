@@ -8,11 +8,19 @@
 /** Available catalog item types */
 export type ItemType = 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
 
-// Plugin file (script, reference, etc.)
+/**
+ * Standard file types for plugin files
+ * - script: Executable scripts (js, ts, sh, py) - run with node/bash/python
+ * - reference: Reference documents/guides - read for context
+ * - template: Templates to copy into project - copy to destination
+ * - config: Configuration files - add to project settings
+ */
+export type FileType = 'script' | 'reference' | 'template' | 'config'
+
 export interface PluginFile {
-  name: string      // e.g., "reference.md", "setup.sh"
-  content: string   // File content
-  type?: string     // Optional MIME type hint (e.g., "markdown", "bash")
+  name: string
+  content: string
+  type?: FileType | string
 }
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
