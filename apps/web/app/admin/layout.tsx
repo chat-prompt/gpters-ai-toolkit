@@ -17,6 +17,7 @@ import type { UserRole } from '@/lib/security/rbac'
 // Role badge component
 function RoleBadge({ role }: { role: UserRole }) {
   const colors: Record<UserRole, string> = {
+    super_admin: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
     admin: 'bg-red-500/20 text-red-400 border-red-500/30',
     editor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     viewer: 'bg-gray-500/20 text-gray-400 border-gray-500/30',

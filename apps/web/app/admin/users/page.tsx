@@ -23,6 +23,10 @@ interface User {
 }
 
 const ROLE_LABELS: Record<UserRole, { label: string; color: string }> = {
+  super_admin: {
+    label: 'Super Admin',
+    color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  },
   admin: {
     label: 'Admin',
     color: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -37,7 +41,7 @@ const ROLE_LABELS: Record<UserRole, { label: string; color: string }> = {
   },
 }
 
-const ROLE_OPTIONS: UserRole[] = ['admin', 'editor', 'viewer']
+const ROLE_OPTIONS: UserRole[] = ['super_admin', 'admin', 'editor', 'viewer']
 
 export default function UsersPage() {
   const { data: session } = useSession()
