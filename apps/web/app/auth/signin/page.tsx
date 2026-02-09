@@ -29,7 +29,7 @@ export default async function SignInPage({
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--bg-secondary)] mb-4">
             <Image
               src="/gpters-logo.svg"
-              alt="GPTers"
+              alt="AI Toolkit"
               width={40}
               height={40}
               className="rounded-lg"
@@ -47,7 +47,7 @@ export default async function SignInPage({
               로그인
             </h2>
             <p className="text-sm text-[var(--text-muted)]">
-              GPTers 팀 계정으로 계속하기
+              조직 계정으로 계속하기
             </p>
           </div>
 
@@ -86,7 +86,7 @@ export default async function SignInPage({
 
         {/* Footer */}
         <p className="text-center text-xs text-[var(--text-muted)] mt-6">
-          @gpters.org 이메일만 허용됩니다
+          등록된 조직 도메인 이메일만 허용됩니다
         </p>
       </div>
     </div>

@@ -68,15 +68,15 @@ Make every user-facing page org-aware: users should clearly see which org owns e
 - Fixed search endpoint with org-based filtering
 
 ### Definition of Done
-- [ ] `pnpm build` succeeds with zero TypeScript errors
-- [ ] Non-super-admin cannot see private items from other orgs in catalog
-- [ ] Non-super-admin cannot search for private items from other orgs
-- [ ] ItemCard displays org badge with org name
-- [ ] Detail pages show org name and visibility badge
-- [ ] Fork button appears on accessible cross-org items
-- [ ] Admin create form has org selector + visibility selector
-- [ ] Profile shows org memberships with roles
-- [ ] Admin dashboard stats are filtered by current org
+- [x] `pnpm build` succeeds with zero TypeScript errors
+- [x] Non-super-admin cannot see private items from other orgs in catalog
+- [x] Non-super-admin cannot search for private items from other orgs
+- [x] ItemCard displays org badge with org name
+- [x] Detail pages show org name and visibility badge
+- [x] Fork button appears on accessible cross-org items
+- [x] Admin create form has org selector + visibility selector
+- [x] Profile shows org memberships with roles
+- [x] Admin dashboard stats are filtered by current org
 
 ### Must Have
 - Catalog filters out inaccessible items
@@ -160,7 +160,7 @@ Wave 3 (After Wave 2):
 
 ## TODOs
 
-- [ ] 1. Fix search endpoint org-based filtering (SECURITY)
+- [x] 1. Fix search endpoint org-based filtering (SECURITY)
 
   **What to do**:
   - Audit `apps/web/app/api/catalog/search/route.ts` (or similar search endpoint)
@@ -202,9 +202,9 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] Search endpoint returns ONLY accessible items for non-super-admin users
-  - [ ] Super admin search returns all items
-  - [ ] Legacy items (orgId=null) appear in search results for all users
+  - [x] Search endpoint returns ONLY accessible items for non-super-admin users
+  - [x] Super admin search returns all items
+  - [x] Legacy items (orgId=null) appear in search results for all users
 
   **Agent-Executed QA Scenarios:**
 
@@ -228,7 +228,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 2. Create OrgBadge and VisibilityBadge reusable components
+- [x] 2. Create OrgBadge and VisibilityBadge reusable components
 
   **What to do**:
   - Create `apps/web/components/ui/OrgBadge.tsx`:
@@ -283,11 +283,11 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] `OrgBadge` renders org name with icon for valid orgName
-  - [ ] `OrgBadge` renders "Legacy" in gray for null orgName
-  - [ ] `VisibilityBadge` renders correct icon and color for each visibility type
-  - [ ] Both components match existing badge styling pattern exactly
-  - [ ] `pnpm build` succeeds
+  - [x] `OrgBadge` renders org name with icon for valid orgName
+  - [x] `OrgBadge` renders "Legacy" in gray for null orgName
+  - [x] `VisibilityBadge` renders correct icon and color for each visibility type
+  - [x] Both components match existing badge styling pattern exactly
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -310,7 +310,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 3. Update catalog page — org filtering context and ItemCard badges
+- [x] 3. Update catalog page — org filtering context and ItemCard badges
 
   **What to do**:
   - **ItemCard** (`apps/web/components/catalog/SearchableCatalog/ItemCard.tsx`):
@@ -370,12 +370,12 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] ItemCard displays OrgBadge with organization name
-  - [ ] ItemCard displays VisibilityBadge for public/shared items
-  - [ ] Catalog page shows context text ("Showing items from [Org]")
-  - [ ] Stats section reflects items from current view (not global totals)
-  - [ ] Legacy items (orgId=null) show "Legacy" badge
-  - [ ] `pnpm build` succeeds
+  - [x] ItemCard displays OrgBadge with organization name
+  - [x] ItemCard displays VisibilityBadge for public/shared items
+  - [x] Catalog page shows context text ("Showing items from [Org]")
+  - [x] Stats section reflects items from current view (not global totals)
+  - [x] Legacy items (orgId=null) show "Legacy" badge
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -400,7 +400,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 4. Update admin catalog table — org column and filter
+- [x] 4. Update admin catalog table — org column and filter
 
   **What to do**:
   - **Admin catalog page** (`apps/web/app/admin/catalog/page.tsx`):
@@ -443,11 +443,11 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] Admin catalog table has "Organization" column showing org name
-  - [ ] Admin catalog table has "Visibility" column
-  - [ ] Super_admin can filter by organization via dropdown
-  - [ ] Non-super-admin sees only current org's items
-  - [ ] `pnpm build` succeeds
+  - [x] Admin catalog table has "Organization" column showing org name
+  - [x] Admin catalog table has "Visibility" column
+  - [x] Super_admin can filter by organization via dropdown
+  - [x] Non-super-admin sees only current org's items
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -472,7 +472,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 5. Update admin catalog create/edit forms — org and visibility selectors
+- [x] 5. Update admin catalog create/edit forms — org and visibility selectors
 
   **What to do**:
   - **Create form** (`apps/web/app/admin/catalog/new/page.tsx`):
@@ -523,12 +523,12 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] Create form has "Organization" dropdown
-  - [ ] Create form has "Visibility" selector (private/shared/public)
-  - [ ] Super_admin can select any org; others see only current org
-  - [ ] Submitting form creates item with correct orgId and visibility
-  - [ ] Edit form pre-fills org and visibility from existing item
-  - [ ] `pnpm build` succeeds
+  - [x] Create form has "Organization" dropdown
+  - [x] Create form has "Visibility" selector (private/shared/public)
+  - [x] Super_admin can select any org; others see only current org
+  - [x] Submitting form creates item with correct orgId and visibility
+  - [x] Edit form pre-fills org and visibility from existing item
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -555,7 +555,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 6. Update detail pages — org info and ForkButton
+- [x] 6. Update detail pages — org info and ForkButton
 
   **What to do**:
   - **ItemHero** (`apps/web/components/detail/ItemHero.tsx`):
@@ -611,13 +611,13 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] Detail pages show OrgBadge with org name
-  - [ ] Detail pages show VisibilityBadge
-  - [ ] ForkButton appears on items from other orgs
-  - [ ] ForkButton does NOT appear on own org items
-  - [ ] Clicking Fork creates copy in current org and shows success toast
-  - [ ] All 5 detail page types (skill, agent, command, guide, hook) updated
-  - [ ] `pnpm build` succeeds
+  - [x] Detail pages show OrgBadge with org name
+  - [x] Detail pages show VisibilityBadge
+  - [x] ForkButton appears on items from other orgs
+  - [x] ForkButton does NOT appear on own org items
+  - [x] Clicking Fork creates copy in current org and shows success toast
+  - [x] All 5 detail page types (skill, agent, command, guide, hook) updated
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -650,7 +650,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 7. Update profile page — org membership section
+- [x] 7. Update profile page — org membership section
 
   **What to do**:
   - **Profile page** (`apps/web/app/profile/page.tsx`):
@@ -698,12 +698,12 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] Profile page has "Organizations" section
-  - [ ] Section shows all user's org memberships with name and role
-  - [ ] Current org is marked with indicator
-  - [ ] "Switch to" action works for non-current orgs
-  - [ ] Styling matches existing profile page card pattern
-  - [ ] `pnpm build` succeeds
+  - [x] Profile page has "Organizations" section
+  - [x] Section shows all user's org memberships with name and role
+  - [x] Current org is marked with indicator
+  - [x] "Switch to" action works for non-current orgs
+  - [x] Styling matches existing profile page card pattern
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -729,7 +729,7 @@ Wave 3 (After Wave 2):
 
 ---
 
-- [ ] 8. Update admin dashboard — org-scoped stats
+- [x] 8. Update admin dashboard — org-scoped stats
 
   **What to do**:
   - **Admin dashboard** (`apps/web/app/admin/page.tsx`):
@@ -773,11 +773,11 @@ Wave 3 (After Wave 2):
 
   **Acceptance Criteria**:
 
-  - [ ] Dashboard shows "Viewing: [Org Name]" context indicator
-  - [ ] Stats reflect items from current org (not global)
-  - [ ] Super_admin has "All Organizations" toggle option
-  - [ ] Recent activity filtered by current org
-  - [ ] `pnpm build` succeeds
+  - [x] Dashboard shows "Viewing: [Org Name]" context indicator
+  - [x] Stats reflect items from current org (not global)
+  - [x] Super_admin has "All Organizations" toggle option
+  - [x] Recent activity filtered by current org
+  - [x] `pnpm build` succeeds
 
   **Agent-Executed QA Scenarios:**
 
@@ -825,9 +825,9 @@ pnpm lint     # Expected: No new lint errors
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" items present (org badges, filtering, forms, fork, profile)
-- [ ] All "Must NOT Have" items absent (no sharing UI, no org management changes, no MCP changes)
-- [ ] Build passes
-- [ ] Non-super-admin cannot see/search private items from other orgs
-- [ ] Super admin can manage items across all orgs
-- [ ] All 8 commits pushed to `feat/org-based-multi-tenancy` branch
+- [x] All "Must Have" items present (org badges, filtering, forms, fork, profile)
+- [x] All "Must NOT Have" items absent (no sharing UI, no org management changes, no MCP changes)
+- [x] Build passes
+- [x] Non-super-admin cannot see/search private items from other orgs
+- [x] Super admin can manage items across all orgs
+- [x] All 8 commits pushed to `feat/org-based-multi-tenancy` branch

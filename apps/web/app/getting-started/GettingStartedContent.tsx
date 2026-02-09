@@ -37,10 +37,10 @@ export function GettingStartedContent() {
       {/* Page Header */}
       <div className="text-center mb-12">
         <h1 className="text-3xl font-medium text-[var(--text-primary)] mb-3">
-          GPTers MCP 빠른 설정
+          MCP 빠른 설정
         </h1>
         <p className="text-[var(--text-secondary)]">
-          2단계로 Claude Code에서 GPTers 플러그인을 사용할 수 있습니다.
+          2단계로 Claude Code에서 팀 플러그인을 사용할 수 있습니다.
         </p>
       </div>
 
@@ -114,7 +114,7 @@ export function GettingStartedContent() {
                     2
                   </div>
                   <span className="text-sm text-[var(--text-secondary)]">
-                    Google 계정 (@gpters.org)으로 로그인
+                    Google 계정 (조직 이메일)으로 로그인
                   </span>
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">

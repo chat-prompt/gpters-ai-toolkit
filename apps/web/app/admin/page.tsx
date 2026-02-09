@@ -191,7 +191,7 @@ export default function AdminDashboard() {
           대시보드
         </h1>
         <p className="text-[var(--text-secondary)]">
-          GPTers AI Toolkit 관리 센터
+          AI Toolkit 관리 센터
         </p>
         
         {/* Organization Context Indicator */}

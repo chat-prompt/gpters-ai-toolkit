@@ -128,7 +128,7 @@ function generateInstallMd(item: {
   lines.push('')
   lines.push('---')
   lines.push('')
-  lines.push(`Downloaded from GPTers AI Toolkit`)
+  lines.push(`Downloaded from AI Toolkit`)
 
   return lines.join('\n')
 }

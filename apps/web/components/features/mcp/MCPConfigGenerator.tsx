@@ -152,7 +152,7 @@ export function MCPConfigGenerator({ defaultUrl }: MCPConfigGeneratorProps) {
                 </p>
                 <div className="flex items-center gap-2 bg-[var(--bg-primary)] rounded-lg p-2">
                   <code className="text-[var(--accent-cyan)] text-xs font-mono">
-                    &quot;GPTers 설정해줘&quot;
+                    &quot;설정해줘&quot;
                   </code>
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">

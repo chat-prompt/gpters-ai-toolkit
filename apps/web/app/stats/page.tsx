@@ -8,7 +8,7 @@ import { ServerHeader } from '@/components/layout/ServerHeader'
 import { WelfareEngineDashboard } from '@/components/welfare-engine/WelfareEngineDashboard'
 
 export const metadata = {
-  title: '복리 엔진 - GPTers AI Toolkit',
+  title: '복리 엔진 - AI Toolkit',
   description: '스킬 축적, 활용, 품질 지표를 확인하세요',
 }
 
@@ -38,7 +38,7 @@ export default function StatsPage() {
               </span>
             </h1>
             <p className="text-lg text-[var(--text-secondary)] max-w-2xl">
-              GPTers AI Toolkit의 복리 엔진 지표를 확인하세요.
+              AI Toolkit의 복리 엔진 지표를 확인하세요.
               스킬 축적, 활용, 품질 지표를 한눈에 파악할 수 있습니다.
             </p>
           </div>
@@ -52,7 +52,7 @@ export default function StatsPage() {
       <footer className="relative z-10 border-t border-[var(--border-subtle)] py-8 mt-12">
         <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
           <p className="text-xs text-[var(--text-muted)]">
-            GPTers AI Toolkit - 복리 엔진
+            AI Toolkit - 복리 엔진
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             Built with Claude Code

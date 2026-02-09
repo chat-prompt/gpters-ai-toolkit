@@ -68,7 +68,7 @@ export function Header({ user }: HeaderProps) {
             <Link href="/" className="flex items-center gap-3 flex-shrink-0">
               <Image
                 src="/gpters-logo.svg"
-                alt="GPTers"
+                alt="AI Toolkit"
                 width={32}
                 height={32}
                 className="rounded-full"

@@ -9,7 +9,7 @@ import { PromptExamplesLibrary } from '@/components/admin/PromptExamplesLibrary'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 
 export const metadata = {
-  title: '프롬프트 예시 라이브러리 | GPTers AI Toolkit',
+  title: '프롬프트 예시 라이브러리 | AI Toolkit',
   description: 'Claude Code에서 사용할 수 있는 효과적인 프롬프트 예시 모음',
 }
 
@@ -126,7 +126,7 @@ export default function PromptsPage() {
       <footer className="relative z-10 border-t border-[var(--border-subtle)] py-8">
         <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
           <p className="text-xs text-[var(--text-muted)]">
-            GPTers AI Toolkit - Prompt Examples
+            AI Toolkit - Prompt Examples
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             Built with Claude Code
