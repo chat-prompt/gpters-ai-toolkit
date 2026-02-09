@@ -11,6 +11,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
+import { OrgSwitcher } from './OrgSwitcher'
 import { UpdateNotificationBell } from '../actions/UpdateNotificationBell'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
 import type { UserRole } from '@/lib/security/rbac'
@@ -134,6 +135,7 @@ export function Header({ user }: HeaderProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            {user && <OrgSwitcher />}
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
             {user && <AdminQuickMenu userRole={user.role} />}

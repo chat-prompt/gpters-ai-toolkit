@@ -17,6 +17,8 @@ const DEV_USER = {
   email: 'dev@gpters.org',
   image: null,
   role: 'admin' as UserRole,
+  orgIds: ['dev-org-1', 'dev-org-2'],
+  currentOrgId: 'dev-org-1',
 }
 
 /**
