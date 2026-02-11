@@ -11,7 +11,7 @@ import { eq, desc, sql, and, gte } from 'drizzle-orm'
 import { ApiErrors, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
-import { forwardToAnalytics } from '@/lib/analytics'
+import { forwardToAnalytics } from '@gpters/lib/analytics'
 
 const log = createLogger('api:installations')
 
