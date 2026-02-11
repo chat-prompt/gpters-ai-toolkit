@@ -13,6 +13,7 @@ import { NextRequest } from 'next/server'
 import { db, mcpAuditLogs } from '@gpters/db'
 import { lt, count, eq, and, gte, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
+import { forwardToAnalytics } from '../analytics/gpters-analytics'
 import type { OAuthAuthResult } from './oauth-tokens'
 
 const log = createLogger('mcp-audit')
@@ -192,6 +193,16 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
       tool: entry.tool,
       status: entry.responseStatus,
       time: entry.responseTime,
+    })
+
+    // Forward to gpters-analytics (fire-and-forget)
+    forwardToAnalytics('toolkit_mcp_request', {
+      distinct_id: entry.ipHash || 'anonymous',
+      tool: entry.tool,
+      method: entry.method,
+      status: entry.responseStatus,
+      duration_ms: entry.responseTime,
+      is_authenticated: entry.isAuthenticated,
     })
   } catch (error) {
     // Don't let audit logging failures break the request
