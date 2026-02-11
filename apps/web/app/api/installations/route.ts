@@ -11,6 +11,7 @@ import { eq, desc, sql, and, gte } from 'drizzle-orm'
 import { ApiErrors, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { forwardToAnalytics } from '@/lib/analytics'
 
 const log = createLogger('api:installations')
 
@@ -60,6 +61,13 @@ export async function POST(request: NextRequest) {
       itemId,
       method,
       userId,
+    })
+
+    // Forward to gpters-analytics (fire-and-forget)
+    forwardToAnalytics('toolkit_skill_installed', {
+      distinct_id: userId || 'anonymous',
+      skill_id: itemId,
+      method,
     })
 
     return apiSuccess({ success: true })
