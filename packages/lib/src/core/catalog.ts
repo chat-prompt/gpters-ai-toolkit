@@ -60,6 +60,7 @@ type SummaryRecord = {
   description: string
   authorId: string | null
   authorName: string | null
+  orgName: string | null
   tags: string[] | null
   teamTag: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general' | null
   difficulty: 'easy' | 'medium' | 'hard' | null
@@ -105,6 +106,7 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     description: record.description,
     authorId: record.authorId ?? undefined,
     authorName: record.authorName ?? undefined,
+    orgName: record.orgName ?? undefined,
     tags: record.tags || [],
     teamTag: (record.teamTag as CatalogItemSummary['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
@@ -194,9 +196,11 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
     .select({
       ...summaryColumns,
       authorName: users.name,
+      orgName: organizations.name,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         ne(catalogItems.type, 'guide'),
@@ -239,9 +243,11 @@ export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary
     .select({
       ...summaryColumns,
       authorName: users.name,
+      orgName: organizations.name,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         eq(catalogItems.type, type),
@@ -260,9 +266,11 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
     .select({
       ...summaryColumns,
       authorName: users.name,
+      orgName: organizations.name,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         eq(catalogItems.type, 'guide'),
@@ -304,9 +312,11 @@ export async function getBeginnerItems(): Promise<CatalogItemSummary[]> {
     .select({
       ...summaryColumns,
       authorName: users.name,
+      orgName: organizations.name,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)))
 
   return records
@@ -353,9 +363,11 @@ export async function getRelatedItems(
     .select({
       ...summaryColumns,
       authorName: users.name,
+      orgName: organizations.name,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         ne(catalogItems.id, itemId),
@@ -419,8 +431,14 @@ export async function getPackageContents(packageId: string): Promise<CatalogItem
   // Get the items
   const itemIds = relations.map(r => r.itemId)
   const records = await db
-    .select(summaryColumns)
+    .select({
+      ...summaryColumns,
+      authorName: users.name,
+      orgName: organizations.name,
+    })
     .from(catalogItems)
+    .leftJoin(users, eq(catalogItems.authorId, users.id))
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         or(...itemIds.map(id => eq(catalogItems.id, id))),
