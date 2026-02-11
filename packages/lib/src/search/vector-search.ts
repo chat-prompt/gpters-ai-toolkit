@@ -1,8 +1,9 @@
 import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
-import { sql, eq, and, gt, desc } from 'drizzle-orm'
+import { sql, eq, and, or, gt, desc } from 'drizzle-orm'
 import { cosineDistance } from 'drizzle-orm'
 import { generateEmbedding } from './embedding'
 import { createLogger } from '../core/logger'
+import { isSuperAdmin } from '../security/rbac'
 import type { ItemType } from '../core/types'
 
 const log = createLogger('vector-search')
@@ -12,6 +13,9 @@ export interface SemanticSearchOptions {
   type?: ItemType | 'all'
   limit?: number
   minSimilarity?: number
+  userId?: string
+  userRole?: string
+  orgId?: string
 }
 
 export interface SemanticSearchResult {
@@ -27,6 +31,9 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     type = 'all',
     limit = 10,
     minSimilarity = 0.3,
+    userId,
+    userRole,
+    orgId,
   } = options
 
   const trimmedQuery = query.trim()
@@ -48,6 +55,28 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
 
   if (type && type !== 'all') {
     conditions.push(eq(catalogItems.type, type))
+  }
+
+  // Org-based visibility filtering
+  if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
+    conditions.push(
+      or(
+        eq(catalogItems.orgId, orgId),
+        eq(catalogItems.visibility, 'public'),
+        and(
+          eq(catalogItems.visibility, 'shared'),
+          sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb`
+        ),
+        sql`${catalogItems.orgId} IS NULL`
+      )!
+    )
+  } else if (!userId) {
+    conditions.push(
+      or(
+        eq(catalogItems.visibility, 'public'),
+        sql`${catalogItems.orgId} IS NULL`
+      )!
+    )
   }
 
   const dbStart = Date.now()

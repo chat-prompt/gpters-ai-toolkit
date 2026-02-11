@@ -10,7 +10,7 @@ import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { isSuperAdmin } from '../security/rbac'
 
 const log = createLogger('mcp-handler')
-import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
+import { ilike, or, eq, and, sql, inArray, desc, type SQL } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
   GetPluginContentInput,
@@ -60,6 +60,37 @@ async function updateItemEmbedding(id: string, item: { name: string; description
   } catch (error) {
     log.error(`Failed to generate embedding for ${id}`, error)
   }
+}
+
+/**
+ * Build org-based visibility filter condition for catalog queries.
+ * Returns undefined if no filtering is needed (super_admin sees all).
+ */
+function buildVisibilityCondition(
+  userId?: string,
+  userRole?: string,
+  orgId?: string
+): SQL | undefined {
+  if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
+    // Regular users: own org + public + shared with their org + legacy
+    return or(
+      eq(catalogItems.orgId, orgId),
+      eq(catalogItems.visibility, 'public'),
+      and(
+        eq(catalogItems.visibility, 'shared'),
+        sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb`
+      ),
+      sql`${catalogItems.orgId} IS NULL`
+    )
+  } else if (!userId) {
+    // Unauthenticated: public + legacy only
+    return or(
+      eq(catalogItems.visibility, 'public'),
+      sql`${catalogItems.orgId} IS NULL`
+    )
+  }
+  // super_admin: no filter
+  return undefined
 }
 
 type PluginFileWithType = { name: string; content: string; type?: string }
@@ -182,29 +213,8 @@ export async function searchPlugins(
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
 
-  // Add org-based visibility filtering
-  if (userId && orgId && !isSuperAdmin(userRole as any)) {
-    // Regular users see: own org items + public items + shared items + legacy (orgId=null)
-    const visibilityCondition = or(
-      eq(catalogItems.orgId, orgId), // Own org items
-      eq(catalogItems.visibility, 'public'), // Public items
-      and(
-        eq(catalogItems.visibility, 'shared'),
-        sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb` // Shared with user's org
-      ),
-      sql`${catalogItems.orgId} IS NULL` // Legacy items (backward compat)
-    )
-    conditions.push(visibilityCondition)
-  } else if (!userId) {
-    // Unauthenticated users see only public items + legacy
-    conditions.push(
-      or(
-        eq(catalogItems.visibility, 'public'),
-        sql`${catalogItems.orgId} IS NULL`
-      )
-    )
-  }
-  // super_admin sees all (no additional filter)
+  const visibilityFilter = buildVisibilityCondition(userId, userRole, orgId)
+  if (visibilityFilter) conditions.push(visibilityFilter)
 
   const whereClause = and(...conditions)
 
@@ -401,28 +411,8 @@ export async function listPlugins(
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
 
-  // Add org-based visibility filtering
-  if (userId && orgId && !isSuperAdmin(userRole as any)) {
-    // Regular users see: own org items + public items + shared items + legacy (orgId=null)
-    const visibilityCondition = or(
-      eq(catalogItems.orgId, orgId),
-      eq(catalogItems.visibility, 'public'),
-      and(
-        eq(catalogItems.visibility, 'shared'),
-        sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb`
-      ),
-      sql`${catalogItems.orgId} IS NULL`
-    )
-    conditions.push(visibilityCondition)
-  } else if (!userId) {
-    // Unauthenticated users see only public items + legacy
-    conditions.push(
-      or(
-        eq(catalogItems.visibility, 'public'),
-        sql`${catalogItems.orgId} IS NULL`
-      )
-    )
-  }
+  const visibilityFilter = buildVisibilityCondition(userId, userRole, orgId)
+  if (visibilityFilter) conditions.push(visibilityFilter)
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -461,9 +451,22 @@ export async function listPlugins(
 /**
  * Get plugins by category
  */
-export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Promise<ListResult> {
+export async function getPluginsByCategory(
+  input: GetPluginsByCategoryInput,
+  userId?: string,
+  userRole?: string,
+  orgId?: string
+): Promise<ListResult> {
   const { category, limit = 10 } = input
   const safeLimit = Math.min(Math.max(1, limit), 50)
+
+  const conditions = [
+    eq(catalogItems.type, category),
+    eq(catalogItems.mcpEnabled, true),
+  ]
+
+  const visibilityFilter = buildVisibilityCondition(userId, userRole, orgId)
+  if (visibilityFilter) conditions.push(visibilityFilter)
 
   const results = await db
     .select({
@@ -478,12 +481,7 @@ export async function getPluginsByCategory(input: GetPluginsByCategoryInput): Pr
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
-    .where(
-      and(
-        eq(catalogItems.type, category),
-        eq(catalogItems.mcpEnabled, true)
-      )
-    )
+    .where(and(...conditions))
     .limit(safeLimit)
 
   const plugins: PluginSummary[] = results.map((item) => ({
@@ -1241,6 +1239,9 @@ export async function executeTool(
           query: input.query,
           type: input.category,
           limit: Math.min(input.limit || 5, 20),
+          userId,
+          userRole,
+          orgId,
         })
         const result: SemanticSearchResult = {
           plugins: searchResult.items.map((item) => ({
@@ -1330,7 +1331,7 @@ export async function executeTool(
       }
 
       case 'get_plugins_by_category': {
-        const result = await getPluginsByCategory(args as unknown as GetPluginsByCategoryInput)
+        const result = await getPluginsByCategory(args as unknown as GetPluginsByCategoryInput, userId, userRole, orgId)
         return {
           content: [
             {
