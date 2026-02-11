@@ -9,11 +9,13 @@
 import { useState, useEffect, use, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import type { TeamTag } from '@/lib/core/types'
 import { TeamTagSelector } from '@/components/social/TeamTagSelector'
 import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/admin/SecurityAuditPanel'
 import type { SecurityAuditResult } from '@/lib/security/security-audit'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import { useOrgContext } from '@/lib/hooks/useOrgContext'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
@@ -29,18 +31,21 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   const searchParams = useSearchParams()
   const returnUrl = searchParams.get('returnUrl')
   useAdminAuth() // For layout protection
+  const { data: session } = useSession()
+  const { currentOrgId } = useOrgContext()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [securityAuditResult, setSecurityAuditResult] = useState<SecurityAuditResult | null>(null)
   const [showSecurityPanel, setShowSecurityPanel] = useState(false)
+  const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
 
   const [formData, setFormData] = useState({
     id: '',
     type: 'skill' as typeof ITEM_TYPES[number],
     name: '',
     description: '',
-    authorName: '', // Read-only, for display purposes
+    authorName: '',
     tags: '',
     teamTag: 'general' as TeamTag,
     difficulty: '' as '' | typeof DIFFICULTIES[number],
@@ -52,6 +57,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     version: '1.0.0',
     status: 'published' as typeof STATUSES[number],
     changelog: '',
+    orgId: '',
+    visibility: 'private' as 'private' | 'shared' | 'public',
   })
 
   const fetchItem = useCallback(async () => {
@@ -77,6 +84,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           version: item.version || '1.0.0',
           status: item.status || 'published',
           changelog: item.changelog || '',
+          orgId: item.orgId || '',
+          visibility: item.visibility || 'private',
         })
       } else {
         setError('Item not found')
@@ -91,6 +100,21 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   useEffect(() => {
     fetchItem()
   }, [fetchItem])
+
+  useEffect(() => {
+    async function fetchOrgs() {
+      try {
+        const res = await fetch('/api/organizations')
+        if (res.ok) {
+          const data = await res.json()
+          setOrgs(data.organizations || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch organizations:', error)
+      }
+    }
+    fetchOrgs()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -113,6 +137,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         version: formData.version || '1.0.0',
         status: formData.status,
         changelog: formData.changelog || null,
+        visibility: formData.visibility,
       }
 
       const res = await fetch(`/api/catalog/${id}`, {
@@ -264,6 +289,59 @@ export default function EditCatalogItem({ params }: EditPageProps) {
             value={formData.teamTag}
             onChange={(value) => setFormData({ ...formData, teamTag: value })}
           />
+
+          <div>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+              Organization
+            </label>
+            {session?.user?.role === 'super_admin' ? (
+              <select
+                value={formData.orgId}
+                onChange={(e) => setFormData({ ...formData, orgId: e.target.value })}
+                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+              >
+                <option value="">Select organization...</option>
+                {orgs.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="px-4 py-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
+                {orgs.find((o) => o.id === currentOrgId)?.name || 'Your organization'}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+              Visibility
+            </label>
+            <div className="flex gap-3">
+              {(['private', 'shared', 'public'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, visibility: v })}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    formData.visibility === v
+                      ? 'bg-[var(--accent-cyan)] text-black'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  {v === 'private' ? '🔒 Private' : v === 'shared' ? '👥 Shared' : '🌍 Public'}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              {formData.visibility === 'private'
+                ? 'Only visible to your organization members'
+                : formData.visibility === 'shared'
+                  ? 'Visible to selected organizations'
+                  : 'Visible to all authenticated users'}
+            </p>
+          </div>
 
           <div className="grid grid-cols-3 gap-6">
             <div>

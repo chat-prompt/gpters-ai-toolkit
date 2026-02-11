@@ -306,13 +306,13 @@ export default function UploadPage() {
         {/* Title */}
         <div className="mb-12">
           <p className="text-[#F26522] text-xs font-medium uppercase tracking-[0.3em] mb-4">
-            Share with GPTers
+            Share with Team
           </p>
           <h1 className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4" style={{ fontFamily: 'var(--font-newsreader)' }}>
             Share Your Creation
           </h1>
           <p className="text-lg text-[var(--text-secondary)]">
-            스킬, 에이전트, 프롬프트를 GPTers 팀과 공유하세요
+            스킬, 에이전트, 프롬프트를 팀과 공유하세요
           </p>
         </div>
 
@@ -686,7 +686,7 @@ export default function UploadPage() {
             {/* Submit */}
             <div className="flex items-center justify-between pt-4">
               <p className="text-xs text-[var(--text-muted)]">
-                제출하면 GPTers 카탈로그에 바로 추가됩니다
+                제출하면 카탈로그에 바로 추가됩니다
               </p>
               <button
                 type="submit"

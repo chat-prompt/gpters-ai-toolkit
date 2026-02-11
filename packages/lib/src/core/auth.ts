@@ -1,23 +1,20 @@
 /**
  * NextAuth.js authentication configuration
  *
- * Configures Google OAuth with @gpters.org domain restriction,
+ * Configures Google OAuth with organization-based domain resolution,
  * user session management, and role-based access control.
  */
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
-import { db, users } from '@gpters/db'
-import { eq } from 'drizzle-orm'
+import { db, users, organizations, orgMemberships } from '@gpters/db'
+import { eq, sql, and } from 'drizzle-orm'
 import { createLogger } from './logger'
-import type { UserRole } from '../security/rbac'
+import type { UserRole, OrgRole } from '../security/rbac'
 
 const log = createLogger('auth')
 
-// Default role for new users
 const DEFAULT_ROLE: UserRole = 'viewer'
-
-// Allowed email domain for authentication
-const ALLOWED_DOMAIN = 'gpters.org'
+const DEFAULT_ORG_ROLE: OrgRole = 'org_viewer'
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: process.env.NODE_ENV === 'development',
@@ -30,21 +27,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      // Only allow users with gpters.org email domain
       const email = user.email
       if (!email) return false
 
       const domain = email.split('@')[1]
-      if (domain !== ALLOWED_DOMAIN) {
-        return false
-      }
+      if (!domain) return false
 
-      // Save or update user in database
       try {
+        const matchingOrgs = await db
+          .select()
+          .from(organizations)
+          .where(
+            and(
+              sql`${organizations.allowedDomains}::jsonb @> ${JSON.stringify([domain])}::jsonb`,
+              eq(organizations.isActive, true)
+            )
+          )
+
+        if (matchingOrgs.length === 0) {
+          log.warn('Login denied: no matching organizations', { email, domain })
+          return false
+        }
+
         const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1)
 
+        let userId: string
         if (existingUser.length > 0) {
-          // Update existing user
+          userId = existingUser[0].id
           await db.update(users)
             .set({
               name: user.name,
@@ -53,30 +62,55 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               updatedAt: new Date(),
             })
             .where(eq(users.email, email))
-          // Store role in user object for session callback
           user.role = existingUser[0].role as UserRole
         } else {
-          // Create new user with default role
+          userId = user.id || account?.providerAccountId || crypto.randomUUID()
           await db.insert(users).values({
-            id: user.id || account?.providerAccountId || crypto.randomUUID(),
+            id: userId,
             email,
             name: user.name,
             image: user.image,
             role: DEFAULT_ROLE,
             lastLoginAt: new Date(),
           })
-          // Store role in user object for session callback
           user.role = DEFAULT_ROLE
         }
+
+        const orgIds: string[] = []
+        for (const org of matchingOrgs) {
+          orgIds.push(org.id)
+
+          const existingMembership = await db
+            .select()
+            .from(orgMemberships)
+            .where(
+              and(
+                eq(orgMemberships.userId, userId),
+                eq(orgMemberships.orgId, org.id)
+              )
+            )
+            .limit(1)
+
+          if (existingMembership.length === 0) {
+            await db.insert(orgMemberships).values({
+              userId,
+              orgId: org.id,
+              role: DEFAULT_ORG_ROLE,
+            })
+            log.info('Created org membership', { userId, orgId: org.id, role: DEFAULT_ORG_ROLE })
+          }
+        }
+
+        user.orgIds = orgIds
+
       } catch (error) {
-        log.error('Failed to save user', error, { action: 'signIn', userId: user.id })
-        // Don't block sign in if DB save fails
+        log.error('Failed during sign in', error, { action: 'signIn', userId: user.id })
+        return false
       }
 
       return true
     },
     async session({ session, token }) {
-      // Add user id and role to session
       if (session.user) {
         if (token.sub) {
           session.user.id = token.sub
@@ -84,28 +118,61 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (token.role) {
           session.user.role = token.role as UserRole
         }
+        if (token.currentOrgId) {
+          session.user.currentOrgId = token.currentOrgId
+        }
+        if (token.orgRole) {
+          session.user.orgRole = token.orgRole as OrgRole
+        }
+        if (token.orgIds) {
+          session.user.orgIds = token.orgIds
+        }
       }
       return session
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = user.role
       }
 
-      // Refresh role from DB on session update or if role is missing
-      if (trigger === 'update' || !token.role) {
-        try {
-          const email = token.email as string
-          if (email) {
-            const [dbUser] = await db.select({ role: users.role }).from(users).where(eq(users.email, email))
-            if (dbUser) {
-              token.role = dbUser.role as UserRole
+      try {
+        const email = token.email as string
+        if (email) {
+          const [dbUser] = await db
+            .select({ 
+              id: users.id,
+              role: users.role 
+            })
+            .from(users)
+            .where(eq(users.email, email))
+
+          if (dbUser) {
+            token.role = dbUser.role as UserRole
+
+            const userOrgMemberships = await db
+              .select({
+                orgId: orgMemberships.orgId,
+                role: orgMemberships.role,
+              })
+              .from(orgMemberships)
+              .where(eq(orgMemberships.userId, dbUser.id))
+
+            if (userOrgMemberships.length > 0) {
+              token.orgIds = userOrgMemberships.map(m => m.orgId)
+              if (!token.currentOrgId || !token.orgIds.includes(token.currentOrgId as string)) {
+                token.currentOrgId = userOrgMemberships[0].orgId
+                token.orgRole = userOrgMemberships[0].role as OrgRole
+              } else {
+                const currentMembership = userOrgMemberships.find(m => m.orgId === token.currentOrgId)
+                if (currentMembership) {
+                  token.orgRole = currentMembership.role as OrgRole
+                }
+              }
             }
           }
-        } catch {
-          // Keep existing role on error
         }
+      } catch {
+        // Keep existing token values on DB error
       }
 
       return token

@@ -11,6 +11,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
+import { OrgSwitcher } from './OrgSwitcher'
 import { UpdateNotificationBell } from '../actions/UpdateNotificationBell'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
 import type { UserRole } from '@/lib/security/rbac'
@@ -67,7 +68,7 @@ export function Header({ user }: HeaderProps) {
             <Link href="/" className="flex items-center gap-3 flex-shrink-0">
               <Image
                 src="/gpters-logo.svg"
-                alt="GPTers"
+                alt="AI Toolkit"
                 width={32}
                 height={32}
                 className="rounded-full"
@@ -87,7 +88,7 @@ export function Header({ user }: HeaderProps) {
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                시작하기
+                Tutorial
               </Link>
               <Link
                 href="/"
@@ -134,6 +135,7 @@ export function Header({ user }: HeaderProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            {user && <OrgSwitcher />}
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
             {user && <AdminQuickMenu userRole={user.role} />}

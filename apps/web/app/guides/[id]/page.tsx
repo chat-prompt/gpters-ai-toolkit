@@ -10,6 +10,7 @@ import { ItemHero } from '@/components/detail/ItemHero'
 import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
 import { ContentSection } from '@/components/detail/ContentSection'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
+import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
@@ -22,6 +23,9 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
   if (!guide) {
     notFound()
   }
+
+  const session = await auth()
+  const currentOrgId = session?.user?.currentOrgId
 
   return (
     <DetailPageLayout accentColor="emerald">
@@ -49,6 +53,10 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         updatedAt={guide.updatedAt}
         status={guide.status}
         version={guide.version}
+        orgName={guide.orgName}
+        orgId={guide.orgId}
+        visibility={guide.visibility}
+        currentOrgId={currentOrgId}
         showLikes={true}
       />
 

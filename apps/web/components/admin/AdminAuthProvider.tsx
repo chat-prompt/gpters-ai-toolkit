@@ -27,7 +27,7 @@ interface AdminAuthContextType {
 const AdminAuthContext = createContext<AdminAuthContextType | null>(null)
 
 /** Roles that can access admin dashboard */
-const ADMIN_ROLES: UserRole[] = ['admin', 'editor', 'viewer']
+const ADMIN_ROLES: UserRole[] = ['super_admin', 'admin', 'editor', 'viewer']
 
 /**
  * Provider component for admin authentication context
@@ -39,12 +39,14 @@ const ADMIN_ROLES: UserRole[] = ['admin', 'editor', 'viewer']
  * </AdminAuthProvider>
  * ```
  */
+const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === 'true'
+
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
 
-  const isLoading = status === 'loading'
-  const userRole = (session?.user?.role as UserRole) || null
-  const isAuthenticated = !!session?.user && !!userRole && ADMIN_ROLES.includes(userRole)
+  const isLoading = DEV_BYPASS_AUTH ? false : status === 'loading'
+  const userRole = DEV_BYPASS_AUTH ? ('admin' as UserRole) : ((session?.user?.role as UserRole) || null)
+  const isAuthenticated = DEV_BYPASS_AUTH || (!!session?.user && !!userRole && ADMIN_ROLES.includes(userRole))
 
   const logout = async () => {
     await signOut({ callbackUrl: '/' })

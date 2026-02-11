@@ -21,6 +21,7 @@ import { RelatedItems } from '@/components/detail/RelatedItems'
 import { ExamplesSection } from '@/components/detail/ExamplesSection'
 import { FilesSection } from '@/components/detail/FilesSection'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
+import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +33,9 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
   if (!item || item.type !== 'skill') {
     notFound()
   }
+
+  const session = await auth()
+  const currentOrgId = session?.user?.currentOrgId
 
   // Fetch related items
   const relatedItems = await getRelatedItems(item.id, item.tags, item.authorId ?? null, 6)
@@ -91,6 +95,10 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           updatedAt={item.updatedAt}
           status={item.status}
           version={item.version}
+          orgName={item.orgName}
+          orgId={item.orgId}
+          visibility={item.visibility}
+          currentOrgId={currentOrgId}
           extraBadges={
             <>
               <TryItButton itemId={item.id} />

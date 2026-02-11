@@ -7,6 +7,7 @@
 import { createLogger } from '../core/logger'
 import { db, catalogItems, users, suggestions } from '@gpters/db'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
+import { isSuperAdmin } from '../security/rbac'
 
 const log = createLogger('mcp-handler')
 import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
@@ -139,10 +140,21 @@ function generateFilesUsageHint(files: PluginFileWithType[]): string {
 }
 
 /**
- * Search plugins by keyword
+ * Search plugins by keyword with organization-based filtering
  * Searches across name, description, and tags
+ * Respects org visibility: private (own org), shared (allowed orgs), public (all), legacy (orgId=null)
+ * 
+ * @param input - Search parameters
+ * @param userId - Authenticated user ID (optional)
+ * @param userRole - User's role (optional)
+ * @param orgId - User's current organization ID (optional)
  */
-export async function searchPlugins(input: SearchPluginsInput): Promise<SearchResult> {
+export async function searchPlugins(
+  input: SearchPluginsInput,
+  userId?: string,
+  userRole?: string,
+  orgId?: string
+): Promise<SearchResult> {
   const { query, category, teamTag, limit = 5 } = input
   const safeLimit = Math.min(Math.max(1, limit), 20)
 
@@ -169,6 +181,30 @@ export async function searchPlugins(input: SearchPluginsInput): Promise<SearchRe
 
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
+
+  // Add org-based visibility filtering
+  if (userId && orgId && !isSuperAdmin(userRole as any)) {
+    // Regular users see: own org items + public items + shared items + legacy (orgId=null)
+    const visibilityCondition = or(
+      eq(catalogItems.orgId, orgId), // Own org items
+      eq(catalogItems.visibility, 'public'), // Public items
+      and(
+        eq(catalogItems.visibility, 'shared'),
+        sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb` // Shared with user's org
+      ),
+      sql`${catalogItems.orgId} IS NULL` // Legacy items (backward compat)
+    )
+    conditions.push(visibilityCondition)
+  } else if (!userId) {
+    // Unauthenticated users see only public items + legacy
+    conditions.push(
+      or(
+        eq(catalogItems.visibility, 'public'),
+        sql`${catalogItems.orgId} IS NULL`
+      )
+    )
+  }
+  // super_admin sees all (no additional filter)
 
   const whereClause = and(...conditions)
 
@@ -207,9 +243,20 @@ export async function searchPlugins(input: SearchPluginsInput): Promise<SearchRe
 }
 
 /**
- * Get full content of a specific plugin
+ * Get full content of a specific plugin with organization-based access control
+ * Returns null if plugin not found or user doesn't have access
+ * 
+ * @param input - Plugin content request
+ * @param userId - Authenticated user ID (optional)
+ * @param userRole - User's role (optional)
+ * @param orgId - User's current organization ID (optional)
  */
-export async function getPluginContent(input: GetPluginContentInput): Promise<PluginContent | null> {
+export async function getPluginContent(
+  input: GetPluginContentInput,
+  userId?: string,
+  userRole?: string,
+  orgId?: string
+): Promise<PluginContent | null> {
   const { pluginId } = input
 
   const results = await db
@@ -235,6 +282,9 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
       version: catalogItems.version,
       status: catalogItems.status,
       changelog: catalogItems.changelog,
+      orgId: catalogItems.orgId,
+      visibility: catalogItems.visibility,
+      sharedWithOrgs: catalogItems.sharedWithOrgs,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
@@ -246,6 +296,32 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
   }
 
   const item = results[0]
+
+  // Check org-based access control
+  if (!isSuperAdmin(userRole as any)) {
+    // Legacy items (orgId=null) are accessible to all
+    if (item.orgId !== null) {
+      // Public items are accessible to all
+      if (item.visibility !== 'public') {
+        // Private items require matching orgId
+        if (item.visibility === 'private') {
+          if (!orgId || item.orgId !== orgId) {
+            return null
+          }
+        }
+        // Shared items require user's org to be in sharedWithOrgs
+        if (item.visibility === 'shared') {
+          if (!orgId) {
+            return null
+          }
+          const sharedOrgs = (item.sharedWithOrgs as string[]) || []
+          if (!sharedOrgs.includes(orgId)) {
+            return null
+          }
+        }
+      }
+    }
+  }
 
   // Resolve agent dependencies if this is a skill with agent dependencies
   let resolvedAgents: Awaited<ReturnType<typeof resolveAgentsAsConfig>> | undefined
@@ -297,9 +373,19 @@ export async function getPluginContent(input: GetPluginContentInput): Promise<Pl
 }
 
 /**
- * List all plugins with optional filters
+ * List all plugins with optional filters and organization-based visibility
+ * 
+ * @param input - List parameters
+ * @param userId - Authenticated user ID (optional)
+ * @param userRole - User's role (optional)
+ * @param orgId - User's current organization ID (optional)
  */
-export async function listPlugins(input: ListPluginsInput = {}): Promise<ListResult> {
+export async function listPlugins(
+  input: ListPluginsInput = {},
+  userId?: string,
+  userRole?: string,
+  orgId?: string
+): Promise<ListResult> {
   const { category, teamTag } = input
 
   const conditions = []
@@ -314,6 +400,29 @@ export async function listPlugins(input: ListPluginsInput = {}): Promise<ListRes
 
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
+
+  // Add org-based visibility filtering
+  if (userId && orgId && !isSuperAdmin(userRole as any)) {
+    // Regular users see: own org items + public items + shared items + legacy (orgId=null)
+    const visibilityCondition = or(
+      eq(catalogItems.orgId, orgId),
+      eq(catalogItems.visibility, 'public'),
+      and(
+        eq(catalogItems.visibility, 'shared'),
+        sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb`
+      ),
+      sql`${catalogItems.orgId} IS NULL`
+    )
+    conditions.push(visibilityCondition)
+  } else if (!userId) {
+    // Unauthenticated users see only public items + legacy
+    conditions.push(
+      or(
+        eq(catalogItems.visibility, 'public'),
+        sql`${catalogItems.orgId} IS NULL`
+      )
+    )
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -527,11 +636,13 @@ export async function deletePlugin(
  * @param input - Deploy skill input
  * @param authorId - Authenticated user ID (for setting ownership)
  * @param userRole - Authenticated user's role (admin can override ownership check)
+ * @param orgId - User's current organization ID (for setting org ownership)
  */
 export async function deploySkill(
   input: DeploySkillInput,
   authorId?: string,
-  userRole?: string
+  userRole?: string,
+  orgId?: string
 ): Promise<DeploySkillResponse> {
   const {
     type,
@@ -652,7 +763,7 @@ export async function deploySkill(
       })
     }
   } else {
-    // Create new item with authorId from authenticated user
+    // Create new item with authorId and orgId from authenticated user
     await db.insert(catalogItems).values({
       id,
       type,
@@ -673,6 +784,10 @@ export async function deploySkill(
       likes: 0,
       dependencies: dependencies || [],
       authorId: authorId || null,
+      orgId: orgId || null,
+      visibility: 'private',
+      sharedWithOrgs: [],
+      forkCount: 0,
       createdAt: now,
       updatedAt: now,
     })
@@ -1087,7 +1202,8 @@ export async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
   userId?: string,
-  userRole?: string
+  userRole?: string,
+  orgId?: string
 ): Promise<McpToolResponse> {
   // 관리자 도구 호출 차단
   const { isAdminTool } = await import('./tools')
@@ -1153,7 +1269,12 @@ export async function executeTool(
       }
 
       case 'search_plugins': {
-        const result = await searchPlugins(args as unknown as SearchPluginsInput)
+        const result = await searchPlugins(
+          args as unknown as SearchPluginsInput,
+          userId,
+          userRole,
+          orgId
+        )
         return {
           content: [
             {
@@ -1166,7 +1287,7 @@ export async function executeTool(
 
       case 'get_plugin_content': {
         const input = args as unknown as GetPluginContentInput
-        const result = await getPluginContent(input)
+        const result = await getPluginContent(input, userId, userRole, orgId)
         if (!result) {
           return {
             content: [
@@ -1192,7 +1313,12 @@ export async function executeTool(
       }
 
       case 'list_plugins': {
-        const result = await listPlugins(args as unknown as ListPluginsInput)
+        const result = await listPlugins(
+          args as unknown as ListPluginsInput,
+          userId,
+          userRole,
+          orgId
+        )
         return {
           content: [
             {
@@ -1308,7 +1434,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await deploySkill(input, userId, userRole)
+        const result = await deploySkill(input, userId, userRole, orgId)
         return {
           content: [
             {

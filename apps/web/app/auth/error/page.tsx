@@ -17,7 +17,7 @@ export default async function AuthErrorPage({
   const errorMessages: Record<string, { title: string; description: string }> = {
     AccessDenied: {
       title: '접근 권한 없음',
-      description: '@gpters.org 이메일 계정만 로그인할 수 있습니다.',
+      description: '등록된 조직 도메인 이메일 계정만 로그인할 수 있습니다.',
     },
     Configuration: {
       title: '설정 오류',
@@ -43,7 +43,7 @@ export default async function AuthErrorPage({
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--bg-secondary)] mb-4">
             <Image
               src="/gpters-logo.svg"
-              alt="GPTers"
+              alt="AI Toolkit"
               width={40}
               height={40}
               className="rounded-lg"

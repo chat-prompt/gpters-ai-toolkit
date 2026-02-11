@@ -16,6 +16,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { searchCatalogItems, getFTSSearchSuggestions } from '@/lib/search/full-text-search'
+import { auth } from '@/lib/core/auth'
+import { isSuperAdmin, type UserRole } from '@/lib/security/rbac'
 import type { ItemType } from '@/lib/core/types'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +30,11 @@ const VALID_SORT_OPTIONS = ['relevance', 'newest', 'popular', 'name'] as const
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+
+    // Get session for org access control
+    const session = await auth()
+    const currentOrgId = session?.user?.currentOrgId
+    const userRole = session?.user?.role
 
     // Parse query parameters
     const query = searchParams.get('q') || ''
@@ -66,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     // If only suggestions are requested
     if (suggestionsOnly) {
-      const suggestions = await getFTSSearchSuggestions(query, limit)
+      const suggestions = await getFTSSearchSuggestions(query, limit, currentOrgId, userRole)
       return NextResponse.json({
         suggestions,
         query,
@@ -83,6 +90,8 @@ export async function GET(request: NextRequest) {
       sortBy,
       teamTag,
       tags,
+      currentOrgId,
+      userRole,
     })
 
     // Return response with cache headers

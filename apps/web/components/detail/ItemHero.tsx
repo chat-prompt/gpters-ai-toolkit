@@ -8,6 +8,9 @@ import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { LikeButton } from '../social/LikeButton'
 import { StatusBadge } from '../ui/StatusBadge'
 import { VersionPopover } from '../ui/VersionPopover'
+import { OrgBadge } from '../ui/OrgBadge'
+import { VisibilityBadge } from '../ui/VisibilityBadge'
+import { ForkButton } from './ForkButton'
 import { ReactNode } from 'react'
 
 /** Supported catalog item types */
@@ -45,6 +48,14 @@ interface ItemHeroProps {
   extraBadges?: ReactNode
   /** Whether to show like button */
   showLikes?: boolean
+  /** Organization name */
+  orgName?: string | null
+  /** Organization ID */
+  orgId?: string | null
+  /** Item visibility level */
+  visibility?: 'private' | 'shared' | 'public' | null
+  /** Current user's organization ID */
+  currentOrgId?: string | null
 }
 
 const TYPE_CONFIG: Record<ItemType, { icon: string; label: string; color: string }> = {
@@ -86,6 +97,10 @@ export function ItemHero({
   estimatedTime,
   extraBadges,
   showLikes = true,
+  orgName,
+  orgId,
+  visibility,
+  currentOrgId,
 }: ItemHeroProps) {
   const config = TYPE_CONFIG[type]
 
@@ -133,6 +148,11 @@ export function ItemHero({
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <OrgBadge orgName={orgName ?? null} size="md" />
+        <VisibilityBadge visibility={visibility ?? null} size="md" />
+      </div>
+
       <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
         {authorName && <span>@{authorName}</span>}
         {updatedAt && (
@@ -148,6 +168,12 @@ export function ItemHero({
           </>
         )}
       </div>
+
+      {((orgId && currentOrgId && orgId !== currentOrgId) || (!orgId && currentOrgId)) && (
+        <div className="mt-6">
+          <ForkButton itemId={itemId} />
+        </div>
+      )}
     </div>
   )
 }

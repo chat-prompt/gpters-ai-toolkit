@@ -17,6 +17,7 @@ import type { UserRole } from '@/lib/security/rbac'
 // Role badge component
 function RoleBadge({ role }: { role: UserRole }) {
   const colors: Record<UserRole, string> = {
+    super_admin: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
     admin: 'bg-red-500/20 text-red-400 border-red-500/30',
     editor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     viewer: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
@@ -29,10 +30,20 @@ function RoleBadge({ role }: { role: UserRole }) {
   )
 }
 
+const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === 'true'
+
+const DEV_SESSION_USER = {
+  name: 'Dev User',
+  email: 'dev@gpters.org',
+  image: null,
+}
+
 function AdminLayoutContent({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, userRole, logout } = useAdminAuth()
   const { data: session } = useSession()
   const pathname = usePathname()
+
+  const effectiveUser = DEV_BYPASS_AUTH ? DEV_SESSION_USER : session?.user
 
   if (isLoading) {
     return (
@@ -42,8 +53,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
-  // Not logged in at all - show sign in prompt
-  if (!session?.user) {
+  if (!effectiveUser) {
     return (
       <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
         <div className="glass rounded-2xl p-8 w-full max-w-md text-center">
@@ -76,7 +86,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             You don&apos;t have permission to access the admin dashboard.
           </p>
           <p className="text-[var(--text-muted)] text-sm mb-6">
-            Signed in as: {session.user.email}
+            Signed in as: {effectiveUser?.email}
           </p>
           <div className="flex gap-3">
             <Link
@@ -97,11 +107,11 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
-  // Nav items
   const navItems = [
     { href: '/admin', label: 'Dashboard', exact: true },
     { href: '/admin/catalog', label: 'Catalog' },
     { href: '/admin/users', label: 'Users' },
+    { href: '/admin/organizations', label: 'Organizations' },
   ]
 
   return (
@@ -135,19 +145,19 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-4">
             {/* User info and role badge */}
-            {session?.user && (
+            {effectiveUser && (
               <div className="flex items-center gap-2">
-                {session.user.image && (
+                {effectiveUser.image && (
                   <Image
-                    src={session.user.image}
-                    alt={session.user.name || 'User'}
+                    src={effectiveUser.image}
+                    alt={effectiveUser.name || 'User'}
                     width={24}
                     height={24}
                     className="rounded-full"
                   />
                 )}
                 <span className="text-sm text-[var(--text-secondary)]">
-                  {session.user.name || session.user.email}
+                  {effectiveUser.name || effectiveUser.email}
                 </span>
                 {userRole && <RoleBadge role={userRole} />}
               </div>

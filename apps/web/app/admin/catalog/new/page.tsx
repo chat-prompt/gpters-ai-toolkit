@@ -9,11 +9,13 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { TypeSpecificFields } from '@/components/admin/TypeSpecificFields'
 import { TypeGuidePanel } from '@/components/admin/TypeGuidePanel'
 import { TeamTagSelector } from '@/components/social/TeamTagSelector'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/data/type-config'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import { useOrgContext } from '@/lib/hooks/useOrgContext'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/core/types'
 
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
@@ -21,6 +23,8 @@ const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 export default function NewCatalogItem() {
   const router = useRouter()
   useAdminAuth() // For layout protection
+  const { data: session } = useSession()
+  const { currentOrgId } = useOrgContext()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,6 +39,11 @@ export default function NewCatalogItem() {
   const [pluginId, setPluginId] = useState('')
   const [content, setContent] = useState('')
   const [readme, setReadme] = useState('')
+
+  // Organization & Visibility state
+  const [orgId, setOrgId] = useState<string>('')
+  const [visibility, setVisibility] = useState<'private' | 'shared' | 'public'>('private')
+  const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
 
   // Marketplace state
   const [mcpEnabled, setMarketplaceEnabled] = useState(false)
@@ -56,6 +65,22 @@ export default function NewCatalogItem() {
   const [hookCommand, setHookCommand] = useState('')
   const [hookTimeout, setHookTimeout] = useState<number | ''>('')
   const [hookBlocking, setHookBlocking] = useState(true)
+
+  // Fetch organizations on mount
+  useEffect(() => {
+    async function fetchOrgs() {
+      try {
+        const res = await fetch('/api/organizations')
+        if (res.ok) {
+          const data = await res.json()
+          setOrgs(data.organizations || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch organizations:', error)
+      }
+    }
+    fetchOrgs()
+  }, [])
 
   // Auto-apply content template when type or name changes
   useEffect(() => {
@@ -165,6 +190,8 @@ export default function NewCatalogItem() {
         hookCommand: hookCommand || null,
         hookTimeout: hookTimeout || null,
         hookBlocking,
+        // Organization & Visibility
+        visibility,
       }
 
       const res = await fetch('/api/catalog', {
@@ -311,6 +338,59 @@ export default function NewCatalogItem() {
               </div>
 
               <TeamTagSelector value={teamTag} onChange={setTeamTag} />
+
+              <div>
+                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                  Organization
+                </label>
+                {session?.user?.role === 'super_admin' ? (
+                  <select
+                    value={orgId}
+                    onChange={(e) => setOrgId(e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                  >
+                    <option value="">Select organization...</option>
+                    {orgs.map((org) => (
+                      <option key={org.id} value={org.id}>
+                        {org.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-sm">
+                    {orgs.find((o) => o.id === currentOrgId)?.name || 'Your organization'}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                  Visibility
+                </label>
+                <div className="flex gap-3">
+                  {(['private', 'shared', 'public'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setVisibility(v)}
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        visibility === v
+                          ? 'bg-[var(--accent-cyan)] text-black'
+                          : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {v === 'private' ? '🔒 Private' : v === 'shared' ? '👥 Shared' : '🌍 Public'}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-2">
+                  {visibility === 'private'
+                    ? 'Only visible to your organization members'
+                    : visibility === 'shared'
+                      ? 'Visible to selected organizations'
+                      : 'Visible to all authenticated users'}
+                </p>
+              </div>
 
               {type === 'skill' && (
                 <div>

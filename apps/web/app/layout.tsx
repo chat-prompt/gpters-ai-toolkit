@@ -29,14 +29,13 @@ const newsreader = Newsreader({
 });
 
 const siteConfig = {
-  name: "GPTers AI Toolkit",
-  description: "Claude Code 스킬, 에이전트, 프롬프트, 커맨드를 찾아보세요. GPTers 팀원들이 만든 리소스를 플러그인으로 바로 설치하거나 복사해서 사용할 수 있습니다.",
+  name: "AI Toolkit",
+  description: "Claude Code 스킬, 에이전트, 프롬프트, 커맨드를 찾아보세요. 팀원들이 만든 리소스를 플러그인으로 바로 설치하거나 복사해서 사용할 수 있습니다.",
   url: getBaseUrl(),
   ogImage: "/og-image.png",
   keywords: [
     "Claude Code",
     "AI Toolkit",
-    "GPTers",
     "Claude Skills",
     "AI Agent",
     "Prompt Engineering",
@@ -54,9 +53,9 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   keywords: siteConfig.keywords,
-  authors: [{ name: "GPTers" }],
-  creator: "GPTers",
-  publisher: "GPTers",
+  authors: [{ name: "AI Toolkit" }],
+  creator: "AI Toolkit",
+  publisher: "AI Toolkit",
   openGraph: {
     type: "website",
     locale: "ko_KR",

@@ -17,6 +17,7 @@ import { DraftBanner } from '@/components/detail/DraftBanner'
 import { TryItButton } from '@/components/actions/TryItButton'
 import { DownloadButton } from '@/components/actions/DownloadButton'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
+import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -65,6 +66,9 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
   if (!item || item.type !== 'hook') {
     notFound()
   }
+
+  const session = await auth()
+  const currentOrgId = session?.user?.currentOrgId
 
   const hookEvent = item.hookEvent as HookEvent | undefined
   const eventInfo = hookEvent ? HOOK_EVENTS[hookEvent] : null
@@ -134,6 +138,10 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           updatedAt={item.updatedAt}
           status={item.status}
           version={item.version}
+          orgName={item.orgName}
+          orgId={item.orgId}
+          visibility={item.visibility}
+          currentOrgId={currentOrgId}
           extraBadges={extraBadges}
         />
       </Section>

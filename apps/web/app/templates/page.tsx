@@ -25,7 +25,7 @@ export default function TemplatesPage() {
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
               <span className="text-xl">⚡</span>
-              <span className="font-medium text-[var(--text-primary)]">GPTers AI Toolkit</span>
+              <span className="font-medium text-[var(--text-primary)]">AI Toolkit</span>
             </Link>
             <nav className="flex items-center gap-6">
               <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">

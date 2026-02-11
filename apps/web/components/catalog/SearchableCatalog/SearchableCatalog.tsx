@@ -296,8 +296,14 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
         </div>
       )}
 
+      {/* Org Context */}
+      <div className="mt-8 text-xs text-[var(--text-muted)] flex items-center gap-2">
+        <span>🏢</span>
+        <span>Showing items accessible to your organization</span>
+      </div>
+
       {/* Stats */}
-      <div className="mt-12 flex items-center gap-12">
+      <div className="mt-6 flex items-center gap-12">
         <div>
           <div className="text-3xl font-light text-[var(--text-primary)]">{skills.length}</div>
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">

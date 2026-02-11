@@ -329,7 +329,7 @@ test.describe('Guides Pages', () => {
 
       if (!isOnSignin) {
         // Check for page title
-        const title = page.getByText('시작하기')
+        const title = page.getByText('Tutorial')
         const hasTitle = await title.isVisible().catch(() => false)
 
         if (hasTitle) {

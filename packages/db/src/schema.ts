@@ -19,7 +19,7 @@ export const itemTypeEnum = pgEnum('item_type', [
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
 
 // User roles for RBAC
-export const userRoleEnum = pgEnum('user_role', ['admin', 'editor', 'viewer'])
+export const userRoleEnum = pgEnum('user_role', ['super_admin', 'admin', 'editor', 'viewer'])
 
 // Team tags for categorizing items by team ownership
 export const teamTagEnum = pgEnum('team_tag', [
@@ -30,6 +30,21 @@ export const teamTagEnum = pgEnum('team_tag', [
   'infra',    // 인프라팀
   'general',  // 공통/일반
 ])
+
+/**
+ * Organization role enum for organization memberships
+ */
+export const orgRoleEnum = pgEnum('org_role', ['org_admin', 'org_editor', 'org_viewer'])
+
+/**
+ * Visibility enum for catalog items
+ */
+export const visibilityEnum = pgEnum('visibility', ['private', 'shared', 'public'])
+
+/**
+ * Invitation status enum for organization invitations
+ */
+export const orgInvitationStatusEnum = pgEnum('org_invitation_status', ['pending', 'accepted', 'rejected', 'expired'])
 
 export const catalogItems = pgTable('catalog_items', {
   id: text('id').primaryKey(),
@@ -79,6 +94,18 @@ export const catalogItems = pgTable('catalog_items', {
   // Uses halfvec (16-bit float) instead of vector (32-bit) to support HNSW indexing up to 4000 dims
   embedding: halfvec('embedding', { dimensions: 3072 }),
 
+  // Multi-tenancy & collaboration fields
+  /** Organization owner (nullable for migration compatibility) */
+  orgId: text('org_id').references(() => organizations.id),
+  /** Visibility level (private, shared with org, or public) */
+  visibility: visibilityEnum('visibility').default('private'),
+  /** Self-reference to original item if this is a fork (stored as text to avoid circular type dependency) */
+  forkedFrom: text('forked_from'),
+  /** Count of times this item has been forked */
+  forkCount: integer('fork_count').notNull().default(0),
+  /** Array of organization IDs this item is shared with */
+  sharedWithOrgs: jsonb('shared_with_orgs').$type<string[]>().default([]),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
@@ -87,6 +114,9 @@ export const catalogItems = pgTable('catalog_items', {
   index('catalog_items_author_id_idx').on(table.authorId),
   index('catalog_items_mcp_enabled_idx').on(table.mcpEnabled),
   index('catalog_items_type_status_idx').on(table.type, table.status),
+  index('catalog_items_org_id_idx').on(table.orgId),
+  index('catalog_items_visibility_idx').on(table.visibility),
+  index('catalog_items_forked_from_idx').on(table.forkedFrom),
 ])
 
 export type CatalogItemRecord = typeof catalogItems.$inferSelect
@@ -109,6 +139,79 @@ export const users = pgTable('users', {
 
 export type UserRecord = typeof users.$inferSelect
 export type NewUserRecord = typeof users.$inferInsert
+
+// ============================================
+// Organizations & Memberships
+// ============================================
+
+/**
+ * Organizations table for multi-tenancy
+ */
+export const organizations = pgTable('organizations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** Organization name */
+  name: text('name').notNull(),
+  /** URL-safe slug for organization */
+  slug: text('slug').notNull().unique(),
+  /** Email domains allowed to auto-join (e.g., ["gpters.org"]) */
+  allowedDomains: jsonb('allowed_domains').$type<string[]>().notNull().default([]),
+  /** Organization description */
+  description: text('description'),
+  /** Whether organization is active */
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type OrganizationRecord = typeof organizations.$inferSelect
+export type NewOrganizationRecord = typeof organizations.$inferInsert
+
+/**
+ * Organization memberships junction table (users ↔ organizations)
+ */
+export const orgMemberships = pgTable('org_memberships', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  /** Member role within organization */
+  role: orgRoleEnum('role').notNull().default('org_viewer'),
+  /** When user joined organization */
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow(),
+  /** User who invited this member */
+  invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.orgId] }),
+  index('org_memberships_user_id_idx').on(table.userId),
+  index('org_memberships_org_id_idx').on(table.orgId),
+])
+
+export type OrgMembershipRecord = typeof orgMemberships.$inferSelect
+export type NewOrgMembershipRecord = typeof orgMemberships.$inferInsert
+
+/**
+ * Organization invitations table
+ */
+export const orgInvitations = pgTable('org_invitations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** Organization to join */
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  /** Invitee email address */
+  email: text('email').notNull(),
+  /** Role to assign upon acceptance */
+  role: orgRoleEnum('role').notNull().default('org_viewer'),
+  /** Invitation status */
+  status: orgInvitationStatusEnum('status').notNull().default('pending'),
+  /** User who sent invitation */
+  invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  /** Invitation expiration timestamp */
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('org_invitations_email_org_status_idx').on(table.email, table.orgId, table.status),
+  index('org_invitations_org_id_idx').on(table.orgId),
+])
+
+export type OrgInvitationRecord = typeof orgInvitations.$inferSelect
+export type NewOrgInvitationRecord = typeof orgInvitations.$inferInsert
 
 // ============================================
 // Normalized Tables
@@ -170,11 +273,52 @@ export type NewPackageItemRecord = typeof packageItems.$inferInsert
 // Relations
 // ============================================
 
-export const catalogItemsRelations = relations(catalogItems, ({ many }) => ({
+export const catalogItemsRelations = relations(catalogItems, ({ one, many }) => ({
   itemTags: many(catalogItemTags),
   // Package relations
   packageContents: many(packageItems, { relationName: 'packageContents' }), // Items contained in this package
   containedInPackages: many(packageItems, { relationName: 'containedInPackages' }), // Packages containing this item
+  // Organization relation
+  organization: one(organizations, {
+    fields: [catalogItems.orgId],
+    references: [organizations.id],
+  }),
+}))
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  memberships: many(orgMemberships),
+  invitations: many(orgInvitations),
+  catalogItems: many(catalogItems),
+}))
+
+export const orgMembershipsRelations = relations(orgMemberships, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [orgMemberships.orgId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [orgMemberships.userId],
+    references: [users.id],
+  }),
+  inviter: one(users, {
+    fields: [orgMemberships.invitedBy],
+    references: [users.id],
+  }),
+}))
+
+export const orgInvitationsRelations = relations(orgInvitations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [orgInvitations.orgId],
+    references: [organizations.id],
+  }),
+  inviter: one(users, {
+    fields: [orgInvitations.invitedBy],
+    references: [users.id],
+  }),
+}))
+
+export const usersRelations = relations(users, ({ many }) => ({
+  orgMemberships: many(orgMemberships),
 }))
 
 export const tagsRelations = relations(tags, ({ many }) => ({

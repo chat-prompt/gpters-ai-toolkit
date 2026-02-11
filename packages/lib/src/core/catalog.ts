@@ -5,7 +5,7 @@
  * list views, detail views, filtering, and package management.
  */
 import { eq, ne, and, or, isNull, asc } from 'drizzle-orm'
-import { db, catalogItems, packageItems, users, isDatabaseAvailable } from '@gpters/db'
+import { db, catalogItems, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
 
 // ============================================================================
@@ -30,24 +30,25 @@ const summaryColumns = {
   estimatedTime: catalogItems.estimatedTime,
   dependencies: catalogItems.dependencies,
   likes: catalogItems.likes,
-  // Type-specific fields
   allowedTools: catalogItems.allowedTools,
   agentModel: catalogItems.agentModel,
   agentPermissionMode: catalogItems.agentPermissionMode,
   agentSkills: catalogItems.agentSkills,
   commandArgumentHint: catalogItems.commandArgumentHint,
   commandDisableModelInvocation: catalogItems.commandDisableModelInvocation,
-  // Hook-specific fields
   hookEvent: catalogItems.hookEvent,
   hookMatcher: catalogItems.hookMatcher,
   hookCommand: catalogItems.hookCommand,
   hookTimeout: catalogItems.hookTimeout,
   hookBlocking: catalogItems.hookBlocking,
-  // MCP fields
   mcpEnabled: catalogItems.mcpEnabled,
   version: catalogItems.version,
-  // Status
   status: catalogItems.status,
+  orgId: catalogItems.orgId,
+  visibility: catalogItems.visibility,
+  forkedFrom: catalogItems.forkedFrom,
+  forkCount: catalogItems.forkCount,
+  sharedWithOrgs: catalogItems.sharedWithOrgs,
   createdAt: catalogItems.createdAt,
   updatedAt: catalogItems.updatedAt,
 } as const
@@ -80,6 +81,11 @@ type SummaryRecord = {
   mcpEnabled: boolean | null
   version: string | null
   status: string | null
+  orgId: string | null
+  visibility: 'private' | 'shared' | 'public' | null
+  forkedFrom: string | null
+  forkCount: number
+  sharedWithOrgs: string[] | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -106,24 +112,25 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     estimatedTime: record.estimatedTime ?? undefined,
     dependencies: record.dependencies || [],
     likes: record.likes,
-    // Type-specific fields
     allowedTools: record.allowedTools ?? undefined,
     agentModel: (record.agentModel as CatalogItemSummary['agentModel']) ?? undefined,
     agentPermissionMode: (record.agentPermissionMode as CatalogItemSummary['agentPermissionMode']) ?? undefined,
     agentSkills: record.agentSkills ?? undefined,
     commandArgumentHint: record.commandArgumentHint ?? undefined,
     commandDisableModelInvocation: record.commandDisableModelInvocation ?? undefined,
-    // Hook-specific fields
     hookEvent: (record.hookEvent as CatalogItemSummary['hookEvent']) ?? undefined,
     hookMatcher: record.hookMatcher ?? undefined,
     hookCommand: record.hookCommand ?? undefined,
     hookTimeout: record.hookTimeout ?? undefined,
     hookBlocking: record.hookBlocking ?? undefined,
-    // MCP fields
     mcpEnabled: record.mcpEnabled ?? false,
     version: record.version ?? undefined,
-    // V2: Status
     status: (record.status as CatalogItemSummary['status']) ?? 'published',
+    orgId: record.orgId ?? undefined,
+    visibility: (record.visibility as CatalogItemSummary['visibility']) ?? undefined,
+    forkedFrom: record.forkedFrom ?? undefined,
+    forkCount: record.forkCount,
+    sharedWithOrgs: record.sharedWithOrgs ?? undefined,
     createdAt: record.createdAt?.toISOString(),
     updatedAt: record.updatedAt?.toISOString(),
   }
@@ -149,25 +156,26 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     content: record.content,
     readme: record.readme ?? undefined,
     files: record.files ?? undefined,
-    // Type-specific fields
     allowedTools: record.allowedTools ?? undefined,
     agentModel: (record.agentModel as CatalogItem['agentModel']) ?? undefined,
     agentPermissionMode: (record.agentPermissionMode as CatalogItem['agentPermissionMode']) ?? undefined,
     agentSkills: record.agentSkills ?? undefined,
     commandArgumentHint: record.commandArgumentHint ?? undefined,
     commandDisableModelInvocation: record.commandDisableModelInvocation ?? undefined,
-    // Hook-specific fields
     hookEvent: (record.hookEvent as CatalogItem['hookEvent']) ?? undefined,
     hookMatcher: record.hookMatcher ?? undefined,
     hookCommand: record.hookCommand ?? undefined,
     hookTimeout: record.hookTimeout ?? undefined,
     hookBlocking: record.hookBlocking ?? undefined,
-    // MCP fields
     mcpEnabled: record.mcpEnabled ?? false,
     version: record.version ?? undefined,
-    // V2: Status and version management
     status: (record.status as CatalogItem['status']) ?? 'published',
     changelog: record.changelog ?? undefined,
+    orgId: record.orgId ?? undefined,
+    visibility: (record.visibility as CatalogItem['visibility']) ?? undefined,
+    forkedFrom: record.forkedFrom ?? undefined,
+    forkCount: record.forkCount,
+    sharedWithOrgs: record.sharedWithOrgs ?? undefined,
     createdAt: record.createdAt?.toISOString(),
     updatedAt: record.updatedAt?.toISOString(),
   }
@@ -204,10 +212,22 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
 // ============================================================================
 
 export async function getItemById(id: string): Promise<CatalogItem | undefined> {
-  const [record] = await db.select().from(catalogItems).where(eq(catalogItems.id, id))
+  const [result] = await db
+    .select({
+      item: catalogItems,
+      orgName: organizations.name,
+    })
+    .from(catalogItems)
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
+    .where(eq(catalogItems.id, id))
 
-  if (!record) return undefined
-  return toPlainObject(record)
+  if (!result) return undefined
+  
+  const item = toPlainObject(result.item)
+  return {
+    ...item,
+    orgName: result.orgName ?? undefined,
+  }
 }
 
 /**
@@ -253,9 +273,13 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
 }
 
 export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | undefined> {
-  const [record] = await db
-    .select()
+  const [result] = await db
+    .select({
+      item: catalogItems,
+      orgName: organizations.name,
+    })
     .from(catalogItems)
+    .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
     .where(
       and(
         eq(catalogItems.type, 'guide'),
@@ -263,8 +287,13 @@ export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | 
       )
     )
 
-  if (!record) return undefined
-  return toPlainObject(record)
+  if (!result) return undefined
+  
+  const item = toPlainObject(result.item)
+  return {
+    ...item,
+    orgName: result.orgName ?? undefined,
+  }
 }
 
 /**

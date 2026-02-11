@@ -93,7 +93,7 @@ export function InstallGuide({ itemId, itemType }: InstallGuideProps) {
       <div className="mt-6 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
         <p className="text-sm text-[var(--text-muted)]">
           <strong className="text-[var(--text-primary)]">💡 Tip:</strong>{' '}
-          <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">&quot;GPTers 설정해줘&quot;</code>를 
+          <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">&quot;설정해줘&quot;</code>를 
           실행하면 Hook이 설치되어 작업 시 자동으로 관련 플러그인을 검색하도록 안내받을 수 있습니다.
         </p>
       </div>
