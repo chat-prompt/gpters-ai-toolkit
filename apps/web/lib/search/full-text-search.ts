@@ -1,1 +1,1 @@
-export * from '@gpters/lib/search'
+export * from '../../../../packages/lib/src/search/full-text-search'

@@ -1,1 +1,1 @@
-export * from '@gpters/lib/core'
+export { getCatalog, getItemById, getItemsByAuthorId, getRelatedItems, getGuides, getGuideById, getPackageWithContents, getItemsByType, getBeginnerItems, getPackageContents, getPackages, addItemToPackage, removeItemFromPackage, setPackageItems } from '../../../../packages/lib/src/core/catalog'

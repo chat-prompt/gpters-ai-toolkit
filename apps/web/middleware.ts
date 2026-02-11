@@ -9,12 +9,29 @@
 import { auth } from './lib/core/auth-config'
 import type { NextAuthRequest } from 'next-auth'
 import { NextResponse } from 'next/server'
-import { 
-  getCurrentOrgId, 
-  validateOrgAccess, 
-  setCurrentOrgCookie, 
-  clearCurrentOrgCookie 
-} from '../../packages/lib/src/security/org-context'
+const ORG_COOKIE_NAME = 'x-current-org-id'
+
+function getCurrentOrgId(
+  cookies: { get: (name: string) => { value: string } | undefined }
+): string | undefined {
+  return cookies.get(ORG_COOKIE_NAME)?.value
+}
+
+function setCurrentOrgCookie(orgId: string): string {
+  const parts = [
+    `${ORG_COOKIE_NAME}=${orgId}`,
+    'Path=/',
+    `Max-Age=${60 * 60 * 24 * 30}`,
+    'SameSite=lax',
+    'HttpOnly',
+  ]
+  if (process.env.NODE_ENV === 'production') parts.push('Secure')
+  return parts.join('; ')
+}
+
+function clearCurrentOrgCookie(): string {
+  return `${ORG_COOKIE_NAME}=; Path=/; Max-Age=0`
+}
 
 const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true'
 
@@ -52,7 +69,7 @@ export default auth(async (req: NextAuthRequest) => {
   const orgIds = session.user?.orgIds || []
 
   if (currentOrgId && userId) {
-    const hasAccess = await validateOrgAccess(userId, currentOrgId, userRole)
+    const hasAccess = orgIds.includes(currentOrgId)
     
     if (!hasAccess) {
       const response = NextResponse.redirect(new URL('/', req.url))
