@@ -133,7 +133,7 @@ function ClaudeCodeTab({
   copiedStep: string | null
   onCopy: (text: string, stepId: string) => void
 }) {
-  const installCmd = 'claude plugin add chat-prompt/gpters-ai-toolkit'
+  const installCmd = 'claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin add chat-prompt/gpters-ai-toolkit'
 
   return (
     <div className="space-y-6">
@@ -152,8 +152,8 @@ function ClaudeCodeTab({
             <CodeBlock code={installCmd} stepId="cc-install" copiedStep={copiedStep} onCopy={onCopy} />
 
             <InfoBox color="blue" label="참고:">
-              플러그인은 Claude Code 마켓플레이스에서 설치됩니다.
-              설치 후 자동으로 MCP 서버가 연결됩니다.
+              기존 MCP 직접 연결이 있으면 자동으로 제거 후 플러그인을 설치합니다.
+              중복 연결 없이 플러그인 방식으로 전환됩니다.
             </InfoBox>
           </div>
         </div>

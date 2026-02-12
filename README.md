@@ -83,7 +83,7 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 ### Claude Code (권장)
 
 ```bash
-claude plugin add chat-prompt/gpters-ai-toolkit
+claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin add chat-prompt/gpters-ai-toolkit
 ```
 
 ### OpenCode
