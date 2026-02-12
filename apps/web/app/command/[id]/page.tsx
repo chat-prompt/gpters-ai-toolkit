@@ -19,7 +19,7 @@ import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export default async function CommandPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

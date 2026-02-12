@@ -4,7 +4,7 @@
  * Provides optimized database queries for catalog items including
  * list views, detail views, filtering, and package management.
  */
-import { eq, ne, and, or, isNull, asc } from 'drizzle-orm'
+import { eq, ne, and, or, isNull, asc, sql, desc } from 'drizzle-orm'
 import { db, catalogItems, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
 
@@ -358,7 +358,16 @@ export async function getRelatedItems(
   authorId: string | null,
   limit: number = 6
 ): Promise<CatalogItemSummary[]> {
-  // Get all published items except the current one
+  // Build score expression: matching tags count + 2 for same author
+  const tagScore = tags.length > 0
+    ? sql<number>`coalesce(array_length(${catalogItems.tags} & ${sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)}, 1), 0)`
+    : sql<number>`0`
+  const authorScore = authorId
+    ? sql<number>`CASE WHEN ${catalogItems.authorId} = ${authorId} THEN 2 ELSE 0 END`
+    : sql<number>`0`
+  const totalScore = sql<number>`(${tagScore} + ${authorScore})`
+
+  // Filter at DB level: only items with score > 0, sorted by score then updatedAt
   const records = await db
     .select({
       ...summaryColumns,
@@ -371,43 +380,20 @@ export async function getRelatedItems(
     .where(
       and(
         ne(catalogItems.id, itemId),
-        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+        // At least one matching tag or same author
+        or(
+          tags.length > 0
+            ? sql`${catalogItems.tags} && ${sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)}`
+            : sql`false`,
+          authorId ? eq(catalogItems.authorId, authorId) : sql`false`
+        )
       )
     )
+    .orderBy(desc(totalScore), desc(catalogItems.updatedAt))
+    .limit(limit)
 
-  const items = records.map(toSummaryObject)
-
-  // Score and filter items
-  const scoredItems = items
-    .map(item => {
-      let score = 0
-
-      // Count matching tags
-      const matchingTags = item.tags.filter(tag => tags.includes(tag))
-      score += matchingTags.length
-
-      // Bonus for same author
-      if (authorId && item.authorId === authorId) {
-        score += 2
-      }
-
-      return { item, score, matchingTags: matchingTags.length }
-    })
-    .filter(({ score }) => score > 0) // Only items with at least one match
-    .sort((a, b) => {
-      // Sort by score first
-      if (b.score !== a.score) {
-        return b.score - a.score
-      }
-      // Then by updated date
-      const aDate = a.item.updatedAt || ''
-      const bDate = b.item.updatedAt || ''
-      return bDate.localeCompare(aDate)
-    })
-    .slice(0, limit)
-    .map(({ item }) => item)
-
-  return scoredItems
+  return records.map(toSummaryObject)
 }
 
 // ============================================================================

@@ -14,7 +14,7 @@ import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export default async function GuidePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
