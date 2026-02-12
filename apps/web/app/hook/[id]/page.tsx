@@ -18,7 +18,7 @@ import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 function generateHookSettingsSnippet(item: {
   hookEvent: HookEvent

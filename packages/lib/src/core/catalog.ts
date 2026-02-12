@@ -358,16 +358,21 @@ export async function getRelatedItems(
   authorId: string | null,
   limit: number = 6
 ): Promise<CatalogItemSummary[]> {
-  // Build score expression: matching tags count + 2 for same author
-  const tagScore = tags.length > 0
-    ? sql<number>`coalesce(array_length(${catalogItems.tags} & ${sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)}, 1), 0)`
+  // Build tag array literal for SQL
+  const tagArrayLiteral = tags.length > 0
+    ? sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)
+    : null
+
+  // Score: count matching tags (via unnest subquery) + 2 for same author
+  const tagScore = tagArrayLiteral
+    ? sql<number>`coalesce((SELECT count(*)::int FROM unnest(${catalogItems.tags}) t WHERE t = ANY(${tagArrayLiteral})), 0)`
     : sql<number>`0`
   const authorScore = authorId
     ? sql<number>`CASE WHEN ${catalogItems.authorId} = ${authorId} THEN 2 ELSE 0 END`
     : sql<number>`0`
   const totalScore = sql<number>`(${tagScore} + ${authorScore})`
 
-  // Filter at DB level: only items with score > 0, sorted by score then updatedAt
+  // Filter at DB level: only items with at least one matching tag or same author
   const records = await db
     .select({
       ...summaryColumns,
@@ -381,10 +386,9 @@ export async function getRelatedItems(
       and(
         ne(catalogItems.id, itemId),
         or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-        // At least one matching tag or same author
         or(
-          tags.length > 0
-            ? sql`${catalogItems.tags} && ${sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)}`
+          tagArrayLiteral
+            ? sql`${catalogItems.tags} && ${tagArrayLiteral}`
             : sql`false`,
           authorId ? eq(catalogItems.authorId, authorId) : sql`false`
         )
