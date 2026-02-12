@@ -88,17 +88,15 @@ claude plugin add chat-prompt/gpters-ai-toolkit
 
 ### OpenCode
 
-`opencode.json`에 플러그인 추가:
+터미널에서 원라인 설치:
 
-```json
-{
-  "mcpServers": {
-    "gpters-ai-toolkit": {
-      "type": "npm",
-      "package": "@gpters-internal/opencode"
-    }
-  }
-}
+```bash
+grep -q "verdaccio.gpters.org" ~/.opencode/.npmrc 2>/dev/null || echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.opencode/.npmrc && \
+grep -q "verdaccio.gpters.org" ~/.cache/opencode/.npmrc 2>/dev/null || (mkdir -p ~/.cache/opencode && echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.cache/opencode/.npmrc) && \
+[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \
+node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters-internal/opencode')||c.plugin.push('@gpters-internal/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"
 ```
 
 ### MCP 직접 연결

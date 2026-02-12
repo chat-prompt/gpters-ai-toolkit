@@ -241,63 +241,40 @@ function OpenCodeTab({
   copiedStep: string | null
   onCopy: (text: string, stepId: string) => void
 }) {
-  const npmrcContent = `@gpters-internal:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN`
-
-  const opencodeConfig = `{
-  "mcpServers": {
-    "gpters-ai-toolkit": {
-      "type": "npm",
-      "package": "@gpters-internal/opencode",
-      "args": []
-    }
-  }
-}`
+  const installCmd = `grep -q "verdaccio.gpters.org" ~/.opencode/.npmrc 2>/dev/null || echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.opencode/.npmrc && \\
+grep -q "verdaccio.gpters.org" ~/.cache/opencode/.npmrc 2>/dev/null || (mkdir -p ~/.cache/opencode && echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.cache/opencode/.npmrc) && \\
+[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \\
+node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters-internal/opencode')||c.plugin.push('@gpters-internal/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"`
 
   return (
     <div className="space-y-6">
-      {/* Step 1: Registry Config */}
+      {/* Step 1: One-liner Install */}
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={1} color="cyan" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              Registry 설정
+              플러그인 설치
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              <code className="text-xs bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded">~/.cache/opencode/.npmrc</code> 파일에 아래 내용을 추가하세요:
+              터미널에서 아래 명령어를 실행하세요. Registry 설정부터 플러그인 등록까지 한 번에 완료됩니다:
             </p>
 
-            <CodeBlock code={npmrcContent} stepId="oc-npmrc" copiedStep={copiedStep} onCopy={onCopy} />
+            <CodeBlock code={installCmd} stepId="oc-install" copiedStep={copiedStep} onCopy={onCopy} />
 
             <InfoBox color="blue" label="참고:">
-              <code className="text-xs">YOUR_GITHUB_TOKEN</code>을 GitHub Personal Access Token (<code className="text-xs">read:packages</code> 권한)으로 교체하세요.
+              이미 설정된 환경에서는 중복 실행해도 안전합니다. 기존 설정을 덮어쓰지 않습니다.
             </InfoBox>
           </div>
         </div>
       </div>
 
-      {/* Step 2: opencode.json */}
+      {/* Step 2: Restart */}
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={2} color="purple" />
-          <div className="flex-grow">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              opencode.json에 플러그인 추가
-            </h2>
-            <p className="text-sm text-[var(--text-secondary)] mb-4">
-              프로젝트 루트의 <code className="text-xs bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded">opencode.json</code>에 MCP 서버를 추가하세요:
-            </p>
-
-            <CodeBlock code={opencodeConfig} stepId="oc-config" copiedStep={copiedStep} onCopy={onCopy} />
-          </div>
-        </div>
-      </div>
-
-      {/* Step 3: Restart */}
-      <div className="glass rounded-2xl p-6">
-        <div className="flex items-start gap-4">
-          <StepBadge step={3} color="green" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               OpenCode 재시작
