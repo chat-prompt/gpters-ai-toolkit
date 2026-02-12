@@ -15,8 +15,6 @@ import { DependencyDisplay } from '@/components/detail/DependencyDisplay'
 import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
 import { TableOfContents, Section, type TocItem } from '@/components/detail/TableOfContents'
 import { DraftBanner } from '@/components/detail/DraftBanner'
-import { TryItButton } from '@/components/actions/TryItButton'
-import { DownloadButton } from '@/components/actions/DownloadButton'
 import { RelatedItems } from '@/components/detail/RelatedItems'
 import { ExamplesSection } from '@/components/detail/ExamplesSection'
 import { FilesSection } from '@/components/detail/FilesSection'
@@ -90,7 +88,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           description={item.description}
           authorName={item.authorName}
           tags={item.tags}
-          likes={item.likes}
           difficulty={item.difficulty}
           updatedAt={item.updatedAt}
           status={item.status}
@@ -99,12 +96,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           orgId={item.orgId}
           visibility={item.visibility}
           currentOrgId={currentOrgId}
-          extraBadges={
-            <>
-              <TryItButton itemId={item.id} />
-              <DownloadButton itemId={item.id} itemName={item.name} size="sm" />
-            </>
-          }
         />
       </Section>
 

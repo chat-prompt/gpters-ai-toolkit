@@ -137,26 +137,8 @@ export default function ProfilePage() {
   const { user, items, stats } = profile
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
-      {/* Header */}
-      <header className="relative z-10 border-b border-[var(--border-subtle)]">
-        <div className="max-w-5xl mx-auto px-8 py-5">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors"
-          >
-            <span>←</span>
-            <span>Back to Catalog</span>
-          </Link>
-        </div>
-      </header>
-
-      <main className="relative z-10 max-w-5xl mx-auto px-8 py-12">
+    <div className="min-h-screen">
+      <main className="max-w-5xl mx-auto px-8 py-12">
         {/* Profile Header */}
         <div className="glass rounded-2xl p-8 mb-8">
           <div className="flex items-start gap-6">
@@ -246,35 +228,18 @@ export default function ProfilePage() {
             <div className="text-2xl font-light text-yellow-400">{stats.drafts}</div>
             <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Drafts</div>
           </div>
-          <div className="glass rounded-xl p-4 text-center">
-            <div className="text-2xl font-light text-rose-400">{stats.totalLikes}</div>
-            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Total Likes</div>
-          </div>
         </div>
 
         {/* Items List */}
         <div>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-medium text-[var(--text-primary)]">내 아이템</h2>
-            <Link
-              href="/upload"
-              className="text-sm text-[var(--accent-cyan)] hover:underline flex items-center gap-1"
-            >
-              <span>+</span>
-              <span>새 아이템 추가</span>
-            </Link>
           </div>
 
           {items.length === 0 ? (
             <div className="glass rounded-2xl p-12 text-center">
               <div className="text-4xl mb-4 opacity-20">📝</div>
               <p className="text-[var(--text-secondary)] mb-4">아직 생성한 아이템이 없습니다.</p>
-              <Link
-                href="/upload"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-cyan)] text-black text-sm font-medium hover:opacity-90 transition-opacity"
-              >
-                첫 번째 아이템 만들기
-              </Link>
             </div>
           ) : (
             <div className="space-y-3">
@@ -317,12 +282,6 @@ export default function ProfilePage() {
                             </span>
                           ))}
                         </div>
-                        {item.likes > 0 && (
-                          <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                            <span className="text-rose-400">♥</span>
-                            {item.likes}
-                          </span>
-                        )}
                         <span className="text-xs text-[var(--text-muted)]">
                           {formatRelativeTime(item.updatedAt || null)}
                         </span>

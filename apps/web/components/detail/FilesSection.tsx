@@ -96,11 +96,11 @@ function FileItem({ file }: { file: PluginFile }) {
       }`}
     >
       {/* File header */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
-      >
-        <div className="flex items-center gap-3">
+      <div className="w-full px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-3 flex-1 hover:bg-white/5 transition-colors rounded-lg -ml-2 px-2 py-1"
+        >
           <span className="text-lg">{meta.icon}</span>
           <div className="text-left">
             <div className="text-sm font-mono text-[var(--text-primary)]">{file.name}</div>
@@ -108,11 +108,8 @@ function FileItem({ file }: { file: PluginFile }) {
               {file.content.split('\n').length} lines
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <CopyButton text={file.content} />
           <svg
-            className={`w-5 h-5 text-[var(--text-secondary)] transition-transform ${
+            className={`w-5 h-5 text-[var(--text-secondary)] transition-transform ml-auto ${
               isExpanded ? 'rotate-180' : ''
             }`}
             fill="none"
@@ -121,8 +118,11 @@ function FileItem({ file }: { file: PluginFile }) {
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
+        </button>
+        <div className="flex items-center gap-2 ml-2">
+          <CopyButton text={file.content} />
         </div>
-      </button>
+      </div>
 
       {/* Expandable content */}
       {isExpanded && (

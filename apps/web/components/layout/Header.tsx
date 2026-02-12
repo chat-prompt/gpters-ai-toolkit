@@ -55,9 +55,8 @@ export function Header({ user }: HeaderProps) {
 
   const isGuidesTab = pathname.startsWith('/guides')
   const isStartTab = pathname.startsWith('/getting-started')
-  const isPromptsTab = pathname.startsWith('/prompts')
   const isStatsTab = pathname.startsWith('/stats')
-  const isCatalogTab = !isGuidesTab && !isStartTab && !isPromptsTab && !isStatsTab && pathname !== '/upload'
+  const isCatalogTab = !isGuidesTab && !isStartTab && !isStatsTab
 
   return (
     <header className="relative z-[1010] border-b border-[var(--border-subtle)]">
@@ -111,16 +110,6 @@ export function Header({ user }: HeaderProps) {
                 Guides
               </Link>
               <Link
-                href="/prompts"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isPromptsTab
-                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                Prompts
-              </Link>
-              <Link
                 href="/stats"
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   isStatsTab
@@ -139,12 +128,6 @@ export function Header({ user }: HeaderProps) {
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
             {user && <AdminQuickMenu userRole={user.role} />}
-            <Link
-              href="/upload"
-              className="px-4 py-2 rounded-xl text-sm font-medium bg-[#F26522] text-white hover:bg-[#E55A1B] transition-colors"
-            >
-              Share
-            </Link>
             {user && <UserMenu user={user} />}
           </div>
         </div>

@@ -120,12 +120,6 @@ export default function TemplatesPage() {
                 >
                   새 템플릿 만들기
                 </button>
-                <Link
-                  href="/upload"
-                  className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
-                >
-                  카탈로그에 등록하기
-                </Link>
               </div>
             </div>
           ) : (

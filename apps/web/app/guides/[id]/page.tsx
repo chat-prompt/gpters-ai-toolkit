@@ -47,7 +47,6 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         description={guide.description}
         authorName={guide.authorName}
         tags={guide.tags}
-        likes={guide.likes}
         difficulty={guide.difficulty}
         estimatedTime={guide.estimatedTime}
         updatedAt={guide.updatedAt}
@@ -57,7 +56,6 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         orgId={guide.orgId}
         visibility={guide.visibility}
         currentOrgId={currentOrgId}
-        showLikes={true}
       />
 
       {/* Changelog */}

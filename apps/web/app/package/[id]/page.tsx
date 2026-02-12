@@ -12,7 +12,6 @@ import { DependencyDisplay } from '@/components/detail/DependencyDisplay'
 import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
 import { TableOfContents, Section, type TocItem } from '@/components/detail/TableOfContents'
 import { DraftBanner } from '@/components/detail/DraftBanner'
-import { DownloadButton } from '@/components/actions/DownloadButton'
 import { RelatedItems } from '@/components/detail/RelatedItems'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { ItemCard } from '@/components/catalog/SearchableCatalog/ItemCard'
@@ -81,16 +80,10 @@ export default async function PackagePage({ params }: { params: Promise<{ id: st
           description={item.description}
           authorName={item.authorName}
           tags={item.tags}
-          likes={item.likes}
           difficulty={item.difficulty}
           updatedAt={item.updatedAt}
           status={item.status}
           version={item.version}
-          extraBadges={
-            <>
-              <DownloadButton itemId={item.id} itemName={item.name} size="sm" />
-            </>
-          }
         />
       </Section>
 

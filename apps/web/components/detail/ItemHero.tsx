@@ -5,7 +5,6 @@
  * with type-specific styling and interactive like button.
  */
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
-import { LikeButton } from '../social/LikeButton'
 import { StatusBadge } from '../ui/StatusBadge'
 import { VersionPopover } from '../ui/VersionPopover'
 import { OrgBadge } from '../ui/OrgBadge'
@@ -30,8 +29,6 @@ interface ItemHeroProps {
   authorName?: string
   /** Tag keys for the item */
   tags: string[]
-  /** Current like count */
-  likes: number
   /** Unique item identifier */
   itemId: string
   /** Difficulty level */
@@ -46,8 +43,6 @@ interface ItemHeroProps {
   estimatedTime?: string
   /** Additional badges to display */
   extraBadges?: ReactNode
-  /** Whether to show like button */
-  showLikes?: boolean
   /** Organization name */
   orgName?: string | null
   /** Organization ID */
@@ -88,7 +83,6 @@ export function ItemHero({
   description,
   authorName,
   tags,
-  likes,
   itemId,
   difficulty,
   updatedAt,
@@ -96,7 +90,6 @@ export function ItemHero({
   version,
   estimatedTime,
   extraBadges,
-  showLikes = true,
   orgName,
   orgId,
   visibility,
@@ -159,12 +152,6 @@ export function ItemHero({
           <>
             <span className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
             <span>Updated {updatedAt}</span>
-          </>
-        )}
-        {showLikes && (
-          <>
-            <span className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
-            <LikeButton itemId={itemId} initialLikes={likes} />
           </>
         )}
       </div>

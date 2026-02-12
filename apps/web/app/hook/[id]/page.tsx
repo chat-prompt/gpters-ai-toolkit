@@ -14,8 +14,6 @@ import { ContentSection } from '@/components/detail/ContentSection'
 import { CopyButton } from '@/components/ui/CopyButton'
 import { TableOfContents, Section, type TocItem } from '@/components/detail/TableOfContents'
 import { DraftBanner } from '@/components/detail/DraftBanner'
-import { TryItButton } from '@/components/actions/TryItButton'
-import { DownloadButton } from '@/components/actions/DownloadButton'
 import { AdminEditButton } from '@/components/admin/AdminEditButton'
 import { auth } from '@/lib/core/auth'
 import { notFound } from 'next/navigation'
@@ -115,8 +113,6 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           {eventInfo.label}
         </span>
       )}
-      <TryItButton itemId={item.id} />
-      <DownloadButton itemId={item.id} itemName={item.name} size="sm" />
     </>
   )
 
@@ -134,7 +130,6 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           description={item.description}
           authorName={item.authorName}
           tags={item.tags}
-          likes={item.likes}
           updatedAt={item.updatedAt}
           status={item.status}
           version={item.version}

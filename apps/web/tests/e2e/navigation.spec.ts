@@ -17,8 +17,5 @@ test.describe('Navigation (unauthenticated)', () => {
 
     await page.goto('/guides')
     await expect(page).toHaveURL(/\/auth\/signin/)
-
-    await page.goto('/upload')
-    await expect(page).toHaveURL(/\/auth\/signin/)
   })
 })

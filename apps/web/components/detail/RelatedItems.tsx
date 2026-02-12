@@ -150,12 +150,6 @@ export function RelatedItems({ items, currentItemTags, currentItemAuthorId }: Re
                 {/* Footer */}
                 <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--border-subtle)]">
                   {item.authorName && <span className="text-[10px] text-[var(--text-muted)]">@{item.authorName}</span>}
-                  {item.likes > 0 && (
-                    <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                      <span className="text-rose-400">♥</span>
-                      {item.likes}
-                    </span>
-                  )}
                 </div>
               </div>
             </Link>
