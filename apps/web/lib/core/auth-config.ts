@@ -125,17 +125,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session
     },
     async jwt({ token, user }) {
+      // On sign-in: populate token from user object (already set by signIn callback)
       if (user) {
         token.id = user.id
+        token.role = (user.role as UserRole) || DEFAULT_ROLE
+        token.orgIds = user.orgIds || []
+        token.tokenRefreshedAt = Date.now()
+
+        // Set initial org context
+        if (user.orgIds && user.orgIds.length > 0) {
+          token.currentOrgId = user.orgIds[0]
+          token.orgRole = DEFAULT_ORG_ROLE
+        }
+
+        return token
+      }
+
+      // On subsequent requests: refresh from DB every 5 minutes
+      const REFRESH_INTERVAL = 5 * 60 * 1000
+      const lastRefreshed = (token.tokenRefreshedAt as number) || 0
+      if (Date.now() - lastRefreshed < REFRESH_INTERVAL) {
+        return token
       }
 
       try {
         const email = token.email as string
         if (email) {
           const [dbUser] = await db
-            .select({ 
+            .select({
               id: users.id,
-              role: users.role 
+              role: users.role
             })
             .from(users)
             .where(eq(users.email, email))
@@ -165,6 +184,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
           }
         }
+        token.tokenRefreshedAt = Date.now()
       } catch {
         // Keep existing token values on DB error
       }
