@@ -43,9 +43,13 @@ import type {
   UndeploySkillResponse,
   SemanticSearchInput,
   SemanticSearchResult,
+  AddFilesInput,
+  AddFilesResponse,
+  RemoveFilesInput,
+  RemoveFilesResponse,
 } from './types'
 import type { ItemType, TeamTag, CatalogItem } from '../core/types'
-import { determineVersion, generateIdFromName, hasUpdate } from '../versioning/version'
+import { determineVersion, generateIdFromName, hasUpdate, incrementVersion } from '../versioning/version'
 import { createVersionSnapshot } from '../versioning/skill-version'
 import { getBaseUrl } from '../utils'
 import { generateEmbedding, prepareTextForEmbedding } from '../search/embedding'
@@ -1232,6 +1236,279 @@ export async function undeploySkill(
 }
 
 /**
+ * Add files to an existing plugin (merge strategy: keep existing, overwrite same name, add new)
+ *
+ * @param input - Add files input with plugin ID and files array
+ * @param userId - Authenticated user ID (required for ownership check)
+ * @param userRole - Authenticated user's role (admin can override ownership check)
+ */
+export async function addFiles(
+  input: AddFilesInput,
+  userId?: string,
+  userRole?: string
+): Promise<AddFilesResponse> {
+  const { id, files: newFiles } = input
+
+  const existing = await db
+    .select({
+      id: catalogItems.id,
+      version: catalogItems.version,
+      authorId: catalogItems.authorId,
+      files: catalogItems.files,
+    })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (existing.length === 0) {
+    return {
+      success: false,
+      id,
+      version: '',
+      previousVersion: '',
+      addedOrUpdated: [],
+      totalFiles: 0,
+      files: [],
+      error: `플러그인 '${id}'을(를) 찾을 수 없습니다`,
+    }
+  }
+
+  const item = existing[0]
+
+  if (!userId) {
+    return {
+      success: false,
+      id,
+      version: item.version || '1.0.0',
+      previousVersion: item.version || '1.0.0',
+      addedOrUpdated: [],
+      totalFiles: 0,
+      files: [],
+      error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+    }
+  }
+
+  const hasAdminRole = userRole === 'admin'
+  if (item.authorId !== userId && !hasAdminRole) {
+    return {
+      success: false,
+      id,
+      version: item.version || '1.0.0',
+      previousVersion: item.version || '1.0.0',
+      addedOrUpdated: [],
+      totalFiles: 0,
+      files: [],
+      error: `본인이 배포한 플러그인만 수정할 수 있습니다. 소유자가 아닙니다.`,
+    }
+  }
+
+  // Merge files: use Map for name-based merge
+  const fileMap = new Map<string, PluginFileWithType>()
+  const existingFiles = (item.files || []) as PluginFileWithType[]
+  for (const f of existingFiles) {
+    fileMap.set(f.name, f)
+  }
+
+  const addedOrUpdated: string[] = []
+  for (const f of newFiles) {
+    const typed: PluginFileWithType = {
+      name: f.name,
+      content: f.content,
+      type: inferFileType(f),
+    }
+    fileMap.set(f.name, typed)
+    addedOrUpdated.push(f.name)
+  }
+
+  const mergedFiles = Array.from(fileMap.values())
+  const previousVersion = item.version || '1.0.0'
+  const newVersion = incrementVersion(previousVersion, 'patch')
+
+  await db
+    .update(catalogItems)
+    .set({
+      files: mergedFiles,
+      version: newVersion,
+      changelog: `파일 추가/업데이트: ${addedOrUpdated.join(', ')}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(catalogItems.id, id))
+
+  // Create version snapshot
+  const [updatedItem] = await db
+    .select()
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (updatedItem) {
+    await createVersionSnapshot(updatedItem, {
+      version: newVersion,
+      versionType: 'patch',
+      changelog: `파일 추가/업데이트: ${addedOrUpdated.join(', ')}`,
+      createdBy: userId,
+    }).catch((err) => {
+      log.error('Failed to create version snapshot', err)
+    })
+  }
+
+  return {
+    success: true,
+    id,
+    version: newVersion,
+    previousVersion,
+    addedOrUpdated,
+    totalFiles: mergedFiles.length,
+    files: mergedFiles,
+  }
+}
+
+/**
+ * Remove files from an existing plugin by file name
+ *
+ * @param input - Remove files input with plugin ID and file names
+ * @param userId - Authenticated user ID (required for ownership check)
+ * @param userRole - Authenticated user's role (admin can override ownership check)
+ */
+export async function removeFiles(
+  input: RemoveFilesInput,
+  userId?: string,
+  userRole?: string
+): Promise<RemoveFilesResponse> {
+  const { id, fileNames } = input
+
+  const existing = await db
+    .select({
+      id: catalogItems.id,
+      version: catalogItems.version,
+      authorId: catalogItems.authorId,
+      files: catalogItems.files,
+    })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (existing.length === 0) {
+    return {
+      success: false,
+      id,
+      version: '',
+      previousVersion: '',
+      removed: [],
+      notFound: [],
+      totalFiles: 0,
+      files: null,
+      error: `플러그인 '${id}'을(를) 찾을 수 없습니다`,
+    }
+  }
+
+  const item = existing[0]
+
+  if (!userId) {
+    return {
+      success: false,
+      id,
+      version: item.version || '1.0.0',
+      previousVersion: item.version || '1.0.0',
+      removed: [],
+      notFound: [],
+      totalFiles: 0,
+      files: null,
+      error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+    }
+  }
+
+  const hasAdminRole = userRole === 'admin'
+  if (item.authorId !== userId && !hasAdminRole) {
+    return {
+      success: false,
+      id,
+      version: item.version || '1.0.0',
+      previousVersion: item.version || '1.0.0',
+      removed: [],
+      notFound: [],
+      totalFiles: 0,
+      files: null,
+      error: `본인이 배포한 플러그인만 수정할 수 있습니다. 소유자가 아닙니다.`,
+    }
+  }
+
+  const existingFiles = (item.files || []) as PluginFileWithType[]
+  const existingNameSet = new Set(existingFiles.map((f) => f.name))
+
+  const removed: string[] = []
+  const notFound: string[] = []
+
+  for (const name of fileNames) {
+    if (existingNameSet.has(name)) {
+      removed.push(name)
+    } else {
+      notFound.push(name)
+    }
+  }
+
+  const previousVersion = item.version || '1.0.0'
+
+  // Skip version bump if nothing was actually removed
+  if (removed.length === 0) {
+    return {
+      success: true,
+      id,
+      version: previousVersion,
+      previousVersion,
+      removed: [],
+      notFound,
+      totalFiles: existingFiles.length,
+      files: existingFiles.length > 0 ? existingFiles : null,
+    }
+  }
+
+  const removeSet = new Set(removed)
+  const remainingFiles = existingFiles.filter((f) => !removeSet.has(f.name))
+  const newVersion = incrementVersion(previousVersion, 'patch')
+  const resultFiles = remainingFiles.length > 0 ? remainingFiles : null
+
+  await db
+    .update(catalogItems)
+    .set({
+      files: resultFiles,
+      version: newVersion,
+      changelog: `파일 삭제: ${removed.join(', ')}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(catalogItems.id, id))
+
+  // Create version snapshot
+  const [updatedItem] = await db
+    .select()
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1)
+
+  if (updatedItem) {
+    await createVersionSnapshot(updatedItem, {
+      version: newVersion,
+      versionType: 'patch',
+      changelog: `파일 삭제: ${removed.join(', ')}`,
+      createdBy: userId,
+    }).catch((err) => {
+      log.error('Failed to create version snapshot', err)
+    })
+  }
+
+  return {
+    success: true,
+    id,
+    version: newVersion,
+    previousVersion,
+    removed,
+    notFound,
+    totalFiles: remainingFiles.length,
+    files: resultFiles,
+  }
+}
+
+/**
  * Check if the user has admin role
  */
 function isAdmin(userRole?: string): boolean {
@@ -1611,6 +1888,60 @@ export async function executeTool(
           }
         }
         const result = await resolveSuggestion(input, userId, userRole)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'add_files': {
+        const input = args as unknown as AddFilesInput
+        if (!input.id || !input.files || !Array.isArray(input.files) || input.files.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required fields: id, files (non-empty array)',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await addFiles(input, userId, userRole)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
+        }
+      }
+
+      case 'remove_files': {
+        const input = args as unknown as RemoveFilesInput
+        if (!input.id || !input.fileNames || !Array.isArray(input.fileNames) || input.fileNames.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing required fields: id, fileNames (non-empty array)',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        const result = await removeFiles(input, userId, userRole)
         return {
           content: [
             {

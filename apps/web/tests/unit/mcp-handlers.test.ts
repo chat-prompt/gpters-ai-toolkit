@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock the database module
-vi.mock('@/lib/db', () => ({
-  db: {
+const { mockDb, mockCatalogItems, mockUsers, mockSuggestions } = vi.hoisted(() => {
+  const mockDb = {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-  },
-  catalogItems: {
+  }
+
+  const mockCatalogItems = {
     id: 'id',
     name: 'name',
     type: 'type',
@@ -32,13 +32,20 @@ vi.mock('@/lib/db', () => ({
     changelog: 'changelog',
     mcpEnabled: 'mcpEnabled',
     likes: 'likes',
-  },
-  users: {
+    orgId: 'orgId',
+    visibility: 'visibility',
+    sharedWithOrgs: 'sharedWithOrgs',
+    forkCount: 'forkCount',
+    embedding: 'embedding',
+  }
+
+  const mockUsers = {
     id: 'id',
     name: 'name',
     email: 'email',
-  },
-  suggestions: {
+  }
+
+  const mockSuggestions = {
     id: 'id',
     pluginId: 'pluginId',
     title: 'title',
@@ -52,21 +59,56 @@ vi.mock('@/lib/db', () => ({
     resolveComment: 'resolveComment',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
-  },
+  }
+
+  return { mockDb, mockCatalogItems, mockUsers, mockSuggestions }
+})
+
+// Mock the database module (must match the actual import path used by handlers)
+vi.mock('@gpters/db', () => ({
+  db: mockDb,
+  catalogItems: mockCatalogItems,
+  users: mockUsers,
+  suggestions: mockSuggestions,
 }))
 
-// Mock the marketplace sync
-vi.mock('@/lib/marketplace', () => ({
-  syncItemToGitHub: vi.fn().mockResolvedValue({
-    success: true,
-    filesCreated: ['README.md'],
-    filesUpdated: [],
-    errors: [],
+// Mock drizzle-orm operators used by handlers
+vi.mock('drizzle-orm', () => ({
+  ilike: vi.fn(),
+  or: vi.fn(),
+  eq: vi.fn(),
+  and: vi.fn(),
+  sql: vi.fn(),
+  inArray: vi.fn(),
+  desc: vi.fn(),
+}))
+
+// Mock sub-modules using resolved file paths matching handlers.ts relative imports
+// handlers.ts is at packages/lib/src/mcp/handlers.ts and uses relative imports like ../core/logger
+// From apps/web/tests/unit/ to packages/lib/src/ is ../../../../packages/lib/src/
+
+vi.mock('../../../../packages/lib/src/core/logger', () => ({
+  createLogger: vi.fn().mockReturnValue({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   }),
 }))
 
-// Mock the version utilities
-vi.mock('@/lib/versioning/version', () => ({
+vi.mock('../../../../packages/lib/src/plugin/dependency-resolver', () => ({
+  resolveAgentsAsConfig: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('../../../../packages/lib/src/security/rbac', () => ({
+  isSuperAdmin: vi.fn().mockReturnValue(false),
+}))
+
+vi.mock('../../../../packages/lib/src/notifications/slack', () => ({
+  notifySlackDeploy: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../../../packages/lib/src/versioning/version', () => ({
   determineVersion: vi.fn().mockReturnValue({
     version: '1.0.0',
     changelog: 'Initial release',
@@ -77,9 +119,30 @@ vi.mock('@/lib/versioning/version', () => ({
   hasUpdate: vi.fn().mockImplementation((installed: string, latest: string) =>
     installed !== latest
   ),
+  incrementVersion: vi.fn().mockImplementation((version: string) => {
+    const [major, minor, patch] = version.split('.').map(Number)
+    return `${major}.${minor}.${patch + 1}`
+  }),
 }))
 
-import { db } from '@/lib/db'
+vi.mock('../../../../packages/lib/src/versioning/skill-version', () => ({
+  createVersionSnapshot: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../../../packages/lib/src/search/embedding', () => ({
+  generateEmbedding: vi.fn().mockResolvedValue([]),
+  prepareTextForEmbedding: vi.fn().mockReturnValue(''),
+}))
+
+vi.mock('../../../../packages/lib/src/search/vector-search', () => ({
+  semanticSearch: vi.fn().mockResolvedValue({ items: [], total: 0, searchTime: 0 }),
+}))
+
+vi.mock('../../../../packages/lib/src/utils', () => ({
+  getBaseUrl: vi.fn().mockReturnValue('https://ai-toolkit.gpters.org'),
+}))
+
+const db = mockDb
 import {
   searchPlugins,
   getPluginContent,
@@ -93,6 +156,8 @@ import {
   suggestImprovement,
   listSuggestions,
   resolveSuggestion,
+  addFiles,
+  removeFiles,
   executeTool,
   listPrompts,
   getPrompt,
@@ -478,7 +543,7 @@ describe('MCP Handlers', () => {
 
     it('should update existing skill', async () => {
       const mockSelectChain = createMockChain([
-        { id: 'existing-skill', content: 'old content', version: '1.0.0' },
+        { id: 'existing-skill', content: 'old content', version: '1.0.0', authorId: 'user-1' },
       ])
       const mockUpdateChain = {
         set: vi.fn().mockReturnThis(),
@@ -493,7 +558,7 @@ describe('MCP Handlers', () => {
         name: 'Existing Skill',
         id: 'existing-skill',
         content: '# Updated Content',
-      })
+      }, 'user-1')
 
       expect(result.success).toBe(true)
       expect(result.previousVersion).toBe('1.0.0')
@@ -603,7 +668,7 @@ describe('MCP Handlers', () => {
       vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
 
       // Mock hasUpdate to return false for same version
-      const { hasUpdate } = await import('@/lib/versioning/version')
+      const { hasUpdate } = await import('../../../../packages/lib/src/versioning/version')
       vi.mocked(hasUpdate).mockReturnValue(false)
 
       const result = await checkUpdates({
@@ -918,6 +983,247 @@ describe('MCP Handlers', () => {
     })
   })
 
+  describe('addFiles', () => {
+    const ownerUserId = 'owner-user-123'
+
+    it('should add new files to a plugin', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: [] },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await addFiles(
+        {
+          id: 'my-skill',
+          files: [{ name: 'scripts/run.mjs', content: 'console.log("hi")' }],
+        },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.version).toBe('1.0.1')
+      expect(result.previousVersion).toBe('1.0.0')
+      expect(result.addedOrUpdated).toContain('scripts/run.mjs')
+      expect(result.totalFiles).toBe(1)
+      expect(db.update).toHaveBeenCalled()
+    })
+
+    it('should merge with existing files and overwrite same name', async () => {
+      const existingFiles = [
+        { name: 'ref.md', content: 'old content', type: 'reference' },
+        { name: 'keep.md', content: 'keep this', type: 'reference' },
+      ]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await addFiles(
+        {
+          id: 'my-skill',
+          files: [
+            { name: 'ref.md', content: 'new content' },
+            { name: 'new-file.ts', content: 'code' },
+          ],
+        },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.totalFiles).toBe(3) // keep.md + ref.md (updated) + new-file.ts
+      expect(result.addedOrUpdated).toEqual(['ref.md', 'new-file.ts'])
+    })
+
+    it('should fail if plugin not found', async () => {
+      const mockSelectChain = createMockChain([])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await addFiles(
+        { id: 'nonexistent', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('찾을 수 없습니다')
+    })
+
+    it('should fail without authentication', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: [] },
+      ])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('인증이 필요합니다')
+    })
+
+    it('should fail if not owner', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', files: [] },
+      ])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('소유자가 아닙니다')
+    })
+  })
+
+  describe('removeFiles', () => {
+    const ownerUserId = 'owner-user-123'
+
+    it('should remove existing files', async () => {
+      const existingFiles = [
+        { name: 'a.md', content: 'aaa', type: 'reference' },
+        { name: 'b.md', content: 'bbb', type: 'reference' },
+        { name: 'c.md', content: 'ccc', type: 'reference' },
+      ]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['a.md', 'c.md'] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.version).toBe('1.0.1')
+      expect(result.removed).toEqual(['a.md', 'c.md'])
+      expect(result.notFound).toEqual([])
+      expect(result.totalFiles).toBe(1) // only b.md remains
+    })
+
+    it('should report not-found files without error', async () => {
+      const existingFiles = [
+        { name: 'a.md', content: 'aaa', type: 'reference' },
+      ]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['a.md', 'nonexistent.md'] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.removed).toEqual(['a.md'])
+      expect(result.notFound).toEqual(['nonexistent.md'])
+    })
+
+    it('should skip version bump when no files actually removed', async () => {
+      const existingFiles = [
+        { name: 'a.md', content: 'aaa', type: 'reference' },
+      ]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: existingFiles },
+      ])
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['nonexistent.md'] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.version).toBe('1.0.0') // No bump
+      expect(result.removed).toEqual([])
+      expect(result.notFound).toEqual(['nonexistent.md'])
+      expect(db.update).not.toHaveBeenCalled()
+    })
+
+    it('should set files to null when all files removed', async () => {
+      const existingFiles = [
+        { name: 'only.md', content: 'content', type: 'reference' },
+      ]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['only.md'] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.totalFiles).toBe(0)
+      expect(result.files).toBeNull()
+      // Verify DB was updated with null files
+      const setCall = mockUpdateChain.set.mock.calls[0][0]
+      expect(setCall.files).toBeNull()
+    })
+
+    it('should fail if plugin not found', async () => {
+      const mockSelectChain = createMockChain([])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await removeFiles(
+        { id: 'nonexistent', fileNames: ['a.md'] },
+        ownerUserId
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('찾을 수 없습니다')
+    })
+
+    it('should fail without authentication', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, files: [] },
+      ])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['a.md'] },
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('인증이 필요합니다')
+    })
+  })
+
   describe('executeTool', () => {
     beforeEach(() => {
       const mockChain = createMockChain([])
@@ -1144,6 +1450,69 @@ describe('MCP Handlers', () => {
 
       expect(result.isError).toBe(true)
       expect(result.content[0].text).toContain('action must be')
+    })
+
+    it('should execute add_files tool', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'user-123', files: [] },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await executeTool(
+        'add_files',
+        {
+          id: 'my-skill',
+          files: [{ name: 'test.md', content: 'hello' }],
+        },
+        'user-123'
+      )
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeFalsy()
+    })
+
+    it('should return error for add_files without required fields', async () => {
+      const result = await executeTool('add_files', { id: 'test' })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    it('should execute remove_files tool', async () => {
+      const existingFiles = [{ name: 'a.md', content: 'aaa', type: 'reference' }]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'user-123', files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await executeTool(
+        'remove_files',
+        {
+          id: 'my-skill',
+          fileNames: ['a.md'],
+        },
+        'user-123'
+      )
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeFalsy()
+    })
+
+    it('should return error for remove_files without required fields', async () => {
+      const result = await executeTool('remove_files', { id: 'test' })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
     })
 
     it('should return error for unknown tool', async () => {

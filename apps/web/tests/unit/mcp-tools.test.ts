@@ -20,7 +20,7 @@ describe('MCP Tools', () => {
       expect(isAdminTool('create_plugin')).toBe(true)
       expect(isAdminTool('update_plugin')).toBe(true)
       expect(isAdminTool('delete_plugin')).toBe(true)
-      expect(isAdminTool('search_plugins')).toBe(false)
+      expect(isAdminTool('semantic_search')).toBe(false)
       expect(isAdminTool('deploy_skill')).toBe(false)
     })
 
@@ -30,36 +30,30 @@ describe('MCP Tools', () => {
       expect(toolNames).not.toContain('update_plugin')
       expect(toolNames).not.toContain('delete_plugin')
     })
-
-    it('should still allow finding admin tools via getToolByName (internal use)', () => {
-      expect(getToolByName('create_plugin')).toBeDefined()
-      expect(getToolByName('update_plugin')).toBeDefined()
-      expect(getToolByName('delete_plugin')).toBeDefined()
-    })
   })
 
   describe('MCP_TOOLS (public tools)', () => {
     it('should contain expected public tools', () => {
       const toolNames = MCP_TOOLS.map((t) => t.name)
 
-      expect(toolNames).toContain('search_plugins')
+      expect(toolNames).toContain('semantic_search')
       expect(toolNames).toContain('get_plugin_content')
-      expect(toolNames).toContain('list_plugins')
-      expect(toolNames).toContain('get_plugins_by_category')
       expect(toolNames).toContain('deploy_skill')
       expect(toolNames).toContain('undeploy_skill')
       expect(toolNames).toContain('check_updates')
       expect(toolNames).toContain('suggest_improvement')
       expect(toolNames).toContain('list_suggestions')
       expect(toolNames).toContain('resolve_suggestion')
+      expect(toolNames).toContain('add_files')
+      expect(toolNames).toContain('remove_files')
     })
 
-    it('should have 10 public tools total (13 - 3 admin)', () => {
+    it('should have 10 public tools', () => {
       expect(MCP_TOOLS).toHaveLength(10)
     })
 
-    describe('search_plugins tool', () => {
-      const tool = MCP_TOOLS.find((t) => t.name === 'search_plugins')!
+    describe('semantic_search tool', () => {
+      const tool = MCP_TOOLS.find((t) => t.name === 'semantic_search')!
 
       it('should have correct schema', () => {
         expect(tool.inputSchema.type).toBe('object')
@@ -77,13 +71,6 @@ describe('MCP Tools', () => {
         expect(tool.inputSchema.properties.category.enum).toContain('command')
         expect(tool.inputSchema.properties.category.enum).toContain('guide')
         expect(tool.inputSchema.properties.category.enum).toContain('all')
-      })
-
-      it('should have teamTag enum', () => {
-        expect(tool.inputSchema.properties.teamTag.enum).toContain('platform')
-        expect(tool.inputSchema.properties.teamTag.enum).toContain('ai')
-        expect(tool.inputSchema.properties.teamTag.enum).toContain('data')
-        expect(tool.inputSchema.properties.teamTag.enum).toContain('general')
       })
 
       it('should have limit property', () => {
@@ -106,39 +93,12 @@ describe('MCP Tools', () => {
       })
     })
 
-    describe('list_plugins tool', () => {
-      const tool = MCP_TOOLS.find((t) => t.name === 'list_plugins')!
-
-      it('should have no required fields', () => {
-        expect(tool.inputSchema.required).toBeUndefined()
-      })
-
-      it('should have optional category and teamTag', () => {
-        expect(tool.inputSchema.properties.category).toBeDefined()
-        expect(tool.inputSchema.properties.teamTag).toBeDefined()
-      })
-    })
-
-    describe('get_plugins_by_category tool', () => {
-      const tool = MCP_TOOLS.find((t) => t.name === 'get_plugins_by_category')!
-
-      it('should require category', () => {
-        expect(tool.inputSchema.required).toContain('category')
-      })
-
-      it('should have category enum without "all"', () => {
-        expect(tool.inputSchema.properties.category.enum).toContain('skill')
-        expect(tool.inputSchema.properties.category.enum).not.toContain('all')
-      })
-    })
-
     describe('deploy_skill tool', () => {
       const tool = MCP_TOOLS.find((t) => t.name === 'deploy_skill')!
 
-      it('should require type, name, content', () => {
+      it('should require type and name', () => {
         expect(tool.inputSchema.required).toContain('type')
         expect(tool.inputSchema.required).toContain('name')
-        expect(tool.inputSchema.required).toContain('content')
       })
 
       it('should have status enum', () => {
@@ -189,6 +149,36 @@ describe('MCP Tools', () => {
       })
     })
 
+    describe('add_files tool', () => {
+      const tool = MCP_TOOLS.find((t) => t.name === 'add_files')!
+
+      it('should require id and files', () => {
+        expect(tool.inputSchema.required).toContain('id')
+        expect(tool.inputSchema.required).toContain('files')
+      })
+
+      it('should have files as array with name and content required', () => {
+        expect(tool.inputSchema.properties.files.type).toBe('array')
+        const itemSchema = tool.inputSchema.properties.files.items
+        expect(itemSchema.required).toContain('name')
+        expect(itemSchema.required).toContain('content')
+      })
+    })
+
+    describe('remove_files tool', () => {
+      const tool = MCP_TOOLS.find((t) => t.name === 'remove_files')!
+
+      it('should require id and fileNames', () => {
+        expect(tool.inputSchema.required).toContain('id')
+        expect(tool.inputSchema.required).toContain('fileNames')
+      })
+
+      it('should have fileNames as array of strings', () => {
+        expect(tool.inputSchema.properties.fileNames.type).toBe('array')
+        expect(tool.inputSchema.properties.fileNames.items.type).toBe('string')
+      })
+    })
+
     describe('all tools have descriptions', () => {
       MCP_TOOLS.forEach((tool) => {
         it(`${tool.name} should have description`, () => {
@@ -211,9 +201,9 @@ describe('MCP Tools', () => {
 
   describe('getToolByName', () => {
     it('should return tool by name', () => {
-      const tool = getToolByName('search_plugins')
+      const tool = getToolByName('semantic_search')
       expect(tool).toBeDefined()
-      expect(tool?.name).toBe('search_plugins')
+      expect(tool?.name).toBe('semantic_search')
     })
 
     it('should return undefined for unknown tool', () => {
@@ -237,13 +227,13 @@ describe('MCP Tools', () => {
 
     it('should contain all expected public names', () => {
       const names = getAllToolNames()
-      expect(names).toContain('search_plugins')
+      expect(names).toContain('semantic_search')
       expect(names).toContain('get_plugin_content')
-      expect(names).toContain('list_plugins')
-      expect(names).toContain('get_plugins_by_category')
       expect(names).toContain('deploy_skill')
       expect(names).toContain('undeploy_skill')
       expect(names).toContain('check_updates')
+      expect(names).toContain('add_files')
+      expect(names).toContain('remove_files')
     })
 
     it('should not contain admin tool names', () => {

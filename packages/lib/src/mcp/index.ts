@@ -31,10 +31,14 @@ export type {
   McpPromptArgument,
   McpPromptMessage,
   McpPromptResult,
+  AddFilesInput,
+  AddFilesResponse,
+  RemoveFilesInput,
+  RemoveFilesResponse,
 } from './types'
 
 // Export tools
-export { MCP_TOOLS, getToolByName, getAllToolNames } from './tools'
+export { MCP_TOOLS, getToolByName, getAllToolNames, ADMIN_TOOL_NAMES, isAdminTool } from './tools'
 
 // Export handlers
 export {
@@ -42,7 +46,16 @@ export {
   getPluginContent,
   listPlugins,
   getPluginsByCategory,
+  createPlugin,
+  updatePlugin,
+  deletePlugin,
   deploySkill,
+  checkUpdates,
+  suggestImprovement,
+  listSuggestions,
+  resolveSuggestion,
+  addFiles,
+  removeFiles,
   executeTool,
   listPrompts,
   getPrompt,

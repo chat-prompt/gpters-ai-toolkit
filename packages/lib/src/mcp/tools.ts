@@ -562,6 +562,73 @@ installations: [
       required: ['suggestionId', 'action'],
     },
   },
+  // File management tools
+  {
+    name: 'add_files',
+    description: `플러그인에 파일을 추가하거나 기존 파일을 업데이트합니다.
+
+기존 파일은 유지하면서, 같은 이름의 파일은 덮어쓰고, 새 파일은 추가합니다.
+deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합니다.
+
+예시:
+- 스크립트 추가: id="my-skill", files=[{name: "scripts/run.mjs", content: "..."}]
+- 참조문서 업데이트: id="my-skill", files=[{name: "references/guide.md", content: "..."}]`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: '파일을 추가할 플러그인 ID',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                description: '파일 경로 (예: scripts/run.mjs, references/guide.md)',
+              },
+              content: { type: 'string', description: '파일 내용' },
+              type: {
+                type: 'string',
+                enum: ['script', 'reference', 'template', 'config'],
+                description: '파일 타입 (미지정 시 파일명에서 자동 추론)',
+              },
+            },
+            required: ['name', 'content'],
+          },
+          description: '추가/업데이트할 파일 목록',
+        },
+      },
+      required: ['id', 'files'],
+    },
+  },
+  {
+    name: 'remove_files',
+    description: `플러그인에서 파일을 삭제합니다.
+
+파일 이름 목록으로 삭제합니다.
+존재하지 않는 파일은 무시됩니다 (에러 아님).
+
+예시:
+- 파일 삭제: id="my-skill", fileNames=["scripts/old.mjs", "references/deprecated.md"]`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: '파일을 삭제할 플러그인 ID',
+        },
+        fileNames: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '삭제할 파일 이름 목록 (예: ["scripts/old.mjs"])',
+        },
+      },
+      required: ['id', 'fileNames'],
+    },
+  },
 ]
 
 /**

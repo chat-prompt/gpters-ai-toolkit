@@ -321,3 +321,37 @@ export interface SemanticSearchResult {
   query: string
   searchTime: number
 }
+
+// File management inputs/responses
+export interface AddFilesInput {
+  id: string
+  files: PluginFile[]
+}
+
+export interface AddFilesResponse {
+  success: boolean
+  id: string
+  version: string
+  previousVersion: string
+  addedOrUpdated: string[]
+  totalFiles: number
+  files: PluginFile[]
+  error?: string
+}
+
+export interface RemoveFilesInput {
+  id: string
+  fileNames: string[]
+}
+
+export interface RemoveFilesResponse {
+  success: boolean
+  id: string
+  version: string
+  previousVersion: string
+  removed: string[]
+  notFound: string[]
+  totalFiles: number
+  files: PluginFile[] | null
+  error?: string
+}
