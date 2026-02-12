@@ -671,6 +671,7 @@ export async function deploySkill(
       content: catalogItems.content,
       version: catalogItems.version,
       authorId: catalogItems.authorId,
+      files: catalogItems.files,
     })
     .from(catalogItems)
     .where(eq(catalogItems.id, id))
@@ -709,22 +710,40 @@ export async function deploySkill(
     }
   }
 
+  // Resolve content and files: use existing values for partial updates
+  const resolvedContent = content ?? existingItem?.content
+  const resolvedFiles = files !== undefined ? (files || null) : (existingItem?.files ?? null)
+
+  // New deployments require content
+  if (!isUpdate && !resolvedContent) {
+    return {
+      success: false,
+      id,
+      version: '1.0.0',
+      changelog: '',
+      status: 'published',
+      webUrl: '',
+      installHint: '',
+      error: '새 배포 시 content는 필수입니다.',
+    }
+  }
+
   // Determine version
   const versionInfo = determineVersion(
     existingItem ? { content: existingItem.content, version: existingItem.version || '1.0.0' } : null,
-    content,
+    resolvedContent!,
     explicitChangelog
   )
 
   const now = new Date()
 
   if (isUpdate) {
-    // Update existing item
+    // Update existing item - only update provided fields, preserve existing for omitted ones
     await db
       .update(catalogItems)
       .set({
         name,
-        content,
+        content: resolvedContent!,
         description: description || '',
         tags: tags || [],
         teamTag: (teamTag as TeamTag) || 'general',
@@ -735,7 +754,7 @@ export async function deploySkill(
         status,
         version: versionInfo.version,
         changelog: versionInfo.changelog,
-        files: files || null,
+        files: resolvedFiles,
         dependencies: dependencies || [],
         mcpEnabled: status === 'published',
         updatedAt: now,
@@ -767,7 +786,7 @@ export async function deploySkill(
       id,
       type,
       name,
-      content,
+      content: resolvedContent!,
       description: description || '',
       tags: tags || [],
       teamTag: (teamTag as TeamTag) || 'general',
@@ -778,7 +797,7 @@ export async function deploySkill(
       status,
       version: versionInfo.version,
       changelog: versionInfo.changelog,
-      files: files || null,
+      files: resolvedFiles,
       mcpEnabled: status === 'published',
       likes: 0,
       dependencies: dependencies || [],
@@ -792,7 +811,7 @@ export async function deploySkill(
     })
   }
 
-  updateItemEmbedding(id, { name, description: description || '', content, tags }).catch(() => {})
+  updateItemEmbedding(id, { name, description: description || '', content: resolvedContent!, tags }).catch(() => {})
 
   const BASE_URL = getBaseUrl()
 
@@ -825,7 +844,7 @@ export async function deploySkill(
       authorName,
       webUrl: response.webUrl,
       status,
-      content,
+      content: resolvedContent!,
     })
   ).catch(() => {})
 
@@ -1445,13 +1464,13 @@ export async function executeTool(
       // V2: Deploy and version management
       case 'deploy_skill': {
         const input = args as unknown as DeploySkillInput
-        if (!input.type || !input.name || !input.content) {
+        if (!input.type || !input.name) {
           return {
             content: [
               {
                 type: 'text',
                 text: JSON.stringify({
-                  error: 'Missing required fields: type, name, content',
+                  error: 'Missing required fields: type, name',
                 }),
               },
             ],

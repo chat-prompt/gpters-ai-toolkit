@@ -313,10 +313,16 @@ const ALL_TOOLS: McpTool[] = [
 - 신규: 1.0.0
 - 기존 업데이트: 변경 내용에 따라 자동 bump (patch/minor/major)
 
+부분 업데이트:
+- 업데이트 시 content를 생략하면 기존 콘텐츠 유지
+- 업데이트 시 files를 생략하면 기존 파일 유지
+- files만 추가/변경하고 싶으면 content 없이 files만 전달
+
 예시:
 - 새 스킬 배포: type="skill", name="코드 리뷰어", content="..."
 - 새 가이드 배포: type="guide", name="Git 사용법", content="..."
-- 기존 스킬 업데이트: id="code-reviewer", content="...", changelog="보안 체크 추가"`,
+- 기존 스킬 업데이트: id="code-reviewer", content="...", changelog="보안 체크 추가"
+- 참조문서만 추가: id="code-reviewer", files=[...], changelog="참조문서 추가"`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -331,7 +337,7 @@ const ALL_TOOLS: McpTool[] = [
         },
         content: {
           type: 'string',
-          description: '메인 콘텐츠 (SKILL.md 내용 등)',
+          description: '메인 콘텐츠 (SKILL.md 내용 등). 업데이트 시 생략하면 기존 콘텐츠 유지',
         },
         id: {
           type: 'string',
@@ -404,7 +410,7 @@ const ALL_TOOLS: McpTool[] = [
           description: '추가 파일들 (스크립트, 템플릿, 참조 문서 등)',
         },
       },
-      required: ['type', 'name', 'content'],
+      required: ['type', 'name'],
     },
   },
   {

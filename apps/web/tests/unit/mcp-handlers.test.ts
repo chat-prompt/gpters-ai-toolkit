@@ -500,6 +500,77 @@ describe('MCP Handlers', () => {
       expect(db.update).toHaveBeenCalled()
     })
 
+    it('should preserve existing content when content is omitted during update', async () => {
+      const existingContent = '# Existing Skill Content'
+      const existingFiles = [{ name: 'ref.md', content: 'old ref', type: 'reference' as const }]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', content: existingContent, version: '1.0.0', authorId: 'user-1', files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const newFiles = [{ name: 'new-ref.md', content: 'new ref doc', type: 'reference' as const }]
+      const result = await deploySkill({
+        type: 'skill',
+        name: 'My Skill',
+        id: 'my-skill',
+        files: newFiles,
+        changelog: '참조문서 추가',
+      }, 'user-1')
+
+      expect(result.success).toBe(true)
+      expect(db.update).toHaveBeenCalled()
+      // Verify that content was preserved (resolved from existing) and files were replaced
+      const setCall = mockUpdateChain.set.mock.calls[0][0]
+      expect(setCall.content).toBe(existingContent)
+      expect(setCall.files).toEqual(newFiles)
+    })
+
+    it('should preserve existing files when files is omitted during update', async () => {
+      const existingFiles = [{ name: 'ref.md', content: 'old ref', type: 'reference' as const }]
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', content: '# Old', version: '1.0.0', authorId: 'user-1', files: existingFiles },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await deploySkill({
+        type: 'skill',
+        name: 'My Skill',
+        id: 'my-skill',
+        content: '# Updated content',
+      }, 'user-1')
+
+      expect(result.success).toBe(true)
+      const setCall = mockUpdateChain.set.mock.calls[0][0]
+      expect(setCall.content).toBe('# Updated content')
+      expect(setCall.files).toEqual(existingFiles)
+    })
+
+    it('should require content for new deployments', async () => {
+      const mockSelectChain = createMockChain([]) // Skill doesn't exist
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await deploySkill({
+        type: 'skill',
+        name: 'New Skill',
+        files: [{ name: 'ref.md', content: 'doc', type: 'reference' as const }],
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('content는 필수')
+    })
+
   })
 
   describe('checkUpdates', () => {

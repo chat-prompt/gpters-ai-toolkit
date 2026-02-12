@@ -61,7 +61,7 @@ export interface DeletePluginInput {
 export interface DeploySkillInput {
   type: ItemType
   name: string
-  content: string
+  content?: string               // Optional for updates - omit to keep existing
   id?: string                    // Auto-generated from name if not provided
   description?: string
   tags?: string[]
