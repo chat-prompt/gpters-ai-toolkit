@@ -53,8 +53,7 @@ next-env.d.ts
 .env*.local
 .idea/
 
-# Claude/Playwright local data
-.claude-plugin/
+# Playwright local data
 .playwright-mcp/
 
 # Internal planning documents (Sisyphus)
