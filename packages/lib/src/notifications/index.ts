@@ -4,5 +4,5 @@
  * Barrel export for notification integrations (Slack, etc.)
  */
 
-export { buildSlackMessage, sendSlackWebhook, notifySlackDeploy } from './slack'
+export { buildSlackMessage, sendSlackWebhook, notifySlackDeploy, summarizeContent } from './slack'
 export type { SlackDeployParams, SlackPayload } from './slack'

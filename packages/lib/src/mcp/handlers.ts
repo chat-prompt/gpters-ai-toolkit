@@ -825,6 +825,7 @@ export async function deploySkill(
       authorName,
       webUrl: response.webUrl,
       status,
+      content,
     })
   ).catch(() => {})
 

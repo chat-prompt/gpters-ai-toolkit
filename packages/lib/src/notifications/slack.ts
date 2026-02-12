@@ -5,9 +5,12 @@
  * are deployed or updated. Uses native fetch with fire-and-forget pattern.
  */
 
+import { GoogleGenAI } from '@google/genai'
 import { createLogger } from '../core/logger'
 
 const log = createLogger('slack-notification')
+
+const SUMMARY_MODEL = 'gemini-2.0-flash'
 
 /** Type-to-emoji/label mapping for Slack messages */
 const TYPE_LABELS: Record<string, { emoji: string; label: string }> = {
@@ -39,6 +42,8 @@ export interface SlackDeployParams {
   webUrl?: string
   /** Deploy status (published or draft) */
   status?: string
+  /** Raw skill content (markdown) for AI summary */
+  content?: string | null
 }
 
 /**
@@ -64,12 +69,37 @@ interface SlackAccessory {
 }
 
 /**
+ * Summarize skill content using Gemini API
+ *
+ * @param content - Raw markdown content to summarize
+ * @returns One-line Korean summary, or null on failure
+ */
+export async function summarizeContent(content: string): Promise<string | null> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) return null
+
+    const client = new GoogleGenAI({ apiKey })
+    const response = await client.models.generateContent({
+      model: SUMMARY_MODEL,
+      contents: `다음 스킬/플러그인 내용을 한국어 1줄(50자 이내)로 요약해줘. 설명만 출력하고 다른 말은 하지 마:\n\n${content.slice(0, 2000)}`,
+    })
+
+    return response.text?.trim() || null
+  } catch (error) {
+    log.error('Failed to summarize content', error)
+    return null
+  }
+}
+
+/**
  * Build a Slack Block Kit message for a deploy event
  *
  * @param params - Deploy notification parameters
+ * @param summary - Optional AI-generated summary of the content
  * @returns Slack Block Kit payload
  */
-export function buildSlackMessage(params: SlackDeployParams): SlackPayload {
+export function buildSlackMessage(params: SlackDeployParams, summary?: string | null): SlackPayload {
   const { name, type, version, previousVersion, changelog, authorName, webUrl, status } = params
   const isUpdate = !!previousVersion
   const typeInfo = TYPE_LABELS[type] || { emoji: '\uD83D\uDCE6', label: type }
@@ -103,6 +133,13 @@ export function buildSlackMessage(params: SlackDeployParams): SlackPayload {
       ],
     },
   ]
+
+  if (summary) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*\uC694\uC57D:*\n${summary}` },
+    })
+  }
 
   if (status === 'draft') {
     blocks.push({
@@ -164,7 +201,9 @@ export async function notifySlackDeploy(params: SlackDeployParams): Promise<void
       return
     }
 
-    const payload = buildSlackMessage(params)
+    const isNew = !params.previousVersion
+    const summary = isNew && params.content ? await summarizeContent(params.content) : null
+    const payload = buildSlackMessage(params, summary)
     await sendSlackWebhook(webhookUrl, payload)
     log.info(`Slack notification sent for ${params.type} "${params.name}"`)
   } catch (error) {

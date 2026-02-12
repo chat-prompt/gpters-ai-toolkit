@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { buildSlackMessage, sendSlackWebhook, notifySlackDeploy } from '@gpters/lib/notifications'
+import { buildSlackMessage, sendSlackWebhook, notifySlackDeploy, summarizeContent } from '@gpters/lib/notifications'
 import type { SlackDeployParams } from '@gpters/lib/notifications'
 
 describe('buildSlackMessage', () => {
@@ -107,6 +107,37 @@ describe('buildSlackMessage', () => {
     const payload = buildSlackMessage({ ...baseParams, type: 'unknown' })
     const text = JSON.stringify(payload.blocks)
     expect(text).toContain('unknown')
+  })
+
+  it('should include summary when provided', () => {
+    const payload = buildSlackMessage(baseParams, 'DB 스키마를 자동 생성하는 스킬')
+    const text = JSON.stringify(payload.blocks)
+    expect(text).toContain('\uC694\uC57D')
+    expect(text).toContain('DB 스키마를 자동 생성하는 스킬')
+  })
+
+  it('should not include summary block when absent', () => {
+    const payload = buildSlackMessage(baseParams)
+    const text = JSON.stringify(payload.blocks)
+    expect(text).not.toContain('\uC694\uC57D')
+  })
+})
+
+describe('summarizeContent', () => {
+  const originalEnv = process.env.GEMINI_API_KEY
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.GEMINI_API_KEY = originalEnv
+    } else {
+      delete process.env.GEMINI_API_KEY
+    }
+  })
+
+  it('should return null when GEMINI_API_KEY is not set', async () => {
+    delete process.env.GEMINI_API_KEY
+    const result = await summarizeContent('some content')
+    expect(result).toBeNull()
   })
 })
 
