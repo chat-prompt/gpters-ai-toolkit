@@ -206,8 +206,8 @@ export async function POST(request: NextRequest) {
     hookTimeout: hookTimeout || null,
     hookBlocking: hookBlocking ?? true,
     orgId: currentOrgId || null,
-    visibility: visibility || 'private',
-    sharedWithOrgs: [],
+    visibility: visibility || (currentOrgId ? 'shared' : 'private'),
+    sharedWithOrgs: currentOrgId ? [currentOrgId] : [],
     forkCount: 0,
   }
 
