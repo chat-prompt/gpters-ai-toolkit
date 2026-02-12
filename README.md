@@ -8,21 +8,7 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 
 > 코칭 과정에서 발생하는 노하우가 휘발되지 않고, 재사용 가능한 형태로 축적되어 팀 전체의 생산성이 복리처럼 성장하는 구조
 
-```
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│  1. 축적     │      │  2. 정제     │      │  3. 배포     │
-│  (Capture)   │ ──→  │  (Refine)    │ ──→  │  (Deploy)    │
-│              │      │              │      │              │
-│ 비개발자 이슈 │      │ 반복 패턴    │      │ AI Toolkit   │
-│ → 개발자 코칭 │      │ → Skill 변환 │      │ → 플러그인   │
-│ → 해결 기록   │      │ → 품질 검증  │      │ → 팀 전체    │
-└──────────────┘      └──────────────┘      └──────┬───────┘
-       ↑                                           │
-       └───── 피드백 루프: 사용 데이터 → 새 이슈 ──┘
-```
-
-> Excalidraw 다이어그램: [`docs/compound-engine.excalidraw`](docs/compound-engine.excalidraw)
-> 플러그인 아키텍처: [`plugin-architecture.excalidraw`](plugin-architecture.excalidraw)
+![복리 엔진 흐름도](docs/compound_productivity_engine.png)
 
 ### 핵심 지표 (2026-02-06 기준)
 
@@ -121,20 +107,7 @@ Claude Code / OpenCode에서 자연어로 요청:
 
 ## 아키텍처
 
-> 플러그인 아키텍처 다이어그램: [`plugin-architecture.excalidraw`](plugin-architecture.excalidraw)
-
-```
-                    ┌──────────────────────┐
- OpenCode Plugin ──→│                      │
- (@gpters-internal) │  GPTers AI Toolkit   │──→ Catalog DB
-                    │  MCP Server          │   (Skills / Agents
- Claude Code     ──→│                      │    Commands / Guides)
- Plugin             │  • search_plugins    │
- (Marketplace)      │  • semantic_search   │
-                    │  • deploy_skill      │
- MCP 직접 연결   ──→│  • get_plugin_content│
-                    └──────────────────────┘
-```
+![플러그인 아키텍처](docs/plugin_architecture.png)
 
 ## 프로젝트 구조
 
@@ -157,10 +130,9 @@ gpters-ai-toolkit/
 │
 ├── packages/lib/                    # 공유 라이브러리
 ├── plugins/                         # Claude Code 플러그인 정의
-├── docs/                            # 문서 및 다이어그램
-│   ├── compound-engine.excalidraw   # 복리 엔진 흐름도
-│   └── SUBAGENT_USAGE.md            # 서브에이전트 사용 가이드
-└── plugin-architecture.excalidraw   # 플러그인 아키텍처 다이어그램
+├── docs/                                  # 문서 및 다이어그램
+│   ├── compound_productivity_engine.png   # 복리 엔진 흐름도
+│   └── plugin_architecture.png            # 플러그인 아키텍처 다이어그램
 ```
 
 ## 기술 스택
