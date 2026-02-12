@@ -12,8 +12,8 @@ node_modules
 
 # testing
 /coverage
-/playwright-report/
-/test-results/
+playwright-report/
+test-results/
 /playwright/.cache/
 
 # next.js
@@ -56,3 +56,14 @@ next-env.d.ts
 # Claude/Playwright local data
 .claude-plugin/
 .playwright-mcp/
+
+# Internal planning documents (Sisyphus)
+.sisyphus/
+
+# Root-level debug/QA screenshots
+css-verify-*.png
+theme-*.png
+light-mode-*.png
+current-signin.png
+home-after-migration.png
+plugin-architecture.excalidraw

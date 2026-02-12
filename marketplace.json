@@ -1,0 +1,13 @@
+{
+  "name": "gpters-ai-toolkit",
+  "owner": {
+    "name": "GPTers"
+  },
+  "plugins": [
+    {
+      "name": "gpters-ai-toolkit",
+      "source": "./apps/claude-code-plugin",
+      "description": "GPTers AI Toolkit - 팀 스킬 자동 검색 및 MCP 연동"
+    }
+  ]
+}

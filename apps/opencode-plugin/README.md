@@ -4,16 +4,21 @@ GPTers OpenCode Plugin - OpenCode 확장 플러그인
 
 ## 설치
 
+### 사전 준비
+
+Private registry 접근을 위한 인증 정보가 필요합니다.
+팀 내부 온보딩 문서 또는 관리자에게 registry URL과 auth token을 요청하세요.
+
 ### macOS / Linux (Bash)
 
 터미널에서 아래 명령어를 복사해서 실행하세요:
 
 ```bash
-# 1. Private Registry 설정
+# 1. Private Registry 설정 (registry URL과 token은 팀 관리자에게 문의)
 mkdir -p ~/.cache/opencode
 cat > ~/.cache/opencode/.npmrc << 'EOF'
-@gpters-internal:registry=https://verdaccio.gpters.org
-//verdaccio.gpters.org/:_authToken=<YOUR_TOKEN>
+@gpters-internal:registry=<REGISTRY_URL>
+//<REGISTRY_HOST>/:_authToken=<YOUR_TOKEN>
 EOF
 
 # 2. opencode.json에 플러그인 추가 (프로젝트 루트에서 실행)
@@ -26,12 +31,12 @@ bun -e "const fs=require('fs'),f='opencode.json',c=JSON.parse(fs.readFileSync(f,
 PowerShell에서 아래 명령어를 복사해서 실행하세요:
 
 ```powershell
-# 1. Private Registry 설정
+# 1. Private Registry 설정 (registry URL과 token은 팀 관리자에게 문의)
 $cacheDir = "$env:LOCALAPPDATA\opencode"
 if (!(Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force }
 @"
-@gpters-internal:registry=https://verdaccio.gpters.org
-//verdaccio.gpters.org/:_authToken=<YOUR_TOKEN>
+@gpters-internal:registry=<REGISTRY_URL>
+//<REGISTRY_HOST>/:_authToken=<YOUR_TOKEN>
 "@ | Set-Content "$cacheDir\.npmrc"
 
 # 2. opencode.json에 플러그인 추가 (프로젝트 루트에서 실행)
@@ -46,7 +51,7 @@ if ($config.plugin -notcontains "@gpters-internal/opencode") {
 $config | ConvertTo-Json -Depth 10 | Set-Content "opencode.json"
 ```
 
-> `<YOUR_TOKEN>`을 팀에서 제공받은 토큰으로 교체하세요.
+> `<REGISTRY_URL>`, `<REGISTRY_HOST>`, `<YOUR_TOKEN>`은 팀에서 제공받은 값으로 교체하세요.
 
 ### 수동 설치
 
@@ -60,9 +65,11 @@ $config | ConvertTo-Json -Depth 10 | Set-Content "opencode.json"
 위 경로에 아래 내용으로 파일 생성:
 
 ```
-@gpters-internal:registry=https://verdaccio.gpters.org
-//verdaccio.gpters.org/:_authToken=<YOUR_TOKEN>
+@gpters-internal:registry=<REGISTRY_URL>
+//<REGISTRY_HOST>/:_authToken=<YOUR_TOKEN>
 ```
+
+> Registry URL과 auth token은 팀 내부 온보딩 문서를 참조하세요.
 
 #### 2. Plugin 설정
 
