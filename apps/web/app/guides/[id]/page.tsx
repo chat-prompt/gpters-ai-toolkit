@@ -18,13 +18,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function GuidePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const guide = await getGuideById(id)
+  const [guide, session] = await Promise.all([getGuideById(id), auth()])
 
   if (!guide) {
     notFound()
   }
 
-  const session = await auth()
   const currentOrgId = session?.user?.currentOrgId
 
   return (
