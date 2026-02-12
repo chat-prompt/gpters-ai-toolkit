@@ -45,7 +45,7 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 
 ### 플러그인 지원
 
-- **Claude Code Plugin** - 마켓플레이스에서 원클릭 설치 (`claude plugin add`)
+- **Claude Code Plugin** - 마켓플레이스에서 원클릭 설치 (`claude plugin install`)
 - **OpenCode Plugin** - npm 레지스트리 기반 설치 (`@gpters-internal/opencode`)
 - **MCP 직접 연결** - `claude mcp add`로 HTTP MCP 서버 연결
 
@@ -69,7 +69,7 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 ### Claude Code (권장)
 
 ```bash
-claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin add chat-prompt/gpters-ai-toolkit
+claude plugin marketplace add chat-prompt/gpters-ai-toolkit 2>/dev/null; claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin install gpters-ai-toolkit
 ```
 
 ### OpenCode

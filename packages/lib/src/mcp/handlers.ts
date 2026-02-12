@@ -8,6 +8,7 @@ import { createLogger } from '../core/logger'
 import { db, catalogItems, users, suggestions } from '@gpters/db'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { isSuperAdmin } from '../security/rbac'
+import { notifySlackDeploy } from '../notifications/slack'
 
 const log = createLogger('mcp-handler')
 import { ilike, or, eq, and, sql, inArray, desc, type SQL } from 'drizzle-orm'
@@ -805,6 +806,27 @@ export async function deploySkill(
     webUrl: `${BASE_URL}/${type}/${id}`,
     installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
   }
+
+  // Fire-and-forget Slack notification
+  const resolveAuthorName = authorId
+    ? db.select({ name: users.name }).from(users).where(eq(users.id, authorId)).limit(1)
+        .then((rows) => rows[0]?.name || undefined)
+        .catch(() => undefined)
+    : Promise.resolve(undefined)
+
+  resolveAuthorName.then((authorName) =>
+    notifySlackDeploy({
+      id,
+      name,
+      type,
+      version: versionInfo.version,
+      previousVersion: existingItem?.version || undefined,
+      changelog: versionInfo.changelog,
+      authorName,
+      webUrl: response.webUrl,
+      status,
+    })
+  ).catch(() => {})
 
   return response
 }

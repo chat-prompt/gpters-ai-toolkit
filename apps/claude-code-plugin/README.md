@@ -18,7 +18,8 @@ GPTers AI Toolkit MCP 서버와 연동하여, 작업 시작 시 관련 팀 스�
 ### Marketplace를 통한 설치 (권장)
 
 ```bash
-claude plugin add chat-prompt/gpters-ai-toolkit
+claude plugin marketplace add chat-prompt/gpters-ai-toolkit
+claude plugin install gpters-ai-toolkit
 ```
 
 설치 후 Claude Code를 재시작하면 플러그인이 자동으로 활성화됩니다.
