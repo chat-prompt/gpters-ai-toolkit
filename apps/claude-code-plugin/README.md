@@ -18,7 +18,7 @@ GPTers AI Toolkit MCP 서버와 연동하여, 작업 시작 시 관련 팀 스�
 ### Marketplace를 통한 설치 (권장)
 
 ```bash
-claude plugin add chat-prompt/company-ai-toolkit
+claude plugin add chat-prompt/gpters-ai-toolkit
 ```
 
 설치 후 Claude Code를 재시작하면 플러그인이 자동으로 활성화됩니다.
@@ -29,11 +29,11 @@ claude plugin add chat-prompt/company-ai-toolkit
 
 ```bash
 # 1. 저장소 클론 (이미 있다면 생략)
-git clone https://github.com/chat-prompt/company-ai-toolkit.git
+git clone https://github.com/chat-prompt/gpters-ai-toolkit.git
 
 # 2. 프로젝트에서 플러그인 디렉토리 설정
 mkdir -p .claude/plugins
-ln -sf /absolute/path/to/company-ai-toolkit/apps/claude-code-plugin .claude/plugins/gpters-ai-toolkit
+ln -sf /absolute/path/to/gpters-ai-toolkit/apps/claude-code-plugin .claude/plugins/gpters-ai-toolkit
 ```
 
 ## 사용 방법
