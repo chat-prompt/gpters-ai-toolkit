@@ -1,8 +1,8 @@
 /**
  * Client-side interactive content for the Getting Started page
  *
- * Handles clipboard copy interactions for setup commands
- * and displays the step-by-step MCP server setup guide.
+ * Provides tabbed setup guides for Claude Code plugin, OpenCode plugin,
+ * and direct MCP server connection with clipboard copy interactions.
  */
 'use client'
 
@@ -11,10 +11,453 @@ import { getMcpServerUrl, getMcpCommand } from '@/lib/utils/config'
 
 const MCP_SERVER_URL = getMcpServerUrl()
 
+/** Tab identifier type */
+type TabId = 'claude-code' | 'opencode' | 'mcp'
+
+/** Tab definition */
+interface Tab {
+  /** Tab identifier */
+  id: TabId
+  /** Display label */
+  label: string
+  /** Short description shown below label */
+  description: string
+}
+
+const TABS: Tab[] = [
+  { id: 'claude-code', label: 'Claude Code', description: '플러그인 마켓플레이스' },
+  { id: 'opencode', label: 'OpenCode', description: 'npm 레지스트리' },
+  { id: 'mcp', label: 'MCP 직접 연결', description: 'claude mcp add' },
+]
+
 /**
- * Interactive getting started content with copy-to-clipboard functionality
+ * Reusable step badge component
+ *
+ * @param step - Step number or check mark
+ * @param color - Accent color name (cyan, purple, green)
+ */
+function StepBadge({ step, color }: { step: string | number; color: 'cyan' | 'purple' | 'green' }) {
+  const colorMap = {
+    cyan: 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border-[var(--accent-cyan)]/30',
+    purple: 'bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] border-[var(--accent-purple)]/30',
+    green: 'bg-green-500/20 text-green-400 border-green-500/30',
+  }
+
+  return (
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border ${colorMap[color]}`}>
+      {step}
+    </div>
+  )
+}
+
+/**
+ * Reusable code block with copy button
+ *
+ * @param code - Code text to display
+ * @param stepId - Unique step identifier for copy state
+ * @param copiedStep - Currently copied step ID
+ * @param onCopy - Copy handler function
+ * @param wrap - Whether to wrap long lines
+ */
+function CodeBlock({
+  code,
+  stepId,
+  copiedStep,
+  onCopy,
+  wrap = true,
+}: {
+  code: string
+  stepId: string
+  copiedStep: string | null
+  onCopy: (text: string, stepId: string) => void
+  wrap?: boolean
+}) {
+  return (
+    <div className="relative">
+      <pre
+        className={`p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] ${wrap ? 'whitespace-pre-wrap break-all' : ''}`}
+      >
+        {code}
+      </pre>
+      <button
+        onClick={() => onCopy(code, stepId)}
+        className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          copiedStep === stepId
+            ? 'bg-green-500/20 text-green-400'
+            : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+        }`}
+      >
+        {copiedStep === stepId ? '복사됨!' : '복사'}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Info box component for tips and notes
+ *
+ * @param color - Box color theme
+ * @param label - Bold label text
+ * @param children - Box content
+ */
+function InfoBox({
+  color,
+  label,
+  children,
+}: {
+  color: 'blue' | 'green'
+  label: string
+  children: React.ReactNode
+}) {
+  const colorMap = {
+    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400/90',
+    green: 'bg-green-500/10 border-green-500/20 text-green-400/90',
+  }
+
+  return (
+    <div className={`mt-4 p-3 rounded-lg border ${colorMap[color]}`}>
+      <div className="text-xs">
+        <strong>{label}</strong> {children}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Claude Code plugin tab content
+ */
+function ClaudeCodeTab({
+  copiedStep,
+  onCopy,
+}: {
+  copiedStep: string | null
+  onCopy: (text: string, stepId: string) => void
+}) {
+  const installCmd = 'claude plugin add chat-prompt/gpters-ai-toolkit'
+
+  return (
+    <div className="space-y-6">
+      {/* Step 1: Plugin Install */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={1} color="cyan" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              플러그인 설치
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              터미널에서 아래 명령어를 실행하세요:
+            </p>
+
+            <CodeBlock code={installCmd} stepId="cc-install" copiedStep={copiedStep} onCopy={onCopy} />
+
+            <InfoBox color="blue" label="참고:">
+              플러그인은 Claude Code 마켓플레이스에서 설치됩니다.
+              설치 후 자동으로 MCP 서버가 연결됩니다.
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: Browser Login */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={2} color="purple" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              브라우저 로그인
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                  1
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  브라우저가 자동으로 열립니다
+                </span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                  2
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Google 계정 (조직 이메일)으로 로그인
+                </span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                  ✓
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  완료! Claude Code로 돌아가서 사용하세요
+                </span>
+              </div>
+            </div>
+
+            <InfoBox color="green" label="보안:">
+              OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Connection Check */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step="✓" color="green" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              연결 확인
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:
+            </p>
+
+            <CodeBlock code="claude mcp list" stepId="cc-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+
+            <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+              <div className="text-xs font-mono text-[var(--text-muted)]">
+                gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * OpenCode plugin tab content
+ */
+function OpenCodeTab({
+  copiedStep,
+  onCopy,
+}: {
+  copiedStep: string | null
+  onCopy: (text: string, stepId: string) => void
+}) {
+  const npmrcContent = `@gpters-internal:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN`
+
+  const opencodeConfig = `{
+  "mcpServers": {
+    "gpters-ai-toolkit": {
+      "type": "npm",
+      "package": "@gpters-internal/opencode",
+      "args": []
+    }
+  }
+}`
+
+  return (
+    <div className="space-y-6">
+      {/* Step 1: Registry Config */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={1} color="cyan" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              Registry 설정
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              <code className="text-xs bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded">~/.cache/opencode/.npmrc</code> 파일에 아래 내용을 추가하세요:
+            </p>
+
+            <CodeBlock code={npmrcContent} stepId="oc-npmrc" copiedStep={copiedStep} onCopy={onCopy} />
+
+            <InfoBox color="blue" label="참고:">
+              <code className="text-xs">YOUR_GITHUB_TOKEN</code>을 GitHub Personal Access Token (<code className="text-xs">read:packages</code> 권한)으로 교체하세요.
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: opencode.json */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={2} color="purple" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              opencode.json에 플러그인 추가
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              프로젝트 루트의 <code className="text-xs bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded">opencode.json</code>에 MCP 서버를 추가하세요:
+            </p>
+
+            <CodeBlock code={opencodeConfig} stepId="oc-config" copiedStep={copiedStep} onCopy={onCopy} />
+          </div>
+        </div>
+      </div>
+
+      {/* Step 3: Restart */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={3} color="green" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              OpenCode 재시작
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              설정을 적용하기 위해 OpenCode를 재시작하세요.
+            </p>
+
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+              <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                ✓
+              </div>
+              <span className="text-sm text-[var(--text-secondary)]">
+                OpenCode 종료 후 다시 실행하면 플러그인이 자동으로 로드됩니다
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Connection Check */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step="✓" color="green" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              연결 확인
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              OpenCode에서 아래 명령어로 MCP 연결 상태를 확인하세요:
+            </p>
+
+            <CodeBlock code="/mcp" stepId="oc-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+
+            <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+              <div className="text-xs font-mono text-[var(--text-muted)]">
+                gpters-ai-toolkit <span className="text-green-400">✓ Connected</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * MCP direct connection tab content (existing guide)
+ */
+function McpDirectTab({
+  copiedStep,
+  onCopy,
+}: {
+  copiedStep: string | null
+  onCopy: (text: string, stepId: string) => void
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Step 1: CLI Command */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={1} color="cyan" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              MCP 서버 추가
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              터미널에서 아래 명령어를 실행하세요:
+            </p>
+
+            <CodeBlock code={getMcpCommand()} stepId="mcp-cli" copiedStep={copiedStep} onCopy={onCopy} />
+
+            <InfoBox color="blue" label="참고:">
+              프로젝트별로 설정하려면 프로젝트 루트 디렉토리에서 실행하세요.
+              글로벌 설정은 <code className="text-xs">-s user</code> 옵션을 추가하세요.
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: Browser Login */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={2} color="purple" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              브라우저 로그인
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                  1
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  브라우저가 자동으로 열립니다
+                </span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                  2
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Google 계정 (조직 이메일)으로 로그인
+                </span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                  ✓
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  완료! Claude Code로 돌아가서 사용하세요
+                </span>
+              </div>
+            </div>
+
+            <InfoBox color="green" label="보안:">
+              OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Connection Check */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step="✓" color="green" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              연결 확인
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:
+            </p>
+
+            <CodeBlock code="claude mcp list" stepId="mcp-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+
+            <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+              <div className="text-xs font-mono text-[var(--text-muted)]">
+                gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Interactive getting started content with tabbed setup guides
+ *
+ * Provides three installation methods: Claude Code plugin, OpenCode plugin,
+ * and direct MCP server connection.
  */
 export function GettingStartedContent() {
+  const [activeTab, setActiveTab] = useState<TabId>('claude-code')
   const [copiedStep, setCopiedStep] = useState<string | null>(null)
 
   async function copyToClipboard(text: string, stepId: string) {
@@ -37,149 +480,42 @@ export function GettingStartedContent() {
       {/* Page Header */}
       <div className="text-center mb-12">
         <h1 className="text-3xl font-medium text-[var(--text-primary)] mb-3">
-          MCP 빠른 설정
+          플러그인 설치 가이드
         </h1>
         <p className="text-[var(--text-secondary)]">
-          2단계로 Claude Code에서 팀 플러그인을 사용할 수 있습니다.
+          사용하는 AI 코딩 도구에 맞는 설치 방법을 선택하세요.
         </p>
       </div>
 
-      {/* Setup Steps */}
-      <div className="space-y-6">
-        {/* Step 1: CLI Command */}
-        <div className="glass rounded-2xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30">
-              1
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-8">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? 'glass border border-[var(--accent-cyan)]/40 text-[var(--text-primary)]'
+                : 'bg-[var(--bg-tertiary)]/50 border border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+            }`}
+          >
+            <div>{tab.label}</div>
+            <div className={`text-xs mt-0.5 ${activeTab === tab.id ? 'text-[var(--accent-cyan)]' : 'text-[var(--text-muted)]'}`}>
+              {tab.description}
             </div>
-            <div className="flex-grow">
-              <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-                MCP 서버 추가
-              </h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                터미널에서 아래 명령어를 실행하세요:
-              </p>
-
-              <div className="relative">
-                <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                  {getMcpCommand()}
-                </pre>
-                <button
-                  onClick={() => copyToClipboard(getMcpCommand(), 'cli')}
-                  className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    copiedStep === 'cli'
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
-                  }`}
-                >
-                  {copiedStep === 'cli' ? '복사됨!' : '복사'}
-                </button>
-              </div>
-
-              <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <div className="text-xs text-blue-400/90">
-                  <strong>참고:</strong> 프로젝트별로 설정하려면 프로젝트 루트 디렉토리에서 실행하세요.
-                  글로벌 설정은 <code>-s user</code> 옵션을 추가하세요.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Step 2: Browser Login */}
-        <div className="glass rounded-2xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] border border-[var(--accent-purple)]/30">
-              2
-            </div>
-            <div className="flex-grow">
-              <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-                브라우저 로그인
-              </h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.
-              </p>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                  <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
-                    1
-                  </div>
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    브라우저가 자동으로 열립니다
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                  <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
-                    2
-                  </div>
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    Google 계정 (조직 이메일)으로 로그인
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                  <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
-                    ✓
-                  </div>
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    완료! Claude Code로 돌아가서 사용하세요
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                <div className="text-xs text-green-400/90">
-                  <strong>보안:</strong> OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Connection Check */}
-        <div className="glass rounded-2xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-green-500/20 text-green-400 border border-green-500/30">
-              ✓
-            </div>
-            <div className="flex-grow">
-              <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-                연결 확인
-              </h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:
-              </p>
-
-              <div className="relative">
-                <pre className="p-4 pr-20 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-sm font-mono overflow-x-auto text-[var(--text-primary)]">
-                  claude mcp list
-                </pre>
-                <button
-                  onClick={() => copyToClipboard('claude mcp list', 'check')}
-                  className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    copiedStep === 'check'
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
-                  }`}
-                >
-                  {copiedStep === 'check' ? '복사됨!' : '복사'}
-                </button>
-              </div>
-
-              <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
-                <div className="text-xs font-mono text-[var(--text-muted)]">
-                  gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          </button>
+        ))}
       </div>
+
+      {/* Tab Content */}
+      {activeTab === 'claude-code' && <ClaudeCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
+      {activeTab === 'opencode' && <OpenCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
+      {activeTab === 'mcp' && <McpDirectTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
 
       {/* Usage Guide */}
       <div className="mt-8 p-6 rounded-2xl bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20">
         <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">
-          🎉 설정 완료 후 사용법
+          설정 완료 후 사용법
         </h3>
         <div className="space-y-4">
           <div>
