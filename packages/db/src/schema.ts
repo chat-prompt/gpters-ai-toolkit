@@ -600,6 +600,9 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   // Client info (masked for privacy)
   ipHash: text('ip_hash').notNull(), // SHA-256 hash of IP for privacy
   userAgent: text('user_agent'),
+  clientType: text('client_type'),       // Resolved type: claude_code, opencode, cursor, web_browser, cli, unknown
+  clientName: text('client_name'),       // Raw name from MCP initialize clientInfo
+  clientVersion: text('client_version'), // Raw version from MCP initialize clientInfo
 
   // Request/Response
   requestParams: jsonb('request_params').$type<Record<string, unknown>>(), // Sanitized request params
@@ -617,6 +620,7 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   index('mcp_audit_logs_response_status_idx').on(table.responseStatus),
   // Composite index for common queries
   index('mcp_audit_logs_created_status_idx').on(table.createdAt, table.responseStatus),
+  index('mcp_audit_logs_client_type_idx').on(table.clientType),
 ])
 
 export type McpAuditLogRecord = typeof mcpAuditLogs.$inferSelect

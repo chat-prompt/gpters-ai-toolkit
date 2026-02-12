@@ -52,6 +52,11 @@ import {
   logRateLimitEvent,
   type AuditResponseStatus,
 } from '@/lib/security/mcp-audit'
+import {
+  resolveClientType,
+  extractClientInfo,
+  type ClientType,
+} from '@/lib/security/client-type'
 import { db, orgMemberships } from '@gpters/db'
 import { eq } from 'drizzle-orm'
 
@@ -70,7 +75,13 @@ const corsHeaders = {
 }
 
 // In-memory session store (for serverless, consider using Redis/KV in production)
-const sessions = new Map<string, { createdAt: number; lastAccess: number }>()
+const sessions = new Map<string, {
+  createdAt: number
+  lastAccess: number
+  clientType?: ClientType
+  clientName?: string
+  clientVersion?: string
+}>()
 
 // Session timeout (30 minutes)
 const SESSION_TIMEOUT = 30 * 60 * 1000
@@ -182,7 +193,7 @@ async function getUserOrgId(userId: string): Promise<string | undefined> {
  */
 async function handleAuthAndRateLimit(
   request: NextRequest
-): Promise<{ error?: NextResponse; auth?: OAuthAuthResult; auditCtx?: AuditContext }> {
+): Promise<{ error?: NextResponse; auth?: OAuthAuthResult; auditCtx?: AuditContext; initialClientType?: ClientType }> {
   // Check OAuth authentication (required)
   const authResult = await withOAuthAuth(request, { requireAuth: true })
 
@@ -192,6 +203,12 @@ async function handleAuthAndRateLimit(
 
   // Create audit context for logging
   const auditCtx = await createAuditContext(request, authResult.auth)
+
+  // Resolve initial client type from OAuth client name and User-Agent
+  const initialClientType = resolveClientType({
+    oauthClientName: authResult.auth?.clientName,
+    userAgent: auditCtx.userAgent,
+  })
 
   // If authenticated with token, token-based rate limiting is already applied
   // If not authenticated, apply IP-based rate limiting
@@ -204,7 +221,7 @@ async function handleAuthAndRateLimit(
     }
   }
 
-  return { auth: authResult.auth, auditCtx }
+  return { auth: authResult.auth, auditCtx, initialClientType }
 }
 
 /**
@@ -392,7 +409,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
 
   // Handle auth and rate limiting
-  const { error, auth, auditCtx } = await handleAuthAndRateLimit(request)
+  const { error, auth, auditCtx, initialClientType } = await handleAuthAndRateLimit(request)
   if (error) return error
 
   // Extract userId and userRole from authentication for ownership-based operations
@@ -416,6 +433,11 @@ export async function POST(request: NextRequest) {
     return response
   }
 
+  // Track client info across the request lifecycle (updated on initialize)
+  let currentClientType: ClientType | undefined = initialClientType
+  let currentClientName: string | undefined
+  let currentClientVersion: string | undefined
+
   // Helper to log audit entry (fire-and-forget via after())
   const logAudit = (
     method: string,
@@ -427,11 +449,18 @@ export async function POST(request: NextRequest) {
     if (!auditCtx) return
 
     const responseTime = Date.now() - startTime
+    // Capture current values in closure
+    const ct = currentClientType
+    const cn = currentClientName
+    const cv = currentClientVersion
     after(async () => {
       await logMcpRequest({
         method,
         tool,
         ...auditCtx,
+        clientType: ct,
+        clientName: cn,
+        clientVersion: cv,
         requestParams: maskRequestBody(body),
         responseStatus: status,
         responseTime,
@@ -584,6 +613,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Extract clientInfo from initialize request for more accurate identification
+    if (rpcMethod === 'initialize') {
+      const mcpClientInfo = extractClientInfo(body)
+      if (mcpClientInfo) {
+        // Re-resolve with clientInfo for more accurate type
+        const refinedType = resolveClientType({
+          oauthClientName: auth?.clientName,
+          clientInfo: mcpClientInfo,
+          userAgent: auditCtx?.userAgent,
+        })
+        currentClientType = refinedType
+        currentClientName = mcpClientInfo.name
+        currentClientVersion = mcpClientInfo.version
+      }
+    }
+
     logAudit(
       `jsonrpc:${rpcMethod}`,
       tool,
@@ -598,11 +643,27 @@ export async function POST(request: NextRequest) {
     // Create new session on initialize method
     if (rpcMethod === 'initialize' && !hasError) {
       sessionId = getOrCreateSession(null)
+
+      // Cache client info in session for subsequent requests
+      const session = sessions.get(sessionId)
+      if (session) {
+        session.clientType = currentClientType
+        session.clientName = currentClientName
+        session.clientVersion = currentClientVersion
+      }
     } else if (incomingSessionId) {
       // In serverless environment, session validation is relaxed
       // because each instance has its own memory
       // Just accept the session ID without strict validation
       sessionId = incomingSessionId
+
+      // Restore cached client info from session (best-effort)
+      const existingSession = sessions.get(incomingSessionId)
+      if (existingSession?.clientType && !currentClientName) {
+        currentClientType = existingSession.clientType
+        currentClientName = existingSession.clientName
+        currentClientVersion = existingSession.clientVersion
+      }
     }
 
     // Return response with session header

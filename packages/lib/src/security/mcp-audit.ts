@@ -55,6 +55,9 @@ export interface McpAuditEntry {
   isAuthenticated: boolean
   ipHash: string              // Hashed IP address
   userAgent?: string
+  clientType?: string         // Resolved client type (claude_code, opencode, etc.)
+  clientName?: string         // Raw client name from MCP initialize clientInfo
+  clientVersion?: string      // Raw client version from MCP initialize clientInfo
   requestParams?: Record<string, unknown>
   responseStatus: AuditResponseStatus
   responseTime?: number       // Milliseconds
@@ -181,6 +184,9 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
       isAuthenticated: entry.isAuthenticated,
       ipHash: entry.ipHash,
       userAgent: entry.userAgent,
+      clientType: entry.clientType,
+      clientName: entry.clientName,
+      clientVersion: entry.clientVersion,
       requestParams: entry.requestParams,
       responseStatus: entry.responseStatus,
       responseTime: entry.responseTime,
@@ -203,6 +209,8 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
       status: entry.responseStatus,
       duration_ms: entry.responseTime,
       is_authenticated: entry.isAuthenticated,
+      client_type: entry.clientType,
+      client_name: entry.clientName,
     })
   } catch (error) {
     // Don't let audit logging failures break the request
@@ -404,6 +412,7 @@ export interface AuditSummary {
   authenticatedRequests: number
   topMethods: Array<{ method: string; count: number }>
   topTools: Array<{ tool: string; count: number }>
+  topClientTypes: Array<{ clientType: string; count: number }>
   averageResponseTime: number
 }
 
@@ -494,6 +503,24 @@ export async function getAuditSummary(
     .orderBy(sql`count(*) DESC`)
     .limit(10)
 
+  // Get top client types
+  const topClientTypes = await db
+    .select({
+      clientType: mcpAuditLogs.clientType,
+      count: count(),
+    })
+    .from(mcpAuditLogs)
+    .where(
+      and(
+        gte(mcpAuditLogs.createdAt, startDate),
+        lt(mcpAuditLogs.createdAt, endDate),
+        sql`${mcpAuditLogs.clientType} IS NOT NULL`
+      )
+    )
+    .groupBy(mcpAuditLogs.clientType)
+    .orderBy(sql`count(*) DESC`)
+    .limit(10)
+
   // Get average response time
   const [avgTimeResult] = await db
     .select({
@@ -524,6 +551,9 @@ export async function getAuditSummary(
     topTools: topTools
       .filter((t) => t.tool !== null)
       .map((t) => ({ tool: t.tool as string, count: t.count })),
+    topClientTypes: topClientTypes
+      .filter((c) => c.clientType !== null)
+      .map((c) => ({ clientType: c.clientType as string, count: c.count })),
     averageResponseTime: Math.round(avgTimeResult?.avg || 0),
   }
 }

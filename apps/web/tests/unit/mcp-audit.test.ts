@@ -162,6 +162,9 @@ describe('MCP Audit Logging', () => {
         isAuthenticated: boolean
         ipHash: string
         userAgent?: string
+        clientType?: string
+        clientName?: string
+        clientVersion?: string
         requestParams?: Record<string, unknown>
         responseStatus: 'success' | 'error' | 'rate_limited'
         responseTime?: number
@@ -191,6 +194,9 @@ describe('MCP Audit Logging', () => {
         isAuthenticated: boolean
         ipHash: string
         userAgent?: string
+        clientType?: string
+        clientName?: string
+        clientVersion?: string
         requestParams?: Record<string, unknown>
         responseStatus: 'success' | 'error' | 'rate_limited'
         responseTime?: number
@@ -213,6 +219,55 @@ describe('MCP Audit Logging', () => {
       expect(entry.responseStatus).toBe('error')
       expect(entry.errorCode).toBe('VALIDATION_ERROR')
       expect(entry.errorMessage).toBe('Invalid query parameter')
+    })
+
+    it('should include client type fields in audit entry', () => {
+      interface McpAuditEntry {
+        method: string
+        isAuthenticated: boolean
+        ipHash: string
+        clientType?: string
+        clientName?: string
+        clientVersion?: string
+        responseStatus: 'success' | 'error' | 'rate_limited'
+      }
+
+      const entry: McpAuditEntry = {
+        method: 'jsonrpc:initialize',
+        isAuthenticated: true,
+        ipHash: 'abc123hash',
+        clientType: 'claude_code',
+        clientName: 'claude code',
+        clientVersion: '1.0.23',
+        responseStatus: 'success',
+      }
+
+      expect(entry.clientType).toBe('claude_code')
+      expect(entry.clientName).toBe('claude code')
+      expect(entry.clientVersion).toBe('1.0.23')
+    })
+
+    it('should allow undefined client type fields', () => {
+      interface McpAuditEntry {
+        method: string
+        isAuthenticated: boolean
+        ipHash: string
+        clientType?: string
+        clientName?: string
+        clientVersion?: string
+        responseStatus: 'success' | 'error' | 'rate_limited'
+      }
+
+      const entry: McpAuditEntry = {
+        method: 'rest:search',
+        isAuthenticated: false,
+        ipHash: 'abc123hash',
+        responseStatus: 'success',
+      }
+
+      expect(entry.clientType).toBeUndefined()
+      expect(entry.clientName).toBeUndefined()
+      expect(entry.clientVersion).toBeUndefined()
     })
   })
 
@@ -282,7 +337,7 @@ describe('MCP Audit Logging', () => {
   })
 
   describe('Audit Summary', () => {
-    it('should have correct summary structure', () => {
+    it('should have correct summary structure with topClientTypes', () => {
       interface AuditSummary {
         totalRequests: number
         successCount: number
@@ -292,6 +347,7 @@ describe('MCP Audit Logging', () => {
         authenticatedRequests: number
         topMethods: Array<{ method: string; count: number }>
         topTools: Array<{ tool: string; count: number }>
+        topClientTypes: Array<{ clientType: string; count: number }>
         averageResponseTime: number
       }
 
@@ -310,6 +366,12 @@ describe('MCP Audit Logging', () => {
           { tool: 'search_plugins', count: 400 },
           { tool: 'get_plugin_content', count: 200 },
         ],
+        topClientTypes: [
+          { clientType: 'claude_code', count: 600 },
+          { clientType: 'opencode', count: 200 },
+          { clientType: 'web_browser', count: 150 },
+          { clientType: 'unknown', count: 50 },
+        ],
         averageResponseTime: 45,
       }
 
@@ -317,6 +379,8 @@ describe('MCP Audit Logging', () => {
       expect(summary.successCount + summary.errorCount + summary.rateLimitCount).toBe(1000)
       expect(summary.topMethods.length).toBe(2)
       expect(summary.topTools.length).toBe(2)
+      expect(summary.topClientTypes.length).toBe(4)
+      expect(summary.topClientTypes[0].clientType).toBe('claude_code')
     })
   })
 })

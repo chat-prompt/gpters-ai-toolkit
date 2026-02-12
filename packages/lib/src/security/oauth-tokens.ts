@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db, oauthAccessTokens, users } from '@gpters/db'
+import { db, oauthAccessTokens, oauthClients, users } from '@gpters/db'
 import { eq, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 import { getBaseUrl } from '../utils'
@@ -95,6 +95,7 @@ export interface AccessTokenValidationResult {
   accessTokenId?: string
   userId?: string
   clientId?: string
+  clientName?: string
   scope?: string
   userRole?: string
   error?: string
@@ -105,6 +106,7 @@ export interface OAuthAuthResult {
   accessTokenId?: string
   userId?: string
   clientId?: string
+  clientName?: string
   scope?: string
   userRole?: string
   error?: string
@@ -163,7 +165,7 @@ export async function validateAccessToken(
     // Hash the token
     const tokenHash = await hashToken(token)
 
-    // Look up in database with user role (left join to handle missing user)
+    // Look up in database with user role and client name (left joins to handle missing records)
     const [tokenRecord] = await db
       .select({
         id: oauthAccessTokens.id,
@@ -173,9 +175,11 @@ export async function validateAccessToken(
         isActive: oauthAccessTokens.isActive,
         expiresAt: oauthAccessTokens.expiresAt,
         userRole: users.role,
+        clientName: oauthClients.name,
       })
       .from(oauthAccessTokens)
       .leftJoin(users, eq(oauthAccessTokens.userId, users.id))
+      .leftJoin(oauthClients, eq(oauthAccessTokens.clientId, oauthClients.id))
       .where(eq(oauthAccessTokens.tokenHash, tokenHash))
 
     if (!tokenRecord) {
@@ -223,6 +227,7 @@ export async function validateAccessToken(
       accessTokenId: tokenRecord.id,
       userId: tokenRecord.userId,
       clientId: tokenRecord.clientId,
+      clientName: tokenRecord.clientName ?? undefined,
       scope: tokenRecord.scope ?? undefined,
       userRole: tokenRecord.userRole ?? undefined,
     }
@@ -260,6 +265,7 @@ export async function authenticateOAuthRequest(
     accessTokenId: result.accessTokenId,
     userId: result.userId,
     clientId: result.clientId,
+    clientName: result.clientName,
     scope: result.scope,
     userRole: result.userRole,
   }
