@@ -2,9 +2,12 @@
   "name": "gpters-ai-toolkit",
   "version": "0.0.1",
   "description": "GPTers AI Toolkit - 팀 스킬 자동 검색 및 MCP 연동 플러그인",
-  "author": "GPTers",
+  "author": {
+    "name": "GPTers",
+    "email": "contact@gpters.org"
+  },
   "homepage": "https://ai-toolkit.gpters.org",
-  "skills": ["skills/skill-suggest"],
+  "skills": "./skills/",
   "mcpServers": {
     "gpters-ai-toolkit": {
       "type": "http",
