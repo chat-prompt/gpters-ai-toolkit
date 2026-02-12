@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { catalogItems } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { auth } from '@/lib/core/auth'
+import { ApiErrors } from '@/lib/utils/api-utils'
 import {
   rollbackToVersion,
   previewRollback,
@@ -24,6 +26,9 @@ interface RouteParams {
  * Preview what would change if rolling back to a version
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   try {
     const { itemId } = await params
     const { searchParams } = new URL(request.url)
@@ -94,6 +99,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Rollback to a previous version
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   try {
     const { itemId } = await params
     const body = await request.json()

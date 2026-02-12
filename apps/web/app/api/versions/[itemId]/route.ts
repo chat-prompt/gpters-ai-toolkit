@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { catalogItems } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { auth } from '@/lib/core/auth'
+import { ApiErrors } from '@/lib/utils/api-utils'
 import {
   getVersionHistory,
   createVersionSnapshot,
@@ -25,6 +27,9 @@ interface RouteParams {
  * Get version history for a catalog item
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   try {
     const { itemId } = await params
     const { searchParams } = new URL(request.url)
@@ -66,15 +71,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Create a new version snapshot
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   try {
     const { itemId } = await params
     const body = await request.json()
-    const { version, versionType, changelog, createdBy } = body as {
+    const { version, versionType, changelog } = body as {
       version?: string
       versionType?: VersionType
       changelog?: string
-      createdBy?: string
     }
+    const createdBy = session.user.id
 
     // Get current item
     const [item] = await db

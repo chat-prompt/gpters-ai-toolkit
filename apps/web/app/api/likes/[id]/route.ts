@@ -10,6 +10,7 @@ import { db, catalogItems } from '@/lib/db'
 import { ApiErrors } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { auth } from '@/lib/core/auth'
 
 const log = createLogger('api:likes')
 
@@ -17,6 +18,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   // Rate limit: 30 requests per minute for like operations (prevents spam)
   const rateLimitError = withRateLimit(request, RateLimitPresets.search)
   if (rateLimitError) return rateLimitError

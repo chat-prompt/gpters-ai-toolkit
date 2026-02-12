@@ -1,24 +1,27 @@
 /**
- * Public catalog item upload API route
+ * Catalog item upload API route
  *
  * POST: Create or update a catalog item via JSON payload
- * No authentication required - for internal team use with trust-based access.
+ * Requires CATALOG_CREATE permission.
  */
 import { NextRequest } from 'next/server'
 import { db, catalogItems } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode } from '@/lib/core/types'
-import { ApiErrors, validateRequired, apiSuccess } from '@/lib/utils/api-utils'
+import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
+import { Permissions } from '@/lib/security/rbac'
 
 const log = createLogger('api:upload')
 
 const VALID_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 
 /**
- * Public upload API - no authentication required
- * For internal team use with trust-based access
+ * Upload API - requires CATALOG_CREATE permission
  */
 export async function POST(request: NextRequest) {
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_CREATE, request)
+  if (permissionError) return permissionError
+
   try {
     const body = await request.json()
 

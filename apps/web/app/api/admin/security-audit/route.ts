@@ -5,8 +5,9 @@
  * Analyzes for potential security issues and risks
  */
 import { NextRequest } from 'next/server'
-import { ApiErrors, apiSuccess } from '@/lib/utils/api-utils'
+import { ApiErrors, apiSuccess, requirePermissionAsync } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
+import { Permissions } from '@/lib/security/rbac'
 import { getItemById } from '@/lib/core/catalog'
 import {
   auditCatalogItem,
@@ -26,6 +27,9 @@ const log = createLogger('api:security-audit')
  * - { content: string, hookCommand?: string } - Audit raw content directly
  */
 export async function POST(request: NextRequest) {
+  const permissionError = await requirePermissionAsync(Permissions.ADMIN_VIEW, request)
+  if (permissionError) return permissionError
+
   try {
     const body = await request.json()
     const { itemId, content, hookCommand } = body
@@ -105,6 +109,9 @@ export async function POST(request: NextRequest) {
  * - itemId: string - Get audit for specific item (runs new audit)
  */
 export async function GET(request: NextRequest) {
+  const permissionError = await requirePermissionAsync(Permissions.ADMIN_VIEW, request)
+  if (permissionError) return permissionError
+
   try {
     const { searchParams } = new URL(request.url)
     const itemId = searchParams.get('itemId')
@@ -150,6 +157,9 @@ export async function GET(request: NextRequest) {
  * Bulk audit multiple items (for admin dashboard)
  */
 export async function PUT(request: NextRequest) {
+  const permissionError = await requirePermissionAsync(Permissions.ADMIN_VIEW, request)
+  if (permissionError) return permissionError
+
   try {
     const body = await request.json()
     const { itemIds } = body as { itemIds?: string[] }

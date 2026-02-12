@@ -10,6 +10,8 @@ import { db, catalogItems, users } from '@/lib/db'
 import JSZip from 'jszip'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { auth } from '@/lib/core/auth'
+import { ApiErrors } from '@/lib/utils/api-utils'
 import type { PluginFile, ItemType } from '@/lib/core/types'
 
 const log = createLogger('api:catalog:download')
@@ -157,6 +159,9 @@ function calculateTotalSize(item: {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   // Rate limit: 30 downloads per minute to prevent abuse
   const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
   if (rateLimitError) return rateLimitError
@@ -274,6 +279,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * HEAD request to get file count and estimated size without downloading
  */
 export async function HEAD(request: NextRequest, { params }: RouteParams) {
+  const session = await auth()
+  if (!session?.user) return ApiErrors.unauthorized()
+
   // Rate limit
   const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
   if (rateLimitError) return rateLimitError
