@@ -9,8 +9,6 @@ import { parseExamplesFromContent } from '@/lib/search/parse-examples'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
 import { ContentSection } from '@/components/detail/ContentSection'
-import { InstallGuide } from '@/components/detail/InstallGuide'
-import { QuickActionGenerator } from '@/components/actions/QuickActionGenerator'
 import { DependencyDisplay } from '@/components/detail/DependencyDisplay'
 import { ChangelogDisplay } from '@/components/detail/ChangelogDisplay'
 import { TableOfContents, Section, type TocItem } from '@/components/detail/TableOfContents'
@@ -62,8 +60,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
     tocItems.push({ id: 'changelog', label: '변경 이력', icon: '📋' })
   }
 
-  tocItems.push({ id: 'quick-actions', label: '퀵 액션', icon: '🚀' })
-  tocItems.push({ id: 'install', label: '설치 방법', icon: '📦' })
   tocItems.push({ id: 'content', label: 'skill.md', icon: '📄' })
 
   if (item.readme) {
@@ -131,23 +127,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
         </Section>
       )}
 
-      {/* Quick Actions */}
-      <Section id="quick-actions" className="mb-8">
-        <QuickActionGenerator
-          itemId={item.id}
-          allowedTools={item.allowedTools}
-          mcpEnabled={item.mcpEnabled}
-        />
-      </Section>
-
-      {/* Installation Guide */}
-      <Section id="install" className="mb-8">
-        <InstallGuide
-          itemId={item.id}
-          itemType="skill"
-          content={item.content}
-        />
-      </Section>
 
       {/* Skill Content */}
       <Section id="content">
