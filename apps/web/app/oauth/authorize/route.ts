@@ -18,6 +18,22 @@ import { getBaseUrl } from "@/lib/utils";
 
 const log = createLogger("oauth-authorize");
 
+/** CORS headers for cross-origin MCP SDK access */
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+/**
+ * Handle CORS preflight requests
+ *
+ * @returns 204 response with CORS headers
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
 // OAuth 2.1 Authorization Endpoint
 // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.1
 
@@ -174,13 +190,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper to return OAuth errors
+/**
+ * Return OAuth error response with CORS headers
+ *
+ * @param error - OAuth error code
+ * @param description - Human-readable error description
+ * @returns JSON error response
+ */
 function oauthError(error: string, description: string): NextResponse {
   return NextResponse.json(
     {
       error,
       error_description: description,
     },
-    { status: 400 },
+    { status: 400, headers: corsHeaders },
   );
 }

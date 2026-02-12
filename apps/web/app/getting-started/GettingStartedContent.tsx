@@ -201,6 +201,10 @@ function ClaudeCodeTab({
             <InfoBox color="green" label="보안:">
               OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
             </InfoBox>
+
+            <InfoBox color="blue" label="참고:">
+              브라우저가 자동으로 열리지 않는 경우, 먼저 웹사이트에서 직접 로그인한 후 다시 시도하세요.
+            </InfoBox>
           </div>
         </div>
       </div>
@@ -396,6 +400,10 @@ function McpDirectTab({
 
             <InfoBox color="green" label="보안:">
               OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
+            </InfoBox>
+
+            <InfoBox color="blue" label="참고:">
+              브라우저가 자동으로 열리지 않는 경우, 먼저 웹사이트에서 직접 로그인한 후 다시 시도하세요.
             </InfoBox>
           </div>
         </div>

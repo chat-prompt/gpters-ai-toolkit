@@ -12,6 +12,22 @@ import { createLogger } from '@/lib/core/logger'
 
 const log = createLogger('oauth-register')
 
+/** CORS headers for cross-origin MCP SDK access */
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+/**
+ * Handle CORS preflight requests
+ *
+ * @returns 204 response with CORS headers
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders })
+}
+
 // Dynamic Client Registration (RFC 7591)
 // https://datatracker.ietf.org/doc/html/rfc7591
 
@@ -29,7 +45,7 @@ export async function POST(request: NextRequest) {
           error: 'invalid_client_metadata',
           error_description: 'client_name is required',
         },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -39,7 +55,7 @@ export async function POST(request: NextRequest) {
           error: 'invalid_client_metadata',
           error_description: 'redirect_uris is required and must be a non-empty array',
         },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -54,7 +70,7 @@ export async function POST(request: NextRequest) {
               error: 'invalid_redirect_uri',
               error_description: `redirect_uri must use https (except localhost): ${uri}`,
             },
-            { status: 400 }
+            { status: 400, headers: corsHeaders }
           )
         }
       } catch {
@@ -63,7 +79,7 @@ export async function POST(request: NextRequest) {
             error: 'invalid_redirect_uri',
             error_description: `Invalid redirect_uri format: ${uri}`,
           },
-          { status: 400 }
+          { status: 400, headers: corsHeaders }
         )
       }
     }
@@ -95,6 +111,7 @@ export async function POST(request: NextRequest) {
         status: 201,
         headers: {
           'Cache-Control': 'no-store',
+          ...corsHeaders,
         },
       }
     )
@@ -105,7 +122,7 @@ export async function POST(request: NextRequest) {
         error: 'server_error',
         error_description: 'Failed to register client',
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     )
   }
 }

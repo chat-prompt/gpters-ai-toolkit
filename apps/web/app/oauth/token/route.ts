@@ -19,6 +19,22 @@ import { createLogger } from "@/lib/core/logger";
 
 const log = createLogger("oauth-token");
 
+/** CORS headers for cross-origin MCP SDK access */
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+/**
+ * Handle CORS preflight requests
+ *
+ * @returns 204 response with CORS headers
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
 // OAuth 2.1 Token Endpoint
 // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.3
 
@@ -162,6 +178,7 @@ export async function POST(request: NextRequest) {
         headers: {
           "Cache-Control": "no-store",
           Pragma: "no-cache",
+          ...corsHeaders,
         },
       },
     );
@@ -171,7 +188,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper to return token errors
+/**
+ * Return token error response with CORS and cache headers
+ *
+ * @param error - OAuth error code
+ * @param description - Human-readable error description
+ * @returns JSON error response
+ */
 function tokenError(error: string, description: string): NextResponse {
   return NextResponse.json(
     {
@@ -183,6 +206,7 @@ function tokenError(error: string, description: string): NextResponse {
       headers: {
         "Cache-Control": "no-store",
         Pragma: "no-cache",
+        ...corsHeaders,
       },
     },
   );

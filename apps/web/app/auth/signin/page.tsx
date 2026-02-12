@@ -6,6 +6,7 @@
  */
 import { signIn } from '@/lib/core/auth'
 import { redirect } from 'next/navigation'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { auth } from '@/lib/core/auth'
 import Image from 'next/image'
 
@@ -19,6 +20,20 @@ export default async function SignInPage({
 
   if (session) {
     redirect(callbackUrl || '/')
+  }
+
+  // MCP OAuth 흐름에서 온 경우 자동으로 Google 로그인 시작
+  if (callbackUrl?.includes('/oauth/authorize')) {
+    try {
+      await signIn('google', { redirectTo: callbackUrl })
+    } catch (error) {
+      // NEXT_REDIRECT는 정상 동작 (redirect가 throw로 구현됨)
+      if (isRedirectError(error)) {
+        throw error
+      }
+      // 실제 에러인 경우 로그 후 수동 로그인 폼 표시
+      console.error('OAuth auto-redirect failed:', error)
+    }
   }
 
   return (
