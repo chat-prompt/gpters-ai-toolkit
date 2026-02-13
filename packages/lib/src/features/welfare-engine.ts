@@ -8,6 +8,7 @@
 import { db, catalogItems, itemVersions, mcpAuditLogs, users } from '@gpters/db'
 import { eq, and, gte, lte, count, sql, desc } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
+import type { ItemType } from '../core/types'
 
 const log = createLogger('welfare-engine')
 
@@ -33,7 +34,7 @@ export interface WelfareEngineMetrics {
     /** Total searches (search_plugins + semantic_search) */
     totalSearches: number
     /** Top 3 viewed skills */
-    topSkills: Array<{ id: string; name: string; views: number }>
+    topSkills: Array<{ id: string; name: string; type: ItemType; views: number }>
   }
   /** Quality metrics (품질) */
   quality: {
@@ -152,9 +153,16 @@ export async function getWelfareEngineStats(
       )
 
     // Get top 3 viewed skills
+    // pluginId can be in two locations depending on the request mode:
+    // - JSON-RPC: requestParams.params.arguments.pluginId
+    // - Simple REST: requestParams.pluginId
+    const pluginIdExpr = sql`COALESCE(
+      ${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId',
+      ${mcpAuditLogs.requestParams}->>'pluginId'
+    )`
     const topSkillViews = await db
       .select({
-        pluginId: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`,
+        pluginId: sql<string>`${pluginIdExpr}`,
         count: count(),
       })
       .from(mcpAuditLogs)
@@ -164,10 +172,10 @@ export async function getWelfareEngineStats(
           eq(mcpAuditLogs.responseStatus, 'success'),
           gte(mcpAuditLogs.createdAt, startDate),
           lte(mcpAuditLogs.createdAt, endDate),
-          sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId' IS NOT NULL`
+          sql`${pluginIdExpr} IS NOT NULL`
         )
       )
-      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`)
+      .groupBy(pluginIdExpr)
       .orderBy(desc(count()))
       .limit(3)
 
@@ -178,6 +186,7 @@ export async function getWelfareEngineStats(
           .select({
             id: catalogItems.id,
             name: catalogItems.name,
+            type: catalogItems.type,
           })
           .from(catalogItems)
           .where(eq(catalogItems.id, view.pluginId))
@@ -186,11 +195,12 @@ export async function getWelfareEngineStats(
         return {
           id: view.pluginId,
           name: item?.name,
+          type: item?.type,
           views: view.count,
         }
       })
     )
-    const topSkills = topSkillsRaw.filter((s): s is { id: string; name: string; views: number } => !!s.name)
+    const topSkills = topSkillsRaw.filter((s): s is { id: string; name: string; type: ItemType; views: number } => !!s.name)
 
     // Get quality metrics
     const [qualityResult] = await db
@@ -284,10 +294,18 @@ export async function getSkillViewRanking(
   endDate?: Date
 ): Promise<SkillViewRanking[]> {
   try {
+    // pluginId can be in two locations depending on the request mode:
+    // - JSON-RPC: requestParams.params.arguments.pluginId
+    // - Simple REST: requestParams.pluginId
+    const rankingPluginIdExpr = sql`COALESCE(
+      ${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId',
+      ${mcpAuditLogs.requestParams}->>'pluginId'
+    )`
+
     const conditions = [
       eq(mcpAuditLogs.tool, 'get_plugin_content'),
       eq(mcpAuditLogs.responseStatus, 'success'),
-      sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId' IS NOT NULL`,
+      sql`${rankingPluginIdExpr} IS NOT NULL`,
     ]
 
     if (startDate) {
@@ -299,12 +317,12 @@ export async function getSkillViewRanking(
 
     const skillViews = await db
       .select({
-        pluginId: sql<string>`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`,
+        pluginId: sql<string>`${rankingPluginIdExpr}`,
         count: count(),
       })
       .from(mcpAuditLogs)
       .where(and(...conditions))
-      .groupBy(sql`${mcpAuditLogs.requestParams}->'params'->'arguments'->>'pluginId'`)
+      .groupBy(rankingPluginIdExpr)
       .orderBy(desc(count()))
       .limit(limit)
 

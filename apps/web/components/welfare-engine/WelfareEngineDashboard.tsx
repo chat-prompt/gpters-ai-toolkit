@@ -13,7 +13,7 @@ interface WelfareEngineMetrics {
   utilization: {
     totalViews: number
     totalSearches: number
-    topSkills: Array<{ id: string; name: string; views: number }>
+    topSkills: Array<{ id: string; name: string; type: string; views: number }>
   }
   quality: {
     successRate: number
@@ -249,7 +249,7 @@ export function WelfareEngineDashboard() {
                 <span className="text-2xl">{['🥇', '🥈', '🥉'][idx]}</span>
                 <div className="flex-1">
                   <Link
-                    href={`/detail/${skill.id}`}
+                    href={`/${skill.type === 'guide' ? 'guides' : skill.type}/${skill.id}`}
                     className="text-[var(--text-primary)] hover:text-[#F26522] font-medium"
                   >
                     {skill.name}
@@ -279,7 +279,7 @@ export function WelfareEngineDashboard() {
                   </span>
                   <div>
                     <Link
-                      href={`/detail/${skill.id}`}
+                      href={`/${skill.type === 'guide' ? 'guides' : skill.type}/${skill.id}`}
                       className="text-[var(--text-primary)] hover:text-[#F26522]"
                     >
                       {skill.name}

@@ -532,7 +532,7 @@ export function StatsDashboard() {
               stats.topItems.map((item, i) => (
                 <Link
                   key={item.id}
-                  href={`/${item.type}/${item.id}`}
+                  href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
                   className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-tertiary)] hover:bg-[var(--bg-primary)] transition-colors"
                 >
                   <span className="w-6 h-6 flex items-center justify-center rounded-full bg-[var(--bg-secondary)] text-xs font-medium text-[var(--text-muted)]">
@@ -611,7 +611,7 @@ export function StatsDashboard() {
                   <span className="text-xl">📥</span>
                   <div className="flex-1 min-w-0">
                     <Link
-                      href={`/${inst.itemType}/${inst.itemId}`}
+                      href={`/${inst.itemType === 'guide' ? 'guides' : inst.itemType}/${inst.itemId}`}
                       className="text-sm font-medium text-[var(--text-primary)] hover:text-[#F26522] truncate block"
                     >
                       {inst.itemName}
@@ -641,7 +641,7 @@ export function StatsDashboard() {
                   <span className="text-xl">✨</span>
                   <div className="flex-1 min-w-0">
                     <Link
-                      href={`/${item.type}/${item.id}`}
+                      href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
                       className="text-sm font-medium text-[var(--text-primary)] hover:text-[#F26522] truncate block"
                     >
                       {item.name}

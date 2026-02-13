@@ -505,6 +505,13 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
+    // Map REST action to corresponding MCP tool name for audit logging
+    const REST_ACTION_TO_TOOL: Record<string, string> = {
+      get: 'get_plugin_content',
+      search: 'search_plugins',
+      list: 'list_plugins',
+    }
+
     // Simple REST mode (action parameter)
     if (action) {
       // Validate request body based on action
@@ -524,7 +531,7 @@ export async function POST(request: NextRequest) {
           validationResult = { success: true, data: body }
           break
         default:
-          logAudit(`rest:${action}`, undefined, 'error', body, {
+          logAudit(`rest:${action}`, REST_ACTION_TO_TOOL[action], 'error', body, {
             code: 'UNKNOWN_ACTION',
             message: `Unknown action: ${action}`,
           })
@@ -541,7 +548,7 @@ export async function POST(request: NextRequest) {
         const errorMessage = typeof validationError === 'string'
           ? validationError
           : (validationError as { message?: string })?.message || 'Validation failed'
-        logAudit(`rest:${action}`, undefined, 'error', body, {
+        logAudit(`rest:${action}`, REST_ACTION_TO_TOOL[action], 'error', body, {
           code: 'VALIDATION_ERROR',
           message: errorMessage,
         })
@@ -557,7 +564,7 @@ export async function POST(request: NextRequest) {
 
       logAudit(
         `rest:${action}`,
-        undefined,
+        REST_ACTION_TO_TOOL[action],
         result.success ? 'success' : 'error',
         body,
         result.success ? undefined : { code: 'REQUEST_FAILED', message: result.error }
