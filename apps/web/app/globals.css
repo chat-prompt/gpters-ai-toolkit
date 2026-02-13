@@ -269,6 +269,32 @@ html.theme-transition *::after {
   transition-delay: 0s !important;
 }
 
+/* Login page floating orbs */
+@keyframes float-slow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 15px) scale(0.95); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.2); }
+  50% { box-shadow: 0 0 40px rgba(0, 212, 255, 0.4); }
+}
+
+.animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
+.animate-float-slow-delayed { animation: float-slow 10s ease-in-out 2s infinite; }
+.animate-float-slow-delayed-2 { animation: float-slow 12s ease-in-out 4s infinite; }
+.animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-slow,
+  .animate-float-slow-delayed,
+  .animate-float-slow-delayed-2,
+  .animate-glow-pulse {
+    animation: none;
+  }
+}
+
 /* Utility */
 .line-clamp-2 {
   display: -webkit-box;

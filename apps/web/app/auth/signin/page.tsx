@@ -2,7 +2,8 @@
  * Sign in page
  *
  * Authentication page with Google OAuth login for @gpters.org
- * domain users. Redirects authenticated users to callback URL.
+ * domain users. Features glassmorphism card with animated gradient
+ * orb background. Redirects authenticated users to callback URL.
  */
 import { signIn } from '@/lib/core/auth'
 import { redirect } from 'next/navigation'
@@ -37,35 +38,44 @@ export default async function SignInPage({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--bg-secondary)] mb-4">
-            <Image
-              src="/gpters-logo.svg"
-              alt="AI Toolkit"
-              width={40}
-              height={40}
-              className="rounded-lg"
-            />
-          </div>
-          <h1 className="text-xl font-medium text-[var(--text-primary)]">
-            AI Toolkit
-          </h1>
-        </div>
+    <div className="min-h-screen bg-[var(--bg-primary)] grid-pattern flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Floating gradient orbs */}
+      <div
+        aria-hidden="true"
+        className="absolute top-[-10%] left-[-5%] w-72 h-72 rounded-full bg-[var(--accent-cyan)] opacity-20 blur-3xl animate-float-slow [.light_&]:opacity-10"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute bottom-[-10%] right-[-5%] w-72 h-72 rounded-full bg-[var(--accent-purple)] opacity-20 blur-3xl animate-float-slow-delayed [.light_&]:opacity-10"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute bottom-[10%] left-[30%] w-72 h-72 rounded-full bg-[var(--accent-green)] opacity-20 blur-3xl animate-float-slow-delayed-2 [.light_&]:opacity-10"
+      />
 
-        {/* Card */}
-        <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 border border-[var(--border-subtle)]">
-          <div className="text-center mb-6">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-1">
-              로그인
-            </h2>
-            <p className="text-sm text-[var(--text-muted)]">
-              조직 계정으로 계속하기
+      {/* Card */}
+      <div className="w-full max-w-md relative z-10 animate-fade-up">
+        <div className="glass rounded-2xl p-8 transition-all duration-200 hover:border-[var(--border-hover)] hover:shadow-[var(--glow-cyan)]">
+          {/* Logo & Branding */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] mb-5 animate-glow-pulse">
+              <Image
+                src="/gpters-logo.svg"
+                alt="AI Toolkit"
+                width={48}
+                height={48}
+                className="rounded-lg"
+              />
+            </div>
+            <h1 className="text-2xl font-semibold gradient-text-cyan mb-2">
+              AI Toolkit
+            </h1>
+            <p className="text-sm text-[var(--text-secondary)]">
+              GPTers 팀을 위한 AI 도구 허브
             </p>
           </div>
 
+          {/* Login Form */}
           <form
             action={async () => {
               'use server'
@@ -74,7 +84,7 @@ export default async function SignInPage({
           >
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors border border-gray-200"
+              className="cursor-pointer w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm font-medium border border-[var(--border-subtle)] transition-all duration-200 hover:border-[var(--accent-cyan)]/50 hover:shadow-[0_0_20px_rgba(0,212,255,0.1)]"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
@@ -97,12 +107,30 @@ export default async function SignInPage({
               Google 계정으로 로그인
             </button>
           </form>
+
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-[var(--text-muted)] mt-6">
-          등록된 조직 도메인 이메일만 허용됩니다
-        </p>
+        <div className="flex items-center justify-center gap-1.5 mt-6">
+          <svg
+            width={14}
+            height={14}
+            className="shrink-0 text-[var(--text-muted)]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
+            />
+          </svg>
+          <p className="text-xs text-[var(--text-muted)]">
+            등록된 조직 도메인 이메일만 허용됩니다
+          </p>
+        </div>
       </div>
     </div>
   )
