@@ -105,7 +105,7 @@ function FileItem({ file }: { file: PluginFile }) {
           <div className="text-left">
             <div className="text-sm font-mono text-[var(--text-primary)]">{file.name}</div>
             <div className="text-xs text-[var(--text-muted)] mt-0.5">
-              {file.content.split('\n').length} lines
+              {(file.content ?? '').split('\n').length} lines
             </div>
           </div>
           <svg
