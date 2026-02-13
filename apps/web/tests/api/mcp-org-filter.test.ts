@@ -1,19 +1,35 @@
 /**
  * MCP Organization-Based Access Control Tests
+ *
+ * Requires DATABASE_URL - skipped in CI without database access.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { db, catalogItems, users, organizations, orgMemberships } from '@gpters/db'
 import { eq } from 'drizzle-orm'
 
-describe('MCP Organization Access Control', () => {
+const hasDatabase = !!process.env.DATABASE_URL || !!process.env.TEST_DATABASE_URL
+
+describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
   const testOrgId1 = 'test-org-1'
   const testOrgId2 = 'test-org-2'
   const testUserId1 = 'test-user-1'
   const testUserId2 = 'test-user-2'
   const superAdminId = 'super-admin-1'
 
+  let db: Awaited<typeof import('@gpters/db')>['db']
+  let catalogItems: Awaited<typeof import('@gpters/db')>['catalogItems']
+  let organizations: Awaited<typeof import('@gpters/db')>['organizations']
+  let users: Awaited<typeof import('@gpters/db')>['users']
+  let orgMemberships: Awaited<typeof import('@gpters/db')>['orgMemberships']
+
   beforeAll(async () => {
+    const dbModule = await import('@gpters/db')
+    db = dbModule.db
+    catalogItems = dbModule.catalogItems
+    organizations = dbModule.organizations
+    users = dbModule.users
+    orgMemberships = dbModule.orgMemberships
+
     await db.insert(organizations).values([
       { id: testOrgId1, name: 'Test Org 1', slug: 'test-org-1', allowedDomains: [] },
       { id: testOrgId2, name: 'Test Org 2', slug: 'test-org-2', allowedDomains: [] },
@@ -37,14 +53,14 @@ describe('MCP Organization Access Control', () => {
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-public-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-shared-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-legacy-1'))
-    
+
     await db.delete(orgMemberships).where(eq(orgMemberships.userId, testUserId1))
     await db.delete(orgMemberships).where(eq(orgMemberships.userId, testUserId2))
-    
+
     await db.delete(users).where(eq(users.id, testUserId1))
     await db.delete(users).where(eq(users.id, testUserId2))
     await db.delete(users).where(eq(users.id, superAdminId))
-    
+
     await db.delete(organizations).where(eq(organizations.id, testOrgId1))
     await db.delete(organizations).where(eq(organizations.id, testOrgId2))
   })
@@ -85,14 +101,14 @@ describe('MCP Organization Access Control', () => {
       ])
 
       const { searchPlugins } = await import('@gpters/lib/mcp')
-      
+
       const resultOrg1 = await searchPlugins(
         { query: 'Skill', limit: 10 },
         testUserId1,
         'viewer',
         testOrgId1
       )
-      
+
       expect(resultOrg1.plugins.some((p) => p.id === 'test-private-1')).toBe(true)
       expect(resultOrg1.plugins.some((p) => p.id === 'test-private-2')).toBe(false)
     })
@@ -111,14 +127,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { searchPlugins } = await import('@gpters/lib/mcp')
-      
+
       const resultOrg2 = await searchPlugins(
         { query: 'Skill', limit: 10 },
         testUserId2,
         'viewer',
         testOrgId2
       )
-      
+
       expect(resultOrg2.plugins.some((p) => p.id === 'test-public-1')).toBe(true)
     })
 
@@ -136,14 +152,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { searchPlugins } = await import('@gpters/lib/mcp')
-      
+
       const resultOrg2 = await searchPlugins(
         { query: 'Skill', limit: 10 },
         testUserId2,
         'viewer',
         testOrgId2
       )
-      
+
       expect(resultOrg2.plugins.some((p) => p.id === 'test-shared-1')).toBe(true)
     })
 
@@ -161,14 +177,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { searchPlugins } = await import('@gpters/lib/mcp')
-      
+
       const result = await searchPlugins(
         { query: 'Skill', limit: 10 },
         testUserId1,
         'viewer',
         testOrgId1
       )
-      
+
       expect(result.plugins.some((p) => p.id === 'test-legacy-1')).toBe(true)
     })
 
@@ -199,14 +215,14 @@ describe('MCP Organization Access Control', () => {
       ])
 
       const { searchPlugins } = await import('@gpters/lib/mcp')
-      
+
       const result = await searchPlugins(
         { query: 'Skill', limit: 10 },
         superAdminId,
         'super_admin',
         testOrgId1
       )
-      
+
       expect(result.plugins.some((p) => p.id === 'test-private-1')).toBe(true)
       expect(result.plugins.some((p) => p.id === 'test-private-2')).toBe(true)
     })
@@ -238,9 +254,9 @@ describe('MCP Organization Access Control', () => {
       ])
 
       const { searchPlugins } = await import('@gpters/lib/mcp')
-      
+
       const result = await searchPlugins({ query: 'Skill', limit: 10 })
-      
+
       expect(result.plugins.some((p) => p.id === 'test-private-1')).toBe(false)
       expect(result.plugins.some((p) => p.id === 'test-public-1')).toBe(true)
     })
@@ -261,14 +277,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { getPluginContent } = await import('@/lib/mcp/handlers')
-      
+
       const result = await getPluginContent(
         { pluginId: 'test-private-1' },
         testUserId2,
         'viewer',
         testOrgId2
       )
-      
+
       expect(result).toBeNull()
     })
 
@@ -286,14 +302,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { getPluginContent } = await import('@/lib/mcp/handlers')
-      
+
       const result = await getPluginContent(
         { pluginId: 'test-public-1' },
         testUserId2,
         'viewer',
         testOrgId2
       )
-      
+
       expect(result).not.toBeNull()
       expect(result?.id).toBe('test-public-1')
     })
@@ -312,14 +328,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { getPluginContent } = await import('@/lib/mcp/handlers')
-      
+
       const result = await getPluginContent(
         { pluginId: 'test-shared-1' },
         testUserId2,
         'viewer',
         testOrgId2
       )
-      
+
       expect(result).not.toBeNull()
       expect(result?.id).toBe('test-shared-1')
     })
@@ -338,14 +354,14 @@ describe('MCP Organization Access Control', () => {
       })
 
       const { getPluginContent } = await import('@/lib/mcp/handlers')
-      
+
       const result = await getPluginContent(
         { pluginId: 'test-private-1' },
         superAdminId,
         'super_admin',
         testOrgId2
       )
-      
+
       expect(result).not.toBeNull()
       expect(result?.id).toBe('test-private-1')
     })
@@ -354,7 +370,7 @@ describe('MCP Organization Access Control', () => {
   describe('deploySkill', () => {
     it('should set orgId when deploying new skill', async () => {
       const { deploySkill } = await import('@gpters/lib/mcp')
-      
+
       const result = await deploySkill(
         {
           type: 'skill',
@@ -366,18 +382,18 @@ describe('MCP Organization Access Control', () => {
         'viewer',
         testOrgId1
       )
-      
+
       expect(result.success).toBe(true)
-      
+
       const [deployed] = await db
         .select()
         .from(catalogItems)
         .where(eq(catalogItems.id, result.id))
         .limit(1)
-      
+
       expect(deployed.orgId).toBe(testOrgId1)
       expect(deployed.visibility).toBe('private')
-      
+
       await db.delete(catalogItems).where(eq(catalogItems.id, result.id))
     })
   })
