@@ -50,8 +50,10 @@ import {
   createAuditContext,
   logMcpRequest,
   logRateLimitEvent,
+  inferReferralSource,
   type AuditResponseStatus,
 } from '@/lib/security/mcp-audit'
+import type { ToolExecutionMeta } from '@/lib/mcp'
 import {
   resolveClientType,
   extractClientInfo,
@@ -375,8 +377,8 @@ function maskRequestBody(body: unknown): Record<string, unknown> | undefined {
     const lowerKey = key.toLowerCase()
     if (sensitiveKeys.some((sk) => lowerKey.includes(sk))) {
       masked[key] = '[REDACTED]'
-    } else if (typeof value === 'string' && value.length > 100) {
-      masked[key] = value.substring(0, 100) + '...'
+    } else if (typeof value === 'string' && value.length > 500) {
+      masked[key] = value.substring(0, 500) + '...'
     } else {
       masked[key] = value
     }
@@ -444,7 +446,8 @@ export async function POST(request: NextRequest) {
     tool: string | undefined,
     status: AuditResponseStatus,
     body?: unknown,
-    errorInfo?: { code?: string; message?: string }
+    errorInfo?: { code?: string; message?: string },
+    meta?: ToolExecutionMeta
   ) => {
     if (!auditCtx) return
 
@@ -453,7 +456,18 @@ export async function POST(request: NextRequest) {
     const ct = currentClientType
     const cn = currentClientName
     const cv = currentClientVersion
+    const sid = incomingSessionId || undefined
     after(async () => {
+      // Determine referral source: from meta (explicit) or infer from session
+      let referralSource = meta?.referralSource
+      if (!referralSource && sid && tool === 'get_plugin_content') {
+        const params = body && typeof body === 'object' ? (body as Record<string, unknown>).params as Record<string, unknown> | undefined : undefined
+        const pluginId = params?.arguments ? (params.arguments as Record<string, unknown>).pluginId as string : undefined
+        if (pluginId) {
+          referralSource = await inferReferralSource(sid, pluginId)
+        }
+      }
+
       await logMcpRequest({
         method,
         tool,
@@ -466,6 +480,9 @@ export async function POST(request: NextRequest) {
         responseTime,
         errorCode: errorInfo?.code,
         errorMessage: errorInfo?.message,
+        sessionId: sid,
+        searchResults: meta?.searchResults,
+        referralSource,
       })
     })
   }
@@ -607,6 +624,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Extract _meta from tool response for audit enrichment, then strip it
+    let toolMeta: ToolExecutionMeta | undefined
+    if (response && typeof response === 'object' && !Array.isArray(response) && 'result' in response) {
+      const result = (response as unknown as Record<string, unknown>).result as Record<string, unknown> | undefined
+      if (result?._meta) {
+        toolMeta = result._meta as ToolExecutionMeta
+        delete result._meta
+      }
+    }
+
     // Check if response contains error
     const hasError = response && typeof response === 'object' && 'error' in response
 
@@ -641,7 +668,8 @@ export async function POST(request: NextRequest) {
       tool,
       hasError ? 'error' : 'success',
       body,
-      errorInfo
+      errorInfo,
+      toolMeta
     )
 
     // Handle session for Streamable HTTP transport

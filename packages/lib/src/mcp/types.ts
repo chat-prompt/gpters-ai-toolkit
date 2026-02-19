@@ -205,6 +205,8 @@ export interface McpToolResponse {
     text: string
   }>
   isError?: boolean
+  /** Internal metadata for audit enrichment (stripped before client response) */
+  _meta?: ToolExecutionMeta
 }
 
 // MCP Prompt types
@@ -313,6 +315,19 @@ export interface SemanticSearchInput {
   query: string
   category?: ItemType | 'all'
   limit?: number
+  /** Source marker for referral tracking (e.g., 'skill-suggest') */
+  _source?: string
+}
+
+/**
+ * Internal metadata attached to tool execution results for audit enrichment.
+ * Stripped before sending response to client.
+ */
+export interface ToolExecutionMeta {
+  /** Search result snapshot for discovery analytics */
+  searchResults?: Array<{ itemId: string; rank: number; score: number }>
+  /** Referral source marker (e.g., 'suggest' from skill-suggest hook) */
+  referralSource?: string
 }
 
 export interface SemanticSearchResult {

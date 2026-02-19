@@ -1585,6 +1585,14 @@ export async function executeTool(
               text: JSON.stringify(result, null, 2),
             },
           ],
+          _meta: {
+            searchResults: searchResult.items.map((item, idx) => ({
+              itemId: item.id,
+              rank: idx + 1,
+              score: item.similarity ?? 0,
+            })),
+            referralSource: input._source === 'skill-suggest' ? 'suggest' : undefined,
+          },
         }
       }
 

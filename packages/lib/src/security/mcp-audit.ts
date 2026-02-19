@@ -63,6 +63,10 @@ export interface McpAuditEntry {
   responseTime?: number       // Milliseconds
   errorCode?: string
   errorMessage?: string
+  // Discovery analytics fields
+  sessionId?: string          // MCP session ID for linking search → view flow
+  searchResults?: Array<{ itemId: string; rank: number; score: number }>
+  referralSource?: string     // 'search' | 'suggest' | 'direct' | 'browse'
 }
 
 /**
@@ -120,9 +124,9 @@ function maskSensitiveData(
     } else if (typeof value === 'object' && value !== null) {
       // Recursively mask nested objects
       masked[key] = maskSensitiveData(value as Record<string, unknown>)
-    } else if (typeof value === 'string' && value.length > 200) {
+    } else if (typeof value === 'string' && value.length > 500) {
       // Truncate long strings
-      masked[key] = value.substring(0, 200) + '...[truncated]'
+      masked[key] = value.substring(0, 500) + '...[truncated]'
     } else {
       masked[key] = value
     }
@@ -192,6 +196,9 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
       responseTime: entry.responseTime,
       errorCode: entry.errorCode,
       errorMessage: entry.errorMessage,
+      sessionId: entry.sessionId,
+      searchResults: entry.searchResults,
+      referralSource: entry.referralSource,
     })
 
     log.debug('Audit log recorded', {
@@ -211,6 +218,10 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
       is_authenticated: entry.isAuthenticated,
       client_type: entry.clientType,
       client_name: entry.clientName,
+      session_id: entry.sessionId,
+      referral_source: entry.referralSource,
+      search_result_count: entry.searchResults?.length,
+      search_top_score: entry.searchResults?.[0]?.score,
     })
   } catch (error) {
     // Don't let audit logging failures break the request
@@ -286,6 +297,56 @@ export async function logRateLimitEvent(
     requestParams: undefined,
     responseStatus: 'rate_limited',
   })
+}
+
+// ============================================
+// Referral Source Inference
+// ============================================
+
+/**
+ * Infer referral source for get_plugin_content calls by checking
+ * if the same session recently performed a search that included this plugin.
+ *
+ * @param sessionId - MCP session ID
+ * @param pluginId - The plugin being viewed
+ * @returns 'search' if plugin was in recent search results, undefined otherwise
+ */
+export async function inferReferralSource(
+  sessionId: string,
+  pluginId: string
+): Promise<string | undefined> {
+  try {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+
+    const recentSearches = await db
+      .select({
+        searchResults: mcpAuditLogs.searchResults,
+        referralSource: mcpAuditLogs.referralSource,
+      })
+      .from(mcpAuditLogs)
+      .where(
+        and(
+          eq(mcpAuditLogs.sessionId, sessionId),
+          eq(mcpAuditLogs.tool, 'semantic_search'),
+          gte(mcpAuditLogs.createdAt, fiveMinutesAgo)
+        )
+      )
+      .orderBy(sql`${mcpAuditLogs.createdAt} DESC`)
+      .limit(5)
+
+    for (const search of recentSearches) {
+      const results = search.searchResults as Array<{ itemId: string }> | null
+      if (results?.some((r) => r.itemId === pluginId)) {
+        // If the search was from skill-suggest, mark as 'suggest'
+        return search.referralSource === 'suggest' ? 'suggest' : 'search'
+      }
+    }
+
+    return undefined
+  } catch (error) {
+    log.error('Failed to infer referral source', error)
+    return undefined
+  }
 }
 
 // ============================================

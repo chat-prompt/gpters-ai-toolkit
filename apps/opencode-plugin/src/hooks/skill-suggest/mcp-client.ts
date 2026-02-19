@@ -134,6 +134,7 @@ export async function searchSkills(
             query,
             category,
             limit,
+            _source: "skill-suggest",
           },
         },
       }),

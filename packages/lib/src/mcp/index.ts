@@ -35,6 +35,7 @@ export type {
   AddFilesResponse,
   RemoveFilesInput,
   RemoveFilesResponse,
+  ToolExecutionMeta,
 } from './types'
 
 // Export tools

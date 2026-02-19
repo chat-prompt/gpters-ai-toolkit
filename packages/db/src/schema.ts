@@ -611,6 +611,14 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   errorCode: text('error_code'), // Error code if failed
   errorMessage: text('error_message'), // Error message if failed
 
+  // Discovery analytics fields
+  /** MCP session ID for linking search → view → install flow */
+  sessionId: text('session_id'),
+  /** Search result list snapshot [{itemId, rank, score}] */
+  searchResults: jsonb('search_results').$type<Array<{ itemId: string; rank: number; score: number }>>(),
+  /** How user arrived: 'search' | 'suggest' | 'direct' | 'browse' */
+  referralSource: text('referral_source'),
+
   // Metadata
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -621,6 +629,7 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   // Composite index for common queries
   index('mcp_audit_logs_created_status_idx').on(table.createdAt, table.responseStatus),
   index('mcp_audit_logs_client_type_idx').on(table.clientType),
+  index('mcp_audit_logs_session_id_idx').on(table.sessionId),
 ])
 
 export type McpAuditLogRecord = typeof mcpAuditLogs.$inferSelect

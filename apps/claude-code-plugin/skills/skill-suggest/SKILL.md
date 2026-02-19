@@ -23,7 +23,7 @@ description: "새 작업/주제 변경 시 팀 스킬을 자동 검색합니다.
 ### 2단계: 스킬 검색
 
 ```
-mcp__gpters-ai-toolkit__semantic_search(query="추출된 키워드", limit=3)
+mcp__gpters-ai-toolkit__semantic_search(query="추출된 키워드", limit=3, _source="skill-suggest")
 ```
 
 ### 3단계: 관련 스킬 로드 및 적용
