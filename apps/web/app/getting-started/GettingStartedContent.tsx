@@ -349,14 +349,13 @@ function CodexTab({
               플러그인 설치
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              터미널에서 아래 명령어를 실행하세요. 스킬 파일, MCP 서버 설정, AGENTS.md를 한 번에 설치합니다:
+              터미널에서 아래 명령어를 실행하세요. <code className="text-xs">~/.codex/config.toml</code>에 MCP 서버 설정을 자동으로 추가합니다:
             </p>
 
             <CodeBlock code={installCmd} stepId="codex-install" copiedStep={copiedStep} onCopy={onCopy} />
 
-            <InfoBox color="blue" label="옵션:">
-              <code className="text-xs">--project</code> (프로젝트 레벨) 또는 <code className="text-xs">--user</code> (전역) 플래그로 범위를 지정할 수 있습니다.
-              <code className="text-xs">--force</code>로 기존 파일을 덮어쓸 수 있습니다.
+            <InfoBox color="blue" label="참고:">
+              이미 설정된 환경에서도 안전하게 재실행할 수 있습니다. 기존 설정을 덮어쓰지 않습니다.
             </InfoBox>
           </div>
         </div>
@@ -404,30 +403,23 @@ function CodexTab({
         </div>
       </div>
 
-      {/* Installed Skills */}
+      {/* Connection Check */}
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step="✓" color="green" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              설치되는 스킬
+              연결 확인
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              다음 스킬이 <code className="text-xs">.agents/skills/gpters/</code>에 설치됩니다:
+              <code className="text-xs">~/.codex/config.toml</code>에 아래 설정이 추가되었는지 확인하세요:
             </p>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <span className="text-sm font-mono text-[var(--accent-cyan)]">skill-suggest</span>
-                <span className="text-sm text-[var(--text-secondary)]">새 작업 시 관련 팀 스킬 자동 검색</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <span className="text-sm font-mono text-[var(--accent-cyan)]">commit</span>
-                <span className="text-sm text-[var(--text-secondary)]">Semantic Commit 형식의 상세 커밋 메시지 생성</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <span className="text-sm font-mono text-[var(--accent-cyan)]">prd-review</span>
-                <span className="text-sm text-[var(--text-secondary)]">PRD 파일 심층 인터뷰 및 스펙 작성</span>
+            <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+              <div className="text-xs font-mono text-[var(--text-muted)]">
+                <div>[mcp_servers.gpters-ai-toolkit]</div>
+                <div>type = &quot;http&quot;</div>
+                <div>url = &quot;{MCP_SERVER_URL}&quot;</div>
               </div>
             </div>
           </div>
