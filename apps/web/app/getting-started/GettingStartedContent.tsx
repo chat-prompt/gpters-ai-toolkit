@@ -2,7 +2,7 @@
  * Client-side interactive content for the Getting Started page
  *
  * Provides tabbed setup guides for Claude Code plugin, OpenCode plugin,
- * and direct MCP server connection with clipboard copy interactions.
+ * Codex CLI plugin, and direct MCP server connection with clipboard copy interactions.
  */
 'use client'
 
@@ -12,7 +12,7 @@ import { getMcpServerUrl, getMcpCommand } from '@/lib/utils/config'
 const MCP_SERVER_URL = getMcpServerUrl()
 
 /** Tab identifier type */
-type TabId = 'claude-code' | 'opencode' | 'mcp'
+type TabId = 'claude-code' | 'opencode' | 'codex' | 'mcp'
 
 /** Tab definition */
 interface Tab {
@@ -27,6 +27,7 @@ interface Tab {
 const TABS: Tab[] = [
   { id: 'claude-code', label: 'Claude Code', description: '플러그인 마켓플레이스' },
   { id: 'opencode', label: 'OpenCode', description: 'npm 레지스트리' },
+  { id: 'codex', label: 'Codex CLI', description: 'npx setup' },
   { id: 'mcp', label: 'MCP 직접 연결', description: 'claude mcp add' },
 ]
 
@@ -326,6 +327,117 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
 }
 
 /**
+ * Codex CLI plugin tab content
+ */
+function CodexTab({
+  copiedStep,
+  onCopy,
+}: {
+  copiedStep: string | null
+  onCopy: (text: string, stepId: string) => void
+}) {
+  const installCmd = 'npx @gpters-internal/codex-plugin setup'
+
+  return (
+    <div className="space-y-6">
+      {/* Step 1: Setup Command */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={1} color="cyan" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              플러그인 설치
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              터미널에서 아래 명령어를 실행하세요. 스킬 파일, MCP 서버 설정, AGENTS.md를 한 번에 설치합니다:
+            </p>
+
+            <CodeBlock code={installCmd} stepId="codex-install" copiedStep={copiedStep} onCopy={onCopy} />
+
+            <InfoBox color="blue" label="옵션:">
+              <code className="text-xs">--project</code> (프로젝트 레벨) 또는 <code className="text-xs">--user</code> (전역) 플래그로 범위를 지정할 수 있습니다.
+              <code className="text-xs">--force</code>로 기존 파일을 덮어쓸 수 있습니다.
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: Browser Login */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={2} color="purple" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              브라우저 로그인
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              Codex CLI 재시작 시 MCP 서버가 자동 연결됩니다. 브라우저에서 Google 로그인이 필요합니다.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                  1
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Codex CLI를 재시작하면 MCP 서버에 자동 연결
+                </span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                  2
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Google 계정 (조직 이메일)으로 로그인
+                </span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                  ✓
+                </div>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  완료! Codex CLI에서 팀 스킬을 사용할 수 있습니다
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Installed Skills */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step="✓" color="green" />
+          <div className="flex-grow">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              설치되는 스킬
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              다음 스킬이 <code className="text-xs">.agents/skills/gpters/</code>에 설치됩니다:
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <span className="text-sm font-mono text-[var(--accent-cyan)]">skill-suggest</span>
+                <span className="text-sm text-[var(--text-secondary)]">새 작업 시 관련 팀 스킬 자동 검색</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <span className="text-sm font-mono text-[var(--accent-cyan)]">commit</span>
+                <span className="text-sm text-[var(--text-secondary)]">Semantic Commit 형식의 상세 커밋 메시지 생성</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <span className="text-sm font-mono text-[var(--accent-cyan)]">prd-review</span>
+                <span className="text-sm text-[var(--text-secondary)]">PRD 파일 심층 인터뷰 및 스펙 작성</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * MCP direct connection tab content (existing guide)
  */
 function McpDirectTab({
@@ -438,8 +550,8 @@ function McpDirectTab({
 /**
  * Interactive getting started content with tabbed setup guides
  *
- * Provides three installation methods: Claude Code plugin, OpenCode plugin,
- * and direct MCP server connection.
+ * Provides four installation methods: Claude Code plugin, OpenCode plugin,
+ * Codex CLI plugin, and direct MCP server connection.
  */
 export function GettingStartedContent() {
   const [activeTab, setActiveTab] = useState<TabId>('claude-code')
@@ -495,6 +607,7 @@ export function GettingStartedContent() {
       {/* Tab Content */}
       {activeTab === 'claude-code' && <ClaudeCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
       {activeTab === 'opencode' && <OpenCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
+      {activeTab === 'codex' && <CodexTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
       {activeTab === 'mcp' && <McpDirectTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
 
       {/* Usage Guide */}
