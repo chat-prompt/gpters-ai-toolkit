@@ -336,7 +336,9 @@ function CodexTab({
   copiedStep: string | null
   onCopy: (text: string, stepId: string) => void
 }) {
-  const installCmd = 'npx @gpters-internal/codex-plugin setup'
+  const installCmd = `grep -q "verdaccio.gpters.org" ~/.npmrc 2>/dev/null || echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.npmrc && \\
+npx --yes @gpters-internal/codex-plugin setup`
 
   return (
     <div className="space-y-6">
