@@ -52,6 +52,10 @@ const ALL_TOOLS: McpTool[] = [
           type: 'number',
           description: '최대 결과 수 (기본: 5, 최대: 20)',
         },
+        _source: {
+          type: 'string',
+          description: '호출 출처 마커 (예: "skill-suggest"). 자동 추천과 수동 검색을 구분하는 데 사용',
+        },
       },
       required: ['query'],
     },
