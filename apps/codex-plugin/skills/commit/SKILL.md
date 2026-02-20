@@ -1,3 +1,8 @@
+---
+name: commit
+description: "Semantic Commit 형식의 상세한 커밋 메시지를 생성합니다."
+---
+
 # Git 커밋 에이전트
 
 현재 변경사항에 대해 명확하고 상세한 커밋을 생성하는 에이전트입니다.

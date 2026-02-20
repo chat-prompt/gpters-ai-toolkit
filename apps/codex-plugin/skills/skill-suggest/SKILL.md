@@ -1,3 +1,8 @@
+---
+name: skill-suggest
+description: "새 작업/주제 변경 시 팀 스킬을 자동 검색합니다."
+---
+
 # Skill Suggest (자동 트리거)
 
 > **IMPORTANT**: 새 작업을 시작하거나 주제가 바뀔 때 아래 워크플로우를 수행하세요.
