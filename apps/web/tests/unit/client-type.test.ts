@@ -35,6 +35,14 @@ describe('Client Type Identification', () => {
       expect(resolveFromOAuthClientName('cursor')).toBe('cursor')
     })
 
+    it('should resolve "codex" to codex', () => {
+      expect(resolveFromOAuthClientName('codex')).toBe('codex')
+    })
+
+    it('should resolve "codex-mcp-client" to codex', () => {
+      expect(resolveFromOAuthClientName('codex-mcp-client')).toBe('codex')
+    })
+
     it('should return undefined for unknown client name', () => {
       expect(resolveFromOAuthClientName('my-custom-app')).toBeUndefined()
     })
@@ -57,6 +65,7 @@ describe('Client Type Identification', () => {
       expect(resolveFromClientInfo({ name: 'claude code', version: '1.0.0' })).toBe('claude_code')
       expect(resolveFromClientInfo({ name: 'opencode', version: '0.5.0' })).toBe('opencode')
       expect(resolveFromClientInfo({ name: 'cursor', version: '2.0' })).toBe('cursor')
+      expect(resolveFromClientInfo({ name: 'codex-mcp-client', version: '0.104.0' })).toBe('codex')
     })
 
     it('should be case-insensitive', () => {
@@ -93,6 +102,10 @@ describe('Client Type Identification', () => {
 
     it('should detect Cursor from User-Agent', () => {
       expect(resolveFromUserAgent('cursor/1.0')).toBe('cursor')
+    })
+
+    it('should detect Codex from User-Agent', () => {
+      expect(resolveFromUserAgent('codex/0.104.0')).toBe('codex')
     })
 
     it('should detect web browsers', () => {

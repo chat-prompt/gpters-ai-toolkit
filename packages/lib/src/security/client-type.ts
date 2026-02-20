@@ -11,7 +11,7 @@
 /**
  * Known MCP client types
  */
-export type ClientType = 'claude_code' | 'opencode' | 'cursor' | 'web_browser' | 'cli' | 'unknown'
+export type ClientType = 'claude_code' | 'opencode' | 'cursor' | 'codex' | 'web_browser' | 'cli' | 'unknown'
 
 /**
  * MCP client info from initialize request params
@@ -44,6 +44,8 @@ const CLIENT_NAME_TYPE_MAP: Record<string, ClientType> = {
   'claude desktop': 'claude_code',
   'opencode': 'opencode',
   'cursor': 'cursor',
+  'codex': 'codex',
+  'codex-mcp-client': 'codex',
 }
 
 /**
@@ -54,6 +56,7 @@ const USER_AGENT_PATTERNS: Array<{ pattern: RegExp; type: ClientType }> = [
   { pattern: /claude[- ]?desktop/i, type: 'claude_code' },
   { pattern: /opencode/i, type: 'opencode' },
   { pattern: /cursor/i, type: 'cursor' },
+  { pattern: /codex/i, type: 'codex' },
   { pattern: /mozilla|chrome|safari|firefox|edge/i, type: 'web_browser' },
   { pattern: /curl|httpie|wget|postman|insomnia/i, type: 'cli' },
 ]
