@@ -100,12 +100,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Extract client credentials from Authorization: Basic header (client_secret_basic)
+    const authHeader = request.headers.get("authorization") || "";
+    if (authHeader.startsWith("Basic ")) {
+      try {
+        const decoded = atob(authHeader.slice(6));
+        const colonIndex = decoded.indexOf(":");
+        if (colonIndex > 0) {
+          const basicClientId = decodeURIComponent(decoded.substring(0, colonIndex));
+          const basicClientSecret = decodeURIComponent(decoded.substring(colonIndex + 1));
+          if (!clientId) clientId = basicClientId;
+          if (!clientSecret) clientSecret = basicClientSecret;
+        }
+      } catch {
+        log.warn("Failed to decode Basic auth header");
+      }
+    }
+
     log.info("Parsed token request params", {
       hasGrantType: !!grantType,
       hasCode: !!code,
       hasClientId: !!clientId,
       hasCodeVerifier: !!codeVerifier,
       hasRedirectUri: !!redirectUri,
+      authMethod: authHeader.startsWith("Basic ") ? "basic" : "body",
     });
 
     // Validate grant_type

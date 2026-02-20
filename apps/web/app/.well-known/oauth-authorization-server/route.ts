@@ -36,7 +36,7 @@ export async function GET() {
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code'],
       code_challenge_methods_supported: ['S256'], // PKCE required, S256 only
-      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+      token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
       service_documentation: `${BASE_URL}/docs/mcp-oauth`,
     },
     {
