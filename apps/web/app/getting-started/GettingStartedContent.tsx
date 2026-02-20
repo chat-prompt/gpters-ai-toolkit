@@ -363,25 +363,27 @@ npx --yes @gpters-internal/codex-plugin setup`
         </div>
       </div>
 
-      {/* Step 2: Browser Login */}
+      {/* Step 2: OAuth Login */}
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={2} color="purple" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              브라우저 로그인
+              OAuth 로그인
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              Codex CLI 재시작 시 MCP 서버가 자동 연결됩니다. 브라우저에서 Google 로그인이 필요합니다.
+              아래 명령어로 MCP 서버에 OAuth 인증을 완료하세요:
             </p>
 
-            <div className="space-y-3">
+            <CodeBlock code="codex mcp login gpters-ai-toolkit" stepId="codex-login" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+
+            <div className="space-y-3 mt-4">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
                 <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  Codex CLI를 재시작하면 MCP 서버에 자동 연결
+                  브라우저가 자동으로 열립니다
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -397,10 +399,14 @@ npx --yes @gpters-internal/codex-plugin setup`
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  완료! Codex CLI에서 팀 스킬을 사용할 수 있습니다
+                  터미널에 인증 완료 메시지가 표시됩니다
                 </span>
               </div>
             </div>
+
+            <InfoBox color="green" label="보안:">
+              OAuth 2.1 인증으로 토큰이 자동 관리됩니다. 환경변수를 직접 설정할 필요가 없습니다.
+            </InfoBox>
           </div>
         </div>
       </div>
@@ -414,7 +420,8 @@ npx --yes @gpters-internal/codex-plugin setup`
               연결 확인
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              <code className="text-xs">~/.codex/config.toml</code>에 아래 설정이 추가되었는지 확인하세요:
+              Codex CLI를 재시작한 후, MCP 서버가 정상 연결되는지 확인하세요.
+              <code className="text-xs ml-1">~/.codex/config.toml</code>에 아래 설정이 추가되어 있어야 합니다:
             </p>
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
