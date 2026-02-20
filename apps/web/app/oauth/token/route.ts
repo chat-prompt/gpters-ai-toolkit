@@ -49,6 +49,11 @@ export async function POST(request: NextRequest) {
     let codeVerifier: string | null = null;
 
     const contentType = request.headers.get("content-type") || "";
+    log.info("Token request received", {
+      contentType,
+      method: request.method,
+    });
+
     if (contentType.includes("application/json")) {
       const json = await request.json();
       grantType = json.grant_type ?? null;
@@ -58,14 +63,50 @@ export async function POST(request: NextRequest) {
       clientSecret = json.client_secret ?? null;
       codeVerifier = json.code_verifier ?? null;
     } else {
-      const formData = await request.formData();
-      grantType = formData.get("grant_type") as string | null;
-      code = formData.get("code") as string | null;
-      redirectUri = formData.get("redirect_uri") as string | null;
-      clientId = formData.get("client_id") as string | null;
-      clientSecret = formData.get("client_secret") as string | null;
-      codeVerifier = formData.get("code_verifier") as string | null;
+      // Try to parse as form data; fall back to reading raw text for edge cases
+      try {
+        const cloned = request.clone();
+        const formData = await cloned.formData();
+        grantType = formData.get("grant_type") as string | null;
+        code = formData.get("code") as string | null;
+        redirectUri = formData.get("redirect_uri") as string | null;
+        clientId = formData.get("client_id") as string | null;
+        clientSecret = formData.get("client_secret") as string | null;
+        codeVerifier = formData.get("code_verifier") as string | null;
+      } catch {
+        // If formData parsing fails, try JSON as fallback
+        const text = await request.text();
+        log.info("formData parse failed, trying JSON fallback", {
+          bodyPreview: text.substring(0, 200),
+        });
+        try {
+          const json = JSON.parse(text);
+          grantType = json.grant_type ?? null;
+          code = json.code ?? null;
+          redirectUri = json.redirect_uri ?? null;
+          clientId = json.client_id ?? null;
+          clientSecret = json.client_secret ?? null;
+          codeVerifier = json.code_verifier ?? null;
+        } catch {
+          // Try URL-encoded parsing manually
+          const params = new URLSearchParams(text);
+          grantType = params.get("grant_type");
+          code = params.get("code");
+          redirectUri = params.get("redirect_uri");
+          clientId = params.get("client_id");
+          clientSecret = params.get("client_secret");
+          codeVerifier = params.get("code_verifier");
+        }
+      }
     }
+
+    log.info("Parsed token request params", {
+      hasGrantType: !!grantType,
+      hasCode: !!code,
+      hasClientId: !!clientId,
+      hasCodeVerifier: !!codeVerifier,
+      hasRedirectUri: !!redirectUri,
+    });
 
     // Validate grant_type
     if (grantType !== "authorization_code") {
