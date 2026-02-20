@@ -40,15 +40,32 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse form data (application/x-www-form-urlencoded)
-    const formData = await request.formData();
+    // Parse request body - support both form data and JSON
+    let grantType: string | null = null;
+    let code: string | null = null;
+    let redirectUri: string | null = null;
+    let clientId: string | null = null;
+    let clientSecret: string | null = null;
+    let codeVerifier: string | null = null;
 
-    const grantType = formData.get("grant_type") as string | null;
-    const code = formData.get("code") as string | null;
-    const redirectUri = formData.get("redirect_uri") as string | null;
-    const clientId = formData.get("client_id") as string | null;
-    const clientSecret = formData.get("client_secret") as string | null;
-    const codeVerifier = formData.get("code_verifier") as string | null;
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const json = await request.json();
+      grantType = json.grant_type ?? null;
+      code = json.code ?? null;
+      redirectUri = json.redirect_uri ?? null;
+      clientId = json.client_id ?? null;
+      clientSecret = json.client_secret ?? null;
+      codeVerifier = json.code_verifier ?? null;
+    } else {
+      const formData = await request.formData();
+      grantType = formData.get("grant_type") as string | null;
+      code = formData.get("code") as string | null;
+      redirectUri = formData.get("redirect_uri") as string | null;
+      clientId = formData.get("client_id") as string | null;
+      clientSecret = formData.get("client_secret") as string | null;
+      codeVerifier = formData.get("code_verifier") as string | null;
+    }
 
     // Validate grant_type
     if (grantType !== "authorization_code") {
