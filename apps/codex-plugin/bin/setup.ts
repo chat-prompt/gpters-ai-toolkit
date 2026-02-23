@@ -15,7 +15,14 @@ const args = process.argv.slice(2)
 
 const command = args[0]
 
-if (!command || command === 'setup') {
+if (command === '--version' || command === '-v' || command === '-V') {
+  const binDir = fileURLToPath(new URL('.', import.meta.url))
+  const pkgPath = join(binDir, '..', '..', 'package.json')
+  const { readFileSync } = await import('node:fs')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+  console.log(`@gpters-internal/codex-plugin v${pkg.version}`)
+  process.exit(0)
+} else if (!command || command === 'setup') {
   const scope: Scope | undefined = args.includes('--project')
     ? 'project'
     : args.includes('--user')
@@ -48,6 +55,7 @@ GPTers Codex Plugin
   --project    프로젝트 레벨 설치 (.agents/skills/gpters/)
   --user       사용자 전역 설치 (~/.agents/skills/gpters/)
   --force      기존 파일 덮어쓰기
+  -v, --version 버전 표시
   -h, --help   도움말 표시
 
 설치 내용:
