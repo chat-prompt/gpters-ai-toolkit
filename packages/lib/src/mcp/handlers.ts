@@ -1934,6 +1934,46 @@ export async function executeTool(
         }
       }
 
+      case 'report_session_event': {
+        const eventType = args.eventType as string | undefined
+        if (!eventType || !['session_summary', 'session_end'].includes(eventType)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Missing or invalid eventType. Must be "session_summary" or "session_end"',
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }
+        // Client context merge is handled in the route layer (needs sessionId from headers)
+        // This case just returns success; actual merge happens via _meta passthrough
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                message: `Session event '${eventType}' received`,
+              }),
+            },
+          ],
+          _meta: {
+            sessionEvent: {
+              eventType,
+              promptCount: args.promptCount as number | undefined,
+              suggestionsShown: args.suggestionsShown as number | undefined,
+              suggestionsUsed: args.suggestionsUsed as number | undefined,
+              skippedSearches: args.skippedSearches as number | undefined,
+              sessionEndReason: args.sessionEndReason as string | undefined,
+            },
+          },
+        }
+      }
+
       case 'remove_files': {
         const input = args as unknown as RemoveFilesInput
         if (!input.id || !input.fileNames || !Array.isArray(input.fileNames) || input.fileNames.length === 0) {

@@ -55,6 +55,14 @@ import {
 } from '@/lib/security/mcp-audit'
 import type { ToolExecutionMeta } from '@/lib/mcp'
 import {
+  upsertSessionSummary,
+  mergeClientContext,
+  mapToolToAction,
+  extractSkillId,
+  extractSearchQuery,
+} from '@/lib/analytics'
+import { finalizeSession } from '@/lib/analytics'
+import {
   resolveClientType,
   extractClientInfo,
   type ClientType,
@@ -352,6 +360,9 @@ export async function DELETE(request: NextRequest) {
 
   if (sessions.has(sessionId)) {
     sessions.delete(sessionId)
+    after(async () => {
+      await finalizeSession(sessionId).catch(() => {})
+    })
     return new NextResponse(null, {
       status: 204,
       headers: corsHeaders,
@@ -484,6 +495,42 @@ export async function POST(request: NextRequest) {
         searchResults: meta?.searchResults,
         referralSource,
       })
+
+      // Session tracking: upsert session summary
+      if (sid) {
+        await upsertSessionSummary({
+          sessionId: sid,
+          userId: auth?.userId,
+          accessTokenId: auditCtx?.tokenId,
+          clientType: ct,
+          clientName: cn,
+          clientVersion: cv,
+          ipHash: auditCtx?.ipHash,
+          tool,
+          method,
+          responseStatus: status,
+          responseTime,
+          skillId: extractSkillId(body, tool),
+          searchQuery: extractSearchQuery(body, tool),
+          action: mapToolToAction(tool),
+        }).catch(() => {})
+
+        // Handle client session events (report_session_event tool)
+        if (meta?.sessionEvent) {
+          const evt = meta.sessionEvent
+          await mergeClientContext(sid, {
+            promptCount: evt.promptCount,
+            suggestionsShown: evt.suggestionsShown,
+            suggestionsUsed: evt.suggestionsUsed,
+            skippedSearches: evt.skippedSearches,
+            sessionEndReason: evt.sessionEndReason,
+          }).catch(() => {})
+
+          if (evt.eventType === 'session_end') {
+            await finalizeSession(sid).catch(() => {})
+          }
+        }
+      }
     })
   }
 

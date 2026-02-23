@@ -10,6 +10,7 @@ import { createAutoCommitHook } from "./hooks/auto-commit"
 import { createPluginSetupHook } from "./hooks/plugin-setup"
 import { createPreferPlanModeHook } from "./hooks/prefer-plan-mode"
 import { createSkillSuggestHook } from "./hooks/skill-suggest"
+import { createSessionReporterHook } from "./hooks/session-reporter"
 
 import { createLogger } from "./utils/logger"
 
@@ -25,6 +26,7 @@ export const GPTersPlugin: Plugin = async (ctx) => {
   const pluginSetupHook = createPluginSetupHook(ctx)
   const preferPlanModeHook = createPreferPlanModeHook(ctx)
   const skillSuggestHook = createSkillSuggestHook(ctx)
+  const sessionReporterHook = createSessionReporterHook(ctx)
   const configManager = GptersConfigManager.getInstance(directory)
 
   logger.info("Plugin started")
@@ -37,6 +39,8 @@ export const GPTersPlugin: Plugin = async (ctx) => {
       if (configManager.getAutoCommit()) {
         await autoCommitHook.event(eventData)
       }
+
+      await sessionReporterHook.event(eventData)
     },
 
     "chat.message": async (input, output) => {

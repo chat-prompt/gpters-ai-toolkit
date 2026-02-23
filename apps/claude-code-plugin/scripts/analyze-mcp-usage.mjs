@@ -455,8 +455,76 @@ async function main() {
     Array.from({ length: dailyClients.length * 2 + 1 }, (_, i) => i)
   )
 
-  // ── 8. 목표 달성 현황 ──
-  separator('8. 목표 달성 현황')
+  // ── 8. 세션 분석 ──
+  separator('8. 세션 분석')
+
+  const sessionQuery = `
+    SELECT
+      COUNT(*) AS total_sessions,
+      COUNT(*) FILTER (WHERE status = 'finalized') AS finalized,
+      COUNT(*) FILTER (WHERE status = 'active') AS active,
+      AVG(duration_seconds) FILTER (WHERE status = 'finalized') AS avg_duration,
+      AVG(total_requests) AS avg_requests,
+      COUNT(*) FILTER (WHERE had_search) AS sessions_with_search,
+      COUNT(*) FILTER (WHERE had_view) AS sessions_with_view,
+      COUNT(*) FILTER (WHERE had_deployment) AS sessions_with_deploy,
+      AVG(CASE WHEN search_to_view_conversion THEN 1 ELSE 0 END) FILTER (WHERE status = 'finalized') AS s2v_rate,
+      AVG(CASE WHEN view_to_deploy_conversion THEN 1 ELSE 0 END) FILTER (WHERE status = 'finalized') AS v2d_rate,
+      AVG(avg_response_time) FILTER (WHERE avg_response_time IS NOT NULL) AS avg_rt,
+      SUM(COALESCE((client_context->>'suggestionsShown')::int, 0)) AS total_suggestions_shown,
+      SUM(COALESCE((client_context->>'suggestionsUsed')::int, 0)) AS total_suggestions_used,
+      SUM(COALESCE((client_context->>'promptCount')::int, 0)) AS total_prompts
+    FROM mcp_sessions
+    WHERE started_at >= $1
+  `
+  const sessionResult = await pool.query(sessionQuery, [sinceDate])
+  const sess = sessionResult.rows[0] || {}
+
+  printTable(
+    ['지표', '값'],
+    [
+      ['총 세션', sess.total_sessions || 0],
+      ['Finalized', sess.finalized || 0],
+      ['Active', sess.active || 0],
+      ['평균 지속시간', `${Math.round(sess.avg_duration || 0)}초`],
+      ['평균 요청수/세션', (Number(sess.avg_requests) || 0).toFixed(1)],
+      ['검색 포함 세션', sess.sessions_with_search || 0],
+      ['조회 포함 세션', sess.sessions_with_view || 0],
+      ['배포 포함 세션', sess.sessions_with_deploy || 0],
+      ['검색→조회 전환율', `${((Number(sess.s2v_rate) || 0) * 100).toFixed(1)}%`],
+      ['조회→배포 전환율', `${((Number(sess.v2d_rate) || 0) * 100).toFixed(1)}%`],
+      ['평균 응답시간', `${Math.round(sess.avg_rt || 0)}ms`],
+    ],
+    [1]
+  )
+
+  // Client context summary
+  const sugShown = Number(sess.total_suggestions_shown) || 0
+  const sugUsed = Number(sess.total_suggestions_used) || 0
+  if (sugShown > 0) {
+    console.log(`\n  📊 클라이언트 컨텍스트:`)
+    console.log(`     총 프롬프트: ${sess.total_prompts || 0}`)
+    console.log(`     추천 노출: ${sugShown}, 사용: ${sugUsed} (${(sugUsed/sugShown*100).toFixed(1)}%)`)
+  }
+
+  // Session client distribution
+  const sessClientQuery = `
+    SELECT COALESCE(client_type, 'unknown') AS client, COUNT(*) AS cnt
+    FROM mcp_sessions WHERE started_at >= $1
+    GROUP BY client_type ORDER BY cnt DESC
+  `
+  const sessClientResult = await pool.query(sessClientQuery, [sinceDate])
+  if (sessClientResult.rows.length > 0) {
+    console.log(`\n  📱 세션 클라이언트 분포:`)
+    printTable(
+      ['클라이언트', '세션 수'],
+      sessClientResult.rows.map((r) => [r.client, r.cnt]),
+      [1]
+    )
+  }
+
+  // ── 9. 목표 달성 현황 ──
+  separator('9. 목표 달성 현황')
 
   const totalLogs = summary.total_logs || 1
   const errorRate = ((summary.error_count || 0) / totalLogs * 100)

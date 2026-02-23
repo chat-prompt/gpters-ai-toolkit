@@ -328,6 +328,15 @@ export interface ToolExecutionMeta {
   searchResults?: Array<{ itemId: string; rank: number; score: number }>
   /** Referral source marker (e.g., 'suggest' from skill-suggest hook) */
   referralSource?: string
+  /** Client session event data from report_session_event tool */
+  sessionEvent?: {
+    eventType: string
+    promptCount?: number
+    suggestionsShown?: number
+    suggestionsUsed?: number
+    skippedSearches?: number
+    sessionEndReason?: string
+  }
 }
 
 export interface SemanticSearchResult {

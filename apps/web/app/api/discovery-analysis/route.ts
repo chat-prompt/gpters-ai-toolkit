@@ -6,14 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db, mcpAuditLogs, catalogItems } from '@gpters/db'
+import { db, mcpAuditLogs, catalogItems, mcpSessions } from '@gpters/db'
 import { sql, eq, and, gte, isNotNull, count } from 'drizzle-orm'
 import { auth } from '@/lib/core/auth'
 
 export const dynamic = 'force-dynamic'
 
 /** Valid report types */
-type ReportType = 'search-effectiveness' | 'recommendation-accuracy' | 'usage-gaps' | 'funnel' | 'full'
+type ReportType = 'search-effectiveness' | 'recommendation-accuracy' | 'usage-gaps' | 'funnel' | 'session-overview' | 'session-journey' | 'session-conversion' | 'full'
 
 /**
  * Search effectiveness report: query-level click rates, zero-click searches, popular queries
@@ -292,6 +292,143 @@ async function getFunnelAnalysis(since: Date) {
 }
 
 /**
+ * Session overview report: aggregate session metrics
+ */
+async function getSessionOverview(since: Date) {
+  const stats = await db
+    .select({
+      totalSessions: count(),
+      avgDuration: sql<number>`AVG(${mcpSessions.durationSeconds})`,
+      avgRequests: sql<number>`AVG(${mcpSessions.totalRequests})`,
+      searchToViewRate: sql<number>`AVG(CASE WHEN ${mcpSessions.searchToViewConversion} THEN 1 ELSE 0 END)`,
+      viewToDeployRate: sql<number>`AVG(CASE WHEN ${mcpSessions.viewToDeployConversion} THEN 1 ELSE 0 END)`,
+      sessionsWithSearch: sql<number>`COUNT(*) FILTER (WHERE ${mcpSessions.hadSearch})`,
+      sessionsWithView: sql<number>`COUNT(*) FILTER (WHERE ${mcpSessions.hadView})`,
+      sessionsWithDeploy: sql<number>`COUNT(*) FILTER (WHERE ${mcpSessions.hadDeployment})`,
+    })
+    .from(mcpSessions)
+    .where(gte(mcpSessions.startedAt, since))
+
+  const clientDist = await db
+    .select({
+      clientType: mcpSessions.clientType,
+      count: count(),
+    })
+    .from(mcpSessions)
+    .where(gte(mcpSessions.startedAt, since))
+    .groupBy(mcpSessions.clientType)
+    .orderBy(sql`count(*) DESC`)
+
+  const s = stats[0]
+  return {
+    reportType: 'session-overview',
+    period: { since: since.toISOString() },
+    summary: {
+      totalSessions: s?.totalSessions || 0,
+      avgDurationSeconds: Math.round(Number(s?.avgDuration) || 0),
+      avgRequestsPerSession: Math.round((Number(s?.avgRequests) || 0) * 10) / 10,
+      searchToViewRate: Math.round((Number(s?.searchToViewRate) || 0) * 100) / 100,
+      viewToDeployRate: Math.round((Number(s?.viewToDeployRate) || 0) * 100) / 100,
+      sessionsWithSearch: Number(s?.sessionsWithSearch) || 0,
+      sessionsWithView: Number(s?.sessionsWithView) || 0,
+      sessionsWithDeploy: Number(s?.sessionsWithDeploy) || 0,
+    },
+    clientDistribution: clientDist.map((c) => ({
+      clientType: c.clientType || 'unknown',
+      count: c.count,
+    })),
+  }
+}
+
+/**
+ * Session journey report: common tool usage sequences
+ */
+async function getSessionJourney(since: Date) {
+  // Top tool combinations per session
+  const topToolSessions = await db
+    .select({
+      sessionId: mcpSessions.sessionId,
+      toolCounts: mcpSessions.toolCounts,
+      hadSearch: mcpSessions.hadSearch,
+      hadView: mcpSessions.hadView,
+      hadDeployment: mcpSessions.hadDeployment,
+      totalRequests: mcpSessions.totalRequests,
+    })
+    .from(mcpSessions)
+    .where(
+      and(
+        gte(mcpSessions.startedAt, since),
+        eq(mcpSessions.status, 'finalized')
+      )
+    )
+    .orderBy(sql`${mcpSessions.totalRequests} DESC`)
+    .limit(50)
+
+  // Classify journey patterns
+  const patterns: Record<string, number> = {}
+  for (const sess of topToolSessions) {
+    const steps: string[] = []
+    if (sess.hadSearch) steps.push('search')
+    if (sess.hadView) steps.push('view')
+    if (sess.hadDeployment) steps.push('deploy')
+    const key = steps.length > 0 ? steps.join(' → ') : 'other'
+    patterns[key] = (patterns[key] || 0) + 1
+  }
+
+  return {
+    reportType: 'session-journey',
+    period: { since: since.toISOString() },
+    journeyPatterns: Object.entries(patterns)
+      .map(([pattern, count]) => ({ pattern, count }))
+      .sort((a, b) => b.count - a.count),
+    sampleSessions: topToolSessions.slice(0, 10).map((s) => ({
+      sessionId: s.sessionId,
+      toolCounts: s.toolCounts,
+      totalRequests: s.totalRequests,
+      journey: [
+        s.hadSearch && 'search',
+        s.hadView && 'view',
+        s.hadDeployment && 'deploy',
+      ].filter(Boolean),
+    })),
+  }
+}
+
+/**
+ * Session conversion report: conversion rates with client context
+ */
+async function getSessionConversion(since: Date) {
+  const contextStats = await db
+    .select({
+      totalSessions: count(),
+      withClientContext: sql<number>`COUNT(*) FILTER (WHERE ${mcpSessions.clientContext} IS NOT NULL)`,
+      totalPrompts: sql<number>`SUM(COALESCE((${mcpSessions.clientContext}->>'promptCount')::int, 0))`,
+      totalSuggestionsShown: sql<number>`SUM(COALESCE((${mcpSessions.clientContext}->>'suggestionsShown')::int, 0))`,
+      totalSuggestionsUsed: sql<number>`SUM(COALESCE((${mcpSessions.clientContext}->>'suggestionsUsed')::int, 0))`,
+      totalSkippedSearches: sql<number>`SUM(COALESCE((${mcpSessions.clientContext}->>'skippedSearches')::int, 0))`,
+    })
+    .from(mcpSessions)
+    .where(gte(mcpSessions.startedAt, since))
+
+  const s = contextStats[0]
+  const shown = Number(s?.totalSuggestionsShown) || 0
+  const used = Number(s?.totalSuggestionsUsed) || 0
+
+  return {
+    reportType: 'session-conversion',
+    period: { since: since.toISOString() },
+    clientContext: {
+      sessionsWithContext: Number(s?.withClientContext) || 0,
+      totalPrompts: Number(s?.totalPrompts) || 0,
+      totalSuggestionsShown: shown,
+      totalSuggestionsUsed: used,
+      suggestionUseRate: shown > 0 ? Math.round((used / shown) * 100) / 100 : 0,
+      totalSkippedSearches: Number(s?.totalSkippedSearches) || 0,
+    },
+  }
+}
+
+/**
  * GET /api/discovery-analysis?reportType=full&days=30
  *
  * Requires admin authentication.
@@ -308,7 +445,7 @@ export async function GET(request: NextRequest) {
   const days = Math.min(Math.max(parseInt(searchParams.get('days') || '30', 10), 1), 90)
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
-  const validTypes: ReportType[] = ['search-effectiveness', 'recommendation-accuracy', 'usage-gaps', 'funnel', 'full']
+  const validTypes: ReportType[] = ['search-effectiveness', 'recommendation-accuracy', 'usage-gaps', 'funnel', 'session-overview', 'session-journey', 'session-conversion', 'full']
   if (!validTypes.includes(reportType)) {
     return NextResponse.json(
       { error: `Invalid reportType. Valid: ${validTypes.join(', ')}` },
@@ -318,11 +455,12 @@ export async function GET(request: NextRequest) {
 
   try {
     if (reportType === 'full') {
-      const [searchEff, recAcc, gaps, funnel] = await Promise.all([
+      const [searchEff, recAcc, gaps, funnel, sessionOverview] = await Promise.all([
         getSearchEffectiveness(since),
         getRecommendationAccuracy(since),
         getUsageGaps(since),
         getFunnelAnalysis(since),
+        getSessionOverview(since),
       ])
 
       return NextResponse.json({
@@ -333,6 +471,7 @@ export async function GET(request: NextRequest) {
         recommendationAccuracy: recAcc,
         usageGaps: gaps,
         funnel,
+        sessionOverview,
       })
     }
 
@@ -349,6 +488,15 @@ export async function GET(request: NextRequest) {
         break
       case 'funnel':
         report = await getFunnelAnalysis(since)
+        break
+      case 'session-overview':
+        report = await getSessionOverview(since)
+        break
+      case 'session-journey':
+        report = await getSessionJourney(since)
+        break
+      case 'session-conversion':
+        report = await getSessionConversion(since)
         break
     }
 

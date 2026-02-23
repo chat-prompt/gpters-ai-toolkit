@@ -644,6 +644,106 @@ export const mcpAuditLogsRelations = relations(mcpAuditLogs, ({ one }) => ({
 }))
 
 // ============================================
+// MCP Sessions Table (Session Conversation Tracking)
+// ============================================
+
+/** Session lifecycle status */
+export const sessionStatusEnum = pgEnum('session_status', ['active', 'finalized'])
+
+/**
+ * MCP session tracking for conversation-level analytics
+ *
+ * Aggregates per-session activity from individual audit log entries.
+ * Enables user journey analysis: search → view → deploy funnel.
+ */
+export const mcpSessions = pgTable('mcp_sessions', {
+  sessionId: text('session_id').primaryKey(),
+
+  // User identification
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  accessTokenId: text('access_token_id').references(() => oauthAccessTokens.id, { onDelete: 'set null' }),
+
+  // Client metadata
+  clientType: text('client_type'),
+  clientName: text('client_name'),
+  clientVersion: text('client_version'),
+  ipHash: text('ip_hash'),
+
+  // Timing
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  lastActivityAt: timestamp('last_activity_at', { withTimezone: true }).notNull(),
+  /** Computed on finalization: lastActivityAt - startedAt in seconds */
+  durationSeconds: integer('duration_seconds'),
+
+  // Activity counters
+  totalRequests: integer('total_requests').notNull().default(0),
+  successCount: integer('success_count').notNull().default(0),
+  errorCount: integer('error_count').notNull().default(0),
+
+  /** Per-tool call counts e.g. { "semantic_search": 5, "get_plugin_content": 3 } */
+  toolCounts: jsonb('tool_counts').$type<Record<string, number>>().notNull().default({}),
+
+  /** Chronological action log (capped at 100 entries) */
+  actionLog: jsonb('action_log').$type<Array<{
+    action: 'search' | 'view' | 'deploy' | 'suggest' | 'other'
+    skillId?: string
+    query?: string
+    timestamp: string
+  }>>().notNull().default([]),
+
+  /** Per-skill interaction counters e.g. { "code-reviewer": { searched: 1, viewed: 2, deployed: 0 } } */
+  skillInteractions: jsonb('skill_interactions').$type<Record<string, {
+    searched: number; viewed: number; deployed: number
+  }>>().notNull().default({}),
+
+  /** Client-reported context merged from report_session_event tool */
+  clientContext: jsonb('client_context').$type<{
+    promptCount?: number
+    suggestionsShown?: number
+    suggestionsUsed?: number
+    skippedSearches?: number
+    sessionEndReason?: string
+  }>(),
+
+  // Boolean activity flags
+  hadSearch: boolean('had_search').notNull().default(false),
+  hadView: boolean('had_view').notNull().default(false),
+  hadDeployment: boolean('had_deployment').notNull().default(false),
+
+  // Conversion metrics (computed on finalization)
+  searchToViewConversion: boolean('search_to_view_conversion'),
+  viewToDeployConversion: boolean('view_to_deploy_conversion'),
+  avgResponseTime: integer('avg_response_time'),
+
+  // Lifecycle
+  status: sessionStatusEnum('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('mcp_sessions_user_id_idx').on(table.userId),
+  index('mcp_sessions_started_at_idx').on(table.startedAt),
+  index('mcp_sessions_last_activity_idx').on(table.lastActivityAt),
+  index('mcp_sessions_status_idx').on(table.status),
+  index('mcp_sessions_client_type_idx').on(table.clientType),
+  index('mcp_sessions_had_deployment_idx').on(table.hadDeployment),
+])
+
+export type McpSessionRecord = typeof mcpSessions.$inferSelect
+export type NewMcpSessionRecord = typeof mcpSessions.$inferInsert
+
+/** Relations for MCP sessions */
+export const mcpSessionsRelations = relations(mcpSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [mcpSessions.userId],
+    references: [users.id],
+  }),
+  accessToken: one(oauthAccessTokens, {
+    fields: [mcpSessions.accessTokenId],
+    references: [oauthAccessTokens.id],
+  }),
+}))
+
+// ============================================
 // Suggestions Table (Collaboration)
 // ============================================
 

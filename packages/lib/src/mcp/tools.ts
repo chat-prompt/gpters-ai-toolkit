@@ -609,6 +609,49 @@ deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합
     },
   },
   {
+    name: 'report_session_event',
+    description: `클라이언트 세션 컨텍스트를 서버에 리포트합니다 (분석용).
+
+플러그인(Claude Code, OpenCode, Codex)이 세션 종료 시 호출하여
+프롬프트 수, 추천 노출/사용 횟수 등 클라이언트 측 메트릭을 전송합니다.
+
+예시:
+- 세션 요약: eventType="session_summary", promptCount=15
+- 세션 종료: eventType="session_end", sessionEndReason="idle"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        eventType: {
+          type: 'string',
+          enum: ['session_summary', 'session_end'],
+          description: '이벤트 유형 (session_summary: 중간 리포트, session_end: 종료 리포트)',
+        },
+        promptCount: {
+          type: 'number',
+          description: '세션 내 프롬프트 수',
+        },
+        suggestionsShown: {
+          type: 'number',
+          description: '스킬 추천 노출 횟수',
+        },
+        suggestionsUsed: {
+          type: 'number',
+          description: '추천 스킬 실제 사용 횟수',
+        },
+        skippedSearches: {
+          type: 'number',
+          description: '스킵된 검색 횟수 (후속 패턴)',
+        },
+        sessionEndReason: {
+          type: 'string',
+          enum: ['idle', 'explicit_close', 'timeout'],
+          description: '세션 종료 사유',
+        },
+      },
+      required: ['eventType'],
+    },
+  },
+  {
     name: 'remove_files',
     description: `플러그인에서 파일을 삭제합니다.
 

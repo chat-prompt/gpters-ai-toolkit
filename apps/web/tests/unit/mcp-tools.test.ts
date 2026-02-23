@@ -46,10 +46,11 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('resolve_suggestion')
       expect(toolNames).toContain('add_files')
       expect(toolNames).toContain('remove_files')
+      expect(toolNames).toContain('report_session_event')
     })
 
-    it('should have 10 public tools', () => {
-      expect(MCP_TOOLS).toHaveLength(10)
+    it('should have 11 public tools', () => {
+      expect(MCP_TOOLS).toHaveLength(11)
     })
 
     describe('semantic_search tool', () => {
@@ -176,6 +177,24 @@ describe('MCP Tools', () => {
       it('should have fileNames as array of strings', () => {
         expect(tool.inputSchema.properties.fileNames.type).toBe('array')
         expect(tool.inputSchema.properties.fileNames.items.type).toBe('string')
+      })
+    })
+
+    describe('report_session_event tool', () => {
+      const tool = MCP_TOOLS.find((t) => t.name === 'report_session_event')!
+
+      it('should require eventType', () => {
+        expect(tool.inputSchema.required).toContain('eventType')
+      })
+
+      it('should have eventType enum', () => {
+        expect(tool.inputSchema.properties.eventType.enum).toContain('session_summary')
+        expect(tool.inputSchema.properties.eventType.enum).toContain('session_end')
+      })
+
+      it('should have optional promptCount', () => {
+        expect(tool.inputSchema.properties.promptCount).toBeDefined()
+        expect(tool.inputSchema.properties.promptCount.type).toBe('number')
       })
     })
 

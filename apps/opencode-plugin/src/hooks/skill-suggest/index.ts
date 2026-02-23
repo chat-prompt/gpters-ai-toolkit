@@ -2,6 +2,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import type { UserMessage, Part } from "@opencode-ai/sdk"
 import { searchSkills, type SkillSummary } from "./mcp-client"
 import { createLogger } from "../../utils/logger"
+import { getSessionMetrics } from "../session-reporter"
 
 const logger = createLogger("skill-suggest")
 
@@ -97,11 +98,15 @@ export function createSkillSuggestHook(ctx: PluginInput) {
       processedMessages.add(messageID)
 
       try {
+        const metrics = getSessionMetrics(sessionID)
+        metrics.promptCount++
+
         const messageText = extractMessageContent(output as { parts: Array<{ type: string; text?: string }> })
         if (!messageText) return
 
         if (shouldSkipSearch(messageText)) {
           logger.debug(`Skipping search for follow-up/command message: "${messageText.slice(0, 30)}..."`)
+          metrics.skippedSearches++
           return
         }
 
@@ -120,6 +125,7 @@ export function createSkillSuggestHook(ctx: PluginInput) {
             skills: relevantSkills,
             timestamp: Date.now(),
           })
+          metrics.suggestionsShown += relevantSkills.length
           logger.debug(`Found ${relevantSkills.length} relevant skills (of ${skills.length} total) for session ${sessionID}`)
         } else {
           logger.debug(`No skills above threshold ${SCORE_THRESHOLD} for session ${sessionID}`)
