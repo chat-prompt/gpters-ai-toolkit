@@ -336,6 +336,7 @@ export interface ToolExecutionMeta {
     suggestionsUsed?: number
     skippedSearches?: number
     sessionEndReason?: string
+    pluginVersion?: string
   }
 }
 

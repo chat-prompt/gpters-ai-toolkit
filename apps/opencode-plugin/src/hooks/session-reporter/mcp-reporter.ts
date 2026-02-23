@@ -9,8 +9,22 @@ import { createLogger } from "../../utils/logger"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
+import { fileURLToPath } from "url"
 
 const logger = createLogger("mcp-reporter")
+
+/** 플러그인 버전을 package.json에서 읽기 */
+function getPluginVersion(): string {
+  try {
+    const pkgPath = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..', 'package.json')
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    return pkg.version || 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+const PLUGIN_VERSION = getPluginVersion()
 
 const MCP_API_URL = "https://ai-toolkit.gpters.org/api/mcp"
 const MCP_SERVER_NAME = "gpters-ai-toolkit"
@@ -77,6 +91,7 @@ export async function reportSessionEvent(
           arguments: {
             eventType,
             ...data,
+            pluginVersion: PLUGIN_VERSION,
           },
         },
       }),

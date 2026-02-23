@@ -46,6 +46,7 @@ export interface ClientContextInput {
   suggestionsUsed?: number
   skippedSearches?: number
   sessionEndReason?: string
+  pluginVersion?: string
 }
 
 /**
@@ -270,6 +271,9 @@ export async function mergeClientContext(
     }
     if (context.sessionEndReason !== undefined) {
       mergeFields.push(`'sessionEndReason', to_jsonb('${context.sessionEndReason}'::text)`)
+    }
+    if (context.pluginVersion !== undefined) {
+      mergeFields.push(`'pluginVersion', to_jsonb('${context.pluginVersion}'::text)`)
     }
 
     if (mergeFields.length === 0) return

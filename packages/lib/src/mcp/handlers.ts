@@ -1969,6 +1969,7 @@ export async function executeTool(
               suggestionsUsed: args.suggestionsUsed as number | undefined,
               skippedSearches: args.skippedSearches as number | undefined,
               sessionEndReason: args.sessionEndReason as string | undefined,
+              pluginVersion: args.pluginVersion as string | undefined,
             },
           },
         }

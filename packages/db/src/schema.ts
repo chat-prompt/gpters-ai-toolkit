@@ -703,6 +703,7 @@ export const mcpSessions = pgTable('mcp_sessions', {
     suggestionsUsed?: number
     skippedSearches?: number
     sessionEndReason?: string
+    pluginVersion?: string
   }>(),
 
   // Boolean activity flags

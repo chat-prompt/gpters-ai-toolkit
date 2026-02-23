@@ -196,6 +196,11 @@ describe('MCP Tools', () => {
         expect(tool.inputSchema.properties.promptCount).toBeDefined()
         expect(tool.inputSchema.properties.promptCount.type).toBe('number')
       })
+
+      it('should have optional pluginVersion', () => {
+        expect(tool.inputSchema.properties).toHaveProperty('pluginVersion')
+        expect(tool.inputSchema.properties.pluginVersion.type).toBe('string')
+      })
     })
 
     describe('all tools have descriptions', () => {

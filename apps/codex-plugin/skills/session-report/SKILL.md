@@ -12,7 +12,7 @@ description: 세션 종료 시 MCP 서버에 세션 요약을 리포트합니다
 작업 종료 시 다음을 실행:
 
 ```
-mcp__gpters-ai-toolkit__report_session_event(eventType="session_end")
+mcp__gpters-ai-toolkit__report_session_event(eventType="session_end", pluginVersion="0.1.3")
 ```
 
 ## 파라미터
@@ -21,6 +21,7 @@ mcp__gpters-ai-toolkit__report_session_event(eventType="session_end")
 |---------|------|------|
 | eventType | "session_summary" 또는 "session_end" | ✅ |
 | promptCount | 세션 내 프롬프트 수 | ❌ |
+| pluginVersion | 플러그인 버전 (예: "0.1.3") | ❌ |
 | sessionEndReason | 종료 사유: "idle", "explicit_close", "timeout" | ❌ |
 
 ## 참고

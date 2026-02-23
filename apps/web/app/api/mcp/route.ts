@@ -524,6 +524,7 @@ export async function POST(request: NextRequest) {
             suggestionsUsed: evt.suggestionsUsed,
             skippedSearches: evt.skippedSearches,
             sessionEndReason: evt.sessionEndReason,
+            pluginVersion: evt.pluginVersion,
           }).catch(() => {})
 
           if (evt.eventType === 'session_end') {

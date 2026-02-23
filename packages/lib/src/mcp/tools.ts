@@ -647,6 +647,10 @@ deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합
           enum: ['idle', 'explicit_close', 'timeout'],
           description: '세션 종료 사유',
         },
+        pluginVersion: {
+          type: 'string',
+          description: '플러그인 자체 버전 (예: "0.1.1")',
+        },
       },
       required: ['eventType'],
     },
