@@ -67,7 +67,7 @@ import {
   extractClientInfo,
   type ClientType,
 } from '@/lib/security/client-type'
-import { db, orgMemberships } from '@gpters/db'
+import { db, orgMemberships, mcpSessions } from '@gpters/db'
 import { eq } from 'drizzle-orm'
 
 // Force dynamic rendering - never cache this route
@@ -462,14 +462,13 @@ export async function POST(request: NextRequest) {
     if (!auditCtx) return
 
     const responseTime = Date.now() - startTime
-    // Capture current values in closure (snapshot at call time)
-    const ct = currentClientType
-    const cn = currentClientName
-    const cv = currentClientVersion
-    // NOTE: resolvedSessionId is read inside after() at execution time (deferred),
-    // so initialize requests will have the newly created session ID
+    // NOTE: client info and session ID are read inside after() at execution time (deferred),
+    // so initialize requests will have the correct values set after session creation
     after(async () => {
       const sid = resolvedSessionId
+      const ct = currentClientType
+      const cn = currentClientName
+      const cv = currentClientVersion
       // Determine referral source: from meta (explicit) or infer from session
       let referralSource = meta?.referralSource
       if (!referralSource && sid && tool === 'get_plugin_content') {
@@ -743,12 +742,32 @@ export async function POST(request: NextRequest) {
       // Just accept the session ID without strict validation
       sessionId = incomingSessionId
 
-      // Restore cached client info from session (best-effort)
+      // Restore cached client info from session (best-effort in-memory, then DB fallback)
       const existingSession = sessions.get(incomingSessionId)
       if (existingSession?.clientType && !currentClientName) {
         currentClientType = existingSession.clientType
         currentClientName = existingSession.clientName
         currentClientVersion = existingSession.clientVersion
+      } else if (!currentClientName) {
+        // Serverless fallback: read client info from DB (non-blocking, best-effort)
+        try {
+          const [row] = await db
+            .select({
+              clientType: mcpSessions.clientType,
+              clientName: mcpSessions.clientName,
+              clientVersion: mcpSessions.clientVersion,
+            })
+            .from(mcpSessions)
+            .where(eq(mcpSessions.sessionId, incomingSessionId))
+            .limit(1)
+          if (row?.clientName) {
+            currentClientType = (row.clientType as ClientType) || currentClientType
+            currentClientName = row.clientName
+            currentClientVersion = row.clientVersion || undefined
+          }
+        } catch {
+          // Ignore — best-effort
+        }
       }
     }
 
