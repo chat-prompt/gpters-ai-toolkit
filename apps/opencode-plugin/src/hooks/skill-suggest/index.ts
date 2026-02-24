@@ -18,8 +18,8 @@ const SKIP_PATTERNS = [
 /** 검색할 필요 없는 짧은 메시지 최소 길이 */
 const MIN_MESSAGE_LENGTH = 10
 
-/** relevanceScore 최소 임계값 */
-const SCORE_THRESHOLD = 0.65
+/** relevanceScore 최소 임계값 (DEV-3004 분석 결과: 0.65→0.60 하향 시 통과율 71%→91%) */
+const SCORE_THRESHOLD = 0.60
 
 /** 검색 쿼리 최대 길이 (키워드 추출 효과) */
 const MAX_QUERY_LENGTH = 80

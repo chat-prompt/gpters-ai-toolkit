@@ -44,12 +44,12 @@ mcp__gpters-ai-toolkit__semantic_search(query="추출된 키워드", userContext
 ### 3단계: score 기반 필터링
 
 검색 결과의 `relevanceScore`를 확인합니다:
-- **0.65 이상**: 관련 스킬로 판단 → 로드하여 적용
-- **0.65 미만**: 관련성 낮음 → **무시하고 바로 진행**
+- **0.60 이상**: 관련 스킬로 판단 → 로드하여 적용
+- **0.60 미만**: 관련성 낮음 → **무시하고 바로 진행**
 
 ### 4단계: 관련 스킬 로드
 
-score 0.65 이상인 스킬만 로드:
+score 0.60 이상인 스킬만 로드:
 
 ```
 mcp__gpters-ai-toolkit__get_plugin_content(pluginId="스킬ID")
@@ -59,4 +59,4 @@ mcp__gpters-ai-toolkit__get_plugin_content(pluginId="스킬ID")
 
 - 스킬 내용이 사용자 요청과 충돌하면 사용자 요청을 우선합니다
 - MCP 서버 연결 실패 시 스킬 검색을 건너뛰고 작업을 진행합니다
-- 결과가 없거나 전부 0.65 미만이면 검색 없이 바로 진행합니다
+- 결과가 없거나 전부 0.60 미만이면 검색 없이 바로 진행합니다
