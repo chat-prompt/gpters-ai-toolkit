@@ -54,6 +54,7 @@ function handleInitialize(): McpResponse['result'] {
     capabilities: {
       tools: {},
       prompts: {},
+      resources: {},
     },
   }
 }
@@ -194,6 +195,20 @@ export async function processRequest(
           result,
         }
       }
+
+      case 'resources/list':
+        return {
+          jsonrpc: '2.0',
+          id: id!,
+          result: { resources: [] },
+        }
+
+      case 'resources/templates/list':
+        return {
+          jsonrpc: '2.0',
+          id: id!,
+          result: { resourceTemplates: [] },
+        }
 
       case 'ping':
         return {

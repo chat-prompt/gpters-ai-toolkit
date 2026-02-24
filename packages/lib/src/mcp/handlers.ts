@@ -669,6 +669,20 @@ export async function deploySkill(
   // Generate ID from name if not provided
   const id = providedId || generateIdFromName(name)
 
+  // Validate ID format — only allow lowercase alphanumeric and hyphens
+  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(id) && !/^[a-z0-9]$/.test(id)) {
+    return {
+      success: false,
+      id,
+      version: '0.0.0',
+      changelog: '',
+      status: 'published',
+      webUrl: '',
+      installHint: '',
+      error: `ID "${id}"에 허용되지 않는 문자가 포함되어 있습니다. 영문 소문자, 숫자, 하이픈만 사용 가능합니다. (예: "my-skill-name")`,
+    }
+  }
+
   // Check if this is an update or new deployment
   const existing = await db
     .select({

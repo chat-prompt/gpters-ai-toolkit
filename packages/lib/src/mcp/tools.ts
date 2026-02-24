@@ -349,7 +349,7 @@ const ALL_TOOLS: McpTool[] = [
         },
         id: {
           type: 'string',
-          description: '플러그인 ID (미지정 시 name에서 자동 생성)',
+          description: '플러그인 ID (영문 소문자, 숫자, 하이픈만 허용. 예: "my-skill-name"). 미지정 시 name에서 자동 생성',
         },
         description: {
           type: 'string',
