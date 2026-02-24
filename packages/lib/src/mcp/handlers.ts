@@ -7,6 +7,7 @@
 import { createLogger } from '../core/logger'
 import { db, catalogItems, users, suggestions } from '@gpters/db'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
+import { checkMetadataQuality } from '../plugin/skill-validator'
 import { isSuperAdmin } from '../security/rbac'
 import { notifySlackDeploy } from '../notifications/slack'
 
@@ -732,6 +733,13 @@ export async function deploySkill(
     }
   }
 
+  // Run non-blocking metadata quality check
+  const qualityWarnings = checkMetadataQuality({
+    description,
+    tags,
+    content: resolvedContent ?? undefined,
+  })
+
   // Determine version
   const versionInfo = determineVersion(
     existingItem ? { content: existingItem.content, version: existingItem.version || '1.0.0' } : null,
@@ -828,6 +836,7 @@ export async function deploySkill(
     status,
     webUrl: `${BASE_URL}/${type}/${id}`,
     installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
+    ...(qualityWarnings.length > 0 ? { qualityWarnings } : {}),
   }
 
   // Fire-and-forget Slack notification
@@ -1764,11 +1773,21 @@ export async function executeTool(
           }
         }
         const result = await deploySkill(input, userId, userRole, orgId)
+
+        // Build response text with optional quality hints
+        let responseText = JSON.stringify(result, null, 2)
+        if (result.success && result.qualityWarnings && result.qualityWarnings.length > 0) {
+          const hints = result.qualityWarnings
+            .map((w) => `- [${w.field}] ${w.message}`)
+            .join('\n')
+          responseText += `\n\n📋 품질 개선 힌트:\n${hints}`
+        }
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: responseText,
             },
           ],
           isError: !result.success,

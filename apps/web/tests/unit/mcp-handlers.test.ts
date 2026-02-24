@@ -636,6 +636,54 @@ describe('MCP Handlers', () => {
       expect(result.error).toContain('content는 필수')
     })
 
+    it('should include qualityWarnings when metadata is insufficient', async () => {
+      const mockSelectChain = createMockChain([]) // New deployment
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      const result = await deploySkill({
+        type: 'skill',
+        name: 'Test',
+        content: '# Short',
+        description: 'Short',
+        tags: [],
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.qualityWarnings).toBeDefined()
+      expect(result.qualityWarnings!.length).toBeGreaterThan(0)
+
+      const fields = result.qualityWarnings!.map((w) => w.field)
+      expect(fields).toContain('description')
+      expect(fields).toContain('tags')
+      expect(fields).toContain('content')
+    })
+
+    it('should not include qualityWarnings when metadata quality is good', async () => {
+      const mockSelectChain = createMockChain([]) // New deployment
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      const result = await deploySkill({
+        type: 'skill',
+        name: 'Quality Skill',
+        content: 'a'.repeat(200),
+        description: 'A sufficiently long description that exceeds the fifty character minimum threshold.',
+        tags: ['quality', 'test'],
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.qualityWarnings).toBeUndefined()
+    })
+
   })
 
   describe('checkUpdates', () => {
@@ -1362,6 +1410,30 @@ describe('MCP Handlers', () => {
 
       expect(result.isError).toBe(true)
       expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    it('should include quality hints in deploy_skill response text', async () => {
+      const mockSelectChain = createMockChain([])
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      const result = await executeTool('deploy_skill', {
+        type: 'skill',
+        name: 'Test Skill',
+        content: '# Short',
+        description: 'Short',
+        tags: [],
+      })
+
+      expect(result.isError).toBe(false)
+      expect(result.content[0].text).toContain('품질 개선 힌트')
+      expect(result.content[0].text).toContain('description')
+      expect(result.content[0].text).toContain('tags')
+      expect(result.content[0].text).toContain('content')
     })
 
     it('should return error for check_updates without installations', async () => {

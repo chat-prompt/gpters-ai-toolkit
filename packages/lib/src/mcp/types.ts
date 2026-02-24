@@ -93,6 +93,12 @@ export interface DeploySkillResponse {
     filesUpdated: string[]
     errors: string[]
   }
+  /** Non-blocking metadata quality warnings (present only when improvements are suggested) */
+  qualityWarnings?: Array<{
+    field: string
+    message: string
+    suggestion: string
+  }>
 }
 
 export interface CheckUpdatesInput {

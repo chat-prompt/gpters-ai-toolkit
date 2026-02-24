@@ -7,6 +7,7 @@
  * - AllowedTools validation against CLAUDE_TOOLS
  * - Example extraction and validation
  * - Test result report generation
+ * - Metadata quality checks (non-blocking hints)
  */
 
 import { CLAUDE_TOOLS, type ClaudeTool } from '../data/type-config'
@@ -670,4 +671,90 @@ export function generateValidationReport(result: SkillValidationResult): string 
   }
 
   return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Metadata Quality Check (non-blocking hints for deploy_skill)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single metadata quality warning.
+ *
+ * Quality warnings are non-blocking hints returned alongside a successful
+ * deployment to help authors improve discoverability and search matching.
+ */
+export interface QualityWarning {
+  /** The metadata field that triggered the warning */
+  field: string
+  /** Human-readable warning message */
+  message: string
+  /** Actionable suggestion for the author */
+  suggestion: string
+}
+
+/**
+ * Input shape accepted by {@link checkMetadataQuality}.
+ */
+export interface MetadataQualityInput {
+  /** Short description of the plugin */
+  description?: string
+  /** Tags associated with the plugin */
+  tags?: string[]
+  /** Main content / body of the plugin */
+  content?: string
+}
+
+/** Minimum description length considered adequate for search matching */
+const MIN_DESCRIPTION_LENGTH = 50
+/** Minimum content length considered adequate for search accuracy */
+const MIN_CONTENT_LENGTH = 200
+
+/**
+ * Check metadata quality and return non-blocking improvement hints.
+ *
+ * This function never prevents deployment. It only returns an array of
+ * {@link QualityWarning} items that the caller can surface to the author.
+ *
+ * Rules:
+ * - description shorter than 50 characters
+ * - zero tags
+ * - content shorter than 200 characters
+ *
+ * @param input - The metadata fields to inspect
+ * @returns An array of quality warnings (empty when all checks pass)
+ */
+export function checkMetadataQuality(input: MetadataQualityInput): QualityWarning[] {
+  const warnings: QualityWarning[] = []
+
+  // 1. Description length check
+  const descLen = input.description?.length ?? 0
+  if (descLen < MIN_DESCRIPTION_LENGTH) {
+    warnings.push({
+      field: 'description',
+      message: `description이 ${descLen}자입니다. ${MIN_DESCRIPTION_LENGTH}자 이상이면 검색 매칭이 개선됩니다.`,
+      suggestion: `현재 ${descLen}자 → ${MIN_DESCRIPTION_LENGTH}자 이상으로 늘려주세요.`,
+    })
+  }
+
+  // 2. Tags presence check
+  const tagCount = input.tags?.length ?? 0
+  if (tagCount === 0) {
+    warnings.push({
+      field: 'tags',
+      message: '태그가 없습니다. 관련 태그를 추가하면 카테고리 검색이 개선됩니다.',
+      suggestion: '1개 이상의 관련 태그를 추가해주세요.',
+    })
+  }
+
+  // 3. Content length check
+  const contentLen = input.content?.length ?? 0
+  if (contentLen < MIN_CONTENT_LENGTH) {
+    warnings.push({
+      field: 'content',
+      message: `content가 ${contentLen}자입니다. ${MIN_CONTENT_LENGTH}자 이상의 상세한 설명이 검색 정확도를 높입니다.`,
+      suggestion: `현재 ${contentLen}자 → ${MIN_CONTENT_LENGTH}자 이상으로 늘려주세요.`,
+    })
+  }
+
+  return warnings
 }
