@@ -8,14 +8,8 @@ COUNTER_FILE="/tmp/gpters-session-${PPID}"
 COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
 echo $((COUNT + 1)) > "$COUNTER_FILE"
 
-# 플러그인 자동 업데이트 (하루 1회, 백그라운드)
-UPDATE_CACHE="/tmp/gpters-plugin-update-check"
-LAST_CHECK=$(cat "$UPDATE_CACHE" 2>/dev/null || echo "0")
-NOW=$(date +%s)
-INTERVAL=86400  # 24시간
-
-if [ $((NOW - LAST_CHECK)) -gt $INTERVAL ]; then
-  echo "$NOW" > "$UPDATE_CACHE"
+# 플러그인 자동 업데이트 (세션 첫 프롬프트 시 백그라운드)
+if [ "$COUNT" -eq "0" ]; then
   (
     PLUGIN_NAME="gpters-ai-toolkit"
     MP_DIR="$HOME/.claude/plugins/marketplaces/chat-prompt-gpters-ai-toolkit"
@@ -24,7 +18,7 @@ if [ $((NOW - LAST_CHECK)) -gt $INTERVAL ]; then
     SOURCE_DIR="$MP_DIR/apps/claude-code-plugin"
 
     # 1. 마켓플레이스 레포 pull
-    [ -d "$MP_DIR/.git" ] && git -C "$MP_DIR" pull --ff-only --quiet 2>/dev/null
+    [ -d "$MP_DIR/.git" ] && git -C "$MP_DIR" pull --ff-only --quiet 2>/dev/null || exit 0
 
     # 2. 원격 버전 vs 로컬 설치 버전 비교
     REMOTE_VER=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$SOURCE_DIR/.claude-plugin/plugin.json" 2>/dev/null | head -1 | grep -o '[0-9][0-9.]*')
@@ -36,14 +30,15 @@ for k, v in data.get('plugins', {}).items():
         for i in v: print(i.get('version', ''))
 " 2>/dev/null | head -1)
 
-    if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$LOCAL_VER" ]; then
-      # 3. 새 버전 캐시에 복사
-      NEW_CACHE="$CACHE_DIR/$REMOTE_VER"
-      mkdir -p "$NEW_CACHE"
-      cp -R "$SOURCE_DIR/." "$NEW_CACHE/" 2>/dev/null
+    [ -z "$REMOTE_VER" ] || [ "$REMOTE_VER" = "$LOCAL_VER" ] && exit 0
 
-      # 4. installed_plugins.json 업데이트
-      python3 -c "
+    # 3. 새 버전 캐시에 복사
+    NEW_CACHE="$CACHE_DIR/$REMOTE_VER"
+    mkdir -p "$NEW_CACHE"
+    cp -R "$SOURCE_DIR/." "$NEW_CACHE/" 2>/dev/null
+
+    # 4. installed_plugins.json 업데이트
+    python3 -c "
 import json, datetime
 path = '$INSTALLED_JSON'
 data = json.load(open(path))
@@ -55,7 +50,6 @@ for k, v in data.get('plugins', {}).items():
             i['lastUpdated'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
 json.dump(data, open(path, 'w'), indent=4)
 " 2>/dev/null
-    fi
   ) &
 fi
 
