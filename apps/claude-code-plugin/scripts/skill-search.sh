@@ -9,5 +9,7 @@ COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
 echo $((COUNT + 1)) > "$COUNTER_FILE"
 
 cat <<'CONTEXT'
-<team-skills>새 작업/주제 변경 시 mcp__gpters-ai-toolkit__semantic_search로 관련 팀 스킬을 확인하세요. 기존 대화의 후속이면 무시하세요.</team-skills>
+<team-skills>새 작업/주제 변경 시 팀 스킬을 검색하세요. 기존 대화의 후속이면 무시하세요.
+검색: mcp__gpters-ai-toolkit__semantic_search(query="핵심 키워드 2~4단어", limit=3, _source="skill-suggest")
+규칙: relevanceScore 0.60 이상만 get_plugin_content로 로드. 미만이면 무시하고 진행.</team-skills>
 CONTEXT
