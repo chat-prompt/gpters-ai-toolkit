@@ -358,19 +358,14 @@ export async function DELETE(request: NextRequest) {
     })
   }
 
-  if (sessions.has(sessionId)) {
-    sessions.delete(sessionId)
-    after(async () => {
-      await finalizeSession(sessionId).catch(() => {})
-    })
-    return new NextResponse(null, {
-      status: 204,
-      headers: corsHeaders,
-    })
-  }
-
-  return new NextResponse('Session not found', {
-    status: 404,
+  // Best-effort cleanup of in-memory session (may not exist in serverless)
+  sessions.delete(sessionId)
+  // Always attempt DB finalization — no-op if session doesn't exist in DB
+  after(async () => {
+    await finalizeSession(sessionId).catch(() => {})
+  })
+  return new NextResponse(null, {
+    status: 204,
     headers: corsHeaders,
   })
 }
@@ -451,6 +446,10 @@ export async function POST(request: NextRequest) {
   let currentClientName: string | undefined
   let currentClientVersion: string | undefined
 
+  // Deferred session ID: updated after initialize creates a new session (line 728+)
+  // after() callbacks read this at execution time, so initialize's new ID is captured
+  let resolvedSessionId: string | undefined = incomingSessionId || undefined
+
   // Helper to log audit entry (fire-and-forget via after())
   const logAudit = (
     method: string,
@@ -463,12 +462,14 @@ export async function POST(request: NextRequest) {
     if (!auditCtx) return
 
     const responseTime = Date.now() - startTime
-    // Capture current values in closure
+    // Capture current values in closure (snapshot at call time)
     const ct = currentClientType
     const cn = currentClientName
     const cv = currentClientVersion
-    const sid = incomingSessionId || undefined
+    // NOTE: resolvedSessionId is read inside after() at execution time (deferred),
+    // so initialize requests will have the newly created session ID
     after(async () => {
+      const sid = resolvedSessionId
       // Determine referral source: from meta (explicit) or infer from session
       let referralSource = meta?.referralSource
       if (!referralSource && sid && tool === 'get_plugin_content') {
@@ -726,6 +727,8 @@ export async function POST(request: NextRequest) {
     // Create new session on initialize method
     if (rpcMethod === 'initialize' && !hasError) {
       sessionId = getOrCreateSession(null)
+      // Update deferred reference so after() callbacks use the new session ID
+      resolvedSessionId = sessionId
 
       // Cache client info in session for subsequent requests
       const session = sessions.get(sessionId)

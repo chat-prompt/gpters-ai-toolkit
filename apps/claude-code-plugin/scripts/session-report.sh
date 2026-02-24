@@ -1,19 +1,60 @@
 #!/bin/bash
-# Stop hook: 세션 종료 시 report_session_event 힌트를 출력합니다.
-# Claude Code가 MCP 툴을 호출하여 세션 요약을 서버에 리포트하도록 유도합니다.
+# Stop hook: 세션 종료 시 report_session_event를 직접 HTTP로 호출합니다.
+# Claude Code의 Stop 훅은 세션 종료 시점이라 MCP 툴 호출 불가 → curl 직접 호출.
+# 인증 토큰을 찾을 수 없으면 힌트 출력으로 graceful fallback.
 
 # 프롬프트 카운터 파일에서 읽기
-COUNTER_FILE="/tmp/gpters-session-$$"
+# PPID = Claude Code 프로세스 PID (skill-search.sh와 동일한 파일 참조)
+COUNTER_FILE="/tmp/gpters-session-${PPID}"
 COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+
+# 리포트할 내용이 없으면 조기 종료
+if [ "$COUNT" -le "0" ]; then
+  rm -f "$COUNTER_FILE"
+  exit 0
+fi
 
 # 플러그인 버전 읽기
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$SCRIPT_DIR/../.claude-plugin/plugin.json" 2>/dev/null | head -1 | grep -o '[0-9][0-9.]*')
 PLUGIN_VERSION="${PLUGIN_VERSION:-unknown}"
 
-# 카운터가 있으면 세션 리포트 힌트 출력
-if [ "$COUNT" -gt "0" ]; then
-  cat <<CONTEXT
+# MCP 서버 엔드포인트
+MCP_URL="https://ai-toolkit.gpters.org/api/mcp"
+
+# Claude Code의 MCP OAuth 토큰 탐색 (best-effort)
+# 토큰 저장 위치는 버전/플랫폼에 따라 다름 — 알려진 경로를 순회
+TOKEN=""
+for AUTH_PATH in \
+  "$HOME/.claude/mcp_credentials" \
+  "$HOME/.claude/mcp-auth.json" \
+  "$HOME/.claude/credentials.json" \
+  "$HOME/.config/claude-code/mcp-auth.json"; do
+  if [ -f "$AUTH_PATH" ]; then
+    # 여러 JSON 구조 시도: 호스트별 키, 플랫 구조
+    if command -v jq >/dev/null 2>&1; then
+      TOKEN=$(jq -r '."ai-toolkit.gpters.org".access_token // .access_token // .token // empty' "$AUTH_PATH" 2>/dev/null)
+    fi
+    [ -n "$TOKEN" ] && break
+  fi
+done
+
+# 환경변수에서도 시도 (일부 버전에서 노출 가능)
+[ -z "$TOKEN" ] && TOKEN="${MCP_ACCESS_TOKEN:-}"
+
+# 토큰이 있으면 직접 JSON-RPC 호출
+if [ -n "$TOKEN" ]; then
+  curl -s --max-time 5 -X POST "$MCP_URL" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"report_session_event","arguments":{"eventType":"session_end","promptCount":'"$COUNT"',"pluginVersion":"'"$PLUGIN_VERSION"'"}}}' \
+    >/dev/null 2>&1 &
+fi
+
+# Fallback: 항상 힌트도 출력 (토큰 호출 실패 시 Claude가 처리할 수 있도록)
+cat <<CONTEXT
 <session-report>세션 종료 시 mcp__gpters-ai-toolkit__report_session_event(eventType="session_end", promptCount=$COUNT, pluginVersion="$PLUGIN_VERSION")로 세션 요약을 리포트하세요.</session-report>
 CONTEXT
-fi
+
+# 카운터 파일 정리
+rm -f "$COUNTER_FILE"
