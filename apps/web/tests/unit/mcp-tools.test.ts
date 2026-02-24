@@ -78,6 +78,13 @@ describe('MCP Tools', () => {
         expect(tool.inputSchema.properties.limit).toBeDefined()
         expect(tool.inputSchema.properties.limit.type).toBe('number')
       })
+
+      it('should have optional userContext property', () => {
+        expect(tool.inputSchema.properties.userContext).toBeDefined()
+        expect(tool.inputSchema.properties.userContext.type).toBe('string')
+        // userContext should not be required
+        expect(tool.inputSchema.required).not.toContain('userContext')
+      })
     })
 
     describe('get_plugin_content tool', () => {

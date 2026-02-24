@@ -1230,6 +1230,76 @@ describe('MCP Handlers', () => {
       vi.mocked(db.select).mockReturnValue(mockChain as never)
     })
 
+    it('should execute semantic_search tool', async () => {
+      const { semanticSearch: mockSemanticSearch } = await import('../../../../packages/lib/src/search/vector-search')
+      vi.mocked(mockSemanticSearch).mockResolvedValue({
+        items: [],
+        total: 0,
+        searchTime: 10,
+      })
+
+      const result = await executeTool('semantic_search', { query: 'code review' })
+
+      expect(result.content).toHaveLength(1)
+      expect(result.content[0].type).toBe('text')
+      expect(result.isError).toBeUndefined()
+      expect(mockSemanticSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: 'code review',
+          userContext: undefined,
+        })
+      )
+    })
+
+    it('should pass userContext to semantic_search', async () => {
+      const { semanticSearch: mockSemanticSearch } = await import('../../../../packages/lib/src/search/vector-search')
+      vi.mocked(mockSemanticSearch).mockResolvedValue({
+        items: [],
+        total: 0,
+        searchTime: 10,
+      })
+
+      const result = await executeTool('semantic_search', {
+        query: 'slack bot',
+        userContext: 'airtable 연동, 슬랙 API',
+      })
+
+      expect(result.content).toHaveLength(1)
+      expect(result.isError).toBeUndefined()
+      expect(mockSemanticSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: 'slack bot',
+          userContext: 'airtable 연동, 슬랙 API',
+        })
+      )
+    })
+
+    it('should handle semantic_search without userContext (backward compatible)', async () => {
+      const { semanticSearch: mockSemanticSearch } = await import('../../../../packages/lib/src/search/vector-search')
+      vi.mocked(mockSemanticSearch).mockResolvedValue({
+        items: [],
+        total: 0,
+        searchTime: 5,
+      })
+
+      const result = await executeTool('semantic_search', { query: 'database' })
+
+      expect(result.isError).toBeUndefined()
+      expect(mockSemanticSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: 'database',
+          userContext: undefined,
+        })
+      )
+    })
+
+    it('should return error for semantic_search without query', async () => {
+      const result = await executeTool('semantic_search', {})
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required field: query')
+    })
+
     it('should execute search_plugins tool', async () => {
       const result = await executeTool('search_plugins', { query: 'test' })
 

@@ -56,6 +56,10 @@ const ALL_TOOLS: McpTool[] = [
           type: 'string',
           description: '호출 출처 마커 (예: "skill-suggest"). 자동 추천과 수동 검색을 구분하는 데 사용',
         },
+        userContext: {
+          type: 'string',
+          description: '작업 맥락 (예: "슬랙 멘션 자동 수집 봇 구현, airtable 연동 완료")',
+        },
       },
       required: ['query'],
     },

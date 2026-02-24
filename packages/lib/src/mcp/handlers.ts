@@ -1561,6 +1561,7 @@ export async function executeTool(
           userId,
           userRole,
           orgId,
+          userContext: input.userContext,
         })
         const result: SemanticSearchResult = {
           plugins: searchResult.items.map((item) => ({

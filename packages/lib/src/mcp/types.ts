@@ -317,6 +317,8 @@ export interface SemanticSearchInput {
   limit?: number
   /** Source marker for referral tracking (e.g., 'skill-suggest') */
   _source?: string
+  /** Optional user context to improve search relevance (e.g., '슬랙 멘션 자동 수집 봇 구현, airtable 연동 완료') */
+  userContext?: string
 }
 
 /**

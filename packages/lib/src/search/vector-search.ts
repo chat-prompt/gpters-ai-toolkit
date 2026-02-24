@@ -16,6 +16,8 @@ export interface SemanticSearchOptions {
   userId?: string
   userRole?: string
   orgId?: string
+  /** Optional user context combined with query for improved embedding relevance */
+  userContext?: string
 }
 
 export interface SemanticSearchResult {
@@ -34,6 +36,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     userId,
     userRole,
     orgId,
+    userContext,
   } = options
 
   const trimmedQuery = query.trim()
@@ -41,8 +44,13 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     return { items: [], total: 0, searchTime: 0 }
   }
 
+  // Combine query with userContext for improved embedding relevance
+  const embeddingText = userContext
+    ? `${trimmedQuery} ${userContext.trim()}`
+    : trimmedQuery
+
   const embeddingStart = Date.now()
-  const queryEmbedding = await generateEmbedding(trimmedQuery)
+  const queryEmbedding = await generateEmbedding(embeddingText)
   const embeddingMs = Date.now() - embeddingStart
 
   const similarity = sql<number>`1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)})`
