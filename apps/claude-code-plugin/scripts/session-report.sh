@@ -23,23 +23,21 @@ PLUGIN_VERSION="${PLUGIN_VERSION:-unknown}"
 MCP_URL="https://ai-toolkit.gpters.org/api/mcp"
 
 # Claude Code의 MCP OAuth 토큰 탐색 (best-effort)
-# 토큰 저장 위치는 버전/플랫폼에 따라 다름 — 알려진 경로를 순회
+# 실제 토큰 위치: ~/.claude/.credentials.json > mcpOAuth > "plugin:gpters-ai-toolkit:*" or "gpters-ai-toolkit|*"
 TOKEN=""
-for AUTH_PATH in \
-  "$HOME/.claude/mcp_credentials" \
-  "$HOME/.claude/mcp-auth.json" \
-  "$HOME/.claude/credentials.json" \
-  "$HOME/.config/claude-code/mcp-auth.json"; do
-  if [ -f "$AUTH_PATH" ]; then
-    # 여러 JSON 구조 시도: 호스트별 키, 플랫 구조
-    if command -v jq >/dev/null 2>&1; then
-      TOKEN=$(jq -r '."ai-toolkit.gpters.org".access_token // .access_token // .token // empty' "$AUTH_PATH" 2>/dev/null)
-    fi
-    [ -n "$TOKEN" ] && break
-  fi
-done
+CRED_FILE="$HOME/.claude/.credentials.json"
 
-# 환경변수에서도 시도 (일부 버전에서 노출 가능)
+if [ -f "$CRED_FILE" ] && command -v jq >/dev/null 2>&1; then
+  # mcpOAuth 내에서 gpters-ai-toolkit 관련 키의 accessToken을 탐색
+  TOKEN=$(jq -r '
+    .mcpOAuth // {} | to_entries[]
+    | select(.key | test("gpters-ai-toolkit"))
+    | select((.value.accessToken | length) > 0)
+    | .value.accessToken
+  ' "$CRED_FILE" 2>/dev/null | head -1)
+fi
+
+# 환경변수 fallback
 [ -z "$TOKEN" ] && TOKEN="${MCP_ACCESS_TOKEN:-}"
 
 # 토큰이 있으면 직접 JSON-RPC 호출

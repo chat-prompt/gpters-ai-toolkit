@@ -15,13 +15,22 @@ const logger = createLogger("mcp-reporter")
 
 /** 플러그인 버전을 package.json에서 읽기 */
 function getPluginVersion(): string {
-  try {
-    const pkgPath = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    return pkg.version || 'unknown'
-  } catch {
-    return 'unknown'
+  // 빌드 후 dist/ 구조에서도 찾을 수 있도록 여러 경로 시도
+  const candidates = [
+    join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..', 'package.json'),
+    join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', 'package.json'),
+    join(fileURLToPath(new URL('.', import.meta.url)), '..', 'package.json'),
+    join(process.cwd(), 'package.json'),
+  ]
+  for (const pkgPath of candidates) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+      if (pkg.name === '@gpters-internal/opencode' && pkg.version) {
+        return pkg.version
+      }
+    } catch { /* next */ }
   }
+  return 'unknown'
 }
 
 const PLUGIN_VERSION = getPluginVersion()
