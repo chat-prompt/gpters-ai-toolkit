@@ -1,6 +1,6 @@
 {
   "name": "@gpters-internal/codex-plugin",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "GPTers Codex CLI Plugin - Agent Skills + MCP 설정 자동 설치",
   "type": "module",
   "bin": {
