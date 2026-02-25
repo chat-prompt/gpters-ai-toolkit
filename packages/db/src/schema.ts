@@ -90,9 +90,8 @@ export const catalogItems = pgTable('catalog_items', {
   status: text('status').default('published'), // 'draft' | 'published'
   changelog: text('changelog'), // Latest version changelog
 
-  // Vector embedding for semantic search (3072 dimensions for Gemini gemini-embedding-001)
-  // Uses halfvec (16-bit float) instead of vector (32-bit) to support HNSW indexing up to 4000 dims
-  embedding: halfvec('embedding', { dimensions: 3072 }),
+  // Vector embedding for semantic search (1536 dimensions for OpenAI text-embedding-3-small)
+  embedding: halfvec('embedding', { dimensions: 1536 }),
 
   // Multi-tenancy & collaboration fields
   /** Organization owner (nullable for migration compatibility) */

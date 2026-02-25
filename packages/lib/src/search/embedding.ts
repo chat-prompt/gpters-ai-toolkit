@@ -1,54 +1,62 @@
 /**
  * 임베딩 생성 모듈
  *
- * Gemini API를 사용하여 텍스트의 벡터 임베딩을 생성합니다.
+ * OpenAI text-embedding-3-small을 사용하여 텍스트의 벡터 임베딩을 생성합니다.
  * LRU 캐시를 통해 동일 쿼리에 대한 중복 API 호출을 방지하며,
  * 서버리스 환경에서 검색 응답 시간을 단축합니다.
  */
 
-import { GoogleGenAI } from '@google/genai'
+import OpenAI from 'openai'
 import { createLogger } from '../core/logger'
 import { embeddingCache } from './embedding-cache'
 
 const log = createLogger('embedding')
 
-/** Gemini 임베딩 모델 ID */
-const EMBEDDING_MODEL = 'gemini-embedding-001'
+/** OpenAI 임베딩 모델 ID */
+const EMBEDDING_MODEL = 'text-embedding-3-small'
 
 /** 임베딩 벡터 차원 수 */
-const EMBEDDING_DIMENSIONS = 3072
-
-let geminiClient: GoogleGenAI | null = null
+const EMBEDDING_DIMENSIONS = 1536
 
 /**
- * Gemini API 클라이언트 싱글턴을 반환합니다.
+ * 임베딩 입력 텍스트 최대 길이 (문자 수).
  *
- * @returns GoogleGenAI 클라이언트 인스턴스
- * @throws GEMINI_API_KEY 환경 변수가 없는 경우
+ * text-embedding-3-small의 토큰 한도는 8,191.
+ * 한영 혼재 텍스트의 안전 마진을 고려하여 28,000자로 제한합니다.
  */
-function getGeminiClient(): GoogleGenAI {
-  if (!geminiClient) {
-    const apiKey = process.env.GEMINI_API_KEY
+const MAX_INPUT_CHARS = 28_000
+
+let openaiClient: OpenAI | null = null
+
+/**
+ * OpenAI API 클라이언트 싱글턴을 반환합니다.
+ *
+ * @returns OpenAI 클라이언트 인스턴스
+ * @throws OPENAI_API_KEY 환경 변수가 없는 경우
+ */
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is not set')
+      throw new Error('OPENAI_API_KEY environment variable is not set')
     }
-    geminiClient = new GoogleGenAI({ apiKey })
+    openaiClient = new OpenAI({ apiKey })
   }
-  return geminiClient
+  return openaiClient
 }
 
 /**
  * 텍스트에 대한 임베딩 벡터를 생성합니다.
  *
  * LRU 캐시를 먼저 확인하고, 히트 시 캐시된 결과를 즉시 반환합니다.
- * 미스 시 Gemini API를 호출하여 임베딩을 생성하고 캐시에 저장합니다.
+ * 미스 시 OpenAI API를 호출하여 임베딩을 생성하고 캐시에 저장합니다.
  *
  * @param text - 임베딩을 생성할 텍스트
  * @returns 임베딩 벡터 (number 배열)
  * @throws 빈 텍스트가 입력된 경우
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const input = text.replaceAll('\n', ' ').trim()
+  const input = text.replaceAll('\n', ' ').trim().slice(0, MAX_INPUT_CHARS)
 
   if (!input) {
     throw new Error('Cannot generate embedding for empty text')
@@ -65,21 +73,41 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     return cached
   }
 
-  // 캐시 미스: Gemini API 호출
+  // 캐시 미스: OpenAI API 호출 (토큰 초과 시 자동 축소 재시도)
   const start = Date.now()
-  const client = getGeminiClient()
-  const response = await client.models.embedContent({
-    model: EMBEDDING_MODEL,
-    contents: input,
-  })
+  const client = getOpenAIClient()
+  let truncatedInput = input
+  let embedding: number[] = []
 
-  const embedding = response.embeddings?.[0]?.values ?? []
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await client.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: truncatedInput,
+        dimensions: EMBEDDING_DIMENSIONS,
+      })
+      embedding = response.data[0]?.embedding ?? []
+      break
+    } catch (err: unknown) {
+      const isTokenLimit = err instanceof Error && 'status' in err && (err as { status: number }).status === 400
+        && err.message.includes('maximum context length')
+      if (isTokenLimit && attempt < 2) {
+        truncatedInput = truncatedInput.slice(0, Math.floor(truncatedInput.length * 0.7))
+        log.warn('Token limit exceeded, retrying with truncated input', {
+          attempt: attempt + 1,
+          newLength: truncatedInput.length,
+        })
+        continue
+      }
+      throw err
+    }
+  }
 
   // 결과 캐시 저장
   embeddingCache.set(input, embedding)
 
   const stats = embeddingCache.getStats()
-  log.info('Gemini embedding generated', {
+  log.info('OpenAI embedding generated', {
     duration: Date.now() - start,
     cacheSize: stats.size,
     hitRate: Math.round(stats.hitRate * 100),
@@ -92,7 +120,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * 여러 텍스트에 대한 임베딩 벡터를 배치로 생성합니다.
  *
  * 각 텍스트에 대해 캐시를 먼저 확인하고,
- * 캐시 미스인 텍스트만 Gemini API를 호출합니다.
+ * 캐시 미스인 텍스트만 OpenAI API를 호출합니다.
+ * OpenAI는 단일 요청에 다수 입력을 배치 처리할 수 있어 효율적입니다.
  *
  * @param texts - 임베딩을 생성할 텍스트 배열
  * @returns 임베딩 벡터 배열
@@ -101,7 +130,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return []
 
-  const inputs = texts.map(text => text.replaceAll('\n', ' ').trim()).filter(Boolean)
+  const inputs = texts
+    .map(text => text.replaceAll('\n', ' ').trim().slice(0, MAX_INPUT_CHARS))
+    .filter(Boolean)
 
   if (inputs.length === 0) {
     throw new Error('Cannot generate embeddings for empty texts')
@@ -119,23 +150,19 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     .filter(r => r.embedding === null)
     .map(r => ({ index: r.index, input: inputs[r.index]! }))
 
-  // 캐시 미스 항목만 API 호출
+  // 캐시 미스 항목만 배치 API 호출
   if (uncachedInputs.length > 0) {
-    const client = getGeminiClient()
-    const apiResults = await Promise.all(
-      uncachedInputs.map(async ({ index, input }) => {
-        const response = await client.models.embedContent({
-          model: EMBEDDING_MODEL,
-          contents: input,
-        })
-        const embedding = response.embeddings?.[0]?.values ?? []
-        embeddingCache.set(input, embedding)
-        return { index, embedding }
-      })
-    )
+    const client = getOpenAIClient()
+    const response = await client.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: uncachedInputs.map(u => u.input),
+      dimensions: EMBEDDING_DIMENSIONS,
+    })
 
-    // API 결과를 병합
-    for (const { index, embedding } of apiResults) {
+    for (let i = 0; i < response.data.length; i++) {
+      const { index } = uncachedInputs[i]!
+      const embedding = response.data[i]!.embedding
+      embeddingCache.set(uncachedInputs[i]!.input, embedding)
       results[index]!.embedding = embedding
     }
   }
@@ -155,8 +182,9 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 /**
  * 카탈로그 아이템을 임베딩용 텍스트로 변환합니다.
  *
- * 이름, 설명, 태그, readme, content를 결합하여
+ * 이름, 설명, 태그, readme, content를 전체 결합하여
  * 임베딩 생성에 적합한 단일 텍스트로 만듭니다.
+ * 최종 텍스트가 MAX_INPUT_CHARS를 초과하면 잘립니다.
  *
  * @param item - 카탈로그 아이템 데이터
  * @returns 임베딩 생성용 결합 텍스트
@@ -172,11 +200,11 @@ export function prepareTextForEmbedding(item: {
     item.name,
     item.description,
     item.tags?.join(' ') || '',
-    item.readme?.slice(0, 1000) || '',
-    item.content?.slice(0, 2000) || '',
+    item.readme || '',
+    item.content || '',
   ]
 
-  return parts.filter(Boolean).join(' ').trim()
+  return parts.filter(Boolean).join(' ').trim().slice(0, MAX_INPUT_CHARS)
 }
 
 export { EMBEDDING_MODEL, EMBEDDING_DIMENSIONS }
