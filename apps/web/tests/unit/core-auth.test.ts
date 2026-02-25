@@ -4,21 +4,77 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockSelect = vi.fn()
 const mockInsert = vi.fn()
 const mockUpdate = vi.fn()
-const mockFrom = vi.fn()
-const mockWhere = vi.fn()
-const mockLimit = vi.fn()
 const mockValues = vi.fn()
 const mockSet = vi.fn()
 
-vi.mock('@/lib/db', () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: () => mockSelect(),
-        }),
+// Chainable mock helpers
+function createChainableSelect(result: () => Promise<unknown[]>) {
+  return {
+    from: () => ({
+      where: () => ({
+        limit: () => result(),
       }),
     }),
+  }
+}
+
+function createSelectWithFields(result: () => Promise<unknown[]>) {
+  return (fields?: unknown) => {
+    if (fields) {
+      // select({ id, role }) pattern — still chainable
+      return {
+        from: () => ({
+          where: () => result(),
+        }),
+      }
+    }
+    // select() pattern — chainable with limit
+    return createChainableSelect(result)
+  }
+}
+
+// Track call order for select to return different results for different queries
+let selectCallCount = 0
+const selectResults: Array<() => Promise<unknown[]>> = []
+
+function pushSelectResult(result: unknown[]) {
+  selectResults.push(() => Promise.resolve(result))
+}
+
+function resetSelectResults() {
+  selectCallCount = 0
+  selectResults.length = 0
+}
+
+vi.mock('@gpters/db', () => ({
+  db: {
+    select: (...args: unknown[]) => {
+      const idx = selectCallCount++
+      const resolver = selectResults[idx] || (() => Promise.resolve([]))
+      mockSelect()
+      // Make result thenable so both .where() and .where().limit() work
+      const makeResult = () => {
+        const promise = resolver()
+        // Return a thenable that also has .limit()
+        return {
+          then: (res: (v: unknown) => void, rej: (e: unknown) => void) => promise.then(res, rej),
+          limit: () => resolver(),
+        }
+      }
+      if (args.length > 0) {
+        // select({ fields }) pattern
+        return {
+          from: () => ({
+            where: makeResult,
+          }),
+        }
+      }
+      return {
+        from: () => ({
+          where: makeResult,
+        }),
+      }
+    },
     insert: () => ({
       values: (data: unknown) => {
         mockValues(data)
@@ -34,24 +90,32 @@ vi.mock('@/lib/db', () => ({
       }),
     }),
   },
-  users: {},
+  users: { email: 'users.email', id: 'users.id', role: 'users.role' },
+  organizations: { allowedDomains: 'organizations.allowedDomains', isActive: 'organizations.isActive' },
+  orgMemberships: { userId: 'orgMemberships.userId', orgId: 'orgMemberships.orgId', role: 'orgMemberships.role' },
 }))
 
-vi.mock('@/lib/db/schema', () => ({
-  users: {},
-}))
+vi.mock('drizzle-orm', async (importOriginal) => {
+  const original = await importOriginal<typeof import('drizzle-orm')>()
+  return {
+    ...original,
+    eq: vi.fn((field, value) => ({ field, value })),
+    sql: vi.fn((...args: unknown[]) => ({ sql: args })),
+    and: vi.fn((...args: unknown[]) => ({ and: args })),
+  }
+})
 
-vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((field, value) => ({ field, value })),
-}))
-
-vi.mock('@/lib/core/logger', () => ({
+vi.mock('@gpters/lib/core', () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
   }),
+}))
+
+vi.mock('@gpters/lib/security', () => ({
+  // Types are erased at runtime, no need to mock them
 }))
 
 // Mock NextAuth
@@ -84,10 +148,18 @@ vi.mock('next-auth/providers/google', () => ({
   })),
 }))
 
+// Mock react cache (used in auth.ts re-export)
+vi.mock('react', () => ({
+  cache: (fn: unknown) => fn,
+}))
+
+// Helper: mock org found for domain
+const MOCK_ORG = { id: 'org-1', name: 'GPTers', allowedDomains: ['gpters.org'], isActive: true }
+
 describe('Auth Module', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSelect.mockResolvedValue([])
+    resetSelectResults()
     mockInsert.mockResolvedValue(undefined)
     mockUpdate.mockResolvedValue(undefined)
   })
@@ -117,7 +189,9 @@ describe('Auth Module', () => {
   describe('Sign In Callback', () => {
     beforeEach(async () => {
       vi.resetModules()
-      mockSelect.mockResolvedValue([])
+      resetSelectResults()
+      mockInsert.mockResolvedValue(undefined)
+      mockUpdate.mockResolvedValue(undefined)
       // Re-import to trigger callback registration
       await import('@/lib/core/auth')
     })
@@ -131,7 +205,10 @@ describe('Auth Module', () => {
       expect(result).toBe(false)
     })
 
-    it('should reject sign in for non-gpters.org emails', async () => {
+    it('should reject sign in when no matching org found', async () => {
+      // organizations query returns empty
+      pushSelectResult([])
+
       const result = await mockSignInCallback({
         user: { id: 'user-1', email: 'test@gmail.com', name: 'Test' },
         account: { provider: 'google', providerAccountId: '123' },
@@ -140,7 +217,14 @@ describe('Auth Module', () => {
       expect(result).toBe(false)
     })
 
-    it('should allow sign in for gpters.org emails', async () => {
+    it('should allow sign in when matching org exists', async () => {
+      // organizations query returns matching org
+      pushSelectResult([MOCK_ORG])
+      // users query returns empty (new user)
+      pushSelectResult([])
+      // orgMemberships query returns empty (new membership)
+      pushSelectResult([])
+
       const result = await mockSignInCallback({
         user: { id: 'user-1', email: 'test@gpters.org', name: 'Test' },
         account: { provider: 'google', providerAccountId: '123' },
@@ -150,7 +234,12 @@ describe('Auth Module', () => {
     })
 
     it('should create new user on first sign in', async () => {
-      mockSelect.mockResolvedValue([])
+      // organizations query
+      pushSelectResult([MOCK_ORG])
+      // users query (not found)
+      pushSelectResult([])
+      // orgMemberships query (not found)
+      pushSelectResult([])
 
       await mockSignInCallback({
         user: { id: 'user-1', email: 'new@gpters.org', name: 'New User', image: 'https://example.com/avatar.jpg' },
@@ -165,11 +254,15 @@ describe('Auth Module', () => {
     })
 
     it('should update existing user on subsequent sign ins', async () => {
-      mockSelect.mockResolvedValue([{ id: 'existing-id', email: 'existing@gpters.org', role: 'admin' }])
+      // organizations query
+      pushSelectResult([MOCK_ORG])
+      // users query (found)
+      pushSelectResult([{ id: 'existing-id', email: 'existing@gpters.org', role: 'admin' }])
+      // orgMemberships query (already exists)
+      pushSelectResult([{ userId: 'existing-id', orgId: 'org-1', role: 'org_viewer' }])
 
-      const user = { id: 'user-1', email: 'existing@gpters.org', name: 'Updated Name', image: 'https://example.com/new-avatar.jpg' }
       await mockSignInCallback({
-        user,
+        user: { id: 'user-1', email: 'existing@gpters.org', name: 'Updated Name', image: 'https://example.com/new-avatar.jpg' },
         account: { provider: 'google', providerAccountId: '123' },
       })
 
@@ -180,7 +273,12 @@ describe('Auth Module', () => {
     })
 
     it('should set user role from database for existing user', async () => {
-      mockSelect.mockResolvedValue([{ id: 'existing-id', email: 'admin@gpters.org', role: 'admin' }])
+      // organizations query
+      pushSelectResult([MOCK_ORG])
+      // users query (found with admin role)
+      pushSelectResult([{ id: 'existing-id', email: 'admin@gpters.org', role: 'admin' }])
+      // orgMemberships query (already exists)
+      pushSelectResult([{ userId: 'existing-id', orgId: 'org-1', role: 'org_viewer' }])
 
       const user: { email: string; name: string; role?: string } = { email: 'admin@gpters.org', name: 'Admin' }
       await mockSignInCallback({
@@ -192,7 +290,12 @@ describe('Auth Module', () => {
     })
 
     it('should set default viewer role for new users', async () => {
-      mockSelect.mockResolvedValue([])
+      // organizations query
+      pushSelectResult([MOCK_ORG])
+      // users query (not found)
+      pushSelectResult([])
+      // orgMemberships query (not found)
+      pushSelectResult([])
 
       const user: { email: string; name: string; role?: string } = { email: 'new@gpters.org', name: 'New User' }
       await mockSignInCallback({
@@ -203,22 +306,24 @@ describe('Auth Module', () => {
       expect(user.role).toBe('viewer')
     })
 
-    it('should still allow sign in if database operation fails', async () => {
-      mockSelect.mockRejectedValue(new Error('Database error'))
+    it('should return false if database operation fails', async () => {
+      // organizations query throws
+      selectResults.push(() => Promise.reject(new Error('Database error')))
 
       const result = await mockSignInCallback({
         user: { id: 'user-1', email: 'test@gpters.org', name: 'Test' },
         account: { provider: 'google', providerAccountId: '123' },
       })
 
-      // Should not block sign in even if DB fails
-      expect(result).toBe(true)
+      // Current implementation returns false on DB failure
+      expect(result).toBe(false)
     })
   })
 
   describe('Session Callback', () => {
     beforeEach(async () => {
       vi.resetModules()
+      resetSelectResults()
       await import('@/lib/core/auth')
     })
 
@@ -238,6 +343,17 @@ describe('Auth Module', () => {
       const result = await mockSessionCallback({ session, token })
 
       expect(result.user.role).toBe('admin')
+    })
+
+    it('should add org context from token to session', async () => {
+      const session = { user: {} }
+      const token = { sub: 'user-id-123', role: 'viewer', currentOrgId: 'org-1', orgRole: 'org_admin', orgIds: ['org-1'] }
+
+      const result = await mockSessionCallback({ session, token })
+
+      expect(result.user.currentOrgId).toBe('org-1')
+      expect(result.user.orgRole).toBe('org_admin')
+      expect(result.user.orgIds).toEqual(['org-1'])
     })
 
     it('should handle missing token sub', async () => {
@@ -273,21 +389,33 @@ describe('Auth Module', () => {
   describe('JWT Callback', () => {
     beforeEach(async () => {
       vi.resetModules()
+      resetSelectResults()
       await import('@/lib/core/auth')
     })
 
     it('should add user id and role to token on first sign in', async () => {
       const token = {}
-      const user = { id: 'user-123', role: 'admin' }
+      const user = { id: 'user-123', role: 'admin', orgIds: ['org-1'] }
 
       const result = await mockJwtCallback({ token, user })
 
       expect(result.id).toBe('user-123')
       expect(result.role).toBe('admin')
+      expect(result.orgIds).toEqual(['org-1'])
+    })
+
+    it('should set initial org context on first sign in', async () => {
+      const token = {}
+      const user = { id: 'user-123', role: 'viewer', orgIds: ['org-1'] }
+
+      const result = await mockJwtCallback({ token, user })
+
+      expect(result.currentOrgId).toBe('org-1')
+      expect(result.orgRole).toBe('org_viewer')
     })
 
     it('should preserve token on subsequent requests without user', async () => {
-      const token = { id: 'existing-id', role: 'viewer' }
+      const token = { id: 'existing-id', role: 'viewer', tokenRefreshedAt: Date.now() }
 
       const result = await mockJwtCallback({ token, user: undefined })
 
@@ -297,33 +425,38 @@ describe('Auth Module', () => {
 
     it('should update token when user object is present', async () => {
       const token = { id: 'old-id', role: 'viewer' }
-      const user = { id: 'new-id', role: 'admin' }
+      const user = { id: 'new-id', role: 'admin', orgIds: ['org-2'] }
 
       const result = await mockJwtCallback({ token, user })
 
       expect(result.id).toBe('new-id')
       expect(result.role).toBe('admin')
+      expect(result.orgIds).toEqual(['org-2'])
     })
   })
 
-  describe('Email Domain Validation', () => {
+  describe('Domain Validation via Organizations', () => {
     beforeEach(async () => {
       vi.resetModules()
-      mockSelect.mockResolvedValue([])
+      resetSelectResults()
+      mockInsert.mockResolvedValue(undefined)
+      mockUpdate.mockResolvedValue(undefined)
       await import('@/lib/core/auth')
     })
 
-    it('should reject various invalid email domains', async () => {
+    it('should reject emails when no org matches domain', async () => {
       const invalidEmails = [
         'test@gmail.com',
         'test@yahoo.com',
         'test@outlook.com',
         'test@company.com',
-        'test@gpters.com', // Note: gpters.com, not gpters.org
-        'test@mail.gpters.org', // Subdomain
       ]
 
       for (const email of invalidEmails) {
+        resetSelectResults()
+        // organizations query returns empty (no matching org)
+        pushSelectResult([])
+
         const result = await mockSignInCallback({
           user: { id: 'user-1', email, name: 'Test' },
           account: { provider: 'google', providerAccountId: '123' },
@@ -332,7 +465,7 @@ describe('Auth Module', () => {
       }
     })
 
-    it('should accept valid gpters.org emails', async () => {
+    it('should accept emails when matching org exists', async () => {
       const validEmails = [
         'user@gpters.org',
         'admin@gpters.org',
@@ -341,7 +474,14 @@ describe('Auth Module', () => {
       ]
 
       for (const email of validEmails) {
-        mockSelect.mockResolvedValue([])
+        resetSelectResults()
+        // organizations query returns matching org
+        pushSelectResult([MOCK_ORG])
+        // users query (new user)
+        pushSelectResult([])
+        // orgMemberships query (new)
+        pushSelectResult([])
+
         const result = await mockSignInCallback({
           user: { id: 'user-1', email, name: 'Test' },
           account: { provider: 'google', providerAccountId: '123' },

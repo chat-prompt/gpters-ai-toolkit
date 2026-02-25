@@ -1,31 +1,80 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock the database module
-const mockSelect = vi.fn()
-const mockFrom = vi.fn()
-const mockWhere = vi.fn()
-const mockLimit = vi.fn()
+// Hoist mock functions so they can be used in vi.mock factories
+const { mockSelect, mockFrom, mockWhere } = vi.hoisted(() => ({
+  mockSelect: vi.fn(),
+  mockFrom: vi.fn(),
+  mockWhere: vi.fn(),
+}))
 
-vi.mock('@/lib/db', () => ({
+/**
+ * Build a chainable query mock that supports all query patterns:
+ * - select().from().leftJoin().leftJoin().where()
+ * - select().from().leftJoin().leftJoin().where().orderBy().limit()
+ * - select().from().leftJoin().where()
+ * - select().from().where()
+ */
+function buildChainFactory() {
+  const terminalWhere = (condition: unknown) => {
+    mockWhere(condition)
+    return mockSelect()
+  }
+  const orderByChain = {
+    limit: () => mockSelect(),
+  }
+  return {
+    where: terminalWhere,
+    orderBy: () => orderByChain,
+    leftJoin: () => ({
+      leftJoin: () => ({
+        where: terminalWhere,
+        orderBy: () => orderByChain,
+      }),
+      where: terminalWhere,
+    }),
+  }
+}
+
+vi.mock('@gpters/db', () => {
+  /**
+   * Create a thenable result that also supports .orderBy().limit() chaining.
+   * This allows both `await query.where(...)` and `query.where(...).orderBy(...).limit(n)`.
+   */
+  function createWhereResult() {
+    const promise = mockSelect()
+    return {
+      then: (resolve: unknown, reject: unknown) => Promise.resolve(promise).then(resolve as never, reject as never),
+      orderBy: () => ({
+        limit: () => mockSelect(),
+      }),
+    }
+  }
+
+  const terminalWhere = (condition: unknown) => {
+    mockWhere(condition)
+    return createWhereResult()
+  }
+
+  return {
   db: {
     select: () => ({
       from: (table: unknown) => {
         mockFrom(table)
         return {
+          where: terminalWhere,
+          orderBy: () => ({ limit: () => mockSelect() }),
           leftJoin: () => ({
-            where: (condition: unknown) => {
-              mockWhere(condition)
-              return mockSelect()
-            },
+            leftJoin: () => ({
+              where: terminalWhere,
+              orderBy: () => ({ limit: () => mockSelect() }),
+            }),
+            where: terminalWhere,
           }),
-          where: (condition: unknown) => {
-            mockWhere(condition)
-            return mockSelect()
-          },
         }
       },
     }),
   },
+  isDatabaseAvailable: () => true,
   catalogItems: {
     id: { name: 'id' },
     type: { name: 'type' },
@@ -56,7 +105,10 @@ vi.mock('@/lib/db', () => ({
     mcpEnabled: { name: 'mcpEnabled' },
     version: { name: 'version' },
     status: { name: 'status' },
-    changelog: { name: 'changelog' },
+    orgId: { name: 'orgId' },
+    visibility: { name: 'visibility' },
+    forkedFrom: { name: 'forkedFrom' },
+    forkCount: { name: 'forkCount' },
     createdAt: { name: 'createdAt' },
     updatedAt: { name: 'updatedAt' },
   },
@@ -65,6 +117,35 @@ vi.mock('@/lib/db', () => ({
     name: { name: 'name' },
     email: { name: 'email' },
   },
+  organizations: {
+    id: { name: 'id' },
+    name: { name: 'name' },
+  },
+  packageItems: {
+    packageId: { name: 'packageId' },
+    itemId: { name: 'itemId' },
+    displayOrder: { name: 'displayOrder' },
+  },
+}})
+
+// Mock drizzle-orm operators
+vi.mock('drizzle-orm', () => ({
+  eq: (...args: unknown[]) => ({ op: 'eq', args }),
+  ne: (...args: unknown[]) => ({ op: 'ne', args }),
+  and: (...args: unknown[]) => ({ op: 'and', args }),
+  or: (...args: unknown[]) => ({ op: 'or', args }),
+  isNull: (...args: unknown[]) => ({ op: 'isNull', args }),
+  asc: (...args: unknown[]) => ({ op: 'asc', args }),
+  desc: (...args: unknown[]) => ({ op: 'desc', args }),
+  like: (...args: unknown[]) => ({ op: 'like', args }),
+  sql: Object.assign(
+    (_strings: TemplateStringsArray, ..._values: unknown[]) => ({
+      op: 'sql',
+    }),
+    {
+      raw: (_s: string) => ({ op: 'sql.raw' }),
+    }
+  ),
 }))
 
 // Import after mocking
@@ -79,7 +160,10 @@ import {
   getRelatedItems,
 } from '@/lib/core/catalog'
 
-// Helper to create mock database records
+/**
+ * Helper to create mock summary records (for list queries with leftJoin to users & organizations).
+ * These match the SummaryRecord shape with authorName and orgName fields.
+ */
 function createMockRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: 'test-id',
@@ -88,6 +172,7 @@ function createMockRecord(overrides: Record<string, unknown> = {}) {
     description: 'Test description',
     authorId: 'author-123',
     authorName: 'Test Author',
+    orgName: null,
     tags: ['tag1', 'tag2'],
     teamTag: 'platform' as const,
     difficulty: 'medium' as const,
@@ -113,9 +198,25 @@ function createMockRecord(overrides: Record<string, unknown> = {}) {
     version: '1.0.0',
     status: 'published' as const,
     changelog: null,
+    orgId: null,
+    visibility: 'public' as const,
+    forkedFrom: null,
+    forkCount: 0,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-02'),
     ...overrides,
+  }
+}
+
+/**
+ * Helper to create mock detail records (for getItemById/getGuideById).
+ * These return { item: catalogItemRecord, orgName: string | null } shape.
+ */
+function createMockDetailRecord(overrides: Record<string, unknown> = {}) {
+  const record = createMockRecord(overrides)
+  return {
+    item: record,
+    orgName: (overrides.orgName as string) ?? null,
   }
 }
 
@@ -201,7 +302,7 @@ describe('Catalog Module', () => {
 
   describe('getItemById', () => {
     it('should return item when found', async () => {
-      const mockRecord = createMockRecord({ id: 'test-skill' })
+      const mockRecord = createMockDetailRecord({ id: 'test-skill' })
       mockSelect.mockResolvedValue([mockRecord])
 
       const result = await getItemById('test-skill')
@@ -219,7 +320,7 @@ describe('Catalog Module', () => {
     })
 
     it('should include full content fields', async () => {
-      const mockRecord = createMockRecord({
+      const mockRecord = createMockDetailRecord({
         content: '# Full Content',
         readme: '# README',
         files: [{ name: 'file.ts', content: 'code' }],
@@ -335,7 +436,7 @@ describe('Catalog Module', () => {
 
   describe('getGuideById', () => {
     it('should return guide when found', async () => {
-      const mockRecord = createMockRecord({ id: 'guide-1', type: 'guide' })
+      const mockRecord = createMockDetailRecord({ id: 'guide-1', type: 'guide' })
       mockSelect.mockResolvedValue([mockRecord])
 
       const result = await getGuideById('guide-1')
@@ -353,8 +454,9 @@ describe('Catalog Module', () => {
     })
 
     it('should return undefined for non-guide type', async () => {
-      const mockRecord = createMockRecord({ id: 'skill-1', type: 'skill' })
-      mockSelect.mockResolvedValue([mockRecord])
+      // getGuideById filters by type='guide' in the WHERE clause,
+      // so DB returns empty when item is not a guide
+      mockSelect.mockResolvedValue([])
 
       const result = await getGuideById('skill-1')
 
@@ -454,7 +556,6 @@ describe('Catalog Module', () => {
     it('should return items with matching tags', async () => {
       const mockRecords = [
         createMockRecord({ id: 'related-1', tags: ['tag1', 'tag2'], authorId: 'other-user' }),
-        createMockRecord({ id: 'unrelated', tags: ['other'], authorId: 'other-user' }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
@@ -464,7 +565,7 @@ describe('Catalog Module', () => {
       expect(result[0].id).toBe('related-1')
     })
 
-    it('should prioritize items by same author', async () => {
+    it('should return results from DB query', async () => {
       const mockRecords = [
         createMockRecord({ id: 'same-author', tags: ['tag1'], authorId: 'john-user' }),
         createMockRecord({ id: 'diff-author', tags: ['tag1', 'tag2'], authorId: 'other-user' }),
@@ -473,12 +574,12 @@ describe('Catalog Module', () => {
 
       const result = await getRelatedItems('current-id', ['tag1'], 'john-user')
 
-      // Same author should be first (2 bonus + 1 tag = 3 points vs 2 tags = 2 points)
-      expect(result[0].id).toBe('same-author')
+      // DB handles scoring and ordering now
+      expect(result).toHaveLength(2)
     })
 
-    it('should limit results to specified count', async () => {
-      const mockRecords = Array.from({ length: 10 }, (_, i) =>
+    it('should return results as provided by DB', async () => {
+      const mockRecords = Array.from({ length: 3 }, (_, i) =>
         createMockRecord({ id: `item-${i}`, tags: ['common'], authorId: 'other-user' })
       )
       mockSelect.mockResolvedValue(mockRecords)
@@ -488,19 +589,15 @@ describe('Catalog Module', () => {
       expect(result).toHaveLength(3)
     })
 
-    it('should return empty array when no matching tags', async () => {
-      const mockRecords = [
-        createMockRecord({ id: 'item-1', tags: ['unrelated'], authorId: 'other-user' }),
-      ]
-      mockSelect.mockResolvedValue(mockRecords)
+    it('should return empty array when no matching items', async () => {
+      mockSelect.mockResolvedValue([])
 
       const result = await getRelatedItems('current-id', ['tag1'], null)
 
       expect(result).toEqual([])
     })
 
-    it('should exclude current item', async () => {
-      // The current item should be filtered by the WHERE clause
+    it('should exclude current item via DB query', async () => {
       const mockRecords = [
         createMockRecord({ id: 'other-item', tags: ['tag1'], authorId: 'other-user' }),
       ]
@@ -511,8 +608,8 @@ describe('Catalog Module', () => {
       expect(result.find((item) => item.id === 'current-id')).toBeUndefined()
     })
 
-    it('should use default limit of 6', async () => {
-      const mockRecords = Array.from({ length: 10 }, (_, i) =>
+    it('should return items as summary objects', async () => {
+      const mockRecords = Array.from({ length: 6 }, (_, i) =>
         createMockRecord({ id: `item-${i}`, tags: ['common'], authorId: 'other-user' })
       )
       mockSelect.mockResolvedValue(mockRecords)
@@ -520,28 +617,31 @@ describe('Catalog Module', () => {
       const result = await getRelatedItems('current-id', ['common'], null)
 
       expect(result).toHaveLength(6)
+      expect(result[0]).toHaveProperty('id')
+      expect(result[0]).toHaveProperty('type')
+      expect(result[0]).toHaveProperty('name')
     })
 
-    it('should sort by score then by updatedAt', async () => {
+    it('should return items ordered by DB', async () => {
       const mockRecords = [
-        createMockRecord({
-          id: 'older',
-          tags: ['tag1', 'tag2'],
-          authorId: 'other-user',
-          updatedAt: new Date('2024-01-01'),
-        }),
         createMockRecord({
           id: 'newer',
           tags: ['tag1', 'tag2'],
           authorId: 'other-user',
           updatedAt: new Date('2024-01-02'),
         }),
+        createMockRecord({
+          id: 'older',
+          tags: ['tag1', 'tag2'],
+          authorId: 'other-user',
+          updatedAt: new Date('2024-01-01'),
+        }),
       ]
       mockSelect.mockResolvedValue(mockRecords)
 
       const result = await getRelatedItems('current-id', ['tag1', 'tag2'], null)
 
-      // Both have same score, newer should come first
+      // DB handles ordering, mock returns in given order
       expect(result[0].id).toBe('newer')
     })
   })

@@ -264,9 +264,10 @@ describe('RBAC Utilities', () => {
   })
 
   describe('getAllRoles', () => {
-    it('returns all three roles', () => {
+    it('returns all four roles including super_admin', () => {
       const roles = getAllRoles()
-      expect(roles).toHaveLength(3)
+      expect(roles).toHaveLength(4)
+      expect(roles).toContain('super_admin')
       expect(roles).toContain('admin')
       expect(roles).toContain('editor')
       expect(roles).toContain('viewer')
@@ -277,6 +278,7 @@ describe('RBAC Utilities', () => {
       expect(roles[0]).toBe('viewer')
       expect(roles[1]).toBe('editor')
       expect(roles[2]).toBe('admin')
+      expect(roles[3]).toBe('super_admin')
     })
   })
 
@@ -340,12 +342,24 @@ describe('RBAC Utilities', () => {
       expect(editorPermissions).not.toContain(Permissions.ADMIN_SETTINGS)
     })
 
-    it('admin has all permissions', () => {
+    it('admin has all non-super_admin permissions', () => {
       const adminPermissions = getPermissionsForRole('admin')
-      // Should have ALL permissions
-      Object.values(Permissions).forEach(permission => {
-        expect(adminPermissions).toContain(permission)
-      })
+      // Admin should have all standard permissions
+      expect(adminPermissions).toContain(Permissions.CATALOG_VIEW)
+      expect(adminPermissions).toContain(Permissions.CATALOG_CREATE)
+      expect(adminPermissions).toContain(Permissions.CATALOG_EDIT)
+      expect(adminPermissions).toContain(Permissions.CATALOG_DELETE)
+      expect(adminPermissions).toContain(Permissions.USERS_VIEW)
+      expect(adminPermissions).toContain(Permissions.USERS_MANAGE)
+      expect(adminPermissions).toContain(Permissions.ADMIN_VIEW)
+      expect(adminPermissions).toContain(Permissions.ADMIN_SETTINGS)
+      expect(adminPermissions).toContain(Permissions.METADATA_VIEW)
+      expect(adminPermissions).toContain(Permissions.METADATA_MANAGE)
+      // Admin should NOT have super_admin-only permissions
+      expect(adminPermissions).not.toContain(Permissions.ORGS_VIEW)
+      expect(adminPermissions).not.toContain(Permissions.ORGS_MANAGE)
+      expect(adminPermissions).not.toContain(Permissions.ORGS_CREATE)
+      expect(adminPermissions).not.toContain(Permissions.SUPER_ADMIN_ACCESS)
     })
   })
 })

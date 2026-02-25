@@ -6,7 +6,7 @@ import {
   AgentTemplateBuilder,
   renderAsSystemPrompt,
   renderAsConfig,
-  renderAsMarkdown,
+  renderTemplateAsMarkdown,
   listRoles,
   getRoleTemplate,
   validateTemplate,
@@ -291,7 +291,7 @@ describe('Agent Template Generator', () => {
     })
   })
 
-  describe('renderAsMarkdown', () => {
+  describe('renderTemplateAsMarkdown', () => {
     it('should render template as Markdown', () => {
       const template = AgentTemplateBuilder.create('md-test')
         .role('writer')
@@ -319,7 +319,7 @@ describe('Agent Template Generator', () => {
         .tags('writing', 'content')
         .build()
 
-      const md = renderAsMarkdown(template)
+      const md = renderTemplateAsMarkdown(template)
 
       expect(md).toContain('# md-test')
       expect(md).toContain('**Role:** writer')
@@ -342,7 +342,7 @@ describe('Agent Template Generator', () => {
         .description('Minimal agent')
         .build()
 
-      const md = renderAsMarkdown(template)
+      const md = renderTemplateAsMarkdown(template)
       expect(md).toContain('# minimal')
       expect(md).toContain('custom')
     })

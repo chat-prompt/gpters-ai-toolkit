@@ -53,12 +53,11 @@ describe('Welfare Engine Stats API', () => {
         expect(typeof data.metrics.quality.avgResponseTime).toBe('number')
 
         expect(data.metrics.secondary).toBeDefined()
-        expect(typeof data.metrics.secondary.newContributors).toBe('number')
-        expect(Array.isArray(data.metrics.secondary.popularQueries)).toBe(true)
+        expect(Array.isArray(data.metrics.secondary.contributors)).toBe(true)
 
         expect(data.rankings).toBeDefined()
         expect(Array.isArray(data.rankings.skills)).toBe(true)
-        expect(Array.isArray(data.rankings.queries)).toBe(true)
+        expect(Array.isArray(data.rankings.contributors)).toBe(true)
       }
     })
 
@@ -180,7 +179,7 @@ describe('Welfare Engine Stats API', () => {
       }
     })
 
-    it('should validate popular queries structure', async () => {
+    it('should validate contributors structure', async () => {
       if (!serverAvailable) return
 
       const response = await fetch(`${API_BASE_URL}/api/welfare-engine/stats`)
@@ -188,13 +187,12 @@ describe('Welfare Engine Stats API', () => {
 
       if (response.status === 200) {
         const data = await response.json()
-        const queries = data.rankings.queries
+        const contributors = data.rankings.contributors
 
-        if (queries.length > 0) {
-          const query = queries[0]
-          expect(query.query).toBeDefined()
-          expect(typeof query.count).toBe('number')
-          expect(query.lastSearched).toBeDefined()
+        if (contributors.length > 0) {
+          const contributor = contributors[0]
+          expect(contributor.name).toBeDefined()
+          expect(typeof contributor.skillCount).toBe('number')
         }
       }
     })

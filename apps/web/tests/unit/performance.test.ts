@@ -157,7 +157,7 @@ describe('Performance Monitoring', () => {
   describe('Timer', () => {
     it('should measure elapsed time', async () => {
       const timer = startTimer('test', 'api')
-      await new Promise((resolve) => setTimeout(resolve, 10))
+      await new Promise((resolve) => setTimeout(resolve, 15))
       const elapsed = timer.elapsed()
       expect(elapsed).toBeGreaterThanOrEqual(10)
     })

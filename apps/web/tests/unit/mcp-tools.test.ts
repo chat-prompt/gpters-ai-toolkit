@@ -47,10 +47,11 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('add_files')
       expect(toolNames).toContain('remove_files')
       expect(toolNames).toContain('report_session_event')
+      expect(toolNames).toContain('list_plugins')
     })
 
-    it('should have 11 public tools', () => {
-      expect(MCP_TOOLS).toHaveLength(11)
+    it('should have 12 public tools', () => {
+      expect(MCP_TOOLS).toHaveLength(12)
     })
 
     describe('semantic_search tool', () => {

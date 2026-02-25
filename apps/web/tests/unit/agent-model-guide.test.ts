@@ -10,7 +10,7 @@ import {
   getModelSpec,
   getAllModelSpecs,
   calculateCostEstimate,
-  compareCosts,
+  compareModelCosts,
   getRecommendedModel,
   getModelForTaskCategory,
   compareModels,
@@ -191,16 +191,16 @@ describe('agent-model-guide', () => {
     })
   })
 
-  describe('compareCosts', () => {
+  describe('compareModelCosts', () => {
     it('should return costs for all models', () => {
-      const costs = compareCosts(100000, 50000)
+      const costs = compareModelCosts(100000, 50000)
       expect(costs.haiku).toBeDefined()
       expect(costs.sonnet).toBeDefined()
       expect(costs.opus).toBeDefined()
     })
 
     it('should have haiku as cheapest', () => {
-      const costs = compareCosts(100000, 50000)
+      const costs = compareModelCosts(100000, 50000)
       expect(costs.haiku).toBeLessThan(costs.sonnet)
       expect(costs.sonnet).toBeLessThan(costs.opus)
     })

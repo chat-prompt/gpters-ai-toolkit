@@ -1,34 +1,50 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock the handlers
-vi.mock('@/lib/mcp/handlers', () => ({
-  executeTool: vi.fn().mockResolvedValue({
+// Use vi.hoisted to create shared mock instances that are reused across all mock targets
+const { handlersMock, toolsMock, mockExecuteTool, mockListPrompts, mockGetPrompt } = vi.hoisted(() => {
+  const mockExecuteTool = vi.fn().mockResolvedValue({
     content: [{ type: 'text', text: '{"result": "success"}' }],
-  }),
-  listPrompts: vi.fn().mockResolvedValue([
+  })
+  const mockListPrompts = vi.fn().mockResolvedValue([
     { name: 'test-skill', description: '[skill] A test skill' },
-  ]),
-  getPrompt: vi.fn().mockResolvedValue({
+  ])
+  const mockGetPrompt = vi.fn().mockResolvedValue({
     description: 'Test prompt',
     messages: [{ role: 'user', content: { type: 'text', text: 'Test content' } }],
-  }),
-}))
+  })
 
-// Mock the tools
-vi.mock('@/lib/mcp/tools', () => ({
-  MCP_TOOLS: [
-    {
-      name: 'search_plugins',
-      description: 'Search plugins',
-      inputSchema: { type: 'object', properties: {}, required: ['query'] },
-    },
-    {
-      name: 'list_plugins',
-      description: 'List plugins',
-      inputSchema: { type: 'object', properties: {} },
-    },
-  ],
-}))
+  const handlersMock = () => ({
+    executeTool: mockExecuteTool,
+    listPrompts: mockListPrompts,
+    getPrompt: mockGetPrompt,
+  })
+
+  const toolsMock = () => ({
+    MCP_TOOLS: [
+      {
+        name: 'search_plugins',
+        description: 'Search plugins',
+        inputSchema: { type: 'object', properties: {}, required: ['query'] },
+      },
+      {
+        name: 'list_plugins',
+        description: 'List plugins',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ],
+  })
+
+  return { handlersMock, toolsMock, mockExecuteTool, mockListPrompts, mockGetPrompt }
+})
+
+// Mock handlers at both the app re-export and the package source paths
+// so server.ts's internal './handlers' import is also intercepted
+vi.mock('@/lib/mcp/handlers', handlersMock)
+vi.mock('/Users/primadonna/projects/gpters-ai-toolkit/packages/lib/src/mcp/handlers', handlersMock)
+
+// Mock tools at both levels
+vi.mock('@/lib/mcp/tools', toolsMock)
+vi.mock('/Users/primadonna/projects/gpters-ai-toolkit/packages/lib/src/mcp/tools', toolsMock)
 
 import {
   processRequest,
@@ -37,7 +53,11 @@ import {
   SERVER_INFO,
   PROTOCOL_VERSION,
 } from '@/lib/mcp/server'
-import { executeTool, listPrompts, getPrompt } from '@/lib/mcp/handlers'
+
+// Use the shared mock instances from vi.hoisted
+const executeTool = mockExecuteTool
+const listPrompts = mockListPrompts
+const getPrompt = mockGetPrompt
 
 describe('MCP Server', () => {
   beforeEach(() => {
@@ -126,7 +146,7 @@ describe('MCP Server', () => {
           },
         })
 
-        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' }, undefined, undefined)
+        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' }, undefined, undefined, undefined)
         expect(response.jsonrpc).toBe('2.0')
         expect(response.id).toBe(4)
         expect(response.result).toBeDefined()
@@ -140,7 +160,7 @@ describe('MCP Server', () => {
           params: { name: 'search_plugins' },
         })
 
-        expect(executeTool).toHaveBeenCalledWith('search_plugins', {}, undefined, undefined)
+        expect(executeTool).toHaveBeenCalledWith('search_plugins', {}, undefined, undefined, undefined)
       })
     })
 
@@ -294,7 +314,7 @@ describe('MCP Server', () => {
       it('should call search_plugins tool', async () => {
         const result = await handleSimpleRequest('search', { query: 'test' })
 
-        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' }, undefined, undefined)
+        expect(executeTool).toHaveBeenCalledWith('search_plugins', { query: 'test' }, undefined, undefined, undefined)
         expect(result.success).toBe(true)
         expect(result.data).toBeDefined()
       })
@@ -304,7 +324,7 @@ describe('MCP Server', () => {
       it('should call get_plugin_content tool', async () => {
         const result = await handleSimpleRequest('get', { pluginId: 'test-skill' })
 
-        expect(executeTool).toHaveBeenCalledWith('get_plugin_content', { pluginId: 'test-skill' }, undefined, undefined)
+        expect(executeTool).toHaveBeenCalledWith('get_plugin_content', { pluginId: 'test-skill' }, undefined, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -313,7 +333,7 @@ describe('MCP Server', () => {
       it('should call list_plugins tool', async () => {
         const result = await handleSimpleRequest('list', {})
 
-        expect(executeTool).toHaveBeenCalledWith('list_plugins', {}, undefined, undefined)
+        expect(executeTool).toHaveBeenCalledWith('list_plugins', {}, undefined, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -342,7 +362,7 @@ describe('MCP Server', () => {
           type: 'skill',
           name: 'New Skill',
           content: '# Content',
-        }, undefined, undefined)
+        }, undefined, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -357,7 +377,7 @@ describe('MCP Server', () => {
         expect(executeTool).toHaveBeenCalledWith('update_plugin', {
           id: 'test-skill',
           name: 'Updated Name',
-        }, undefined, undefined)
+        }, undefined, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })
@@ -366,7 +386,7 @@ describe('MCP Server', () => {
       it('should call delete_plugin tool', async () => {
         const result = await handleSimpleRequest('delete', { id: 'test-skill' })
 
-        expect(executeTool).toHaveBeenCalledWith('delete_plugin', { id: 'test-skill' }, undefined, undefined)
+        expect(executeTool).toHaveBeenCalledWith('delete_plugin', { id: 'test-skill' }, undefined, undefined, undefined)
         expect(result.success).toBe(true)
       })
     })

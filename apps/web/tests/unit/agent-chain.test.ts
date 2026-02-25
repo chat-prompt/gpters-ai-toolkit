@@ -21,7 +21,7 @@ import {
   getAvailableTemplates,
   renderAsMermaid,
   renderAsJson,
-  renderAsMarkdown,
+  renderChainAsMarkdown,
   type ChainDefinition,
   type StepCondition,
   type InputMapping,
@@ -678,7 +678,7 @@ describe('Agent Chain', () => {
     })
   })
 
-  describe('renderAsMarkdown', () => {
+  describe('renderChainAsMarkdown', () => {
     it('should render chain as Markdown', () => {
       const chain = ChainBuilder.create('md-test')
         .name('Markdown Chain')
@@ -692,7 +692,7 @@ describe('Agent Chain', () => {
         .addAgent('step2', { id: 'a2', name: 'Writer', type: 'writer' })
         .build()
 
-      const md = renderAsMarkdown(chain)
+      const md = renderChainAsMarkdown(chain)
 
       expect(md).toContain('# Markdown Chain')
       expect(md).toContain('A chain rendered as markdown')

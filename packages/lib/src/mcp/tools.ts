@@ -118,27 +118,32 @@ const ALL_TOOLS: McpTool[] = [
       required: ['pluginId'],
     },
   },
-  //   {
-  //     name: 'list_plugins',
-  //     description: `카탈로그의 모든 플러그인 목록을 조회합니다.
-  // 카테고리나 팀 태그로 필터링할 수 있습니다.
-  // 전체 목록을 확인하거나 특정 유형의 플러그인을 찾을 때 유용합니다.`,
-  //     inputSchema: {
-  //       type: 'object',
-  //       properties: {
-  //         category: {
-  //           type: 'string',
-  //           enum: ['skill', 'agent', 'command', 'guide', 'all'],
-  //           description: '플러그인 카테고리 필터 (기본: all)',
-  //         },
-  //         teamTag: {
-  //           type: 'string',
-  //           enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-  //           description: '팀 태그 필터 (선택)',
-  //         },
-  //       },
-  //     },
-  //   },
+  {
+    name: 'list_plugins',
+    description: `카탈로그의 모든 플러그인 목록을 조회합니다.
+카테고리나 팀 태그로 필터링할 수 있습니다.
+전체 목록을 확인하거나 특정 유형의 플러그인을 찾을 때 유용합니다.
+
+권한에 따라 볼 수 있는 플러그인이 달라집니다:
+- 일반 사용자: 자기 조직 + public + legacy 플러그인
+- 비인증 사용자: public + legacy 플러그인만
+- super_admin: 모든 플러그인`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['skill', 'agent', 'command', 'guide', 'all'],
+          description: '플러그인 카테고리 필터 (기본: all)',
+        },
+        teamTag: {
+          type: 'string',
+          enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
+          description: '팀 태그 필터 (선택)',
+        },
+      },
+    },
+  },
   //   {
   //     name: 'get_plugins_by_category',
   //     description: `특정 카테고리의 플러그인 목록을 조회합니다.
