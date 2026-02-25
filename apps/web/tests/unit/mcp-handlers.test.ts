@@ -34,7 +34,6 @@ const { mockDb, mockCatalogItems, mockUsers, mockSuggestions } = vi.hoisted(() =
     likes: 'likes',
     orgId: 'orgId',
     visibility: 'visibility',
-    sharedWithOrgs: 'sharedWithOrgs',
     forkCount: 'forkCount',
     embedding: 'embedding',
   }
@@ -284,6 +283,8 @@ describe('MCP Handlers', () => {
         version: '1.0.0',
         status: 'published',
         changelog: 'Initial release',
+        orgId: null,
+        visibility: 'public',
       }
 
       const mockChain = createMockChain([mockPlugin])
@@ -329,6 +330,8 @@ describe('MCP Handlers', () => {
         version: null,
         status: null,
         changelog: null,
+        orgId: null,
+        visibility: null,
       }
 
       const mockChain = createMockChain([mockPlugin])

@@ -39,7 +39,7 @@ export const orgRoleEnum = pgEnum('org_role', ['org_admin', 'org_editor', 'org_v
 /**
  * Visibility enum for catalog items
  */
-export const visibilityEnum = pgEnum('visibility', ['private', 'shared', 'public'])
+export const visibilityEnum = pgEnum('visibility', ['private', 'public'])
 
 /**
  * Invitation status enum for organization invitations
@@ -97,14 +97,12 @@ export const catalogItems = pgTable('catalog_items', {
   // Multi-tenancy & collaboration fields
   /** Organization owner (nullable for migration compatibility) */
   orgId: text('org_id').references(() => organizations.id),
-  /** Visibility level (private, shared with org, or public) */
+  /** Visibility level (private or public) */
   visibility: visibilityEnum('visibility').default('private'),
   /** Self-reference to original item if this is a fork (stored as text to avoid circular type dependency) */
   forkedFrom: text('forked_from'),
   /** Count of times this item has been forked */
   forkCount: integer('fork_count').notNull().default(0),
-  /** Array of organization IDs this item is shared with */
-  sharedWithOrgs: jsonb('shared_with_orgs').$type<string[]>().default([]),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

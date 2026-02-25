@@ -5,7 +5,7 @@
  * POST: Create a new catalog item (requires authentication)
  */
 import { NextRequest } from 'next/server'
-import { eq, and, or, isNull, sql } from 'drizzle-orm'
+import { eq, and, or, isNull } from 'drizzle-orm'
 import { db, catalogItems, users, organizations } from '@/lib/db'
 import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
@@ -75,7 +75,6 @@ export async function GET(request: NextRequest) {
         visibility: catalogItems.visibility,
         forkedFrom: catalogItems.forkedFrom,
         forkCount: catalogItems.forkCount,
-        sharedWithOrgs: catalogItems.sharedWithOrgs,
         createdAt: catalogItems.createdAt,
         updatedAt: catalogItems.updatedAt,
       })
@@ -103,10 +102,6 @@ export async function GET(request: NextRequest) {
       ? or(
           eq(catalogItems.orgId, currentOrgId),
           eq(catalogItems.visibility, 'public'),
-          and(
-            eq(catalogItems.visibility, 'shared'),
-            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
-          ),
           isNull(catalogItems.orgId)
         )
       : or(
@@ -206,8 +201,7 @@ export async function POST(request: NextRequest) {
     hookTimeout: hookTimeout || null,
     hookBlocking: hookBlocking ?? true,
     orgId: currentOrgId || null,
-    visibility: visibility || (currentOrgId ? 'shared' : 'private'),
-    sharedWithOrgs: currentOrgId ? [currentOrgId] : [],
+    visibility: visibility || (currentOrgId ? 'public' : 'private'),
     forkCount: 0,
   }
 

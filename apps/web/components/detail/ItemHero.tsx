@@ -48,7 +48,7 @@ interface ItemHeroProps {
   /** Organization ID */
   orgId?: string | null
   /** Item visibility level */
-  visibility?: 'private' | 'shared' | 'public' | null
+  visibility?: 'private' | 'public' | null
   /** Current user's organization ID */
   currentOrgId?: string | null
 }

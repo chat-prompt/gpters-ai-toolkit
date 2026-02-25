@@ -105,10 +105,6 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
       ? or(
           eq(catalogItems.orgId, currentOrgId),
           eq(catalogItems.visibility, 'public'),
-          and(
-            eq(catalogItems.visibility, 'shared'),
-            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
-          ),
           isNull(catalogItems.orgId)
         )
       : or(
@@ -247,10 +243,6 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
       ? or(
           eq(catalogItems.orgId, currentOrgId),
           eq(catalogItems.visibility, 'public'),
-          and(
-            eq(catalogItems.visibility, 'shared'),
-            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
-          ),
           isNull(catalogItems.orgId)
         )
       : or(
@@ -342,10 +334,6 @@ export async function getFTSSearchSuggestions(
       ? or(
           eq(catalogItems.orgId, currentOrgId),
           eq(catalogItems.visibility, 'public'),
-          and(
-            eq(catalogItems.visibility, 'shared'),
-            sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([currentOrgId])}::jsonb`
-          ),
           isNull(catalogItems.orgId)
         )
       : or(

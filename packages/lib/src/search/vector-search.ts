@@ -71,10 +71,6 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
       or(
         eq(catalogItems.orgId, orgId),
         eq(catalogItems.visibility, 'public'),
-        and(
-          eq(catalogItems.visibility, 'shared'),
-          sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb`
-        ),
         sql`${catalogItems.orgId} IS NULL`
       )!
     )

@@ -42,7 +42,7 @@ export default function NewCatalogItem() {
 
   // Organization & Visibility state
   const [orgId, setOrgId] = useState<string>('')
-  const [visibility, setVisibility] = useState<'private' | 'shared' | 'public'>('private')
+  const [visibility, setVisibility] = useState<'private' | 'public'>('private')
   const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
 
   // Marketplace state
@@ -368,7 +368,7 @@ export default function NewCatalogItem() {
                   Visibility
                 </label>
                 <div className="flex gap-3">
-                  {(['private', 'shared', 'public'] as const).map((v) => (
+                  {(['private', 'public'] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
@@ -379,16 +379,14 @@ export default function NewCatalogItem() {
                           : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
                       }`}
                     >
-                      {v === 'private' ? '🔒 Private' : v === 'shared' ? '👥 Shared' : '🌍 Public'}
+                      {v === 'private' ? '🔒 Private' : '🌍 Public'}
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-[var(--text-muted)] mt-2">
                   {visibility === 'private'
                     ? 'Only visible to your organization members'
-                    : visibility === 'shared'
-                      ? 'Visible to selected organizations'
-                      : 'Visible to all authenticated users'}
+                    : 'Visible to all authenticated users'}
                 </p>
               </div>
 

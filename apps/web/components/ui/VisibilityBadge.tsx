@@ -1,7 +1,7 @@
 /**
  * Visibility badge component for displaying item visibility level
  *
- * Shows visibility status (private/shared/public) with appropriate
+ * Shows visibility status (private/public) with appropriate
  * icon and color coding for catalog items.
  */
 
@@ -10,7 +10,7 @@
  */
 interface VisibilityBadgeProps {
   /** Visibility level (null for legacy items) */
-  visibility: 'private' | 'shared' | 'public' | null
+  visibility: 'private' | 'public' | null
   /** Badge size variant */
   size?: 'sm' | 'md'
   /** Additional CSS classes */
@@ -22,16 +22,8 @@ interface VisibilityBadgeProps {
  *
  * Shows color-coded badges with icons for different visibility levels:
  * - Private: Gray with lock icon
- * - Shared: Blue with people icon
  * - Public: Green with globe icon
  * - Legacy (null): No badge rendered
- *
- * @example
- * ```tsx
- * <VisibilityBadge visibility="private" size="sm" />
- * <VisibilityBadge visibility="shared" size="md" />
- * <VisibilityBadge visibility="public" />
- * ```
  */
 export function VisibilityBadge({ visibility, size = 'sm', className = '' }: VisibilityBadgeProps) {
   const sizeClasses = size === 'md'
@@ -48,15 +40,6 @@ export function VisibilityBadge({ visibility, size = 'sm', className = '' }: Vis
     return (
       <span className={`${sizeClasses} rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/30 font-medium tracking-wide flex items-center gap-1.5 ${className}`}>
         🔒 Private
-      </span>
-    )
-  }
-
-  // Shared visibility
-  if (visibility === 'shared') {
-    return (
-      <span className={`${sizeClasses} rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium tracking-wide flex items-center gap-1.5 ${className}`}>
-        👥 Shared
       </span>
     )
   }

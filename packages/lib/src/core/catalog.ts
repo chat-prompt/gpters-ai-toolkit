@@ -48,7 +48,6 @@ const summaryColumns = {
   visibility: catalogItems.visibility,
   forkedFrom: catalogItems.forkedFrom,
   forkCount: catalogItems.forkCount,
-  sharedWithOrgs: catalogItems.sharedWithOrgs,
   createdAt: catalogItems.createdAt,
   updatedAt: catalogItems.updatedAt,
 } as const
@@ -83,10 +82,9 @@ type SummaryRecord = {
   version: string | null
   status: string | null
   orgId: string | null
-  visibility: 'private' | 'shared' | 'public' | null
+  visibility: 'private' | 'public' | null
   forkedFrom: string | null
   forkCount: number
-  sharedWithOrgs: string[] | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -132,7 +130,6 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     visibility: (record.visibility as CatalogItemSummary['visibility']) ?? undefined,
     forkedFrom: record.forkedFrom ?? undefined,
     forkCount: record.forkCount,
-    sharedWithOrgs: record.sharedWithOrgs ?? undefined,
     createdAt: record.createdAt?.toISOString(),
     updatedAt: record.updatedAt?.toISOString(),
   }
@@ -177,7 +174,6 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     visibility: (record.visibility as CatalogItem['visibility']) ?? undefined,
     forkedFrom: record.forkedFrom ?? undefined,
     forkCount: record.forkCount,
-    sharedWithOrgs: record.sharedWithOrgs ?? undefined,
     createdAt: record.createdAt?.toISOString(),
     updatedAt: record.updatedAt?.toISOString(),
   }

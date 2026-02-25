@@ -78,14 +78,10 @@ function buildVisibilityCondition(
   orgId?: string
 ): SQL | undefined {
   if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
-    // Regular users: own org + public + shared with their org + legacy
+    // Regular users: own org + public + legacy
     return or(
       eq(catalogItems.orgId, orgId),
       eq(catalogItems.visibility, 'public'),
-      and(
-        eq(catalogItems.visibility, 'shared'),
-        sql`${catalogItems.sharedWithOrgs}::jsonb @> ${JSON.stringify([orgId])}::jsonb`
-      ),
       sql`${catalogItems.orgId} IS NULL`
     )
   } else if (!userId) {
@@ -179,7 +175,7 @@ function generateFilesUsageHint(files: PluginFileWithType[]): string {
 /**
  * Search plugins by keyword with organization-based filtering
  * Searches across name, description, and tags
- * Respects org visibility: private (own org), shared (allowed orgs), public (all), legacy (orgId=null)
+ * Respects org visibility: private (own org), public (all), legacy (orgId=null)
  * 
  * @param input - Search parameters
  * @param userId - Authenticated user ID (optional)
@@ -300,7 +296,6 @@ export async function getPluginContent(
       changelog: catalogItems.changelog,
       orgId: catalogItems.orgId,
       visibility: catalogItems.visibility,
-      sharedWithOrgs: catalogItems.sharedWithOrgs,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
@@ -320,20 +315,8 @@ export async function getPluginContent(
       // Public items are accessible to all
       if (item.visibility !== 'public') {
         // Private items require matching orgId
-        if (item.visibility === 'private') {
-          if (!orgId || item.orgId !== orgId) {
-            return null
-          }
-        }
-        // Shared items require user's org to be in sharedWithOrgs
-        if (item.visibility === 'shared') {
-          if (!orgId) {
-            return null
-          }
-          const sharedOrgs = (item.sharedWithOrgs as string[]) || []
-          if (!sharedOrgs.includes(orgId)) {
-            return null
-          }
+        if (!orgId || item.orgId !== orgId) {
+          return null
         }
       }
     }
@@ -829,8 +812,7 @@ export async function deploySkill(
       dependencies: dependencies || [],
       authorId: authorId || null,
       orgId: orgId || null,
-      visibility: orgId ? 'shared' : 'private',
-      sharedWithOrgs: orgId ? [orgId] : [],
+      visibility: orgId ? 'public' : 'private',
       forkCount: 0,
       createdAt: now,
       updatedAt: now,

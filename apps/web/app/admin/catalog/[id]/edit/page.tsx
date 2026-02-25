@@ -58,7 +58,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     status: 'published' as typeof STATUSES[number],
     changelog: '',
     orgId: '',
-    visibility: 'private' as 'private' | 'shared' | 'public',
+    visibility: 'private' as 'private' | 'public',
   })
 
   const fetchItem = useCallback(async () => {
@@ -319,7 +319,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
               Visibility
             </label>
             <div className="flex gap-3">
-              {(['private', 'shared', 'public'] as const).map((v) => (
+              {(['private', 'public'] as const).map((v) => (
                 <button
                   key={v}
                   type="button"
@@ -330,16 +330,14 @@ export default function EditCatalogItem({ params }: EditPageProps) {
                       : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
                   }`}
                 >
-                  {v === 'private' ? '🔒 Private' : v === 'shared' ? '👥 Shared' : '🌍 Public'}
+                  {v === 'private' ? '🔒 Private' : '🌍 Public'}
                 </button>
               ))}
             </div>
             <p className="text-xs text-[var(--text-muted)] mt-2">
               {formData.visibility === 'private'
                 ? 'Only visible to your organization members'
-                : formData.visibility === 'shared'
-                  ? 'Visible to selected organizations'
-                  : 'Visible to all authenticated users'}
+                : 'Visible to all authenticated users'}
             </p>
           </div>
 

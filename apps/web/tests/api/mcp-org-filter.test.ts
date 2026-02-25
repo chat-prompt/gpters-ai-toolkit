@@ -51,7 +51,6 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-private-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-private-2'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-public-1'))
-    await db.delete(catalogItems).where(eq(catalogItems.id, 'test-shared-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-legacy-1'))
 
     await db.delete(orgMemberships).where(eq(orgMemberships.userId, testUserId1))
@@ -69,7 +68,6 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-private-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-private-2'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-public-1'))
-    await db.delete(catalogItems).where(eq(catalogItems.id, 'test-shared-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-legacy-1'))
   })
 
@@ -85,7 +83,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
           mcpEnabled: true,
           orgId: testOrgId1,
           visibility: 'private',
-          sharedWithOrgs: [],
+
         },
         {
           id: 'test-private-2',
@@ -96,7 +94,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
           mcpEnabled: true,
           orgId: testOrgId2,
           visibility: 'private',
-          sharedWithOrgs: [],
+
         },
       ])
 
@@ -138,31 +136,6 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
       expect(resultOrg2.plugins.some((p) => p.id === 'test-public-1')).toBe(true)
     })
 
-    it('should show shared items to allowed organizations', async () => {
-      await db.insert(catalogItems).values({
-        id: 'test-shared-1',
-        type: 'skill',
-        name: 'Shared Skill',
-        description: 'Shared with org 2',
-        content: 'test',
-        mcpEnabled: true,
-        orgId: testOrgId1,
-        visibility: 'shared',
-        sharedWithOrgs: [testOrgId2],
-      })
-
-      const { searchPlugins } = await import('@gpters/lib/mcp')
-
-      const resultOrg2 = await searchPlugins(
-        { query: 'Skill', limit: 10 },
-        testUserId2,
-        'viewer',
-        testOrgId2
-      )
-
-      expect(resultOrg2.plugins.some((p) => p.id === 'test-shared-1')).toBe(true)
-    })
-
     it('should show legacy items (orgId=null) to all users', async () => {
       await db.insert(catalogItems).values({
         id: 'test-legacy-1',
@@ -199,7 +172,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
           mcpEnabled: true,
           orgId: testOrgId1,
           visibility: 'private',
-          sharedWithOrgs: [],
+
         },
         {
           id: 'test-private-2',
@@ -210,7 +183,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
           mcpEnabled: true,
           orgId: testOrgId2,
           visibility: 'private',
-          sharedWithOrgs: [],
+
         },
       ])
 
@@ -238,7 +211,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
           mcpEnabled: true,
           orgId: testOrgId1,
           visibility: 'private',
-          sharedWithOrgs: [],
+
         },
         {
           id: 'test-public-1',
@@ -249,7 +222,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
           mcpEnabled: true,
           orgId: testOrgId1,
           visibility: 'public',
-          sharedWithOrgs: [],
+
         },
       ])
 
@@ -314,32 +287,6 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
       expect(result?.id).toBe('test-public-1')
     })
 
-    it('should allow access to shared items for allowed orgs', async () => {
-      await db.insert(catalogItems).values({
-        id: 'test-shared-1',
-        type: 'skill',
-        name: 'Shared Skill',
-        description: 'Shared with org 2',
-        content: 'test content',
-        mcpEnabled: true,
-        orgId: testOrgId1,
-        visibility: 'shared',
-        sharedWithOrgs: [testOrgId2],
-      })
-
-      const { getPluginContent } = await import('@/lib/mcp/handlers')
-
-      const result = await getPluginContent(
-        { pluginId: 'test-shared-1' },
-        testUserId2,
-        'viewer',
-        testOrgId2
-      )
-
-      expect(result).not.toBeNull()
-      expect(result?.id).toBe('test-shared-1')
-    })
-
     it('should allow super_admin to access all items', async () => {
       await db.insert(catalogItems).values({
         id: 'test-private-1',
@@ -392,7 +339,7 @@ describe.skipIf(!hasDatabase)('MCP Organization Access Control', () => {
         .limit(1)
 
       expect(deployed.orgId).toBe(testOrgId1)
-      expect(deployed.visibility).toBe('private')
+      expect(deployed.visibility).toBe('public')
 
       await db.delete(catalogItems).where(eq(catalogItems.id, result.id))
     })

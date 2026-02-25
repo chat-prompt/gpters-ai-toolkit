@@ -97,10 +97,9 @@ export interface CatalogItem {
   // Multi-tenancy & collaboration fields
   orgId?: string // Organization owner
   orgName?: string // Organization name (from JOIN)
-  visibility?: 'private' | 'shared' | 'public' // Visibility level
+  visibility?: 'private' | 'public' // Visibility level
   forkedFrom?: string // Original item if this is a fork
   forkCount?: number // Number of times forked
-  sharedWithOrgs?: string[] // Organization IDs shared with
 
   createdAt?: string
   updatedAt?: string

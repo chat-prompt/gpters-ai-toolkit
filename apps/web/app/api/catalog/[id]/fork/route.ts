@@ -25,7 +25,6 @@ interface RouteParams {
  * Creates a fork (copy) of a catalog item in the current user's organization.
  * Access is granted based on item visibility:
  * - Public items: Anyone can fork
- * - Shared items: Only shared organizations can fork
  * - Private items: Only same organization can fork
  * - Legacy items (orgId = null): Anyone can fork
  * - Super admins: Can fork any item
@@ -62,17 +61,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!isSuperAdminUser) {
       if (sourceOrgId !== null) {
         if (sourceVisibility !== 'public') {
-          if (sourceVisibility === 'private' && sourceOrgId !== currentOrgId) {
+          if (sourceOrgId !== currentOrgId) {
             return ApiErrors.notFound('Catalog item')
-          }
-
-          if (sourceVisibility === 'shared') {
-            const sharedWithOrgs = sourceItem.sharedWithOrgs as string[] | null
-            const isSharedWithCurrentOrg = sharedWithOrgs && currentOrgId && sharedWithOrgs.includes(currentOrgId)
-            
-            if (sourceOrgId !== currentOrgId && !isSharedWithCurrentOrg) {
-              return ApiErrors.notFound('Catalog item')
-            }
           }
         }
       }
@@ -111,7 +101,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       forkedFrom: sourceItem.id,
       forkCount: 0,
       status: 'draft' as const,
-      sharedWithOrgs: [],
     }
 
     await db.insert(catalogItems).values(newItem)

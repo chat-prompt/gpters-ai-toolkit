@@ -66,15 +66,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return response
     }
 
-    if (itemVisibility === 'shared' && currentOrgId) {
-      const sharedWithOrgs = item.sharedWithOrgs as string[] | null
-      if (sharedWithOrgs && sharedWithOrgs.includes(currentOrgId)) {
-        const response = cachedJsonResponse(item, 'catalogItem', request)
-        addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
-        return response
-      }
-    }
-
     return ApiErrors.notFound('Catalog item')
   } catch (error) {
     log.error('Failed to fetch catalog item', error)

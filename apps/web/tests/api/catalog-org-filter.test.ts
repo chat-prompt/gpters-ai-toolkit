@@ -84,7 +84,6 @@ describe.skipIf(!hasDatabase)('Catalog API - Organization Filtering', () => {
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-org-private-1'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-org-private-2'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-org-public'))
-    await db.delete(catalogItems).where(eq(catalogItems.id, 'test-org-shared'))
     await db.delete(catalogItems).where(eq(catalogItems.id, 'test-org-legacy'))
     await db.delete(orgMemberships).where(eq(orgMemberships.userId, TEST_USER_ORG_1))
     await db.delete(orgMemberships).where(eq(orgMemberships.userId, TEST_USER_ORG_2))
@@ -130,17 +129,6 @@ describe.skipIf(!hasDatabase)('Catalog API - Organization Filtering', () => {
           visibility: 'public',
         },
         {
-          id: 'test-org-shared',
-          type: 'skill',
-          name: 'Shared Skill',
-          content: 'Test content',
-          description: '',
-          authorId: TEST_USER_ORG_1,
-          orgId: TEST_ORG_1,
-          visibility: 'shared',
-          sharedWithOrgs: [TEST_ORG_2],
-        },
-        {
           id: 'test-org-legacy',
           type: 'skill',
           name: 'Legacy Skill',
@@ -172,14 +160,6 @@ describe.skipIf(!hasDatabase)('Catalog API - Organization Filtering', () => {
       expect(items.length).toBeGreaterThanOrEqual(1)
       const publicItem = items.find(item => item.id === 'test-org-public')
       expect(publicItem).toBeDefined()
-    })
-
-    it('should show shared items to shared org members', async () => {
-      const items = await db.select().from(catalogItems)
-      const sharedItem = items.find(item => item.id === 'test-org-shared')
-
-      expect(sharedItem).toBeDefined()
-      expect(sharedItem?.sharedWithOrgs).toContain(TEST_ORG_2)
     })
 
     it('should show legacy items (orgId = null) to all users', async () => {
@@ -227,16 +207,6 @@ describe.skipIf(!hasDatabase)('Catalog API - Organization Filtering', () => {
 
       expect(item).toBeDefined()
       expect(item.visibility).toBe('public')
-    })
-
-    it('should allow access to shared items if org is in sharedWithOrgs', async () => {
-      const [item] = await db
-        .select()
-        .from(catalogItems)
-        .where(eq(catalogItems.id, 'test-org-shared'))
-
-      expect(item).toBeDefined()
-      expect(item.sharedWithOrgs).toContain(TEST_ORG_2)
     })
 
     it('should allow access to legacy items (orgId = null)', async () => {
@@ -371,15 +341,6 @@ describe.skipIf(!hasDatabase)('Catalog API - Organization Filtering', () => {
       expect(item.visibility).toBe('public')
     })
 
-    it('should respect shared visibility (sharedWithOrgs)', async () => {
-      const [item] = await db
-        .select()
-        .from(catalogItems)
-        .where(eq(catalogItems.id, 'test-org-shared'))
-
-      expect(item.visibility).toBe('shared')
-      expect(item.sharedWithOrgs).toBeInstanceOf(Array)
-    })
   })
 
   describe('Backward compatibility', () => {

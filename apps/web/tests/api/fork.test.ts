@@ -120,18 +120,6 @@ describe.skipIf(!hasDatabase)('Fork API', () => {
           forkCount: 0,
         },
         {
-          id: 'test-fork-shared-item',
-          type: 'skill',
-          name: 'Shared Fork Test Skill',
-          content: 'Test shared content',
-          description: 'A shared item',
-          authorId: TEST_USER_ORG_1,
-          orgId: TEST_ORG_1,
-          visibility: 'shared',
-          sharedWithOrgs: [TEST_ORG_2],
-          forkCount: 0,
-        },
-        {
           id: 'test-fork-legacy',
           type: 'skill',
           name: 'Legacy Fork Test Skill',
@@ -246,40 +234,6 @@ describe.skipIf(!hasDatabase)('Fork API', () => {
       expect(forkedItem.forkCount).toBe(0)
       expect(forkedItem.status).toBe('draft')
       expect(forkedItem.authorId).toBe(TEST_USER_ORG_2)
-    })
-
-    it('should allow forking shared items by shared org members', async () => {
-      const [sharedItem] = await db
-        .select()
-        .from(catalogItems)
-        .where(eq(catalogItems.id, 'test-fork-shared-item'))
-
-      expect(sharedItem).toBeDefined()
-      expect(sharedItem.visibility).toBe('shared')
-      expect(sharedItem.sharedWithOrgs).toContain(TEST_ORG_2)
-
-      const forkedItemId = crypto.randomUUID()
-      await db.insert(catalogItems).values({
-        id: forkedItemId,
-        type: sharedItem.type,
-        name: sharedItem.name,
-        content: sharedItem.content,
-        description: sharedItem.description,
-        authorId: TEST_USER_ORG_2,
-        orgId: TEST_ORG_2,
-        visibility: 'private',
-        forkedFrom: sharedItem.id,
-        forkCount: 0,
-        status: 'draft',
-      })
-
-      const [forkedItem] = await db
-        .select()
-        .from(catalogItems)
-        .where(eq(catalogItems.id, forkedItemId))
-
-      expect(forkedItem).toBeDefined()
-      expect(forkedItem.forkedFrom).toBe('test-fork-shared-item')
     })
 
     it('should allow forking legacy items (orgId = null)', async () => {

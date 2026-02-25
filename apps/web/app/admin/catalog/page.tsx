@@ -41,7 +41,7 @@ interface CatalogItem {
   status: 'draft' | 'published' | null
   version: string | null
   orgId: string | null
-  visibility: 'private' | 'shared' | 'public' | null
+  visibility: 'private' | 'public' | null
   createdAt: string
   updatedAt: string
 }
