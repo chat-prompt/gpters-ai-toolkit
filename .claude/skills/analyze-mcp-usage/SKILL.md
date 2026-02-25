@@ -1,8 +1,3 @@
----
-name: analyze-mcp-usage
-description: "MCP 플러그인 사용 행태 분석 리포트를 생성합니다"
----
-
 # MCP 사용 행태 분석
 
 `mcp_audit_logs` 데이터를 기반으로 MCP 플러그인 사용 행태 분석 리포트를 생성합니다.
@@ -12,7 +7,7 @@ description: "MCP 플러그인 사용 행태 분석 리포트를 생성합니다
 아래 명령어를 Bash로 실행하고, 출력 결과를 사용자에게 그대로 전달하세요.
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/analyze-mcp-usage.mjs
+node .claude/skills/analyze-mcp-usage/analyze-mcp-usage.mjs
 ```
 
 ### 옵션
@@ -21,7 +16,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/analyze-mcp-usage.mjs
 
 ```bash
 # 최근 7일만 분석
-node ${CLAUDE_PLUGIN_ROOT}/scripts/analyze-mcp-usage.mjs --days=7
+node .claude/skills/analyze-mcp-usage/analyze-mcp-usage.mjs --days=7
 ```
 
 ## 분석 항목

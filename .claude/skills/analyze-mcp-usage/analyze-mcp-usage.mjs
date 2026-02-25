@@ -23,7 +23,8 @@ const TARGETS = {
 
   // 품질 지표
   errorRatePct: 1.0,        // 에러율 상한 (%)
-  avgResponseMs: 500,       // 평균 응답시간 상한 (ms)
+  avgResponseMs: 500,       // 전체 평균 응답시간 상한 (ms)
+  searchResponseMs: 1500,   // 검색 평균 응답시간 상한 (ms) — Go/No-go 가산 조건
 }
 // ──────────────────────────────────────────────────────────
 
@@ -139,7 +140,11 @@ async function main() {
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content' AND referral_source = 'search')::int AS view_from_search,
       COUNT(*) FILTER (WHERE tool = 'deploy_skill')::int AS deploy_count,
       COUNT(*) FILTER (WHERE response_status = 'error')::int AS error_count,
-      ROUND(AVG(response_time))::int AS avg_response_time
+      ROUND(AVG(response_time))::int AS avg_response_time,
+      ROUND(AVG(response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS avg_search_time,
+      ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p50_search_time,
+      ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p95_search_time,
+      ROUND(AVG(response_time) FILTER (WHERE tool NOT IN ('search_plugins', 'semantic_search')))::int AS avg_other_time
     FROM mcp_audit_logs
     WHERE created_at >= NOW() - make_interval(days => ${days})
   `
@@ -156,8 +161,14 @@ async function main() {
   console.log(`  스킬 조회:       ${viewCount.toLocaleString()} (검색경유 ${viewFromSearch} / 직접 ${viewCount - viewFromSearch})`)
   console.log(`  배포:            ${summary.deploy_count.toLocaleString()}`)
   console.log(`  에러:            ${summary.error_count.toLocaleString()}`)
-  console.log(`  평균 응답시간:   ${summary.avg_response_time ?? '-'}ms`)
   console.log(`  검색→조회 전환율: ${conversionRate}%`)
+  console.log(``)
+  console.log(`  ⏱ 응답시간:`)
+  console.log(`     전체 평균:    ${summary.avg_response_time ?? '-'}ms`)
+  console.log(`     검색 평균:    ${summary.avg_search_time ?? '-'}ms`)
+  console.log(`     검색 P50:     ${summary.p50_search_time ?? '-'}ms`)
+  console.log(`     검색 P95:     ${summary.p95_search_time ?? '-'}ms`)
+  console.log(`     기타 평균:    ${summary.avg_other_time ?? '-'}ms`)
 
   // ── 2. 클라이언트별 비교 ──
   separator('2. 클라이언트별 비교')
@@ -458,27 +469,25 @@ async function main() {
   // ── 8. 세션 분석 ──
   separator('8. 세션 분석')
 
-  const sessionQuery = `
+  const [sess] = await sql`
     SELECT
-      COUNT(*) AS total_sessions,
-      COUNT(*) FILTER (WHERE status = 'finalized') AS finalized,
-      COUNT(*) FILTER (WHERE status = 'active') AS active,
-      AVG(duration_seconds) FILTER (WHERE status = 'finalized') AS avg_duration,
-      AVG(total_requests) AS avg_requests,
-      COUNT(*) FILTER (WHERE had_search) AS sessions_with_search,
-      COUNT(*) FILTER (WHERE had_view) AS sessions_with_view,
-      COUNT(*) FILTER (WHERE had_deployment) AS sessions_with_deploy,
+      COUNT(*)::int AS total_sessions,
+      COUNT(*) FILTER (WHERE status = 'finalized')::int AS finalized,
+      COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+      ROUND(AVG(duration_seconds) FILTER (WHERE status = 'finalized'))::int AS avg_duration,
+      ROUND(AVG(total_requests), 1) AS avg_requests,
+      COUNT(*) FILTER (WHERE had_search)::int AS sessions_with_search,
+      COUNT(*) FILTER (WHERE had_view)::int AS sessions_with_view,
+      COUNT(*) FILTER (WHERE had_deployment)::int AS sessions_with_deploy,
       AVG(CASE WHEN search_to_view_conversion THEN 1 ELSE 0 END) FILTER (WHERE status = 'finalized') AS s2v_rate,
       AVG(CASE WHEN view_to_deploy_conversion THEN 1 ELSE 0 END) FILTER (WHERE status = 'finalized') AS v2d_rate,
-      AVG(avg_response_time) FILTER (WHERE avg_response_time IS NOT NULL) AS avg_rt,
-      SUM(COALESCE((client_context->>'suggestionsShown')::int, 0)) AS total_suggestions_shown,
-      SUM(COALESCE((client_context->>'suggestionsUsed')::int, 0)) AS total_suggestions_used,
-      SUM(COALESCE((client_context->>'promptCount')::int, 0)) AS total_prompts
+      ROUND(AVG(avg_response_time) FILTER (WHERE avg_response_time IS NOT NULL))::int AS avg_rt,
+      SUM(COALESCE((client_context->>'suggestionsShown')::int, 0))::int AS total_suggestions_shown,
+      SUM(COALESCE((client_context->>'suggestionsUsed')::int, 0))::int AS total_suggestions_used,
+      SUM(COALESCE((client_context->>'promptCount')::int, 0))::int AS total_prompts
     FROM mcp_sessions
-    WHERE started_at >= $1
+    WHERE started_at >= NOW() - make_interval(days => ${days})
   `
-  const sessionResult = await pool.query(sessionQuery, [sinceDate])
-  const sess = sessionResult.rows[0] || {}
 
   printTable(
     ['지표', '값'],
@@ -508,17 +517,16 @@ async function main() {
   }
 
   // Session client distribution
-  const sessClientQuery = `
-    SELECT COALESCE(client_type, 'unknown') AS client, COUNT(*) AS cnt
-    FROM mcp_sessions WHERE started_at >= $1
+  const sessClientResult = await sql`
+    SELECT COALESCE(client_type, 'unknown') AS client, COUNT(*)::int AS cnt
+    FROM mcp_sessions WHERE started_at >= NOW() - make_interval(days => ${days})
     GROUP BY client_type ORDER BY cnt DESC
   `
-  const sessClientResult = await pool.query(sessClientQuery, [sinceDate])
-  if (sessClientResult.rows.length > 0) {
+  if (sessClientResult.length > 0) {
     console.log(`\n  📱 세션 클라이언트 분포:`)
     printTable(
       ['클라이언트', '세션 수'],
-      sessClientResult.rows.map((r) => [r.client, r.cnt]),
+      sessClientResult.map((r) => [r.client, r.cnt]),
       [1]
     )
   }
@@ -570,9 +578,16 @@ async function main() {
       higher: false,
     },
     {
-      name: '평균 응답시간',
+      name: '전체 평균 응답시간',
       actual: summary.avg_response_time ?? 0,
       target: TARGETS.avgResponseMs,
+      unit: 'ms',
+      higher: false,
+    },
+    {
+      name: '검색 평균 응답시간',
+      actual: summary.avg_search_time ?? 0,
+      target: TARGETS.searchResponseMs,
       unit: 'ms',
       higher: false,
     },
