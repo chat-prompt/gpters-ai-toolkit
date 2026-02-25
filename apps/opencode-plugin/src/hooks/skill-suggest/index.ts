@@ -48,12 +48,18 @@ function shouldSkipSearch(text: string): boolean {
 }
 
 /**
- * 메시지에서 검색용 쿼리를 추출 (첫 줄, MAX_QUERY_LENGTH 이내)
+ * 메시지에서 검색용 query와 context를 분리 추출
+ *
+ * 첫 줄은 query, 나머지는 userContext로 사용
  */
-function extractSearchQuery(text: string): string {
-  const firstLine = text.split("\n")[0].trim()
-  if (firstLine.length <= MAX_QUERY_LENGTH) return firstLine
-  return firstLine.slice(0, MAX_QUERY_LENGTH)
+function extractSearchParams(text: string): { query: string; context: string } {
+  const lines = text.split("\n")
+  const firstLine = lines[0].trim()
+  const query = firstLine.length <= MAX_QUERY_LENGTH
+    ? firstLine
+    : firstLine.slice(0, MAX_QUERY_LENGTH)
+  const context = lines.slice(1).join("\n").trim().slice(0, 200)
+  return { query, context }
 }
 
 function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
@@ -110,10 +116,10 @@ export function createSkillSuggestHook(ctx: PluginInput) {
           return
         }
 
-        const query = extractSearchQuery(messageText)
+        const { query, context } = extractSearchParams(messageText)
         logger.debug(`Searching skills for session ${sessionID}, query: "${query}"`)
 
-        const skills = await searchSkills(query, { category: "skill", limit: 3 })
+        const skills = await searchSkills(query, { category: "skill", limit: 3, userContext: context || undefined })
 
         const relevantSkills = skills.filter(
           (s) => s.relevanceScore != null && s.relevanceScore >= SCORE_THRESHOLD

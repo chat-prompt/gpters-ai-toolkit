@@ -107,9 +107,10 @@ export async function searchSkills(
   options: {
     category?: string
     limit?: number
+    userContext?: string
   } = {}
 ): Promise<SkillSummary[]> {
-  const { category = "skill", limit = 5 } = options
+  const { category = "skill", limit = 5, userContext } = options
   const accessToken = loadAccessToken()
 
   if (!accessToken) {
@@ -135,6 +136,7 @@ export async function searchSkills(
             category,
             limit,
             _source: "skill-suggest",
+            ...(userContext && { userContext }),
           },
         },
       }),
