@@ -644,6 +644,7 @@ export async function deploySkill(
     agentPermissionMode,
     agentSkills,
     status = 'published',
+    visibility: explicitVisibility,
     changelog: explicitChangelog,
     files,
     dependencies,
@@ -766,6 +767,7 @@ export async function deploySkill(
         files: resolvedFiles,
         dependencies: dependencies || [],
         mcpEnabled: status === 'published',
+        ...(explicitVisibility ? { visibility: explicitVisibility } : {}),
         updatedAt: now,
       })
       .where(eq(catalogItems.id, id))
@@ -812,7 +814,7 @@ export async function deploySkill(
       dependencies: dependencies || [],
       authorId: authorId || null,
       orgId: orgId || null,
-      visibility: orgId ? 'public' : 'private',
+      visibility: explicitVisibility || (orgId ? 'public' : 'private'),
       forkCount: 0,
       createdAt: now,
       updatedAt: now,
