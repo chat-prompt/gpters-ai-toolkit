@@ -11,5 +11,6 @@ echo $((COUNT + 1)) > "$COUNTER_FILE"
 cat <<'CONTEXT'
 <team-skills>새 작업/주제 변경 시 팀 스킬을 검색하세요. 기존 대화의 후속이면 무시하세요.
 검색: mcp__gpters-ai-toolkit__semantic_search(query="핵심 키워드 2~4단어", userContext="작업 맥락(있으면)", limit=3, _source="skill-suggest")
-규칙: relevanceScore 0.60 이상만 get_plugin_content로 로드. 미만이면 무시하고 진행.</team-skills>
+규칙: 0.60 이상→get_plugin_content로 로드, 미만→report_search_skip으로 스킵 보고.
+적용 후: report_skill_outcome으로 결과 보고. 상세 절차는 skill-suggest SKILL.md 참조.</team-skills>
 CONTEXT

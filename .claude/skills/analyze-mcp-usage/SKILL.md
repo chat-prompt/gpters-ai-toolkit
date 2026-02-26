@@ -26,6 +26,8 @@ node .claude/skills/analyze-mcp-usage/analyze-mcp-usage.mjs --days=7
 | 전체 요약 | 총 로그, 사용자 수, 검색/조회/배포, 전환율 |
 | 클라이언트별 비교 | Claude Code vs OpenCode — 요청/검색/조회/전환율 |
 | 인기 검색어 | 클라이언트별 TOP 15 |
+| 검색 스킵 분석 | report_search_skip 사유 분포, 스킵된 쿼리 TOP 15 |
+| 스킬 적용률 분석 | report_skill_outcome 적용/미적용 비율, 스킬별 목록, 미적용 사유 |
 | 인기 스킬 | 클라이언트별 TOP 10 조회 스킬 |
 | 시간대별 사용량 | KST 기준 클라이언트별 분포 |
 | 일별 추이 | 최근 14일 클라이언트별 |

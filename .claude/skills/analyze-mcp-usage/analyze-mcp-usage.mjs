@@ -21,6 +21,10 @@ const TARGETS = {
   viewToDeployPct: 10,      // 조회→배포 전환율 (%)
   zeroResultPct: 10,        // 검색 무결과율 상한 (%)
 
+  // 퍼널 추적 지표
+  skillApplyPct: 50,        // 스킬 적용률 (%)
+  searchSkipPct: 30,        // 검색 스킵율 상한 (%)
+
   // 품질 지표
   errorRatePct: 1.0,        // 에러율 상한 (%)
   avgResponseMs: 500,       // 전체 평균 응답시간 상한 (ms)
@@ -139,6 +143,9 @@ async function main() {
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content')::int AS view_count,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content' AND referral_source = 'search')::int AS view_from_search,
       COUNT(*) FILTER (WHERE tool = 'deploy_skill')::int AS deploy_count,
+      COUNT(*) FILTER (WHERE tool = 'report_search_skip')::int AS skip_count,
+      COUNT(*) FILTER (WHERE tool = 'report_skill_outcome')::int AS outcome_count,
+      COUNT(*) FILTER (WHERE tool = 'report_skill_outcome' AND (request_params->'params'->'arguments'->>'applied')::boolean = true)::int AS outcome_applied,
       COUNT(*) FILTER (WHERE response_status = 'error')::int AS error_count,
       ROUND(AVG(response_time))::int AS avg_response_time,
       ROUND(AVG(response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS avg_search_time,
@@ -160,6 +167,8 @@ async function main() {
   console.log(`  검색 요청:       ${searchCount.toLocaleString()}`)
   console.log(`  스킬 조회:       ${viewCount.toLocaleString()} (검색경유 ${viewFromSearch} / 직접 ${viewCount - viewFromSearch})`)
   console.log(`  배포:            ${summary.deploy_count.toLocaleString()}`)
+  console.log(`  검색 스킵 보고:  ${(summary.skip_count || 0).toLocaleString()}`)
+  console.log(`  스킬 결과 보고:  ${(summary.outcome_count || 0).toLocaleString()} (적용 ${summary.outcome_applied || 0} / 미적용 ${(summary.outcome_count || 0) - (summary.outcome_applied || 0)})`)
   console.log(`  에러:            ${summary.error_count.toLocaleString()}`)
   console.log(`  검색→조회 전환율: ${conversionRate}%`)
   console.log(``)
@@ -353,6 +362,153 @@ async function main() {
     )
   }
 
+  // ── 4-4. 검색 스킵 분석 (report_search_skip) ──
+  const skipData = await sql`
+    SELECT
+      request_params->'params'->'arguments'->>'reason' AS reason,
+      request_params->'params'->'arguments'->>'query' AS query,
+      request_params->'params'->'arguments'->'resultIds' AS result_ids,
+      COUNT(*)::int AS cnt
+    FROM mcp_audit_logs
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+      AND tool = 'report_search_skip'
+    GROUP BY reason, query, result_ids
+    ORDER BY cnt DESC
+  `
+
+  if (skipData.length > 0) {
+    console.log(`\n  [검색 스킵 분석 — report_search_skip]`)
+
+    // 스킵 사유 분포
+    const reasonMap = {}
+    let totalSkips = 0
+    for (const r of skipData) {
+      const reason = r.reason || '(미지정)'
+      reasonMap[reason] = (reasonMap[reason] || 0) + r.cnt
+      totalSkips += r.cnt
+    }
+
+    console.log(`\n  총 스킵 건수: ${totalSkips}`)
+    console.log(`\n  스킵 사유 분포:`)
+    printTable(
+      ['사유', '건수', '비율'],
+      Object.entries(reasonMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([reason, cnt]) => [
+          reason.length > 60 ? reason.slice(0, 57) + '...' : reason,
+          cnt,
+          `${(cnt / totalSkips * 100).toFixed(1)}%`,
+        ]),
+      [1]
+    )
+
+    // 스킵된 검색 쿼리 목록 TOP 15
+    const skipQueryMap = {}
+    for (const r of skipData) {
+      const q = r.query || '(미지정)'
+      skipQueryMap[q] = (skipQueryMap[q] || 0) + r.cnt
+    }
+
+    console.log(`\n  스킵된 검색 쿼리 TOP 15:`)
+    printTable(
+      ['#', '검색어', '스킵 횟수'],
+      Object.entries(skipQueryMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([query, cnt], i) => [
+          i + 1,
+          query.length > 50 ? query.slice(0, 47) + '...' : query,
+          cnt,
+        ]),
+      [0, 2]
+    )
+  }
+
+  // ── 4-5. 스킬 적용률 분석 (report_skill_outcome) ──
+  const outcomeData = await sql`
+    SELECT
+      request_params->'params'->'arguments'->>'skillId' AS skill_id,
+      (request_params->'params'->'arguments'->>'applied')::boolean AS applied,
+      request_params->'params'->'arguments'->>'summary' AS summary,
+      COUNT(*)::int AS cnt
+    FROM mcp_audit_logs
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+      AND tool = 'report_skill_outcome'
+    GROUP BY skill_id, applied, summary
+    ORDER BY cnt DESC
+  `
+
+  if (outcomeData.length > 0) {
+    console.log(`\n  [스킬 적용률 분석 — report_skill_outcome]`)
+
+    let totalOutcomes = 0
+    let appliedCount = 0
+    let notAppliedCount = 0
+    const appliedSkills = {}
+    const notAppliedSkills = {}
+
+    for (const r of outcomeData) {
+      totalOutcomes += r.cnt
+      const skillId = r.skill_id || '(미지정)'
+      if (r.applied) {
+        appliedCount += r.cnt
+        appliedSkills[skillId] = (appliedSkills[skillId] || 0) + r.cnt
+      } else {
+        notAppliedCount += r.cnt
+        notAppliedSkills[skillId] = (notAppliedSkills[skillId] || 0) + r.cnt
+      }
+    }
+
+    const appliedPct = totalOutcomes > 0 ? (appliedCount / totalOutcomes * 100).toFixed(1) : '0.0'
+    const notAppliedPct = totalOutcomes > 0 ? (notAppliedCount / totalOutcomes * 100).toFixed(1) : '0.0'
+
+    console.log(`\n  총 스킬 결과 보고: ${totalOutcomes}건`)
+    console.log(`  적용됨:   ${appliedCount}건 (${appliedPct}%)`)
+    console.log(`  미적용:   ${notAppliedCount}건 (${notAppliedPct}%)`)
+
+    // 적용된 스킬 목록
+    const appliedEntries = Object.entries(appliedSkills).sort((a, b) => b[1] - a[1])
+    if (appliedEntries.length > 0) {
+      console.log(`\n  적용된 스킬 목록:`)
+      printTable(
+        ['#', '스킬 ID', '적용 횟수'],
+        appliedEntries.map(([id, cnt], i) => [i + 1, id, cnt]),
+        [0, 2]
+      )
+    }
+
+    // 미적용된 스킬 목록
+    const notAppliedEntries = Object.entries(notAppliedSkills).sort((a, b) => b[1] - a[1])
+    if (notAppliedEntries.length > 0) {
+      console.log(`\n  미적용된 스킬 목록:`)
+      printTable(
+        ['#', '스킬 ID', '미적용 횟수'],
+        notAppliedEntries.map(([id, cnt], i) => [i + 1, id, cnt]),
+        [0, 2]
+      )
+    }
+
+    // 미적용 사유 요약
+    const notAppliedSummaries = outcomeData
+      .filter((r) => !r.applied && r.summary)
+      .sort((a, b) => b.cnt - a.cnt)
+      .slice(0, 10)
+
+    if (notAppliedSummaries.length > 0) {
+      console.log(`\n  미적용 사유 TOP 10:`)
+      printTable(
+        ['#', '스킬 ID', '사유', '건수'],
+        notAppliedSummaries.map((r, i) => [
+          i + 1,
+          r.skill_id || '(미지정)',
+          (r.summary || '').length > 50 ? r.summary.slice(0, 47) + '...' : (r.summary || ''),
+          r.cnt,
+        ]),
+        [0, 3]
+      )
+    }
+  }
+
   // ── 5. 인기 스킬 (클라이언트별 TOP 10) ──
   separator('5. 인기 스킬 (클라이언트별 TOP 10 조회)')
 
@@ -540,6 +696,10 @@ async function main() {
   const v2dPct = viewCount > 0 ? ((summary.deploy_count || 0) / viewCount * 100) : 0
   const sessionS2vPct = sf.search_sessions > 0
     ? (sf.search_to_view / sf.search_sessions * 100) : 0
+  const skillApplyPct = (summary.outcome_count || 0) > 0
+    ? ((summary.outcome_applied || 0) / summary.outcome_count * 100) : 0
+  const searchSkipPct = searchCount > 0
+    ? ((summary.skip_count || 0) / searchCount * 100) : 0
 
   const metrics = [
     {
@@ -562,6 +722,20 @@ async function main() {
       target: TARGETS.viewToDeployPct,
       unit: '%',
       higher: true,
+    },
+    {
+      name: '스킬 적용률',
+      actual: parseFloat(skillApplyPct.toFixed(1)),
+      target: TARGETS.skillApplyPct,
+      unit: '%',
+      higher: true,
+    },
+    {
+      name: '검색 스킵율',
+      actual: parseFloat(searchSkipPct.toFixed(1)),
+      target: TARGETS.searchSkipPct,
+      unit: '%',
+      higher: false,
     },
     {
       name: '검색 무결과율',

@@ -1,6 +1,12 @@
+/**
+ * Skill Suggest 훅 — 사용자 메시지를 분석하여 관련 팀 스킬을 자동 검색하고 시스템 프롬프트에 주입
+ *
+ * 검색 결과가 임계값 미만이면 report_search_skip을 호출하고,
+ * 스킬 로드 시 outcome 보고 힌트를 포함하여 사용 행태를 추적한다.
+ */
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { UserMessage, Part } from "@opencode-ai/sdk"
-import { searchSkills, type SkillSummary } from "./mcp-client"
+import { searchSkills, reportSearchSkip, type SkillSummary } from "./mcp-client"
 import { createLogger } from "../../utils/logger"
 import { getSessionMetrics } from "../session-reporter"
 
@@ -62,6 +68,14 @@ function extractSearchParams(text: string): { query: string; context: string } {
   return { query, context }
 }
 
+/**
+ * 관련 스킬 목록을 시스템 프롬프트에 주입할 형식으로 포맷
+ *
+ * 스킬 로드 후 적용 결과를 report_skill_outcome으로 보고하는 힌트를 포함한다.
+ *
+ * @param skills - 임계값을 통과한 관련 스킬 목록
+ * @returns 시스템 프롬프트에 주입할 마크다운 문자열 (스킬 없으면 빈 문자열)
+ */
 function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
   if (skills.length === 0) return ""
 
@@ -76,6 +90,13 @@ Based on your request, these skills may be helpful:
 ${skillLines}
 
 **How to use**: If any skill seems relevant, load it using \`mcp_gpters-ai-toolkit_get_plugin_content(pluginId="<skill-id>")\` to get detailed instructions.
+
+**After applying a skill**, report the outcome:
+\`\`\`
+mcp_gpters-ai-toolkit_report_skill_outcome(skillId="<skill-id>", applied=true/false, summary="결과 한 줄 요약")
+\`\`\`
+- \`applied=true\`: 스킬 내용을 실제 작업에 적용한 경우
+- \`applied=false\`: 로드했지만 맥락에 맞지 않아 적용하지 않은 경우
 </available-skills>
 `.trim()
 }
@@ -135,6 +156,16 @@ export function createSkillSuggestHook(ctx: PluginInput) {
           logger.debug(`Found ${relevantSkills.length} relevant skills (of ${skills.length} total) for session ${sessionID}`)
         } else {
           logger.debug(`No skills above threshold ${SCORE_THRESHOLD} for session ${sessionID}`)
+
+          if (skills.length > 0) {
+            const resultIds = skills.map((s) => s.id)
+            const topScore = Math.max(...skills.map((s) => s.relevanceScore ?? 0))
+            reportSearchSkip(
+              query,
+              resultIds,
+              `All ${skills.length} results below ${SCORE_THRESHOLD} threshold (top: ${topScore.toFixed(2)})`
+            ).catch((err) => logger.error("Failed to report search skip", err))
+          }
         }
       } catch (error) {
         logger.error("Error in skill-suggest hook", error)
