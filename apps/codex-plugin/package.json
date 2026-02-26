@@ -1,6 +1,6 @@
 {
   "name": "@gpters-internal/codex-plugin",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "GPTers Codex CLI Plugin - Agent Skills + MCP 설정 자동 설치",
   "type": "module",
   "bin": {
@@ -9,10 +9,11 @@
   "files": [
     "dist",
     "skills",
-    "templates"
+    "templates",
+    "scripts"
   ],
   "scripts": {
-    "build": "bun build src/setup.ts src/paths.ts src/config-toml.ts src/skills-installer.ts src/prompts.ts --outdir dist/src --target node --format esm && bun build bin/setup.ts --outdir dist/bin --target node --format esm && cp -r skills dist/ && cp -r templates dist/",
+    "build": "bun build src/setup.ts src/paths.ts src/config-toml.ts src/skills-installer.ts src/prompts.ts --outdir dist/src --target node --format esm && bun build bin/setup.ts --outdir dist/bin --target node --format esm && cp -r skills dist/ && cp -r templates dist/ && cp -r scripts dist/",
     "dev": "bun build bin/setup.ts --outdir dist/bin --target node --format esm --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
