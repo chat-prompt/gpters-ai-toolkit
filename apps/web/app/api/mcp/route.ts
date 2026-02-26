@@ -562,6 +562,21 @@ export async function POST(request: NextRequest) {
             skillId: meta.skillOutcome.skillId,
           }).catch(() => {})
         }
+
+        // Handle human skill rating feedback
+        if (meta?.skillRating) {
+          await upsertSessionSummary({
+            sessionId: sid,
+            userId: auth?.userId,
+            accessTokenId: auditCtx?.tokenId,
+            clientType: ct,
+            clientName: cn,
+            tool: 'rate_skill',
+            action: 'other',
+            responseStatus: 'success',
+            skillId: meta.skillRating.skillId,
+          }).catch(() => {})
+        }
       }
     })
   }

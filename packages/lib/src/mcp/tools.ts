@@ -118,32 +118,32 @@ const ALL_TOOLS: McpTool[] = [
       required: ['pluginId'],
     },
   },
-  {
-    name: 'list_plugins',
-    description: `카탈로그의 모든 플러그인 목록을 조회합니다.
-카테고리나 팀 태그로 필터링할 수 있습니다.
-전체 목록을 확인하거나 특정 유형의 플러그인을 찾을 때 유용합니다.
-
-권한에 따라 볼 수 있는 플러그인이 달라집니다:
-- 일반 사용자: 자기 조직 + public + legacy 플러그인
-- 비인증 사용자: public + legacy 플러그인만
-- super_admin: 모든 플러그인`,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        category: {
-          type: 'string',
-          enum: ['skill', 'agent', 'command', 'guide', 'all'],
-          description: '플러그인 카테고리 필터 (기본: all)',
-        },
-        teamTag: {
-          type: 'string',
-          enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-          description: '팀 태그 필터 (선택)',
-        },
-      },
-    },
-  },
+  //   {
+  //     name: 'list_plugins',
+  //     description: `카탈로그의 모든 플러그인 목록을 조회합니다.
+  // 카테고리나 팀 태그로 필터링할 수 있습니다.
+  // 전체 목록을 확인하거나 특정 유형의 플러그인을 찾을 때 유용합니다.
+  //
+  // 권한에 따라 볼 수 있는 플러그인이 달라집니다:
+  // - 일반 사용자: 자기 조직 + public + legacy 플러그인
+  // - 비인증 사용자: public + legacy 플러그인만
+  // - super_admin: 모든 플러그인`,
+  //     inputSchema: {
+  //       type: 'object',
+  //       properties: {
+  //         category: {
+  //           type: 'string',
+  //           enum: ['skill', 'agent', 'command', 'guide', 'all'],
+  //           description: '플러그인 카테고리 필터 (기본: all)',
+  //         },
+  //         teamTag: {
+  //           type: 'string',
+  //           enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
+  //           description: '팀 태그 필터 (선택)',
+  //         },
+  //       },
+  //     },
+  //   },
   //   {
   //     name: 'get_plugins_by_category',
   //     description: `특정 카테고리의 플러그인 목록을 조회합니다.
@@ -722,6 +722,35 @@ semantic_search로 검색했으나 get_plugin_content를 호출하지 않을 때
         },
       },
       required: ['query', 'resultIds', 'reason'],
+    },
+  },
+  {
+    name: 'rate_skill',
+    description: `스킬에 대한 인간 피드백(평가)을 제출합니다.
+
+스킬을 사용한 후, 도움이 되었는지 평점과 선택적 코멘트를 남길 수 있습니다.
+AI가 자동 보고하는 report_skill_outcome과 달리, 사람이 직접 평가하는 도구입니다.
+
+예시:
+- 매우 유용: skillId="code-reviewer", rating=5, comment="PR 리뷰 시간이 절반으로 줄었습니다"
+- 개선 필요: skillId="db-helper", rating=2, comment="PostgreSQL 외 DB 지원이 부족합니다"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skillId: {
+          type: 'string',
+          description: '평가할 스킬 ID',
+        },
+        rating: {
+          type: 'number',
+          description: '평점 (1=별로, 2=부족, 3=보통, 4=유용, 5=매우 유용)',
+        },
+        comment: {
+          type: 'string',
+          description: '선택적 한 줄 피드백 (예: "리팩토링 가이드 덕분에 코드가 깔끔해졌습니다")',
+        },
+      },
+      required: ['skillId', 'rating'],
     },
   },
   {

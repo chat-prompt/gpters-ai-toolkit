@@ -5,6 +5,7 @@ import { generateEmbedding } from './embedding'
 import { createLogger } from '../core/logger'
 import { isSuperAdmin } from '../security/rbac'
 import type { ItemType } from '../core/types'
+import { getPopularityMap, computePopularityScore, blendScore } from './popularity'
 
 const log = createLogger('vector-search')
 
@@ -39,15 +40,16 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     userContext,
   } = options
 
-  const trimmedQuery = query.trim()
-  if (!trimmedQuery) {
+  const cleanedQuery = cleanQuery(query)
+  if (!cleanedQuery) {
+    log.info('Noise query filtered', { query: query.trim().slice(0, 80) })
     return { items: [], total: 0, searchTime: 0 }
   }
 
   // Combine query with userContext for improved embedding relevance
   const embeddingText = userContext
-    ? `${trimmedQuery} ${userContext.trim()}`
-    : trimmedQuery
+    ? `${cleanedQuery} ${userContext.trim()}`
+    : cleanedQuery
 
   const embeddingStart = Date.now()
   const queryEmbedding = await generateEmbedding(embeddingText)
@@ -126,18 +128,31 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     .limit(limit)
   const dbMs = Date.now() - dbStart
 
+  // Apply popularity-based ranking boost
+  const popularityMap = await getPopularityMap()
+  const boostedResults = results.map((row) => {
+    const pop = popularityMap.get(row.id)
+    const popScore = computePopularityScore(pop)
+    const finalScore = blendScore(row.similarity, popScore)
+    return { ...row, similarity: finalScore }
+  })
+
+  // Re-sort by blended score (descending)
+  boostedResults.sort((a, b) => b.similarity - a.similarity)
+
   const searchTime = Date.now() - startTime
 
   log.info('Semantic search completed', {
     embeddingMs,
     dbMs,
     totalMs: searchTime,
-    resultCount: results.length,
+    resultCount: boostedResults.length,
+    popularityBoostApplied: popularityMap.size > 0,
   })
 
   return {
-    items: results as Array<CatalogItemRecord & { similarity: number }>,
-    total: results.length,
+    items: boostedResults as Array<CatalogItemRecord & { similarity: number }>,
+    total: boostedResults.length,
     searchTime,
   }
 }
@@ -204,4 +219,54 @@ export async function findSimilarItems(
     .limit(limit)
 
   return results as Array<CatalogItemRecord & { similarity: number }>
+}
+
+/** Maximum query length for meaningful semantic search */
+const MAX_QUERY_LENGTH = 500
+
+/** Minimum query length for meaningful semantic search */
+const MIN_QUERY_LENGTH = 3
+
+/**
+ * Strips noise prefixes from a query and validates the remainder.
+ *
+ * Phase 1: Strips removable noise (image placeholders like `[Image 1]`).
+ * Phase 2: Rejects structural noise that cannot be cleaned — mode prompt
+ * injections (`[analyze-mode]`), XML mode tags (`<ultrawork-mode>`),
+ * and queries that are too short or too long after stripping.
+ *
+ * @returns Cleaned query string, or `null` if the query is pure noise.
+ */
+export function cleanQuery(query: string): string | null {
+  // Phase 1: Strip removable noise prefixes
+  let cleaned = query.trim()
+
+  // Strip image placeholders: [Image 1], [image 2], etc. (may appear multiple times)
+  cleaned = cleaned.replace(/\[image\s+\d+\]\s*/gi, '').trim()
+
+  // Phase 2: Reject structural noise that can't be cleaned
+  if (!cleaned) return null
+
+  // Mode prompt injections: [analyze-mode], [search-mode], etc.
+  if (/^\[[\w-]+-mode\]/i.test(cleaned)) return null
+
+  // XML-like mode tags: <ultrawork-mode>, <deep-research>, etc.
+  if (/<[\w-]+-mode>/i.test(cleaned)) return null
+
+  // Too short to be a meaningful search
+  if (cleaned.length < MIN_QUERY_LENGTH) return null
+
+  // Too long — likely pasted error logs, code, or system prompts
+  if (cleaned.length > MAX_QUERY_LENGTH) return null
+
+  return cleaned
+}
+
+/**
+ * Checks whether a query is structural noise.
+ *
+ * Convenience wrapper around {@link cleanQuery} for boolean checks.
+ */
+export function isNoiseQuery(query: string): boolean {
+  return cleanQuery(query) === null
 }

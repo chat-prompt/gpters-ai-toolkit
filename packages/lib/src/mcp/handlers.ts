@@ -2018,6 +2018,31 @@ export async function executeTool(
         }
       }
 
+      case 'rate_skill': {
+        const skillId = args.skillId as string | undefined
+        const rating = args.rating as number | undefined
+        const comment = args.comment as string | undefined
+        if (!skillId || rating === undefined) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'Missing required fields: skillId, rating' }) }],
+            isError: true,
+          }
+        }
+        if (typeof rating !== 'number' || rating < 1 || rating > 5 || !Number.isInteger(rating)) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'rating must be an integer between 1 and 5' }) }],
+            isError: true,
+          }
+        }
+        log.info('Skill rated by human', { skillId, rating, comment })
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Rating recorded', skillId, rating }) }],
+          _meta: {
+            skillRating: { skillId, rating, ...(comment ? { comment } : {}) },
+          },
+        }
+      }
+
       case 'report_skill_outcome': {
         const skillId = args.skillId as string | undefined
         const applied = args.applied as boolean | undefined

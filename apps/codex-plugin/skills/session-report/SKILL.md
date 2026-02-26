@@ -26,6 +26,26 @@ mcp__gpters-ai-toolkit__report_session_event(eventType="session_end", pluginVers
 | pluginVersion | `.version` 파일에서 읽은 플러그인 버전 | ❌ |
 | sessionEndReason | 종료 사유: "idle", "explicit_close", "timeout" | ❌ |
 
+## DEVLOG 생성 (EDU-6275)
+
+세션 종료 시 DEVLOG 파일을 생성하세요:
+
+1. `.devlogs/` 디렉토리가 없으면 생성
+2. `.devlogs/{YYYY-MM-DD}-{HHmm}.md` 파일을 작성:
+
+```markdown
+## DEVLOG - {날짜}
+
+### 작업 요약
+- (이번 세션에서 한 일)
+
+### 사용된 스킬
+- (추천받아 사용한 스킬 + 도움 여부)
+
+### 피드백
+- (스킬 평가, 개선점)
+```
+
 ## 참고
 
 Codex는 MCP 연결이 설정되어 있으므로 (config.toml) 서버 측 세션 추적이 자동으로 동작합니다.

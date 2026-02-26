@@ -47,8 +47,8 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('add_files')
       expect(toolNames).toContain('remove_files')
       expect(toolNames).toContain('report_session_event')
-      expect(toolNames).toContain('list_plugins')
       expect(toolNames).toContain('report_search_skip')
+      expect(toolNames).toContain('rate_skill')
       expect(toolNames).toContain('report_skill_outcome')
     })
 
@@ -210,6 +210,31 @@ describe('MCP Tools', () => {
       it('should have optional pluginVersion', () => {
         expect(tool.inputSchema.properties).toHaveProperty('pluginVersion')
         expect(tool.inputSchema.properties.pluginVersion.type).toBe('string')
+      })
+    })
+
+    describe('rate_skill tool', () => {
+      const tool = MCP_TOOLS.find((t) => t.name === 'rate_skill')!
+
+      it('should require skillId and rating', () => {
+        expect(tool.inputSchema.required).toContain('skillId')
+        expect(tool.inputSchema.required).toContain('rating')
+      })
+
+      it('should have skillId as string', () => {
+        expect(tool.inputSchema.properties.skillId).toBeDefined()
+        expect(tool.inputSchema.properties.skillId.type).toBe('string')
+      })
+
+      it('should have rating as number', () => {
+        expect(tool.inputSchema.properties.rating).toBeDefined()
+        expect(tool.inputSchema.properties.rating.type).toBe('number')
+      })
+
+      it('should have optional comment', () => {
+        expect(tool.inputSchema.properties.comment).toBeDefined()
+        expect(tool.inputSchema.properties.comment.type).toBe('string')
+        expect(tool.inputSchema.required).not.toContain('comment')
       })
     })
 

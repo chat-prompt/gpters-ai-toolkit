@@ -50,8 +50,24 @@ if [ -n "$TOKEN" ]; then
 fi
 
 # Fallback: 항상 힌트도 출력 (토큰 호출 실패 시 Claude가 처리할 수 있도록)
+# DEVLOG 생성 지시도 함께 포함 (복리엔진 EDU-6275)
+DATESTAMP=$(date +%Y-%m-%d)
+TIMESTAMP=$(date +%H%M)
 cat <<CONTEXT
-<session-report>세션 종료 시 mcp__gpters-ai-toolkit__report_session_event(eventType="session_end", promptCount=$COUNT, pluginVersion="$PLUGIN_VERSION")로 세션 요약을 리포트하세요.</session-report>
+<session-report>
+1. mcp__gpters-ai-toolkit__report_session_event(eventType="session_end", promptCount=$COUNT, pluginVersion="$PLUGIN_VERSION")로 세션 요약을 리포트하세요.
+2. DEVLOG를 생성하세요:
+   - 경로: .devlogs/${DATESTAMP}-${TIMESTAMP}.md
+   - 형식:
+     ## DEVLOG - ${DATESTAMP}
+     ### 작업 요약
+     - (이번 세션에서 한 일)
+     ### 사용된 스킬
+     - (추천받아 사용한 스킬 + 도움 여부)
+     ### 피드백
+     - (스킬 평가, 개선점)
+   - .devlogs/ 디렉토리가 없으면 먼저 생성하세요.
+</session-report>
 CONTEXT
 
 # 카운터 파일 정리
