@@ -1677,6 +1677,167 @@ describe('MCP Handlers', () => {
       expect(result.isError).toBe(true)
       expect(result.content[0].text).toContain('Database error')
     })
+
+    // --- EDU-6411: report_search_skip ---
+
+    it('should execute report_search_skip with valid input', async () => {
+      const result = await executeTool('report_search_skip', {
+        query: 'slack bot',
+        resultIds: ['skill-1', 'skill-2'],
+        reason: 'Results not relevant to current task',
+      })
+
+      expect(result.isError).toBeUndefined()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.success).toBe(true)
+      expect(parsed.message).toBe('Skip reason recorded')
+      expect(result._meta).toBeDefined()
+      expect(result._meta?.searchSkip).toEqual({
+        query: 'slack bot',
+        resultIds: ['skill-1', 'skill-2'],
+        reason: 'Results not relevant to current task',
+      })
+    })
+
+    it('should return error for report_search_skip without query', async () => {
+      const result = await executeTool('report_search_skip', {
+        resultIds: ['skill-1'],
+        reason: 'not relevant',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields: query, resultIds, reason')
+    })
+
+    it('should return error for report_search_skip without resultIds', async () => {
+      const result = await executeTool('report_search_skip', {
+        query: 'test',
+        reason: 'not relevant',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    it('should return error for report_search_skip without reason', async () => {
+      const result = await executeTool('report_search_skip', {
+        query: 'test',
+        resultIds: ['skill-1'],
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    // --- EDU-6411: report_skill_outcome ---
+
+    it('should execute report_skill_outcome with applied=true', async () => {
+      const result = await executeTool('report_skill_outcome', {
+        skillId: 'code-reviewer',
+        applied: true,
+        summary: 'Applied code review suggestions to PR',
+      })
+
+      expect(result.isError).toBeUndefined()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.success).toBe(true)
+      expect(parsed.message).toBe('Outcome recorded')
+      expect(result._meta).toBeDefined()
+      expect(result._meta?.skillOutcome).toEqual({
+        skillId: 'code-reviewer',
+        applied: true,
+        summary: 'Applied code review suggestions to PR',
+      })
+    })
+
+    it('should execute report_skill_outcome with applied=false', async () => {
+      const result = await executeTool('report_skill_outcome', {
+        skillId: 'refactor-guide',
+        applied: false,
+        summary: 'Scope changed, refactoring not needed',
+      })
+
+      expect(result.isError).toBeUndefined()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.success).toBe(true)
+      expect(result._meta?.skillOutcome).toEqual({
+        skillId: 'refactor-guide',
+        applied: false,
+        summary: 'Scope changed, refactoring not needed',
+      })
+    })
+
+    it('should return error for report_skill_outcome without skillId', async () => {
+      const result = await executeTool('report_skill_outcome', {
+        applied: true,
+        summary: 'test',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields: skillId, applied, summary')
+    })
+
+    it('should return error for report_skill_outcome without applied', async () => {
+      const result = await executeTool('report_skill_outcome', {
+        skillId: 'test-skill',
+        summary: 'test',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    it('should return error for report_skill_outcome without summary', async () => {
+      const result = await executeTool('report_skill_outcome', {
+        skillId: 'test-skill',
+        applied: true,
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Missing required fields')
+    })
+
+    // --- EDU-6411: get_plugin_content outcome hint injection ---
+
+    it('should inject outcome hint into get_plugin_content response', async () => {
+      const mockPlugin = {
+        id: 'test-skill',
+        name: 'Test Skill',
+        type: 'skill',
+        description: 'A test skill',
+        authorName: 'test-author',
+        tags: ['test'],
+        teamTag: 'general',
+        difficulty: 'easy',
+        content: '# Test Skill Content',
+        readme: null,
+        files: null,
+        dependencies: null,
+        allowedTools: null,
+        agentModel: null,
+        agentPermissionMode: null,
+        agentSkills: null,
+        commandArgumentHint: null,
+        commandDisableModelInvocation: null,
+        version: '1.0.0',
+        status: 'published',
+        changelog: 'Initial release',
+        orgId: null,
+        visibility: 'public',
+      }
+
+      const mockChain = createMockChain([mockPlugin])
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      const result = await executeTool('get_plugin_content', { pluginId: 'test-skill' })
+
+      expect(result.isError).toBeUndefined()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.content).toContain('# Test Skill Content')
+      expect(parsed.content).toContain('report_skill_outcome')
+      expect(parsed.content).toContain('skillId="test-skill"')
+      expect(parsed.content).toContain('applied=true/false')
+    })
   })
 
   describe('listPrompts', () => {
