@@ -47,6 +47,7 @@ export interface ClientContextInput {
   skippedSearches?: number
   sessionEndReason?: string
   pluginVersion?: string
+  devlog?: string
 }
 
 /**
@@ -274,6 +275,11 @@ export async function mergeClientContext(
     }
     if (context.pluginVersion !== undefined) {
       mergeFields.push(`'pluginVersion', to_jsonb('${context.pluginVersion}'::text)`)
+    }
+    if (context.devlog !== undefined) {
+      // Escape single quotes for SQL safety
+      const escaped = context.devlog.replace(/'/g, "''")
+      mergeFields.push(`'devlog', to_jsonb('${escaped}'::text)`)
     }
 
     if (mergeFields.length === 0) return

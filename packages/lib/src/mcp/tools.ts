@@ -665,6 +665,10 @@ deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합
           type: 'string',
           description: '플러그인 자체 버전 (예: "0.1.1")',
         },
+        devlog: {
+          type: 'string',
+          description: '세션 DEVLOG (작업 요약, 사용 스킬, 피드백을 포함한 마크다운)',
+        },
       },
       required: ['eventType'],
     },

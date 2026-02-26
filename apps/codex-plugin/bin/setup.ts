@@ -41,6 +41,7 @@ if (command === '--version' || command === '-v' || command === '-V') {
     force,
     skillsSourceDir,
     templatesDir,
+    packageRoot,
   })
 
   printSummary(result)

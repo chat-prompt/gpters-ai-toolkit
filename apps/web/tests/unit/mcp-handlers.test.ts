@@ -536,6 +536,8 @@ describe('MCP Handlers', () => {
         type: 'skill',
         name: 'New Skill',
         content: '# Skill Content',
+        description: '새 스킬 설명입니다',
+        tags: ['test'],
       })
 
       expect(result.success).toBe(true)
@@ -632,6 +634,8 @@ describe('MCP Handlers', () => {
       const result = await deploySkill({
         type: 'skill',
         name: 'New Skill',
+        description: '새 스킬 설명',
+        tags: ['test'],
         files: [{ name: 'ref.md', content: 'doc', type: 'reference' as const }],
       })
 
@@ -653,7 +657,7 @@ describe('MCP Handlers', () => {
         name: 'Test',
         content: '# Short',
         description: 'Short',
-        tags: [],
+        tags: ['test'],
       })
 
       expect(result.success).toBe(true)
@@ -662,7 +666,6 @@ describe('MCP Handlers', () => {
 
       const fields = result.qualityWarnings!.map((w) => w.field)
       expect(fields).toContain('description')
-      expect(fields).toContain('tags')
       expect(fields).toContain('content')
     })
 
@@ -1415,6 +1418,36 @@ describe('MCP Handlers', () => {
       expect(result.content[0].text).toContain('Missing required fields')
     })
 
+    it('should require description for new deploy_skill', async () => {
+      const mockSelectChain = createMockChain([])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await executeTool('deploy_skill', {
+        type: 'skill',
+        name: 'Test Skill',
+        content: '# Test',
+        tags: ['test'],
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('description')
+    })
+
+    it('should require tags for new deploy_skill', async () => {
+      const mockSelectChain = createMockChain([])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await executeTool('deploy_skill', {
+        type: 'skill',
+        name: 'Test Skill',
+        content: '# Test',
+        description: '테스트 스킬 설명입니다',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('tags')
+    })
+
     it('should include quality hints in deploy_skill response text', async () => {
       const mockSelectChain = createMockChain([])
       const mockInsertChain = {
@@ -1429,13 +1462,12 @@ describe('MCP Handlers', () => {
         name: 'Test Skill',
         content: '# Short',
         description: 'Short',
-        tags: [],
+        tags: ['test'],
       })
 
       expect(result.isError).toBe(false)
       expect(result.content[0].text).toContain('품질 개선 힌트')
       expect(result.content[0].text).toContain('description')
-      expect(result.content[0].text).toContain('tags')
       expect(result.content[0].text).toContain('content')
     })
 

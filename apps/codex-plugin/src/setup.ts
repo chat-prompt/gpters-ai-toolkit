@@ -4,7 +4,8 @@
  * 스킬 복사, MCP 설정, AGENTS.md 생성을 순서대로 수행한다.
  */
 
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, chmodSync, existsSync } from 'node:fs'
 import type { Scope } from './paths.js'
 import { getConfigTomlPath, getSkillsDir, getAgentsMdPath } from './paths.js'
 import { ensureMcpConfig } from './config-toml.js'
@@ -25,6 +26,8 @@ export interface SetupOptions {
   skillsSourceDir: string
   /** 패키지 내 templates 디렉토리 경로 */
   templatesDir: string
+  /** 패키지 루트 디렉토리 경로 (package.json 위치) */
+  packageRoot?: string
 }
 
 /**
@@ -41,6 +44,8 @@ export interface SetupResult {
   mcpConfig: 'added' | 'skipped'
   /** AGENTS.md 결과 */
   agentsMd: 'created' | 'skipped' | 'not_found' | 'not_requested'
+  /** 자동 업데이트 스크립트 설치 결과 */
+  autoUpdate: 'installed' | 'skipped'
 }
 
 /**
@@ -72,12 +77,59 @@ export async function runSetup(options: SetupOptions): Promise<SetupResult> {
     }
   }
 
+  // 4. 버전 마커 + 자동 업데이트 스크립트 (user scope만)
+  let autoUpdateResult: SetupResult['autoUpdate'] = 'skipped'
+  if (scope === 'user' && options.packageRoot) {
+    autoUpdateResult = installAutoUpdate(options.packageRoot, targetDir)
+  }
+
   return {
     scope,
     skillsCopied: skillResult.copied,
     skillsSkipped: skillResult.skipped,
     mcpConfig: mcpResult,
     agentsMd: agentsMdResult,
+    autoUpdate: autoUpdateResult,
+  }
+}
+
+/**
+ * 버전 마커 파일과 자동 업데이트 스크립트를 설치한다.
+ *
+ * - package.json에서 버전을 읽어 `{skillsDir}/.version`에 기록
+ * - `scripts/auto-update.sh`를 `{skillsDir}/../auto-update.sh`에 복사
+ *
+ * @param packageRoot - 패키지 루트 디렉토리 경로
+ * @param skillsDir - 스킬 설치 디렉토리 경로
+ * @returns 'installed' 또는 'skipped'
+ */
+export function installAutoUpdate(
+  packageRoot: string,
+  skillsDir: string
+): 'installed' | 'skipped' {
+  try {
+    // package.json에서 버전 읽기
+    const pkgPath = join(packageRoot, 'package.json')
+    if (!existsSync(pkgPath)) return 'skipped'
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    const version: string = pkg.version
+
+    // .version 파일 기록
+    mkdirSync(skillsDir, { recursive: true })
+    writeFileSync(join(skillsDir, '.version'), version, 'utf-8')
+
+    // auto-update.sh 복사 (~/.agents/auto-update.sh)
+    const scriptSrc = join(packageRoot, 'scripts', 'auto-update.sh')
+    if (!existsSync(scriptSrc)) return 'skipped'
+
+    const agentsBaseDir = dirname(dirname(skillsDir)) // ~/.agents/skills/gpters → ~/.agents
+    const destPath = join(agentsBaseDir, 'auto-update.sh')
+    copyFileSync(scriptSrc, destPath)
+    chmodSync(destPath, 0o755)
+
+    return 'installed'
+  } catch {
+    return 'skipped'
   }
 }
 
@@ -104,6 +156,10 @@ export function printSummary(result: SetupResult): void {
     console.log('AGENTS.md: 생성됨')
   } else if (result.agentsMd === 'skipped') {
     console.log('AGENTS.md: 이미 존재하여 건너뜀')
+  }
+
+  if (result.autoUpdate === 'installed') {
+    console.log('자동 업데이트: 설치됨 (~/.agents/auto-update.sh)')
   }
 
   console.log('\n다음 단계:')

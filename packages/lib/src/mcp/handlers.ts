@@ -683,6 +683,29 @@ export async function deploySkill(
   const isUpdate = existing.length > 0
   const existingItem = isUpdate ? existing[0] : null
 
+  // Validate required metadata for new deployments
+  if (!isUpdate) {
+    const missingFields: string[] = []
+    if (!description || description.trim().length === 0) {
+      missingFields.push('description')
+    }
+    if (!tags || tags.length === 0) {
+      missingFields.push('tags')
+    }
+    if (missingFields.length > 0) {
+      return {
+        success: false,
+        id,
+        version: '0.0.0',
+        changelog: '',
+        status: 'published',
+        webUrl: '',
+        installHint: '',
+        error: `신규 배포 시 ${missingFields.join(', ')}은(는) 필수입니다. description(스킬 설명)과 tags(관련 키워드 배열)를 포함해주세요.`,
+      }
+    }
+  }
+
   // Check ownership for updates - only author or admin can update
   if (isUpdate && existingItem) {
     if (!authorId) {
@@ -1994,6 +2017,7 @@ export async function executeTool(
               skippedSearches: args.skippedSearches as number | undefined,
               sessionEndReason: args.sessionEndReason as string | undefined,
               pluginVersion: args.pluginVersion as string | undefined,
+              devlog: args.devlog as string | undefined,
             },
           },
         }
