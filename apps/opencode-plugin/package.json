@@ -1,6 +1,6 @@
 {
   "name": "@gpters-internal/opencode",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "GPTers OpenCode Plugin",
   "type": "module",
   "main": "dist/index.js",
@@ -15,7 +15,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly && cp -r bin dist/",
+    "build": "PLUGIN_VERSION=$(node -p \"require('./package.json').version\") && bun build src/index.ts --outdir dist --target bun --format esm --define \"process.env.PLUGIN_VERSION='$PLUGIN_VERSION'\" && tsc --emitDeclarationOnly && cp -r bin dist/",
     "dev": "bun build src/index.ts --outdir dist --target bun --format esm --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

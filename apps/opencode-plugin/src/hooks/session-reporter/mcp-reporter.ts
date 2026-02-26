@@ -9,31 +9,11 @@ import { createLogger } from "../../utils/logger"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
-import { fileURLToPath } from "url"
 
 const logger = createLogger("mcp-reporter")
 
-/** 플러그인 버전을 package.json에서 읽기 */
-function getPluginVersion(): string {
-  // 빌드 후 dist/ 구조에서도 찾을 수 있도록 여러 경로 시도
-  const candidates = [
-    join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..', 'package.json'),
-    join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', 'package.json'),
-    join(fileURLToPath(new URL('.', import.meta.url)), '..', 'package.json'),
-    join(process.cwd(), 'package.json'),
-  ]
-  for (const pkgPath of candidates) {
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-      if (pkg.name === '@gpters-internal/opencode' && pkg.version) {
-        return pkg.version
-      }
-    } catch { /* next */ }
-  }
-  return 'unknown'
-}
-
-const PLUGIN_VERSION = getPluginVersion()
+/** 빌드 시 --define으로 주입되는 플러그인 버전. 런타임 package.json 탐색 불필요. */
+const PLUGIN_VERSION: string = process.env.PLUGIN_VERSION || 'unknown'
 
 const MCP_API_URL = "https://ai-toolkit.gpters.org/api/mcp"
 const MCP_SERVER_NAME = "gpters-ai-toolkit"
