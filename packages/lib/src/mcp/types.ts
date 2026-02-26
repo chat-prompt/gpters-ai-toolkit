@@ -346,6 +346,18 @@ export interface ToolExecutionMeta {
     sessionEndReason?: string
     pluginVersion?: string
   }
+  /** Search skip report: why results were not loaded */
+  searchSkip?: {
+    query: string
+    resultIds: string[]
+    reason: string
+  }
+  /** Skill outcome report: whether a loaded skill was applied */
+  skillOutcome?: {
+    skillId: string
+    applied: boolean
+    summary: string
+  }
 }
 
 export interface SemanticSearchResult {
@@ -387,4 +399,18 @@ export interface RemoveFilesResponse {
   totalFiles: number
   files: PluginFile[] | null
   error?: string
+}
+
+/** Input for reporting why search results were skipped */
+export interface ReportSearchSkipInput {
+  query: string
+  resultIds: string[]
+  reason: string
+}
+
+/** Input for reporting skill application outcome */
+export interface ReportSkillOutcomeInput {
+  skillId: string
+  applied: boolean
+  summary: string
 }

@@ -689,6 +689,65 @@ deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합
       required: ['id', 'fileNames'],
     },
   },
+  {
+    name: 'report_search_skip',
+    description: `스킬 검색 후 결과를 사용하지 않은 이유를 보고합니다.
+
+semantic_search로 검색했으나 get_plugin_content를 호출하지 않을 때 사용합니다.
+스킵 사유 데이터를 수집하여 추천 품질 개선에 활용합니다.
+
+예시:
+- 검색 결과가 현재 작업과 무관: reason="사업계획서 작성 중인데 코드 리뷰 스킬만 나옴"
+- 이미 알고 있는 스킬: reason="해당 스킬은 이미 사용 중"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '검색에 사용한 쿼리',
+        },
+        resultIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '반환된 스킬 ID 목록',
+        },
+        reason: {
+          type: 'string',
+          description: '스킵 사유 (한 줄)',
+        },
+      },
+      required: ['query', 'resultIds', 'reason'],
+    },
+  },
+  {
+    name: 'report_skill_outcome',
+    description: `로드한 스킬의 적용 결과를 보고합니다.
+
+get_plugin_content로 스킬을 로드한 후, 실제로 적용했는지와 결과를 기록합니다.
+스킬 효용성 측정에 활용됩니다.
+
+예시:
+- 적용 성공: applied=true, summary="Mixpanel 대시보드 쿼리 작성에 활용"
+- 적용 안 함: applied=false, summary="현재 작업과 맞지 않아 미적용"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skillId: {
+          type: 'string',
+          description: '스킬 ID',
+        },
+        applied: {
+          type: 'boolean',
+          description: '실제 적용 여부',
+        },
+        summary: {
+          type: 'string',
+          description: '결과 요약 (한 줄)',
+        },
+      },
+      required: ['skillId', 'applied', 'summary'],
+    },
+  },
 ]
 
 /**

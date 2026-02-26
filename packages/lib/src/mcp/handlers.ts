@@ -1597,7 +1597,7 @@ export async function executeTool(
               rank: idx + 1,
               score: item.similarity ?? 0,
             })),
-            referralSource: input._source === 'skill-suggest' ? 'suggest' : undefined,
+            referralSource: input._source === 'skill-suggest' ? 'suggest' : (input._source || 'direct'),
           },
         }
       }
@@ -1636,11 +1636,17 @@ export async function executeTool(
             isError: true,
           }
         }
+        // Append outcome reporting instruction to skill content
+        const outcomeHint = `\n\n---\n_스킬 적용 후 결과를 보고해주세요: report_skill_outcome(skillId="${input.pluginId}", applied=true/false, summary="한 줄 결과")_`
+        const resultWithHint = { ...result }
+        if (typeof resultWithHint.content === 'string') {
+          resultWithHint.content = resultWithHint.content + outcomeHint
+        }
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: JSON.stringify(resultWithHint, null, 2),
             },
           ],
         }
@@ -1987,6 +1993,44 @@ export async function executeTool(
               sessionEndReason: args.sessionEndReason as string | undefined,
               pluginVersion: args.pluginVersion as string | undefined,
             },
+          },
+        }
+      }
+
+      case 'report_search_skip': {
+        const query = args.query as string | undefined
+        const resultIds = args.resultIds as string[] | undefined
+        const reason = args.reason as string | undefined
+        if (!query || !resultIds || !reason) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'Missing required fields: query, resultIds, reason' }) }],
+            isError: true,
+          }
+        }
+        log.info('Search skip reported', { query, resultIds, reason })
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Skip reason recorded' }) }],
+          _meta: {
+            searchSkip: { query, resultIds, reason },
+          },
+        }
+      }
+
+      case 'report_skill_outcome': {
+        const skillId = args.skillId as string | undefined
+        const applied = args.applied as boolean | undefined
+        const summary = args.summary as string | undefined
+        if (!skillId || applied === undefined || !summary) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'Missing required fields: skillId, applied, summary' }) }],
+            isError: true,
+          }
+        }
+        log.info('Skill outcome reported', { skillId, applied, summary })
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Outcome recorded' }) }],
+          _meta: {
+            skillOutcome: { skillId, applied, summary },
           },
         }
       }

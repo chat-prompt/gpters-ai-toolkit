@@ -443,7 +443,8 @@ export async function POST(request: NextRequest) {
 
   // Track client info across the request lifecycle (updated on initialize)
   let currentClientType: ClientType | undefined = initialClientType
-  let currentClientName: string | undefined
+  // Fallback: use OAuth client name when initialize is skipped (e.g., OpenCode direct tools/call)
+  let currentClientName: string | undefined = auth?.clientName || undefined
   let currentClientVersion: string | undefined
 
   // Deferred session ID: updated after initialize creates a new session (line 728+)
@@ -530,6 +531,36 @@ export async function POST(request: NextRequest) {
           if (evt.eventType === 'session_end') {
             await finalizeSession(sid).catch(() => {})
           }
+        }
+
+        // Handle search skip reports
+        if (meta?.searchSkip) {
+          await upsertSessionSummary({
+            sessionId: sid,
+            userId: auth?.userId,
+            accessTokenId: auditCtx?.tokenId,
+            clientType: ct,
+            clientName: cn,
+            tool: 'report_search_skip',
+            action: 'other',
+            responseStatus: 'success',
+            searchQuery: meta.searchSkip.query,
+          }).catch(() => {})
+        }
+
+        // Handle skill outcome reports
+        if (meta?.skillOutcome) {
+          await upsertSessionSummary({
+            sessionId: sid,
+            userId: auth?.userId,
+            accessTokenId: auditCtx?.tokenId,
+            clientType: ct,
+            clientName: cn,
+            tool: 'report_skill_outcome',
+            action: meta.skillOutcome.applied ? 'deploy' : 'other',
+            responseStatus: 'success',
+            skillId: meta.skillOutcome.skillId,
+          }).catch(() => {})
         }
       }
     })

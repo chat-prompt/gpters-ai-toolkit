@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## 세션 시작
+
+Codex 세션 시작 시 플러그인 업데이트를 확인합니다:
+```bash
+bash ~/.agents/auto-update.sh
+```
+
+---
+
 ## 팀 컨벤션
 
 ### 언어
@@ -23,7 +32,7 @@
 
 ### 스킬 검색
 ```
-mcp_gpters-ai-toolkit_semantic_search(query="키워드", limit=3)
+mcp_gpters-ai-toolkit_semantic_search(query="키워드", limit=3, _source="skill-suggest")
 ```
 
 ### 스킬 내용 조회

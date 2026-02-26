@@ -48,10 +48,12 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('remove_files')
       expect(toolNames).toContain('report_session_event')
       expect(toolNames).toContain('list_plugins')
+      expect(toolNames).toContain('report_search_skip')
+      expect(toolNames).toContain('report_skill_outcome')
     })
 
-    it('should have 12 public tools', () => {
-      expect(MCP_TOOLS).toHaveLength(12)
+    it('should have 14 public tools', () => {
+      expect(MCP_TOOLS).toHaveLength(14)
     })
 
     describe('semantic_search tool', () => {
