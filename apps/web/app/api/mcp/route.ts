@@ -60,6 +60,13 @@ import {
   mapToolToAction,
   extractSkillId,
   extractSearchQuery,
+  recordSearchEvents,
+  recordLoadEvent,
+  recordOutcomeEvent,
+  recordSearchSkipEvent,
+  recordDeployEvent,
+  recordSuggestEvent,
+  recordSkillRating,
 } from '@/lib/analytics'
 import { finalizeSession } from '@/lib/analytics'
 import {
@@ -526,7 +533,6 @@ export async function POST(request: NextRequest) {
             skippedSearches: evt.skippedSearches,
             sessionEndReason: evt.sessionEndReason,
             pluginVersion: evt.pluginVersion,
-            devlog: evt.devlog,
           }).catch(() => {})
 
           if (evt.eventType === 'session_end') {
@@ -577,6 +583,79 @@ export async function POST(request: NextRequest) {
             responseStatus: 'success',
             skillId: meta.skillRating.skillId,
           }).catch(() => {})
+        }
+
+        // ── Normalized skill_events / skill_ratings recording ──
+        if (meta?.searchResults && meta.searchResults.length > 0) {
+          await recordSearchEvents({
+            sessionId: sid,
+            userId: auth?.userId,
+            query: extractSearchQuery(body, tool) ?? '',
+            results: meta.searchResults,
+          }).catch(() => {})
+        }
+
+        if (tool === 'get_plugin_content') {
+          const skillId = extractSkillId(body, tool)
+          if (skillId) {
+            await recordLoadEvent({
+              sessionId: sid,
+              userId: auth?.userId,
+              skillId,
+            }).catch(() => {})
+          }
+        }
+
+        if (meta?.skillOutcome) {
+          await recordOutcomeEvent({
+            sessionId: sid,
+            userId: auth?.userId,
+            skillId: meta.skillOutcome.skillId,
+            applied: meta.skillOutcome.applied,
+            summary: meta.skillOutcome.summary,
+          }).catch(() => {})
+        }
+
+        if (meta?.searchSkip) {
+          await recordSearchSkipEvent({
+            sessionId: sid,
+            userId: auth?.userId,
+            query: meta.searchSkip.query,
+            resultIds: meta.searchSkip.resultIds,
+            reason: meta.searchSkip.reason,
+          }).catch(() => {})
+        }
+
+        if (meta?.skillRating) {
+          await recordSkillRating({
+            sessionId: sid,
+            userId: auth?.userId,
+            skillId: meta.skillRating.skillId,
+            rating: meta.skillRating.rating,
+            comment: meta.skillRating.comment,
+          }).catch(() => {})
+        }
+
+        if (tool === 'deploy_skill') {
+          const skillId = extractSkillId(body, tool)
+          if (skillId) {
+            await recordDeployEvent({
+              sessionId: sid,
+              userId: auth?.userId,
+              skillId,
+            }).catch(() => {})
+          }
+        }
+
+        if (tool === 'suggest_improvement') {
+          const skillId = extractSkillId(body, tool)
+          if (skillId) {
+            await recordSuggestEvent({
+              sessionId: sid,
+              userId: auth?.userId,
+              skillId,
+            }).catch(() => {})
+          }
         }
       }
     })

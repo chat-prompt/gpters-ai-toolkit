@@ -18,3 +18,20 @@ export {
   finalizeStaleSessions,
   cleanupOldSessions,
 } from './session-finalizer'
+export {
+  recordSearchEvents,
+  recordLoadEvent,
+  recordOutcomeEvent,
+  recordSearchSkipEvent,
+  recordDeployEvent,
+  recordSuggestEvent,
+  recordSkillRating,
+} from './skill-events'
+export {
+  getSkillFunnelStats,
+  getSkillRatings,
+  invalidateSkillStatsCache,
+  type SkillFunnelStats,
+  type SkillRatingStats,
+  type StatsPeriod,
+} from './skill-stats'

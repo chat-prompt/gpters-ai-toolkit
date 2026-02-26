@@ -346,7 +346,6 @@ export interface ToolExecutionMeta {
     skippedSearches?: number
     sessionEndReason?: string
     pluginVersion?: string
-    devlog?: string
   }
   /** Search skip report: why results were not loaded */
   searchSkip?: {

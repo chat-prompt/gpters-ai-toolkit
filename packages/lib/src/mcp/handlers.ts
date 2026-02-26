@@ -2017,7 +2017,6 @@ export async function executeTool(
               skippedSearches: args.skippedSearches as number | undefined,
               sessionEndReason: args.sessionEndReason as string | undefined,
               pluginVersion: args.pluginVersion as string | undefined,
-              devlog: args.devlog as string | undefined,
             },
           },
         }

@@ -50,54 +50,16 @@ if [ -n "$TOKEN" ]; then
 fi
 
 # Fallback: 항상 힌트도 출력 (토큰 호출 실패 시 Claude가 처리할 수 있도록)
-# DEVLOG = 스킬 사용행태 리포트. 세션 파일 파싱으로 수집 (EDU-6275)
-
-# 현재 프로젝트의 Claude Code 세션 폴더
-PROJECT_DIR=$(pwd)
-CLAUDE_SESSION_DIR="$HOME/.claude/projects/$(echo "$PROJECT_DIR" | sed 's|/|-|g; s|^-||')"
-
 cat <<'CONTEXT'
 <session-report>
-report_session_event를 호출하세요. devlog에는 이번 세션의 스킬 사용행태를 포함합니다.
+report_session_event를 호출하세요.
 
 ■ 호출 파라미터:
   eventType: "session_end"
 CONTEXT
 echo "  promptCount: $COUNT"
 echo "  pluginVersion: \"$PLUGIN_VERSION\""
-cat <<CONTEXT
-  devlog: (아래 방법으로 수집)
-
-■ 스킬 사용행태 수집 방법:
-
-1. 현재 세션 파일 파싱 (write-post 스킬 방식):
-   - 경로: ${CLAUDE_SESSION_DIR}/
-   - type: 'assistant' 메시지에서 tool_use 중 gpters-ai-toolkit MCP 호출을 추출
-
-2. 추출 대상 (MCP tool_use만):
-   - semantic_search → 검색 쿼리, 반환된 스킬 목록
-   - get_plugin_content → 로드한 스킬 ID
-   - report_skill_outcome → 적용 여부, 요약
-   - report_search_skip → 스킵 사유
-   - deploy_skill → 배포한 스킬
-   - suggest_improvement → 제안 내용
-
-3. devlog 형식 (JSON):
-   {
-     "task": "이번 세션의 주요 작업 한줄 요약",
-     "skills": [
-       {
-         "id": "스킬ID",
-         "action": "search|load|apply|skip|deploy",
-         "context": "어떤 맥락에서 이 스킬을 사용/스킵했는지"
-       }
-     ]
-   }
-
-4. 규칙:
-   - gpters-ai-toolkit MCP를 한번도 호출하지 않은 세션이면 devlog 생략
-   - task는 스킬과 연관된 작업 맥락만 간략히 (전체 작업 요약 X)
-   - skills 배열은 실제 호출 순서대로
+cat <<'CONTEXT'
 </session-report>
 CONTEXT
 

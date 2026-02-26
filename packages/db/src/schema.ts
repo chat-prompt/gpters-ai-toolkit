@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, halfvec } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, halfvec, real } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -773,6 +773,117 @@ export const suggestions = pgTable('suggestions', {
 
 export type SuggestionRecord = typeof suggestions.$inferSelect
 export type NewSuggestionRecord = typeof suggestions.$inferInsert
+
+// ============================================
+// Skill Events Table (Normalized Skill Usage Tracking)
+// ============================================
+
+/** Skill interaction action types */
+export const skillEventActionEnum = pgEnum('skill_event_action', [
+  'search',   // semantic_search에서 결과로 노출
+  'load',     // get_plugin_content로 상세 로드
+  'apply',    // report_skill_outcome(applied=true)
+  'skip',     // report_search_skip 또는 report_skill_outcome(applied=false)
+  'deploy',   // deploy_skill 호출
+  'suggest',  // suggest_improvement 호출
+])
+
+/**
+ * Normalized skill usage events
+ *
+ * Replaces JSONB fields (skillInteractions, actionLog) with queryable rows.
+ * Each row = one skill interaction within a session.
+ * Enables: funnel analysis, skill popularity trends, search→load→apply conversion.
+ */
+export const skillEvents = pgTable('skill_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text('session_id').notNull().references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  skillId: text('skill_id').notNull(),
+
+  /** Interaction type */
+  action: skillEventActionEnum('action').notNull(),
+
+  /** Why this skill was used/skipped (free text from client or inferred) */
+  context: text('context'),
+
+  /** Search query that surfaced this skill (for search action) */
+  query: text('query'),
+
+  /** Position in search results (1-based) */
+  rank: integer('rank'),
+
+  /** Relevance score from search */
+  score: real('score'),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('skill_events_session_id_idx').on(table.sessionId),
+  index('skill_events_skill_id_idx').on(table.skillId),
+  index('skill_events_action_idx').on(table.action),
+  index('skill_events_user_id_idx').on(table.userId),
+  index('skill_events_created_at_idx').on(table.createdAt),
+  index('skill_events_skill_action_idx').on(table.skillId, table.action),
+])
+
+export type SkillEventRecord = typeof skillEvents.$inferSelect
+export type NewSkillEventRecord = typeof skillEvents.$inferInsert
+
+/** Relations for skill events */
+export const skillEventsRelations = relations(skillEvents, ({ one }) => ({
+  session: one(mcpSessions, {
+    fields: [skillEvents.sessionId],
+    references: [mcpSessions.sessionId],
+  }),
+  user: one(users, {
+    fields: [skillEvents.userId],
+    references: [users.id],
+  }),
+}))
+
+// ============================================
+// Skill Ratings Table (Human Feedback)
+// ============================================
+
+/**
+ * User ratings for skills (1-5 scale)
+ *
+ * Collected via rate_skill MCP tool. One rating per user per skill per session.
+ * Enables: skill quality ranking, feedback-driven improvements.
+ */
+export const skillRatings = pgTable('skill_ratings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text('session_id').notNull().references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  skillId: text('skill_id').notNull(),
+
+  /** Rating from 1 (not helpful) to 5 (very helpful) */
+  rating: integer('rating').notNull(),
+
+  /** Optional one-line feedback */
+  comment: text('comment'),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('skill_ratings_skill_id_idx').on(table.skillId),
+  index('skill_ratings_user_id_idx').on(table.userId),
+  index('skill_ratings_created_at_idx').on(table.createdAt),
+])
+
+export type SkillRatingRecord = typeof skillRatings.$inferSelect
+export type NewSkillRatingRecord = typeof skillRatings.$inferInsert
+
+/** Relations for skill ratings */
+export const skillRatingsRelations = relations(skillRatings, ({ one }) => ({
+  session: one(mcpSessions, {
+    fields: [skillRatings.sessionId],
+    references: [mcpSessions.sessionId],
+  }),
+  user: one(users, {
+    fields: [skillRatings.userId],
+    references: [users.id],
+  }),
+}))
 
 export const suggestionsRelations = relations(suggestions, ({ one }) => ({
   plugin: one(catalogItems, {
