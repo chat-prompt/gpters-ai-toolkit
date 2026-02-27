@@ -1,38 +1,13 @@
 /**
  * Statistics dashboard component
  *
- * Displays comprehensive analytics including installation trends,
- * type distribution, popular items, and recent activity.
+ * Displays analytics including type distribution,
+ * category distribution, and recent activity.
  */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-
-/** Trend data point for charts */
-interface TrendData {
-  date?: string
-  week?: string
-  month?: string
-  count: number
-}
-
-interface TopItem {
-  id: string
-  name: string
-  type: string
-  authorName: string
-  installCount: number
-}
-
-interface RecentInstallation {
-  id: string
-  itemId: string
-  itemName: string
-  itemType: string
-  method: string
-  createdAt: string
-}
 
 interface RecentItem {
   id: string
@@ -52,16 +27,7 @@ interface StatsData {
   period: string
   summary: {
     totalItems: number
-    totalInstallations: number
-    avgInstallationsPerDay: number
-    topMethod: string
   }
-  trends: {
-    daily: TrendData[]
-    weekly: TrendData[]
-    monthly: TrendData[]
-  }
-  topItems: TopItem[]
   typeDistribution: {
     skill: number
     agent: number
@@ -69,16 +35,13 @@ interface StatsData {
     guide: number
     hook: number
   }
-  installationsByMethod: Record<string, number>
   categoryDistribution: CategoryData[]
   recentActivity: {
-    installations: RecentInstallation[]
     newItems: RecentItem[]
   }
 }
 
 type Period = '7d' | '30d' | '90d'
-type TrendType = 'daily' | 'weekly' | 'monthly'
 
 // Colors for charts
 const TYPE_COLORS: Record<string, string> = {
@@ -87,24 +50,6 @@ const TYPE_COLORS: Record<string, string> = {
   command: '#10B981',
   guide: '#3B82F6',
   hook: '#EC4899',
-}
-
-const METHOD_COLORS: Record<string, string> = {
-  cli: '#F26522',
-  mcp: '#8B5CF6',
-  plugin: '#10B981',
-  manual_content: '#3B82F6',
-  manual_folder: '#EC4899',
-  manual_file: '#F59E0B',
-}
-
-const METHOD_LABELS: Record<string, string> = {
-  cli: 'CLI',
-  mcp: 'MCP Prompt',
-  plugin: 'Plugin',
-  manual_content: 'Manual Copy',
-  manual_folder: 'Folder Command',
-  manual_file: 'File Path',
 }
 
 /** Bar chart component for category distribution */
@@ -141,139 +86,6 @@ function BarChart({ data, labelKey, valueKey, maxBars = 10 }: {
       })}
     </div>
   )
-}
-
-/** Line chart component for trend visualization */
-function LineChart({ data, dateKey, valueKey }: {
-  data: TrendData[]
-  dateKey: 'date' | 'week' | 'month'
-  valueKey: keyof TrendData
-}) {
-  if (data.length === 0) {
-    return (
-      <div className="h-40 flex items-center justify-center text-[var(--text-muted)]">
-        No data available
-      </div>
-    )
-  }
-
-  const maxValue = Math.max(...data.map(d => Number(d[valueKey]) || 0))
-  const chartHeight = 160
-
-  // Show fewer labels for better readability
-  const labelInterval = Math.ceil(data.length / 7)
-
-  return (
-    <div className="relative">
-      {/* Y-axis labels */}
-      <div className="absolute left-0 top-0 bottom-6 w-8 flex flex-col justify-between text-xs text-[var(--text-muted)]">
-        <span>{maxValue}</span>
-        <span>{Math.round(maxValue / 2)}</span>
-        <span>0</span>
-      </div>
-
-      {/* Chart area */}
-      <div className="ml-10">
-        <svg
-          className="w-full"
-          viewBox={`0 0 ${data.length * 20} ${chartHeight}`}
-          preserveAspectRatio="none"
-          style={{ height: chartHeight }}
-        >
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => (
-            <line
-              key={i}
-              x1="0"
-              y1={chartHeight - ratio * chartHeight}
-              x2={data.length * 20}
-              y2={chartHeight - ratio * chartHeight}
-              stroke="var(--border-subtle)"
-              strokeDasharray="4"
-            />
-          ))}
-
-          {/* Area fill */}
-          <path
-            d={`
-              M 0 ${chartHeight}
-              ${data.map((d, i) => {
-                const value = Number(d[valueKey]) || 0
-                const y = maxValue > 0 ? chartHeight - (value / maxValue) * chartHeight : chartHeight
-                return `L ${i * 20 + 10} ${y}`
-              }).join(' ')}
-              L ${(data.length - 1) * 20 + 10} ${chartHeight}
-              Z
-            `}
-            fill="url(#gradient)"
-            opacity="0.3"
-          />
-
-          {/* Line */}
-          <path
-            d={data.map((d, i) => {
-              const value = Number(d[valueKey]) || 0
-              const y = maxValue > 0 ? chartHeight - (value / maxValue) * chartHeight : chartHeight
-              return `${i === 0 ? 'M' : 'L'} ${i * 20 + 10} ${y}`
-            }).join(' ')}
-            fill="none"
-            stroke="#F26522"
-            strokeWidth="2"
-          />
-
-          {/* Points */}
-          {data.map((d, i) => {
-            const value = Number(d[valueKey]) || 0
-            const y = maxValue > 0 ? chartHeight - (value / maxValue) * chartHeight : chartHeight
-            return (
-              <circle
-                key={i}
-                cx={i * 20 + 10}
-                cy={y}
-                r="3"
-                fill="#F26522"
-              />
-            )
-          })}
-
-          {/* Gradient definition */}
-          <defs>
-            <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#F26522" />
-              <stop offset="100%" stopColor="#F26522" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        {/* X-axis labels */}
-        <div className="flex justify-between mt-2 text-xs text-[var(--text-muted)] overflow-hidden">
-          {data.map((d, i) => (
-            <span
-              key={i}
-              className={`${i % labelInterval === 0 ? 'opacity-100' : 'opacity-0'} truncate`}
-              style={{ width: `${100 / data.length}%`, textAlign: 'center' }}
-            >
-              {formatDateLabel(String(d[dateKey]), dateKey)}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function formatDateLabel(date: string, type: 'date' | 'week' | 'month'): string {
-  if (type === 'month') {
-    const [_year, month] = date.split('-')
-    return `${month}월`
-  }
-  if (type === 'week') {
-    const d = new Date(date)
-    return `${d.getMonth() + 1}/${d.getDate()}`
-  }
-  // Daily
-  const d = new Date(date)
-  return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
 /** Pie/donut chart component for distribution visualization */
@@ -376,8 +188,8 @@ function StatCard({ title, value, subtitle, icon }: {
 /**
  * Main statistics dashboard component
  *
- * Fetches and displays comprehensive analytics for the catalog,
- * including trends, distributions, and activity feeds.
+ * Fetches and displays analytics for the catalog,
+ * including distributions and activity feeds.
  *
  * @example
  * ```tsx
@@ -386,7 +198,6 @@ function StatCard({ title, value, subtitle, icon }: {
  */
 export function StatsDashboard() {
   const [period, setPeriod] = useState<Period>('30d')
-  const [trendType, setTrendType] = useState<TrendType>('daily')
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -417,11 +228,10 @@ export function StatsDashboard() {
       <div className="space-y-6">
         {/* Loading skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2].map(i => (
             <div key={i} className="h-28 rounded-2xl bg-[var(--bg-secondary)] animate-pulse" />
           ))}
         </div>
-        <div className="h-64 rounded-2xl bg-[var(--bg-secondary)] animate-pulse" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="h-80 rounded-2xl bg-[var(--bg-secondary)] animate-pulse" />
           <div className="h-80 rounded-2xl bg-[var(--bg-secondary)] animate-pulse" />
@@ -448,10 +258,6 @@ export function StatsDashboard() {
     return null
   }
 
-  // Get trend data based on selected type
-  const trendData = stats.trends[trendType]
-  const dateKey = trendType === 'daily' ? 'date' : trendType === 'weekly' ? 'week' : 'month'
-
   return (
     <div className="space-y-8">
       {/* Period filter */}
@@ -475,197 +281,75 @@ export function StatsDashboard() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatCard
           title="Total Items"
           value={stats.summary.totalItems}
           icon="📦"
         />
         <StatCard
-          title="Total Installations"
-          value={stats.summary.totalInstallations.toLocaleString()}
-          subtitle={`Last ${period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days'}`}
-          icon="📥"
+          title="Categories"
+          value={stats.categoryDistribution.length}
+          icon="🏷️"
         />
-        <StatCard
-          title="Avg. Daily Installs"
-          value={stats.summary.avgInstallationsPerDay}
-          icon="📊"
-        />
-        <StatCard
-          title="Top Install Method"
-          value={METHOD_LABELS[stats.summary.topMethod] || stats.summary.topMethod}
-          icon="🎯"
-        />
-      </div>
-
-      {/* Installation trend chart */}
-      <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-[var(--text-primary)]">Installation Trend</h3>
-          <div className="flex items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg p-1">
-            {(['daily', 'weekly', 'monthly'] as TrendType[]).map(t => (
-              <button
-                key={t}
-                onClick={() => setTrendType(t)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  trendType === t
-                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-        <LineChart data={trendData} dateKey={dateKey} valueKey="count" />
       </div>
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top 10 items */}
+        {/* Type distribution */}
         <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Top 10 Popular Items</h3>
-          <div className="space-y-3">
-            {stats.topItems.length > 0 ? (
-              stats.topItems.map((item, i) => (
-                <Link
-                  key={item.id}
-                  href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-tertiary)] hover:bg-[var(--bg-primary)] transition-colors"
-                >
-                  <span className="w-6 h-6 flex items-center justify-center rounded-full bg-[var(--bg-secondary)] text-xs font-medium text-[var(--text-muted)]">
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--text-primary)] truncate">{item.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{item.authorName}</p>
-                  </div>
-                  <span
-                    className="px-2 py-1 rounded-md text-xs font-medium"
-                    style={{
-                      backgroundColor: `${TYPE_COLORS[item.type]}20`,
-                      color: TYPE_COLORS[item.type]
-                    }}
-                  >
-                    {item.type}
-                  </span>
-                  <span className="text-sm font-semibold text-[var(--text-primary)]">
-                    {item.installCount}
-                  </span>
-                </Link>
-              ))
-            ) : (
-              <p className="text-center text-[var(--text-muted)] py-8">No installation data yet</p>
-            )}
-          </div>
+          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Content Type Distribution</h3>
+          <PieChart data={stats.typeDistribution} colorMap={TYPE_COLORS} />
         </div>
 
-        {/* Distribution charts */}
-        <div className="space-y-6">
-          {/* Type distribution */}
-          <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Content Type Distribution</h3>
-            <PieChart data={stats.typeDistribution} colorMap={TYPE_COLORS} />
-          </div>
-
-          {/* Installation method distribution */}
-          <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Installation Methods</h3>
-            <PieChart
-              data={Object.fromEntries(
-                Object.entries(stats.installationsByMethod).map(([k, v]) => [METHOD_LABELS[k] || k, v])
-              )}
-              colorMap={Object.fromEntries(
-                Object.entries(METHOD_COLORS).map(([k, v]) => [METHOD_LABELS[k] || k, v])
-              )}
+        {/* Category distribution */}
+        <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
+          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Top Categories</h3>
+          {stats.categoryDistribution.length > 0 ? (
+            <BarChart
+              data={stats.categoryDistribution.map(c => ({ label: c.label, count: c.count }))}
+              labelKey="label"
+              valueKey="count"
             />
-          </div>
+          ) : (
+            <p className="text-center text-[var(--text-muted)] py-8">No category data</p>
+          )}
         </div>
-      </div>
-
-      {/* Category distribution */}
-      <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Top Categories</h3>
-        {stats.categoryDistribution.length > 0 ? (
-          <BarChart
-            data={stats.categoryDistribution.map(c => ({ label: c.label, count: c.count }))}
-            labelKey="label"
-            valueKey="count"
-          />
-        ) : (
-          <p className="text-center text-[var(--text-muted)] py-8">No category data</p>
-        )}
       </div>
 
       {/* Recent activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent installations */}
-        <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Recent Installations</h3>
-          <div className="space-y-3">
-            {stats.recentActivity.installations.length > 0 ? (
-              stats.recentActivity.installations.map(inst => (
-                <div key={inst.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-tertiary)]">
-                  <span className="text-xl">📥</span>
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      href={`/${inst.itemType === 'guide' ? 'guides' : inst.itemType}/${inst.itemId}`}
-                      className="text-sm font-medium text-[var(--text-primary)] hover:text-[#F26522] truncate block"
-                    >
-                      {inst.itemName}
-                    </Link>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      via {METHOD_LABELS[inst.method] || inst.method}
-                    </p>
-                  </div>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    {formatTimeAgo(inst.createdAt)}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-[var(--text-muted)] py-8">No recent installations</p>
-            )}
-          </div>
-        </div>
-
-        {/* Recently added items */}
-        <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Recently Added</h3>
-          <div className="space-y-3">
-            {stats.recentActivity.newItems.length > 0 ? (
-              stats.recentActivity.newItems.map(item => (
-                <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-tertiary)]">
-                  <span className="text-xl">✨</span>
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
-                      className="text-sm font-medium text-[var(--text-primary)] hover:text-[#F26522] truncate block"
-                    >
-                      {item.name}
-                    </Link>
-                    <p className="text-xs text-[var(--text-muted)]">by {item.authorName}</p>
-                  </div>
-                  <span
-                    className="px-2 py-1 rounded-md text-xs font-medium"
-                    style={{
-                      backgroundColor: `${TYPE_COLORS[item.type]}20`,
-                      color: TYPE_COLORS[item.type]
-                    }}
+      <div className="p-6 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
+        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Recently Added</h3>
+        <div className="space-y-3">
+          {stats.recentActivity.newItems.length > 0 ? (
+            stats.recentActivity.newItems.map(item => (
+              <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-tertiary)]">
+                <div className="flex-1 min-w-0">
+                  <Link
+                    href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
+                    className="text-sm font-medium text-[var(--text-primary)] hover:text-[#F26522] truncate block"
                   >
-                    {item.type}
-                  </span>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    {formatTimeAgo(item.createdAt)}
-                  </span>
+                    {item.name}
+                  </Link>
+                  <p className="text-xs text-[var(--text-muted)]">by {item.authorName}</p>
                 </div>
-              ))
-            ) : (
-              <p className="text-center text-[var(--text-muted)] py-8">No new items in this period</p>
-            )}
-          </div>
+                <span
+                  className="px-2 py-1 rounded-md text-xs font-medium"
+                  style={{
+                    backgroundColor: `${TYPE_COLORS[item.type]}20`,
+                    color: TYPE_COLORS[item.type]
+                  }}
+                >
+                  {item.type}
+                </span>
+                <span className="text-xs text-[var(--text-muted)]">
+                  {formatTimeAgo(item.createdAt)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-[var(--text-muted)] py-8">No new items in this period</p>
+          )}
         </div>
       </div>
     </div>

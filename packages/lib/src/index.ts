@@ -105,7 +105,6 @@ export {
   subscribeToBookmarks,
 } from './features/bookmarks'
 
-export * from './features/track-install'
 export * from './features/welfare-engine'
 
 // Playground utilities (excluding ParsedMarkdown which conflicts with utils/frontmatter)
