@@ -20,6 +20,7 @@ const TARGETS = {
   searchToViewPct: 15,      // 검색→조회 전환율 (%)
   viewToDeployPct: 10,      // 조회→배포 전환율 (%)
   zeroResultPct: 10,        // 검색 무결과율 상한 (%)
+  relevanceThreshold: 0.40, // 검색 무결과 판정 기준 (이하면 관련 스킬 없음)
 
   // 퍼널 추적 지표
   skillApplyPct: 50,        // 스킬 적용률 (%)
@@ -146,12 +147,22 @@ async function main() {
       COUNT(*) FILTER (WHERE tool = 'report_search_skip')::int AS skip_count,
       COUNT(*) FILTER (WHERE tool = 'report_skill_outcome')::int AS outcome_count,
       COUNT(*) FILTER (WHERE tool = 'report_skill_outcome' AND (request_params->'params'->'arguments'->>'applied')::boolean = true)::int AS outcome_applied,
-      COUNT(*) FILTER (WHERE response_status = 'error')::int AS error_count,
-      ROUND(AVG(response_time))::int AS avg_response_time,
+      COUNT(*) FILTER (WHERE tool = 'undeploy_skill')::int AS undeploy_count,
+      COUNT(*) FILTER (WHERE tool = 'check_updates')::int AS check_updates_count,
+      COUNT(*) FILTER (WHERE tool = 'suggest_improvement')::int AS suggest_improve_count,
+      COUNT(*) FILTER (WHERE tool = 'list_suggestions')::int AS list_suggest_count,
+      COUNT(*) FILTER (WHERE tool = 'resolve_suggestion')::int AS resolve_suggest_count,
+      COUNT(*) FILTER (WHERE tool = 'add_files')::int AS add_files_count,
+      COUNT(*) FILTER (WHERE tool = 'remove_files')::int AS remove_files_count,
+      COUNT(*) FILTER (WHERE tool = 'report_session_event')::int AS session_event_count,
+      COUNT(*) FILTER (WHERE response_status = 'error' AND tool IS DISTINCT FROM 'report_session_event')::int AS error_count,
+      -- 응답시간: report_session_event 제외 (대량 이벤트로 메트릭 오염 방지)
+      COUNT(*) FILTER (WHERE tool IS DISTINCT FROM 'report_session_event')::int AS effective_logs,
+      ROUND(AVG(response_time) FILTER (WHERE tool IS DISTINCT FROM 'report_session_event'))::int AS avg_response_time,
       ROUND(AVG(response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS avg_search_time,
       ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p50_search_time,
       ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p95_search_time,
-      ROUND(AVG(response_time) FILTER (WHERE tool NOT IN ('search_plugins', 'semantic_search')))::int AS avg_other_time
+      ROUND(AVG(response_time) FILTER (WHERE tool IS NOT NULL AND tool NOT IN ('search_plugins', 'semantic_search', 'report_session_event')))::int AS avg_other_time
     FROM mcp_audit_logs
     WHERE created_at >= NOW() - make_interval(days => ${days})
   `
@@ -162,13 +173,20 @@ async function main() {
   const conversionRate =
     searchCount > 0 ? ((viewFromSearch / searchCount) * 100).toFixed(1) : '0.0'
 
-  console.log(`  총 로그 수:      ${summary.total_logs.toLocaleString()}`)
+  const effectiveLogs = summary.effective_logs || 0
+  console.log(`  총 로그 수:      ${summary.total_logs.toLocaleString()} (유효 ${effectiveLogs.toLocaleString()}, 세션이벤트 ${(summary.session_event_count || 0).toLocaleString()} 제외)`)
   console.log(`  고유 사용자:     ${summary.unique_users.toLocaleString()}`)
   console.log(`  검색 요청:       ${searchCount.toLocaleString()}`)
   console.log(`  스킬 조회:       ${viewCount.toLocaleString()} (검색경유 ${viewFromSearch} / 직접 ${viewCount - viewFromSearch})`)
   console.log(`  배포:            ${summary.deploy_count.toLocaleString()}`)
   console.log(`  검색 스킵 보고:  ${(summary.skip_count || 0).toLocaleString()}`)
   console.log(`  스킬 결과 보고:  ${(summary.outcome_count || 0).toLocaleString()} (적용 ${summary.outcome_applied || 0} / 미적용 ${(summary.outcome_count || 0) - (summary.outcome_applied || 0)})`)
+  console.log(`  배포 해제:       ${(summary.undeploy_count || 0).toLocaleString()}`)
+  console.log(`  업데이트 확인:   ${(summary.check_updates_count || 0).toLocaleString()}`)
+  console.log(`  개선 제안:       ${(summary.suggest_improve_count || 0).toLocaleString()}`)
+  console.log(`  제안 조회/처리:  ${(summary.list_suggest_count || 0).toLocaleString()} / ${(summary.resolve_suggest_count || 0).toLocaleString()}`)
+  console.log(`  파일 추가/제거:  ${(summary.add_files_count || 0).toLocaleString()} / ${(summary.remove_files_count || 0).toLocaleString()}`)
+  console.log(`  세션 이벤트:     ${(summary.session_event_count || 0).toLocaleString()}`)
   console.log(`  에러:            ${summary.error_count.toLocaleString()}`)
   console.log(`  검색→조회 전환율: ${conversionRate}%`)
   console.log(``)
@@ -257,29 +275,121 @@ async function main() {
   // ── 4. 검색 품질 분석 ──
   separator('4. 검색 품질 분석 (전환율 진단)')
 
-  // 4-1. 무결과 검색 (search_results가 빈 배열이거나 NULL)
-  const [searchQuality] = await sql`
+  // 4-1. 미전환 검색 분석 (무결과 + 조회 미이어짐)
+  // 무결과 = 최고 점수가 relevanceThreshold 미만 (실질적으로 쓸만한 결과 없음)
+  const threshold = TARGETS.relevanceThreshold
+  const deadSearchData = await sql`
+    WITH search_logs AS (
+      SELECT
+        id,
+        session_id,
+        request_params->'params'->'arguments'->>'query' AS query,
+        search_results,
+        CASE
+          WHEN search_results IS NULL OR jsonb_array_length(search_results) = 0 THEN true
+          WHEN (search_results->0->>'score')::float < ${threshold} THEN true
+          ELSE false
+        END AS is_low_relevance
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND (tool = 'search_plugins' OR tool = 'semantic_search')
+    ),
+    sessions_with_view AS (
+      SELECT DISTINCT session_id
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND tool = 'get_plugin_content'
+        AND session_id IS NOT NULL
+    )
     SELECT
       COUNT(*)::int AS total_searches,
+      COUNT(*) FILTER (WHERE is_low_relevance)::int AS low_relevance,
+      COUNT(*) FILTER (WHERE NOT is_low_relevance)::int AS has_relevant,
       COUNT(*) FILTER (
-        WHERE search_results IS NULL
-          OR jsonb_array_length(search_results) = 0
-      )::int AS zero_results,
+        WHERE session_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM sessions_with_view v WHERE v.session_id = search_logs.session_id)
+      )::int AS unconverted,
       COUNT(*) FILTER (
-        WHERE search_results IS NOT NULL
-          AND jsonb_array_length(search_results) > 0
-      )::int AS has_results
-    FROM mcp_audit_logs
-    WHERE created_at >= NOW() - make_interval(days => ${days})
-      AND (tool = 'search_plugins' OR tool = 'semantic_search')
+        WHERE is_low_relevance
+          AND session_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM sessions_with_view v WHERE v.session_id = search_logs.session_id)
+      )::int AS unconverted_low_relevance
+    FROM search_logs
   `
 
-  const totalSearches = searchQuality.total_searches || 1
-  const zeroResultPct = (searchQuality.zero_results / totalSearches * 100).toFixed(1)
+  const sq = deadSearchData[0]
+  const totalSearches = sq.total_searches || 1
+  const zeroResultPct = (sq.low_relevance / totalSearches * 100).toFixed(1)
 
-  console.log(`  총 검색:     ${searchQuality.total_searches}건`)
-  console.log(`  결과 있음:   ${searchQuality.has_results}건 (${(searchQuality.has_results / totalSearches * 100).toFixed(1)}%)`)
-  console.log(`  무결과:      ${searchQuality.zero_results}건 (${zeroResultPct}%)`)
+  console.log(`  총 검색:        ${sq.total_searches}건`)
+  console.log(`  유효 결과:      ${sq.has_relevant}건 (top score >= ${threshold})`)
+  console.log(`  저연관/무결과:   ${sq.low_relevance}건 (${zeroResultPct}%) — top score < ${threshold}`)
+  console.log(`  미전환 검색:     ${sq.unconverted}건 (이 중 저연관 ${sq.unconverted_low_relevance}건)`)
+
+  // 미전환 검색어 TOP 15 (개선 대상)
+  const deadSearchTerms = await sql`
+    WITH search_logs AS (
+      SELECT
+        session_id,
+        request_params->'params'->'arguments'->>'query' AS query,
+        CASE
+          WHEN search_results IS NULL OR jsonb_array_length(search_results) = 0 THEN NULL
+          ELSE (search_results->0->>'score')::float
+        END AS top_score
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND (tool = 'search_plugins' OR tool = 'semantic_search')
+        AND request_params->'params'->'arguments'->>'query' IS NOT NULL
+    ),
+    sessions_with_view AS (
+      SELECT DISTINCT session_id
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND tool = 'get_plugin_content'
+        AND session_id IS NOT NULL
+    )
+    SELECT
+      s.query,
+      COUNT(*)::int AS cnt,
+      ROUND(AVG(s.top_score)::numeric, 2) AS avg_score
+    FROM search_logs s
+    WHERE s.session_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM sessions_with_view v WHERE v.session_id = s.session_id)
+    GROUP BY s.query
+    ORDER BY cnt DESC
+    LIMIT 15
+  `
+
+  if (deadSearchTerms.length > 0) {
+    // 고점수(>= threshold) 미전환 = 스킬은 있는데 에이전트가 안 본 것 → 노출/설명 개선
+    const highScoreDead = deadSearchTerms.filter((r) => r.avg_score !== null && parseFloat(r.avg_score) >= threshold)
+    // 저점수(< threshold) 미전환 = 관련 스킬 부족 → 신규 스킬 후보
+    const lowScoreDead = deadSearchTerms.filter((r) => r.avg_score === null || parseFloat(r.avg_score) < threshold)
+
+    if (highScoreDead.length > 0) {
+      console.log(`\n  [미전환 — 고점수] 스킬은 있지만 조회 안 됨 → 제목/설명 개선 필요`)
+      printTable(
+        ['#', '검색어', '횟수', '평균점수'],
+        highScoreDead.map((r, i) => {
+          const q = r.query.length > 50 ? r.query.slice(0, 47) + '...' : r.query
+          return [i + 1, q, r.cnt, r.avg_score]
+        }),
+        [0, 2, 3]
+      )
+    }
+
+    if (lowScoreDead.length > 0) {
+      console.log(`\n  [미전환 — 저점수] 관련 스킬 부족 → 신규 스킬 추가 후보`)
+      printTable(
+        ['#', '검색어', '횟수', '평균점수'],
+        lowScoreDead.map((r, i) => {
+          const q = r.query.length > 50 ? r.query.slice(0, 47) + '...' : r.query
+          return [i + 1, q, r.cnt, r.avg_score !== null ? r.avg_score : '-']
+        }),
+        [0, 2, 3]
+      )
+    }
+  }
 
   // 4-2. 세션별 검색→조회 흐름 분석
   const sessionFunnel = await sql`
@@ -318,51 +428,7 @@ async function main() {
   console.log(`  → 조회로 이어진 세션: ${sf.search_to_view} (${(sf.search_to_view / ssTotal * 100).toFixed(1)}%)`)
   console.log(`  → 배포로 이어진 세션: ${sf.view_to_deploy}`)
 
-  // 4-3. 조회로 이어지지 않은 검색어 TOP 15 (개선 대상)
-  const deadSearches = await sql`
-    WITH search_logs AS (
-      SELECT
-        id,
-        session_id,
-        request_params->'params'->'arguments'->>'query' AS query,
-        search_results
-      FROM mcp_audit_logs
-      WHERE created_at >= NOW() - make_interval(days => ${days})
-        AND (tool = 'search_plugins' OR tool = 'semantic_search')
-        AND request_params->'params'->'arguments'->>'query' IS NOT NULL
-    ),
-    sessions_with_view AS (
-      SELECT DISTINCT session_id
-      FROM mcp_audit_logs
-      WHERE created_at >= NOW() - make_interval(days => ${days})
-        AND tool = 'get_plugin_content'
-        AND session_id IS NOT NULL
-    )
-    SELECT
-      s.query,
-      COUNT(*)::int AS cnt,
-      BOOL_OR(s.search_results IS NULL OR jsonb_array_length(s.search_results) = 0) AS had_zero_results
-    FROM search_logs s
-    WHERE s.session_id IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM sessions_with_view v WHERE v.session_id = s.session_id)
-    GROUP BY s.query
-    ORDER BY cnt DESC
-    LIMIT 15
-  `
-
-  if (deadSearches.length > 0) {
-    console.log(`\n  [조회 미전환 검색어 TOP 15] — 스킬 추가/개선 후보`)
-    printTable(
-      ['#', '검색어', '횟수', '무결과'],
-      deadSearches.map((r, i) => {
-        const q = r.query.length > 50 ? r.query.slice(0, 47) + '...' : r.query
-        return [i + 1, q, r.cnt, r.had_zero_results ? 'Y' : 'N']
-      }),
-      [0, 2]
-    )
-  }
-
-  // ── 4-4. 검색 스킵 분석 (report_search_skip) ──
+  // ── 4-3. 검색 스킵 분석 (report_search_skip) — (구 4-4) ──
   const skipData = await sql`
     SELECT
       request_params->'params'->'arguments'->>'reason' AS reason,
@@ -424,7 +490,7 @@ async function main() {
     )
   }
 
-  // ── 4-5. 스킬 적용률 분석 (report_skill_outcome) ──
+  // ── 4-4. 스킬 적용률 분석 (report_skill_outcome) — (구 4-5) ──
   const outcomeData = await sql`
     SELECT
       request_params->'params'->'arguments'->>'skillId' AS skill_id,
@@ -687,10 +753,344 @@ async function main() {
     )
   }
 
-  // ── 9. 목표 달성 현황 ──
-  separator('9. 목표 달성 현황')
+  // ── 9. 커뮤니티 & 관리 활동 ──
+  separator('9. 커뮤니티 & 관리 활동')
 
-  const totalLogs = summary.total_logs || 1
+  const mgmtTools = await sql`
+    SELECT
+      tool,
+      COUNT(*)::int AS cnt,
+      COUNT(DISTINCT session_id)::int AS sessions,
+      COUNT(DISTINCT ip_hash)::int AS users
+    FROM mcp_audit_logs
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+      AND tool IN ('undeploy_skill', 'check_updates', 'suggest_improvement', 'list_suggestions', 'resolve_suggestion', 'add_files', 'remove_files', 'report_session_event')
+    GROUP BY tool
+    ORDER BY cnt DESC
+  `
+
+  if (mgmtTools.length > 0) {
+    printTable(
+      ['도구', '호출수', '세션', '사용자'],
+      mgmtTools.map((r) => [r.tool, r.cnt, r.sessions, r.users]),
+      [1, 2, 3]
+    )
+
+    // check_updates 상세: 어떤 스킬 업데이트를 확인하는지
+    const updateChecks = await sql`
+      SELECT
+        COALESCE(request_params->'params'->'arguments'->>'installedSkills', '(미지정)') AS skills_checked,
+        COUNT(*)::int AS cnt
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND tool = 'check_updates'
+      GROUP BY skills_checked
+      ORDER BY cnt DESC
+      LIMIT 10
+    `.catch(() => [])
+
+    if (updateChecks.length > 0) {
+      console.log(`\n  [업데이트 확인 내역]`)
+      printTable(
+        ['#', '확인한 스킬 목록', '횟수'],
+        updateChecks.map((r, i) => {
+          const s = r.skills_checked.length > 60 ? r.skills_checked.slice(0, 57) + '...' : r.skills_checked
+          return [i + 1, s, r.cnt]
+        }),
+        [0, 2]
+      )
+    }
+
+    // suggest_improvement 상세
+    const suggestions = await sql`
+      SELECT
+        request_params->'params'->'arguments'->>'pluginId' AS plugin_id,
+        request_params->'params'->'arguments'->>'title' AS title,
+        COUNT(*)::int AS cnt
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND tool = 'suggest_improvement'
+      GROUP BY plugin_id, title
+      ORDER BY cnt DESC
+      LIMIT 10
+    `.catch(() => [])
+
+    if (suggestions.length > 0) {
+      console.log(`\n  [개선 제안 내역]`)
+      printTable(
+        ['#', '스킬 ID', '제안 제목', '건수'],
+        suggestions.map((r, i) => [
+          i + 1,
+          r.plugin_id || '(미지정)',
+          (r.title || '').length > 40 ? r.title.slice(0, 37) + '...' : (r.title || '-'),
+          r.cnt,
+        ]),
+        [0, 3]
+      )
+    }
+
+    // report_session_event 상세: 이벤트 타입별
+    const sessionEvents = await sql`
+      SELECT
+        request_params->'params'->'arguments'->>'eventType' AS event_type,
+        COUNT(*)::int AS cnt
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND tool = 'report_session_event'
+      GROUP BY event_type
+      ORDER BY cnt DESC
+    `.catch(() => [])
+
+    if (sessionEvents.length > 0) {
+      console.log(`\n  [세션 이벤트 타입]`)
+      printTable(
+        ['이벤트 타입', '건수'],
+        sessionEvents.map((r) => [r.event_type || '(미지정)', r.cnt]),
+        [1]
+      )
+    }
+
+    // add_files / remove_files 상세: 어떤 스킬에 파일 작업했는지
+    const fileOps = await sql`
+      SELECT
+        tool,
+        COALESCE(
+          request_params->'params'->'arguments'->>'id',
+          request_params->'params'->'arguments'->>'pluginId',
+          '(미지정)'
+        ) AS skill_id,
+        COUNT(*)::int AS cnt
+      FROM mcp_audit_logs
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+        AND tool IN ('add_files', 'remove_files')
+      GROUP BY tool, skill_id
+      ORDER BY cnt DESC
+      LIMIT 10
+    `.catch(() => [])
+
+    if (fileOps.length > 0) {
+      console.log(`\n  [파일 추가/제거 내역]`)
+      printTable(
+        ['#', '작업', '스킬 ID', '건수'],
+        fileOps.map((r, i) => [i + 1, r.tool, r.skill_id, r.cnt]),
+        [0, 3]
+      )
+    }
+  } else {
+    console.log('  (해당 기간 관리 도구 사용 이력 없음)')
+  }
+
+  // 9-2. 개선 제안 현황 (suggestions 테이블)
+  const suggestionStats = await sql`
+    SELECT
+      status,
+      COUNT(*)::int AS cnt
+    FROM suggestions
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+    GROUP BY status
+    ORDER BY cnt DESC
+  `.catch(() => [])
+
+  if (suggestionStats.length > 0) {
+    const totalSuggestions = suggestionStats.reduce((s, r) => s + r.cnt, 0)
+    console.log(`\n  [개선 제안 현황 — suggestions 테이블]`)
+    console.log(`  총 제안: ${totalSuggestions}건`)
+    printTable(
+      ['상태', '건수', '비율'],
+      suggestionStats.map((r) => [
+        r.status,
+        r.cnt,
+        `${(r.cnt / totalSuggestions * 100).toFixed(1)}%`,
+      ]),
+      [1]
+    )
+
+    // 스킬별 제안 분포
+    const suggestionBySkill = await sql`
+      SELECT
+        plugin_id,
+        COUNT(*)::int AS cnt,
+        COUNT(*) FILTER (WHERE status = 'accepted')::int AS accepted,
+        COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+        COUNT(*) FILTER (WHERE status = 'pending')::int AS pending
+      FROM suggestions
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+      GROUP BY plugin_id
+      ORDER BY cnt DESC
+      LIMIT 10
+    `.catch(() => [])
+
+    if (suggestionBySkill.length > 0) {
+      console.log(`\n  스킬별 제안 TOP 10:`)
+      printTable(
+        ['#', '스킬 ID', '총', '수락', '거절', '대기'],
+        suggestionBySkill.map((r, i) => [i + 1, r.plugin_id, r.cnt, r.accepted, r.rejected, r.pending]),
+        [0, 2, 3, 4, 5]
+      )
+    }
+  }
+
+  // 9-3. 스킬 버전 이력 (item_versions 테이블)
+  const versionStats = await sql`
+    SELECT
+      iv.item_id,
+      ci.name AS item_name,
+      COUNT(*)::int AS version_count,
+      MAX(iv.version) AS latest_version,
+      MAX(iv.created_at) AS last_updated
+    FROM item_versions iv
+    LEFT JOIN catalog_items ci ON ci.id = iv.item_id
+    WHERE iv.created_at >= NOW() - make_interval(days => ${days})
+    GROUP BY iv.item_id, ci.name
+    ORDER BY version_count DESC
+    LIMIT 15
+  `.catch(() => [])
+
+  if (versionStats.length > 0) {
+    console.log(`\n  [스킬 버전 업데이트 — item_versions 테이블]`)
+    const totalVersions = versionStats.reduce((s, r) => s + r.version_count, 0)
+    console.log(`  기간 내 총 버전 업데이트: ${totalVersions}건`)
+    printTable(
+      ['#', '스킬 ID', '이름', '업데이트 수', '최신 버전', '마지막 업데이트'],
+      versionStats.map((r, i) => [
+        i + 1,
+        r.item_id.length > 25 ? r.item_id.slice(0, 22) + '...' : r.item_id,
+        (r.item_name || '-').length > 20 ? r.item_name.slice(0, 17) + '...' : (r.item_name || '-'),
+        r.version_count,
+        r.latest_version,
+        new Date(r.last_updated).toLocaleDateString('ko-KR'),
+      ]),
+      [0, 3]
+    )
+
+    // 버전 타입 분포
+    const versionTypes = await sql`
+      SELECT
+        version_type,
+        COUNT(*)::int AS cnt
+      FROM item_versions
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+      GROUP BY version_type
+      ORDER BY cnt DESC
+    `.catch(() => [])
+
+    if (versionTypes.length > 0) {
+      console.log(`\n  버전 타입 분포:`)
+      printTable(
+        ['타입', '건수'],
+        versionTypes.map((r) => [r.version_type, r.cnt]),
+        [1]
+      )
+    }
+  }
+
+  // ── 10. 스킬별 전환율 분석 (skill_events) ──
+  let matchedHitPctValue = '-'  // section 11에서 재사용
+  separator('10. 스킬별 전환율 분석 (skill_events)')
+
+  const skillFunnel = await sql`
+    SELECT
+      skill_id,
+      COUNT(*) FILTER (WHERE action = 'search')::int AS searches,
+      COUNT(*) FILTER (WHERE action = 'load')::int AS loads,
+      COUNT(*) FILTER (WHERE action = 'apply')::int AS applies,
+      COUNT(*) FILTER (WHERE action = 'skip')::int AS skips,
+      COUNT(*) FILTER (WHERE action = 'deploy')::int AS deploys,
+      COUNT(*) FILTER (WHERE action = 'suggest')::int AS suggests,
+      COUNT(DISTINCT session_id)::int AS sessions
+    FROM skill_events
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+    GROUP BY skill_id
+    ORDER BY loads DESC, searches DESC
+    LIMIT 20
+  `.catch(() => [])
+
+  if (skillFunnel.length > 0) {
+    const [eventSummary] = await sql`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE action = 'search')::int AS searches,
+        COUNT(*) FILTER (WHERE action = 'load')::int AS loads,
+        COUNT(*) FILTER (WHERE action = 'apply')::int AS applies,
+        COUNT(*) FILTER (WHERE action = 'skip')::int AS skips,
+        COUNT(*) FILTER (WHERE action = 'deploy')::int AS deploys,
+        COUNT(DISTINCT session_id)::int AS sessions,
+        COUNT(DISTINCT skill_id)::int AS unique_skills
+      FROM skill_events
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+    `
+
+    console.log(`  총 이벤트: ${eventSummary.total}건 (${eventSummary.unique_skills}개 스킬, ${eventSummary.sessions}개 세션)`)
+    console.log(`  search: ${eventSummary.searches} → load: ${eventSummary.loads} → apply: ${eventSummary.applies} / skip: ${eventSummary.skips} → deploy: ${eventSummary.deploys}`)
+    const globalLoadRate = eventSummary.searches > 0 ? (eventSummary.loads / eventSummary.searches * 100).toFixed(1) : '-'
+    const globalApplyRate = eventSummary.loads > 0 ? (eventSummary.applies / eventSummary.loads * 100).toFixed(1) : '-'
+    console.log(`  전체 search→load: ${globalLoadRate}%, load→apply: ${globalApplyRate}%`)
+
+    console.log(`\n  [스킬별 퍼널 TOP 20]`)
+    printTable(
+      ['#', '스킬 ID', 'search', 'load', 'apply', 'skip', 'deploy', '세션', 'S→L%', 'L→A%'],
+      skillFunnel.map((r, i) => {
+        const s2l = r.searches > 0 ? (r.loads / r.searches * 100).toFixed(0) + '%' : '-'
+        const l2a = r.loads > 0 ? (r.applies / r.loads * 100).toFixed(0) + '%' : '-'
+        return [i + 1, r.skill_id, r.searches, r.loads, r.applies, r.skips, r.deploys, r.sessions, s2l, l2a]
+      }),
+      [0, 2, 3, 4, 5, 6, 7]
+    )
+
+    // 저조한 전환율 스킬 (search 3회 이상인데 load 0)
+    const deadSkills = skillFunnel.filter((r) => r.searches >= 3 && r.loads === 0)
+    if (deadSkills.length > 0) {
+      console.log(`\n  [검색 노출 되지만 조회 안 되는 스킬] — 제목/설명 개선 후보`)
+      printTable(
+        ['#', '스킬 ID', 'search 횟수', 'load 횟수'],
+        deadSkills.map((r, i) => [i + 1, r.skill_id, r.searches, r.loads]),
+        [0, 2, 3]
+      )
+    }
+
+    // ── 10-2. 스킬 매칭 기반 추천 적중률 (Go/No-go 핵심 지표) ──
+    // "추천된 그 스킬을 실제로 조회했는가"를 skill_events의 skill_id 매칭으로 측정
+    const [matchedHitRate] = await sql`
+      WITH search_skills AS (
+        SELECT session_id, skill_id
+        FROM skill_events
+        WHERE action = 'search'
+          AND skill_id IS NOT NULL
+          AND created_at >= NOW() - make_interval(days => ${days})
+      ),
+      loaded_skills AS (
+        SELECT session_id, skill_id
+        FROM skill_events
+        WHERE action = 'load'
+          AND created_at >= NOW() - make_interval(days => ${days})
+      ),
+      matched AS (
+        SELECT DISTINCT ss.session_id, ss.skill_id
+        FROM search_skills ss
+        JOIN loaded_skills ls ON ss.session_id = ls.session_id AND ss.skill_id = ls.skill_id
+      )
+      SELECT
+        (SELECT COUNT(DISTINCT session_id || '::' || skill_id) FROM search_skills) AS total_recommendations,
+        (SELECT COUNT(*) FROM matched) AS matched_loads
+    `.catch(() => [{ total_recommendations: 0, matched_loads: 0 }])
+
+    const totalRecs = parseInt(matchedHitRate.total_recommendations) || 0
+    const matchedLoads = parseInt(matchedHitRate.matched_loads) || 0
+    // matchedHitPct는 section 11 목표 달성에서 재사용하므로 외부 스코프에 할당
+    matchedHitPctValue = totalRecs > 0 ? (matchedLoads / totalRecs * 100).toFixed(1) : '-'
+
+    console.log(`\n  [추천 적중률 — 스킬 매칭 기반] ★ Go/No-go 핵심 지표`)
+    console.log(`  추천된 (세션×스킬) 쌍: ${totalRecs}`)
+    console.log(`  실제 조회 매칭:        ${matchedLoads}`)
+    console.log(`  적중률:                ${matchedHitPctValue}%`)
+  } else {
+    console.log('  (skill_events 데이터 없음 — 테이블 미존재 또는 이벤트 미기록)')
+  }
+
+  // ── 11. 목표 달성 현황 ──
+  separator('11. 목표 달성 현황')
+
+  const totalLogs = effectiveLogs || 1  // report_session_event 제외
   const errorRate = ((summary.error_count || 0) / totalLogs * 100)
   const s2vPct = searchCount > 0 ? (viewFromSearch / searchCount * 100) : 0
   const v2dPct = viewCount > 0 ? ((summary.deploy_count || 0) / viewCount * 100) : 0
@@ -700,17 +1100,21 @@ async function main() {
     ? ((summary.outcome_applied || 0) / summary.outcome_count * 100) : 0
   const searchSkipPct = searchCount > 0
     ? ((summary.skip_count || 0) / searchCount * 100) : 0
+  // skill_events 기반 적중률 (section 9에서 계산된 값 재사용)
+  const skillMatchHitPct = matchedHitPctValue !== '-'
+    ? parseFloat(matchedHitPctValue) : 0
 
   const metrics = [
     {
-      name: '검색→조회 전환율',
-      actual: parseFloat(s2vPct.toFixed(1)),
+      name: '★ 추천 적중률 (스킬매칭)',
+      actual: skillMatchHitPct,
       target: TARGETS.searchToViewPct,
       unit: '%',
       higher: true,
+      note: 'skill_events 기반',
     },
     {
-      name: '세션 전환율',
+      name: '세션 전환율 (검색→조회)',
       actual: parseFloat(sessionS2vPct.toFixed(1)),
       target: TARGETS.searchToViewPct,
       unit: '%',
@@ -774,7 +1178,7 @@ async function main() {
       const achieved = m.higher ? m.actual >= m.target : m.actual <= m.target
       const achievePct = m.higher
         ? pct.toFixed(0) + '%'
-        : (m.target > 0 ? (m.target / m.actual * 100).toFixed(0) + '%' : '-')
+        : (m.actual > 0 ? (m.target / m.actual * 100).toFixed(0) + '%' : '✅ 0')
       return [
         m.name,
         `${m.actual}${m.unit}`,

@@ -487,6 +487,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // report_session_event without session → skip audit log (noise reduction)
+      // These are typically devlog hooks calling HTTP directly without MCP session
+      if (tool === 'report_session_event' && !sid) {
+        return
+      }
+
       await logMcpRequest({
         method,
         tool,
