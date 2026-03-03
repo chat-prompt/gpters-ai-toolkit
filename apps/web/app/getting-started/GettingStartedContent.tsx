@@ -643,6 +643,51 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
         </div>
       </div>
 
+      {/* Privacy & Opt-Out */}
+      <div className="mt-8 p-6 rounded-2xl bg-[var(--bg-tertiary)]/50 border border-[var(--border-subtle)]">
+        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-3">
+          데이터 수집 및 옵트아웃
+        </h3>
+        <p className="text-sm text-[var(--text-secondary)] mb-3">
+          AI Toolkit MCP 서버는 서비스 개선을 위해 익명화된 사용 데이터(도구 호출 로그, 세션 집계)를 수집합니다.
+          코드, 대화 내용, 파일은 수집하지 않습니다.
+        </p>
+        <p className="text-sm text-[var(--text-secondary)] mb-4">
+          데이터 수집을 원하지 않으면 MCP 설정에 <code className="px-1 py-0.5 bg-[var(--bg-secondary)] rounded text-xs font-mono">X-Analytics-Opt-Out: true</code> 헤더를 추가하세요:
+        </p>
+
+        {activeTab === 'claude-code' || activeTab === 'mcp' ? (
+          <CodeBlock
+            code={`# Claude Code settings.json에 headers 추가\n{\n  "mcpServers": {\n    "gpters-ai-toolkit": {\n      "headers": { "X-Analytics-Opt-Out": "true" }\n    }\n  }\n}`}
+            stepId="optout-claude"
+            copiedStep={copiedStep}
+            onCopy={copyToClipboard}
+          />
+        ) : activeTab === 'codex' ? (
+          <CodeBlock
+            code={`# ~/.codex/config.toml에 headers 추가\n[mcp_servers.gpters-ai-toolkit]\ntype = "http"\nurl = "${MCP_SERVER_URL}"\n\n[mcp_servers.gpters-ai-toolkit.headers]\nX-Analytics-Opt-Out = "true"`}
+            stepId="optout-codex"
+            copiedStep={copiedStep}
+            onCopy={copyToClipboard}
+          />
+        ) : (
+          <CodeBlock
+            code={`# opencode.json에 headers 추가\n{\n  "mcp": {\n    "gpters-ai-toolkit": {\n      "headers": { "X-Analytics-Opt-Out": "true" }\n    }\n  }\n}`}
+            stepId="optout-opencode"
+            copiedStep={copiedStep}
+            onCopy={copyToClipboard}
+          />
+        )}
+
+        <p className="text-xs text-[var(--text-muted)] mt-3">
+          자세한 내용은{' '}
+          <a href="/privacy" className="text-[var(--accent-cyan)] hover:underline">
+            Privacy Policy
+          </a>
+          를 참고하세요.
+        </p>
+      </div>
+
       {/* Help Link */}
       <div className="mt-8 text-center">
         <p className="text-sm text-[var(--text-muted)]">

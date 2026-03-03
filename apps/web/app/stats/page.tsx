@@ -5,6 +5,7 @@
  * skill accumulation, utilization, and quality metrics.
  */
 import { ServerHeader } from '@/components/layout/ServerHeader'
+import { Footer } from '@/components/layout/Footer'
 import { WelfareEngineDashboard } from '@/components/welfare-engine/WelfareEngineDashboard'
 
 export const metadata = {
@@ -48,17 +49,7 @@ export default function StatsPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-[var(--border-subtle)] py-8 mt-12">
-        <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
-          <p className="text-xs text-[var(--text-muted)]">
-            AI Toolkit - 복리 엔진
-          </p>
-          <p className="text-xs text-[var(--text-muted)]">
-            Built with Claude Code
-          </p>
-        </div>
-      </footer>
+      <Footer label="AI Toolkit - 복리 엔진" className="mt-12" />
     </div>
   )
 }

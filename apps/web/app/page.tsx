@@ -7,6 +7,7 @@
 import { getCatalog } from '@/lib/core/catalog'
 import { SearchableCatalog } from '@/components/catalog/SearchableCatalog'
 import { ServerHeader } from '@/components/layout/ServerHeader'
+import { Footer } from '@/components/layout/Footer'
 
 // Revalidate every 60 seconds
 export const revalidate = 60
@@ -47,17 +48,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-[var(--border-subtle)] py-8">
-        <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
-          <p className="text-xs text-[var(--text-muted)]">
-            AI Toolkit Catalog
-          </p>
-          <p className="text-xs text-[var(--text-muted)]">
-            Built with Claude Code
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }

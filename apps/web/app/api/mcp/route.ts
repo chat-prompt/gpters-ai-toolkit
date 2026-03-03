@@ -86,7 +86,7 @@ export const fetchCache = 'force-no-store'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Session-Id, Last-Event-ID',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Session-Id, Last-Event-ID, X-Analytics-Opt-Out',
   'Access-Control-Expose-Headers': 'Mcp-Session-Id',
   'Cache-Control': 'no-store, no-cache, must-revalidate',
 }
@@ -512,6 +512,9 @@ export async function POST(request: NextRequest) {
   // after() callbacks read this at execution time, so initialize's new ID is captured
   let resolvedSessionId: string | undefined = incomingSessionId || undefined
 
+  // Check analytics opt-out header
+  const analyticsOptOut = request.headers.get('x-analytics-opt-out') === 'true'
+
   // Helper to log audit entry (fire-and-forget via after())
   const logAudit = (
     method: string,
@@ -522,6 +525,7 @@ export async function POST(request: NextRequest) {
     meta?: ToolExecutionMeta
   ) => {
     if (!auditCtx) return
+    if (analyticsOptOut) return
 
     const responseTime = Date.now() - startTime
     // NOTE: client info and session ID are read inside after() at execution time (deferred),
