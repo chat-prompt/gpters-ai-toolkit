@@ -12,17 +12,17 @@ import crypto from 'crypto'
  * Cache presets for different use cases
  */
 export const CachePresets = {
-  // Public catalog listing - cache for 1 minute, revalidate for 5 minutes
+  // Catalog listing - private cache (personalized by org membership)
   catalogList: {
     maxAge: 60,
     staleWhileRevalidate: 300,
-    public: true,
+    public: false,
   },
-  // Individual catalog item - cache for 2 minutes, revalidate for 10 minutes
+  // Individual catalog item - private cache (personalized by org membership)
   catalogItem: {
     maxAge: 120,
     staleWhileRevalidate: 600,
-    public: true,
+    public: false,
   },
   // MCP server responses - cache for 30 seconds
   mcp: {
@@ -137,7 +137,7 @@ export function cachedJsonResponse<T>(
     headers: {
       'Cache-Control': cacheControl,
       'ETag': etag,
-      'Vary': 'Accept-Encoding',
+      'Vary': 'Accept-Encoding, Cookie',
     },
   })
 }

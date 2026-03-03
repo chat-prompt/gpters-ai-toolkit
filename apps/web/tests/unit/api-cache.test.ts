@@ -109,7 +109,7 @@ describe('API Cache Utilities', () => {
       expect(CachePresets.catalogList).toEqual({
         maxAge: 60,
         staleWhileRevalidate: 300,
-        public: true,
+        public: false,
       })
     })
 
@@ -117,7 +117,7 @@ describe('API Cache Utilities', () => {
       expect(CachePresets.catalogItem).toEqual({
         maxAge: 120,
         staleWhileRevalidate: 600,
-        public: true,
+        public: false,
       })
     })
 
@@ -137,10 +137,10 @@ describe('API Cache Utilities', () => {
       const response = cachedJsonResponse(data, 'catalogList')
 
       expect(response.headers.get('Cache-Control')).toBe(
-        'public, max-age=60, stale-while-revalidate=300'
+        'private, max-age=60, stale-while-revalidate=300'
       )
       expect(response.headers.get('ETag')).toMatch(/^"[a-f0-9]+"$/)
-      expect(response.headers.get('Vary')).toBe('Accept-Encoding')
+      expect(response.headers.get('Vary')).toBe('Accept-Encoding, Cookie')
     })
 
     it('should return 304 for matching ETag', () => {
@@ -224,7 +224,7 @@ describe('API Cache Utilities', () => {
       addCacheHeaders(response, 'catalogList')
 
       expect(response.headers.get('Cache-Control')).toBe(
-        'public, max-age=60, stale-while-revalidate=300'
+        'private, max-age=60, stale-while-revalidate=300'
       )
       expect(response.headers.get('Vary')).toBe('Accept-Encoding')
     })
