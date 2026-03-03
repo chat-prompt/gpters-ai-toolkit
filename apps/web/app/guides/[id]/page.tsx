@@ -49,9 +49,6 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         updatedAt={guide.updatedAt}
         status={guide.status}
         version={guide.version}
-        orgName={guide.orgName}
-        orgId={guide.orgId}
-        visibility={guide.visibility}
       />
 
       {/* Changelog */}

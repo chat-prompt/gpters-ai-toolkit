@@ -130,9 +130,6 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           updatedAt={item.updatedAt}
           status={item.status}
           version={item.version}
-          orgName={item.orgName}
-          orgId={item.orgId}
-          visibility={item.visibility}
           extraBadges={extraBadges}
         />
       </Section>

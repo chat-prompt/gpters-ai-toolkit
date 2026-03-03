@@ -7,8 +7,6 @@
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { StatusBadge } from '../ui/StatusBadge'
 import { VersionPopover } from '../ui/VersionPopover'
-import { OrgBadge } from '../ui/OrgBadge'
-import { VisibilityBadge } from '../ui/VisibilityBadge'
 import { ReactNode } from 'react'
 
 /** Supported catalog item types */
@@ -42,12 +40,6 @@ interface ItemHeroProps {
   estimatedTime?: string
   /** Additional badges to display */
   extraBadges?: ReactNode
-  /** Organization name */
-  orgName?: string | null
-  /** Organization ID */
-  orgId?: string | null
-  /** Item visibility level */
-  visibility?: 'private' | 'public' | null
 }
 
 const TYPE_CONFIG: Record<ItemType, { icon: string; label: string; color: string }> = {
@@ -87,9 +79,6 @@ export function ItemHero({
   version,
   estimatedTime,
   extraBadges,
-  orgName,
-  orgId,
-  visibility,
 }: ItemHeroProps) {
   const config = TYPE_CONFIG[type]
 
@@ -135,11 +124,6 @@ export function ItemHero({
             {TAGS[tag]?.label || tag}
           </span>
         ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <OrgBadge orgName={orgName ?? null} size="md" />
-        <VisibilityBadge visibility={visibility ?? null} size="md" />
       </div>
 
       <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">

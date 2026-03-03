@@ -85,9 +85,6 @@ export default async function SkillPage({ params }: { params: Promise<{ id: stri
           updatedAt={item.updatedAt}
           status={item.status}
           version={item.version}
-          orgName={item.orgName}
-          orgId={item.orgId}
-          visibility={item.visibility}
         />
       </Section>
 
