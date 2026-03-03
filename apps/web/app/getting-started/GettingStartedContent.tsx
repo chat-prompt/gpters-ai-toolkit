@@ -24,12 +24,16 @@ interface Tab {
   description: string
 }
 
-const TABS: Tab[] = [
+/** All available tabs */
+const ALL_TABS: Tab[] = [
   { id: 'claude-code', label: 'Claude Code', description: '플러그인 마켓플레이스' },
   { id: 'opencode', label: 'OpenCode', description: 'npm 레지스트리' },
   { id: 'codex', label: 'Codex CLI', description: 'npx setup' },
   { id: 'mcp', label: 'MCP 직접 연결', description: 'claude mcp add' },
 ]
+
+/** Tab IDs only visible to internal (@gpters.org) users */
+const INTERNAL_ONLY_TABS: Set<TabId> = new Set(['opencode', 'codex'])
 
 /**
  * Reusable step badge component
@@ -551,10 +555,13 @@ function McpDirectTab({
 /**
  * Interactive getting started content with tabbed setup guides
  *
- * Provides four installation methods: Claude Code plugin, OpenCode plugin,
- * Codex CLI plugin, and direct MCP server connection.
+ * Provides installation methods filtered by user type.
+ * Internal users see all options; external users see only Claude Code and MCP direct.
+ *
+ * @param isInternal - Whether the user belongs to the internal organization
  */
-export function GettingStartedContent() {
+export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
+  const tabs = isInternal ? ALL_TABS : ALL_TABS.filter(t => !INTERNAL_ONLY_TABS.has(t.id))
   const [activeTab, setActiveTab] = useState<TabId>('claude-code')
   const [copiedStep, setCopiedStep] = useState<string | null>(null)
 
@@ -587,7 +594,7 @@ export function GettingStartedContent() {
 
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-8">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}

@@ -5,9 +5,17 @@
  * integration and Claude Code hooks with step-by-step instructions.
  */
 import { ServerHeader } from '@/components/layout/ServerHeader'
+import { auth } from '@/lib/core/auth'
 import { GettingStartedContent } from './GettingStartedContent'
 
-export default function GettingStartedPage() {
+/** Internal email domain for full plugin access */
+const INTERNAL_DOMAIN = 'gpters.org'
+
+export default async function GettingStartedPage() {
+  const session = await auth()
+  const email = session?.user?.email ?? ''
+  const isInternal = email.endsWith(`@${INTERNAL_DOMAIN}`)
+
   return (
     <div className="min-h-screen grid-pattern noise-overlay">
       {/* Ambient Background */}
@@ -19,7 +27,7 @@ export default function GettingStartedPage() {
       <ServerHeader />
 
       <main className="relative z-10 max-w-3xl mx-auto px-8 py-12">
-        <GettingStartedContent />
+        <GettingStartedContent isInternal={isInternal} />
       </main>
     </div>
   )
