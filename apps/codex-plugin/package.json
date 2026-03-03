@@ -9,11 +9,10 @@
   "files": [
     "dist",
     "skills",
-    "templates",
-    "scripts"
+    "templates"
   ],
   "scripts": {
-    "build": "bun build src/setup.ts src/paths.ts src/config-toml.ts src/skills-installer.ts src/prompts.ts --outdir dist/src --target node --format esm && bun build bin/setup.ts --outdir dist/bin --target node --format esm && cp -r skills dist/ && cp -r templates dist/ && cp -r scripts dist/",
+    "build": "bun build src/setup.ts src/paths.ts src/config-toml.ts src/skills-installer.ts src/prompts.ts --outdir dist/src --target node --format esm && bun build bin/setup.ts --outdir dist/bin --target node --format esm && cp -r skills dist/ && cp -r templates dist/",
     "dev": "bun build bin/setup.ts --outdir dist/bin --target node --format esm --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
