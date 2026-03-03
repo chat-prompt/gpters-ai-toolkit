@@ -128,6 +128,17 @@ vi.mock('@gpters/db', () => {
   },
 }})
 
+// Mock auth and rbac (used for visibility filtering in catalog.ts)
+// catalog.ts imports from './auth' which resolves to packages/lib/src/core/auth.ts
+vi.mock('../../../../packages/lib/src/core/auth', () => ({
+  auth: vi.fn().mockResolvedValue({
+    user: { role: 'super_admin', currentOrgId: 'org-123' },
+  }),
+}))
+vi.mock('../../../../packages/lib/src/security/rbac', () => ({
+  isSuperAdmin: (role: string) => role === 'super_admin',
+}))
+
 // Mock drizzle-orm operators
 vi.mock('drizzle-orm', () => ({
   eq: (...args: unknown[]) => ({ op: 'eq', args }),

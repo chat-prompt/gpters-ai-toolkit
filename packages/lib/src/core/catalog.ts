@@ -7,6 +7,41 @@
 import { eq, ne, and, or, isNull, asc, sql, desc } from 'drizzle-orm'
 import { db, catalogItems, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
+import { auth } from './auth'
+import { isSuperAdmin, type UserRole } from '../security/rbac'
+
+/**
+ * Safely get the current session. Returns null when called outside
+ * a request scope (e.g., during generateStaticParams at build time).
+ */
+async function safeAuth() {
+  try {
+    return await auth()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Build org-based visibility filter conditions.
+ * Super admins see everything; others see only public items + their own org's items.
+ */
+function buildVisibilityFilter(userRole?: string | null, currentOrgId?: string | null) {
+  if (userRole && isSuperAdmin(userRole as UserRole)) {
+    return undefined
+  }
+
+  return currentOrgId
+    ? or(
+        eq(catalogItems.orgId, currentOrgId),
+        eq(catalogItems.visibility, 'public'),
+        isNull(catalogItems.orgId)
+      )
+    : or(
+        eq(catalogItems.visibility, 'public'),
+        isNull(catalogItems.orgId)
+      )
+}
 
 // ============================================================================
 // Field Selection for Query Optimization
@@ -188,6 +223,15 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
     return []
   }
 
+  const session = await safeAuth()
+  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
+
+  const whereConditions = [
+    ne(catalogItems.type, 'guide'),
+    or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+    ...(visFilter ? [visFilter] : []),
+  ]
+
   const records = await db
     .select({
       ...summaryColumns,
@@ -197,12 +241,7 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
     .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
-    .where(
-      and(
-        ne(catalogItems.type, 'guide'),
-        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
-      )
-    )
+    .where(and(...whereConditions))
 
   return records.map(toSummaryObject)
 }
@@ -222,7 +261,19 @@ export async function getItemById(id: string): Promise<CatalogItem | undefined> 
     .where(eq(catalogItems.id, id))
 
   if (!result) return undefined
-  
+
+  // Enforce visibility: non-super-admins cannot access private items from other orgs
+  const session = await safeAuth()
+  const currentOrgId = session?.user?.currentOrgId
+  const userRole = session?.user?.role
+
+  if (!userRole || !isSuperAdmin(userRole as UserRole)) {
+    const item = result.item
+    if (item.visibility === 'private' && item.orgId !== currentOrgId) {
+      return undefined
+    }
+  }
+
   const item = toPlainObject(result.item)
   return {
     ...item,
@@ -231,10 +282,19 @@ export async function getItemById(id: string): Promise<CatalogItem | undefined> 
 }
 
 /**
- * Get published items of a specific type.
+ * Get published items of a specific type with org-based visibility filtering.
  * Uses composite index: catalog_items_type_status_idx
  */
 export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary[]> {
+  const session = await safeAuth()
+  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
+
+  const whereConditions = [
+    eq(catalogItems.type, type),
+    or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+    ...(visFilter ? [visFilter] : []),
+  ]
+
   const records = await db
     .select({
       ...summaryColumns,
@@ -244,12 +304,7 @@ export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
     .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
-    .where(
-      and(
-        eq(catalogItems.type, type),
-        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
-      )
-    )
+    .where(and(...whereConditions))
   return records.map(toSummaryObject)
 }
 
@@ -258,6 +313,15 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
     return []
   }
 
+  const session = await safeAuth()
+  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
+
+  const whereConditions = [
+    eq(catalogItems.type, 'guide'),
+    or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+    ...(visFilter ? [visFilter] : []),
+  ]
+
   const records = await db
     .select({
       ...summaryColumns,
@@ -267,12 +331,7 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
     .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
-    .where(
-      and(
-        eq(catalogItems.type, 'guide'),
-        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
-      )
-    )
+    .where(and(...whereConditions))
   return records.map(toSummaryObject)
 }
 
@@ -292,7 +351,19 @@ export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | 
     )
 
   if (!result) return undefined
-  
+
+  // Enforce visibility: non-super-admins cannot access private items from other orgs
+  const session = await safeAuth()
+  const currentOrgId = session?.user?.currentOrgId
+  const userRole = session?.user?.role
+
+  if (!userRole || !isSuperAdmin(userRole as UserRole)) {
+    const raw = result.item
+    if (raw.visibility === 'private' && raw.orgId !== currentOrgId) {
+      return undefined
+    }
+  }
+
   const item = toPlainObject(result.item)
   return {
     ...item,
@@ -304,6 +375,14 @@ export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | 
  * Get published items suitable for beginners (easy difficulty or beginner tag).
  */
 export async function getBeginnerItems(): Promise<CatalogItemSummary[]> {
+  const session = await safeAuth()
+  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
+
+  const whereConditions = [
+    or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+    ...(visFilter ? [visFilter] : []),
+  ]
+
   const records = await db
     .select({
       ...summaryColumns,
@@ -313,7 +392,7 @@ export async function getBeginnerItems(): Promise<CatalogItemSummary[]> {
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
     .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
-    .where(or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)))
+    .where(and(...whereConditions))
 
   return records
     .map(toSummaryObject)
@@ -354,6 +433,9 @@ export async function getRelatedItems(
   authorId: string | null,
   limit: number = 6
 ): Promise<CatalogItemSummary[]> {
+  const session = await safeAuth()
+  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
+
   // Build tag array literal for SQL
   const tagArrayLiteral = tags.length > 0
     ? sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)
@@ -368,6 +450,18 @@ export async function getRelatedItems(
     : sql<number>`0`
   const totalScore = sql<number>`(${tagScore} + ${authorScore})`
 
+  const whereConditions = [
+    ne(catalogItems.id, itemId),
+    or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+    or(
+      tagArrayLiteral
+        ? sql`${catalogItems.tags} && ${tagArrayLiteral}`
+        : sql`false`,
+      authorId ? eq(catalogItems.authorId, authorId) : sql`false`
+    ),
+    ...(visFilter ? [visFilter] : []),
+  ]
+
   // Filter at DB level: only items with at least one matching tag or same author
   const records = await db
     .select({
@@ -378,18 +472,7 @@ export async function getRelatedItems(
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
     .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
-    .where(
-      and(
-        ne(catalogItems.id, itemId),
-        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-        or(
-          tagArrayLiteral
-            ? sql`${catalogItems.tags} && ${tagArrayLiteral}`
-            : sql`false`,
-          authorId ? eq(catalogItems.authorId, authorId) : sql`false`
-        )
-      )
-    )
+    .where(and(...whereConditions))
     .orderBy(desc(totalScore), desc(catalogItems.updatedAt))
     .limit(limit)
 
