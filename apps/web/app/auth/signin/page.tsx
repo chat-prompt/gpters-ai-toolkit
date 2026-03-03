@@ -1,8 +1,8 @@
 /**
  * Sign in page
  *
- * Authentication page with Google OAuth login for @gpters.org
- * domain users. Features glassmorphism card with animated gradient
+ * Authentication page with Google OAuth login.
+ * Features glassmorphism card with animated gradient
  * orb background. Redirects authenticated users to callback URL.
  */
 import { signIn } from '@/lib/core/auth'
@@ -71,7 +71,7 @@ export default async function SignInPage({
               AI Toolkit
             </h1>
             <p className="text-sm text-[var(--text-secondary)]">
-              GPTers 팀을 위한 AI 도구 허브
+              Claude Code 스킬, 에이전트, 가이드 공유 플랫폼
             </p>
           </div>
 
