@@ -16,6 +16,9 @@ import { UpdateNotificationBell } from '../actions/UpdateNotificationBell'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
 import type { UserRole } from '@/lib/security/rbac'
 
+/** Roles that can access the stats page */
+const STATS_ROLES: UserRole[] = ['super_admin', 'admin', 'editor']
+
 /**
  * Props for the Header component
  */
@@ -56,7 +59,8 @@ export function Header({ user }: HeaderProps) {
   const isGuidesTab = pathname.startsWith('/guides')
   const isStartTab = pathname.startsWith('/getting-started')
   const isStatsTab = pathname.startsWith('/stats')
-  const isCatalogTab = !isGuidesTab && !isStartTab && !isStatsTab
+  const canViewStats = user?.role && STATS_ROLES.includes(user.role)
+  const isCatalogTab = !isGuidesTab && !isStartTab && !(isStatsTab && canViewStats)
 
   return (
     <header className="relative z-[1010] border-b border-[var(--border-subtle)]">
@@ -109,16 +113,18 @@ export function Header({ user }: HeaderProps) {
               >
                 Guides
               </Link>
-              <Link
-                href="/stats"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isStatsTab
-                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                Stats
-              </Link>
+              {canViewStats && (
+                <Link
+                  href="/stats"
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    isStatsTab
+                      ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  Stats
+                </Link>
+              )}
             </nav>
           </div>
 

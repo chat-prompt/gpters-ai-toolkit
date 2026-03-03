@@ -1,14 +1,16 @@
 /**
- * Public statistics API route
+ * Admin statistics API route
  *
  * GET: Retrieve platform-wide statistics including item counts
  * and content for the stats dashboard.
+ * Requires CATALOG_VIEW permission (admin only).
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db, catalogItems, tags, catalogItemTags, users } from '@/lib/db'
-import { ApiErrors } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { Permissions } from '@/lib/security/rbac'
 import { auth } from '@/lib/core/auth'
 import { eq, or, isNull } from 'drizzle-orm'
 
@@ -32,9 +34,13 @@ function getPeriodDate(period: Period): Date {
 }
 
 export async function GET(request: NextRequest) {
-  // Rate limit: 100 requests per minute
-  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  // Rate limit: 60 requests per minute for admin operations
+  const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
+
+  // Check RBAC permission
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_VIEW, request)
+  if (permissionError) return permissionError
 
   try {
     const { searchParams } = new URL(request.url)

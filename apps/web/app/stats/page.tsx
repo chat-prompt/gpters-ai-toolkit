@@ -1,19 +1,32 @@
 /**
- * Statistics page - Welfare Engine Dashboard
+ * Statistics page - Welfare Engine Dashboard (Admin only)
  *
- * Public analytics dashboard displaying welfare engine metrics:
+ * Admin-restricted analytics dashboard displaying welfare engine metrics:
  * skill accumulation, utilization, and quality metrics.
  */
+import { auth } from '@/lib/core/auth'
+import { redirect } from 'next/navigation'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 import { Footer } from '@/components/layout/Footer'
 import { WelfareEngineDashboard } from '@/components/welfare-engine/WelfareEngineDashboard'
+import type { UserRole } from '@/lib/security/rbac'
+
+/** Roles that can access the stats page */
+const STATS_ROLES: UserRole[] = ['super_admin', 'admin', 'editor']
 
 export const metadata = {
   title: '복리 엔진 - AI Toolkit',
   description: '스킬 축적, 활용, 품질 지표를 확인하세요',
 }
 
-export default function StatsPage() {
+export default async function StatsPage() {
+  const session = await auth()
+  const userRole = session?.user?.role as UserRole | undefined
+
+  if (!session?.user || !userRole || !STATS_ROLES.includes(userRole)) {
+    redirect('/')
+  }
+
   return (
     <div className="min-h-screen grid-pattern noise-overlay">
       {/* Ambient Background Gradients */}

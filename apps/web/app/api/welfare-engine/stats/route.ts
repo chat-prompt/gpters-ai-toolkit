@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ApiErrors } from '@/lib/utils/api-utils'
+import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { Permissions } from '@/lib/security/rbac'
 import {
   getWelfareEngineStats,
   getSkillViewRanking,
@@ -55,8 +56,12 @@ function getWeekStart(date: Date = new Date()): Date {
 }
 
 export async function GET(request: NextRequest) {
-  const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
+  const rateLimitError = withRateLimit(request, RateLimitPresets.admin)
   if (rateLimitError) return rateLimitError
+
+  // Check RBAC permission
+  const permissionError = await requirePermissionAsync(Permissions.CATALOG_VIEW, request)
+  if (permissionError) return permissionError
 
   try {
     const { searchParams } = new URL(request.url)
