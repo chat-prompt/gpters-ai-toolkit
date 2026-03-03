@@ -1,18 +1,22 @@
 /**
- * Normalized skill event and rating recording functions
+ * Normalized skill event recording functions
  *
- * Writes individual skill interaction events to the `skill_events` table
- * and rating feedback to the `skill_ratings` table for fine-grained analytics.
+ * Writes individual skill interaction events to the `skill_events` table for fine-grained analytics.
  * All functions are fire-and-forget: errors are logged but never thrown.
  */
 
-import { db, skillEvents, skillRatings } from '@gpters/db'
+import { db, skillEvents } from '@gpters/db'
 import { createLogger } from '../core/logger'
 
 const log = createLogger('skill-events')
 
+/** Sentinel skill ID for zero-result search events */
+export const ZERO_RESULT_SKILL_ID = '__zero_result__'
+
 /**
- * Record search events for all skills returned in a search result
+ * Record search events for all skills returned in a search result.
+ * When results are empty, records a single zero-result event
+ * to enable accurate zero-result rate measurement.
  *
  * @param params - Search event parameters
  * @param params.sessionId - MCP session ID
@@ -27,7 +31,19 @@ export async function recordSearchEvents(params: {
   results: Array<{ itemId: string; rank: number; score: number }>
 }): Promise<void> {
   try {
-    if (params.results.length === 0) return
+    if (params.results.length === 0) {
+      // Record zero-result search event for accurate zero-result rate tracking
+      await db.insert(skillEvents).values({
+        sessionId: params.sessionId,
+        userId: params.userId,
+        skillId: ZERO_RESULT_SKILL_ID,
+        action: 'search' as const,
+        query: params.query,
+        rank: 0,
+        score: 0,
+      })
+      return
+    }
 
     const rows = params.results.map((r) => ({
       sessionId: params.sessionId,
@@ -97,6 +113,48 @@ export async function recordOutcomeEvent(params: {
     })
   } catch (error) {
     log.warn('Failed to record outcome event', { error, sessionId: params.sessionId })
+  }
+}
+
+/**
+ * Record auto-skip outcome events for skills loaded but not explicitly reported
+ *
+ * Called when a session ends or times out. For each unreported skill,
+ * inserts a 'skip' event with an auto-generated context message.
+ *
+ * @param params - Auto-skip event parameters
+ * @param params.sessionId - MCP session ID
+ * @param params.userId - Authenticated user ID (optional)
+ * @param params.loadedSkillIds - Skill IDs loaded via get_plugin_content
+ * @param params.reportedSkillIds - Skill IDs explicitly reported via report_skill_outcome
+ */
+export async function recordAutoSkipEvents(params: {
+  sessionId: string
+  userId?: string
+  loadedSkillIds: string[]
+  reportedSkillIds: string[]
+}): Promise<void> {
+  const reportedSet = new Set(params.reportedSkillIds)
+  const unreported = params.loadedSkillIds.filter(id => !reportedSet.has(id))
+  if (unreported.length === 0) return
+
+  try {
+    const rows = unreported.map(skillId => ({
+      sessionId: params.sessionId,
+      userId: params.userId,
+      skillId,
+      action: 'skip' as const,
+      context: 'auto: 세션 종료까지 명시적 보고 없음',
+    }))
+
+    await db.insert(skillEvents).values(rows)
+    log.debug('Auto-skip events recorded', {
+      sessionId: params.sessionId,
+      count: unreported.length,
+      skills: unreported,
+    })
+  } catch (error) {
+    log.warn('Failed to record auto-skip events', { error, sessionId: params.sessionId })
   }
 }
 
@@ -185,32 +243,3 @@ export async function recordSuggestEvent(params: {
   }
 }
 
-/**
- * Record a skill rating (1-5 stars with optional comment)
- *
- * @param params - Rating parameters
- * @param params.sessionId - MCP session ID
- * @param params.userId - Authenticated user ID (optional)
- * @param params.skillId - ID of the rated skill
- * @param params.rating - Rating value (1-5)
- * @param params.comment - Optional feedback comment
- */
-export async function recordSkillRating(params: {
-  sessionId: string
-  userId?: string
-  skillId: string
-  rating: number
-  comment?: string
-}): Promise<void> {
-  try {
-    await db.insert(skillRatings).values({
-      sessionId: params.sessionId,
-      userId: params.userId,
-      skillId: params.skillId,
-      rating: params.rating,
-      comment: params.comment,
-    })
-  } catch (error) {
-    log.warn('Failed to record skill rating', { error, sessionId: params.sessionId })
-  }
-}

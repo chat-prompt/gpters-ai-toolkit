@@ -1,8 +1,8 @@
 /**
  * Skill popularity scoring based on usage data.
  *
- * Primarily queries the normalised skill_events table for apply counts
- * and skill_ratings for average ratings. Falls back to mcp_audit_logs
+ * Primarily queries the normalised skill_events table for apply counts.
+ * Falls back to mcp_audit_logs
  * when skill_events is empty (initial migration period).
  *
  * Results are cached in-memory with a 5-minute TTL to avoid
@@ -19,8 +19,6 @@ const log = createLogger('popularity')
 export interface SkillPopularity {
   /** Number of times the skill was applied */
   applyCount: number
-  /** Average rating (1-5), or null if no ratings */
-  avgRating: number | null
 }
 
 /** Normalised popularity score (0-1) */
@@ -62,8 +60,7 @@ export function invalidatePopularityCache(): void {
 /**
  * Fetch popularity data from the normalised skill_events table.
  *
- * Counts apply events per skill and joins with skill_ratings for
- * average rating.
+ * Counts apply events per skill.
  *
  * @returns Map of skillId to aggregated popularity metrics, or null if skill_events is empty
  */
@@ -92,42 +89,12 @@ async function fetchFromSkillEvents(): Promise<PopularityMap | null> {
       GROUP BY skill_id
     `)
 
-    // Aggregate average ratings from skill_ratings
-    const ratingRows = await db.execute<{
-      skill_id: string
-      avg_rating: string | null
-    }>(sql`
-      SELECT
-        skill_id,
-        AVG(rating)::text AS avg_rating
-      FROM skill_ratings
-      GROUP BY skill_id
-    `)
-
-    // Build rating lookup
-    const ratingMap = new Map<string, number>()
-    for (const row of ratingRows.rows) {
-      if (row.avg_rating !== null) {
-        ratingMap.set(row.skill_id, parseFloat(row.avg_rating))
-      }
-    }
-
-    // Merge apply counts and ratings
     const map: PopularityMap = new Map()
 
     for (const row of applyRows.rows) {
-      const skillId = row.skill_id
-      map.set(skillId, {
+      map.set(row.skill_id, {
         applyCount: parseInt(row.apply_count, 10) || 0,
-        avgRating: ratingMap.get(skillId) ?? null,
       })
-    }
-
-    // Include skills that have ratings but no apply events
-    for (const [skillId, avgRating] of ratingMap) {
-      if (!map.has(skillId)) {
-        map.set(skillId, { applyCount: 0, avgRating })
-      }
     }
 
     log.info('Popularity data loaded from skill_events', { skillCount: map.size })
@@ -150,7 +117,6 @@ async function fetchFromSkillEvents(): Promise<PopularityMap | null> {
  * For `report_skill_outcome` calls we extract:
  * - `skillId` from `request_params->'params'->'arguments'->>'skillId'`
  * - `applied` (boolean) from `request_params->'params'->'arguments'->>'applied'`
- * - `rating` (number 1-5) from `request_params->'params'->'arguments'->>'rating'`
  *
  * @returns Map of skillId to aggregated popularity metrics
  */
@@ -159,18 +125,12 @@ async function fetchFromAuditLogs(): Promise<PopularityMap> {
     const rows = await db.execute<{
       skill_id: string
       apply_count: string
-      avg_rating: string | null
     }>(sql`
       SELECT
         request_params->'params'->'arguments'->>'skillId' AS skill_id,
         COUNT(*) FILTER (
           WHERE request_params->'params'->'arguments'->>'applied' = 'true'
-        )::text AS apply_count,
-        AVG(
-          (request_params->'params'->'arguments'->>'rating')::numeric
-        ) FILTER (
-          WHERE request_params->'params'->'arguments'->>'rating' IS NOT NULL
-        )::text AS avg_rating
+        )::text AS apply_count
       FROM mcp_audit_logs
       WHERE tool = 'report_skill_outcome'
         AND response_status = 'success'
@@ -183,7 +143,6 @@ async function fetchFromAuditLogs(): Promise<PopularityMap> {
     for (const row of rows.rows) {
       map.set(row.skill_id, {
         applyCount: parseInt(row.apply_count, 10) || 0,
-        avgRating: row.avg_rating !== null ? parseFloat(row.avg_rating) : null,
       })
     }
 
@@ -240,9 +199,7 @@ export async function getPopularityMap(): Promise<PopularityMap> {
  * Compute a normalised popularity score (0-1) for a single skill.
  *
  * Formula:
- * - applyComponent = min(applyCount / 10, 1.0) * 0.5
- * - ratingComponent = (avgRating / 5) * 0.5   (0 if no ratings)
- * - popularityScore = applyComponent + ratingComponent
+ * - score = min(applyCount / 10, 1.0)
  *
  * @param popularity - Aggregated metrics for the skill, or undefined for unknown skills
  * @returns A number between 0 and 1 (inclusive)
@@ -252,11 +209,7 @@ export function computePopularityScore(
 ): number {
   if (!popularity) return 0
 
-  const applyComponent = Math.min(popularity.applyCount / 10, 1.0) * 0.5
-  const ratingComponent =
-    popularity.avgRating !== null ? (popularity.avgRating / 5) * 0.5 : 0
-
-  return applyComponent + ratingComponent
+  return Math.min(popularity.applyCount / 10, 1.0)
 }
 
 /**

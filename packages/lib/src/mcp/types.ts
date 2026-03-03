@@ -359,12 +359,6 @@ export interface ToolExecutionMeta {
     applied: boolean
     summary: string
   }
-  /** Human skill rating feedback */
-  skillRating?: {
-    skillId: string
-    rating: number
-    comment?: string
-  }
 }
 
 export interface SemanticSearchResult {
@@ -422,15 +416,3 @@ export interface ReportSkillOutcomeInput {
   summary: string
 }
 
-/**
- * Input for rating a skill (human feedback).
- * Allows users to provide a numeric rating and optional comment.
- */
-export interface RateSkillInput {
-  /** Skill ID to rate */
-  skillId: string
-  /** Rating from 1 (not helpful) to 5 (very helpful) */
-  rating: number
-  /** Optional one-line feedback comment */
-  comment?: string
-}
