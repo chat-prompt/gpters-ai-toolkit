@@ -70,7 +70,7 @@ export function Header({ user }: HeaderProps) {
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-3 flex-shrink-0">
               <Image
-                src="/gpters-logo.svg"
+                src="/gpters-logo.png"
                 alt="AI Toolkit"
                 width={32}
                 height={32}

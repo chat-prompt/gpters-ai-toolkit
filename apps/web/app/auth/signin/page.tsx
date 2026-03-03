@@ -60,7 +60,7 @@ export default async function SignInPage({
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] mb-5 animate-glow-pulse">
               <Image
-                src="/gpters-logo.svg"
+                src="/gpters-logo.png"
                 alt="AI Toolkit"
                 width={48}
                 height={48}
