@@ -29,8 +29,6 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
     notFound()
   }
 
-  const currentOrgId = session?.user?.currentOrgId
-
   // Fetch related items
   const relatedItems = await getRelatedItems(item.id, item.tags, item.authorId ?? null, 6)
 
@@ -85,7 +83,6 @@ export default async function CommandPage({ params }: { params: Promise<{ id: st
           orgName={item.orgName}
           orgId={item.orgId}
           visibility={item.visibility}
-          currentOrgId={currentOrgId}
         />
       </Section>
 

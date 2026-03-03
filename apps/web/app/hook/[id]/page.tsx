@@ -65,8 +65,6 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
     notFound()
   }
 
-  const currentOrgId = session?.user?.currentOrgId
-
   const hookEvent = item.hookEvent as HookEvent | undefined
   const eventInfo = hookEvent ? HOOK_EVENTS[hookEvent] : null
 
@@ -135,7 +133,6 @@ export default async function HookPage({ params }: { params: Promise<{ id: strin
           orgName={item.orgName}
           orgId={item.orgId}
           visibility={item.visibility}
-          currentOrgId={currentOrgId}
           extraBadges={extraBadges}
         />
       </Section>

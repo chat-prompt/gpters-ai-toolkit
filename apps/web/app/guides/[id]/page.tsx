@@ -24,8 +24,6 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
     notFound()
   }
 
-  const currentOrgId = session?.user?.currentOrgId
-
   return (
     <DetailPageLayout accentColor="emerald">
       {/* Back Navigation */}
@@ -54,7 +52,6 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
         orgName={guide.orgName}
         orgId={guide.orgId}
         visibility={guide.visibility}
-        currentOrgId={currentOrgId}
       />
 
       {/* Changelog */}

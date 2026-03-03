@@ -9,7 +9,6 @@ import { StatusBadge } from '../ui/StatusBadge'
 import { VersionPopover } from '../ui/VersionPopover'
 import { OrgBadge } from '../ui/OrgBadge'
 import { VisibilityBadge } from '../ui/VisibilityBadge'
-import { ForkButton } from './ForkButton'
 import { ReactNode } from 'react'
 
 /** Supported catalog item types */
@@ -49,8 +48,6 @@ interface ItemHeroProps {
   orgId?: string | null
   /** Item visibility level */
   visibility?: 'private' | 'public' | null
-  /** Current user's organization ID */
-  currentOrgId?: string | null
 }
 
 const TYPE_CONFIG: Record<ItemType, { icon: string; label: string; color: string }> = {
@@ -93,7 +90,6 @@ export function ItemHero({
   orgName,
   orgId,
   visibility,
-  currentOrgId,
 }: ItemHeroProps) {
   const config = TYPE_CONFIG[type]
 
@@ -155,12 +151,6 @@ export function ItemHero({
           </>
         )}
       </div>
-
-      {((orgId && currentOrgId && orgId !== currentOrgId) || (!orgId && currentOrgId)) && (
-        <div className="mt-6">
-          <ForkButton itemId={itemId} />
-        </div>
-      )}
     </div>
   )
 }
