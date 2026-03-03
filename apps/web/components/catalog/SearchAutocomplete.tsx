@@ -462,7 +462,7 @@ export function SearchAutocomplete({
                     </span>
                   ) : suggestion.type === 'hint' ? (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
-                      TRY THIS
+                      HINT
                     </span>
                   ) : (
                     <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
