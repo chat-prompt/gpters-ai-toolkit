@@ -8,7 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, mcpAuditLogs, catalogItems, mcpSessions } from '@gpters/db'
 import { sql, eq, and, gte, isNotNull, count } from 'drizzle-orm'
-import { auth } from '@/lib/core/auth'
+import { requirePermissionAsync } from '@/lib/utils/api-utils'
+import { Permissions } from '@/lib/security/rbac'
 
 export const dynamic = 'force-dynamic'
 
@@ -434,11 +435,9 @@ async function getSessionConversion(since: Date) {
  * Requires admin authentication.
  */
 export async function GET(request: NextRequest) {
-  // Auth check
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // Admin RBAC check
+  const authError = await requirePermissionAsync(Permissions.CATALOG_VIEW, request)
+  if (authError) return authError
 
   const { searchParams } = new URL(request.url)
   const reportType = (searchParams.get('reportType') || 'full') as ReportType
