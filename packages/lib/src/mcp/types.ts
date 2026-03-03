@@ -85,7 +85,6 @@ export interface DeploySkillResponse {
   changelog: string
   status: string
   webUrl: string
-  installHint: string
   error?: string
   // GitHub sync result
   githubSync?: {

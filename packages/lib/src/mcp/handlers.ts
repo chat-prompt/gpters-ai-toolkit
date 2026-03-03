@@ -662,7 +662,6 @@ export async function deploySkill(
       changelog: '',
       status: 'published',
       webUrl: '',
-      installHint: '',
       error: `ID "${id}"에 허용되지 않는 문자가 포함되어 있습니다. 영문 소문자, 숫자, 하이픈만 사용 가능합니다. (예: "my-skill-name")`,
     }
   }
@@ -700,8 +699,7 @@ export async function deploySkill(
         changelog: '',
         status: 'published',
         webUrl: '',
-        installHint: '',
-        error: `신규 배포 시 ${missingFields.join(', ')}은(는) 필수입니다. description(스킬 설명)과 tags(관련 키워드 배열)를 포함해주세요.`,
+          error: `신규 배포 시 ${missingFields.join(', ')}은(는) 필수입니다. description(스킬 설명)과 tags(관련 키워드 배열)를 포함해주세요.`,
       }
     }
   }
@@ -716,8 +714,7 @@ export async function deploySkill(
         changelog: '',
         status: 'published',
         webUrl: '',
-        installHint: '',
-        error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+          error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
       }
     }
 
@@ -730,8 +727,7 @@ export async function deploySkill(
         changelog: '',
         status: 'published',
         webUrl: '',
-        installHint: '',
-        error: `본인이 배포한 플러그인만 업데이트할 수 있습니다. '${name}'의 소유자가 아닙니다.`,
+          error: `본인이 배포한 플러그인만 업데이트할 수 있습니다. '${name}'의 소유자가 아닙니다.`,
       }
     }
   }
@@ -749,7 +745,6 @@ export async function deploySkill(
       changelog: '',
       status: 'published',
       webUrl: '',
-      installHint: '',
       error: '새 배포 시 content는 필수입니다.',
     }
   }
@@ -856,7 +851,6 @@ export async function deploySkill(
     changelog: versionInfo.changelog,
     status,
     webUrl: `${BASE_URL}/${type}/${id}`,
-    installHint: `팀원들은 "${name} 설치해줘"라고 하면 돼요.`,
     ...(qualityWarnings.length > 0 ? { qualityWarnings } : {}),
   }
 
