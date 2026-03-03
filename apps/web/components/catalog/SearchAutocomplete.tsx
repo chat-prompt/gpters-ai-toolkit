@@ -12,9 +12,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CatalogItemSummary, TAGS, ItemType } from '@/lib/core/types'
 import {
   naturalLanguageSearch,
-  getSearchSuggestions,
   extractKeywords,
-  COMMON_SEARCH_SUGGESTIONS,
 } from '@/lib/search/search-utils'
 import { useSearchSuggestions } from '@/lib/search/use-server-search'
 
@@ -120,16 +118,9 @@ export function SearchAutocomplete({
 
   // Generate suggestions based on query (memoized)
   const generateSuggestions = useCallback((query: string): Suggestion[] => {
-    // Show common suggestions when query is empty or very short
+    // No suggestions for empty or very short queries
     if (!query.trim() || query.length < 2) {
-      // Return hint suggestions for common queries
-      return COMMON_SEARCH_SUGGESTIONS.slice(0, 4).map(s => ({
-        type: 'hint' as const,
-        value: s.query,
-        label: s.query,
-        icon: '💡',
-        description: s.description,
-      }))
+      return []
     }
 
     const lowerQuery = query.toLowerCase()
@@ -232,20 +223,6 @@ export function SearchAutocomplete({
         }
       }
     })
-
-    // If no results found and there's a query, add search suggestions
-    if (results.length === 0 && query.length >= 2) {
-      const searchHints = getSearchSuggestions(query, 3)
-      searchHints.forEach(hint => {
-        results.push({
-          type: 'hint',
-          value: hint.query,
-          label: hint.query,
-          icon: '🔍',
-          description: hint.description,
-        })
-      })
-    }
 
     // Limit and sort: NLP matches first, then items, then tags, then authors
     const sortOrder = { nlp: 0, item: 1, tag: 2, author: 3, hint: 4, server: 0 }
@@ -371,11 +348,6 @@ export function SearchAutocomplete({
       onChange(`tag:${suggestion.value}`)
     } else if (suggestion.type === 'author') {
       onChange(`author:${suggestion.value}`)
-    } else if (suggestion.type === 'hint') {
-      // Apply the suggested search query
-      onChange(suggestion.value)
-      // Don't close - let user see results for the suggested query
-      return
     }
     onSelect?.(suggestion)
     setIsOpen(false)
@@ -459,10 +431,6 @@ export function SearchAutocomplete({
                         : 'bg-purple-500/20 text-purple-400'
                     }`}>
                       {suggestion.matchType === 'exact' ? 'EXACT' : suggestion.matchType === 'keyword' ? 'KEYWORD' : 'NL'}
-                    </span>
-                  ) : suggestion.type === 'hint' ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
-                      HINT
                     </span>
                   ) : (
                     <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
