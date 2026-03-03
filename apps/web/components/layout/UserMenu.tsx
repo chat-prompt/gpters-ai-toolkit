@@ -37,7 +37,7 @@ interface UserMenuProps {
  * @returns true if user can access admin panel
  */
 function hasAdminAccess(role?: UserRole): boolean {
-  return role === 'admin' || role === 'editor' || role === 'viewer'
+  return role === 'super_admin' || role === 'admin' || role === 'editor'
 }
 
 /**
