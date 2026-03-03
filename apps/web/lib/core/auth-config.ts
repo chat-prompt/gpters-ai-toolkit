@@ -39,8 +39,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           )
 
         if (matchingOrgs.length === 0) {
-          log.warn('Login denied: no matching organizations', { email, domain })
-          return false
+          // Fallback: enroll external users into the public organization
+          const [publicOrg] = await db
+            .select()
+            .from(organizations)
+            .where(
+              and(
+                eq(organizations.slug, 'public'),
+                eq(organizations.isActive, true)
+              )
+            )
+
+          if (!publicOrg) {
+            log.warn('Login denied: no matching orgs and no public org', { email, domain })
+            return false
+          }
+
+          matchingOrgs.push(publicOrg)
+          log.info('External user matched to public org', { email, domain, orgId: publicOrg.id })
         }
 
         const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1)
