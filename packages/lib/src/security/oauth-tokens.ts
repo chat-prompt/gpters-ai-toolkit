@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db, oauthAccessTokens, oauthClients, users } from '@gpters/db'
-import { eq, sql } from 'drizzle-orm'
+import { db, oauthAccessTokens, oauthClients, oauthRefreshTokens, users } from '@gpters/db'
+import { eq, and, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 import { getBaseUrl } from '../utils'
 
@@ -293,6 +293,223 @@ export function oauthAuthError(message: string, status: 401 | 403 = 401): NextRe
     },
     { status, headers }
   )
+}
+
+// ============================================
+// Refresh Token Constants & Types
+// ============================================
+
+const REFRESH_TOKEN_PREFIX = 'mrt_'
+const REFRESH_TOKEN_LENGTH = 32 // hex characters after prefix
+
+/** Refresh token validity period (30 days) */
+export const REFRESH_TOKEN_EXPIRY_SECONDS = 30 * 24 * 60 * 60
+
+/** Access token validity period (1 hour) */
+export const ACCESS_TOKEN_EXPIRY_SECONDS = 60 * 60
+
+/**
+ * Options for creating a refresh token
+ */
+export interface CreateRefreshTokenOptions {
+  clientId: string
+  userId: string
+  accessTokenId: string
+  scope?: string
+  /** Token chain identifier. Auto-generated if not provided */
+  familyId?: string
+  /** Rotation counter within the family */
+  generation?: number
+}
+
+/**
+ * Result of creating a refresh token
+ */
+export interface CreateRefreshTokenResult {
+  token: string // Raw token (only returned once)
+  id: string
+  familyId: string
+}
+
+/**
+ * Result of validating a refresh token
+ */
+export interface RefreshTokenValidationResult {
+  valid: boolean
+  id?: string
+  clientId?: string
+  userId?: string
+  accessTokenId?: string
+  scope?: string
+  familyId?: string
+  generation?: number
+  error?: string
+}
+
+// ============================================
+// Refresh Token Functions
+// ============================================
+
+/**
+ * Generate a cryptographically secure refresh token
+ * Format: mrt_[32 hex characters]
+ */
+export function generateRefreshToken(): string {
+  const randomBytes = crypto.getRandomValues(new Uint8Array(REFRESH_TOKEN_LENGTH / 2))
+  const hexString = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  return `${REFRESH_TOKEN_PREFIX}${hexString}`
+}
+
+/**
+ * Validate refresh token format
+ */
+export function isValidRefreshTokenFormat(token: string): boolean {
+  if (!token.startsWith(REFRESH_TOKEN_PREFIX)) return false
+  const hexPart = token.slice(REFRESH_TOKEN_PREFIX.length)
+  if (hexPart.length !== REFRESH_TOKEN_LENGTH) return false
+  return /^[0-9a-f]+$/i.test(hexPart)
+}
+
+/**
+ * Create a new refresh token and store its hash in the database
+ */
+export async function createRefreshToken(
+  options: CreateRefreshTokenOptions
+): Promise<CreateRefreshTokenResult> {
+  const rawToken = generateRefreshToken()
+  const tokenHash = await hashToken(rawToken)
+  const familyId = options.familyId ?? crypto.randomUUID()
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_SECONDS * 1000)
+
+  const [record] = await db
+    .insert(oauthRefreshTokens)
+    .values({
+      tokenHash,
+      clientId: options.clientId,
+      userId: options.userId,
+      accessTokenId: options.accessTokenId,
+      scope: options.scope,
+      familyId,
+      generation: options.generation ?? 0,
+      expiresAt,
+    })
+    .returning({ id: oauthRefreshTokens.id })
+
+  log.info('Refresh token created', {
+    refreshTokenId: record.id,
+    clientId: options.clientId,
+    userId: options.userId,
+    familyId,
+    generation: options.generation ?? 0,
+  })
+
+  return {
+    token: rawToken,
+    id: record.id,
+    familyId,
+  }
+}
+
+/**
+ * Validate a refresh token against the database
+ *
+ * Checks format, hash match, expiration, and active status.
+ * If a used (inactive) token is presented, this is a replay attack —
+ * the entire token family is revoked.
+ */
+export async function validateRefreshToken(
+  token: string
+): Promise<RefreshTokenValidationResult> {
+  if (!isValidRefreshTokenFormat(token)) {
+    return { valid: false, error: 'Invalid refresh token format' }
+  }
+
+  try {
+    const tokenHash = await hashToken(token)
+
+    const [record] = await db
+      .select()
+      .from(oauthRefreshTokens)
+      .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
+
+    if (!record) {
+      return { valid: false, error: 'Invalid refresh token' }
+    }
+
+    // Replay detection: if a previously rotated token is reused,
+    // revoke the entire family to prevent token theft
+    if (!record.isActive) {
+      log.warn('Refresh token replay detected — revoking family', {
+        refreshTokenId: record.id,
+        familyId: record.familyId,
+        revokeReason: record.revokeReason,
+      })
+      await revokeTokenFamily(record.familyId, 'replay_detected')
+      return { valid: false, error: 'Token reuse detected — family revoked' }
+    }
+
+    // Check expiration
+    if (record.expiresAt < new Date()) {
+      log.warn('Refresh token expired', { refreshTokenId: record.id })
+      return { valid: false, error: 'Refresh token expired' }
+    }
+
+    return {
+      valid: true,
+      id: record.id,
+      clientId: record.clientId,
+      userId: record.userId,
+      accessTokenId: record.accessTokenId ?? undefined,
+      scope: record.scope ?? undefined,
+      familyId: record.familyId,
+      generation: record.generation,
+    }
+  } catch (error) {
+    log.error('Refresh token validation error', error)
+    return { valid: false, error: 'Refresh token validation failed' }
+  }
+}
+
+/**
+ * Revoke all refresh tokens in a family
+ *
+ * Used when replay attack is detected or user logs out.
+ */
+export async function revokeTokenFamily(
+  familyId: string,
+  reason: string
+): Promise<void> {
+  await db
+    .update(oauthRefreshTokens)
+    .set({
+      isActive: false,
+      revokedAt: new Date(),
+      revokeReason: reason,
+    })
+    .where(
+      and(
+        eq(oauthRefreshTokens.familyId, familyId),
+        eq(oauthRefreshTokens.isActive, true),
+      )
+    )
+
+  log.info('Token family revoked', { familyId, reason })
+}
+
+/**
+ * Revoke a specific access token (deactivate it)
+ *
+ * Used during refresh token rotation to invalidate the old access token.
+ */
+export async function revokeAccessToken(accessTokenId: string): Promise<void> {
+  await db
+    .update(oauthAccessTokens)
+    .set({ isActive: false })
+    .where(eq(oauthAccessTokens.id, accessTokenId))
+
+  log.info('Access token revoked', { accessTokenId })
 }
 
 /**

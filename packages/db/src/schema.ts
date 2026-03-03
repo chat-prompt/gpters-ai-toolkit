@@ -404,10 +404,39 @@ export const oauthAccessTokens = pgTable('oauth_access_tokens', {
 export type OAuthAccessTokenRecord = typeof oauthAccessTokens.$inferSelect
 export type NewOAuthAccessTokenRecord = typeof oauthAccessTokens.$inferInsert
 
+// OAuth Refresh Tokens - Issued alongside access tokens for token rotation
+export const oauthRefreshTokens = pgTable('oauth_refresh_tokens', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of refresh token
+  clientId: text('client_id').notNull().references(() => oauthClients.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  accessTokenId: text('access_token_id').references(() => oauthAccessTokens.id, { onDelete: 'set null' }),
+  scope: text('scope'),
+  /** Token chain identifier — all tokens from the same auth code share a familyId */
+  familyId: text('family_id').notNull(),
+  /** Rotation counter within the family (starts at 0) */
+  generation: integer('generation').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokeReason: text('revoke_reason'), // 'rotated' | 'user_logout' | 'replay_detected' | 'manual'
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('oauth_refresh_tokens_token_hash_idx').on(table.tokenHash),
+  index('oauth_refresh_tokens_user_id_idx').on(table.userId),
+  index('oauth_refresh_tokens_client_id_idx').on(table.clientId),
+  index('oauth_refresh_tokens_family_id_idx').on(table.familyId),
+  index('oauth_refresh_tokens_expires_at_idx').on(table.expiresAt),
+])
+
+export type OAuthRefreshTokenRecord = typeof oauthRefreshTokens.$inferSelect
+export type NewOAuthRefreshTokenRecord = typeof oauthRefreshTokens.$inferInsert
+
 // Relations for OAuth tables
 export const oauthClientsRelations = relations(oauthClients, ({ many }) => ({
   codes: many(oauthCodes),
   accessTokens: many(oauthAccessTokens),
+  refreshTokens: many(oauthRefreshTokens),
 }))
 
 export const oauthCodesRelations = relations(oauthCodes, ({ one }) => ({
@@ -429,6 +458,21 @@ export const oauthAccessTokensRelations = relations(oauthAccessTokens, ({ one })
   user: one(users, {
     fields: [oauthAccessTokens.userId],
     references: [users.id],
+  }),
+}))
+
+export const oauthRefreshTokensRelations = relations(oauthRefreshTokens, ({ one }) => ({
+  client: one(oauthClients, {
+    fields: [oauthRefreshTokens.clientId],
+    references: [oauthClients.id],
+  }),
+  user: one(users, {
+    fields: [oauthRefreshTokens.userId],
+    references: [users.id],
+  }),
+  accessToken: one(oauthAccessTokens, {
+    fields: [oauthRefreshTokens.accessTokenId],
+    references: [oauthAccessTokens.id],
   }),
 }))
 
@@ -743,50 +787,6 @@ export const skillEventsRelations = relations(skillEvents, ({ one }) => ({
   }),
   user: one(users, {
     fields: [skillEvents.userId],
-    references: [users.id],
-  }),
-}))
-
-// ============================================
-// Skill Ratings Table (Human Feedback)
-// ============================================
-
-/**
- * User ratings for skills (1-5 scale)
- *
- * Collected via rate_skill MCP tool. One rating per user per skill per session.
- * Enables: skill quality ranking, feedback-driven improvements.
- */
-export const skillRatings = pgTable('skill_ratings', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  sessionId: text('session_id').notNull().references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
-  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-  skillId: text('skill_id').notNull(),
-
-  /** Rating from 1 (not helpful) to 5 (very helpful) */
-  rating: integer('rating').notNull(),
-
-  /** Optional one-line feedback */
-  comment: text('comment'),
-
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index('skill_ratings_skill_id_idx').on(table.skillId),
-  index('skill_ratings_user_id_idx').on(table.userId),
-  index('skill_ratings_created_at_idx').on(table.createdAt),
-])
-
-export type SkillRatingRecord = typeof skillRatings.$inferSelect
-export type NewSkillRatingRecord = typeof skillRatings.$inferInsert
-
-/** Relations for skill ratings */
-export const skillRatingsRelations = relations(skillRatings, ({ one }) => ({
-  session: one(mcpSessions, {
-    fields: [skillRatings.sessionId],
-    references: [mcpSessions.sessionId],
-  }),
-  user: one(users, {
-    fields: [skillRatings.userId],
     references: [users.id],
   }),
 }))

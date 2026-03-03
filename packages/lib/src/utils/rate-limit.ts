@@ -196,4 +196,10 @@ export const RateLimitPresets = {
 
   /** Installation tracking: 200 requests per minute (high volume) */
   tracking: { limit: 200, windowSec: 60 },
+
+  /** Authenticated users: 300 requests per minute */
+  authenticated: { limit: 300, windowSec: 60 },
+
+  /** Authenticated admin users: 600 requests per minute */
+  authenticatedAdmin: { limit: 600, windowSec: 60 },
 } as const

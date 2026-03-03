@@ -63,12 +63,12 @@ import {
   recordSearchEvents,
   recordLoadEvent,
   recordOutcomeEvent,
+  recordAutoSkipEvents,
   recordSearchSkipEvent,
   recordDeployEvent,
   recordSuggestEvent,
-  recordSkillRating,
+  finalizeSession,
 } from '@/lib/analytics'
-import { finalizeSession } from '@/lib/analytics'
 import {
   resolveClientType,
   extractClientInfo,
@@ -91,14 +91,27 @@ const corsHeaders = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
 }
 
-// In-memory session store (for serverless, consider using Redis/KV in production)
-const sessions = new Map<string, {
+/**
+ * In-memory session state for MCP connections
+ *
+ * Tracks client info and skill interaction for outcome auto-reporting.
+ */
+interface InMemorySession {
   createdAt: number
   lastAccess: number
   clientType?: ClientType
   clientName?: string
   clientVersion?: string
-}>()
+  /** Skill IDs loaded via get_plugin_content during this session */
+  loadedSkills: Set<string>
+  /** Skill IDs explicitly reported via report_skill_outcome */
+  reportedSkills: Set<string>
+  /** Authenticated user ID (for auto-skip event recording) */
+  userId?: string
+}
+
+// In-memory session store (for serverless, consider using Redis/KV in production)
+const sessions = new Map<string, InMemorySession>()
 
 // Session timeout (30 minutes)
 const SESSION_TIMEOUT = 30 * 60 * 1000
@@ -140,17 +153,43 @@ function getOrCreateSession(sessionId: string | null): string {
   }
 
   const newSessionId = generateSessionId()
-  sessions.set(newSessionId, { createdAt: Date.now(), lastAccess: Date.now() })
+  sessions.set(newSessionId, {
+    createdAt: Date.now(),
+    lastAccess: Date.now(),
+    loadedSkills: new Set(),
+    reportedSkills: new Set(),
+  })
   return newSessionId
 }
 
 /**
+ * Flush auto-skip events for a single in-memory session
+ *
+ * Delegates to the shared recordAutoSkipEvents from analytics library.
+ *
+ * @param sessionId - MCP session ID
+ * @param session - In-memory session state
+ */
+async function flushAutoSkipForSession(sessionId: string, session: InMemorySession): Promise<void> {
+  await recordAutoSkipEvents({
+    sessionId,
+    userId: session.userId,
+    loadedSkillIds: [...session.loadedSkills],
+    reportedSkillIds: [...session.reportedSkills],
+  })
+}
+
+/**
  * Clean up expired sessions (called periodically)
+ *
+ * Records auto-skip events for unreported skills before removing sessions.
  */
 function cleanupSessions() {
   const now = Date.now()
   for (const [id, session] of sessions.entries()) {
     if (now - session.lastAccess > SESSION_TIMEOUT) {
+      // Fire-and-forget: record auto-skip events before removing session
+      flushAutoSkipForSession(id, session).catch(() => {})
       sessions.delete(id)
     }
   }
@@ -227,12 +266,23 @@ async function handleAuthAndRateLimit(
     userAgent: auditCtx.userAgent,
   })
 
-  // If authenticated with token, token-based rate limiting is already applied
-  // If not authenticated, apply IP-based rate limiting
-  if (!authResult.auth) {
+  // Apply rate limiting based on authentication status
+  if (authResult.auth?.userId) {
+    // Authenticated users: userId-based rate limit with role-based tier
+    const isAdmin = authResult.auth.userRole === 'super_admin' || authResult.auth.userRole === 'admin'
+    const preset = isAdmin ? RateLimitPresets.authenticatedAdmin : RateLimitPresets.authenticated
+    const rateLimitError = withRateLimit(request, {
+      ...preset,
+      identifier: () => `user:${authResult.auth!.userId}`,
+    })
+    if (rateLimitError) {
+      after(() => logRateLimitEvent(request, authResult.auth))
+      return { error: addCorsHeaders(rateLimitError), auditCtx }
+    }
+  } else {
+    // Unauthenticated: IP-based rate limiting
     const rateLimitError = withRateLimit(request, RateLimitPresets.standard)
     if (rateLimitError) {
-      // Log rate limit event
       after(() => logRateLimitEvent(request, authResult.auth))
       return { error: addCorsHeaders(rateLimitError), auditCtx }
     }
@@ -365,10 +415,14 @@ export async function DELETE(request: NextRequest) {
     })
   }
 
-  // Best-effort cleanup of in-memory session (may not exist in serverless)
+  // Record auto-skip events for unreported skills before removing session
+  const session = sessions.get(sessionId)
   sessions.delete(sessionId)
   // Always attempt DB finalization — no-op if session doesn't exist in DB
   after(async () => {
+    if (session) {
+      await flushAutoSkipForSession(sessionId, session).catch(() => {})
+    }
     await finalizeSession(sessionId).catch(() => {})
   })
   return new NextResponse(null, {
@@ -576,28 +630,14 @@ export async function POST(request: NextRequest) {
           }).catch(() => {})
         }
 
-        // Handle human skill rating feedback
-        if (meta?.skillRating) {
-          await upsertSessionSummary({
-            sessionId: sid,
-            userId: auth?.userId,
-            accessTokenId: auditCtx?.tokenId,
-            clientType: ct,
-            clientName: cn,
-            tool: 'rate_skill',
-            action: 'other',
-            responseStatus: 'success',
-            skillId: meta.skillRating.skillId,
-          }).catch(() => {})
-        }
-
-        // ── Normalized skill_events / skill_ratings recording ──
-        if (meta?.searchResults && meta.searchResults.length > 0) {
+        // ── Normalized skill_events recording ──
+        // Record search events including zero-result searches for accurate metrics
+        if (meta?.searchResults !== undefined) {
           await recordSearchEvents({
             sessionId: sid,
             userId: auth?.userId,
             query: extractSearchQuery(body, tool) ?? '',
-            results: meta.searchResults,
+            results: meta.searchResults ?? [],
           }).catch(() => {})
         }
 
@@ -609,6 +649,13 @@ export async function POST(request: NextRequest) {
               userId: auth?.userId,
               skillId,
             }).catch(() => {})
+
+            // Track loaded skill in session for auto-skip on session end
+            const sess = sid ? sessions.get(sid) : undefined
+            if (sess) {
+              sess.loadedSkills.add(skillId)
+              sess.userId = auth?.userId
+            }
           }
         }
 
@@ -620,6 +667,12 @@ export async function POST(request: NextRequest) {
             applied: meta.skillOutcome.applied,
             summary: meta.skillOutcome.summary,
           }).catch(() => {})
+
+          // Track reported skill in session to exclude from auto-skip
+          const sess = sid ? sessions.get(sid) : undefined
+          if (sess) {
+            sess.reportedSkills.add(meta.skillOutcome.skillId)
+          }
         }
 
         if (meta?.searchSkip) {
@@ -629,16 +682,6 @@ export async function POST(request: NextRequest) {
             query: meta.searchSkip.query,
             resultIds: meta.searchSkip.resultIds,
             reason: meta.searchSkip.reason,
-          }).catch(() => {})
-        }
-
-        if (meta?.skillRating) {
-          await recordSkillRating({
-            sessionId: sid,
-            userId: auth?.userId,
-            skillId: meta.skillRating.skillId,
-            rating: meta.skillRating.rating,
-            comment: meta.skillRating.comment,
           }).catch(() => {})
         }
 

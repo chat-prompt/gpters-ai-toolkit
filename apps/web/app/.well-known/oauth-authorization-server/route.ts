@@ -34,7 +34,7 @@ export async function GET() {
       token_endpoint: `${BASE_URL}/oauth/token`,
       registration_endpoint: `${BASE_URL}/oauth/register`,
       response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'], // PKCE required, S256 only
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
       service_documentation: `${BASE_URL}/docs/mcp-oauth`,

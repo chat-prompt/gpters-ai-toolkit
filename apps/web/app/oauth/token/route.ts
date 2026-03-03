@@ -2,7 +2,7 @@
  * OAuth 2.1 Token Endpoint
  *
  * Exchanges authorization codes for access tokens with PKCE verification.
- * Supports the authorization_code grant type only per OAuth 2.1 spec.
+ * Supports authorization_code and refresh_token grant types per OAuth 2.1 spec.
  *
  * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#section-4.1.3
  */
@@ -14,8 +14,17 @@ import {
   getClient,
   verifyClientSecret,
 } from "@/lib/security/oauth";
-import { createAccessToken } from "@/lib/security/oauth-tokens";
+import {
+  createAccessToken,
+  createRefreshToken,
+  validateRefreshToken,
+  revokeAccessToken,
+  ACCESS_TOKEN_EXPIRY_SECONDS,
+  REFRESH_TOKEN_EXPIRY_SECONDS,
+} from "@/lib/security/oauth-tokens";
 import { createLogger } from "@/lib/core/logger";
+import { db, oauthRefreshTokens } from "@gpters/db";
+import { eq } from "drizzle-orm";
 
 const log = createLogger("oauth-token");
 
@@ -47,6 +56,7 @@ export async function POST(request: NextRequest) {
     let clientId: string | null = null;
     let clientSecret: string | null = null;
     let codeVerifier: string | null = null;
+    let refreshToken: string | null = null;
 
     const contentType = request.headers.get("content-type") || "";
     log.info("Token request received", {
@@ -62,6 +72,7 @@ export async function POST(request: NextRequest) {
       clientId = json.client_id ?? null;
       clientSecret = json.client_secret ?? null;
       codeVerifier = json.code_verifier ?? null;
+      refreshToken = json.refresh_token ?? null;
     } else {
       // Try to parse as form data; fall back to reading raw text for edge cases
       try {
@@ -73,6 +84,7 @@ export async function POST(request: NextRequest) {
         clientId = formData.get("client_id") as string | null;
         clientSecret = formData.get("client_secret") as string | null;
         codeVerifier = formData.get("code_verifier") as string | null;
+        refreshToken = formData.get("refresh_token") as string | null;
       } catch {
         // If formData parsing fails, try JSON as fallback
         const text = await request.text();
@@ -87,6 +99,7 @@ export async function POST(request: NextRequest) {
           clientId = json.client_id ?? null;
           clientSecret = json.client_secret ?? null;
           codeVerifier = json.code_verifier ?? null;
+          refreshToken = json.refresh_token ?? null;
         } catch {
           // Try URL-encoded parsing manually
           const params = new URLSearchParams(text);
@@ -96,6 +109,7 @@ export async function POST(request: NextRequest) {
           clientId = params.get("client_id");
           clientSecret = params.get("client_secret");
           codeVerifier = params.get("code_verifier");
+          refreshToken = params.get("refresh_token");
         }
       }
     }
@@ -127,13 +141,19 @@ export async function POST(request: NextRequest) {
     });
 
     // Validate grant_type
-    if (grantType !== "authorization_code") {
+    if (grantType !== "authorization_code" && grantType !== "refresh_token") {
       return tokenError(
         "unsupported_grant_type",
-        "Only grant_type=authorization_code is supported",
+        "Supported grant types: authorization_code, refresh_token",
       );
     }
 
+    // ── grant_type=refresh_token ──
+    if (grantType === "refresh_token") {
+      return handleRefreshTokenGrant(refreshToken, clientId, clientSecret);
+    }
+
+    // ── grant_type=authorization_code ──
     // Validate required parameters
     if (!code) {
       return tokenError("invalid_request", "code is required");
@@ -227,27 +247,40 @@ export async function POST(request: NextRequest) {
     // Consume the authorization code (single use)
     await consumeAuthCode(code);
 
-    // Create OAuth access token
+    // Create OAuth access token (1-hour expiry)
+    const accessTokenExpiry = new Date(
+      Date.now() + ACCESS_TOKEN_EXPIRY_SECONDS * 1000,
+    );
     const tokenResult = await createAccessToken({
       clientId,
       userId: authCode.userId,
       scope: authCode.scope || undefined,
+      expiresAt: accessTokenExpiry,
     });
 
-    log.info("Access token issued via OAuth", {
+    // Create refresh token (30-day expiry)
+    const refreshResult = await createRefreshToken({
       clientId,
       userId: authCode.userId,
-      tokenId: tokenResult.id,
+      accessTokenId: tokenResult.id,
+      scope: authCode.scope || undefined,
     });
 
-    // Return the access token
+    log.info("Access + refresh tokens issued via OAuth", {
+      clientId,
+      userId: authCode.userId,
+      accessTokenId: tokenResult.id,
+      refreshTokenId: refreshResult.id,
+      familyId: refreshResult.familyId,
+    });
+
+    // Return both tokens
     return NextResponse.json(
       {
         access_token: tokenResult.token,
         token_type: "Bearer",
-        // Set very long expiration (10 years in seconds)
-        // Claude Code requires expires_in to be set
-        expires_in: 315360000,
+        expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
+        refresh_token: refreshResult.token,
         scope: authCode.scope || undefined,
       },
       {
@@ -262,6 +295,121 @@ export async function POST(request: NextRequest) {
     log.error("Token exchange failed", error);
     return tokenError("server_error", "Failed to exchange token");
   }
+}
+
+/**
+ * Handle grant_type=refresh_token
+ *
+ * Validates the refresh token, rotates it (issues new access + refresh tokens),
+ * and revokes the old tokens. Detects replay attacks via token family tracking.
+ *
+ * @param refreshTokenValue - The raw refresh token string
+ * @param clientId - The client_id from the request
+ * @param clientSecret - Optional client_secret for confidential clients
+ * @returns Token response or error
+ */
+async function handleRefreshTokenGrant(
+  refreshTokenValue: string | null,
+  clientId: string | null,
+  clientSecret: string | null,
+): Promise<NextResponse> {
+  if (!refreshTokenValue) {
+    return tokenError("invalid_request", "refresh_token is required");
+  }
+
+  if (!clientId) {
+    return tokenError("invalid_request", "client_id is required");
+  }
+
+  // Verify client secret if provided
+  if (clientSecret) {
+    const client = await getClient(clientId);
+    if (client?.secretHash) {
+      const secretValid = await verifyClientSecret(clientId, clientSecret);
+      if (!secretValid) {
+        return tokenError("invalid_client", "Invalid client credentials");
+      }
+    }
+  }
+
+  // Validate the refresh token
+  const validation = await validateRefreshToken(refreshTokenValue);
+  if (!validation.valid) {
+    log.warn("Refresh token validation failed", {
+      error: validation.error,
+      clientId,
+    });
+    return tokenError("invalid_grant", validation.error || "Invalid refresh token");
+  }
+
+  // Verify client_id matches the token
+  if (validation.clientId !== clientId) {
+    log.warn("Refresh token client_id mismatch", {
+      expected: validation.clientId,
+      received: clientId,
+    });
+    return tokenError("invalid_grant", "client_id does not match");
+  }
+
+  // Revoke the old refresh token (mark as rotated)
+  await db
+    .update(oauthRefreshTokens)
+    .set({
+      isActive: false,
+      revokedAt: new Date(),
+      revokeReason: "rotated",
+    })
+    .where(eq(oauthRefreshTokens.id, validation.id!));
+
+  // Revoke the old access token
+  if (validation.accessTokenId) {
+    await revokeAccessToken(validation.accessTokenId);
+  }
+
+  // Issue new access token (1-hour expiry)
+  const newAccessTokenExpiry = new Date(
+    Date.now() + ACCESS_TOKEN_EXPIRY_SECONDS * 1000,
+  );
+  const newAccessToken = await createAccessToken({
+    clientId,
+    userId: validation.userId!,
+    scope: validation.scope,
+    expiresAt: newAccessTokenExpiry,
+  });
+
+  // Issue new refresh token (same family, incremented generation)
+  const newRefreshToken = await createRefreshToken({
+    clientId,
+    userId: validation.userId!,
+    accessTokenId: newAccessToken.id,
+    scope: validation.scope,
+    familyId: validation.familyId,
+    generation: (validation.generation ?? 0) + 1,
+  });
+
+  log.info("Tokens rotated via refresh_token grant", {
+    clientId,
+    userId: validation.userId,
+    familyId: validation.familyId,
+    generation: (validation.generation ?? 0) + 1,
+  });
+
+  return NextResponse.json(
+    {
+      access_token: newAccessToken.token,
+      token_type: "Bearer",
+      expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
+      refresh_token: newRefreshToken.token,
+      scope: validation.scope || undefined,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+        ...corsHeaders,
+      },
+    },
+  );
 }
 
 /**
