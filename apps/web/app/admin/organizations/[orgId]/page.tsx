@@ -11,6 +11,8 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useParams } from 'next/navigation'
 import type { OrgRole } from '@/lib/security/rbac'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface Organization {
   id: string
@@ -52,6 +54,8 @@ const ORG_ROLE_OPTIONS: OrgRole[] = ['org_admin', 'org_editor', 'org_viewer']
 export default function OrganizationDetailPage() {
   const params = useParams()
   const { data: session } = useSession()
+  const toast = useToast()
+  const { confirm: confirmDialog } = useConfirmDialog()
   const orgId = params.orgId as string
 
   const [org, setOrg] = useState<Organization | null>(null)
@@ -154,7 +158,7 @@ export default function OrganizationDetailPage() {
       setOrg(updatedOrg)
       setEditMode(false)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update organization')
+      toast.error(err instanceof Error ? err.message : '조직 정보 업데이트에 실패했습니다.')
     } finally {
       setSaving(false)
     }
@@ -163,9 +167,12 @@ export default function OrganizationDetailPage() {
   async function handleToggleActive() {
     if (!isSuperAdmin || !org) return
 
-    const confirmed = confirm(
-      `Are you sure you want to ${org.isActive ? 'deactivate' : 'activate'} this organization?`
-    )
+    const confirmed = await confirmDialog({
+      title: org.isActive ? '조직 비활성화' : '조직 활성화',
+      description: `이 조직을 ${org.isActive ? '비활성화' : '활성화'}하시겠습니까?`,
+      variant: org.isActive ? 'danger' : 'default',
+      confirmLabel: org.isActive ? '비활성화' : '활성화',
+    })
     if (!confirmed) return
 
     try {
@@ -183,7 +190,7 @@ export default function OrganizationDetailPage() {
       const updatedOrg = await res.json()
       setOrg(updatedOrg)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update organization')
+      toast.error(err instanceof Error ? err.message : '조직 정보 업데이트에 실패했습니다.')
     }
   }
 
@@ -208,7 +215,7 @@ export default function OrganizationDetailPage() {
       setInviteRole('org_viewer')
       await fetchMembers()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to invite member')
+      toast.error(err instanceof Error ? err.message : '멤버 초대에 실패했습니다.')
     } finally {
       setInviting(false)
     }
@@ -232,7 +239,7 @@ export default function OrganizationDetailPage() {
 
       await fetchMembers()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update role')
+      toast.error(err instanceof Error ? err.message : '역할 변경에 실패했습니다.')
     } finally {
       setUpdatingMemberId(null)
     }
@@ -241,7 +248,12 @@ export default function OrganizationDetailPage() {
   async function handleRemoveMember(userId: string) {
     if (!canEdit) return
 
-    const confirmed = confirm('Are you sure you want to remove this member?')
+    const confirmed = await confirmDialog({
+      title: '멤버 제거',
+      description: '이 멤버를 정말 제거하시겠습니까?',
+      variant: 'danger',
+      confirmLabel: '제거',
+    })
     if (!confirmed) return
 
     setRemovingMemberId(userId)
@@ -257,7 +269,7 @@ export default function OrganizationDetailPage() {
 
       await fetchMembers()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to remove member')
+      toast.error(err instanceof Error ? err.message : '멤버 제거에 실패했습니다.')
     } finally {
       setRemovingMemberId(null)
     }
@@ -283,7 +295,7 @@ export default function OrganizationDetailPage() {
       setNewDomain('')
       await fetchDomains()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add domain')
+      toast.error(err instanceof Error ? err.message : '도메인 추가에 실패했습니다.')
     } finally {
       setAddingDomain(false)
     }
@@ -292,7 +304,12 @@ export default function OrganizationDetailPage() {
   async function handleRemoveDomain(domain: string) {
     if (!canEdit) return
 
-    const confirmed = confirm(`Are you sure you want to remove domain "${domain}"?`)
+    const confirmed = await confirmDialog({
+      title: '도메인 제거',
+      description: `"${domain}" 도메인을 정말 제거하시겠습니까?`,
+      variant: 'danger',
+      confirmLabel: '제거',
+    })
     if (!confirmed) return
 
     setRemovingDomain(domain)
@@ -308,7 +325,7 @@ export default function OrganizationDetailPage() {
 
       await fetchDomains()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to remove domain')
+      toast.error(err instanceof Error ? err.message : '도메인 제거에 실패했습니다.')
     } finally {
       setRemovingDomain(null)
     }

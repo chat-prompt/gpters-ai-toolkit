@@ -9,6 +9,7 @@
 import { SessionProvider } from 'next-auth/react'
 import { ThemeProvider } from './ThemeProvider'
 import { ToastProvider } from '@/components/ui/Toast'
+import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog'
 
 /**
  * Combined provider wrapper for app-wide contexts
@@ -17,6 +18,7 @@ import { ToastProvider } from '@/components/ui/Toast'
  * 1. SessionProvider - NextAuth session management
  * 2. ThemeProvider - Dark/light/system theme
  * 3. ToastProvider - Toast notifications
+ * 4. ConfirmDialogProvider - Confirm dialogs
  *
  * @example
  * ```tsx
@@ -28,7 +30,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <ThemeProvider>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
+        </ToastProvider>
       </ThemeProvider>
     </SessionProvider>
   )

@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import type { UserRole } from '@/lib/security/rbac'
+import { useToast } from '@/components/ui/Toast'
 
 interface User {
   id: string
@@ -45,6 +46,7 @@ const ROLE_OPTIONS: UserRole[] = ['super_admin', 'admin', 'editor', 'viewer']
 
 export default function UsersPage() {
   const { data: session } = useSession()
+  const toast = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -96,7 +98,7 @@ export default function UsersPage() {
       const updatedUser = await res.json()
       setUsers(users.map(u => u.id === userId ? updatedUser : u))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update role')
+      toast.error(err instanceof Error ? err.message : '역할 변경에 실패했습니다.')
     } finally {
       setUpdatingUserId(null)
     }

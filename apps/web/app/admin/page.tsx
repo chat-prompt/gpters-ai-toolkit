@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
 import { useOrgContext } from '@/lib/hooks/useOrgContext'
+import { useToast } from '@/components/ui/Toast'
 import type { UserRole } from '@/lib/security/rbac'
 
 interface Stats {
@@ -104,6 +105,7 @@ export default function AdminDashboard() {
   const { data: session } = useSession()
   const userRole = session?.user?.role as UserRole | undefined
   const { currentOrgId } = useOrgContext()
+  const toast = useToast()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishingId, setPublishingId] = useState<string | null>(null)
@@ -133,7 +135,7 @@ export default function AdminDashboard() {
 
   const handleQuickPublish = async (itemId: string) => {
     if (!canEdit(userRole)) {
-      alert('발행 권한이 없습니다.')
+      toast.error('발행 권한이 없습니다.')
       return
     }
 
@@ -151,13 +153,13 @@ export default function AdminDashboard() {
         // Refresh data
         await fetchData()
       } else if (res.status === 403) {
-        alert('권한이 없습니다.')
+        toast.error('권한이 없습니다.')
       } else {
-        alert('발행 실패')
+        toast.error('발행에 실패했습니다.')
       }
     } catch (error) {
       console.error('Failed to publish:', error)
-      alert('발행 실패')
+      toast.error('발행에 실패했습니다.')
     } finally {
       setPublishingId(null)
     }

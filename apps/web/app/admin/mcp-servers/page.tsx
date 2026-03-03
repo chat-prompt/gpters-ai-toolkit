@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface McpServer {
   id: string
@@ -21,6 +22,7 @@ interface McpServer {
 
 export default function McpServersAdminPage() {
   useAdminAuth() // For layout protection
+  const { confirm } = useConfirmDialog()
   const [servers, setServers] = useState<McpServer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -95,7 +97,13 @@ export default function McpServersAdminPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return
+    const confirmed = await confirm({
+      title: 'MCP 서버 삭제',
+      description: '이 MCP 서버를 정말 삭제하시겠습니까?',
+      variant: 'danger',
+      confirmLabel: '삭제',
+    })
+    if (!confirmed) return
 
     try {
       await fetch(`/api/mcp-servers/${id}`, {

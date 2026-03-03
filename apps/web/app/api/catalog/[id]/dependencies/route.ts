@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
+import { ApiErrors } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import {
   resolveAllDependencies,
@@ -108,16 +109,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     log.error('Failed to resolve dependencies', { itemId: id, error: message })
 
     if (message.includes('not found')) {
-      return NextResponse.json(
-        { success: false, error: message },
-        { status: 404 }
-      )
+      return ApiErrors.notFound(message)
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Failed to resolve dependencies' },
-      { status: 500 }
-    )
+    return ApiErrors.internalError()
   }
 }
 
@@ -157,15 +152,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     log.error('Failed to validate dependencies', { itemId: id, error: message })
 
     if (message.includes('not found')) {
-      return NextResponse.json(
-        { success: false, error: message },
-        { status: 404 }
-      )
+      return ApiErrors.notFound(message)
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Failed to validate dependencies' },
-      { status: 500 }
-    )
+    return ApiErrors.internalError()
   }
 }

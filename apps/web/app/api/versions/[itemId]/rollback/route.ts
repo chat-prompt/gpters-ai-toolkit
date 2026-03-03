@@ -11,11 +11,14 @@ import { catalogItems } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/core/auth'
 import { ApiErrors } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 import {
   rollbackToVersion,
   previewRollback,
   getVersion,
 } from '@/lib/versioning/skill-version'
+
+const log = createLogger('api:versions:rollback')
 
 interface RouteParams {
   params: Promise<{ itemId: string }>
@@ -35,10 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const targetVersionId = searchParams.get('targetVersionId')
 
     if (!targetVersionId) {
-      return NextResponse.json(
-        { error: 'targetVersionId is required' },
-        { status: 400 }
-      )
+      return ApiErrors.badRequest('targetVersionId is required')
     }
 
     // Verify item exists
@@ -49,27 +49,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .limit(1)
 
     if (!item) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      )
+      return ApiErrors.notFound('Item')
     }
 
     // Get target version details
     const targetVersion = await getVersion(targetVersionId)
     if (!targetVersion) {
-      return NextResponse.json(
-        { error: 'Target version not found' },
-        { status: 404 }
-      )
+      return ApiErrors.notFound('Target version')
     }
 
     // Verify target version belongs to this item
     if (targetVersion.itemId !== itemId) {
-      return NextResponse.json(
-        { error: 'Target version does not belong to this item' },
-        { status: 400 }
-      )
+      return ApiErrors.badRequest('Target version does not belong to this item')
     }
 
     const preview = await previewRollback(itemId, targetVersionId)
@@ -86,11 +77,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     })
   } catch (error) {
-    console.error('Error previewing rollback:', error)
-    return NextResponse.json(
-      { error: 'Failed to preview rollback' },
-      { status: 500 }
-    )
+    log.error('Failed to preview rollback', error, { itemId: (await params).itemId })
+    return ApiErrors.internalError()
   }
 }
 
@@ -112,10 +100,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     if (!targetVersionId) {
-      return NextResponse.json(
-        { error: 'targetVersionId is required' },
-        { status: 400 }
-      )
+      return ApiErrors.badRequest('targetVersionId is required')
     }
 
     // Verify item exists
@@ -126,27 +111,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .limit(1)
 
     if (!item) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      )
+      return ApiErrors.notFound('Item')
     }
 
     // Get target version details
     const targetVersion = await getVersion(targetVersionId)
     if (!targetVersion) {
-      return NextResponse.json(
-        { error: 'Target version not found' },
-        { status: 404 }
-      )
+      return ApiErrors.notFound('Target version')
     }
 
     // Verify target version belongs to this item
     if (targetVersion.itemId !== itemId) {
-      return NextResponse.json(
-        { error: 'Target version does not belong to this item' },
-        { status: 400 }
-      )
+      return ApiErrors.badRequest('Target version does not belong to this item')
     }
 
     // Perform rollback
@@ -158,10 +134,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     })
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.message },
-        { status: 400 }
-      )
+      return ApiErrors.badRequest(result.message)
     }
 
     return NextResponse.json({
@@ -173,10 +146,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       rolledBackTo: targetVersion.version,
     })
   } catch (error) {
-    console.error('Error performing rollback:', error)
-    return NextResponse.json(
-      { error: 'Failed to perform rollback' },
-      { status: 500 }
-    )
+    log.error('Failed to perform rollback', error, { itemId: (await params).itemId })
+    return ApiErrors.internalError()
   }
 }

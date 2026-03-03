@@ -15,6 +15,8 @@ import { TeamTagBadge } from '@/components/social/TeamTagSelector'
 import type { UserRole } from '@/lib/security/rbac'
 import { OrgBadge } from '@/components/ui/OrgBadge'
 import { VisibilityBadge } from '@/components/ui/VisibilityBadge'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 // RBAC helper functions
 function canCreate(role: UserRole | undefined): boolean {
@@ -68,6 +70,8 @@ interface Organization {
 
 export default function CatalogList() {
   const { data: session } = useSession()
+  const toast = useToast()
+  const { confirm } = useConfirmDialog()
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -113,11 +117,17 @@ export default function CatalogList() {
 
   async function handleDelete(id: string) {
     if (!canDelete(userRole)) {
-      alert('You do not have permission to delete items')
+      toast.error('아이템 삭제 권한이 없습니다.')
       return
     }
 
-    if (!confirm(`Are you sure you want to delete "${id}"?`)) return
+    const confirmed = await confirm({
+      title: '아이템 삭제',
+      description: `"${id}" 항목을 정말 삭제하시겠습니까?`,
+      variant: 'danger',
+      confirmLabel: '삭제',
+    })
+    if (!confirmed) return
 
     try {
       const res = await fetch(`/api/catalog/${id}`, {
@@ -127,13 +137,13 @@ export default function CatalogList() {
       if (res.ok) {
         setItems(items.filter((item) => item.id !== id))
       } else if (res.status === 403) {
-        alert('Permission denied: You do not have permission to delete items')
+        toast.error('아이템 삭제 권한이 없습니다.')
       } else {
-        alert('Failed to delete item')
+        toast.error('아이템 삭제에 실패했습니다.')
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      alert('Failed to delete item')
+      toast.error('아이템 삭제에 실패했습니다.')
     }
   }
 

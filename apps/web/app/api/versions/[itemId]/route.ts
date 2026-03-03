@@ -11,12 +11,15 @@ import { catalogItems } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/core/auth'
 import { ApiErrors } from '@/lib/utils/api-utils'
+import { createLogger } from '@/lib/core/logger'
 import {
   getVersionHistory,
   createVersionSnapshot,
   compareWithPreviousVersion,
   type VersionType,
 } from '@/lib/versioning/skill-version'
+
+const log = createLogger('api:versions')
 
 interface RouteParams {
   params: Promise<{ itemId: string }>
@@ -43,10 +46,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .limit(1)
 
     if (!item) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      )
+      return ApiErrors.notFound('Item')
     }
 
     const history = await getVersionHistory(itemId, limit)
@@ -58,11 +58,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       count: history.length,
     })
   } catch (error) {
-    console.error('Error fetching version history:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch version history' },
-      { status: 500 }
-    )
+    log.error('Failed to fetch version history', error, { itemId: (await params).itemId })
+    return ApiErrors.internalError()
   }
 }
 
@@ -92,10 +89,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .limit(1)
 
     if (!item) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      )
+      return ApiErrors.notFound('Item')
     }
 
     // If no version specified, compare with previous and suggest
@@ -160,10 +154,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       version: newVersion,
     })
   } catch (error) {
-    console.error('Error creating version:', error)
-    return NextResponse.json(
-      { error: 'Failed to create version' },
-      { status: 500 }
-    )
+    log.error('Failed to create version', error, { itemId: (await params).itemId })
+    return ApiErrors.internalError()
   }
 }
