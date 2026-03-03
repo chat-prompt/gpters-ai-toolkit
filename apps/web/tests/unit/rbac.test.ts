@@ -161,7 +161,7 @@ describe('RBAC Utilities', () => {
     it('returns permissions for viewer role', () => {
       const permissions = getPermissionsForRole('viewer')
       expect(permissions).toContain(Permissions.CATALOG_VIEW)
-      expect(permissions).toContain(Permissions.ADMIN_VIEW)
+      expect(permissions).not.toContain(Permissions.ADMIN_VIEW)
       expect(permissions).not.toContain(Permissions.CATALOG_CREATE)
       expect(permissions).not.toContain(Permissions.CATALOG_EDIT)
     })
@@ -315,14 +315,14 @@ describe('RBAC Utilities', () => {
   })
 
   describe('Role permission matrix', () => {
-    it('viewer has only view permissions', () => {
+    it('viewer has only catalog view permission', () => {
       const viewerPermissions = getPermissionsForRole('viewer')
-      // Should have view permissions
-      expect(viewerPermissions).toContain(Permissions.ADMIN_VIEW)
+      // Should have catalog view only
       expect(viewerPermissions).toContain(Permissions.CATALOG_VIEW)
-      expect(viewerPermissions).toContain(Permissions.USERS_VIEW)
-      expect(viewerPermissions).toContain(Permissions.METADATA_VIEW)
-      // Should NOT have write permissions
+      // Should NOT have admin or write permissions
+      expect(viewerPermissions).not.toContain(Permissions.ADMIN_VIEW)
+      expect(viewerPermissions).not.toContain(Permissions.USERS_VIEW)
+      expect(viewerPermissions).not.toContain(Permissions.METADATA_VIEW)
       expect(viewerPermissions).not.toContain(Permissions.CATALOG_CREATE)
       expect(viewerPermissions).not.toContain(Permissions.CATALOG_EDIT)
       expect(viewerPermissions).not.toContain(Permissions.CATALOG_DELETE)

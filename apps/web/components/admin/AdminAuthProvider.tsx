@@ -27,7 +27,7 @@ interface AdminAuthContextType {
 const AdminAuthContext = createContext<AdminAuthContextType | null>(null)
 
 /** Roles that can access admin dashboard */
-const ADMIN_ROLES: UserRole[] = ['super_admin', 'admin', 'editor', 'viewer']
+const ADMIN_ROLES: UserRole[] = ['super_admin', 'admin', 'editor']
 
 /**
  * Provider component for admin authentication context

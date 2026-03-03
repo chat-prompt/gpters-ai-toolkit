@@ -50,10 +50,7 @@ export type Permission = typeof Permissions[keyof typeof Permissions]
  */
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   viewer: [
-    Permissions.ADMIN_VIEW,
     Permissions.CATALOG_VIEW,
-    Permissions.USERS_VIEW,
-    Permissions.METADATA_VIEW,
   ],
   editor: [
     Permissions.ADMIN_VIEW,
