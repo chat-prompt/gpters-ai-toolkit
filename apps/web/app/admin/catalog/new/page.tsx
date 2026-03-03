@@ -466,14 +466,14 @@ export default function NewCatalogItem() {
               </div>
             </div>
 
-            {/* Marketplace Settings */}
+            {/* CLI Settings */}
             {type !== 'guide' && type !== 'hook' && (
               <div className="glass rounded-2xl p-8 space-y-6">
                 <h2 className="text-lg font-medium text-[var(--text-primary)] flex items-center gap-2">
-                  <span className="text-[var(--accent-cyan)]">CLI</span> Marketplace Settings
+                  <span className="text-[var(--accent-cyan)]">CLI</span> Settings
                 </h2>
                 <p className="text-sm text-[var(--text-muted)]">
-                  Enable this item in the Claude Code plugin marketplace for CLI installation.
+                  Enable this item for CLI plugin installation.
                 </p>
 
                 <div className="flex items-center gap-4">
@@ -484,7 +484,7 @@ export default function NewCatalogItem() {
                       onChange={(e) => setMarketplaceEnabled(e.target.checked)}
                       className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
                     />
-                    <span className="text-[var(--text-primary)]">Enable in Marketplace</span>
+                    <span className="text-[var(--text-primary)]">Enable for CLI</span>
                   </label>
                 </div>
 

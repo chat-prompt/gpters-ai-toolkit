@@ -26,7 +26,7 @@ interface Tab {
 
 /** All available tabs */
 const ALL_TABS: Tab[] = [
-  { id: 'claude-code', label: 'Claude Code', description: '플러그인 마켓플레이스' },
+  { id: 'claude-code', label: 'Claude Code', description: '플러그인 설치' },
   { id: 'opencode', label: 'OpenCode', description: 'npm 레지스트리' },
   { id: 'codex', label: 'Codex CLI', description: 'npx setup' },
   { id: 'mcp', label: 'MCP 직접 연결', description: 'claude mcp add' },
@@ -157,7 +157,7 @@ function ClaudeCodeTab({
             <CodeBlock code={installCmd} stepId="cc-install" copiedStep={copiedStep} onCopy={onCopy} />
 
             <InfoBox color="blue" label="참고:">
-              마켓플레이스 등록, 기존 MCP 직접 연결 제거, 플러그인 설치를 한 번에 수행합니다.
+              기존 MCP 직접 연결 제거 및 플러그인 설치를 한 번에 수행합니다.
               이미 설정된 환경에서도 안전하게 재실행할 수 있습니다.
             </InfoBox>
           </div>

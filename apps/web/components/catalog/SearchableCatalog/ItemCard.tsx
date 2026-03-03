@@ -109,11 +109,6 @@ export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
             <span className="text-xs text-[var(--text-muted)]">@{item.authorName}</span>
           </div>
           <div className="flex items-center gap-2">
-            {item.mcpEnabled && item.type !== 'guide' && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] font-medium tracking-wide border border-[var(--accent-cyan)]/30">
-                CLI READY
-              </span>
-            )}
             {item.type === 'skill' && item.pluginId && (
               <span className="text-[10px] text-[var(--accent-purple)] font-medium tracking-wide">
                 PLUGIN →
