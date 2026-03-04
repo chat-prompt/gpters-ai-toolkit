@@ -48,7 +48,7 @@ function waitForToken(serverUrl: string): Promise<string> {
       }
 
       const port = addr.port
-      const loginUrl = `${serverUrl}/api/auth/cli-token?port=${port}`
+      const loginUrl = `${serverUrl}/api/cli-token?port=${port}`
 
       info(`브라우저에서 로그인하세요: ${loginUrl}`)
       info('대기 중...')

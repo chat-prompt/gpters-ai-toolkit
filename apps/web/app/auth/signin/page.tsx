@@ -24,7 +24,7 @@ export default async function SignInPage({
   }
 
   // MCP OAuth 또는 CLI 토큰 흐름에서 온 경우 자동으로 Google 로그인 시작
-  if (callbackUrl?.includes('/oauth/authorize') || callbackUrl?.includes('/api/auth/cli-token')) {
+  if (callbackUrl?.includes('/oauth/authorize') || callbackUrl?.includes('/api/cli-token')) {
     try {
       await signIn('google', { redirectTo: callbackUrl })
     } catch (error) {

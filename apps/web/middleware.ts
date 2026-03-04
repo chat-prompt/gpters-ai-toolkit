@@ -43,6 +43,7 @@ export default auth(async (req: NextAuthRequest) => {
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/mcp') ||
+    pathname.startsWith('/api/cli-token') ||
     pathname.startsWith('/api/hooks') ||
     pathname.startsWith('/privacy') ||
     pathname.startsWith('/api/cron') ||
