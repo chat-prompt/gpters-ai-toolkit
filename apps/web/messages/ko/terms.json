@@ -1,4 +1,8 @@
 {
+  "metadata": {
+    "title": "이용약관",
+    "description": "서비스 이용약관"
+  },
   "badge": "Terms of Service",
   "title": "이용",
   "titleHighlight": "약관",
@@ -38,7 +42,8 @@
     },
     "contact": {
       "title": "7. 문의",
-      "content": "이용약관에 대한 질문은 {email}로 연락해 주세요."
+      "contentPrefix": "이용약관에 대한 질문은",
+      "contentSuffix": "로 연락해 주세요."
     }
   },
   "lastUpdated": "최종 업데이트: 2026년 3월"

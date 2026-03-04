@@ -1,4 +1,8 @@
 {
+  "metadata": {
+    "title": "개인정보 처리방침",
+    "description": "MCP 서버 데이터 수집 정책 및 옵트아웃 안내"
+  },
   "badge": "Privacy Policy",
   "title": "데이터 수집",
   "titleHighlight": "정책",
@@ -45,7 +49,8 @@
     },
     "contact": {
       "title": "5. 문의",
-      "description": "데이터 수집에 대한 질문이나 삭제 요청은 {email}로 연락해 주세요."
+      "descriptionPrefix": "데이터 수집에 대한 질문이나 삭제 요청은",
+      "descriptionSuffix": "로 연락해 주세요."
     }
   },
   "lastUpdated": "최종 업데이트: 2026년 3월"
