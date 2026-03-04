@@ -4,7 +4,6 @@
  * 외부 Claude Code 사용자에게 AI Toolkit 플랫폼을 소개하고
  * MCP 서버 연결 방법을 안내하는 퍼블릭 랜딩페이지.
  */
-import Link from 'next/link'
 import { Footer } from '@/components/layout/Footer'
 import { CopyButton } from './CopyButton'
 
@@ -22,8 +21,8 @@ const FEATURES = [
   {
     icon: '/',
     label: 'Skills',
-    title: '슬래시 커맨드',
-    description: '반복 작업을 자동화하는 재사용 가능한 스킬을 검색하고 바로 설치하세요.',
+    title: '재사용 스킬',
+    description: '코드 리뷰, TDD, 디버깅 등 검증된 워크플로우를 스킬로 설치해 바로 활용하세요.',
   },
   {
     icon: '@',
@@ -48,9 +47,9 @@ const FEATURES = [
 /** MCP 도구 예시 데이터 */
 const TOOL_EXAMPLES = [
   {
-    tool: 'search_plugins',
+    tool: 'semantic_search',
     description: '키워드로 스킬 검색',
-    example: 'search_plugins("code review")',
+    example: 'semantic_search("code review")',
   },
   {
     tool: 'get_plugin_content',
@@ -242,26 +241,7 @@ export default function WelcomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-[var(--border-subtle)] py-8">
-        <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
-          <p className="text-xs text-[var(--text-muted)]">{SITE_NAME}</p>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/terms"
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/privacy"
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              Privacy
-            </Link>
-            <p className="text-xs text-[var(--text-muted)]">{SITE_NAME}</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
