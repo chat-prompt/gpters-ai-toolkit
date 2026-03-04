@@ -75,9 +75,9 @@ export default async function WelcomePage({
   /** MCP 도구 예시 데이터 */
   const TOOL_EXAMPLES = [
     {
-      tool: 'search_plugins',
+      tool: 'semantic_search',
       description: t('tools.searchPlugins'),
-      example: 'search_plugins("code review")',
+      example: 'semantic_search("code review")',
     },
     {
       tool: 'get_plugin_content',

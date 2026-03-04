@@ -9,8 +9,8 @@
     "badge": "What We Offer",
     "title": "Four Content Types",
     "skills": {
-      "title": "Slash Commands",
-      "description": "Search and install reusable skills that automate repetitive tasks."
+      "title": "Reusable Skills",
+      "description": "Install proven workflows like code review, TDD, and debugging as ready-to-use skills."
     },
     "agents": {
       "title": "Specialist Agents",
@@ -37,7 +37,7 @@
       },
       "2": {
         "title": "Google Sign-in",
-        "description": "When the browser opens, sign in with your organization account (@gpters.org)."
+        "description": "When the browser opens, sign in with your Google account."
       },
       "3": {
         "title": "Start using",

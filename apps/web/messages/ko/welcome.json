@@ -9,8 +9,8 @@
     "badge": "What We Offer",
     "title": "네 가지 콘텐츠 타입",
     "skills": {
-      "title": "슬래시 커맨드",
-      "description": "반복 작업을 자동화하는 재사용 가능한 스킬을 검색하고 바로 설치하세요."
+      "title": "재사용 스킬",
+      "description": "코드 리뷰, TDD, 디버깅 등 검증된 워크플로우를 스킬로 설치해 바로 활용하세요."
     },
     "agents": {
       "title": "전문 에이전트",
@@ -37,7 +37,7 @@
       },
       "2": {
         "title": "Google 로그인",
-        "description": "브라우저가 열리면 조직 계정(@gpters.org)으로 로그인하세요."
+        "description": "브라우저가 열리면 Google 계정으로 로그인하세요."
       },
       "3": {
         "title": "바로 사용",
