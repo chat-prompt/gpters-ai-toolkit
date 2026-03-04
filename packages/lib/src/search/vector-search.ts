@@ -5,7 +5,6 @@ import { generateEmbedding } from './embedding'
 import { createLogger } from '../core/logger'
 import { isSuperAdmin } from '../security/rbac'
 import type { ItemType } from '../core/types'
-import { getPopularityMap, computePopularityScore, blendScore } from './popularity'
 
 const log = createLogger('vector-search')
 
@@ -127,31 +126,18 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     .limit(limit)
   const dbMs = Date.now() - dbStart
 
-  // Apply popularity-based ranking boost
-  const popularityMap = await getPopularityMap()
-  const boostedResults = results.map((row) => {
-    const pop = popularityMap.get(row.id)
-    const popScore = computePopularityScore(pop)
-    const finalScore = blendScore(row.similarity, popScore)
-    return { ...row, similarity: finalScore }
-  })
-
-  // Re-sort by blended score (descending)
-  boostedResults.sort((a, b) => b.similarity - a.similarity)
-
   const searchTime = Date.now() - startTime
 
   log.info('Semantic search completed', {
     embeddingMs,
     dbMs,
     totalMs: searchTime,
-    resultCount: boostedResults.length,
-    popularityBoostApplied: popularityMap.size > 0,
+    resultCount: results.length,
   })
 
   return {
-    items: boostedResults as Array<CatalogItemRecord & { similarity: number }>,
-    total: boostedResults.length,
+    items: results as Array<CatalogItemRecord & { similarity: number }>,
+    total: results.length,
     searchTime,
   }
 }
