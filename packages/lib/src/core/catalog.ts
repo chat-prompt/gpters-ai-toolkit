@@ -5,7 +5,7 @@
  * list views, detail views, filtering, and package management.
  */
 import { eq, ne, and, or, isNull, asc, sql, desc } from 'drizzle-orm'
-import { db, catalogItems, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
+import { db, catalogItems, catalogItemTranslations, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
 import { auth } from './auth'
 import { isSuperAdmin, type UserRole } from '../security/rbac'
@@ -214,11 +214,12 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
 // List Queries (Optimized with Summary Columns)
 // ============================================================================
 
-export async function getCatalog(): Promise<CatalogItemSummary[]> {
+export async function getCatalog(locale?: string): Promise<CatalogItemSummary[]> {
   if (!isDatabaseAvailable()) {
     return []
   }
 
+  const useTranslation = locale && locale !== 'ko'
   const session = await safeAuth()
   const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
 
@@ -227,6 +228,32 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
     or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
     ...(visFilter ? [visFilter] : []),
   ]
+
+  if (useTranslation) {
+    const records = await db
+      .select({
+        ...summaryColumns,
+        authorName: users.name,
+        orgName: organizations.name,
+        translatedName: catalogItemTranslations.name,
+        translatedDescription: catalogItemTranslations.description,
+      })
+      .from(catalogItems)
+      .leftJoin(users, eq(catalogItems.authorId, users.id))
+      .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
+      .leftJoin(catalogItemTranslations, and(
+        eq(catalogItems.id, catalogItemTranslations.itemId),
+        eq(catalogItemTranslations.locale, locale),
+      ))
+      .where(and(...whereConditions))
+
+    return records.map((r) => {
+      const summary = toSummaryObject(r)
+      if (r.translatedName) summary.name = r.translatedName
+      if (r.translatedDescription) summary.description = r.translatedDescription
+      return summary
+    })
+  }
 
   const records = await db
     .select({
@@ -246,7 +273,51 @@ export async function getCatalog(): Promise<CatalogItemSummary[]> {
 // Detail Queries (Full Record with All Fields)
 // ============================================================================
 
-export async function getItemById(id: string): Promise<CatalogItem | undefined> {
+export async function getItemById(id: string, locale?: string): Promise<CatalogItem | undefined> {
+  const useTranslation = locale && locale !== 'ko'
+
+  if (useTranslation) {
+    const [result] = await db
+      .select({
+        item: catalogItems,
+        orgName: organizations.name,
+        translatedName: catalogItemTranslations.name,
+        translatedDescription: catalogItemTranslations.description,
+        translatedContent: catalogItemTranslations.content,
+        translatedReadme: catalogItemTranslations.readme,
+      })
+      .from(catalogItems)
+      .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
+      .leftJoin(catalogItemTranslations, and(
+        eq(catalogItems.id, catalogItemTranslations.itemId),
+        eq(catalogItemTranslations.locale, locale),
+      ))
+      .where(eq(catalogItems.id, id))
+
+    if (!result) return undefined
+
+    const session = await safeAuth()
+    const currentOrgId = session?.user?.currentOrgId
+    const userRole = session?.user?.role
+
+    if (!userRole || !isSuperAdmin(userRole as UserRole)) {
+      const raw = result.item
+      if (raw.visibility === 'private' && raw.orgId !== currentOrgId) {
+        return undefined
+      }
+    }
+
+    const item = toPlainObject(result.item)
+    return {
+      ...item,
+      name: result.translatedName ?? item.name,
+      description: result.translatedDescription ?? item.description,
+      content: result.translatedContent ?? item.content,
+      readme: result.translatedReadme ?? item.readme,
+      orgName: result.orgName ?? undefined,
+    }
+  }
+
   const [result] = await db
     .select({
       item: catalogItems,
@@ -304,11 +375,12 @@ export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary
   return records.map(toSummaryObject)
 }
 
-export async function getGuides(): Promise<CatalogItemSummary[]> {
+export async function getGuides(locale?: string): Promise<CatalogItemSummary[]> {
   if (!isDatabaseAvailable()) {
     return []
   }
 
+  const useTranslation = locale && locale !== 'ko'
   const session = await safeAuth()
   const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
 
@@ -317,6 +389,32 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
     or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
     ...(visFilter ? [visFilter] : []),
   ]
+
+  if (useTranslation) {
+    const records = await db
+      .select({
+        ...summaryColumns,
+        authorName: users.name,
+        orgName: organizations.name,
+        translatedName: catalogItemTranslations.name,
+        translatedDescription: catalogItemTranslations.description,
+      })
+      .from(catalogItems)
+      .leftJoin(users, eq(catalogItems.authorId, users.id))
+      .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
+      .leftJoin(catalogItemTranslations, and(
+        eq(catalogItems.id, catalogItemTranslations.itemId),
+        eq(catalogItemTranslations.locale, locale),
+      ))
+      .where(and(...whereConditions))
+
+    return records.map((r) => {
+      const summary = toSummaryObject(r)
+      if (r.translatedName) summary.name = r.translatedName
+      if (r.translatedDescription) summary.description = r.translatedDescription
+      return summary
+    })
+  }
 
   const records = await db
     .select({
@@ -331,7 +429,55 @@ export async function getGuides(): Promise<CatalogItemSummary[]> {
   return records.map(toSummaryObject)
 }
 
-export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | undefined> {
+export async function getGuideById(idOrPluginId: string, locale?: string): Promise<CatalogItem | undefined> {
+  const useTranslation = locale && locale !== 'ko'
+  const whereClause = and(
+    eq(catalogItems.type, 'guide'),
+    or(eq(catalogItems.id, idOrPluginId), eq(catalogItems.pluginId, idOrPluginId))
+  )
+
+  if (useTranslation) {
+    const [result] = await db
+      .select({
+        item: catalogItems,
+        orgName: organizations.name,
+        translatedName: catalogItemTranslations.name,
+        translatedDescription: catalogItemTranslations.description,
+        translatedContent: catalogItemTranslations.content,
+        translatedReadme: catalogItemTranslations.readme,
+      })
+      .from(catalogItems)
+      .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
+      .leftJoin(catalogItemTranslations, and(
+        eq(catalogItems.id, catalogItemTranslations.itemId),
+        eq(catalogItemTranslations.locale, locale),
+      ))
+      .where(whereClause)
+
+    if (!result) return undefined
+
+    const session = await safeAuth()
+    const currentOrgId = session?.user?.currentOrgId
+    const userRole = session?.user?.role
+
+    if (!userRole || !isSuperAdmin(userRole as UserRole)) {
+      const raw = result.item
+      if (raw.visibility === 'private' && raw.orgId !== currentOrgId) {
+        return undefined
+      }
+    }
+
+    const item = toPlainObject(result.item)
+    return {
+      ...item,
+      name: result.translatedName ?? item.name,
+      description: result.translatedDescription ?? item.description,
+      content: result.translatedContent ?? item.content,
+      readme: result.translatedReadme ?? item.readme,
+      orgName: result.orgName ?? undefined,
+    }
+  }
+
   const [result] = await db
     .select({
       item: catalogItems,
@@ -339,16 +485,10 @@ export async function getGuideById(idOrPluginId: string): Promise<CatalogItem | 
     })
     .from(catalogItems)
     .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
-    .where(
-      and(
-        eq(catalogItems.type, 'guide'),
-        or(eq(catalogItems.id, idOrPluginId), eq(catalogItems.pluginId, idOrPluginId))
-      )
-    )
+    .where(whereClause)
 
   if (!result) return undefined
 
-  // Enforce visibility: non-super-admins cannot access private items from other orgs
   const session = await safeAuth()
   const currentOrgId = session?.user?.currentOrgId
   const userRole = session?.user?.role

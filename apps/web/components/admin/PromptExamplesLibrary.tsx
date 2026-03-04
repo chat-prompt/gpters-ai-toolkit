@@ -7,7 +7,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, memo } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import {
   PromptExample,
   PromptCategory,

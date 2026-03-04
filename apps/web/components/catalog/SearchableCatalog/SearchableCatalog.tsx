@@ -9,7 +9,7 @@
  */
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { TAGS, DIFFICULTY_LABELS, type Difficulty } from '@/lib/core/types'
 import { SearchAutocomplete } from '../SearchAutocomplete'
 import { ItemCard } from './ItemCard'

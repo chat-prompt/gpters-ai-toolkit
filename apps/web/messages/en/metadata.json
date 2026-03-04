@@ -1,0 +1,11 @@
+{
+  "site": {
+    "name": "AI Toolkit",
+    "description": "Discover Claude Code skills, agents, prompts, and commands. Install resources created by your team as plugins or copy them to use directly.",
+    "locale": "en_US"
+  },
+  "welcome": {
+    "title": "Welcome",
+    "description": "Connect to the AI Toolkit platform to share skills, agents, and commands for Claude Code."
+  }
+}

@@ -8,7 +8,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { PluginUpdate, UpdateCheckResult } from '@/lib/plugin/updates'
 
 /** Props for UpdateNotificationBell component */

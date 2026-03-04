@@ -6,7 +6,7 @@
  * Client-side filtering for guides with search functionality
  */
 import { useState, useMemo } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { TAGS, DIFFICULTY_LABELS, type Difficulty } from '@/lib/core/types'
 
 interface Guide {

@@ -6,14 +6,16 @@
  */
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 import { OrgSwitcher } from './OrgSwitcher'
 import { UpdateNotificationBell } from '../actions/UpdateNotificationBell'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
+import { LocaleSwitcher } from './LocaleSwitcher'
 import type { UserRole } from '@/lib/security/rbac'
 
 /** Roles that can access the stats page */
@@ -55,6 +57,7 @@ interface HeaderProps {
  */
 export function Header({ user }: HeaderProps) {
   const pathname = usePathname()
+  const t = useTranslations('common.nav')
 
   const isGuidesTab = pathname.startsWith('/guides')
   const isStartTab = pathname.startsWith('/getting-started')
@@ -91,7 +94,7 @@ export function Header({ user }: HeaderProps) {
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                Tutorial
+                {t('tutorial')}
               </Link>
               <Link
                 href="/"
@@ -101,7 +104,7 @@ export function Header({ user }: HeaderProps) {
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                Catalog
+                {t('catalog')}
               </Link>
               <Link
                 href="/guides"
@@ -111,7 +114,7 @@ export function Header({ user }: HeaderProps) {
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                Guides
+                {t('guides')}
               </Link>
               {canViewStats && (
                 <Link
@@ -122,7 +125,7 @@ export function Header({ user }: HeaderProps) {
                       : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
-                  Stats
+                  {t('stats')}
                 </Link>
               )}
             </nav>
@@ -131,6 +134,7 @@ export function Header({ user }: HeaderProps) {
           {/* Actions */}
           <div className="flex items-center gap-3">
             {user && <OrgSwitcher />}
+            <LocaleSwitcher />
             <ThemeToggle />
             {user && <UpdateNotificationBell />}
             {user && <AdminQuickMenu userRole={user.role} />}

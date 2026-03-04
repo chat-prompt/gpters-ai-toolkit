@@ -3,13 +3,14 @@
  *
  * Shared footer with privacy policy link, extracted from inline footer patterns.
  */
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
+import { getTranslations } from 'next-intl/server'
 
 /**
  * Props for the Footer component
  */
 interface FooterProps {
-  /** Left-side label text */
+  /** Left-side label text (optional, defaults to translated label) */
   label?: string
   /** Additional CSS classes for the footer element */
   className?: string
@@ -18,25 +19,28 @@ interface FooterProps {
 /**
  * Site-wide footer with branding and privacy link
  *
- * @param label - Left-side label (defaults to "AI Toolkit Catalog")
+ * @param label - Left-side label (defaults to translated "AI Toolkit Catalog")
  * @param className - Additional CSS classes
  */
-export function Footer({ label = 'AI Toolkit Catalog', className }: FooterProps) {
+export async function Footer({ label, className }: FooterProps) {
+  const t = await getTranslations('common.footer')
+  const displayLabel = label ?? t('label')
+
   return (
     <footer className={`relative z-10 border-t border-[var(--border-subtle)] py-8 ${className ?? ''}`}>
       <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
         <p className="text-xs text-[var(--text-muted)]">
-          {label}
+          {displayLabel}
         </p>
         <div className="flex items-center gap-4">
           <Link
             href="/privacy"
             className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
-            Privacy Policy
+            {t('privacyPolicy')}
           </Link>
           <p className="text-xs text-[var(--text-muted)]">
-            Built with Claude Code
+            {t('builtWith')}
           </p>
         </div>
       </div>

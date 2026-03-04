@@ -4,7 +4,7 @@
  * Displays grid of related catalog items based on
  * matching tags and same author relationships.
  */
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { CatalogItemSummary, TAGS, DIFFICULTY_LABELS, ItemType } from '@/lib/core/types'
 
 /** Type-specific styling configuration */

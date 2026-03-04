@@ -5,7 +5,7 @@
  * tags, author, and metadata badges.
  */
 import { memo } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { TYPE_CONFIG } from './constants'
 import type { ItemCardProps } from './types'

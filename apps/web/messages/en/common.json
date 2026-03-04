@@ -1,0 +1,31 @@
+{
+  "nav": {
+    "tutorial": "Tutorial",
+    "catalog": "Catalog",
+    "guides": "Guides",
+    "stats": "Stats"
+  },
+  "footer": {
+    "label": "AI Toolkit Catalog",
+    "privacyPolicy": "Privacy Policy",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "builtWith": "Built with Claude Code"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again.",
+    "retry": "Try again",
+    "goHome": "Go back home"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you requested does not exist or has been moved.",
+    "goHome": "Go back home"
+  },
+  "localeSwitcher": {
+    "label": "Language",
+    "ko": "한국어",
+    "en": "English"
+  }
+}
