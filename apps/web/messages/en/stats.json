@@ -1,0 +1,13 @@
+{
+  "page": {
+    "badge": "Welfare Engine",
+    "title": "Welfare",
+    "titleHighlight": "Engine",
+    "subtitle": "View AI Toolkit welfare engine metrics. Track skill accumulation, utilization, and quality at a glance.",
+    "footerLabel": "AI Toolkit - Welfare Engine"
+  },
+  "metadata": {
+    "title": "Welfare Engine - AI Toolkit",
+    "description": "View skill accumulation, utilization, and quality metrics"
+  }
+}

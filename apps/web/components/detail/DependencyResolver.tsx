@@ -8,6 +8,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
 
@@ -106,6 +107,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
   const [loading, setLoading] = useState(false)
   const [showTree, setShowTree] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const t = useTranslations('detail.dependencies')
 
   // Only show basic deps if there are direct dependencies
   if (!dependencies || dependencies.length === 0) {
@@ -206,10 +208,10 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <span className="text-xl">🔗</span>
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">필요한 의존성</h2>
+          <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('title')}</h2>
           {resolved?.data && (
             <span className="text-xs px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
-              {resolved.data.totalCount}개 발견
+              {t('found', { count: resolved.data.totalCount })}
             </span>
           )}
         </div>
@@ -218,7 +220,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
           disabled={loading}
           className="text-xs px-3 py-1.5 rounded-lg bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] hover:bg-[var(--accent-cyan)]/20 transition-colors disabled:opacity-50"
         >
-          {loading ? '분석 중...' : resolved ? '다시 분석' : '전체 의존성 분석'}
+          {loading ? t('analyzing') : resolved ? t('reanalyzeButton') : t('analyzeButton')}
         </button>
       </div>
 
@@ -232,7 +234,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
       {!resolved && (
         <>
           <p className="text-sm text-[var(--text-secondary)] mb-4">
-            이 리소스를 사용하려면 다음 의존성이 필요합니다.
+            {t('description')}
           </p>
           <div className="flex flex-wrap gap-3">
             {parsedDeps.map((dep, index) => {
@@ -275,21 +277,21 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
           <div className="grid grid-cols-4 gap-3 mb-4">
             <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
               <div className="text-xl font-bold text-blue-400">{resolved.data.summary.mcp}</div>
-              <div className="text-xs text-[var(--text-muted)]">MCP 서버</div>
+              <div className="text-xs text-[var(--text-muted)]">{t('mcpServers')}</div>
             </div>
             <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
               <div className="text-xl font-bold text-[var(--accent-cyan)]">{resolved.data.summary.skills}</div>
-              <div className="text-xs text-[var(--text-muted)]">스킬</div>
+              <div className="text-xs text-[var(--text-muted)]">{t('skills')}</div>
             </div>
             <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
               <div className="text-xl font-bold text-[var(--accent-purple)]">{resolved.data.summary.agents}</div>
-              <div className="text-xs text-[var(--text-muted)]">에이전트</div>
+              <div className="text-xs text-[var(--text-muted)]">{t('agents')}</div>
             </div>
             <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
               <div className={`text-xl font-bold ${resolved.data.summary.unresolved > 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {resolved.data.summary.unresolved}
               </div>
-              <div className="text-xs text-[var(--text-muted)]">미해결</div>
+              <div className="text-xs text-[var(--text-muted)]">{t('unresolved')}</div>
             </div>
           </div>
 
@@ -298,7 +300,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
             <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <div className="flex items-center gap-2 text-yellow-400 text-sm font-medium mb-1">
                 <span>⚠️</span>
-                <span>순환 의존성 감지됨</span>
+                <span>{t('circularDetected')}</span>
               </div>
               <p className="text-xs text-yellow-400/80">
                 {resolved.data.circularPaths.map((path) => path.join(' → ')).join('; ')}
@@ -312,7 +314,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
               onClick={() => setShowTree(!showTree)}
               className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             >
-              {showTree ? '▼ 직접 의존성만 보기' : '▶ 전체 의존성 트리 보기'}
+              {showTree ? t('showDirectOnly') : t('showFullTree')}
             </button>
           </div>
 
@@ -328,7 +330,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
           {showTree && resolved.data.installOrder.length > 0 && (
             <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
               <p className="text-xs text-[var(--text-muted)] mb-2">
-                💡 <strong>권장 설치 순서</strong>
+                💡 <strong>{t('recommendedOrder')}</strong>
               </p>
               <div className="flex flex-wrap gap-2">
                 {resolved.data.installOrder.map((id, i) => (
@@ -346,8 +348,11 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
       {parsedDeps.some((d) => d.type === 'mcp') && (
         <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
           <p className="text-xs text-[var(--text-muted)]">
-            💡 <strong>MCP 서버</strong>는 Claude Code 설정에서 활성화해야 합니다.{' '}
-            <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">claude mcp</code> 명령어로 설정할 수 있습니다.
+            💡 {t.rich('mcpHint', {
+              command: () => (
+                <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">claude mcp</code>
+              )
+            })}
           </p>
         </div>
       )}

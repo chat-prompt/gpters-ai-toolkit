@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { usePathname } from '@/i18n/navigation'
 import type { UserRole } from '@/lib/security/rbac'
@@ -109,12 +110,14 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
     { type: 'hook', href: '/admin/catalog/new?type=hook' },
   ]
 
+  const t = useTranslations('admin.menu')
+
   // Management links
   const managementLinks = [
-    { icon: '📦', label: '카탈로그 관리', href: '/admin/catalog', requireAdmin: false },
-    { icon: '🏷️', label: '태그 관리', href: '/admin/tags', requireAdmin: false },
-    { icon: '🔌', label: 'MCP 서버', href: '/admin/mcp-servers', requireAdmin: false },
-    { icon: '👥', label: '사용자 관리', href: '/admin/users', requireAdmin: true },
+    { icon: '📦', label: t('catalog'), href: '/admin/catalog', requireAdmin: false },
+    { icon: '🏷️', label: t('tags'), href: '/admin/tags', requireAdmin: false },
+    { icon: '🔌', label: t('mcpServers'), href: '/admin/mcp-servers', requireAdmin: false },
+    { icon: '👥', label: t('users'), href: '/admin/users', requireAdmin: true },
   ]
 
   return (
@@ -132,7 +135,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
         `}
         aria-expanded={isOpen}
         aria-haspopup="true"
-        aria-label="Admin 메뉴"
+        aria-label={t('label')}
       >
         <svg
           className="w-4 h-4"
@@ -175,7 +178,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
             <>
               <div className="px-3 py-2 bg-[var(--bg-tertiary)]">
                 <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
-                  현재 페이지
+                  {t('currentPage')}
                 </p>
               </div>
               <div className="p-2">
@@ -188,10 +191,10 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
                   <span className="text-lg">✏️</span>
                   <div className="flex-1">
                     <p className="text-sm text-[var(--text-primary)] group-hover:text-[var(--accent-cyan)] transition-colors">
-                      편집하기
+                      {t('edit')}
                     </p>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {TYPE_CONFIG[contextualAction.type].label} 수정
+                      {TYPE_CONFIG[contextualAction.type].label}
                     </p>
                   </div>
                   <span className={`text-sm ${TYPE_CONFIG[contextualAction.type].color}`}>
@@ -206,7 +209,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
           {/* Quick Create Section */}
           <div className="px-3 py-2 bg-[var(--bg-tertiary)]">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
-              새로 만들기
+              {t('createNew')}
             </p>
           </div>
           <div className="p-2 grid grid-cols-2 gap-1">
@@ -232,7 +235,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
           <div className="border-t border-[var(--border-subtle)]">
             <div className="px-3 py-2 bg-[var(--bg-tertiary)]">
               <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
-                관리
+                {t('manage')}
               </p>
             </div>
             <div className="p-2 space-y-0.5">
@@ -264,7 +267,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
               role="menuitem"
             >
               <span>📊</span>
-              <span>대시보드 열기</span>
+              <span>{t('openDashboard')}</span>
             </Link>
           </div>
         </div>

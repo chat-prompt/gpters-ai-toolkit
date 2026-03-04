@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "catalog": "카탈로그",
+    "guides": "가이드",
+    "templates": "템플릿"
+  },
+  "hero": {
+    "badge": "Skill Template Generator",
+    "title": "스킬 템플릿 생성기",
+    "subtitle": "카테고리별 최적화된 템플릿으로 Claude Code 스킬을 빠르게 만들어보세요.",
+    "subtitleNote": "Best practices가 자동으로 적용됩니다."
+  },
+  "features": {
+    "dataReference": {
+      "title": "데이터 참조",
+      "description": "DB, API 등 외부 데이터를 활용하는 스킬"
+    },
+    "workflow": {
+      "title": "워크플로우",
+      "description": "반복 작업을 자동화하는 스킬"
+    },
+    "codeAnalysis": {
+      "title": "코드 분석",
+      "description": "코드 품질과 보안을 분석하는 스킬"
+    },
+    "documentation": {
+      "title": "문서화",
+      "description": "자동 문서 생성 및 관리 스킬"
+    }
+  },
+  "completion": {
+    "success": "템플릿 생성 완료!",
+    "ready": "스킬이 준비되었습니다.",
+    "createNew": "새 템플릿 만들기"
+  },
+  "tips": {
+    "title": "스킬 작성 팁",
+    "clearTrigger": {
+      "title": "명확한 트리거 설정",
+      "description": "설명에 \"~할 때\", \"~작업 시\" 같은 키워드를 포함하면 Claude가 적절한 시점에 스킬을 활성화합니다."
+    },
+    "leastPrivilege": {
+      "title": "최소 권한 원칙",
+      "description": "필요한 도구만 허용하여 안전성을 높이세요. 읽기만 필요하면 Read, Grep, Glob만 허용하는 것이 좋습니다."
+    },
+    "examples": {
+      "title": "구체적인 예시 제공",
+      "description": "스킬 내용에 구체적인 사용 예시를 포함하면 Claude가 더 정확하게 스킬을 활용할 수 있습니다."
+    }
+  },
+  "cta": {
+    "title": "직접 만든 스킬을 팀과 공유하세요",
+    "description": "템플릿을 기반으로 스킬을 커스터마이징한 후, 카탈로그에 등록하여 팀원들과 함께 사용하세요.",
+    "gettingStarted": "시작 가이드",
+    "browseCatalog": "카탈로그 둘러보기"
+  }
+}

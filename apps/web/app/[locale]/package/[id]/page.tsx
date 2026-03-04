@@ -4,6 +4,7 @@
  * Displays detailed information about a curated package bundle
  * including contained items, dependencies, and installation guide.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { getPackageWithContents, getCatalog, getRelatedItems } from '@/lib/core/catalog'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
@@ -28,8 +29,9 @@ export async function generateStaticParams() {
     .map(item => ({ id: item.id }))
 }
 
-export default async function PackagePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function PackagePage({ params }: { params: Promise<{ locale: string; id: string }> }) {
+  const { locale, id } = await params
+  setRequestLocale(locale)
   const item = await getPackageWithContents(id)
 
   if (!item || item.type !== 'package') {

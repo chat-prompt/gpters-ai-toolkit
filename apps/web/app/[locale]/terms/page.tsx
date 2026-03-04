@@ -4,6 +4,7 @@
  * Public page describing service usage terms and conditions.
  * Accessible without authentication.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
@@ -14,7 +15,9 @@ export const metadata = {
   description: '서비스 이용약관',
 }
 
-export default function TermsPage() {
+export default async function TermsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  setRequestLocale(locale)
   return (
     <div className="min-h-screen grid-pattern noise-overlay">
       {/* Ambient Background Gradients */}

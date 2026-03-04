@@ -6,6 +6,7 @@
  * Client-side filtering for guides with search functionality
  */
 import { useState, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { TAGS, DIFFICULTY_LABELS, type Difficulty } from '@/lib/core/types'
 
@@ -25,6 +26,7 @@ interface SearchableGuidesProps {
 
 export function SearchableGuides({ guides }: SearchableGuidesProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const t = useTranslations('guides')
 
   const filteredGuides = useMemo(() => {
     if (!searchQuery.trim()) return guides
@@ -49,10 +51,10 @@ export function SearchableGuides({ guides }: SearchableGuidesProps) {
       <div className="text-center py-32">
         <div className="text-6xl mb-6 opacity-20">📚</div>
         <p className="text-[var(--text-secondary)] text-lg mb-4">
-          아직 가이드가 없습니다
+          {t('empty.title')}
         </p>
         <p className="text-[var(--text-muted)] text-sm">
-          곧 유용한 가이드들이 추가될 예정입니다
+          {t('empty.subtitle')}
         </p>
       </div>
     )
@@ -65,7 +67,7 @@ export function SearchableGuides({ guides }: SearchableGuidesProps) {
         <div className="relative max-w-md">
           <input
             type="text"
-            placeholder="가이드 검색..."
+            placeholder={t('search.placeholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full px-4 py-3 pl-10 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
@@ -84,7 +86,7 @@ export function SearchableGuides({ guides }: SearchableGuidesProps) {
         </div>
         {searchQuery && (
           <p className="mt-2 text-sm text-[var(--text-muted)]">
-            {filteredGuides.length}개의 가이드 검색됨
+            {t('search.resultsCount', { count: filteredGuides.length })}
           </p>
         )}
       </div>
@@ -157,13 +159,13 @@ export function SearchableGuides({ guides }: SearchableGuidesProps) {
         <div className="text-center py-16">
           <div className="text-4xl mb-4 opacity-40">🔍</div>
           <p className="text-[var(--text-secondary)] mb-2">
-            &quot;{searchQuery}&quot;에 대한 결과가 없습니다
+            {t('search.noResults', { query: searchQuery })}
           </p>
           <button
             onClick={() => setSearchQuery('')}
             className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
           >
-            검색어 지우기
+            {t('search.clearSearch')}
           </button>
         </div>
       )}

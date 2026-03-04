@@ -4,6 +4,7 @@
  * Displays detailed content for a specific guide or tutorial
  * with markdown rendering and changelog display.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { getGuideById } from '@/lib/core/catalog'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { ItemHero } from '@/components/detail/ItemHero'
@@ -16,8 +17,9 @@ import { Link } from '@/i18n/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function GuidePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function GuidePage({ params }: { params: Promise<{ locale: string; id: string }> }) {
+  const { locale, id } = await params
+  setRequestLocale(locale)
   const [guide, session] = await Promise.all([getGuideById(id), auth()])
 
   if (!guide) {

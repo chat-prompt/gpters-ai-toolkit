@@ -4,6 +4,7 @@
  * Admin-restricted analytics dashboard displaying welfare engine metrics:
  * skill accumulation, utilization, and quality metrics.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { auth } from '@/lib/core/auth'
 import { redirect } from 'next/navigation'
 import { ServerHeader } from '@/components/layout/ServerHeader'
@@ -19,7 +20,9 @@ export const metadata = {
   description: '스킬 축적, 활용, 품질 지표를 확인하세요',
 }
 
-export default async function StatsPage() {
+export default async function StatsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  setRequestLocale(locale)
   const session = await auth()
   const userRole = session?.user?.role as UserRole | undefined
 

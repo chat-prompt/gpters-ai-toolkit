@@ -7,6 +7,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { PluginFile, FileType } from '@/lib/core/types'
 import { CopyButton } from '../ui/CopyButton'
 
@@ -18,34 +19,26 @@ interface FilesSectionProps {
   files: PluginFile[]
 }
 
-/** File type metadata with icons and styling */
+/** File type icon and color metadata (labels/descriptions come from translations) */
 const FILE_TYPE_META: Record<
   FileType,
-  { icon: string; label: string; color: string; description: string }
+  { icon: string; color: string }
 > = {
   script: {
     icon: '🔧',
-    label: '실행 스크립트',
     color: 'border-emerald-500/30 bg-emerald-500/5',
-    description: 'node/bash/python으로 실행 가능한 스크립트',
   },
   reference: {
     icon: '📚',
-    label: '참조 문서',
     color: 'border-blue-500/30 bg-blue-500/5',
-    description: '컨텍스트 이해를 위한 참조 자료',
   },
   template: {
     icon: '📋',
-    label: '템플릿',
     color: 'border-purple-500/30 bg-purple-500/5',
-    description: '프로젝트에 복사할 템플릿 파일',
   },
   config: {
     icon: '⚙️',
-    label: '설정 파일',
     color: 'border-amber-500/30 bg-amber-500/5',
-    description: '프로젝트 설정에 추가할 파일',
   },
 }
 
@@ -88,6 +81,7 @@ function FileItem({ file }: { file: PluginFile }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const type = (file.type as FileType) || inferFileType(file.name)
   const meta = FILE_TYPE_META[type]
+  const t = useTranslations('detail.files')
 
   return (
     <div
@@ -141,6 +135,7 @@ function FileItem({ file }: { file: PluginFile }) {
  */
 function FileTypeGroup({ type, files }: { type: FileType; files: PluginFile[] }) {
   const meta = FILE_TYPE_META[type]
+  const t = useTranslations('detail.files')
 
   return (
     <div className="mb-6 last:mb-0">
@@ -148,12 +143,12 @@ function FileTypeGroup({ type, files }: { type: FileType; files: PluginFile[] })
       <div className="flex items-center gap-3 mb-3">
         <span className="text-2xl">{meta.icon}</span>
         <div>
-          <h3 className="text-base font-semibold text-[var(--text-primary)]">{meta.label}</h3>
-          <p className="text-xs text-[var(--text-muted)]">{meta.description}</p>
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">{t(`types.${type}.label`)}</h3>
+          <p className="text-xs text-[var(--text-muted)]">{t(`types.${type}.description`)}</p>
         </div>
         <div className="ml-auto">
           <span className="px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)] font-medium">
-            {files.length}개
+            {files.length}
           </span>
         </div>
       </div>
@@ -182,6 +177,8 @@ function FileTypeGroup({ type, files }: { type: FileType; files: PluginFile[] })
  * ```
  */
 export function FilesSection({ files }: FilesSectionProps) {
+  const t = useTranslations('detail.files')
+
   if (!files || files.length === 0) {
     return null
   }
@@ -194,12 +191,11 @@ export function FilesSection({ files }: FilesSectionProps) {
       {/* Section header */}
       <div className="flex items-center gap-3 mb-6">
         <span className="text-xl">📁</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">추가 파일</h2>
+        <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('title')}</h2>
       </div>
 
       <p className="text-sm text-[var(--text-secondary)] mb-6">
-        이 리소스에는 {files.length}개의 추가 파일이 포함되어 있습니다. 각 파일을 클릭하여
-        내용을 확인하세요.
+        {t('description', { count: files.length })}
       </p>
 
       {/* File groups */}

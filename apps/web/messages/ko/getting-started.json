@@ -1,0 +1,74 @@
+{
+  "pageTitle": "플러그인 설치 가이드",
+  "pageSubtitle": "사용하는 AI 코딩 도구에 맞는 설치 방법을 선택하세요.",
+  "tabs": {
+    "claudeCode": {
+      "label": "Claude Code",
+      "description": "플러그인 설치"
+    },
+    "opencode": {
+      "label": "OpenCode",
+      "description": "npm 레지스트리"
+    },
+    "codex": {
+      "label": "Codex CLI",
+      "description": "npx setup"
+    },
+    "mcp": {
+      "label": "MCP 직접 연결",
+      "description": "claude mcp add"
+    }
+  },
+  "steps": {
+    "pluginInstall": "플러그인 설치",
+    "pluginInstallDesc": "터미널에서 아래 명령어를 실행하세요:",
+    "browserLogin": "브라우저 로그인",
+    "browserLoginDesc": "Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.",
+    "connectionCheck": "연결 확인",
+    "connectionCheckDesc": "설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:",
+    "oauthLogin": "OAuth 로그인",
+    "oauthLoginDesc": "아래 명령어로 MCP 서버에 OAuth 인증을 완료하세요:",
+    "restart": "OpenCode 재시작",
+    "restartDesc": "설정을 적용하기 위해 OpenCode를 재시작하세요.",
+    "mcpAdd": "MCP 서버 추가",
+    "mcpAddDesc": "터미널에서 아래 명령어를 실행하세요:"
+  },
+  "loginSteps": {
+    "browserOpens": "브라우저가 자동으로 열립니다",
+    "googleLogin": "Google 계정 (조직 이메일)으로 로그인",
+    "done": "완료! Claude Code로 돌아가서 사용하세요",
+    "authComplete": "터미널에 인증 완료 메시지가 표시됩니다",
+    "restartDone": "OpenCode 종료 후 다시 실행하면 플러그인이 자동으로 로드됩니다"
+  },
+  "notes": {
+    "pluginNote": "기존 MCP 직접 연결 제거 및 플러그인 설치를 한 번에 수행합니다. 이미 설정된 환경에서도 안전하게 재실행할 수 있습니다.",
+    "safeRerun": "이미 설정된 환경에서는 중복 실행해도 안전합니다. 기존 설정을 덮어쓰지 않습니다.",
+    "browserFallback": "브라우저가 자동으로 열리지 않는 경우, 먼저 웹사이트에서 직접 로그인한 후 다시 시도하세요.",
+    "projectScope": "프로젝트별로 설정하려면 프로젝트 루트 디렉토리에서 실행하세요. 글로벌 설정은 -s user 옵션을 추가하세요.",
+    "oauthSecurity": "OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.",
+    "oauthAuto": "OAuth 2.1 인증으로 토큰이 자동 관리됩니다. 환경변수를 직접 설정할 필요가 없습니다.",
+    "codexAutoConfig": "~/.codex/config.toml에 MCP 서버 설정을 자동으로 추가합니다:"
+  },
+  "noteLabels": {
+    "note": "참고:",
+    "security": "보안:"
+  },
+  "copy": "복사",
+  "copied": "복사됨!",
+  "usageGuide": {
+    "title": "설정 완료 후 사용법",
+    "naturalLanguage": "자연어로 사용",
+    "directCall": "직접 호출"
+  },
+  "privacy": {
+    "title": "데이터 수집 및 옵트아웃",
+    "description": "AI Toolkit MCP 서버는 서비스 개선을 위해 익명화된 사용 데이터(도구 호출 로그, 세션 집계)를 수집합니다. 코드, 대화 내용, 파일은 수집하지 않습니다.",
+    "optOutDesc": "데이터 수집을 원하지 않으면 MCP 설정에 X-Analytics-Opt-Out: true 헤더를 추가하세요:",
+    "privacyLink": "Privacy Policy",
+    "privacySuffix": "를 참고하세요."
+  },
+  "help": {
+    "question": "문제가 있나요?",
+    "reportIssue": "이슈 등록"
+  }
+}

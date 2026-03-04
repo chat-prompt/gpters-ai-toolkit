@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "catalog": "Catalog",
+    "guides": "Guides",
+    "templates": "Templates"
+  },
+  "hero": {
+    "badge": "Skill Template Generator",
+    "title": "Skill Template Generator",
+    "subtitle": "Quickly create Claude Code skills with category-optimized templates.",
+    "subtitleNote": "Best practices are automatically applied."
+  },
+  "features": {
+    "dataReference": {
+      "title": "Data Reference",
+      "description": "Skills that use external data like DBs and APIs"
+    },
+    "workflow": {
+      "title": "Workflow",
+      "description": "Skills that automate repetitive tasks"
+    },
+    "codeAnalysis": {
+      "title": "Code Analysis",
+      "description": "Skills that analyze code quality and security"
+    },
+    "documentation": {
+      "title": "Documentation",
+      "description": "Skills for automated document generation and management"
+    }
+  },
+  "completion": {
+    "success": "Template created!",
+    "ready": "skill is ready.",
+    "createNew": "Create new template"
+  },
+  "tips": {
+    "title": "Skill Writing Tips",
+    "clearTrigger": {
+      "title": "Clear Trigger Setup",
+      "description": "Including keywords like \"when doing X\" in your description helps Claude activate the skill at the right time."
+    },
+    "leastPrivilege": {
+      "title": "Least Privilege Principle",
+      "description": "Allow only the tools you need to improve safety. If only reading is needed, allow only Read, Grep, and Glob."
+    },
+    "examples": {
+      "title": "Provide Concrete Examples",
+      "description": "Including specific usage examples in the skill content helps Claude use the skill more accurately."
+    }
+  },
+  "cta": {
+    "title": "Share your skills with the team",
+    "description": "Customize a skill based on a template, then register it in the catalog to share with teammates.",
+    "gettingStarted": "Getting Started",
+    "browseCatalog": "Browse Catalog"
+  }
+}

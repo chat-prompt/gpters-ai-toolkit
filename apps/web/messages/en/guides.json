@@ -3,5 +3,15 @@
     "badge": "Guides",
     "title": "Vibe Coding Guides",
     "description": "Practical setup guides for vibe coding.\nStep-by-step instructions that anyone can follow."
+  },
+  "search": {
+    "placeholder": "Search guides...",
+    "resultsCount": "{count} guide(s) found",
+    "noResults": "No results for \"{query}\"",
+    "clearSearch": "Clear search"
+  },
+  "empty": {
+    "title": "No guides yet",
+    "subtitle": "Useful guides will be added soon"
   }
 }

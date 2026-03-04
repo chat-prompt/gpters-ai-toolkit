@@ -1,0 +1,52 @@
+{
+  "badge": "Privacy Policy",
+  "title": "Data Collection",
+  "titleHighlight": "Policy",
+  "sections": {
+    "overview": {
+      "title": "1. Overview",
+      "p1": "{siteName} is a Claude Code skill sharing platform. It provides skill search, viewing, and deployment via MCP (Model Context Protocol) server, and collects minimal usage data for service improvement.",
+      "p2": "This policy applies only to MCP server usage data. Web authentication (Google OAuth) and cookies are used for browser session management and are outside the scope of this policy."
+    },
+    "collected": {
+      "title": "2. Data Collected",
+      "columns": {
+        "item": "Item",
+        "purpose": "Purpose",
+        "retention": "Retention"
+      },
+      "rows": {
+        "auditLogs": "IP hash, User-Agent, client info, request/response metadata — security monitoring & debugging",
+        "sessions": "Session aggregates, behavior logs — usage pattern analysis",
+        "skillEvents": "Search, view, deploy events — skill quality metrics",
+        "analytics": "Anonymized event forwarding — aggregate statistics",
+        "retentionAudit": "30 days",
+        "retentionSessions": "Session end",
+        "retentionSkillEvents": "Indefinite",
+        "retentionAnalytics": "Per external service policy"
+      }
+    },
+    "notCollected": {
+      "title": "3. What We Don't Collect",
+      "items": [
+        "Code content or file system data",
+        "Conversation content with Claude",
+        "Local file paths or project structure",
+        "Unhashed IP addresses (raw IPs are not stored)",
+        "Passwords, tokens, or raw credentials"
+      ]
+    },
+    "optOut": {
+      "title": "4. How to Opt Out",
+      "description": "Including the X-Analytics-Opt-Out: true header in MCP requests disables audit logging, session tracking, skill event recording, and external forwarding.",
+      "rateLimitNote": "Rate limiting and security features remain active regardless of opt-out, and MCP tool responses are unaffected.",
+      "exampleTitle": "Claude Code Configuration Example",
+      "exampleDesc": "Add the header to MCP server config in {settingsPath}:"
+    },
+    "contact": {
+      "title": "5. Contact",
+      "description": "For questions or deletion requests regarding data collection, contact {email}."
+    }
+  },
+  "lastUpdated": "Last updated: March 2026"
+}

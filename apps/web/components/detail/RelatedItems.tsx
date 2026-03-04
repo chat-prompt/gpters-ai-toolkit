@@ -5,6 +5,7 @@
  * matching tags and same author relationships.
  */
 import { Link } from '@/i18n/navigation'
+import { getTranslations } from 'next-intl/server'
 import { CatalogItemSummary, TAGS, DIFFICULTY_LABELS, ItemType } from '@/lib/core/types'
 
 /** Type-specific styling configuration */
@@ -71,20 +72,22 @@ interface RelatedItemsProps {
  * />
  * ```
  */
-export function RelatedItems({ items, currentItemTags, currentItemAuthorId }: RelatedItemsProps) {
+export async function RelatedItems({ items, currentItemTags, currentItemAuthorId }: RelatedItemsProps) {
   if (!items || items.length === 0) {
     return null
   }
+
+  const t = await getTranslations('detail.relatedItems')
 
   return (
     <div className="glass rounded-2xl p-6 mb-8">
       <div className="flex items-center gap-3 mb-4">
         <span className="text-xl">🔗</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">관련 아이템</h2>
+        <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('title')}</h2>
       </div>
 
       <p className="text-sm text-[var(--text-secondary)] mb-5">
-        비슷한 태그를 가진 스킬, 에이전트, 커맨드를 확인해보세요.
+        {t('subtitle')}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -128,7 +131,7 @@ export function RelatedItems({ items, currentItemTags, currentItemAuthorId }: Re
                   {/* Same author indicator */}
                   {isSameAuthor && (
                     <span className="text-[9px] px-2 py-0.5 rounded-md bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] border border-[var(--accent-purple)]/20">
-                      같은 작성자
+                      {t('sameAuthor')}
                     </span>
                   )}
                   {/* Matching tags */}
