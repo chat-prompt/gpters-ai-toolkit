@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from '@/i18n/navigation'
 import Image from 'next/image'
+import { useTranslations } from 'next-intl'
 import { CatalogItem, TAGS } from '@/lib/core/types'
 import { useOrgContext } from '@/lib/hooks/useOrgContext'
 
@@ -55,7 +56,9 @@ function formatDate(dateString: string | null): string {
   })
 }
 
-function formatRelativeTime(dateString: string | null): string {
+type RelativeTimeTranslator = (key: string, values?: Record<string, number>) => string
+
+function formatRelativeTime(dateString: string | null, t: RelativeTimeTranslator): string {
   if (!dateString) return '-'
   const date = new Date(dateString)
   const now = new Date()
@@ -64,10 +67,10 @@ function formatRelativeTime(dateString: string | null): string {
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffMins < 1) return '방금 전'
-  if (diffMins < 60) return `${diffMins}분 전`
-  if (diffHours < 24) return `${diffHours}시간 전`
-  if (diffDays < 7) return `${diffDays}일 전`
+  if (diffMins < 1) return t('relativeTime.justNow')
+  if (diffMins < 60) return t('relativeTime.minutesAgo', { count: diffMins })
+  if (diffHours < 24) return t('relativeTime.hoursAgo', { count: diffHours })
+  if (diffDays < 7) return t('relativeTime.daysAgo', { count: diffDays })
   return formatDate(dateString)
 }
 
@@ -77,6 +80,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { currentOrgId, switchOrg } = useOrgContext()
+  const t = useTranslations('profile')
 
   useEffect(() => {
     async function fetchProfile() {
@@ -169,12 +173,12 @@ export default function ProfilePage() {
 
               <div className="flex flex-wrap gap-6 text-sm">
                 <div>
-                  <span className="text-[var(--text-muted)]">가입일: </span>
+                  <span className="text-[var(--text-muted)]">{t('joinDate')}: </span>
                   <span className="text-[var(--text-secondary)]">{formatDate(user.createdAt)}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">마지막 로그인: </span>
-                  <span className="text-[var(--text-secondary)]">{formatRelativeTime(user.lastLoginAt)}</span>
+                  <span className="text-[var(--text-muted)]">{t('lastLogin')}: </span>
+                  <span className="text-[var(--text-secondary)]">{formatRelativeTime(user.lastLoginAt, t)}</span>
                 </div>
               </div>
             </div>
@@ -233,13 +237,13 @@ export default function ProfilePage() {
         {/* Items List */}
         <div>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">내 아이템</h2>
+            <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('myItems')}</h2>
           </div>
 
           {items.length === 0 ? (
             <div className="glass rounded-2xl p-12 text-center">
               <div className="text-4xl mb-4 opacity-20">📝</div>
-              <p className="text-[var(--text-secondary)] mb-4">아직 생성한 아이템이 없습니다.</p>
+              <p className="text-[var(--text-secondary)] mb-4">{t('noItems')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -283,7 +287,7 @@ export default function ProfilePage() {
                           ))}
                         </div>
                         <span className="text-xs text-[var(--text-muted)]">
-                          {formatRelativeTime(item.updatedAt || null)}
+                          {formatRelativeTime(item.updatedAt || null, t)}
                         </span>
                       </div>
                     </div>

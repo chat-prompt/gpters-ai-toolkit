@@ -7,6 +7,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   PERMISSION_MODES,
   SECURITY_LEVELS,
@@ -49,6 +50,7 @@ export function AgentPermissionGuide({
   collapsible = false,
   initialCollapsed = false,
 }: AgentPermissionGuideProps) {
+  const t = useTranslations('detail')
   const [expandedMode, setExpandedMode] = useState<AgentPermissionMode | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed)
 
@@ -93,10 +95,11 @@ export function AgentPermissionGuide({
         <div className="flex items-start gap-3">
           <span className="text-lg">⚠️</span>
           <div>
-            <h4 className="text-sm font-medium text-amber-400 mb-1">보안 주의사항</h4>
+            <h4 className="text-sm font-medium text-amber-400 mb-1">
+              {t('agentGuide.permissionGuide.securityWarningTitle')}
+            </h4>
             <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-              Agent 권한 모드는 Claude Code가 자동으로 수행할 수 있는 작업의 범위를 결정합니다.
-              프로덕션 환경이나 민감한 데이터가 있는 프로젝트에서는 항상 <strong className="text-amber-400">Default</strong> 또는 <strong className="text-amber-400">Plan</strong> 모드를 권장합니다.
+              {t('agentGuide.permissionGuide.securityWarningBody')}
             </p>
           </div>
         </div>
@@ -113,7 +116,9 @@ export function AgentPermissionGuide({
         >
           <div className="flex items-center gap-3">
             <span className="text-xl">🔐</span>
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">권한 모드 가이드</h2>
+            <h2 className="text-lg font-medium text-[var(--text-primary)]">
+              {t('agentGuide.permissionGuide.permissionModeGuide')}
+            </h2>
             {currentMode && (
               <SecurityModeBadge mode={currentMode} />
             )}
@@ -136,14 +141,16 @@ export function AgentPermissionGuide({
     <div className="glass rounded-2xl p-6 mb-8">
       <div className="flex items-center gap-3 mb-6">
         <span className="text-xl">🔐</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">권한 모드 가이드</h2>
+        <h2 className="text-lg font-medium text-[var(--text-primary)]">
+          {t('agentGuide.permissionGuide.permissionModeGuide')}
+        </h2>
         {currentMode && (
           <SecurityModeBadge mode={currentMode} />
         )}
       </div>
 
       <p className="text-sm text-[var(--text-secondary)] mb-6">
-        Agent가 Claude Code에서 실행될 때의 권한 수준을 설정합니다. 각 모드에 따라 자동 실행되는 작업의 범위가 달라집니다.
+        {t('agentGuide.permissionGuide.permissionModeDescription')}
       </p>
 
       {content}
@@ -165,6 +172,7 @@ function PermissionModeCard({
   onSelect?: () => void
   onToggleExpand: () => void
 }) {
+  const t = useTranslations('detail')
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
   const isInteractive = !!onSelect
 
@@ -185,7 +193,7 @@ function PermissionModeCard({
             <h3 className="font-medium text-[var(--text-primary)]">{modeInfo.label}</h3>
             {isSelected && (
               <span className="text-[10px] text-[var(--accent-purple)] font-medium uppercase tracking-wider">
-                현재 설정
+                {t('agentGuide.permissionGuide.currentSetting')}
               </span>
             )}
           </div>
@@ -204,7 +212,7 @@ function PermissionModeCard({
         }}
         className="text-sm text-[var(--accent-cyan)] hover:text-[var(--accent-cyan)]/80 transition-colors"
       >
-        {isExpanded ? '간략히 ▲' : '자세히 보기 ▼'}
+        {isExpanded ? t('agentGuide.permissionGuide.collapse') : t('agentGuide.permissionGuide.expand')}
       </button>
 
       {/* Expanded Content */}
@@ -213,7 +221,7 @@ function PermissionModeCard({
           {/* Full Description */}
           <div>
             <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              상세 설명
+              {t('agentGuide.permissionGuide.fullDescription')}
             </h4>
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
               {modeInfo.fullDescription}
@@ -224,7 +232,7 @@ function PermissionModeCard({
           {modeInfo.securityWarnings.length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-amber-400 uppercase tracking-wider mb-2">
-                보안 주의사항
+                {t('agentGuide.permissionGuide.securityWarnings')}
               </h4>
               <ul className="space-y-1">
                 {modeInfo.securityWarnings.map((warning, i) => (
@@ -240,7 +248,7 @@ function PermissionModeCard({
           {/* Allowed Operations */}
           <div>
             <h4 className="text-xs font-medium text-green-400 uppercase tracking-wider mb-2">
-              허용 작업
+              {t('agentGuide.permissionGuide.allowedOperations')}
             </h4>
             <ul className="space-y-1">
               {modeInfo.allowedOperations.map((op, i) => (
@@ -256,7 +264,7 @@ function PermissionModeCard({
           {modeInfo.blockedOperations.length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-red-400 uppercase tracking-wider mb-2">
-                차단 작업
+                {t('agentGuide.permissionGuide.blockedOperations')}
               </h4>
               <ul className="space-y-1">
                 {modeInfo.blockedOperations.map((op, i) => (
@@ -272,7 +280,7 @@ function PermissionModeCard({
           {/* Use Cases */}
           <div>
             <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              사용 사례
+              {t('agentGuide.permissionGuide.useCases')}
             </h4>
             <div className="space-y-2">
               {modeInfo.useCases.slice(0, 2).map((useCase, i) => (
@@ -283,7 +291,7 @@ function PermissionModeCard({
                   <p className="text-xs text-[var(--text-muted)]">{useCase.description}</p>
                   {useCase.example && (
                     <p className="text-xs text-[var(--accent-cyan)] mt-2 font-mono">
-                      예: {useCase.example}
+                      {t('agentGuide.permissionGuide.examplePrefix')} {useCase.example}
                     </p>
                   )}
                 </div>
@@ -294,7 +302,7 @@ function PermissionModeCard({
           {/* Best Practices */}
           <div>
             <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              권장 사항
+              {t('agentGuide.permissionGuide.bestPractices')}
             </h4>
             <ul className="space-y-1">
               {modeInfo.bestPractices.slice(0, 3).map((practice, i) => (
@@ -310,7 +318,7 @@ function PermissionModeCard({
           {modeInfo.notRecommendedFor.length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                비권장 상황
+                {t('agentGuide.permissionGuide.notRecommended')}
               </h4>
               <ul className="space-y-1">
                 {modeInfo.notRecommendedFor.map((item, i) => (
@@ -409,10 +417,12 @@ function SecurityModeBadge({ mode }: { mode: AgentPermissionMode }) {
 
 /** Security level legend explaining all levels */
 function SecurityLevelLegend() {
+  const t = useTranslations('detail')
+
   return (
     <div className="p-4 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
       <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
-        보안 수준 안내
+        {t('agentGuide.permissionGuide.securityLevelGuide')}
       </h4>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {(Object.entries(SECURITY_LEVELS) as [SecurityLevel, typeof SECURITY_LEVELS[SecurityLevel]][]).map(([level, info]) => (
@@ -454,6 +464,7 @@ export function AgentPermissionModeDisplay({ mode }: { mode: AgentPermissionMode
 
 /** Standalone mode info section for agent detail pages */
 export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode }) {
+  const t = useTranslations('detail')
   const [isExpanded, setIsExpanded] = useState(false)
   const modeInfo = PERMISSION_MODES[mode]
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
@@ -469,7 +480,9 @@ export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode
     <div className="glass rounded-2xl p-6 mb-8">
       <div className="flex items-center gap-3 mb-4">
         <span className="text-xl">🔐</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">권한 모드</h2>
+        <h2 className="text-lg font-medium text-[var(--text-primary)]">
+          {t('agentGuide.permissionGuide.permissionMode')}
+        </h2>
       </div>
 
       <div className={`p-4 rounded-xl border ${colorClasses[modeInfo.securityLevel]} bg-[var(--bg-secondary)]`}>
@@ -504,7 +517,7 @@ export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode
           onClick={() => setIsExpanded(!isExpanded)}
           className="text-sm text-[var(--accent-cyan)] hover:text-[var(--accent-cyan)]/80 transition-colors"
         >
-          {isExpanded ? '간략히 ▲' : '상세 정보 보기 ▼'}
+          {isExpanded ? t('agentGuide.permissionGuide.collapse') : t('agentGuide.permissionGuide.expand')}
         </button>
 
         {isExpanded && (
@@ -513,7 +526,7 @@ export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <h4 className="text-xs font-medium text-green-400 uppercase tracking-wider mb-2">
-                  허용 작업
+                  {t('agentGuide.permissionGuide.allowedOperations')}
                 </h4>
                 <ul className="space-y-1">
                   {modeInfo.allowedOperations.map((op, i) => (
@@ -528,7 +541,7 @@ export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode
               {modeInfo.blockedOperations.length > 0 && (
                 <div>
                   <h4 className="text-xs font-medium text-red-400 uppercase tracking-wider mb-2">
-                    차단 작업
+                    {t('agentGuide.permissionGuide.blockedOperations')}
                   </h4>
                   <ul className="space-y-1">
                     {modeInfo.blockedOperations.map((op, i) => (
@@ -545,7 +558,7 @@ export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode
             {/* Use Cases */}
             <div>
               <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                적합한 사용 사례
+                {t('agentGuide.permissionGuide.suitableUseCases')}
               </h4>
               <div className="grid md:grid-cols-2 gap-2">
                 {modeInfo.useCases.map((useCase, i) => (
@@ -560,7 +573,7 @@ export function AgentPermissionModeSection({ mode }: { mode: AgentPermissionMode
             {/* Best Practices */}
             <div>
               <h4 className="text-xs font-medium text-[var(--accent-cyan)] uppercase tracking-wider mb-2">
-                권장 사항
+                {t('agentGuide.permissionGuide.bestPractices')}
               </h4>
               <ul className="space-y-1">
                 {modeInfo.bestPractices.map((practice, i) => (

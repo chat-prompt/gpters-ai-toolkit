@@ -11,7 +11,9 @@ export { BasicInfoForm } from './BasicInfoForm'
 export { ToolSelector } from './ToolSelector'
 export { TemplatePreview } from './TemplatePreview'
 export { useTemplateGenerator } from './useTemplateGenerator'
-export { TEMPLATE_CATEGORIES, WIZARD_STEPS } from './constants'
+export { TEMPLATE_CATEGORY_META, WIZARD_STEPS } from './constants'
+export { TEMPLATE_CATEGORY_META as TEMPLATE_CATEGORIES } from './constants'
+export type { TemplateCategoryMeta } from './constants'
 export type {
   TemplateCategory,
   TemplateCategoryInfo,

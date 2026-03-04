@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   MODEL_SPECS,
   MODEL_TIER_CONFIG,
@@ -31,6 +32,7 @@ export function AgentModelGuideSection({
   currentModel,
   defaultExpanded = false,
 }: AgentModelGuideSectionProps) {
+  const t = useTranslations('detail')
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
   // Auto-recommend based on current model
@@ -56,10 +58,10 @@ export function AgentModelGuideSection({
           <span className="text-xl">🤖</span>
           <div className="text-left">
             <h2 className="text-lg font-medium text-[var(--text-primary)]">
-              모델 선택 가이드
+              {t('agentGuide.modelGuide.title')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)]">
-              작업 유형에 맞는 최적의 Claude 모델을 선택하세요
+              {t('agentGuide.modelGuide.subtitle')}
             </p>
           </div>
         </div>
@@ -98,7 +100,7 @@ export function AgentModelGuideSection({
                 <span className="text-2xl">{recommendation.tierConfig.icon}</span>
                 <div className="flex-1">
                   <h3 className="font-medium text-[var(--text-primary)]">
-                    현재 선택: {MODEL_SPECS[recommendation.model].name}
+                    {t('agentGuide.modelGuide.currentSelection')} {MODEL_SPECS[recommendation.model].name}
                   </h3>
                   <p className="text-sm text-[var(--text-secondary)] mt-1">
                     {MODEL_SPECS[recommendation.model].description}
@@ -136,29 +138,32 @@ export function AgentModelGuideSection({
  * Model comparison table component
  */
 function ModelComparisonTable({ currentModel }: { currentModel?: AgentModel }) {
+  const t = useTranslations('detail')
   const models = Object.values(MODEL_SPECS)
 
   return (
     <div>
-      <h3 className="text-base font-medium text-[var(--text-primary)] mb-4">모델 비교표</h3>
+      <h3 className="text-base font-medium text-[var(--text-primary)] mb-4">
+        {t('agentGuide.modelGuide.comparisonTable')}
+      </h3>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className="text-left py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
-                모델
+                {t('agentGuide.modelGuide.colModel')}
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
-                성능
+                {t('agentGuide.modelGuide.colPerformance')}
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
-                비용
+                {t('agentGuide.modelGuide.colCost')}
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
-                속도
+                {t('agentGuide.modelGuide.colSpeed')}
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
-                추천 작업
+                {t('agentGuide.modelGuide.colRecommended')}
               </th>
             </tr>
           </thead>
@@ -194,13 +199,13 @@ function ModelComparisonTable({ currentModel }: { currentModel?: AgentModel }) {
                       <span className="text-[var(--text-primary)] font-mono">
                         ${model.inputCostPer1M}
                       </span>
-                      <span className="text-[var(--text-muted)]"> /1M 입력</span>
+                      <span className="text-[var(--text-muted)]"> {t('agentGuide.modelGuide.inputPer1M')}</span>
                     </div>
                     <div className="text-sm">
                       <span className="text-[var(--text-primary)] font-mono">
                         ${model.outputCostPer1M}
                       </span>
-                      <span className="text-[var(--text-muted)]"> /1M 출력</span>
+                      <span className="text-[var(--text-muted)]"> {t('agentGuide.modelGuide.outputPer1M')}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4 text-sm text-[var(--text-secondary)]">
@@ -252,24 +257,26 @@ function PerformanceBar({ level }: { level: number }) {
  * Task-based recommendations component
  */
 function TaskRecommendations() {
-  const taskGroups: { title: string; icon: string; categories: TaskCategory[] }[] = [
+  const t = useTranslations('detail')
+
+  const taskGroups: { titleKey: string; icon: string; categories: TaskCategory[] }[] = [
     {
-      title: '코딩 작업',
+      titleKey: 'agentGuide.modelGuide.taskGroupCoding',
       icon: '💻',
       categories: ['code-generation', 'code-review', 'debugging', 'refactoring'],
     },
     {
-      title: '분석 작업',
+      titleKey: 'agentGuide.modelGuide.taskGroupAnalysis',
       icon: '🔍',
       categories: ['analysis', 'testing'],
     },
     {
-      title: '창의적 작업',
+      titleKey: 'agentGuide.modelGuide.taskGroupCreative',
       icon: '🎨',
       categories: ['creative', 'documentation'],
     },
     {
-      title: '간단한 작업',
+      titleKey: 'agentGuide.modelGuide.taskGroupSimple',
       icon: '⚡',
       categories: ['data-processing', 'conversation'],
     },
@@ -278,17 +285,17 @@ function TaskRecommendations() {
   return (
     <div>
       <h3 className="text-base font-medium text-[var(--text-primary)] mb-4">
-        작업 유형별 추천 모델
+        {t('agentGuide.modelGuide.taskRecommendations')}
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {taskGroups.map((group) => (
           <div
-            key={group.title}
+            key={group.titleKey}
             className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]"
           >
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">{group.icon}</span>
-              <h4 className="font-medium text-[var(--text-primary)]">{group.title}</h4>
+              <h4 className="font-medium text-[var(--text-primary)]">{t(group.titleKey as Parameters<typeof t>[0])}</h4>
             </div>
             <div className="space-y-2">
               {group.categories.map((cat) => {
@@ -322,13 +329,14 @@ function TaskRecommendations() {
  * Cost comparison visualization
  */
 function CostComparisonChart() {
+  const t = useTranslations('detail')
   const models = Object.values(MODEL_SPECS)
   const maxCost = Math.max(...models.map((m) => m.outputCostPer1M))
 
   return (
     <div>
       <h3 className="text-base font-medium text-[var(--text-primary)] mb-4">
-        비용 vs 성능 비교
+        {t('agentGuide.modelGuide.costVsPerformance')}
       </h3>
       <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
         <div className="space-y-4">
@@ -366,19 +374,19 @@ function CostComparisonChart() {
 
         {/* Legend */}
         <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-          <p className="text-xs text-[var(--text-muted)] mb-2">모델 선택 가이드:</p>
+          <p className="text-xs text-[var(--text-muted)] mb-2">{t('agentGuide.modelGuide.legendTitle')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-[var(--text-secondary)]">Haiku: 간단한 작업, 대량 처리</span>
+              <span className="text-[var(--text-secondary)]">{t('agentGuide.modelGuide.legendHaiku')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-blue-500" />
-              <span className="text-[var(--text-secondary)]">Sonnet: 대부분의 코딩 작업</span>
+              <span className="text-[var(--text-secondary)]">{t('agentGuide.modelGuide.legendSonnet')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-purple-500" />
-              <span className="text-[var(--text-secondary)]">Opus: 복잡한 분석/창의적 작업</span>
+              <span className="text-[var(--text-secondary)]">{t('agentGuide.modelGuide.legendOpus')}</span>
             </div>
           </div>
         </div>
@@ -391,10 +399,12 @@ function CostComparisonChart() {
  * Simple inline model display (for use elsewhere)
  */
 export function ModelBadge({ model }: { model: AgentModel }) {
+  const t = useTranslations('detail')
+
   if (model === 'inherit') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
-        🔗 상속
+        🔗 {t('agentGuide.modelGuide.inheritBadge')}
       </span>
     )
   }

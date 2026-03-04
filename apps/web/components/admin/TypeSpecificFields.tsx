@@ -6,6 +6,7 @@
  */
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { CLAUDE_TOOLS, AGENT_MODELS, AGENT_PERMISSION_MODES, TYPE_CONFIG } from '@/lib/data/type-config'
 import type { ItemType, AgentModel, AgentPermissionMode, Difficulty, HookEvent } from '@/lib/core/types'
 import { DIFFICULTY_LABELS, HOOK_EVENTS } from '@/lib/core/types'
@@ -44,6 +45,7 @@ interface TypeSpecificFieldsProps {
  * - guide: difficulty, estimated time
  */
 export function TypeSpecificFields({ type, values, onChange }: TypeSpecificFieldsProps) {
+  const t = useTranslations('admin.typeSpecificFields')
   const config = TYPE_CONFIG[type]
   const { fields } = config
 
@@ -90,13 +92,13 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
       {fields.showEstimatedTime && (
         <div>
           <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            예상 소요 시간
+            {t('estimatedTime')}
           </label>
           <input
             type="text"
             value={values.estimatedTime}
             onChange={(e) => onChange('estimatedTime', e.target.value)}
-            placeholder="예: 10분, 30분, 1시간"
+            placeholder={t('estimatedTimePlaceholder')}
             className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
           />
         </div>
@@ -109,8 +111,8 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
             Allowed Tools
           </label>
           <p className="text-xs text-[var(--text-muted)] mb-3">
-            {type === 'agent' ? 'Agent가 사용할 수 있는 도구를 선택하세요.' : '이 기능이 사용할 수 있는 도구를 제한합니다.'}
-            {' '}비워두면 모든 도구를 사용합니다.
+            {type === 'agent' ? t('agentToolsHint') : t('featureToolsHint')}
+            {' '}{t('toolsEmpty')}
           </p>
           <div className="flex flex-wrap gap-2">
             {CLAUDE_TOOLS.map((tool) => (
@@ -202,13 +204,13 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               Skills to Load
             </label>
             <p className="text-xs text-[var(--text-muted)] mb-3">
-              Agent에 자동으로 로드할 스킬 이름을 쉼표로 구분하여 입력하세요.
+              {t('agentSkillsHint')}
             </p>
             <input
               type="text"
               value={values.agentSkills}
               onChange={(e) => onChange('agentSkills', e.target.value)}
-              placeholder="예: pdf-processing, git-workflow"
+              placeholder={t('agentSkillsPlaceholder')}
               className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
             />
           </div>
@@ -224,13 +226,13 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               Argument Hint
             </label>
             <p className="text-xs text-[var(--text-muted)] mb-3">
-              자동완성에서 보여줄 인자 힌트입니다. 예: [message], [file] [options]
+              {t('argumentHintDesc')}
             </p>
             <input
               type="text"
               value={values.commandArgumentHint}
               onChange={(e) => onChange('commandArgumentHint', e.target.value)}
-              placeholder="예: [message]"
+              placeholder={t('argumentHintPlaceholder')}
               className="w-full max-w-md px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
             />
           </div>
@@ -249,7 +251,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                   Disable Model Invocation
                 </span>
                 <p className="text-xs text-[var(--text-muted)]">
-                  체크하면 SlashCommand 도구가 이 커맨드를 자동으로 호출하지 않습니다.
+                  {t('disableModelInvocationDesc')}
                 </p>
               </div>
             </label>
@@ -312,7 +314,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                 type="text"
                 value={values.hookMatcher}
                 onChange={(e) => onChange('hookMatcher', e.target.value)}
-                placeholder="또는 커스텀 matcher 입력..."
+                placeholder={t('hookMatcherPlaceholder')}
                 className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
               />
             </div>
@@ -324,17 +326,17 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               Command *
             </label>
             <p className="text-xs text-[var(--text-muted)] mb-3">
-              Hook 실행 시 호출할 셸 명령어를 입력하세요.
+              {t('hookCommandDesc')}
             </p>
             <textarea
               value={values.hookCommand}
               onChange={(e) => onChange('hookCommand', e.target.value)}
-              placeholder="예: cp $transcript_path ~/backups/transcript-$(date +%s).jsonl"
+              placeholder={t('hookCommandPlaceholder')}
               className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors resize-none"
               rows={3}
             />
             <p className="text-xs text-[var(--text-muted)] mt-2">
-              사용 가능한 변수: <code className="text-[var(--accent-cyan)]">$session_id</code>, <code className="text-[var(--accent-cyan)]">$transcript_path</code>, <code className="text-[var(--accent-cyan)]">$hook_event_name</code>
+              {t('hookVariablesDesc')} <code className="text-[var(--accent-cyan)]">$session_id</code>, <code className="text-[var(--accent-cyan)]">$transcript_path</code>, <code className="text-[var(--accent-cyan)]">$hook_event_name</code>
             </p>
           </div>
 
@@ -347,7 +349,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               type="number"
               value={values.hookTimeout}
               onChange={(e) => onChange('hookTimeout', e.target.value ? parseInt(e.target.value, 10) : '')}
-              placeholder="기본값: 60000 (60초)"
+              placeholder={t('hookTimeoutPlaceholder')}
               min={0}
               className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
             />
@@ -367,7 +369,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                   Blocking
                 </span>
                 <p className="text-xs text-[var(--text-muted)]">
-                  체크하면 Hook이 완료될 때까지 Claude Code가 대기합니다.
+                  {t('hookBlockingDesc')}
                 </p>
               </div>
             </label>
@@ -377,7 +379,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
           {values.hookEvent && values.hookCommand && (
             <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                설정 미리보기
+                {t('configPreview')}
               </div>
               <pre className="text-xs font-mono text-[var(--accent-cyan)] overflow-x-auto">
 {`{

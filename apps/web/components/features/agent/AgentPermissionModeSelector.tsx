@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   PERMISSION_MODES,
   SECURITY_LEVELS,
@@ -125,16 +126,20 @@ function CompactModeSelector({
   onSelect: (mode: AgentPermissionMode) => void
   readOnly: boolean
 }) {
+  const t = useTranslations('detail')
+
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-300">권한 모드</label>
+      <label className="block text-sm font-medium text-gray-300">
+        {t('agentGuide.permissionSelector.permissionMode')}
+      </label>
       <select
         value={selectedMode || ''}
         onChange={(e) => onSelect(e.target.value as AgentPermissionMode)}
         disabled={readOnly}
         className="w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
       >
-        <option value="">선택하세요</option>
+        <option value="">{t('agentGuide.permissionSelector.selectPlaceholder')}</option>
         {modes.map((mode) => {
           const securityInfo = SECURITY_LEVELS[mode.securityLevel]
           return (
@@ -159,6 +164,7 @@ function RecommendationBanner({
   recommendation: ReturnType<typeof getRecommendation>
   onSelect: (mode: AgentPermissionMode) => void
 }) {
+  const t = useTranslations('detail')
   const modeInfo = PERMISSION_MODES[recommendation.recommended]
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
 
@@ -167,7 +173,9 @@ function RecommendationBanner({
       <div className="flex items-start gap-3">
         <span className="text-2xl">{securityInfo.icon}</span>
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-900">권장 모드: {modeInfo.label}</h3>
+          <h3 className="font-semibold text-gray-900">
+            {t('agentGuide.permissionSelector.recommendedMode')} {modeInfo.label}
+          </h3>
           <p className="mt-1 text-sm text-gray-700">{modeInfo.shortDescription}</p>
 
           {recommendation.reasoning.length > 0 && (
@@ -190,7 +198,7 @@ function RecommendationBanner({
             onClick={() => onSelect(recommendation.recommended)}
             className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            권장 모드 선택
+            {t('agentGuide.permissionSelector.applyRecommended')}
           </button>
         </div>
       </div>
@@ -218,6 +226,7 @@ function ModeCard({
   context?: Partial<RecommendationCriteria>
   readOnly: boolean
 }) {
+  const t = useTranslations('detail')
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
   const validation = context ? validateModeForContext(modeInfo.mode, context) : null
 
@@ -237,7 +246,9 @@ function ModeCard({
           <div>
             <h3 className="font-semibold text-white">{modeInfo.label}</h3>
             {isRecommended && (
-              <span className="text-xs text-blue-400">✓ 권장</span>
+              <span className="text-xs text-blue-400">
+                {t('agentGuide.permissionSelector.recommendedBadge')}
+              </span>
             )}
           </div>
         </div>
@@ -262,7 +273,9 @@ function ModeCard({
         }}
         className="mt-3 text-sm text-blue-400 hover:text-blue-300"
       >
-        {isExpanded ? '간략히 보기 ▲' : '자세히 보기 ▼'}
+        {isExpanded
+          ? t('agentGuide.permissionSelector.collapse')
+          : t('agentGuide.permissionSelector.expand')}
       </button>
 
       {/* Expanded content */}
@@ -270,14 +283,18 @@ function ModeCard({
         <div className="mt-4 space-y-4 border-t border-gray-700 pt-4">
           {/* Full description */}
           <div>
-            <h4 className="text-sm font-medium text-gray-300">상세 설명</h4>
+            <h4 className="text-sm font-medium text-gray-300">
+              {t('agentGuide.permissionSelector.fullDescription')}
+            </h4>
             <p className="mt-1 text-sm text-gray-400">{modeInfo.fullDescription}</p>
           </div>
 
           {/* Security warnings */}
           {modeInfo.securityWarnings.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-300">보안 주의사항</h4>
+              <h4 className="text-sm font-medium text-gray-300">
+                {t('agentGuide.permissionSelector.securityWarnings')}
+              </h4>
               <ul className="mt-1 space-y-1 text-sm text-amber-400">
                 {modeInfo.securityWarnings.map((warning, i) => (
                   <li key={i}>{warning}</li>
@@ -288,7 +305,9 @@ function ModeCard({
 
           {/* Allowed operations */}
           <div>
-            <h4 className="text-sm font-medium text-gray-300">허용되는 작업</h4>
+            <h4 className="text-sm font-medium text-gray-300">
+              {t('agentGuide.permissionSelector.allowedOperations')}
+            </h4>
             <ul className="mt-1 space-y-1 text-sm text-green-400">
               {modeInfo.allowedOperations.map((op, i) => (
                 <li key={i}>✓ {op}</li>
@@ -299,7 +318,9 @@ function ModeCard({
           {/* Blocked operations */}
           {modeInfo.blockedOperations.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-300">차단되는 작업</h4>
+              <h4 className="text-sm font-medium text-gray-300">
+                {t('agentGuide.permissionSelector.blockedOperations')}
+              </h4>
               <ul className="mt-1 space-y-1 text-sm text-red-400">
                 {modeInfo.blockedOperations.map((op, i) => (
                   <li key={i}>✗ {op}</li>
@@ -310,7 +331,9 @@ function ModeCard({
 
           {/* Use cases */}
           <div>
-            <h4 className="text-sm font-medium text-gray-300">사용 사례</h4>
+            <h4 className="text-sm font-medium text-gray-300">
+              {t('agentGuide.permissionSelector.useCases')}
+            </h4>
             <div className="mt-2 space-y-2">
               {modeInfo.useCases.slice(0, 2).map((useCase, i) => (
                 <div key={i} className="rounded bg-gray-700/50 p-2 text-sm">
@@ -346,6 +369,7 @@ function SelectedModeDetails({
   modeInfo: PermissionModeInfo
   context?: Partial<RecommendationCriteria>
 }) {
+  const t = useTranslations('detail')
   const validation = context ? validateModeForContext(modeInfo.mode, context) : null
   const securityInfo = SECURITY_LEVELS[modeInfo.securityLevel]
 
@@ -377,7 +401,9 @@ function SelectedModeDetails({
 
       {/* Best practices */}
       <div className="mt-6">
-        <h3 className="text-sm font-semibold text-gray-300">모범 사례</h3>
+        <h3 className="text-sm font-semibold text-gray-300">
+          {t('agentGuide.permissionSelector.bestPractices')}
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-400">
           {modeInfo.bestPractices.map((practice, i) => (
             <li key={i}>• {practice}</li>
@@ -388,7 +414,9 @@ function SelectedModeDetails({
       {/* Not recommended for */}
       {modeInfo.notRecommendedFor.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-sm font-semibold text-gray-300">권장하지 않는 경우</h3>
+          <h3 className="text-sm font-semibold text-gray-300">
+            {t('agentGuide.permissionSelector.notRecommended')}
+          </h3>
           <ul className="mt-2 space-y-1 text-sm text-gray-400">
             {modeInfo.notRecommendedFor.map((item, i) => (
               <li key={i}>• {item}</li>
@@ -411,13 +439,16 @@ export function PermissionModeComparison({
   mode1: AgentPermissionMode
   mode2: AgentPermissionMode
 }) {
+  const t = useTranslations('detail')
   const comparison = compareModes(mode1, mode2)
   const info1 = PERMISSION_MODES[mode1]
   const info2 = PERMISSION_MODES[mode2]
 
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
-      <h3 className="text-lg font-semibold text-white">모드 비교</h3>
+      <h3 className="text-lg font-semibold text-white">
+        {t('agentGuide.permissionSelector.modeComparison')}
+      </h3>
 
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div className="rounded bg-gray-700/50 p-3">
@@ -439,18 +470,20 @@ export function PermissionModeComparison({
 
       <div className="mt-4">
         <p className="text-sm text-gray-400">
-          보안 수준: {info1.label}은(는) {info2.label}보다{' '}
+          {t('agentGuide.permissionSelector.securityLevelPrefix')} {info1.label}{' '}
           {comparison.securityComparison === 'safer'
-            ? '더 안전합니다'
+            ? t('agentGuide.permissionSelector.securityLevelSafer')
             : comparison.securityComparison === 'riskier'
-              ? '더 위험합니다'
-              : '동일한 보안 수준입니다'}
+              ? t('agentGuide.permissionSelector.securityLevelRiskier')
+              : t('agentGuide.permissionSelector.securityLevelSame')}
         </p>
       </div>
 
       {comparison.differences.length > 0 && (
         <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-300">주요 차이점</h4>
+          <h4 className="text-sm font-medium text-gray-300">
+            {t('agentGuide.permissionSelector.keyDifferences')}
+          </h4>
           <ul className="mt-2 space-y-1 text-sm text-gray-400">
             {comparison.differences.map((diff, i) => (
               <li key={i}>• {diff}</li>

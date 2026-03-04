@@ -1,5 +1,6 @@
 {
   "toc": {
+    "heading": "Table of Contents",
     "overview": "Overview",
     "examples": "Examples",
     "dependencies": "Dependencies",
@@ -31,7 +32,10 @@
     "showDirectOnly": "▼ Show direct dependencies only",
     "showFullTree": "▶ Show full dependency tree",
     "recommendedOrder": "Recommended install order",
-    "mcpHint": "MCP servers must be enabled in Claude Code settings. Configure with {command}."
+    "mcpHint": "MCP servers must be enabled in Claude Code settings. Configure with {command}.",
+    "clickToView": "Click to view details →",
+    "mcpHintBefore": " must be enabled in Claude Code settings.",
+    "mcpHintAfter": "to configure."
   },
   "examples": {
     "title": "Usage Examples",
@@ -73,9 +77,109 @@
     "docsLink": "View Hook docs →",
     "securityWarning": "Security check: {count} risk(s) detected"
   },
+  "draft": {
+    "description": "This item is still being written and is not visible in the public catalog."
+  },
   "package": {
     "contentsTitle": "Included Items",
     "contentsDescription": "These are the items included in this package. You can install each item individually or install the entire package at once.",
     "descriptionTitle": "Package Description"
+  },
+  "agentGuide": {
+    "modelGuide": {
+      "title": "Model Selection Guide",
+      "subtitle": "Choose the optimal Claude model for your task type",
+      "currentSelection": "Current selection:",
+      "comparisonTable": "Model Comparison",
+      "colModel": "Model",
+      "colPerformance": "Performance",
+      "colCost": "Cost",
+      "colSpeed": "Speed",
+      "colRecommended": "Best For",
+      "inputPer1M": "/1M input",
+      "outputPer1M": "/1M output",
+      "taskGroupCoding": "Coding Tasks",
+      "taskGroupAnalysis": "Analysis Tasks",
+      "taskGroupCreative": "Creative Tasks",
+      "taskGroupSimple": "Simple Tasks",
+      "taskRecommendations": "Recommended Model by Task Type",
+      "costVsPerformance": "Cost vs Performance",
+      "legendTitle": "Model Selection Guide:",
+      "legendHaiku": "Haiku: Simple tasks, bulk processing",
+      "legendSonnet": "Sonnet: Most coding tasks",
+      "legendOpus": "Opus: Complex analysis/creative tasks",
+      "inheritBadge": "Inherit"
+    },
+    "permissionGuide": {
+      "securityWarningTitle": "Security Notice",
+      "securityWarningBody": "The agent permission mode determines the scope of actions Claude Code can perform automatically. Always use Default or Plan mode for production environments or projects with sensitive data.",
+      "permissionModeGuide": "Permission Mode Guide",
+      "permissionModeDescription": "Sets the permission level when Agent runs in Claude Code. The scope of automatically executed actions varies by mode.",
+      "currentSetting": "Current setting",
+      "collapse": "Collapse ▲",
+      "expand": "Show details ▼",
+      "fullDescription": "Full Description",
+      "securityWarnings": "Security Warnings",
+      "allowedOperations": "Allowed Operations",
+      "blockedOperations": "Blocked Operations",
+      "useCases": "Use Cases",
+      "examplePrefix": "e.g.:",
+      "bestPractices": "Best Practices",
+      "notRecommended": "Not Recommended For",
+      "securityLevelGuide": "Security Level Guide",
+      "permissionMode": "Permission Mode",
+      "suitableUseCases": "Suitable Use Cases"
+    },
+    "permissionSelector": {
+      "permissionMode": "Permission Mode",
+      "selectPlaceholder": "Select a mode",
+      "recommendedMode": "Recommended mode:",
+      "applyRecommended": "Apply recommended mode",
+      "recommendedBadge": "✓ Recommended",
+      "collapse": "Collapse ▲",
+      "expand": "Show details ▼",
+      "fullDescription": "Full Description",
+      "securityWarnings": "Security Warnings",
+      "allowedOperations": "Allowed Operations",
+      "blockedOperations": "Blocked Operations",
+      "useCases": "Use Cases",
+      "bestPractices": "Best Practices",
+      "notRecommended": "Not Recommended For",
+      "modeComparison": "Mode Comparison",
+      "securityLevelPrefix": "Security level:",
+      "securityLevelSafer": "is safer",
+      "securityLevelRiskier": "is riskier",
+      "securityLevelSame": "has the same security level",
+      "keyDifferences": "Key Differences"
+    }
+  },
+  "hookConfig": {
+    "title": "Hook Config JSON Generator",
+    "subtitle": "Easily generate Hook configurations to add to your Claude Code settings.json.",
+    "sectionTitle": "Settings",
+    "eventLabel": "Hook Event",
+    "matcherLabel": "Matcher",
+    "matcherPlaceholder": "Enter or select a tool name",
+    "matcherHintTool": "Enter a tool name to apply the Hook only to that tool. Multiple tool types require multiple Hooks.",
+    "matcherHintPreCompact": "auto: automatic compaction, manual: manual compaction (/compact command)",
+    "matcherHintSessionStart": "startup: new session, resume: resume existing session, clear: after /clear, compact: after /compact",
+    "commandLabel": "Command",
+    "commandPlaceholder": "e.g. /path/to/script.sh $CLAUDE_SESSION_ID",
+    "commandHint": "Environment variables: $CLAUDE_SESSION_ID, $CLAUDE_PROJECT_DIR, etc. are available.",
+    "timeoutLabel": "Timeout (ms)",
+    "timeoutHint": "Command execution time limit. Default is 30000ms (30 seconds).",
+    "blockingLabel": "Blocking",
+    "blockingHint": "When checked, Claude waits until the Hook completes. When unchecked, runs asynchronously.",
+    "generateButton": "Generate JSON",
+    "resultTitle": "Generated JSON",
+    "copiedLabel": "Copied!",
+    "installTitle": "How to install:",
+    "installStep1": "Open the file",
+    "installStep2Before": "Merge the above config into the existing",
+    "installStep2After": "object, or add it if it doesn't exist",
+    "installStep3Before": "Restart Claude Code or verify with",
+    "installStep3After": "",
+    "errorCommand": "Please enter a command to execute",
+    "errorMatcher": "Please select or enter a Matcher"
   }
 }

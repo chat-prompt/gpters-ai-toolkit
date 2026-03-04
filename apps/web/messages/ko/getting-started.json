@@ -22,10 +22,14 @@
   "steps": {
     "pluginInstall": "플러그인 설치",
     "pluginInstallDesc": "터미널에서 아래 명령어를 실행하세요:",
+    "openCodeInstallDesc": "터미널에서 아래 명령어를 실행하세요. Registry 설정부터 플러그인 등록까지 한 번에 완료됩니다:",
     "browserLogin": "브라우저 로그인",
     "browserLoginDesc": "Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.",
     "connectionCheck": "연결 확인",
     "connectionCheckDesc": "설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:",
+    "openCodeCheckDesc": "OpenCode에서 아래 명령어로 MCP 연결 상태를 확인하세요:",
+    "codexCheckDesc": "Codex CLI를 재시작한 후, MCP 서버가 정상 연결되는지 확인하세요.",
+    "codexCheckDescSuffix": "에 아래 설정이 추가되어 있어야 합니다:",
     "oauthLogin": "OAuth 로그인",
     "oauthLoginDesc": "아래 명령어로 MCP 서버에 OAuth 인증을 완료하세요:",
     "restart": "OpenCode 재시작",
@@ -47,7 +51,7 @@
     "projectScope": "프로젝트별로 설정하려면 프로젝트 루트 디렉토리에서 실행하세요. 글로벌 설정은 -s user 옵션을 추가하세요.",
     "oauthSecurity": "OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.",
     "oauthAuto": "OAuth 2.1 인증으로 토큰이 자동 관리됩니다. 환경변수를 직접 설정할 필요가 없습니다.",
-    "codexAutoConfig": "~/.codex/config.toml에 MCP 서버 설정을 자동으로 추가합니다:"
+    "codexAutoConfigSuffix": "에 MCP 서버 설정을 자동으로 추가합니다:"
   },
   "noteLabels": {
     "note": "참고:",
@@ -58,12 +62,17 @@
   "usageGuide": {
     "title": "설정 완료 후 사용법",
     "naturalLanguage": "자연어로 사용",
-    "directCall": "직접 호출"
+    "directCall": "직접 호출",
+    "example1": "코드 리뷰해줘",
+    "example2": "DB 스키마 알려줘",
+    "example3": "리팩토링 가이드 참고해서 개선해줘"
   },
   "privacy": {
     "title": "데이터 수집 및 옵트아웃",
     "description": "AI Toolkit MCP 서버는 서비스 개선을 위해 익명화된 사용 데이터(도구 호출 로그, 세션 집계)를 수집합니다. 코드, 대화 내용, 파일은 수집하지 않습니다.",
-    "optOutDesc": "데이터 수집을 원하지 않으면 MCP 설정에 X-Analytics-Opt-Out: true 헤더를 추가하세요:",
+    "optOutDesc": "데이터 수집을 원하지 않으면 MCP 설정에",
+    "optOutDescSuffix": "헤더를 추가하세요:",
+    "seeAlsoPrefix": "자세한 내용은",
     "privacyLink": "Privacy Policy",
     "privacySuffix": "를 참고하세요."
   },

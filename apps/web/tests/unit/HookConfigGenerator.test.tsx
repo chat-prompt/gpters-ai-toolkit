@@ -2,6 +2,49 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { HookConfigGenerator } from '@/components/features/hook/HookConfigGenerator'
 
+// Mock next-intl to return Korean translation strings used by HookConfigGenerator
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string, params?: Record<string, unknown>) => {
+    const messages: Record<string, string> = {
+      'title': 'Hook 설정 JSON 생성기',
+      'subtitle': 'Claude Code settings.json에 추가할 Hook 설정을 쉽게 생성할 수 있습니다.',
+      'sectionTitle': '설정',
+      'eventLabel': 'Hook 이벤트',
+      'matcherLabel': 'Matcher',
+      'matcherPlaceholder': '도구 이름을 입력하거나 선택하세요',
+      'matcherHintTool': '특정 도구에만 Hook을 적용하려면 도구 이름을 입력하세요. 여러 도구 타입은 여러 Hook을 추가해야 합니다.',
+      'matcherHintPreCompact': 'auto: 자동 Compaction, manual: 수동 Compaction (/compact 명령)',
+      'matcherHintSessionStart': 'startup: 새 세션, resume: 기존 세션 재개, clear: /clear 후, compact: /compact 후',
+      'commandLabel': '실행 명령어',
+      'commandPlaceholder': '예: /path/to/script.sh $CLAUDE_SESSION_ID',
+      'commandHint': '환경변수: $CLAUDE_SESSION_ID, $CLAUDE_PROJECT_DIR 등을 사용할 수 있습니다.',
+      'timeoutLabel': '타임아웃 (ms)',
+      'timeoutHint': '명령어 실행 제한 시간. 기본값은 30000ms (30초)입니다.',
+      'blockingLabel': 'Blocking',
+      'blockingHint': '체크 시 Hook 완료까지 Claude가 대기합니다. 해제 시 비동기로 실행됩니다.',
+      'generateButton': 'JSON 생성',
+      'resultTitle': '생성된 JSON',
+      'copiedLabel': '복사됨!',
+      'installTitle': '설치 방법:',
+      'installStep1': '파일을 엽니다',
+      'installStep2Before': '기존',
+      'installStep2After': '객체에 위 설정을 병합하거나, 없으면 새로 추가합니다',
+      'installStep3Before': 'Claude Code를 재시작하거나',
+      'installStep3After': '로 확인합니다',
+      'errorCommand': '실행할 명령어를 입력하세요',
+      'errorMatcher': 'Matcher를 선택하거나 입력하세요',
+    }
+    const value = messages[key] ?? key
+    if (params) {
+      return Object.entries(params).reduce(
+        (acc, [k, v]) => acc.replace(`{${k}}`, String(v)),
+        value
+      )
+    }
+    return value
+  },
+}))
+
 // Mock clipboard API
 const mockWriteText = vi.fn().mockResolvedValue(undefined)
 

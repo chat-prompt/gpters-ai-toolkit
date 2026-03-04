@@ -4,6 +4,7 @@
  * Shows a list of required dependencies with type icons,
  * links to internal items, and MCP server hints.
  */
+import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
 import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
 
@@ -38,22 +39,23 @@ const TYPE_COLORS: Record<string, string> = {
  * <DependencyDisplay dependencies={['mcp:github', 'skill:helper']} />
  * ```
  */
-export function DependencyDisplay({ dependencies }: DependencyDisplayProps) {
+export async function DependencyDisplay({ dependencies }: DependencyDisplayProps) {
   if (!dependencies || dependencies.length === 0) {
     return null
   }
 
+  const t = await getTranslations('detail')
   const parsedDeps = dependencies.map(parseDependency)
 
   return (
     <div className="glass rounded-2xl p-6 mb-8">
       <div className="flex items-center gap-3 mb-4">
         <span className="text-xl">🔗</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">필요한 의존성</h2>
+        <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('dependencies.title')}</h2>
       </div>
 
       <p className="text-sm text-[var(--text-secondary)] mb-4">
-        이 리소스를 사용하려면 다음 의존성이 필요합니다.
+        {t('dependencies.description')}
       </p>
 
       <div className="flex flex-wrap gap-3">
@@ -82,7 +84,7 @@ export function DependencyDisplay({ dependencies }: DependencyDisplayProps) {
                 )}
                 {isInternalLink && (
                   <span className="text-xs text-[var(--text-muted)]">
-                    클릭하여 상세 보기 →
+                    {t('dependencies.clickToView')}
                   </span>
                 )}
               </div>
@@ -117,11 +119,11 @@ export function DependencyDisplay({ dependencies }: DependencyDisplayProps) {
       {parsedDeps.some((d) => d.type === 'mcp') && (
         <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
           <p className="text-xs text-[var(--text-muted)]">
-            💡 <strong>MCP 서버</strong>는 Claude Code 설정에서 활성화해야 합니다.{' '}
+            💡 <strong>{t('dependencies.mcpServers')}</strong>{t('dependencies.mcpHintBefore')}{' '}
             <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">
               claude mcp
             </code>{' '}
-            명령어로 설정할 수 있습니다.
+            {t('dependencies.mcpHintAfter')}
           </p>
         </div>
       )}

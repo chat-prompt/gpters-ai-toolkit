@@ -31,5 +31,9 @@
   "userMenu": {
     "profile": "Profile",
     "signOut": "Sign out"
+  },
+  "dialog": {
+    "confirm": "Confirm",
+    "cancel": "Cancel"
   }
 }

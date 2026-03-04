@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 
 /**
  * Table of contents item structure
@@ -62,6 +63,7 @@ function getInitialActiveId(items: TocItem[]): string {
  * ```
  */
 export function TableOfContents({ items }: TableOfContentsProps) {
+  const t = useTranslations('detail')
   // Initialize with first item, will update on mount
   const initialId = useMemo(() => items[0]?.id || '', [items])
   const [activeId, setActiveId] = useState<string>(initialId)
@@ -112,7 +114,7 @@ export function TableOfContents({ items }: TableOfContentsProps) {
     <nav className="hidden xl:block fixed right-8 top-32 w-48 z-20">
       <div className="glass rounded-xl p-4">
         <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-          목차
+          {t('toc.heading')}
         </h3>
         <ul className="space-y-1">
           {items.map((item) => (
