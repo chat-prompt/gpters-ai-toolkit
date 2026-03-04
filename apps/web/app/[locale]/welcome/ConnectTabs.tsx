@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 
 /** 탭 식별자 */
-type TabId = 'claude-code' | 'opencode' | 'codex' | 'cli'
+type TabId = 'claude-code' | 'cli' | 'mcp'
 
 /** 탭 정의 */
 interface Tab {
@@ -45,21 +45,14 @@ export function ConnectTabs({ baseUrl }: ConnectTabsProps) {
       command: 'claude plugin marketplace add chat-prompt/gpters-ai-toolkit 2>/dev/null; claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin install gpters-ai-toolkit',
     },
     {
-      id: 'opencode',
-      label: 'OpenCode',
-      command: `[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \\
-node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters/opencode')||c.plugin.push('@gpters/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"`,
-      multiline: true,
-    },
-    {
-      id: 'codex',
-      label: 'Codex CLI',
-      command: 'npx --yes @gpters/codex-plugin setup',
-    },
-    {
       id: 'cli',
       label: 'AITK CLI',
       command: 'npx --yes @gpters/aitk login',
+    },
+    {
+      id: 'mcp',
+      label: 'MCP Direct',
+      command: `claude mcp add gpters-ai-toolkit ${baseUrl}/api/mcp -t http`,
     },
   ]
 
