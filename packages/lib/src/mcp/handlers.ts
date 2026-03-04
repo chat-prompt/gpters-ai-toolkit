@@ -1587,13 +1587,26 @@ export async function executeTool(
           orgId,
           userContext: input.userContext,
         })
+        // authorId → authorName 매핑
+        const authorIds = [...new Set(searchResult.items.map((item) => item.authorId).filter(Boolean))] as string[]
+        const authorMap = new Map<string, string>()
+        if (authorIds.length > 0) {
+          const authorRows = await db
+            .select({ id: users.id, name: users.name })
+            .from(users)
+            .where(inArray(users.id, authorIds))
+          for (const row of authorRows) {
+            if (row.name) authorMap.set(row.id, row.name)
+          }
+        }
+
         const result: SemanticSearchResult = {
           plugins: searchResult.items.map((item) => ({
             id: item.id,
             name: item.name,
             type: item.type,
             description: item.description,
-            authorName: 'Unknown',
+            authorName: (item.authorId && authorMap.get(item.authorId)) || 'Unknown',
             tags: item.tags || [],
             teamTag: item.teamTag || undefined,
             difficulty: item.difficulty || undefined,
