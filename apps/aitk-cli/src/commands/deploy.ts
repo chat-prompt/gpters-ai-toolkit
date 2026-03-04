@@ -1,0 +1,71 @@
+/**
+ * deploy 명령어 - 스킬/에이전트/커맨드 배포
+ */
+
+import { readFileSync } from 'node:fs'
+import { apiCall } from '../client.js'
+import { resolveToken } from '../auth.js'
+import { jsonOut, error } from '../output.js'
+
+/** deploy 명령어 옵션 */
+export interface DeployOptions {
+  /** 영문 slug ID */
+  id: string
+  /** 아이템 타입 */
+  type: string
+  /** 표시 이름 */
+  name: string
+  /** 콘텐츠 (텍스트 또는 @file 경로) */
+  content: string
+  /** 설명 */
+  description?: string
+  /** 태그 (콤마 구분) */
+  tags?: string
+}
+
+/**
+ * 콘텐츠 값 해석 (@file이면 파일에서 읽기)
+ *
+ * @param value - 콘텐츠 문자열 또는 @파일경로
+ * @returns 실제 콘텐츠
+ */
+function resolveContent(value: string): string {
+  if (value.startsWith('@')) {
+    const filePath = value.slice(1)
+    try {
+      return readFileSync(filePath, 'utf-8')
+    } catch {
+      error(`파일을 읽을 수 없습니다: ${filePath}`)
+    }
+  }
+  return value
+}
+
+/**
+ * deploy 명령어 실행
+ *
+ * @param opts - 배포 옵션
+ */
+export async function runDeploy(opts: DeployOptions): Promise<void> {
+  const token = resolveToken()
+  if (!token) error('인증 필요. "aitk login" 실행하세요.', 2)
+
+  const content = resolveContent(opts.content)
+  const params: Record<string, unknown> = {
+    id: opts.id,
+    type: opts.type,
+    name: opts.name,
+    content,
+  }
+  if (opts.description) params.description = opts.description
+  if (opts.tags) params.tags = opts.tags.split(',').map((t) => t.trim())
+
+  const result = await apiCall('create', params, token)
+
+  if (!result.ok) {
+    if (result.status === 401) error(result.error!, 2)
+    error(result.error!)
+  }
+
+  jsonOut(result.data)
+}

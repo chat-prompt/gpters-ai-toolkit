@@ -19,6 +19,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$SCRIPT_DIR/../.claude-plugin/plugin.json" 2>/dev/null | head -1 | grep -o '[0-9][0-9.]*')
 PLUGIN_VERSION="${PLUGIN_VERSION:-unknown}"
 
+# CLI fallback (curl보다 단순)
+if command -v aitk >/dev/null 2>&1; then
+  aitk report-session --count "$COUNT" --version "$PLUGIN_VERSION" 2>/dev/null &
+  rm -f "$COUNTER_FILE"
+  exit 0
+fi
+
 # MCP 서버 엔드포인트
 MCP_URL="https://ai-toolkit.gpters.org/api/mcp"
 

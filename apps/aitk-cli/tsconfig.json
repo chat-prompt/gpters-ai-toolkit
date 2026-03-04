@@ -1,0 +1,12 @@
+{
+  "extends": "@gpters/tsconfig/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "noEmit": false,
+    "declaration": true,
+    "moduleResolution": "bundler"
+  },
+  "include": ["src", "bin"],
+  "exclude": ["node_modules", "dist", "tests"]
+}
