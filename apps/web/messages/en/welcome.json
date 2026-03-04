@@ -2,7 +2,7 @@
   "hero": {
     "titleHighlight": "AI Toolkit",
     "titleSuffix": "for Coding Agents",
-    "description": "Search and share skills for coding agents in one place.\nAlso supports agents, commands, and more. Connect via Claude Code, OpenCode, or Codex plugin.",
+    "description": "Search and share skills for coding agents in one place.\nConnect via Claude Code, OpenCode, or Codex plugin.",
     "cta": "Get Started"
   },
   "features": {

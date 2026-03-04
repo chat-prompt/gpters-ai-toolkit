@@ -2,7 +2,7 @@
   "hero": {
     "titleHighlight": "AI Toolkit",
     "titleSuffix": "for Coding Agents",
-    "description": "코딩 에이전트용 스킬을 한곳에서 검색하고 공유하세요.\n에이전트, 커맨드 등도 지원합니다. Claude Code · OpenCode · Codex 플러그인으로 바로 연결됩니다.",
+    "description": "코딩 에이전트용 스킬을 한곳에서 검색하고 공유하세요.\nClaude Code · OpenCode · Codex 플러그인으로 바로 연결됩니다.",
     "cta": "시작하기"
   },
   "features": {
