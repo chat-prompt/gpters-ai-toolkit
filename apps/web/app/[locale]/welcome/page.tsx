@@ -73,18 +73,6 @@ export default async function WelcomePage({
       description: t('features.commands.description'),
     },
     {
-      icon: '#',
-      label: 'Hooks',
-      title: t('features.hooks.title'),
-      description: t('features.hooks.description'),
-    },
-    {
-      icon: '{}',
-      label: 'Packages',
-      title: t('features.packages.title'),
-      description: t('features.packages.description'),
-    },
-    {
       icon: '?',
       label: 'Guides',
       title: t('features.guides.title'),
@@ -164,7 +152,7 @@ export default async function WelcomePage({
           >
             {t('features.title')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {FEATURES.map((feature) => (
               <div
                 key={feature.label}
