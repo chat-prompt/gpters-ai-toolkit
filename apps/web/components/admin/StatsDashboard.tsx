@@ -45,7 +45,7 @@ type Period = '7d' | '30d' | '90d'
 
 // Colors for charts
 const TYPE_COLORS: Record<string, string> = {
-  skill: '#F26522',
+  skill: 'var(--brand-primary)',
   agent: '#8B5CF6',
   command: '#10B981',
   guide: '#3B82F6',
@@ -74,7 +74,7 @@ function BarChart({ data, labelKey, valueKey, maxBars = 10 }: {
             </div>
             <div className="flex-1 h-6 bg-[var(--bg-secondary)] rounded-lg overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-[#F26522] to-[#FF8C42] rounded-lg transition-all duration-500"
+                className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-lg transition-all duration-500"
                 style={{ width: `${percentage}%` }}
               />
             </div>
@@ -246,7 +246,7 @@ export function StatsDashboard() {
         <p className="text-red-500 mb-4">{error}</p>
         <button
           onClick={fetchStats}
-          className="px-4 py-2 rounded-lg bg-[#F26522] text-white hover:bg-[#E55A1B]"
+          className="px-4 py-2 rounded-lg bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary)]"
         >
           Retry
         </button>
@@ -327,7 +327,7 @@ export function StatsDashboard() {
                 <div className="flex-1 min-w-0">
                   <Link
                     href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
-                    className="text-sm font-medium text-[var(--text-primary)] hover:text-[#F26522] truncate block"
+                    className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--brand-primary)] truncate block"
                   >
                     {item.name}
                   </Link>

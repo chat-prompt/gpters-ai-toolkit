@@ -136,7 +136,7 @@ export function WelfareEngineDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F26522]" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--brand-primary)]" />
       </div>
     )
   }
@@ -167,7 +167,7 @@ export function WelfareEngineDashboard() {
               onClick={() => setPeriod(p)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 period === p
-                  ? 'bg-[#F26522] text-white'
+                  ? 'bg-[var(--brand-primary)] text-white'
                   : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
               }`}
             >
@@ -250,7 +250,7 @@ export function WelfareEngineDashboard() {
                 <div className="flex-1">
                   <Link
                     href={`/${skill.type === 'guide' ? 'guides' : skill.type}/${skill.id}`}
-                    className="text-[var(--text-primary)] hover:text-[#F26522] font-medium"
+                    className="text-[var(--text-primary)] hover:text-[var(--brand-primary)] font-medium"
                   >
                     {skill.name}
                   </Link>
@@ -280,7 +280,7 @@ export function WelfareEngineDashboard() {
                   <div>
                     <Link
                       href={`/${skill.type === 'guide' ? 'guides' : skill.type}/${skill.id}`}
-                      className="text-[var(--text-primary)] hover:text-[#F26522]"
+                      className="text-[var(--text-primary)] hover:text-[var(--brand-primary)]"
                     >
                       {skill.name}
                     </Link>
@@ -343,10 +343,10 @@ export function WelfareEngineDashboard() {
                 {weeklyTrend.map((week, idx) => (
                   <tr 
                     key={week.weekStart} 
-                    className={`border-b border-[var(--border-subtle)] last:border-0 ${idx === 0 ? 'bg-[#F26522]/5' : ''}`}
+                    className={`border-b border-[var(--border-subtle)] last:border-0 ${idx === 0 ? 'bg-[var(--brand-primary)]/5' : ''}`}
                   >
                     <td className="py-3 px-2 text-[var(--text-primary)]">
-                      {idx === 0 && <span className="text-[#F26522] mr-1">●</span>}
+                      {idx === 0 && <span className="text-[var(--brand-primary)] mr-1">●</span>}
                       {week.weekLabel}
                     </td>
                     <td className="text-right py-3 px-2 text-[var(--text-primary)] font-medium">
@@ -382,7 +382,7 @@ export function WelfareEngineDashboard() {
             </h3>
             <button
               onClick={copyReport}
-              className="px-4 py-2 bg-[#F26522] text-white rounded-lg text-sm hover:bg-[#D95A1E] transition-colors"
+              className="px-4 py-2 bg-[var(--brand-primary)] text-white rounded-lg text-sm hover:bg-[var(--brand-primary)] transition-colors"
             >
               {copied ? '✓ Copied!' : 'Copy Report'}
             </button>

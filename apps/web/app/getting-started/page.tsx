@@ -8,13 +8,13 @@ import { ServerHeader } from '@/components/layout/ServerHeader'
 import { auth } from '@/lib/core/auth'
 import { GettingStartedContent } from './GettingStartedContent'
 
-/** Internal email domain for full plugin access */
-const INTERNAL_DOMAIN = 'gpters.org'
+/** Internal email domain for full plugin access (empty = no internal features) */
+const INTERNAL_DOMAIN = process.env.INTERNAL_ORGANIZATION_DOMAIN || ''
 
 export default async function GettingStartedPage() {
   const session = await auth()
   const email = session?.user?.email ?? ''
-  const isInternal = email.endsWith(`@${INTERNAL_DOMAIN}`)
+  const isInternal = INTERNAL_DOMAIN ? email.endsWith(`@${INTERNAL_DOMAIN}`) : false
 
   return (
     <div className="min-h-screen grid-pattern noise-overlay">

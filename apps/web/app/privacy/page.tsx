@@ -6,8 +6,11 @@
  */
 import { ServerHeader } from '@/components/layout/ServerHeader'
 
+const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'admin@example.com'
+
 export const metadata = {
-  title: 'Privacy Policy - AI Toolkit',
+  title: `Privacy Policy - ${SITE_NAME}`,
   description: 'MCP 서버 데이터 수집 정책 및 옵트아웃 안내',
 }
 
@@ -23,7 +26,7 @@ export default function PrivacyPage() {
       <ServerHeader />
 
       <main className="relative z-10 max-w-3xl mx-auto px-8 py-12">
-        <p className="text-[#F26522] text-xs font-medium uppercase tracking-[0.3em] mb-4">
+        <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4">
           Privacy Policy
         </p>
         <h1
@@ -31,7 +34,7 @@ export default function PrivacyPage() {
           style={{ fontFamily: 'var(--font-newsreader)' }}
         >
           데이터 수집{' '}
-          <span className="bg-gradient-to-r from-[#F26522] to-[#FF8C42] bg-clip-text text-transparent font-medium">
+          <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
             정책
           </span>
         </h1>
@@ -41,7 +44,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-3">1. 개요</h2>
             <p>
-              GPTers AI Toolkit은 GPTers 팀이 운영하는 Claude Code 스킬 공유 플랫폼입니다.
+              {SITE_NAME}은 Claude Code 스킬 공유 플랫폼입니다.
               MCP(Model Context Protocol) 서버를 통해 스킬 검색, 조회, 배포 기능을 제공하며,
               서비스 개선을 위해 최소한의 사용 데이터를 수집합니다.
             </p>
@@ -138,10 +141,10 @@ export default function PrivacyPage() {
             <p>
               데이터 수집에 대한 질문이나 삭제 요청은{' '}
               <a
-                href="mailto:dev@gpters.org"
-                className="text-[#F26522] hover:underline"
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="text-[var(--brand-primary)] hover:underline"
               >
-                dev@gpters.org
+                {CONTACT_EMAIL}
               </a>
               로 연락해 주세요.
             </p>

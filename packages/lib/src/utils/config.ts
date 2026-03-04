@@ -1,7 +1,12 @@
-const DEFAULT_BASE_URL = 'https://ai-toolkit.gpters.org'
-
 export function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL || DEFAULT_BASE_URL
+  const url = process.env.NEXT_PUBLIC_BASE_URL
+  if (!url) {
+    if (typeof window === 'undefined') {
+      throw new Error('NEXT_PUBLIC_BASE_URL environment variable is required')
+    }
+    return window.location.origin
+  }
+  return url
 }
 
 export function getMcpServerUrl(): string {

@@ -14,7 +14,7 @@ const DEV_BYPASS_AUTH = process.env.NODE_ENV === 'development' && process.env.DE
 /** Mock user for development when auth bypass is enabled */
 const DEV_USER = {
   name: 'Dev User',
-  email: 'dev@gpters.org',
+  email: process.env.DEV_USER_EMAIL || 'dev@example.com',
   image: null,
   role: 'admin' as UserRole,
   orgIds: ['dev-org-1', 'dev-org-2'],

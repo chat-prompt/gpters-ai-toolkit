@@ -42,12 +42,12 @@ export default async function StatsPage() {
         <div className="max-w-7xl mx-auto">
           {/* Page Header */}
           <div className="mb-10">
-            <p className="text-[#F26522] text-xs font-medium uppercase tracking-[0.3em] mb-4">
+            <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4">
               Welfare Engine
             </p>
             <h1 className="text-4xl md:text-5xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-4" style={{ fontFamily: 'var(--font-newsreader)' }}>
               복리{' '}
-              <span className="bg-gradient-to-r from-[#F26522] to-[#FF8C42] bg-clip-text text-transparent font-medium">
+              <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
                 엔진
               </span>
             </h1>
