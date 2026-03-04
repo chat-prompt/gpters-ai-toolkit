@@ -164,6 +164,6 @@ export function printSummary(result: SetupResult): void {
 
   console.log('\n다음 단계:')
   console.log('  1. Codex CLI를 재시작하면 MCP 서버가 자동 연결됩니다')
-  console.log('  2. 브라우저에서 Google (@gpters.org) 로그인이 필요합니다')
+  console.log('  2. 브라우저에서 Google 로그인이 필요합니다')
   console.log('')
 }

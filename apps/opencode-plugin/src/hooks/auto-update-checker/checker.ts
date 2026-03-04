@@ -4,13 +4,12 @@ import * as os from "node:os"
 import type { OpencodeConfig, PackageJson, PluginEntryInfo, VerdaccioPackageInfo, VersionInfo } from "./types"
 import {
   PACKAGE_NAME,
-  VERDACCIO_PACKAGE_URL,
-  VERDACCIO_FETCH_TIMEOUT,
+  NPM_PACKAGE_URL,
+  NPM_FETCH_TIMEOUT,
   INSTALLED_PACKAGE_JSON,
   USER_OPENCODE_CONFIG,
   USER_OPENCODE_CONFIG_JSONC,
   USER_CONFIG_DIR,
-  NPMRC_PATH,
   getWindowsAppdataDir,
 } from "./constants"
 import { createLogger } from "../../utils/logger"
@@ -90,24 +89,6 @@ export function getCachedVersion(): string | null {
   return null
 }
 
-function getAuthToken(): string | null {
-  try {
-    if (!fs.existsSync(NPMRC_PATH)) return null
-
-    const content = fs.readFileSync(NPMRC_PATH, "utf-8")
-    const lines = content.split("\n")
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith("//verdaccio.gpters.org/:_authToken=")) {
-        return trimmed.split("=")[1]?.trim() ?? null
-      }
-    }
-  } catch {}
-
-  return null
-}
-
 export function updatePinnedVersion(configPath: string, oldEntry: string, newVersion: string): boolean {
   try {
     const content = fs.readFileSync(configPath, "utf-8")
@@ -160,23 +141,18 @@ export function updatePinnedVersion(configPath: string, oldEntry: string, newVer
 
 export async function getLatestVersionInfo(): Promise<VersionInfo | null> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), VERDACCIO_FETCH_TIMEOUT)
+  const timeoutId = setTimeout(() => controller.abort(), NPM_FETCH_TIMEOUT)
 
   try {
-    const token = getAuthToken()
     const headers: Record<string, string> = { Accept: "application/json" }
 
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`
-    }
-
-    const response = await fetch(VERDACCIO_PACKAGE_URL, {
+    const response = await fetch(NPM_PACKAGE_URL, {
       signal: controller.signal,
       headers,
     })
 
     if (!response.ok) {
-      logger.error(`Verdaccio API error: ${response.status}`)
+      logger.error(`npm registry API error: ${response.status}`)
       return null
     }
 

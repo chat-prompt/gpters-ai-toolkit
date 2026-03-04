@@ -1,5 +1,5 @@
 {
-  "name": "@gpters-internal/aitk",
+  "name": "@gpters/aitk",
   "version": "0.1.7",
   "description": "GPTers AI Toolkit CLI - MCP fallback & standalone CLI tool",
   "type": "module",
@@ -16,9 +16,9 @@
     "clean": "rm -rf dist",
     "test": "vitest run"
   },
+  "license": "SEE LICENSE IN LICENSE",
   "publishConfig": {
-    "registry": "https://verdaccio.gpters.org",
-    "access": "restricted"
+    "access": "public"
   },
   "devDependencies": {
     "@gpters/tsconfig": "workspace:*",

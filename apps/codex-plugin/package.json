@@ -1,5 +1,5 @@
 {
-  "name": "@gpters-internal/codex-plugin",
+  "name": "@gpters/codex-plugin",
   "version": "0.1.8",
   "description": "GPTers Codex CLI Plugin - Agent Skills + MCP 설정 자동 설치",
   "type": "module",
@@ -19,8 +19,7 @@
     "test": "vitest run"
   },
   "publishConfig": {
-    "registry": "https://verdaccio.gpters.org",
-    "access": "restricted"
+    "access": "public"
   },
   "keywords": [
     "codex",
@@ -29,7 +28,7 @@
     "gpters"
   ],
   "author": "GPTers",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gpters/gpters-ai-toolkit.git",

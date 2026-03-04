@@ -1,0 +1,26 @@
+Copyright (c) 2026 주식회사 지니파이 (Geniefy Inc.). All rights reserved.
+
+This software and associated documentation files (the "Software") are the
+proprietary property of 주식회사 지니파이 (Geniefy Inc.).
+
+PERMISSIONS:
+- You may view and study the source code for personal, non-commercial purposes.
+- You may fork and modify the Software for internal use within your organization,
+  provided that such use is not commercially distributed.
+
+RESTRICTIONS:
+- You may NOT distribute, sublicense, sell, or commercially exploit the Software
+  or any derivative works without prior written permission from 주식회사 지니파이.
+- You may NOT use the Software to provide a competing service.
+- You may NOT remove or alter any proprietary notices or labels on the Software.
+
+For licensing inquiries, commercial use, or distribution permissions, contact:
+dev@gpters.org (주식회사 지니파이)
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -2,13 +2,13 @@ import * as path from "node:path"
 import * as os from "node:os"
 import * as fs from "node:fs"
 
-export const PACKAGE_NAME = "@gpters-internal/opencode"
+export const PACKAGE_NAME = "@gpters/opencode"
 export const PACKAGE_NAME_ENCODED = encodeURIComponent(PACKAGE_NAME).replace("%40", "@")
 
-// Verdaccio registry URLs
-export const VERDACCIO_REGISTRY = "https://verdaccio.gpters.org"
-export const VERDACCIO_PACKAGE_URL = `${VERDACCIO_REGISTRY}/${PACKAGE_NAME_ENCODED}`
-export const VERDACCIO_FETCH_TIMEOUT = 5000
+// npm public registry URLs
+export const NPM_REGISTRY = "https://registry.npmjs.org"
+export const NPM_PACKAGE_URL = `${NPM_REGISTRY}/${PACKAGE_NAME_ENCODED}`
+export const NPM_FETCH_TIMEOUT = 5000
 
 /**
  * OpenCode plugin cache directory

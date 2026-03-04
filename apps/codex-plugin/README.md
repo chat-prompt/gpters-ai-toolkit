@@ -1,11 +1,11 @@
-# @gpters-internal/codex-plugin
+# @gpters/codex-plugin
 
 GPTers Codex CLI 플러그인 - Agent Skills + MCP 서버 설정을 한 번에 설치합니다.
 
 ## 설치
 
 ```bash
-npx @gpters-internal/codex-plugin setup
+npx @gpters/codex-plugin setup
 ```
 
 ### 옵션

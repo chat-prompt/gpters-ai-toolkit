@@ -3,7 +3,7 @@
 /**
  * Codex 플러그인 CLI 진입점
  *
- * 사용법: npx @gpters-internal/codex-plugin setup [--project|--user] [--force]
+ * 사용법: npx @gpters/codex-plugin setup [--project|--user] [--force]
  */
 
 import { join } from 'node:path'
@@ -20,7 +20,7 @@ if (command === '--version' || command === '-v' || command === '-V') {
   const pkgPath = join(binDir, '..', '..', 'package.json')
   const { readFileSync } = await import('node:fs')
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-  console.log(`@gpters-internal/codex-plugin v${pkg.version}`)
+  console.log(`@gpters/codex-plugin v${pkg.version}`)
   process.exit(0)
 } else if (!command || command === 'setup') {
   const scope: Scope | undefined = args.includes('--project')
@@ -50,7 +50,7 @@ if (command === '--version' || command === '-v' || command === '-V') {
 GPTers Codex Plugin
 
 사용법:
-  npx @gpters-internal/codex-plugin setup [옵션]
+  npx @gpters/codex-plugin setup [옵션]
 
 옵션:
   --project    프로젝트 레벨 설치 (.agents/skills/gpters/)
@@ -69,6 +69,6 @@ GPTers Codex Plugin
 `)
 } else {
   console.error(`알 수 없는 명령어: ${command}`)
-  console.error('사용법: npx @gpters-internal/codex-plugin setup [--project|--user] [--force]')
+  console.error('사용법: npx @gpters/codex-plugin setup [--project|--user] [--force]')
   process.exit(1)
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@gpters-internal/opencode",
+  "name": "@gpters/opencode",
   "version": "0.0.18",
   "description": "GPTers OpenCode Plugin",
   "type": "module",
@@ -12,7 +12,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/bin"
   ],
   "scripts": {
     "build": "PLUGIN_VERSION=$(node -p \"require('./package.json').version\") && bun build src/index.ts --outdir dist --target bun --format esm --define \"process.env.PLUGIN_VERSION='$PLUGIN_VERSION'\" && tsc --emitDeclarationOnly && cp -r bin dist/",
@@ -21,8 +22,7 @@
     "clean": "rm -rf dist"
   },
   "publishConfig": {
-    "registry": "https://verdaccio.gpters.org",
-    "access": "restricted"
+    "access": "public"
   },
   "keywords": [
     "opencode",
@@ -30,7 +30,7 @@
     "gpters"
   ],
   "author": "GPTers",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gpters/gpters-ai-toolkit.git",
