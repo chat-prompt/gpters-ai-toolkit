@@ -33,7 +33,7 @@ function StepBadge({ step, color }: { step: string | number; color: 'cyan' | 'pu
   }
 
   return (
-    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border ${colorMap[color]}`}>
+    <div className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center text-sm font-bold border ${colorMap[color]}`}>
       {step}
     </div>
   )
