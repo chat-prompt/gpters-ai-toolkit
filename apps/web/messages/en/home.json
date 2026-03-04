@@ -1,8 +1,8 @@
 {
   "hero": {
-    "badge": "AI Automation Hub",
+    "badge": "AI Toolkit",
     "titleLine1": "Discover & Share",
-    "titleLine2": "Claude Skills",
-    "description": "Find skills, agents, and prompts created by your team.\nInstall them as plugins or copy to use directly."
+    "titleLine2": "Coding Agent Skills",
+    "description": "Find skills, agents, commands, hooks, and packages created by your team.\nInstall via Claude Code, OpenCode, or Codex plugin."
   }
 }

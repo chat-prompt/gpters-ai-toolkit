@@ -1,13 +1,13 @@
 {
   "hero": {
-    "titleHighlight": "AI Skills",
-    "titleSuffix": "Hub",
-    "description": "Search and share skills, agents, and commands for Claude Code in one place.\nConnect via MCP server to use them directly in Claude Code.",
-    "cta": "Connect Now"
+    "titleHighlight": "AI Toolkit",
+    "titleSuffix": "for Coding Agents",
+    "description": "Search and share skills, agents, commands, hooks, and packages for coding agents in one place.\nConnect via Claude Code, OpenCode, or Codex plugin.",
+    "cta": "Get Started"
   },
   "features": {
     "badge": "What We Offer",
-    "title": "Four Content Types",
+    "title": "Six Content Types",
     "skills": {
       "title": "Reusable Skills",
       "description": "Install proven workflows like code review, TDD, and debugging as ready-to-use skills."
@@ -20,20 +20,33 @@
       "title": "Custom Commands",
       "description": "Simplify your development workflow with project-specific custom commands."
     },
+    "hooks": {
+      "title": "Hooks",
+      "description": "Extend your workflow with event-driven automation. Connect to commits, builds, deploys, and more."
+    },
+    "packages": {
+      "title": "Packages",
+      "description": "Bundled collections of skills and agents that you can install all at once."
+    },
     "guides": {
       "title": "Usage Guides",
-      "description": "Check out Claude Code tips, tricks, and best practices."
+      "description": "Check out coding agent tips, tricks, and best practices."
     }
   },
   "connect": {
     "badge": "Get Started",
-    "title": "MCP Server",
+    "title": "Plugin",
     "titleHighlight": "Connection",
-    "terminalLabel": "Run in your terminal:",
+    "terminalLabel": "Run in Claude Code:",
+    "pluginTabs": {
+      "claudeCode": "Claude Code",
+      "opencode": "OpenCode",
+      "codex": "Codex"
+    },
     "steps": {
       "1": {
         "title": "Run the command",
-        "description": "Paste the command above into your terminal to register the MCP server."
+        "description": "Paste the command above into your terminal to register the plugin."
       },
       "2": {
         "title": "Google Sign-in",
@@ -41,16 +54,19 @@
       },
       "3": {
         "title": "Start using",
-        "description": "You can now search, browse, and deploy skills from Claude Code."
+        "description": "You can now search, browse, and deploy skills."
       }
-    }
+    },
+    "moreSetup": "For detailed setup instructions, see the",
+    "gettingStartedLink": "Getting Started guide",
+    "moreSetupSuffix": "."
   },
   "tools": {
     "badge": "What's Inside",
     "title": "MCP Tools Preview",
-    "searchPlugins": "Search skills by keyword",
+    "semanticSearch": "Search skills and agents with natural language",
     "getPluginContent": "Get full skill content",
-    "deploySkill": "Deploy a new skill",
+    "deploySkill": "Deploy a new skill to your team",
     "checkUpdates": "Check for installed skill updates"
   }
 }

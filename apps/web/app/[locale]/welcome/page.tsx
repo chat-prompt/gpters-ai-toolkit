@@ -1,8 +1,9 @@
 /**
  * Welcome landing page
  *
- * 외부 Claude Code 사용자에게 AI Toolkit 플랫폼을 소개하고
- * MCP 서버 연결 방법을 안내하는 퍼블릭 랜딩페이지.
+ * 코딩 에이전트 사용자에게 AI Toolkit 플랫폼을 소개하고
+ * 플러그인 연결 방법을 안내하는 퍼블릭 랜딩페이지.
+ * Claude Code, OpenCode, Codex 세 가지 플러그인을 모두 안내한다.
  */
 import { Link } from '@/i18n/navigation'
 import { Footer } from '@/components/layout/Footer'
@@ -13,6 +14,13 @@ import type { Metadata } from 'next'
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
 const MCP_COMMAND = `claude mcp add gpters-ai-toolkit ${BASE_URL}/api/mcp -t http`
+
+/** 플러그인별 연결 커맨드 */
+const PLUGIN_COMMANDS = {
+  claudeCode: MCP_COMMAND,
+  opencode: `# opencode settings.json\n{\n  "mcpServers": {\n    "gpters-ai-toolkit": {\n      "type": "http",\n      "url": "${BASE_URL}/api/mcp"\n    }\n  }\n}`,
+  codex: `# codex MCP config\ncodex --mcp-config '{"gpters-ai-toolkit":{"type":"http","url":"${BASE_URL}/api/mcp"}}'`,
+} as const
 
 /**
  * Generate locale-aware metadata for the welcome page
@@ -65,6 +73,18 @@ export default async function WelcomePage({
       description: t('features.commands.description'),
     },
     {
+      icon: '#',
+      label: 'Hooks',
+      title: t('features.hooks.title'),
+      description: t('features.hooks.description'),
+    },
+    {
+      icon: '{}',
+      label: 'Packages',
+      title: t('features.packages.title'),
+      description: t('features.packages.description'),
+    },
+    {
       icon: '?',
       label: 'Guides',
       title: t('features.guides.title'),
@@ -76,7 +96,7 @@ export default async function WelcomePage({
   const TOOL_EXAMPLES = [
     {
       tool: 'semantic_search',
-      description: t('tools.searchPlugins'),
+      description: t('tools.semanticSearch'),
       example: 'semantic_search("code review")',
     },
     {
@@ -144,7 +164,7 @@ export default async function WelcomePage({
           >
             {t('features.title')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((feature) => (
               <div
                 key={feature.label}
@@ -215,6 +235,15 @@ export default async function WelcomePage({
               </div>
             ))}
           </div>
+
+          {/* Getting Started link */}
+          <p className="text-sm text-[var(--text-secondary)] mt-8 text-center">
+            {t('connect.moreSetup')}{' '}
+            <Link href="/getting-started" className="text-[var(--brand-primary)] hover:underline font-medium">
+              {t('connect.gettingStartedLink')}
+            </Link>
+            {t('connect.moreSetupSuffix')}
+          </p>
         </div>
       </section>
 

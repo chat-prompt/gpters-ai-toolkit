@@ -1,13 +1,13 @@
 {
   "hero": {
-    "titleHighlight": "AI Skills",
-    "titleSuffix": "Hub",
-    "description": "Claude Code용 스킬, 에이전트, 커맨드를 한곳에서 검색하고 공유하세요.\nMCP 서버로 연결하면 Claude Code에서 바로 사용할 수 있습니다.",
-    "cta": "Connect Now"
+    "titleHighlight": "AI Toolkit",
+    "titleSuffix": "for Coding Agents",
+    "description": "코딩 에이전트용 스킬, 에이전트, 커맨드, 훅, 패키지를 한곳에서 검색하고 공유하세요.\nClaude Code · OpenCode · Codex 플러그인으로 바로 연결됩니다.",
+    "cta": "시작하기"
   },
   "features": {
     "badge": "What We Offer",
-    "title": "네 가지 콘텐츠 타입",
+    "title": "여섯 가지 콘텐츠 타입",
     "skills": {
       "title": "재사용 스킬",
       "description": "코드 리뷰, TDD, 디버깅 등 검증된 워크플로우를 스킬로 설치해 바로 활용하세요."
@@ -20,20 +20,33 @@
       "title": "커스텀 커맨드",
       "description": "프로젝트별 맞춤 커맨드로 개발 워크플로우를 간소화하세요."
     },
+    "hooks": {
+      "title": "훅",
+      "description": "이벤트 기반 자동화로 워크플로우를 확장하세요. 커밋, 빌드, 배포 등에 연결됩니다."
+    },
+    "packages": {
+      "title": "패키지",
+      "description": "여러 스킬과 에이전트를 묶어 한 번에 설치할 수 있는 번들 패키지입니다."
+    },
     "guides": {
       "title": "활용 가이드",
-      "description": "Claude Code 활용 노하우와 베스트 프랙티스를 확인하세요."
+      "description": "코딩 에이전트 활용 노하우와 베스트 프랙티스를 확인하세요."
     }
   },
   "connect": {
     "badge": "Get Started",
-    "title": "MCP 서버",
+    "title": "플러그인",
     "titleHighlight": "연결하기",
-    "terminalLabel": "터미널에서 실행하세요:",
+    "terminalLabel": "Claude Code에서 실행하세요:",
+    "pluginTabs": {
+      "claudeCode": "Claude Code",
+      "opencode": "OpenCode",
+      "codex": "Codex"
+    },
     "steps": {
       "1": {
         "title": "커맨드 실행",
-        "description": "위 커맨드를 터미널에 붙여넣어 MCP 서버를 등록합니다."
+        "description": "위 커맨드를 터미널에 붙여넣어 플러그인을 등록합니다."
       },
       "2": {
         "title": "Google 로그인",
@@ -41,16 +54,19 @@
       },
       "3": {
         "title": "바로 사용",
-        "description": "Claude Code에서 스킬 검색, 조회, 배포가 가능해집니다."
+        "description": "스킬 검색, 조회, 배포가 가능해집니다."
       }
-    }
+    },
+    "moreSetup": "자세한 설정 방법은",
+    "gettingStartedLink": "시작 가이드",
+    "moreSetupSuffix": "를 참고하세요."
   },
   "tools": {
     "badge": "What's Inside",
     "title": "MCP 도구 미리보기",
-    "searchPlugins": "키워드로 스킬 검색",
+    "semanticSearch": "자연어로 스킬·에이전트 검색",
     "getPluginContent": "스킬 전체 내용 조회",
-    "deploySkill": "새 스킬을 배포",
+    "deploySkill": "새 스킬을 팀에 배포",
     "checkUpdates": "설치된 스킬 업데이트 확인"
   }
 }
