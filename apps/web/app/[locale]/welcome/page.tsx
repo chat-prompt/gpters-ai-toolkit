@@ -178,6 +178,38 @@ export default async function WelcomePage({
         </div>
       </section>
 
+      {/* Why AI Toolkit Section */}
+      <section className="relative z-10 py-20 px-8">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
+            {t('why.badge')}
+          </p>
+          <h2
+            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
+            style={{ fontFamily: 'var(--font-newsreader)' }}
+          >
+            {t('why.title')}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {([
+              { key: 'lazyLoading', icon: '⚡' },
+              { key: 'autoRecommend', icon: '🎯' },
+              { key: 'multiAgent', icon: '🔗' },
+            ] as const).map((item) => (
+              <div key={item.key} className="text-center">
+                <div className="text-3xl mb-4">{item.icon}</div>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
+                  {t(`why.${item.key}.title`)}
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                  {t(`why.${item.key}.description`)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Connect Section */}
       <section id="connect" className="relative z-10 py-20 px-8">
         <div className="max-w-3xl mx-auto">
