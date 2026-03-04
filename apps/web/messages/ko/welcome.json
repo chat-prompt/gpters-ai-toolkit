@@ -2,7 +2,7 @@
   "hero": {
     "titleHighlight": "AI Toolkit",
     "titleSuffix": "for Coding Agents",
-    "description": "코딩 에이전트용 스킬을 한곳에서 검색하고 공유하세요.\nClaude Code · OpenCode · Codex 플러그인 또는 AITK CLI로 바로 연결됩니다.",
+    "description": "코딩 에이전트용 스킬을 한곳에서 검색하고 공유하세요.\nClaude Code 플러그인 또는 AITK CLI로 바로 연결됩니다.",
     "cta": "시작하기"
   },
   "features": {
@@ -46,7 +46,7 @@
     },
     "multiAgent": {
       "title": "어떤 코딩 에이전트든 연결",
-      "description": "Claude Code, OpenCode, Codex, AITK CLI — 어떤 도구를 쓰든 같은 스킬을 공유합니다. 도구가 바뀌어도 팀의 노하우는 그대로 남습니다."
+      "description": "Claude Code 플러그인, AITK CLI, MCP 직접 연결 — 어떤 방식이든 같은 스킬을 공유합니다. MCP를 지원하는 모든 코딩 에이전트에서 사용할 수 있습니다."
     }
   },
   "connect": {
