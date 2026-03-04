@@ -9,5 +9,26 @@
   "metadata": {
     "title": "복리 엔진 - AI Toolkit",
     "description": "스킬 축적, 활용, 품질 지표를 확인하세요"
+  },
+  "dashboard": {
+    "registeredSkills": "등록된 스킬",
+    "updates": "업데이트",
+    "skillViews": "스킬 조회",
+    "searches": "검색",
+    "qualityMetrics": "품질 지표",
+    "successRate": "성공률",
+    "avgResponseTime": "평균 응답시간",
+    "top3Skills": "TOP 3 스킬",
+    "skillRanking": "스킬 조회 순위",
+    "contributors": "배포자 목록",
+    "count": "{n}개",
+    "weeklyTrend": "주간별 트렌드",
+    "weekCol": "주차",
+    "newSkillsCol": "신규 스킬",
+    "updatesCol": "업데이트",
+    "viewsCol": "조회수",
+    "searchesCol": "검색",
+    "successRateCol": "성공률",
+    "weeklyReport": "주간 리포트"
   }
 }

@@ -1,4 +1,137 @@
 {
+  "skillWizard": {
+    "categories": {
+      "data-reference": {
+        "name": "데이터 참조",
+        "description": "데이터베이스, API, 외부 소스에서 정보를 가져와 활용하는 스킬",
+        "bestPractices": [
+          "읽기 전용 도구만 허용하여 안전성 확보",
+          "캐싱 전략을 명시하여 성능 최적화",
+          "데이터 형식과 스키마를 명확히 문서화",
+          "에러 핸들링 시나리오 포함"
+        ],
+        "exampleDescription": "SQL 데이터베이스 스키마를 참조하여 쿼리 작성을 돕습니다"
+      },
+      "workflow-automation": {
+        "name": "워크플로우 자동화",
+        "description": "반복적인 작업을 자동화하고 효율성을 높이는 스킬",
+        "bestPractices": [
+          "작업 전 현재 상태 확인 단계 포함",
+          "중간 결과 검증 로직 추가",
+          "롤백 가능한 단계별 실행",
+          "진행 상황 보고 기능 포함"
+        ],
+        "exampleDescription": "Git 커밋 메시지 작성 및 PR 생성을 자동화합니다"
+      },
+      "code-analysis": {
+        "name": "코드 분석",
+        "description": "코드 품질, 보안, 성능을 분석하고 개선점을 제안하는 스킬",
+        "bestPractices": [
+          "분석 범위와 기준을 명확히 정의",
+          "결과를 구조화된 형식으로 출력",
+          "우선순위가 있는 개선 제안 제공",
+          "코드 수정은 별도 확인 후 실행"
+        ],
+        "exampleDescription": "코드베이스의 잠재적 버그와 개선점을 분석합니다"
+      },
+      "documentation": {
+        "name": "문서화",
+        "description": "코드, API, 프로젝트 문서를 생성하고 관리하는 스킬",
+        "bestPractices": [
+          "기존 문서 스타일 분석 후 일관성 유지",
+          "마크다운 포맷 표준 준수",
+          "예제 코드와 사용법 포함",
+          "버전 정보와 업데이트 이력 관리"
+        ],
+        "exampleDescription": "함수와 클래스의 JSDoc/TSDoc 주석을 자동 생성합니다"
+      },
+      "testing": {
+        "name": "테스트",
+        "description": "테스트 코드 생성, 실행, 커버리지 분석을 지원하는 스킬",
+        "bestPractices": [
+          "테스트 프레임워크 자동 감지",
+          "엣지 케이스와 경계값 테스트 포함",
+          "모킹 전략 명시",
+          "테스트 실행 결과 요약 제공"
+        ],
+        "exampleDescription": "기존 코드에 대한 단위 테스트를 자동 생성합니다"
+      }
+    },
+    "steps": {
+      "category": {
+        "label": "템플릿 선택",
+        "description": "스킬 유형 선택"
+      },
+      "basic": {
+        "label": "기본 정보",
+        "description": "이름과 설명 입력"
+      },
+      "tools": {
+        "label": "도구 선택",
+        "description": "사용 도구 설정"
+      },
+      "preview": {
+        "label": "미리보기",
+        "description": "코드 확인 및 복사"
+      }
+    },
+    "nav": {
+      "back": "이전",
+      "next": "다음",
+      "complete": "완료"
+    },
+    "categorySelector": {
+      "title": "템플릿 유형 선택",
+      "subtitle": "생성할 스킬의 카테고리를 선택하세요. 각 카테고리에는 최적화된 템플릿과 권장 도구가 포함되어 있습니다."
+    },
+    "basicInfoForm": {
+      "title": "기본 정보 입력",
+      "subtitle": "스킬의 이름과 설명을 입력하세요. 설명은 Claude가 스킬을 호출할 시점을 결정하는 데 사용됩니다.",
+      "skillNameLabel": "스킬 이름 *",
+      "skillIdLabel": "스킬 ID",
+      "skillIdHint": "비워두면 이름에서 자동 생성됩니다:",
+      "descriptionLabel": "설명 *",
+      "descriptionLabelTrigger": "(Claude 호출 트리거)",
+      "descriptionTip": "팁: \"~할 때\", \"~작업 시\" 같은 트리거 키워드를 포함하면 Claude가 적절한 시점에 스킬을 활성화합니다."
+    },
+    "toolSelector": {
+      "title": "도구 선택",
+      "subtitle": "스킬이 사용할 수 있는 Claude Code 도구를 선택하세요. 비워두면 모든 도구를 사용할 수 있습니다.",
+      "selectedCount": "선택된 도구: {count}개",
+      "clearAll": "전체 해제",
+      "recommended": "권장",
+      "recommendedOnly": "권장 도구만",
+      "toolDescriptions": "도구 설명",
+      "tools": {
+        "Read": "파일 읽기",
+        "Write": "파일 쓰기",
+        "Edit": "파일 수정",
+        "Glob": "파일 패턴 검색",
+        "Grep": "텍스트 검색",
+        "Bash": "셸 명령 실행",
+        "Task": "서브에이전트 호출",
+        "WebFetch": "웹 페이지 가져오기",
+        "WebSearch": "웹 검색",
+        "TodoWrite": "할 일 관리"
+      }
+    },
+    "templatePreview": {
+      "title": "미리보기",
+      "subtitle": "생성된 스킬 템플릿을 확인하고 복사하거나 다운로드하세요.",
+      "category": "카테고리",
+      "skillId": "스킬 ID",
+      "tools": "도구",
+      "toolsAllowed": "{count}개",
+      "toolsAllowAll": "전체 허용",
+      "installPath": "설치 경로",
+      "allowedTools": "허용된 도구",
+      "download": "다운로드",
+      "nextSteps": "다음 단계",
+      "step1": "폴더 생성:",
+      "step2": "파일 저장:",
+      "step3": "Claude Code에서 스킬이 인식되는지 확인"
+    }
+  },
   "nav": {
     "catalog": "카탈로그",
     "guides": "가이드",

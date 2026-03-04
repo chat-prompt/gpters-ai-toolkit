@@ -4,6 +4,9 @@
  * Grid of selectable Claude Code tools with toggle selection,
  * recommended tool indicators, and tool descriptions.
  */
+'use client'
+
+import { useTranslations } from 'next-intl'
 import { CLAUDE_TOOLS, ClaudeTool } from '@/lib/data/type-config'
 import type { TemplateCategoryInfo } from './types'
 
@@ -34,32 +37,31 @@ export function ToolSelector({
   onResetToRecommended,
   categoryInfo,
 }: ToolSelectorProps) {
+  const t = useTranslations('templates.skillWizard.toolSelector')
+
   return (
     <div className="animate-fade-up">
-      <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">도구 선택</h2>
-      <p className="text-sm text-[var(--text-secondary)] mb-6">
-        스킬이 사용할 수 있는 Claude Code 도구를 선택하세요. 비워두면 모든 도구를 사용할 수
-        있습니다.
-      </p>
+      <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">{t('title')}</h2>
+      <p className="text-sm text-[var(--text-secondary)] mb-6">{t('subtitle')}</p>
 
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-[var(--text-muted)]">
-            선택된 도구: {selectedTools.length}개
+            {t('selectedCount', { count: selectedTools.length })}
           </span>
           <div className="flex gap-2">
             <button
               onClick={onClearAll}
               className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
-              전체 해제
+              {t('clearAll')}
             </button>
             <span className="text-[var(--text-muted)]">|</span>
             <button
               onClick={onResetToRecommended}
               className="text-xs text-[var(--accent-cyan)] hover:underline"
             >
-              권장 도구만
+              {t('recommendedOnly')}
             </button>
           </div>
         </div>
@@ -85,7 +87,7 @@ export function ToolSelector({
                 </div>
                 {isRecommended && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]">
-                    권장
+                    {t('recommended')}
                   </span>
                 )}
               </button>
@@ -95,38 +97,28 @@ export function ToolSelector({
       </div>
 
       <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-        <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">도구 설명</h4>
+        <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">
+          {t('toolDescriptions')}
+        </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs text-[var(--text-secondary)]">
-          <div>
-            <strong>Read</strong>: 파일 읽기
-          </div>
-          <div>
-            <strong>Write</strong>: 파일 쓰기
-          </div>
-          <div>
-            <strong>Edit</strong>: 파일 수정
-          </div>
-          <div>
-            <strong>Glob</strong>: 파일 패턴 검색
-          </div>
-          <div>
-            <strong>Grep</strong>: 텍스트 검색
-          </div>
-          <div>
-            <strong>Bash</strong>: 셸 명령 실행
-          </div>
-          <div>
-            <strong>Task</strong>: 서브에이전트 호출
-          </div>
-          <div>
-            <strong>WebFetch</strong>: 웹 페이지 가져오기
-          </div>
-          <div>
-            <strong>WebSearch</strong>: 웹 검색
-          </div>
-          <div>
-            <strong>TodoWrite</strong>: 할 일 관리
-          </div>
+          {(
+            [
+              'Read',
+              'Write',
+              'Edit',
+              'Glob',
+              'Grep',
+              'Bash',
+              'Task',
+              'WebFetch',
+              'WebSearch',
+              'TodoWrite',
+            ] as const
+          ).map((tool) => (
+            <div key={tool}>
+              <strong>{tool}</strong>: {t(`tools.${tool}`)}
+            </div>
+          ))}
         </div>
       </div>
     </div>

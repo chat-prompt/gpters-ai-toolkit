@@ -4,6 +4,7 @@
  * Displays a floating action button for editing catalog items,
  * visible only to users with editor or admin role.
  */
+import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
 import { auth } from '@/lib/core/auth'
 import { canEdit } from '@/lib/security/rbac'
@@ -25,6 +26,7 @@ interface AdminEditButtonProps {
  * Positioned at bottom-right of the page.
  */
 export async function AdminEditButton({ itemId, returnUrl }: AdminEditButtonProps) {
+  const t = await getTranslations('admin.menu')
   const session = await auth()
   const userRole = session?.user?.role as UserRole | undefined
 
@@ -49,8 +51,8 @@ export async function AdminEditButton({ itemId, returnUrl }: AdminEditButtonProp
         hover:scale-110 hover:shadow-cyan-500/40
         transition-all duration-200
         group"
-      title="편집하기"
-      aria-label="편집하기"
+      title={t('edit')}
+      aria-label={t('edit')}
     >
       <svg
         className="w-6 h-6 group-hover:rotate-12 transition-transform duration-200"
@@ -74,7 +76,7 @@ export async function AdminEditButton({ itemId, returnUrl }: AdminEditButtonProp
         pointer-events-none
         transition-opacity duration-200
         shadow-lg">
-        편집하기
+        {t('edit')}
       </span>
     </Link>
   )

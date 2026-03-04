@@ -4,6 +4,9 @@
  * Grid of selectable template categories with icons,
  * descriptions, and recommended tool previews.
  */
+'use client'
+
+import { useTranslations } from 'next-intl'
 import type { TemplateCategory, TemplateCategoryInfo } from './types'
 
 /** Props for CategorySelector component */
@@ -27,13 +30,12 @@ export function CategorySelector({
   selectedCategory,
   onSelect,
 }: CategorySelectorProps) {
+  const t = useTranslations('templates.skillWizard.categorySelector')
+
   return (
     <div className="animate-fade-up">
-      <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">템플릿 유형 선택</h2>
-      <p className="text-sm text-[var(--text-secondary)] mb-6">
-        생성할 스킬의 카테고리를 선택하세요. 각 카테고리에는 최적화된 템플릿과 권장 도구가
-        포함되어 있습니다.
-      </p>
+      <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">{t('title')}</h2>
+      <p className="text-sm text-[var(--text-secondary)] mb-6">{t('subtitle')}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {categories.map((category) => (

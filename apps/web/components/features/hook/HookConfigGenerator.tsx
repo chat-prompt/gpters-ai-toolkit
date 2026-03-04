@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import { CopyButton } from '../../ui/CopyButton'
 import type { HookEvent } from '@/lib/core/types'
 import { HOOK_EVENTS } from '@/lib/core/types'
@@ -60,6 +61,8 @@ interface ValidationErrors {
  * - Live JSON preview with copy functionality
  */
 export function HookConfigGenerator() {
+  const t = useTranslations('detail.hookConfig')
+
   const [config, setConfig] = useState<HookConfig>({
     event: 'PreCompact',
     matcher: 'auto',
@@ -86,11 +89,11 @@ export function HookConfigGenerator() {
     const newErrors: ValidationErrors = {}
 
     if (!config.command.trim()) {
-      newErrors.command = '실행할 명령어를 입력하세요'
+      newErrors.command = t('errorCommand')
     }
 
     if (availableMatchers.length > 0 && !config.matcher.trim()) {
-      newErrors.matcher = 'Matcher를 선택하거나 입력하세요'
+      newErrors.matcher = t('errorMatcher')
     }
 
     setErrors(newErrors)
@@ -149,22 +152,22 @@ export function HookConfigGenerator() {
       <div className="glass rounded-2xl p-6 glow-cyan">
         <div className="flex items-center gap-3 mb-4">
           <span className="text-2xl">🪝</span>
-          <h2 className="text-xl font-medium text-[var(--text-primary)]">Hook 설정 JSON 생성기</h2>
+          <h2 className="text-xl font-medium text-[var(--text-primary)]">{t('title')}</h2>
         </div>
         <p className="text-sm text-[var(--text-secondary)]">
-          Claude Code settings.json에 추가할 Hook 설정을 쉽게 생성할 수 있습니다.
+          {t('subtitle')}
         </p>
       </div>
 
       {/* Configuration Form */}
       <div className="glass rounded-2xl p-6">
-        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-6">설정</h3>
+        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-6">{t('sectionTitle')}</h3>
 
         <div className="space-y-6">
           {/* Event Type Selection */}
           <div>
             <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Hook 이벤트
+              {t('eventLabel')}
             </label>
             <select
               value={config.event}
@@ -196,7 +199,7 @@ export function HookConfigGenerator() {
           {availableMatchers.length > 0 && (
             <div>
               <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-                Matcher
+                {t('matcherLabel')}
               </label>
               {availableMatchers.length <= 5 ? (
                 // Button group for small number of options
@@ -230,7 +233,7 @@ export function HookConfigGenerator() {
                       setConfig({ ...config, matcher: e.target.value })
                       setErrors({ ...errors, matcher: undefined })
                     }}
-                    placeholder="도구 이름을 입력하거나 선택하세요"
+                    placeholder={t('matcherPlaceholder')}
                     className={`w-full px-4 py-3 rounded-xl bg-[var(--bg-primary)] border text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] transition-colors ${
                       errors.matcher ? 'border-red-500' : 'border-[var(--border-subtle)]'
                     }`}
@@ -247,11 +250,11 @@ export function HookConfigGenerator() {
               )}
               <p className="mt-2 text-xs text-[var(--text-muted)]">
                 {config.event === 'PreToolUse' || config.event === 'PostToolUse' || config.event === 'PermissionRequest'
-                  ? '특정 도구에만 Hook을 적용하려면 도구 이름을 입력하세요. 여러 도구 타입은 여러 Hook을 추가해야 합니다.'
+                  ? t('matcherHintTool')
                   : config.event === 'PreCompact'
-                    ? 'auto: 자동 Compaction, manual: 수동 Compaction (/compact 명령)'
+                    ? t('matcherHintPreCompact')
                     : config.event === 'SessionStart'
-                      ? 'startup: 새 세션, resume: 기존 세션 재개, clear: /clear 후, compact: /compact 후'
+                      ? t('matcherHintSessionStart')
                       : ''}
               </p>
             </div>
@@ -260,7 +263,7 @@ export function HookConfigGenerator() {
           {/* Command Input */}
           <div>
             <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              실행 명령어
+              {t('commandLabel')}
             </label>
             <textarea
               value={config.command}
@@ -268,7 +271,7 @@ export function HookConfigGenerator() {
                 setConfig({ ...config, command: e.target.value })
                 setErrors({ ...errors, command: undefined })
               }}
-              placeholder="예: /path/to/script.sh $CLAUDE_SESSION_ID"
+              placeholder={t('commandPlaceholder')}
               rows={3}
               className={`w-full px-4 py-3 rounded-xl bg-[var(--bg-primary)] border text-[var(--text-primary)] font-mono text-sm focus:outline-none focus:border-[var(--accent-cyan)] transition-colors resize-none ${
                 errors.command ? 'border-red-500' : 'border-[var(--border-subtle)]'
@@ -278,14 +281,14 @@ export function HookConfigGenerator() {
               <p className="mt-2 text-xs text-red-400">{errors.command}</p>
             )}
             <p className="mt-2 text-xs text-[var(--text-muted)]">
-              환경변수: $CLAUDE_SESSION_ID, $CLAUDE_PROJECT_DIR 등을 사용할 수 있습니다.
+              {t('commandHint')}
             </p>
           </div>
 
           {/* Timeout Input */}
           <div>
             <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              타임아웃 (ms)
+              {t('timeoutLabel')}
             </label>
             <input
               type="number"
@@ -296,7 +299,7 @@ export function HookConfigGenerator() {
               className="w-full px-4 py-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] transition-colors"
             />
             <p className="mt-2 text-xs text-[var(--text-muted)]">
-              명령어 실행 제한 시간. 기본값은 30000ms (30초)입니다.
+              {t('timeoutHint')}
             </p>
           </div>
 
@@ -310,9 +313,9 @@ export function HookConfigGenerator() {
                 className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] accent-[var(--accent-cyan)]"
               />
               <div>
-                <span className="text-[var(--text-primary)] font-medium">Blocking</span>
+                <span className="text-[var(--text-primary)] font-medium">{t('blockingLabel')}</span>
                 <p className="text-xs text-[var(--text-muted)]">
-                  체크 시 Hook 완료까지 Claude가 대기합니다. 해제 시 비동기로 실행됩니다.
+                  {t('blockingHint')}
                 </p>
               </div>
             </label>
@@ -325,7 +328,7 @@ export function HookConfigGenerator() {
             onClick={handleGenerate}
             className="w-full px-6 py-3 rounded-xl bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
           >
-            JSON 생성
+            {t('generateButton')}
           </button>
         </div>
       </div>
@@ -335,11 +338,11 @@ export function HookConfigGenerator() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <span className="text-xl">📋</span>
-            <h3 className="text-lg font-medium text-[var(--text-primary)]">생성된 JSON</h3>
+            <h3 className="text-lg font-medium text-[var(--text-primary)]">{t('resultTitle')}</h3>
           </div>
           <div className="flex items-center gap-2">
             {copied && (
-              <span className="text-xs text-green-400">복사됨!</span>
+              <span className="text-xs text-green-400">{t('copiedLabel')}</span>
             )}
             <CopyButton text={jsonString} onCopy={handleCopy} />
           </div>
@@ -353,16 +356,23 @@ export function HookConfigGenerator() {
 
         <div className="mt-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
           <p className="text-sm text-[var(--text-muted)]">
-            <strong className="text-[var(--text-primary)]">설치 방법:</strong>
+            <strong className="text-[var(--text-primary)]">{t('installTitle')}</strong>
           </p>
           <ol className="mt-2 text-sm text-[var(--text-muted)] list-decimal list-inside space-y-1">
             <li>
-              <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">~/.claude/settings.json</code> 파일을 엽니다
+              <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">~/.claude/settings.json</code>{' '}
+              {t('installStep1')}
             </li>
             <li>
-              기존 <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">hooks</code> 객체에 위 설정을 병합하거나, 없으면 새로 추가합니다
+              {t('installStep2Before')}{' '}
+              <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">hooks</code>{' '}
+              {t('installStep2After')}
             </li>
-            <li>Claude Code를 재시작하거나 <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">/config</code>로 확인합니다</li>
+            <li>
+              {t('installStep3Before')}{' '}
+              <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">/config</code>
+              {t('installStep3After')}
+            </li>
           </ol>
         </div>
       </div>

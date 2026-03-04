@@ -29,7 +29,8 @@
     "collapse": "Collapse",
     "showMore": "Show more",
     "promptExamples": "Prompt examples",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "compactCount": "{count}"
   },
   "stats": {
     "overview": "Overview",
@@ -46,6 +47,34 @@
       "30d": "30 Days",
       "90d": "90 Days"
     }
+  },
+  "typeSpecificFields": {
+    "estimatedTime": "Estimated Time",
+    "agentToolsHint": "Select tools the agent can use.",
+    "featureToolsHint": "Restrict tools this feature can use.",
+    "toolsEmpty": "Leave empty to allow all tools.",
+    "agentSkillsHint": "Enter skill names to auto-load for the agent, comma-separated.",
+    "argumentHintDesc": "Argument hint shown in autocomplete. e.g. [message], [file] [options]",
+    "disableModelInvocationDesc": "When checked, the SlashCommand tool will not automatically invoke this command.",
+    "hookCommandDesc": "Enter the shell command to run when this hook fires.",
+    "hookVariablesDesc": "Available variables:",
+    "hookTimeoutPlaceholder": "Default: 60000 (60s)",
+    "hookBlockingDesc": "When checked, Claude Code waits until the hook completes.",
+    "configPreview": "Configuration preview",
+    "hookMatcherPlaceholder": "Or enter a custom matcher...",
+    "estimatedTimePlaceholder": "e.g. 10 min, 30 min, 1 hour",
+    "agentSkillsPlaceholder": "e.g. pdf-processing, git-workflow",
+    "argumentHintPlaceholder": "e.g. [message]",
+    "hookCommandPlaceholder": "e.g. cp $transcript_path ~/backups/transcript-$(date +%s).jsonl"
+  },
+  "typeGuidePanel": {
+    "syntaxHighlights": "Special syntax",
+    "typeFields": "Fields for this type"
+  },
+  "newItem": {
+    "typeSelection": "Type selection",
+    "basicInfo": "Basic info",
+    "typeSettings": "{type} settings"
   },
   "welfare": {
     "registeredSkills": "Registered Skills",

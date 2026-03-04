@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, memo } from 'react'
+import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import {
   PromptExample,
@@ -35,6 +36,7 @@ const PromptCard = memo(function PromptCard({
   example,
   onCopy,
 }: PromptCardProps) {
+  const t = useTranslations('admin.prompts')
   const [isExpanded, setIsExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
   const categoryConfig = PROMPT_CATEGORIES[example.category]
@@ -101,7 +103,7 @@ const PromptCard = memo(function PromptCard({
             onClick={() => setIsExpanded(!isExpanded)}
             className="mt-2 text-xs text-[var(--accent-cyan)] hover:underline"
           >
-            {isExpanded ? '접기' : '더 보기'}
+            {isExpanded ? t('collapse') : t('showMore')}
           </button>
         )}
       </div>
@@ -112,7 +114,7 @@ const PromptCard = memo(function PromptCard({
           <span className="text-sm text-emerald-400">→</span>
           <div>
             <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-1">
-              예상 결과
+              {t('expectedOutcome')}
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               {example.expectedOutcome}
@@ -127,7 +129,7 @@ const PromptCard = memo(function PromptCard({
           <span className="text-sm text-amber-400">💡</span>
           <div>
             <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-1">
-              사용 시나리오
+              {t('useCase')}
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               {example.useCase}
@@ -141,7 +143,7 @@ const PromptCard = memo(function PromptCard({
         {/* Related Items */}
         {example.relatedItems.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--text-muted)]">관련:</span>
+            <span className="text-xs text-[var(--text-muted)]">{t('related')}</span>
             {example.relatedItems.map((item) => (
               <Link
                 key={item.id}
@@ -189,6 +191,7 @@ const CategoryFilter = memo(function CategoryFilter({
   onCategoryChange,
   counts,
 }: CategoryFilterProps) {
+  const t = useTranslations('admin.prompts')
   return (
     <div className="flex flex-wrap gap-2">
       <button
@@ -199,7 +202,7 @@ const CategoryFilter = memo(function CategoryFilter({
             : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
         }`}
       >
-        전체 ({counts.all})
+        {t('allFilter', { count: counts.all })}
       </button>
       {categories.map((category) => {
         const config = PROMPT_CATEGORIES[category]
@@ -243,6 +246,7 @@ export interface PromptExamplesLibraryProps {
 export function PromptExamplesLibrary({
   maxVisible,
 }: PromptExamplesLibraryProps = {}) {
+  const t = useTranslations('admin.prompts')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState<PromptCategory | 'all'>(
     'all'
@@ -363,7 +367,7 @@ export function PromptExamplesLibrary({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="프롬프트 검색..."
+            placeholder={t('searchPlaceholder')}
             className="w-full px-4 py-3 pl-10 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-cyan)]"
           />
           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
@@ -391,7 +395,7 @@ export function PromptExamplesLibrary({
           }`}
         >
           <span>⚙</span>
-          <span>필터</span>
+          <span>{t('filter')}</span>
           {hasActiveFilters && (
             <span className="w-2 h-2 rounded-full bg-[var(--accent-cyan)]" />
           )}
@@ -402,7 +406,7 @@ export function PromptExamplesLibrary({
             onClick={handleClearFilters}
             className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors"
           >
-            필터 초기화
+            {t('clearFilters')}
           </button>
         )}
       </div>
@@ -413,7 +417,7 @@ export function PromptExamplesLibrary({
           {/* Difficulty Filter */}
           <div className="mb-5">
             <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              난이도
+              {t('difficulty')}
             </div>
             <div className="flex gap-2">
               {(['easy', 'medium', 'hard'] as Difficulty[]).map((level) => (
@@ -443,7 +447,7 @@ export function PromptExamplesLibrary({
           {/* Tag Filter */}
           <div>
             <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              태그 {selectedTags.length > 0 && `(${selectedTags.length} 선택)`}
+              {t('tags')}{selectedTags.length > 0 && ` ${t('tagsSelected', { count: selectedTags.length })}`}
             </div>
             <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => (
@@ -467,8 +471,8 @@ export function PromptExamplesLibrary({
       {/* Results Stats */}
       <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
         <span>
-          {filteredExamples.length}개의 프롬프트
-          {hasActiveFilters && ` (전체 ${allExamples.length}개)`}
+          {t('results', { count: filteredExamples.length })}
+          {hasActiveFilters && ` ${t('resultsTotal', { total: allExamples.length })}`}
         </span>
       </div>
 
@@ -484,13 +488,13 @@ export function PromptExamplesLibrary({
         <div className="text-center py-16">
           <div className="text-5xl mb-4 opacity-20">🔍</div>
           <p className="text-[var(--text-secondary)] mb-4">
-            검색 결과가 없습니다.
+            {t('noResults')}
           </p>
           <button
             onClick={handleClearFilters}
             className="text-[var(--accent-cyan)] hover:underline"
           >
-            필터 초기화
+            {t('clearFiltersLink')}
           </button>
         </div>
       )}
@@ -518,6 +522,7 @@ export function PromptExamplesCompact({
   maxItems = 3,
   showViewAll = true,
 }: PromptExamplesCompactProps) {
+  const t = useTranslations('admin.prompts')
   const examples = useMemo(() => {
     const all = getAllPromptExamples()
     const filtered = category
@@ -537,10 +542,10 @@ export function PromptExamplesCompact({
         <div className="flex items-center gap-3">
           <span className="text-xl">{categoryConfig?.icon || '💡'}</span>
           <h2 className="text-lg font-medium text-[var(--text-primary)]">
-            {categoryConfig?.label || '프롬프트 예시'}
+            {categoryConfig?.label || t('promptExamples')}
           </h2>
           <span className="px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-xs text-[var(--text-muted)]">
-            {examples.length}개
+            {t('compactCount', { count: examples.length })}
           </span>
         </div>
         {showViewAll && (
@@ -548,7 +553,7 @@ export function PromptExamplesCompact({
             href="/prompts"
             className="text-xs text-[var(--accent-cyan)] hover:underline flex items-center gap-1"
           >
-            <span>전체 보기</span>
+            <span>{t('viewAll')}</span>
             <span>→</span>
           </Link>
         )}

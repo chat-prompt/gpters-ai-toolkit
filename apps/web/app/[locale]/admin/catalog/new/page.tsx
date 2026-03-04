@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { Link } from '@/i18n/navigation'
 import { useSession } from 'next-auth/react'
@@ -20,6 +21,7 @@ import type { ItemType, Difficulty, AgentModel, AgentPermissionMode, HookEvent }
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
 export default function NewCatalogItem() {
+  const t = useTranslations('admin.newItem')
   const router = useRouter()
   useAdminAuth() // For layout protection
   const { data: session } = useSession()
@@ -235,7 +237,7 @@ export default function NewCatalogItem() {
             {/* Type Selection */}
             <div className="glass rounded-2xl p-8">
               <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">
-                Type 선택
+                {t('typeSelection')}
               </h2>
               <div className="grid grid-cols-5 gap-3">
                 {ITEM_TYPES.map((t) => {
@@ -262,7 +264,7 @@ export default function NewCatalogItem() {
             {/* Basic Info */}
             <div className="glass rounded-2xl p-8 space-y-6">
               <h2 className="text-lg font-medium text-[var(--text-primary)]">
-                기본 정보
+                {t('basicInfo')}
               </h2>
 
               <div className="grid grid-cols-2 gap-6">
@@ -404,7 +406,7 @@ export default function NewCatalogItem() {
             {/* Type-Specific Fields */}
             <div className="glass rounded-2xl p-8">
               <h2 className="text-lg font-medium text-[var(--text-primary)] mb-6">
-                {config.icon} {type.charAt(0).toUpperCase() + type.slice(1)} 설정
+                {config.icon} {t('typeSettings', { type: type.charAt(0).toUpperCase() + type.slice(1) })}
               </h2>
               <TypeSpecificFields
                 type={type}

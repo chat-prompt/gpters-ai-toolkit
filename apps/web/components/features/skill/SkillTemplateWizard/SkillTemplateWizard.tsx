@@ -7,9 +7,10 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import { ClaudeTool } from '@/lib/data/type-config'
-import type { TemplateCategory, SkillTemplateWizardProps } from './types'
-import { TEMPLATE_CATEGORIES, WIZARD_STEPS } from './constants'
+import type { TemplateCategory, TemplateCategoryInfo, SkillTemplateWizardProps } from './types'
+import { TEMPLATE_CATEGORY_META, WIZARD_STEPS } from './constants'
 import { useTemplateGenerator } from './useTemplateGenerator'
 import { WizardProgress } from './WizardProgress'
 import { CategorySelector } from './CategorySelector'
@@ -17,7 +18,15 @@ import { BasicInfoForm } from './BasicInfoForm'
 import { ToolSelector } from './ToolSelector'
 import { TemplatePreview } from './TemplatePreview'
 
+/**
+ * Skill template wizard
+ *
+ * @param onComplete - Callback when wizard completes with generated template
+ * @param initialCategory - Pre-selected category to skip first step
+ */
 export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTemplateWizardProps) {
+  const t = useTranslations('templates.skillWizard')
+
   const [currentStep, setCurrentStep] = useState(initialCategory ? 1 : 0)
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | null>(
     initialCategory || null
@@ -27,10 +36,37 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
   const [selectedTools, setSelectedTools] = useState<ClaudeTool[]>([])
   const [customId, setCustomId] = useState('')
 
+  // Build translated TEMPLATE_CATEGORIES by merging meta with translations
+  const translatedCategories: TemplateCategoryInfo[] = useMemo(
+    () =>
+      TEMPLATE_CATEGORY_META.map((meta) => ({
+        id: meta.id as TemplateCategory,
+        icon: meta.icon,
+        gradient: meta.gradient,
+        recommendedTools: meta.recommendedTools,
+        name: t(`categories.${meta.id}.name`),
+        description: t(`categories.${meta.id}.description`),
+        bestPractices: t.raw(`categories.${meta.id}.bestPractices`) as string[],
+        exampleDescription: t(`categories.${meta.id}.exampleDescription`),
+      })),
+    [t]
+  )
+
+  // Build translated wizard steps
+  const translatedSteps = useMemo(
+    () =>
+      WIZARD_STEPS.map((step) => ({
+        ...step,
+        label: t(`steps.${step.id}.label`),
+        description: t(`steps.${step.id}.description`),
+      })),
+    [t]
+  )
+
   // Get category info
   const categoryInfo = useMemo(() => {
-    return TEMPLATE_CATEGORIES.find((c) => c.id === selectedCategory) || null
-  }, [selectedCategory])
+    return translatedCategories.find((c) => c.id === selectedCategory) || null
+  }, [selectedCategory, translatedCategories])
 
   // Generate skill ID from name
   const generatedId = useMemo(() => {
@@ -53,15 +89,18 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
   })
 
   // Handle category selection
-  const handleCategorySelect = useCallback((category: TemplateCategory) => {
-    setSelectedCategory(category)
-    const cat = TEMPLATE_CATEGORIES.find((c) => c.id === category)
-    if (cat) {
-      setSelectedTools(cat.recommendedTools)
-      setSkillDescription(cat.exampleDescription)
-    }
-    setCurrentStep(1)
-  }, [])
+  const handleCategorySelect = useCallback(
+    (category: TemplateCategory) => {
+      setSelectedCategory(category)
+      const cat = translatedCategories.find((c) => c.id === category)
+      if (cat) {
+        setSelectedTools(cat.recommendedTools)
+        setSkillDescription(cat.exampleDescription)
+      }
+      setCurrentStep(1)
+    },
+    [translatedCategories]
+  )
 
   // Handle tool toggle
   const handleToolToggle = useCallback((tool: ClaudeTool) => {
@@ -87,10 +126,10 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
   }, [currentStep, selectedCategory, skillName, skillDescription])
 
   const handleNext = useCallback(() => {
-    if (canProceed() && currentStep < WIZARD_STEPS.length - 1) {
+    if (canProceed() && currentStep < translatedSteps.length - 1) {
       setCurrentStep((prev) => prev + 1)
     }
-  }, [canProceed, currentStep])
+  }, [canProceed, currentStep, translatedSteps.length])
 
   const handleBack = useCallback(() => {
     if (currentStep > 0) {
@@ -119,7 +158,7 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
     <div className="w-full max-w-4xl mx-auto">
       {/* Progress Steps */}
       <WizardProgress
-        steps={WIZARD_STEPS}
+        steps={translatedSteps}
         currentStep={currentStep}
         onStepClick={setCurrentStep}
       />
@@ -129,7 +168,7 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
         {/* Step 1: Category Selection */}
         {currentStep === 0 && (
           <CategorySelector
-            categories={TEMPLATE_CATEGORIES}
+            categories={translatedCategories}
             selectedCategory={selectedCategory}
             onSelect={handleCategorySelect}
           />
@@ -179,16 +218,16 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
           disabled={currentStep === 0}
           className="px-6 py-3 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          이전
+          {t('nav.back')}
         </button>
 
         <div className="flex gap-3">
-          {currentStep === WIZARD_STEPS.length - 1 ? (
+          {currentStep === translatedSteps.length - 1 ? (
             <button
               onClick={handleComplete}
               className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
             >
-              완료
+              {t('nav.complete')}
             </button>
           ) : (
             <button
@@ -196,7 +235,7 @@ export function SkillTemplateWizard({ onComplete, initialCategory }: SkillTempla
               disabled={!canProceed()}
               className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              다음
+              {t('nav.next')}
             </button>
           )}
         </div>

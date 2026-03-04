@@ -1,4 +1,8 @@
 {
+  "metadata": {
+    "title": "Terms of Service",
+    "description": "Terms and conditions for using the service"
+  },
   "badge": "Terms of Service",
   "title": "Terms of",
   "titleHighlight": "Service",
@@ -38,7 +42,8 @@
     },
     "contact": {
       "title": "7. Contact",
-      "content": "For questions about these terms, contact {email}."
+      "contentPrefix": "For questions about these terms, contact",
+      "contentSuffix": "."
     }
   },
   "lastUpdated": "Last updated: March 2026"

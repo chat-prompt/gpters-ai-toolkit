@@ -1,4 +1,137 @@
 {
+  "skillWizard": {
+    "categories": {
+      "data-reference": {
+        "name": "Data Reference",
+        "description": "Skills that fetch and use information from databases, APIs, and external sources",
+        "bestPractices": [
+          "Allow only read-only tools for safety",
+          "Specify caching strategy for performance optimization",
+          "Clearly document data formats and schemas",
+          "Include error handling scenarios"
+        ],
+        "exampleDescription": "Helps write queries by referencing SQL database schemas"
+      },
+      "workflow-automation": {
+        "name": "Workflow Automation",
+        "description": "Skills that automate repetitive tasks and improve efficiency",
+        "bestPractices": [
+          "Include a state verification step before the task",
+          "Add intermediate result validation logic",
+          "Execute in rollback-capable steps",
+          "Include progress reporting"
+        ],
+        "exampleDescription": "Automates Git commit message writing and PR creation"
+      },
+      "code-analysis": {
+        "name": "Code Analysis",
+        "description": "Skills that analyze code quality, security, and performance and suggest improvements",
+        "bestPractices": [
+          "Clearly define the analysis scope and criteria",
+          "Output results in a structured format",
+          "Provide prioritized improvement suggestions",
+          "Confirm before making code changes"
+        ],
+        "exampleDescription": "Analyzes potential bugs and improvements in the codebase"
+      },
+      "documentation": {
+        "name": "Documentation",
+        "description": "Skills that generate and manage code, API, and project documentation",
+        "bestPractices": [
+          "Analyze existing documentation style for consistency",
+          "Follow markdown format standards",
+          "Include example code and usage",
+          "Track version info and update history"
+        ],
+        "exampleDescription": "Automatically generates JSDoc/TSDoc comments for functions and classes"
+      },
+      "testing": {
+        "name": "Testing",
+        "description": "Skills that support test code generation, execution, and coverage analysis",
+        "bestPractices": [
+          "Auto-detect testing framework",
+          "Include edge cases and boundary value tests",
+          "Specify mocking strategy",
+          "Provide test execution result summary"
+        ],
+        "exampleDescription": "Automatically generates unit tests for existing code"
+      }
+    },
+    "steps": {
+      "category": {
+        "label": "Select Template",
+        "description": "Choose skill type"
+      },
+      "basic": {
+        "label": "Basic Info",
+        "description": "Enter name and description"
+      },
+      "tools": {
+        "label": "Select Tools",
+        "description": "Configure tools"
+      },
+      "preview": {
+        "label": "Preview",
+        "description": "Review and copy code"
+      }
+    },
+    "nav": {
+      "back": "Back",
+      "next": "Next",
+      "complete": "Complete"
+    },
+    "categorySelector": {
+      "title": "Select Template Type",
+      "subtitle": "Choose the category for the skill you want to create. Each category includes optimized templates and recommended tools."
+    },
+    "basicInfoForm": {
+      "title": "Enter Basic Info",
+      "subtitle": "Enter the name and description for your skill. The description is used by Claude to determine when to invoke the skill.",
+      "skillNameLabel": "Skill Name *",
+      "skillIdLabel": "Skill ID",
+      "skillIdHint": "Leave blank to auto-generate from name:",
+      "descriptionLabel": "Description *",
+      "descriptionLabelTrigger": "(Claude invocation trigger)",
+      "descriptionTip": "Tip: Including trigger keywords like \"when doing X\" or \"during X task\" helps Claude activate the skill at the right time."
+    },
+    "toolSelector": {
+      "title": "Select Tools",
+      "subtitle": "Choose the Claude Code tools your skill can use. Leave empty to allow all tools.",
+      "selectedCount": "Selected tools: {count}",
+      "clearAll": "Clear all",
+      "recommended": "Recommended",
+      "recommendedOnly": "Recommended only",
+      "toolDescriptions": "Tool Descriptions",
+      "tools": {
+        "Read": "Read files",
+        "Write": "Write files",
+        "Edit": "Edit files",
+        "Glob": "File pattern search",
+        "Grep": "Text search",
+        "Bash": "Run shell commands",
+        "Task": "Invoke sub-agent",
+        "WebFetch": "Fetch web pages",
+        "WebSearch": "Web search",
+        "TodoWrite": "Manage todos"
+      }
+    },
+    "templatePreview": {
+      "title": "Preview",
+      "subtitle": "Review your generated skill template and copy or download it.",
+      "category": "Category",
+      "skillId": "Skill ID",
+      "tools": "Tools",
+      "toolsAllowed": "{count} tools",
+      "toolsAllowAll": "All allowed",
+      "installPath": "Install Path",
+      "allowedTools": "Allowed Tools",
+      "download": "Download",
+      "nextSteps": "Next Steps",
+      "step1": "Create folder:",
+      "step2": "Save file:",
+      "step3": "Verify the skill is recognized in Claude Code"
+    }
+  },
   "nav": {
     "catalog": "Catalog",
     "guides": "Guides",

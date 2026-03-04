@@ -1,8 +1,17 @@
 'use client'
 
+/**
+ * Welfare Engine Dashboard component
+ *
+ * Displays skill accumulation, utilization, and quality metrics
+ * for the AI Toolkit welfare engine, including weekly trends and rankings.
+ */
+
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 
+/** Welfare engine metrics data structure */
 interface WelfareEngineMetrics {
   accumulation: {
     totalSkills: number
@@ -24,6 +33,7 @@ interface WelfareEngineMetrics {
   }
 }
 
+/** Skill ranking entry */
 interface SkillRanking {
   id: string
   name: string
@@ -32,11 +42,13 @@ interface SkillRanking {
   authorName?: string
 }
 
+/** Contributor entry */
 interface Contributor {
   name: string
   skillCount: number
 }
 
+/** Stats API response */
 interface StatsResponse {
   period: string
   startDate: string
@@ -60,6 +72,7 @@ type _WeeklyReportResponse = {
   }
 }
 
+/** Weekly trend data point */
 interface WeeklyTrendData {
   weekStart: string
   weekEnd: string
@@ -73,7 +86,15 @@ interface WeeklyTrendData {
 
 type Period = '7d' | '30d' | '90d'
 
+/**
+ * Welfare Engine Dashboard
+ *
+ * Shows period-filtered stats, quality metrics, skill rankings,
+ * contributor list, weekly trend table, and weekly report.
+ */
 export function WelfareEngineDashboard() {
+  const t = useTranslations('stats.dashboard')
+
   const [period, setPeriod] = useState<Period>('30d')
   const [data, setData] = useState<StatsResponse | null>(null)
   const [weeklyReport, setWeeklyReport] = useState<string | null>(null)
@@ -185,24 +206,24 @@ export function WelfareEngineDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
-          title="등록된 스킬"
+          title={t('registeredSkills')}
           value={metrics.accumulation.totalSkills}
           change={metrics.accumulation.newSkills}
           icon="📚"
         />
         <MetricCard
-          title="업데이트"
+          title={t('updates')}
           value={metrics.accumulation.totalUpdates}
           change={metrics.accumulation.newUpdates}
           icon="🔄"
         />
         <MetricCard
-          title="스킬 조회"
+          title={t('skillViews')}
           value={metrics.utilization.totalViews}
           icon="👁️"
         />
         <MetricCard
-          title="검색"
+          title={t('searches')}
           value={metrics.utilization.totalSearches}
           icon="🔍"
         />
@@ -211,12 +232,12 @@ export function WelfareEngineDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-            품질 지표
+            {t('qualityMetrics')}
           </h3>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-[var(--text-secondary)]">성공률</span>
+                <span className="text-sm text-[var(--text-secondary)]">{t('successRate')}</span>
                 <span className="text-2xl font-bold text-[#10B981]">
                   {metrics.quality.successRate.toFixed(1)}%
                 </span>
@@ -230,7 +251,7 @@ export function WelfareEngineDashboard() {
             </div>
             <div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-[var(--text-secondary)]">평균 응답시간</span>
+                <span className="text-sm text-[var(--text-secondary)]">{t('avgResponseTime')}</span>
                 <span className="text-2xl font-bold text-[#3B82F6]">
                   {metrics.quality.avgResponseTime}ms
                 </span>
@@ -241,7 +262,7 @@ export function WelfareEngineDashboard() {
 
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-            TOP 3 스킬
+            {t('top3Skills')}
           </h3>
           <div className="space-y-3">
             {metrics.utilization.topSkills.slice(0, 3).map((skill, idx) => (
@@ -265,7 +286,7 @@ export function WelfareEngineDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-            스킬 조회 순위
+            {t('skillRanking')}
           </h3>
           <div className="space-y-2">
             {rankings.skills.slice(0, 10).map((skill, idx) => (
@@ -299,7 +320,7 @@ export function WelfareEngineDashboard() {
 
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-            배포자 목록
+            {t('contributors')}
           </h3>
           <div className="space-y-2">
             {rankings.contributors.slice(0, 10).map((contributor, idx) => (
@@ -314,7 +335,7 @@ export function WelfareEngineDashboard() {
                   <span className="text-[var(--text-primary)]">{contributor.name}</span>
                 </div>
                 <span className="text-sm font-medium text-[var(--text-secondary)]">
-                  {contributor.skillCount}개
+                  {t('count', { n: contributor.skillCount })}
                 </span>
               </div>
             ))}
@@ -325,24 +346,24 @@ export function WelfareEngineDashboard() {
       {weeklyTrend.length > 0 && (
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-            📈 주간별 트렌드
+            📈 {t('weeklyTrend')}
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--border-subtle)]">
-                  <th className="text-left py-3 px-2 text-[var(--text-muted)] font-medium">주차</th>
-                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">신규 스킬</th>
-                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">업데이트</th>
-                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">조회수</th>
-                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">검색</th>
-                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">성공률</th>
+                  <th className="text-left py-3 px-2 text-[var(--text-muted)] font-medium">{t('weekCol')}</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">{t('newSkillsCol')}</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">{t('updatesCol')}</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">{t('viewsCol')}</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">{t('searchesCol')}</th>
+                  <th className="text-right py-3 px-2 text-[var(--text-muted)] font-medium">{t('successRateCol')}</th>
                 </tr>
               </thead>
               <tbody>
                 {weeklyTrend.map((week, idx) => (
-                  <tr 
-                    key={week.weekStart} 
+                  <tr
+                    key={week.weekStart}
                     className={`border-b border-[var(--border-subtle)] last:border-0 ${idx === 0 ? 'bg-[var(--brand-primary)]/5' : ''}`}
                   >
                     <td className="py-3 px-2 text-[var(--text-primary)]">
@@ -378,7 +399,7 @@ export function WelfareEngineDashboard() {
         <div className="bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-subtle)]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-              주간 리포트
+              {t('weeklyReport')}
             </h3>
             <button
               onClick={copyReport}
@@ -396,6 +417,14 @@ export function WelfareEngineDashboard() {
   )
 }
 
+/**
+ * Metric card for displaying a single KPI value
+ *
+ * @param title - Card label
+ * @param value - Primary numeric value
+ * @param change - Optional delta value shown beside the main value
+ * @param icon - Emoji icon displayed in the card header
+ */
 function MetricCard({
   title,
   value,

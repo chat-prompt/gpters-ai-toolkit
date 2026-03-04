@@ -9,5 +9,26 @@
   "metadata": {
     "title": "Welfare Engine - AI Toolkit",
     "description": "View skill accumulation, utilization, and quality metrics"
+  },
+  "dashboard": {
+    "registeredSkills": "Registered Skills",
+    "updates": "Updates",
+    "skillViews": "Skill Views",
+    "searches": "Searches",
+    "qualityMetrics": "Quality Metrics",
+    "successRate": "Success Rate",
+    "avgResponseTime": "Avg Response Time",
+    "top3Skills": "TOP 3 Skills",
+    "skillRanking": "Skill View Rankings",
+    "contributors": "Contributors",
+    "count": "{n}",
+    "weeklyTrend": "Weekly Trend",
+    "weekCol": "Week",
+    "newSkillsCol": "New Skills",
+    "updatesCol": "Updates",
+    "viewsCol": "Views",
+    "searchesCol": "Searches",
+    "successRateCol": "Success Rate",
+    "weeklyReport": "Weekly Report"
   }
 }

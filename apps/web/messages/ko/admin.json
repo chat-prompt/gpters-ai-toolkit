@@ -29,7 +29,8 @@
     "collapse": "접기",
     "showMore": "더 보기",
     "promptExamples": "프롬프트 예시",
-    "viewAll": "전체 보기"
+    "viewAll": "전체 보기",
+    "compactCount": "{count}개"
   },
   "stats": {
     "overview": "Overview",
@@ -46,6 +47,34 @@
       "30d": "30 Days",
       "90d": "90 Days"
     }
+  },
+  "typeSpecificFields": {
+    "estimatedTime": "예상 소요 시간",
+    "agentToolsHint": "Agent가 사용할 수 있는 도구를 선택하세요.",
+    "featureToolsHint": "이 기능이 사용할 수 있는 도구를 제한합니다.",
+    "toolsEmpty": "비워두면 모든 도구를 사용합니다.",
+    "agentSkillsHint": "Agent에 자동으로 로드할 스킬 이름을 쉼표로 구분하여 입력하세요.",
+    "argumentHintDesc": "자동완성에서 보여줄 인자 힌트입니다. 예: [message], [file] [options]",
+    "disableModelInvocationDesc": "체크하면 SlashCommand 도구가 이 커맨드를 자동으로 호출하지 않습니다.",
+    "hookCommandDesc": "Hook 실행 시 호출할 셸 명령어를 입력하세요.",
+    "hookVariablesDesc": "사용 가능한 변수:",
+    "hookTimeoutPlaceholder": "기본값: 60000 (60초)",
+    "hookBlockingDesc": "체크하면 Hook이 완료될 때까지 Claude Code가 대기합니다.",
+    "configPreview": "설정 미리보기",
+    "hookMatcherPlaceholder": "또는 커스텀 matcher 입력...",
+    "estimatedTimePlaceholder": "예: 10분, 30분, 1시간",
+    "agentSkillsPlaceholder": "예: pdf-processing, git-workflow",
+    "argumentHintPlaceholder": "예: [message]",
+    "hookCommandPlaceholder": "예: cp $transcript_path ~/backups/transcript-$(date +%s).jsonl"
+  },
+  "typeGuidePanel": {
+    "syntaxHighlights": "특수 문법",
+    "typeFields": "이 타입의 필드"
+  },
+  "newItem": {
+    "typeSelection": "Type 선택",
+    "basicInfo": "기본 정보",
+    "typeSettings": "{type} 설정"
   },
   "welfare": {
     "registeredSkills": "등록된 스킬",

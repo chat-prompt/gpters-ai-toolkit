@@ -17,6 +17,7 @@ import {
   type ReactNode,
   type MutableRefObject,
 } from 'react'
+import { useTranslations } from 'next-intl'
 
 // ============================================================================
 // Types
@@ -179,11 +180,14 @@ function ConfirmDialogOverlay({
   title,
   description,
   variant = 'default',
-  confirmLabel = '확인',
-  cancelLabel = '취소',
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
 }: ConfirmDialogOverlayProps) {
+  const t = useTranslations('common')
+  const resolvedConfirmLabel = confirmLabel ?? t('dialog.confirm')
+  const resolvedCancelLabel = cancelLabel ?? t('dialog.cancel')
   const cancelRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -235,7 +239,7 @@ function ConfirmDialogOverlay({
             onClick={onCancel}
             className="flex-1 px-4 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm font-medium border border-[var(--border-subtle)] transition-all duration-200 hover:bg-[var(--bg-secondary)] cursor-pointer"
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </button>
           <button
             onClick={onConfirm}
@@ -245,7 +249,7 @@ function ConfirmDialogOverlay({
                 : 'bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] border-[var(--accent-cyan)]/30 hover:bg-[var(--accent-cyan)]/20'
             }`}
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </button>
         </div>
       </div>

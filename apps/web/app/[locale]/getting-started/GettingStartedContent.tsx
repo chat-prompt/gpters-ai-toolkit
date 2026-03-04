@@ -7,6 +7,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { getMcpServerUrl, getMcpCommand } from '@/lib/utils/config'
 
@@ -14,24 +15,6 @@ const MCP_SERVER_URL = getMcpServerUrl()
 
 /** Tab identifier type */
 type TabId = 'claude-code' | 'opencode' | 'codex' | 'mcp'
-
-/** Tab definition */
-interface Tab {
-  /** Tab identifier */
-  id: TabId
-  /** Display label */
-  label: string
-  /** Short description shown below label */
-  description: string
-}
-
-/** All available tabs */
-const ALL_TABS: Tab[] = [
-  { id: 'claude-code', label: 'Claude Code', description: '플러그인 설치' },
-  { id: 'opencode', label: 'OpenCode', description: 'npm 레지스트리' },
-  { id: 'codex', label: 'Codex CLI', description: 'npx setup' },
-  { id: 'mcp', label: 'MCP 직접 연결', description: 'claude mcp add' },
-]
 
 /** Tab IDs only visible to internal (@gpters.org) users */
 const INTERNAL_ONLY_TABS: Set<TabId> = new Set(['opencode', 'codex'])
@@ -64,6 +47,8 @@ function StepBadge({ step, color }: { step: string | number; color: 'cyan' | 'pu
  * @param copiedStep - Currently copied step ID
  * @param onCopy - Copy handler function
  * @param wrap - Whether to wrap long lines
+ * @param copyLabel - Label for copy button
+ * @param copiedLabel - Label shown after copying
  */
 function CodeBlock({
   code,
@@ -71,12 +56,16 @@ function CodeBlock({
   copiedStep,
   onCopy,
   wrap = true,
+  copyLabel,
+  copiedLabel,
 }: {
   code: string
   stepId: string
   copiedStep: string | null
   onCopy: (text: string, stepId: string) => void
   wrap?: boolean
+  copyLabel: string
+  copiedLabel: string
 }) {
   return (
     <div className="relative">
@@ -93,7 +82,7 @@ function CodeBlock({
             : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
         }`}
       >
-        {copiedStep === stepId ? '복사됨!' : '복사'}
+        {copiedStep === stepId ? copiedLabel : copyLabel}
       </button>
     </div>
   )
@@ -130,15 +119,24 @@ function InfoBox({
 }
 
 /**
+ * Props shared by all tab content components
+ */
+interface TabContentProps {
+  /** Currently copied step ID */
+  copiedStep: string | null
+  /** Copy handler function */
+  onCopy: (text: string, stepId: string) => void
+  /** Label for copy button */
+  copyLabel: string
+  /** Label shown after copying */
+  copiedLabel: string
+}
+
+/**
  * Claude Code plugin tab content
  */
-function ClaudeCodeTab({
-  copiedStep,
-  onCopy,
-}: {
-  copiedStep: string | null
-  onCopy: (text: string, stepId: string) => void
-}) {
+function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
+  const t = useTranslations('getting-started')
   const installCmd = 'claude plugin marketplace add chat-prompt/gpters-ai-toolkit 2>/dev/null; claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin install gpters-ai-toolkit'
 
   return (
@@ -149,17 +147,16 @@ function ClaudeCodeTab({
           <StepBadge step={1} color="cyan" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              플러그인 설치
+              {t('steps.pluginInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              터미널에서 아래 명령어를 실행하세요:
+              {t('steps.pluginInstallDesc')}
             </p>
 
-            <CodeBlock code={installCmd} stepId="cc-install" copiedStep={copiedStep} onCopy={onCopy} />
+            <CodeBlock code={installCmd} stepId="cc-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label="참고:">
-              기존 MCP 직접 연결 제거 및 플러그인 설치를 한 번에 수행합니다.
-              이미 설정된 환경에서도 안전하게 재실행할 수 있습니다.
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.pluginNote')}
             </InfoBox>
           </div>
         </div>
@@ -171,10 +168,10 @@ function ClaudeCodeTab({
           <StepBadge step={2} color="purple" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              브라우저 로그인
+              {t('steps.browserLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.
+              {t('steps.browserLoginDesc')}
             </p>
 
             <div className="space-y-3">
@@ -183,7 +180,7 @@ function ClaudeCodeTab({
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  브라우저가 자동으로 열립니다
+                  {t('loginSteps.browserOpens')}
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -191,7 +188,7 @@ function ClaudeCodeTab({
                   2
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  Google 계정 (조직 이메일)으로 로그인
+                  {t('loginSteps.googleLogin')}
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -199,17 +196,17 @@ function ClaudeCodeTab({
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  완료! Claude Code로 돌아가서 사용하세요
+                  {t('loginSteps.done')}
                 </span>
               </div>
             </div>
 
-            <InfoBox color="green" label="보안:">
-              OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
+            <InfoBox color="green" label={t('noteLabels.security')}>
+              {t('notes.oauthSecurity')}
             </InfoBox>
 
-            <InfoBox color="blue" label="참고:">
-              브라우저가 자동으로 열리지 않는 경우, 먼저 웹사이트에서 직접 로그인한 후 다시 시도하세요.
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.browserFallback')}
             </InfoBox>
           </div>
         </div>
@@ -221,13 +218,13 @@ function ClaudeCodeTab({
           <StepBadge step="✓" color="green" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              연결 확인
+              {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:
+              {t('steps.connectionCheckDesc')}
             </p>
 
-            <CodeBlock code="claude mcp list" stepId="cc-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+            <CodeBlock code="claude mcp list" stepId="cc-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs font-mono text-[var(--text-muted)]">
@@ -244,15 +241,14 @@ function ClaudeCodeTab({
 /**
  * OpenCode plugin tab content
  */
-function OpenCodeTab({
-  copiedStep,
-  onCopy,
-}: {
-  copiedStep: string | null
-  onCopy: (text: string, stepId: string) => void
-}) {
-  const installCmd = `[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \\
-node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters/opencode')||c.plugin.push('@gpters/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"`
+function OpenCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
+  const t = useTranslations('getting-started')
+  const installCmd = `grep -q "verdaccio.gpters.org" ~/.opencode/.npmrc 2>/dev/null || echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.opencode/.npmrc && \\
+grep -q "verdaccio.gpters.org" ~/.cache/opencode/.npmrc 2>/dev/null || (mkdir -p ~/.cache/opencode && echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.cache/opencode/.npmrc) && \\
+[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \\
+node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters-internal/opencode')||c.plugin.push('@gpters-internal/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"`
 
   return (
     <div className="space-y-6">
@@ -262,16 +258,16 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
           <StepBadge step={1} color="cyan" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              플러그인 설치
+              {t('steps.pluginInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              터미널에서 아래 명령어를 실행하세요. Registry 설정부터 플러그인 등록까지 한 번에 완료됩니다:
+              {t('steps.openCodeInstallDesc')}
             </p>
 
-            <CodeBlock code={installCmd} stepId="oc-install" copiedStep={copiedStep} onCopy={onCopy} />
+            <CodeBlock code={installCmd} stepId="oc-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label="참고:">
-              이미 설정된 환경에서는 중복 실행해도 안전합니다. 기존 설정을 덮어쓰지 않습니다.
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.safeRerun')}
             </InfoBox>
           </div>
         </div>
@@ -283,10 +279,10 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
           <StepBadge step={2} color="purple" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              OpenCode 재시작
+              {t('steps.restart')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              설정을 적용하기 위해 OpenCode를 재시작하세요.
+              {t('steps.restartDesc')}
             </p>
 
             <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -294,7 +290,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
                 ✓
               </div>
               <span className="text-sm text-[var(--text-secondary)]">
-                OpenCode 종료 후 다시 실행하면 플러그인이 자동으로 로드됩니다
+                {t('loginSteps.restartDone')}
               </span>
             </div>
           </div>
@@ -307,13 +303,13 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
           <StepBadge step="✓" color="green" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              연결 확인
+              {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              OpenCode에서 아래 명령어로 MCP 연결 상태를 확인하세요:
+              {t('steps.openCodeCheckDesc')}
             </p>
 
-            <CodeBlock code="/mcp" stepId="oc-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+            <CodeBlock code="/mcp" stepId="oc-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs font-mono text-[var(--text-muted)]">
@@ -330,14 +326,11 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
 /**
  * Codex CLI plugin tab content
  */
-function CodexTab({
-  copiedStep,
-  onCopy,
-}: {
-  copiedStep: string | null
-  onCopy: (text: string, stepId: string) => void
-}) {
-  const installCmd = `npx --yes @gpters/codex-plugin setup`
+function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
+  const t = useTranslations('getting-started')
+  const installCmd = `grep -q "verdaccio.gpters.org" ~/.npmrc 2>/dev/null || echo '@gpters-internal:registry=https://verdaccio.gpters.org
+//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.npmrc && \\
+npx --yes @gpters-internal/codex-plugin setup`
 
   return (
     <div className="space-y-6">
@@ -347,16 +340,18 @@ function CodexTab({
           <StepBadge step={1} color="cyan" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              플러그인 설치
+              {t('steps.pluginInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              터미널에서 아래 명령어를 실행하세요. <code className="text-xs">~/.codex/config.toml</code>에 MCP 서버 설정을 자동으로 추가합니다:
+              {t('steps.pluginInstallDesc')}{' '}
+              <code className="text-xs">~/.codex/config.toml</code>
+              {t('notes.codexAutoConfigSuffix')}
             </p>
 
-            <CodeBlock code={installCmd} stepId="codex-install" copiedStep={copiedStep} onCopy={onCopy} />
+            <CodeBlock code={installCmd} stepId="codex-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label="참고:">
-              이미 설정된 환경에서도 안전하게 재실행할 수 있습니다. 기존 설정을 덮어쓰지 않습니다.
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.safeRerun')}
             </InfoBox>
           </div>
         </div>
@@ -368,13 +363,13 @@ function CodexTab({
           <StepBadge step={2} color="purple" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              OAuth 로그인
+              {t('steps.oauthLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              아래 명령어로 MCP 서버에 OAuth 인증을 완료하세요:
+              {t('steps.oauthLoginDesc')}
             </p>
 
-            <CodeBlock code="codex mcp login gpters-ai-toolkit" stepId="codex-login" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+            <CodeBlock code="codex mcp login gpters-ai-toolkit" stepId="codex-login" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
             <div className="space-y-3 mt-4">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -382,7 +377,7 @@ function CodexTab({
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  브라우저가 자동으로 열립니다
+                  {t('loginSteps.browserOpens')}
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -390,7 +385,7 @@ function CodexTab({
                   2
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  Google 계정 (조직 이메일)으로 로그인
+                  {t('loginSteps.googleLogin')}
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -398,13 +393,13 @@ function CodexTab({
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  터미널에 인증 완료 메시지가 표시됩니다
+                  {t('loginSteps.authComplete')}
                 </span>
               </div>
             </div>
 
-            <InfoBox color="green" label="보안:">
-              OAuth 2.1 인증으로 토큰이 자동 관리됩니다. 환경변수를 직접 설정할 필요가 없습니다.
+            <InfoBox color="green" label={t('noteLabels.security')}>
+              {t('notes.oauthAuto')}
             </InfoBox>
           </div>
         </div>
@@ -416,11 +411,12 @@ function CodexTab({
           <StepBadge step="✓" color="green" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              연결 확인
+              {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              Codex CLI를 재시작한 후, MCP 서버가 정상 연결되는지 확인하세요.
-              <code className="text-xs ml-1">~/.codex/config.toml</code>에 아래 설정이 추가되어 있어야 합니다:
+              {t('steps.codexCheckDesc')}{' '}
+              <code className="text-xs ml-1">~/.codex/config.toml</code>
+              {t('steps.codexCheckDescSuffix')}
             </p>
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
@@ -440,13 +436,9 @@ function CodexTab({
 /**
  * MCP direct connection tab content (existing guide)
  */
-function McpDirectTab({
-  copiedStep,
-  onCopy,
-}: {
-  copiedStep: string | null
-  onCopy: (text: string, stepId: string) => void
-}) {
+function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
+  const t = useTranslations('getting-started')
+
   return (
     <div className="space-y-6">
       {/* Step 1: CLI Command */}
@@ -455,17 +447,16 @@ function McpDirectTab({
           <StepBadge step={1} color="cyan" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              MCP 서버 추가
+              {t('steps.mcpAdd')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              터미널에서 아래 명령어를 실행하세요:
+              {t('steps.mcpAddDesc')}
             </p>
 
-            <CodeBlock code={getMcpCommand()} stepId="mcp-cli" copiedStep={copiedStep} onCopy={onCopy} />
+            <CodeBlock code={getMcpCommand()} stepId="mcp-cli" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label="참고:">
-              프로젝트별로 설정하려면 프로젝트 루트 디렉토리에서 실행하세요.
-              글로벌 설정은 <code className="text-xs">-s user</code> 옵션을 추가하세요.
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.projectScope')}
             </InfoBox>
           </div>
         </div>
@@ -477,10 +468,10 @@ function McpDirectTab({
           <StepBadge step={2} color="purple" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              브라우저 로그인
+              {t('steps.browserLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              Claude Code가 자동으로 브라우저를 열어 Google 로그인을 요청합니다.
+              {t('steps.browserLoginDesc')}
             </p>
 
             <div className="space-y-3">
@@ -489,7 +480,7 @@ function McpDirectTab({
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  브라우저가 자동으로 열립니다
+                  {t('loginSteps.browserOpens')}
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -497,7 +488,7 @@ function McpDirectTab({
                   2
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  Google 계정 (조직 이메일)으로 로그인
+                  {t('loginSteps.googleLogin')}
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
@@ -505,17 +496,17 @@ function McpDirectTab({
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
-                  완료! Claude Code로 돌아가서 사용하세요
+                  {t('loginSteps.done')}
                 </span>
               </div>
             </div>
 
-            <InfoBox color="green" label="보안:">
-              OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.
+            <InfoBox color="green" label={t('noteLabels.security')}>
+              {t('notes.oauthSecurity')}
             </InfoBox>
 
-            <InfoBox color="blue" label="참고:">
-              브라우저가 자동으로 열리지 않는 경우, 먼저 웹사이트에서 직접 로그인한 후 다시 시도하세요.
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.browserFallback')}
             </InfoBox>
           </div>
         </div>
@@ -527,13 +518,13 @@ function McpDirectTab({
           <StepBadge step="✓" color="green" />
           <div className="flex-grow">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              연결 확인
+              {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              설정이 완료되면 아래 명령어로 연결 상태를 확인할 수 있습니다:
+              {t('steps.connectionCheckDesc')}
             </p>
 
-            <CodeBlock code="claude mcp list" stepId="mcp-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} />
+            <CodeBlock code="claude mcp list" stepId="mcp-check" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs font-mono text-[var(--text-muted)]">
@@ -556,9 +547,31 @@ function McpDirectTab({
  * @param isInternal - Whether the user belongs to the internal organization
  */
 export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
-  const tabs = isInternal ? ALL_TABS : ALL_TABS.filter(t => !INTERNAL_ONLY_TABS.has(t.id))
+  const t = useTranslations('getting-started')
   const [activeTab, setActiveTab] = useState<TabId>('claude-code')
   const [copiedStep, setCopiedStep] = useState<string | null>(null)
+
+  /** Tab definition with translated labels */
+  interface Tab {
+    /** Tab identifier */
+    id: TabId
+    /** Display label */
+    label: string
+    /** Short description shown below label */
+    description: string
+  }
+
+  const ALL_TABS: Tab[] = [
+    { id: 'claude-code', label: t('tabs.claudeCode.label'), description: t('tabs.claudeCode.description') },
+    { id: 'opencode', label: t('tabs.opencode.label'), description: t('tabs.opencode.description') },
+    { id: 'codex', label: t('tabs.codex.label'), description: t('tabs.codex.description') },
+    { id: 'mcp', label: t('tabs.mcp.label'), description: t('tabs.mcp.description') },
+  ]
+
+  const tabs = isInternal ? ALL_TABS : ALL_TABS.filter(tab => !INTERNAL_ONLY_TABS.has(tab.id))
+
+  const copyLabel = t('copy')
+  const copiedLabel = t('copied')
 
   async function copyToClipboard(text: string, stepId: string) {
     try {
@@ -580,10 +593,10 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       {/* Page Header */}
       <div className="text-center mb-12">
         <h1 className="text-3xl font-medium text-[var(--text-primary)] mb-3">
-          플러그인 설치 가이드
+          {t('pageTitle')}
         </h1>
         <p className="text-[var(--text-secondary)]">
-          사용하는 AI 코딩 도구에 맞는 설치 방법을 선택하세요.
+          {t('pageSubtitle')}
         </p>
       </div>
 
@@ -608,27 +621,27 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'claude-code' && <ClaudeCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
-      {activeTab === 'opencode' && <OpenCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
-      {activeTab === 'codex' && <CodexTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
-      {activeTab === 'mcp' && <McpDirectTab copiedStep={copiedStep} onCopy={copyToClipboard} />}
+      {activeTab === 'claude-code' && <ClaudeCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
+      {activeTab === 'opencode' && <OpenCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
+      {activeTab === 'codex' && <CodexTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
+      {activeTab === 'mcp' && <McpDirectTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
 
       {/* Usage Guide */}
       <div className="mt-8 p-6 rounded-2xl bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20">
         <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">
-          설정 완료 후 사용법
+          {t('usageGuide.title')}
         </h3>
         <div className="space-y-4">
           <div>
-            <div className="text-sm font-medium text-[var(--text-primary)] mb-2">자연어로 사용</div>
+            <div className="text-sm font-medium text-[var(--text-primary)] mb-2">{t('usageGuide.naturalLanguage')}</div>
             <div className="text-sm text-[var(--text-secondary)] space-y-1">
-              <p>&quot;코드 리뷰해줘&quot;</p>
-              <p>&quot;DB 스키마 알려줘&quot;</p>
-              <p>&quot;리팩토링 가이드 참고해서 개선해줘&quot;</p>
+              <p>&quot;{t('usageGuide.example1')}&quot;</p>
+              <p>&quot;{t('usageGuide.example2')}&quot;</p>
+              <p>&quot;{t('usageGuide.example3')}&quot;</p>
             </div>
           </div>
           <div>
-            <div className="text-sm font-medium text-[var(--text-primary)] mb-2">직접 호출</div>
+            <div className="text-sm font-medium text-[var(--text-primary)] mb-2">{t('usageGuide.directCall')}</div>
             <div className="text-sm text-[var(--text-secondary)] font-mono space-y-1">
               <p>/mcp__gpters-ai-toolkit__code-reviewer</p>
               <p>/mcp__gpters-ai-toolkit__data-source-reference</p>
@@ -641,14 +654,15 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       {/* Privacy & Opt-Out */}
       <div className="mt-8 p-6 rounded-2xl bg-[var(--bg-tertiary)]/50 border border-[var(--border-subtle)]">
         <h3 className="text-lg font-medium text-[var(--text-primary)] mb-3">
-          데이터 수집 및 옵트아웃
+          {t('privacy.title')}
         </h3>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
-          AI Toolkit MCP 서버는 서비스 개선을 위해 익명화된 사용 데이터(도구 호출 로그, 세션 집계)를 수집합니다.
-          코드, 대화 내용, 파일은 수집하지 않습니다.
+          {t('privacy.description')}
         </p>
         <p className="text-sm text-[var(--text-secondary)] mb-4">
-          데이터 수집을 원하지 않으면 MCP 설정에 <code className="px-1 py-0.5 bg-[var(--bg-secondary)] rounded text-xs font-mono">X-Analytics-Opt-Out: true</code> 헤더를 추가하세요:
+          {t('privacy.optOutDesc')}{' '}
+          <code className="px-1 py-0.5 bg-[var(--bg-secondary)] rounded text-xs font-mono">X-Analytics-Opt-Out: true</code>
+          {' '}{t('privacy.optOutDescSuffix')}
         </p>
 
         {activeTab === 'claude-code' || activeTab === 'mcp' ? (
@@ -657,6 +671,8 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
             stepId="optout-claude"
             copiedStep={copiedStep}
             onCopy={copyToClipboard}
+            copyLabel={copyLabel}
+            copiedLabel={copiedLabel}
           />
         ) : activeTab === 'codex' ? (
           <CodeBlock
@@ -664,6 +680,8 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
             stepId="optout-codex"
             copiedStep={copiedStep}
             onCopy={copyToClipboard}
+            copyLabel={copyLabel}
+            copiedLabel={copiedLabel}
           />
         ) : (
           <CodeBlock
@@ -671,24 +689,26 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
             stepId="optout-opencode"
             copiedStep={copiedStep}
             onCopy={copyToClipboard}
+            copyLabel={copyLabel}
+            copiedLabel={copiedLabel}
           />
         )}
 
         <p className="text-xs text-[var(--text-muted)] mt-3">
-          자세한 내용은{' '}
+          {t('privacy.seeAlsoPrefix')}{' '}
           <Link href="/privacy" className="text-[var(--accent-cyan)] hover:underline">
-            Privacy Policy
+            {t('privacy.privacyLink')}
           </Link>
-          를 참고하세요.
+          {t('privacy.privacySuffix')}
         </p>
       </div>
 
       {/* Help Link */}
       <div className="mt-8 text-center">
         <p className="text-sm text-[var(--text-muted)]">
-          문제가 있나요?{' '}
+          {t('help.question')}{' '}
           <a href="https://github.com/chat-prompt/gpters-ai-toolkit/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-cyan)] hover:underline">
-            이슈 등록
+            {t('help.reportIssue')}
           </a>
         </p>
       </div>

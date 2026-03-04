@@ -6,6 +6,7 @@
  */
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { TYPE_CONFIG } from '@/lib/data/type-config'
 import type { ItemType } from '@/lib/core/types'
 
@@ -24,6 +25,7 @@ interface TypeGuidePanelProps {
  * to help users create well-structured catalog items.
  */
 export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
+  const t = useTranslations('admin.typeGuidePanel')
   const config = TYPE_CONFIG[type]
   const { guide } = config
 
@@ -65,7 +67,7 @@ export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
       {guide.syntaxHighlights && guide.syntaxHighlights.length > 0 && (
         <div className="mt-6 pt-5 border-t border-[var(--border-subtle)]">
           <h4 className="text-sm font-medium text-[var(--text-primary)] mb-3">
-            특수 문법
+            {t('syntaxHighlights')}
           </h4>
           <div className="space-y-2">
             {guide.syntaxHighlights.map((item, idx) => (
@@ -86,7 +88,7 @@ export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
       {/* Field Hints */}
       <div className="mt-6 pt-5 border-t border-[var(--border-subtle)]">
         <h4 className="text-sm font-medium text-[var(--text-primary)] mb-3">
-          이 타입의 필드
+          {t('typeFields')}
         </h4>
         <div className="flex flex-wrap gap-2">
           <span className="px-2 py-1 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
