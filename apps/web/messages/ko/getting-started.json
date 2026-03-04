@@ -14,6 +14,10 @@
       "label": "Codex CLI",
       "description": "npx setup"
     },
+    "cli": {
+      "label": "AITK CLI",
+      "description": "독립 실행형 CLI"
+    },
     "mcp": {
       "label": "MCP 직접 연결",
       "description": "claude mcp add"
@@ -34,6 +38,12 @@
     "oauthLoginDesc": "아래 명령어로 MCP 서버에 OAuth 인증을 완료하세요:",
     "restart": "OpenCode 재시작",
     "restartDesc": "설정을 적용하기 위해 OpenCode를 재시작하세요.",
+    "cliInstall": "로그인",
+    "cliInstallDesc": "npx로 바로 실행할 수 있습니다. 브라우저에서 Google 로그인 후 토큰이 자동 저장됩니다:",
+    "cliUsage": "스킬 검색 & 조회",
+    "cliUsageDesc": "로그인 후 바로 스킬을 검색하고 조회할 수 있습니다:",
+    "cliGlobalInstall": "글로벌 설치 (선택)",
+    "cliGlobalInstallDesc": "자주 사용한다면 글로벌로 설치하면 npx 없이 바로 사용할 수 있습니다:",
     "mcpAdd": "MCP 서버 추가",
     "mcpAddDesc": "터미널에서 아래 명령어를 실행하세요:"
   },
@@ -51,7 +61,8 @@
     "projectScope": "프로젝트별로 설정하려면 프로젝트 루트 디렉토리에서 실행하세요. 글로벌 설정은 -s user 옵션을 추가하세요.",
     "oauthSecurity": "OAuth 2.1 인증으로 토큰을 직접 복사하거나 환경변수를 설정할 필요가 없습니다.",
     "oauthAuto": "OAuth 2.1 인증으로 토큰이 자동 관리됩니다. 환경변수를 직접 설정할 필요가 없습니다.",
-    "codexAutoConfigSuffix": "에 MCP 서버 설정을 자동으로 추가합니다:"
+    "codexAutoConfigSuffix": "에 MCP 서버 설정을 자동으로 추가합니다:",
+    "cliNote": "MCP 서버 없이도 독립적으로 스킬 검색·조회·배포가 가능합니다. 어떤 코딩 에이전트와도 함께 사용할 수 있습니다."
   },
   "noteLabels": {
     "note": "참고:",

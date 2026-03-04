@@ -14,6 +14,10 @@
       "label": "Codex CLI",
       "description": "npx setup"
     },
+    "cli": {
+      "label": "AITK CLI",
+      "description": "Standalone CLI"
+    },
     "mcp": {
       "label": "MCP Direct",
       "description": "claude mcp add"
@@ -34,6 +38,12 @@
     "oauthLoginDesc": "Complete OAuth authentication with the MCP server:",
     "restart": "Restart OpenCode",
     "restartDesc": "Restart OpenCode to apply the settings.",
+    "cliInstall": "Login",
+    "cliInstallDesc": "Run directly with npx. After Google login in the browser, the token is saved automatically:",
+    "cliUsage": "Search & Get Skills",
+    "cliUsageDesc": "After login, search and retrieve skills right away:",
+    "cliGlobalInstall": "Global Install (Optional)",
+    "cliGlobalInstallDesc": "If you use it frequently, install globally to skip npx:",
     "mcpAdd": "Add MCP Server",
     "mcpAddDesc": "Run the following command in your terminal:"
   },
@@ -51,7 +61,8 @@
     "projectScope": "Run in project root directory for project-level config. Add -s user for global settings.",
     "oauthSecurity": "OAuth 2.1 authentication — no need to copy tokens or set environment variables.",
     "oauthAuto": "OAuth 2.1 authentication manages tokens automatically. No need to set environment variables.",
-    "codexAutoConfigSuffix": " automatically adds MCP server config to:"
+    "codexAutoConfigSuffix": " automatically adds MCP server config to:",
+    "cliNote": "Works independently without an MCP server. Search, get, and deploy skills with any coding agent."
   },
   "noteLabels": {
     "note": "Note:",

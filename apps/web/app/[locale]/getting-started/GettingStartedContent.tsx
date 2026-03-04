@@ -14,7 +14,7 @@ import { getMcpServerUrl, getMcpCommand } from '@/lib/utils/config'
 const MCP_SERVER_URL = getMcpServerUrl()
 
 /** Tab identifier type */
-type TabId = 'claude-code' | 'opencode' | 'codex' | 'mcp'
+type TabId = 'claude-code' | 'opencode' | 'codex' | 'cli' | 'mcp'
 
 /** Tab IDs only visible to internal (@gpters.org) users */
 const INTERNAL_ONLY_TABS: Set<TabId> = new Set([])
@@ -428,6 +428,73 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
 }
 
 /**
+ * AITK CLI tab content
+ */
+function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
+  const t = useTranslations('getting-started')
+  const installCmd = 'npx --yes @gpters/aitk login'
+
+  return (
+    <div className="space-y-6">
+      {/* Step 1: Install & Login */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={1} color="cyan" />
+          <div className="flex-grow min-w-0">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              {t('steps.cliInstall')}
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              {t('steps.cliInstallDesc')}
+            </p>
+
+            <CodeBlock code={installCmd} stepId="cli-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+
+            <InfoBox color="blue" label={t('noteLabels.note')}>
+              {t('notes.cliNote')}
+            </InfoBox>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: Usage */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={2} color="purple" />
+          <div className="flex-grow min-w-0">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              {t('steps.cliUsage')}
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              {t('steps.cliUsageDesc')}
+            </p>
+
+            <CodeBlock code={'aitk search "code review"\naitk get code-reviewer'} stepId="cli-usage" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+          </div>
+        </div>
+      </div>
+
+      {/* Global Install (optional) */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step="+" color="green" />
+          <div className="flex-grow min-w-0">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              {t('steps.cliGlobalInstall')}
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              {t('steps.cliGlobalInstallDesc')}
+            </p>
+
+            <CodeBlock code="npm install -g @gpters/aitk" stepId="cli-global" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * MCP direct connection tab content (existing guide)
  */
 function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
@@ -559,6 +626,7 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
     { id: 'claude-code', label: t('tabs.claudeCode.label'), description: t('tabs.claudeCode.description') },
     { id: 'opencode', label: t('tabs.opencode.label'), description: t('tabs.opencode.description') },
     { id: 'codex', label: t('tabs.codex.label'), description: t('tabs.codex.description') },
+    { id: 'cli', label: t('tabs.cli.label'), description: t('tabs.cli.description') },
     { id: 'mcp', label: t('tabs.mcp.label'), description: t('tabs.mcp.description') },
   ]
 
@@ -618,6 +686,7 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       {activeTab === 'claude-code' && <ClaudeCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
       {activeTab === 'opencode' && <OpenCodeTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
       {activeTab === 'codex' && <CodexTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
+      {activeTab === 'cli' && <CliTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
       {activeTab === 'mcp' && <McpDirectTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
 
       {/* Usage Guide */}
