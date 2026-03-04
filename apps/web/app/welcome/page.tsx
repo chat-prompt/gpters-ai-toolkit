@@ -184,7 +184,7 @@ export default function WelcomePage() {
               {
                 step: '2',
                 title: 'Google 로그인',
-                description: '브라우저가 열리면 조직 계정(@gpters.org)으로 로그인하세요.',
+                description: '브라우저가 열리면 Google 계정으로 로그인하세요.',
               },
               {
                 step: '3',
