@@ -9,8 +9,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
 import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { Link } from '@/i18n/navigation'
+import { useRouter } from '@/i18n/navigation'
 import type { UserRole } from '@/lib/security/rbac'
 
 /**

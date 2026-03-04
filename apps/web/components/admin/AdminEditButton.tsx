@@ -4,7 +4,7 @@
  * Displays a floating action button for editing catalog items,
  * visible only to users with editor or admin role.
  */
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { auth } from '@/lib/core/auth'
 import { canEdit } from '@/lib/security/rbac'
 import type { UserRole } from '@/lib/security/rbac'

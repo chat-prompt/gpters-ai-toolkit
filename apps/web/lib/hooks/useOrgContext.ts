@@ -8,7 +8,7 @@
  */
 
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import { useState, useCallback } from 'react'
 import type { OrgRole } from '@gpters/lib/security'
 

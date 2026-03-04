@@ -110,6 +110,41 @@ export type CatalogItemRecord = typeof catalogItems.$inferSelect
 export type NewCatalogItemRecord = typeof catalogItems.$inferInsert
 
 // ============================================
+// Catalog Item Translations Table (i18n)
+// ============================================
+
+/**
+ * Translations for catalog items
+ *
+ * Stores locale-specific translations for catalog item text fields.
+ * Falls back to the original catalog_items data when no translation exists.
+ */
+export const catalogItemTranslations = pgTable('catalog_item_translations', {
+  /** Reference to the catalog item */
+  itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),
+  /** Locale code (e.g., 'ko', 'en') */
+  locale: text('locale').notNull(),
+  /** Translated item name */
+  name: text('name'),
+  /** Translated description */
+  description: text('description'),
+  /** Translated content (main body) */
+  content: text('content'),
+  /** Translated README */
+  readme: text('readme'),
+  /** Whether this translation was auto-generated */
+  isAutoTranslated: boolean('is_auto_translated').default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.itemId, table.locale] }),
+  index('catalog_item_translations_locale_idx').on(table.locale),
+])
+
+export type CatalogItemTranslationRecord = typeof catalogItemTranslations.$inferSelect
+export type NewCatalogItemTranslationRecord = typeof catalogItemTranslations.$inferInsert
+
+// ============================================
 // Users Table (OAuth)
 // ============================================
 
@@ -262,6 +297,7 @@ export type NewPackageItemRecord = typeof packageItems.$inferInsert
 
 export const catalogItemsRelations = relations(catalogItems, ({ one, many }) => ({
   itemTags: many(catalogItemTags),
+  translations: many(catalogItemTranslations),
   // Package relations
   packageContents: many(packageItems, { relationName: 'packageContents' }), // Items contained in this package
   containedInPackages: many(packageItems, { relationName: 'containedInPackages' }), // Packages containing this item
@@ -269,6 +305,13 @@ export const catalogItemsRelations = relations(catalogItems, ({ one, many }) => 
   organization: one(organizations, {
     fields: [catalogItems.orgId],
     references: [organizations.id],
+  }),
+}))
+
+export const catalogItemTranslationsRelations = relations(catalogItemTranslations, ({ one }) => ({
+  item: one(catalogItems, {
+    fields: [catalogItemTranslations.itemId],
+    references: [catalogItems.id],
   }),
 }))
 

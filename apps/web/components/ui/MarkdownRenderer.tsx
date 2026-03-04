@@ -10,7 +10,7 @@
 import ReactMarkdown, { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { memo, useMemo } from 'react'
 
 // ============================================================================

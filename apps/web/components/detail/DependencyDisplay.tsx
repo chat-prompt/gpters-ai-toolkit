@@ -4,7 +4,7 @@
  * Shows a list of required dependencies with type icons,
  * links to internal items, and MCP server hints.
  */
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
 
 /**

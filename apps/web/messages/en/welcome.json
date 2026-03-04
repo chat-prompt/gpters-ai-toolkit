@@ -1,0 +1,56 @@
+{
+  "hero": {
+    "titleHighlight": "AI Skills",
+    "titleSuffix": "Hub",
+    "description": "Search and share skills, agents, and commands for Claude Code in one place.\nConnect via MCP server to use them directly in Claude Code.",
+    "cta": "Connect Now"
+  },
+  "features": {
+    "badge": "What We Offer",
+    "title": "Four Content Types",
+    "skills": {
+      "title": "Slash Commands",
+      "description": "Search and install reusable skills that automate repetitive tasks."
+    },
+    "agents": {
+      "title": "Specialist Agents",
+      "description": "Search and install specialist agents for code review, debugging, refactoring, and more."
+    },
+    "commands": {
+      "title": "Custom Commands",
+      "description": "Simplify your development workflow with project-specific custom commands."
+    },
+    "guides": {
+      "title": "Usage Guides",
+      "description": "Check out Claude Code tips, tricks, and best practices."
+    }
+  },
+  "connect": {
+    "badge": "Get Started",
+    "title": "MCP Server",
+    "titleHighlight": "Connection",
+    "terminalLabel": "Run in your terminal:",
+    "steps": {
+      "1": {
+        "title": "Run the command",
+        "description": "Paste the command above into your terminal to register the MCP server."
+      },
+      "2": {
+        "title": "Google Sign-in",
+        "description": "When the browser opens, sign in with your organization account (@gpters.org)."
+      },
+      "3": {
+        "title": "Start using",
+        "description": "You can now search, browse, and deploy skills from Claude Code."
+      }
+    }
+  },
+  "tools": {
+    "badge": "What's Inside",
+    "title": "MCP Tools Preview",
+    "searchPlugins": "Search skills by keyword",
+    "getPluginContent": "Get full skill content",
+    "deploySkill": "Deploy a new skill",
+    "checkUpdates": "Check for installed skill updates"
+  }
+}

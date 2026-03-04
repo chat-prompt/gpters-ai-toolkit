@@ -1,0 +1,34 @@
+{
+  "search": {
+    "placeholder": "Search skills, agents, commands..."
+  },
+  "filter": {
+    "all": "All",
+    "skills": "Skills",
+    "agents": "Agents",
+    "commands": "Commands",
+    "hooks": "Hooks",
+    "packages": "Packages",
+    "filters": "Filters",
+    "difficulty": "Difficulty",
+    "tags": "Tags",
+    "tagsSelected": "({count} selected)",
+    "clearAll": "Clear all filters",
+    "activeFilters": "Active filters:",
+    "showing": "Showing {filtered} of {total} items",
+    "filtered": "(filtered)"
+  },
+  "noResults": {
+    "noResultsFor": "No results for \"{query}\"",
+    "noMatchFilters": "No items match the selected filters",
+    "noItems": "No items yet",
+    "didYouMean": "Did you mean:",
+    "clearAll": "Clear all filters",
+    "shareFirst": "Share the first skill →"
+  },
+  "difficulty": {
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard"
+  }
+}
