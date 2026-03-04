@@ -145,7 +145,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={1} color="cyan" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.pluginInstall')}
             </h2>
@@ -166,7 +166,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={2} color="purple" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.browserLogin')}
             </h2>
@@ -216,7 +216,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step="✓" color="green" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
@@ -252,7 +252,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={1} color="cyan" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.pluginInstall')}
             </h2>
@@ -273,7 +273,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={2} color="purple" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.restart')}
             </h2>
@@ -297,7 +297,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step="✓" color="green" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
@@ -332,7 +332,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={1} color="cyan" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.pluginInstall')}
             </h2>
@@ -355,7 +355,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={2} color="purple" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.oauthLogin')}
             </h2>
@@ -403,7 +403,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step="✓" color="green" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
@@ -439,7 +439,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={1} color="cyan" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.mcpAdd')}
             </h2>
@@ -460,7 +460,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={2} color="purple" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.browserLogin')}
             </h2>
@@ -510,7 +510,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step="✓" color="green" />
-          <div className="flex-grow">
+          <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
