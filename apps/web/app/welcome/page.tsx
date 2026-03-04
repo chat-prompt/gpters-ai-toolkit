@@ -88,11 +88,9 @@ export default function WelcomePage() {
             className="text-5xl md:text-7xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-6"
             style={{ fontFamily: 'var(--font-newsreader)' }}
           >
-            Your Team&apos;s{' '}
             <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
               AI Skills
-            </span>
-            <br />
+            </span>{' '}
             Hub
           </h1>
           <p className="text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto mb-10">
@@ -260,7 +258,7 @@ export default function WelcomePage() {
             >
               Privacy
             </Link>
-            <p className="text-xs text-[var(--text-muted)]">Built with Claude Code</p>
+            <p className="text-xs text-[var(--text-muted)]">{SITE_NAME}</p>
           </div>
         </div>
       </footer>
