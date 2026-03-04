@@ -8,6 +8,7 @@
 import { Link } from '@/i18n/navigation'
 import { Footer } from '@/components/layout/Footer'
 import { CopyButton } from './CopyButton'
+import { ConnectTabs } from './ConnectTabs'
 import { getTranslations, setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 
@@ -226,15 +227,9 @@ export default async function WelcomePage({
             </span>
           </h2>
 
-          {/* Command Box */}
-          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 mb-10">
-            <p className="text-xs text-[var(--text-muted)] mb-3">{t('connect.terminalLabel')}</p>
-            <div className="flex items-center gap-3">
-              <code className="flex-1 bg-[var(--bg-secondary)] rounded-lg px-4 py-3 text-sm font-mono text-[var(--text-primary)] overflow-x-auto">
-                {MCP_COMMAND}
-              </code>
-              <CopyButton text={MCP_COMMAND} />
-            </div>
+          {/* Plugin Connection Tabs */}
+          <div className="mb-10">
+            <ConnectTabs baseUrl={BASE_URL} />
           </div>
 
           {/* Steps */}
