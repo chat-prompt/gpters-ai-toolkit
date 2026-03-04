@@ -82,7 +82,6 @@ vi.mock('@gpters/db', () => {
     description: { name: 'description' },
     authorId: { name: 'authorId' },
     tags: { name: 'tags' },
-    teamTag: { name: 'teamTag' },
     difficulty: { name: 'difficulty' },
     pluginId: { name: 'pluginId' },
     estimatedTime: { name: 'estimatedTime' },
@@ -185,7 +184,6 @@ function createMockRecord(overrides: Record<string, unknown> = {}) {
     authorName: 'Test Author',
     orgName: null,
     tags: ['tag1', 'tag2'],
-    teamTag: 'platform' as const,
     difficulty: 'medium' as const,
     pluginId: null,
     estimatedTime: '10 min',
@@ -658,15 +656,6 @@ describe('Catalog Module', () => {
   })
 
   describe('Type Conversion', () => {
-    it('should handle null teamTag', async () => {
-      const mockRecords = [createMockRecord({ teamTag: null })]
-      mockSelect.mockResolvedValue(mockRecords)
-
-      const result = await getCatalog()
-
-      expect(result[0].teamTag).toBeUndefined()
-    })
-
     it('should handle null difficulty', async () => {
       const mockRecords = [createMockRecord({ difficulty: null })]
       mockSelect.mockResolvedValue(mockRecords)

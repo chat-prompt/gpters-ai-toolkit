@@ -121,7 +121,6 @@ describe('deploy_skill with agent: dependency storage', () => {
         content: '# Complete Skill Content',
         description: 'A complete skill with all properties',
         tags: ['code-review', 'quality'],
-        teamTag: 'ai',
         dependencies: ['agent:code-reviewer'],
       }
 
@@ -130,7 +129,6 @@ describe('deploy_skill with agent: dependency storage', () => {
       expect(deployInput.content).toBe('# Complete Skill Content')
       expect(deployInput.description).toBe('A complete skill with all properties')
       expect(deployInput.tags).toEqual(['code-review', 'quality'])
-      expect(deployInput.teamTag).toBe('ai')
       expect(deployInput.dependencies).toEqual(['agent:code-reviewer'])
     })
 
@@ -268,7 +266,6 @@ describe('deploy_skill with agent: dependency storage', () => {
         content: '# Complete Skill',
         description: 'A complete skill',
         tags: ['code-review'],
-        teamTag: 'ai',
         dependencies: ['agent:code-reviewer'],
       }
 

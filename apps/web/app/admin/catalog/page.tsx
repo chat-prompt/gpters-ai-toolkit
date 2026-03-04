@@ -9,9 +9,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import type { TeamTag } from '@/lib/core/types'
-import { TEAM_TAGS } from '@/lib/core/types'
-import { TeamTagBadge } from '@/components/social/TeamTagSelector'
 import type { UserRole } from '@/lib/security/rbac'
 import { OrgBadge } from '@/components/ui/OrgBadge'
 import { VisibilityBadge } from '@/components/ui/VisibilityBadge'
@@ -39,7 +36,6 @@ interface CatalogItem {
   authorId?: string
   authorName?: string
   tags: string[]
-  teamTag: TeamTag | null
   status: 'draft' | 'published' | null
   version: string | null
   orgId: string | null
@@ -75,7 +71,6 @@ export default function CatalogList() {
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
-  const [teamFilter, setTeamFilter] = useState<TeamTag | 'all'>('all')
   const [orgFilter, setOrgFilter] = useState<string>('all')
   const [organizations, setOrganizations] = useState<Organization[]>([])
 
@@ -148,18 +143,13 @@ export default function CatalogList() {
   }
 
   const filters = ['all', 'skill', 'agent', 'command', 'guide']
-  const teamFilters: (TeamTag | 'all')[] = ['all', ...Object.keys(TEAM_TAGS) as TeamTag[]]
 
   // Create org lookup map
   const orgMap = new Map(organizations.map(org => [org.id, org.name]))
 
-  // Filter items by team tag and org (client-side)
+  // Filter items by org (client-side)
   let filteredItems = items
-  
-  if (teamFilter !== 'all') {
-    filteredItems = filteredItems.filter(item => item.teamTag === teamFilter)
-  }
-  
+
   if (orgFilter !== 'all') {
     if (orgFilter === 'legacy') {
       filteredItems = filteredItems.filter(item => item.orgId === null)
@@ -176,7 +166,7 @@ export default function CatalogList() {
             Catalog
           </h1>
           <p className="text-[var(--text-secondary)]">
-            {filteredItems.length} items{teamFilter !== 'all' && ` (filtered from ${items.length})`}
+            {filteredItems.length} items
           </p>
         </div>
         {canCreate(userRole) && (
@@ -206,30 +196,6 @@ export default function CatalogList() {
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
-        </div>
-        {/* Team Filters */}
-        <div className="flex gap-2 flex-wrap">
-          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider self-center mr-2">Team:</span>
-          {teamFilters.map((t) => {
-            const isAll = t === 'all'
-            const tagInfo = isAll ? null : TEAM_TAGS[t]
-            return (
-              <button
-                key={t}
-                onClick={() => setTeamFilter(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
-                  teamFilter === t
-                    ? isAll
-                      ? 'bg-[var(--accent-cyan)] text-black border-transparent'
-                      : tagInfo?.color
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {tagInfo && <span>{tagInfo.emoji}</span>}
-                <span>{isAll ? 'All' : tagInfo?.label}</span>
-              </button>
-            )
-          })}
         </div>
         {/* Org Filters (super_admin only) */}
         {isSuperAdmin && organizations.length > 0 && (
@@ -290,7 +256,7 @@ export default function CatalogList() {
             <span className="text-[var(--text-muted)]">No items available</span>
           ) : (
             <button
-              onClick={() => { setFilter('all'); setTeamFilter('all'); }}
+              onClick={() => { setFilter('all'); }}
               className="text-[var(--accent-cyan)] hover:underline"
             >
               Clear all filters
@@ -313,9 +279,6 @@ export default function CatalogList() {
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
                   Status
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Team
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
                   Organization
@@ -370,11 +333,6 @@ export default function CatalogList() {
                         </span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {item.teamTag && (
-                      <TeamTagBadge tag={item.teamTag} size="sm" />
-                    )}
                   </td>
                   <td className="px-6 py-4">
                     <OrgBadge orgName={item.orgId ? (orgMap.get(item.orgId) || item.orgId) : null} size="sm" />

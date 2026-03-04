@@ -50,7 +50,6 @@ describe('Catalog CRUD API', () => {
         description: 'A test skill for API testing',
         // Note: authorId is a FK to users table, not a string field
         tags: ['testing', 'api'],
-        teamTag: 'general',
         difficulty: 'easy',
         content: '# Test Skill Content\n\nThis is a test skill.',
         mcpEnabled: false,

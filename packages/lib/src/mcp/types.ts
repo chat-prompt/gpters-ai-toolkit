@@ -2,13 +2,13 @@
  * MCP Server Types for GPTers Marketplace
  */
 
-import type { ItemType, TeamTag, Difficulty, PluginFile } from '../core/types'
+import type { ItemType, Difficulty, PluginFile } from '../core/types'
 
 // Tool input schemas
 export interface SearchPluginsInput {
   query: string
   category?: ItemType | 'all'
-  teamTag?: TeamTag
+
   limit?: number
 }
 
@@ -18,7 +18,7 @@ export interface GetPluginContentInput {
 
 export interface ListPluginsInput {
   category?: ItemType | 'all'
-  teamTag?: TeamTag
+
 }
 
 export interface GetPluginsByCategoryInput {
@@ -34,7 +34,7 @@ export interface CreatePluginInput {
   content: string
   author?: string
   tags?: string[]
-  teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+
   readme?: string
   files?: PluginFile[]
   mcpEnabled?: boolean
@@ -47,7 +47,7 @@ export interface UpdatePluginInput {
   content?: string
   author?: string
   tags?: string[]
-  teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+
   readme?: string
   files?: PluginFile[]
   mcpEnabled?: boolean
@@ -65,7 +65,7 @@ export interface DeploySkillInput {
   id?: string                    // Auto-generated from name if not provided
   description?: string
   tags?: string[]
-  teamTag?: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
+
   allowedTools?: string
   agentModel?: string
   agentPermissionMode?: string
@@ -127,7 +127,7 @@ export interface PluginSummary {
   description: string
   authorName: string
   tags: string[]
-  teamTag?: TeamTag
+
   difficulty?: Difficulty
   relevanceScore?: number
 }
@@ -139,7 +139,7 @@ export interface PluginContent {
   description: string
   authorName: string
   tags: string[]
-  teamTag?: TeamTag
+
   difficulty?: Difficulty
   content: string       // Main content (SKILL.md, agent definition, etc.)
   readme?: string       // Additional documentation

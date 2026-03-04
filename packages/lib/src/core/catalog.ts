@@ -59,7 +59,6 @@ const summaryColumns = {
   description: catalogItems.description,
   authorId: catalogItems.authorId,
   tags: catalogItems.tags,
-  teamTag: catalogItems.teamTag,
   difficulty: catalogItems.difficulty,
   pluginId: catalogItems.pluginId,
   estimatedTime: catalogItems.estimatedTime,
@@ -96,7 +95,6 @@ type SummaryRecord = {
   authorName: string | null
   orgName: string | null
   tags: string[] | null
-  teamTag: 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general' | null
   difficulty: 'easy' | 'medium' | 'hard' | null
   pluginId: string | null
   estimatedTime: string | null
@@ -141,7 +139,6 @@ function toSummaryObject(record: SummaryRecord): CatalogItemSummary {
     authorName: record.authorName ?? undefined,
     orgName: record.orgName ?? undefined,
     tags: record.tags || [],
-    teamTag: (record.teamTag as CatalogItemSummary['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
     pluginId: record.pluginId ?? undefined,
     estimatedTime: record.estimatedTime ?? undefined,
@@ -181,7 +178,6 @@ function toPlainObject(record: typeof catalogItems.$inferSelect): CatalogItem {
     description: record.description,
     authorId: record.authorId ?? undefined,
     tags: record.tags || [],
-    teamTag: (record.teamTag as CatalogItem['teamTag']) ?? undefined,
     difficulty: record.difficulty ?? undefined,
     pluginId: record.pluginId ?? undefined,
     estimatedTime: record.estimatedTime ?? undefined,

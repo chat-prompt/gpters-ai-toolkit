@@ -12,7 +12,7 @@
  * - Filter history and saved filters
  */
 
-import { CatalogItemSummary, ItemType, Difficulty, TeamTag, TAGS } from '../core/types'
+import { CatalogItemSummary, ItemType, Difficulty, TAGS } from '../core/types'
 
 // ============================================================================
 // Types
@@ -78,7 +78,6 @@ export interface FilterState {
   tags: string[]
   tagsOperator: 'AND' | 'OR'  // AND = must have all, OR = any match
   difficulty: Difficulty | ''
-  teamTag: TeamTag | ''
   status: 'published' | 'draft' | 'all'
   mcpEnabled: boolean | null  // null = all
   likesRange: RangeFilter
@@ -102,7 +101,6 @@ export interface FilterCounts {
   types: Record<ItemType | 'all', number>
   tags: Record<string, number>
   difficulties: Record<Difficulty | '', number>
-  teamTags: Record<TeamTag | '', number>
   statuses: Record<'published' | 'draft' | 'all', number>
   mcpEnabled: { true: number; false: number; all: number }
 }
@@ -142,7 +140,6 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   tags: [],
   tagsOperator: 'AND',
   difficulty: '',
-  teamTag: '',
   status: 'all',
   mcpEnabled: null,
   likesRange: {},
@@ -347,8 +344,6 @@ function getFieldValue(item: CatalogItemSummary, field: string): string {
       return item.type
     case 'difficulty':
       return item.difficulty || ''
-    case 'team':
-      return item.teamTag || ''
     case 'name':
     case 'title':
       return item.name
@@ -492,11 +487,6 @@ export function applyFilters(items: CatalogItemSummary[], filters: FilterState):
       return false
     }
 
-    // Team tag filter
-    if (filters.teamTag && item.teamTag !== filters.teamTag) {
-      return false
-    }
-
     // Status filter
     if (filters.status !== 'all') {
       const isDraft = item.status === 'draft'
@@ -607,7 +597,6 @@ export function calculateFilterCounts(
     types: { all: 0, skill: 0, agent: 0, command: 0, guide: 0, hook: 0, package: 0 },
     tags: {},
     difficulties: { '': 0, easy: 0, medium: 0, hard: 0 },
-    teamTags: { '': 0, general: 0, platform: 0, ai: 0, data: 0, product: 0, infra: 0 },
     statuses: { all: 0, published: 0, draft: 0 },
     mcpEnabled: { true: 0, false: 0, all: 0 },
   }
@@ -616,14 +605,12 @@ export function calculateFilterCounts(
   const baseFiltersExceptType = { ...currentFilters, type: 'all' as const }
   const baseFiltersExceptTags = { ...currentFilters, tags: [] }
   const baseFiltersExceptDifficulty = { ...currentFilters, difficulty: '' as const }
-  const baseFiltersExceptTeamTag = { ...currentFilters, teamTag: '' as const }
   const baseFiltersExceptStatus = { ...currentFilters, status: 'all' as const }
   const baseFiltersExceptMarketplace = { ...currentFilters, mcpEnabled: null }
 
   const itemsForTypeCount = applyFilters(items, baseFiltersExceptType)
   const itemsForTagCount = applyFilters(items, baseFiltersExceptTags)
   const itemsForDifficultyCount = applyFilters(items, baseFiltersExceptDifficulty)
-  const itemsForTeamTagCount = applyFilters(items, baseFiltersExceptTeamTag)
   const itemsForStatusCount = applyFilters(items, baseFiltersExceptStatus)
   const itemsForMarketplaceCount = applyFilters(items, baseFiltersExceptMarketplace)
 
@@ -646,15 +633,6 @@ export function calculateFilterCounts(
     counts.difficulties[diff]++
   }
   counts.difficulties[''] = itemsForDifficultyCount.length
-
-  // Count team tags
-  for (const item of itemsForTeamTagCount) {
-    const team = item.teamTag || ''
-    if (team in counts.teamTags) {
-      counts.teamTags[team as TeamTag]++
-    }
-  }
-  counts.teamTags[''] = itemsForTeamTagCount.length
 
   // Count statuses
   counts.statuses.all = itemsForStatusCount.length
@@ -705,7 +683,6 @@ export function filterCatalog(
   if (filters.type !== 'all') appliedFilters.push(`타입: ${filters.type}`)
   if (filters.tags.length > 0) appliedFilters.push(`태그: ${filters.tags.join(', ')}`)
   if (filters.difficulty) appliedFilters.push(`난이도: ${filters.difficulty}`)
-  if (filters.teamTag) appliedFilters.push(`팀: ${filters.teamTag}`)
   if (filters.status !== 'all') appliedFilters.push(`상태: ${filters.status}`)
   if (filters.mcpEnabled !== null) {
     appliedFilters.push(`CLI: ${filters.mcpEnabled ? '지원' : '미지원'}`)
@@ -865,7 +842,6 @@ export function hasActiveFilters(filters: FilterState): boolean {
     filters.type !== 'all' ||
     filters.tags.length > 0 ||
     filters.difficulty !== '' ||
-    filters.teamTag !== '' ||
     filters.status !== 'all' ||
     filters.mcpEnabled !== null ||
     filters.likesRange.min !== undefined ||
@@ -884,7 +860,6 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.type !== 'all') count++
   if (filters.tags.length > 0) count += filters.tags.length
   if (filters.difficulty !== '') count++
-  if (filters.teamTag !== '') count++
   if (filters.status !== 'all') count++
   if (filters.mcpEnabled !== null) count++
   if (filters.likesRange.min !== undefined) count++
@@ -905,7 +880,6 @@ export function filterStateFromParams(params: URLSearchParams): Partial<FilterSt
   if (params.has('tags')) state.tags = params.get('tags')?.split(',').filter(Boolean) || []
   if (params.has('tagsOp')) state.tagsOperator = params.get('tagsOp') as 'AND' | 'OR'
   if (params.has('difficulty')) state.difficulty = params.get('difficulty') as Difficulty
-  if (params.has('team')) state.teamTag = params.get('team') as TeamTag
   if (params.has('status')) state.status = params.get('status') as 'published' | 'draft' | 'all'
   if (params.has('cli')) state.mcpEnabled = params.get('cli') === 'true'
   if (params.has('likesMin')) state.likesRange = { ...state.likesRange, min: parseInt(params.get('likesMin') || '0') }
@@ -933,7 +907,6 @@ export function filterStateToParams(filters: FilterState): URLSearchParams {
   if (filters.tags.length > 0) params.set('tags', filters.tags.join(','))
   if (filters.tagsOperator !== 'AND') params.set('tagsOp', filters.tagsOperator)
   if (filters.difficulty) params.set('difficulty', filters.difficulty)
-  if (filters.teamTag) params.set('team', filters.teamTag)
   if (filters.status !== 'all') params.set('status', filters.status)
   if (filters.mcpEnabled !== null) params.set('cli', String(filters.mcpEnabled))
   if (filters.likesRange.min !== undefined) params.set('likesMin', String(filters.likesRange.min))

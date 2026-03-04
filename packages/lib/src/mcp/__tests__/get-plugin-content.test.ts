@@ -138,7 +138,6 @@ describe('PluginContent type with resolvedAgents', () => {
       description: 'A comprehensive skill',
       authorName: 'John Doe',
       tags: ['ai', 'automation'],
-      teamTag: 'platform',
       difficulty: 'hard',
       content: 'Detailed skill content',
       readme: 'Additional documentation',
@@ -156,7 +155,6 @@ describe('PluginContent type with resolvedAgents', () => {
     expect(content.description).toBe('A comprehensive skill')
     expect(content.authorName).toBe('John Doe')
     expect(content.tags).toEqual(['ai', 'automation'])
-    expect(content.teamTag).toBe('platform')
     expect(content.difficulty).toBe('hard')
     expect(content.content).toBe('Detailed skill content')
     expect(content.readme).toBe('Additional documentation')

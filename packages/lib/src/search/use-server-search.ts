@@ -16,7 +16,6 @@ interface SearchParams {
   limit?: number
   offset?: number
   sortBy?: 'relevance' | 'newest' | 'popular' | 'name'
-  teamTag?: string
   tags?: string[]
 }
 
@@ -29,7 +28,6 @@ interface SearchItem {
   author: string
   tags: string[]
   difficulty: string | null
-  teamTag: string | null
   status: string
   likes: number
   createdAt: string
@@ -46,7 +44,6 @@ interface SearchResponse {
     type: ItemType | 'all'
     status: string
     sortBy: string
-    teamTag?: string
     tags?: string[]
   }
   pagination: {
@@ -129,7 +126,6 @@ export function useServerSearch(
         if (params.limit) searchParams.set('limit', String(params.limit))
         if (params.offset) searchParams.set('offset', String(params.offset))
         if (params.sortBy) searchParams.set('sortBy', params.sortBy)
-        if (params.teamTag) searchParams.set('teamTag', params.teamTag)
         if (params.tags && params.tags.length > 0) {
           searchParams.set('tags', params.tags.join(','))
         }

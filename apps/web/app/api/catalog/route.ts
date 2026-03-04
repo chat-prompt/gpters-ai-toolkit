@@ -7,7 +7,7 @@
 import { NextRequest } from 'next/server'
 import { eq, and, or, isNull } from 'drizzle-orm'
 import { db, catalogItems, users, organizations } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
+import type { ItemType, Difficulty, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -46,7 +46,6 @@ export async function GET(request: NextRequest) {
         authorId: catalogItems.authorId,
         authorName: users.name,
         tags: catalogItems.tags,
-        teamTag: catalogItems.teamTag,
         difficulty: catalogItems.difficulty,
         pluginId: catalogItems.pluginId,
         estimatedTime: catalogItems.estimatedTime,
@@ -143,7 +142,6 @@ export async function POST(request: NextRequest) {
     name,
     description,
     tags,
-    teamTag,
     difficulty,
     pluginId,
     estimatedTime,
@@ -180,7 +178,6 @@ export async function POST(request: NextRequest) {
     description: description || '',
     authorId: currentUser?.id || null,
     tags: tags || [],
-    teamTag: (teamTag as TeamTag) || 'general',
     difficulty: difficulty as Difficulty | null,
     pluginId: pluginId || null,
     estimatedTime: estimatedTime || null,

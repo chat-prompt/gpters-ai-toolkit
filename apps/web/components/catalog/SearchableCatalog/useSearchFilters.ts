@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { TAGS, type ItemType, type Difficulty, type TeamTag } from '@/lib/core/types'
+import { TAGS, type ItemType, type Difficulty } from '@/lib/core/types'
 import {
   naturalLanguageSearch,
   extractKeywords,
@@ -28,11 +28,8 @@ export function useSearchFilters({
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | ''>(
     (searchParams.get('difficulty') as Difficulty) || ''
   )
-  const [selectedTeamTag, setSelectedTeamTag] = useState<TeamTag | ''>(
-    (searchParams.get('team') as TeamTag) || ''
-  )
   const [showFilters, setShowFilters] = useState(
-    Boolean(searchParams.get('tags') || searchParams.get('difficulty') || searchParams.get('team'))
+    Boolean(searchParams.get('tags') || searchParams.get('difficulty'))
   )
 
   // Sync URL with filter state
@@ -92,18 +89,9 @@ export function useSearchFilters({
     [updateURL]
   )
 
-  const handleTeamTagChange = useCallback(
-    (team: TeamTag | '') => {
-      setSelectedTeamTag(team)
-      updateURL({ team: team || null })
-    },
-    [updateURL]
-  )
-
   const handleClearAllFilters = useCallback(() => {
     setSelectedTags([])
     setSelectedDifficulty('')
-    setSelectedTeamTag('')
     setSearchQuery('')
     setActiveFilter('all')
     router.replace(pathname, { scroll: false })
@@ -133,11 +121,6 @@ export function useSearchFilters({
 
       // Difficulty filter
       if (selectedDifficulty && item.difficulty !== selectedDifficulty) {
-        return false
-      }
-
-      // Team tag filter
-      if (selectedTeamTag && item.teamTag !== selectedTeamTag) {
         return false
       }
 
@@ -227,10 +210,10 @@ export function useSearchFilters({
     // No search query - just sort by updated date
     filtered.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
     return { filteredCatalog: filtered, didYouMean: [] }
-  }, [catalog, searchQuery, activeFilter, selectedTags, selectedDifficulty, selectedTeamTag])
+  }, [catalog, searchQuery, activeFilter, selectedTags, selectedDifficulty])
 
   const hasActiveFilters =
-    selectedTags.length > 0 || selectedDifficulty !== '' || selectedTeamTag !== ''
+    selectedTags.length > 0 || selectedDifficulty !== ''
 
   // Memoize category groupings
   const { skills, agents, commands, hooks, packages } = useMemo(
@@ -282,7 +265,6 @@ export function useSearchFilters({
     activeFilter,
     selectedTags,
     selectedDifficulty,
-    selectedTeamTag,
     showFilters,
     setShowFilters,
     availableTags,
@@ -292,7 +274,6 @@ export function useSearchFilters({
     handleTypeFilter,
     handleTagToggle,
     handleDifficultyChange,
-    handleTeamTagChange,
     handleClearAllFilters,
     skills,
     agents,

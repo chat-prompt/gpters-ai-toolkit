@@ -12,11 +12,10 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { TypeSpecificFields } from '@/components/admin/TypeSpecificFields'
 import { TypeGuidePanel } from '@/components/admin/TypeGuidePanel'
-import { TeamTagSelector } from '@/components/social/TeamTagSelector'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/data/type-config'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
 import { useOrgContext } from '@/lib/hooks/useOrgContext'
-import type { ItemType, Difficulty, TeamTag, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/core/types'
+import type { ItemType, Difficulty, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/core/types'
 
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
@@ -34,7 +33,6 @@ export default function NewCatalogItem() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [author, setAuthor] = useState('')
-  const [teamTag, setTeamTag] = useState<TeamTag>('general')
   const [tags, setTags] = useState('')
   const [pluginId, setPluginId] = useState('')
   const [content, setContent] = useState('')
@@ -168,7 +166,6 @@ export default function NewCatalogItem() {
         name,
         description,
         author: author || 'anonymous',
-        teamTag,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         difficulty: difficulty || null,
         pluginId: pluginId || null,
@@ -336,8 +333,6 @@ export default function NewCatalogItem() {
                   />
                 </div>
               </div>
-
-              <TeamTagSelector value={teamTag} onChange={setTeamTag} />
 
               <div>
                 <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">

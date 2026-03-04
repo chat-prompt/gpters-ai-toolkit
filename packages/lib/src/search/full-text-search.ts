@@ -8,7 +8,7 @@
 
 import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
 import { sql, eq, and, or, desc, asc, isNull } from 'drizzle-orm'
-import type { ItemType, TeamTag } from '../core/types'
+import type { ItemType } from '../core/types'
 
 /**
  * Search options for catalog item queries
@@ -20,7 +20,6 @@ export interface SearchOptions {
   limit?: number
   offset?: number
   sortBy?: 'relevance' | 'newest' | 'popular' | 'name'
-  teamTag?: string
   tags?: string[]
   /** Current organization ID for access control filtering */
   currentOrgId?: string
@@ -54,7 +53,6 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
     limit = 20,
     offset = 0,
     sortBy = 'relevance',
-    teamTag,
     tags,
     currentOrgId,
     userRole,
@@ -65,7 +63,7 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
 
   if (!sanitizedQuery) {
     // Return all items if no query
-    return getAllItems({ type, status, limit, offset, sortBy, teamTag, tags })
+    return getAllItems({ type, status, limit, offset, sortBy, tags })
   }
 
   // Detect if query contains Korean characters
@@ -82,11 +80,6 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
   // Type filter
   if (type && type !== 'all') {
     conditions.push(eq(catalogItems.type, type))
-  }
-
-  // Team tag filter
-  if (teamTag) {
-    conditions.push(eq(catalogItems.teamTag, teamTag as TeamTag))
   }
 
   // Tag filter - check if any of the requested tags are in the item's tags array
@@ -209,7 +202,6 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
     limit = 20,
     offset = 0,
     sortBy = 'newest',
-    teamTag,
     tags,
     currentOrgId,
     userRole,
@@ -223,10 +215,6 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
 
   if (type && type !== 'all') {
     conditions.push(eq(catalogItems.type, type))
-  }
-
-  if (teamTag) {
-    conditions.push(eq(catalogItems.teamTag, teamTag as TeamTag))
   }
 
   if (tags && tags.length > 0) {

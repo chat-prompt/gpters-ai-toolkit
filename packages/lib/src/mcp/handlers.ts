@@ -49,7 +49,7 @@ import type {
   RemoveFilesInput,
   RemoveFilesResponse,
 } from './types'
-import type { ItemType, TeamTag, CatalogItem } from '../core/types'
+import type { ItemType, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate, incrementVersion } from '../versioning/version'
 import { createVersionSnapshot } from '../versioning/skill-version'
 import { getBaseUrl } from '../utils'
@@ -188,7 +188,7 @@ export async function searchPlugins(
   userRole?: string,
   orgId?: string
 ): Promise<SearchResult> {
-  const { query, category, teamTag, limit = 5 } = input
+  const { query, category, limit = 5 } = input
   const safeLimit = Math.min(Math.max(1, limit), 20)
 
   const searchPattern = `%${query}%`
@@ -208,10 +208,6 @@ export async function searchPlugins(
     conditions.push(eq(catalogItems.type, category as ItemType))
   }
 
-  if (teamTag) {
-    conditions.push(eq(catalogItems.teamTag, teamTag as TeamTag))
-  }
-
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
 
@@ -228,7 +224,6 @@ export async function searchPlugins(
       description: catalogItems.description,
       authorName: users.name,
       tags: catalogItems.tags,
-      teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
     })
     .from(catalogItems)
@@ -243,7 +238,6 @@ export async function searchPlugins(
     description: item.description,
     authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
-    teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
   }))
 
@@ -279,7 +273,6 @@ export async function getPluginContent(
       description: catalogItems.description,
       authorName: users.name,
       tags: catalogItems.tags,
-      teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
       content: catalogItems.content,
       readme: catalogItems.readme,
@@ -338,7 +331,6 @@ export async function getPluginContent(
     description: item.description,
     authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
-    teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
     content: item.content,
     readme: item.readme || undefined,
@@ -385,16 +377,12 @@ export async function listPlugins(
   userRole?: string,
   orgId?: string
 ): Promise<ListResult> {
-  const { category, teamTag } = input
+  const { category } = input
 
   const conditions = []
 
   if (category && category !== 'all') {
     conditions.push(eq(catalogItems.type, category as ItemType))
-  }
-
-  if (teamTag) {
-    conditions.push(eq(catalogItems.teamTag, teamTag as TeamTag))
   }
 
   // Only include marketplace-enabled items
@@ -413,7 +401,6 @@ export async function listPlugins(
       description: catalogItems.description,
       authorName: users.name,
       tags: catalogItems.tags,
-      teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
     })
     .from(catalogItems)
@@ -427,7 +414,6 @@ export async function listPlugins(
     description: item.description,
     authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
-    teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
   }))
 
@@ -465,7 +451,6 @@ export async function getPluginsByCategory(
       description: catalogItems.description,
       authorName: users.name,
       tags: catalogItems.tags,
-      teamTag: catalogItems.teamTag,
       difficulty: catalogItems.difficulty,
     })
     .from(catalogItems)
@@ -480,7 +465,6 @@ export async function getPluginsByCategory(
     description: item.description,
     authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
-    teamTag: item.teamTag || undefined,
     difficulty: item.difficulty || undefined,
   }))
 
@@ -497,7 +481,7 @@ export async function getPluginsByCategory(
 export async function createPlugin(
   input: CreatePluginInput
 ): Promise<{ success: boolean; id: string; error?: string }> {
-  const { id, type, name, description, content, tags, teamTag, readme, files, mcpEnabled } = input
+  const { id, type, name, description, content, tags, readme, files, mcpEnabled } = input
 
   // Check if plugin already exists
   const existing = await db
@@ -518,7 +502,6 @@ export async function createPlugin(
     description: description || '',
     content,
     tags: tags || [],
-    teamTag: (teamTag as TeamTag) || 'general',
     readme: readme || null,
     files: files || null,
     mcpEnabled: mcpEnabled || false,
@@ -561,7 +544,6 @@ export async function updatePlugin(
   if (updateFields.content !== undefined) updateData.content = updateFields.content
   // Note: authorId is not updated through this API
   if (updateFields.tags !== undefined) updateData.tags = updateFields.tags
-  if (updateFields.teamTag !== undefined) updateData.teamTag = updateFields.teamTag
   if (updateFields.readme !== undefined) updateData.readme = updateFields.readme
   if (updateFields.files !== undefined) updateData.files = updateFields.files
   if (updateFields.mcpEnabled !== undefined) updateData.mcpEnabled = updateFields.mcpEnabled
@@ -638,7 +620,6 @@ export async function deploySkill(
     id: providedId,
     description,
     tags,
-    teamTag,
     allowedTools,
     agentModel,
     agentPermissionMode,
@@ -774,7 +755,6 @@ export async function deploySkill(
         content: resolvedContent!,
         description: description || '',
         tags: tags || [],
-        teamTag: (teamTag as TeamTag) || 'general',
         allowedTools: allowedTools || null,
         agentModel: agentModel || null,
         agentPermissionMode: agentPermissionMode || null,
@@ -818,7 +798,6 @@ export async function deploySkill(
       content: resolvedContent!,
       description: description || '',
       tags: tags || [],
-      teamTag: (teamTag as TeamTag) || 'general',
       allowedTools: allowedTools || null,
       agentModel: agentModel || null,
       agentPermissionMode: agentPermissionMode || null,
@@ -1608,8 +1587,7 @@ export async function executeTool(
             description: item.description,
             authorName: (item.authorId && authorMap.get(item.authorId)) || 'Unknown',
             tags: item.tags || [],
-            teamTag: item.teamTag || undefined,
-            difficulty: item.difficulty || undefined,
+                    difficulty: item.difficulty || undefined,
             relevanceScore: item.similarity,
           })),
           total: searchResult.total,

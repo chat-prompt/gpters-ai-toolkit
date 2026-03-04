@@ -28,7 +28,6 @@ vi.mock('@/lib/db/schema', () => ({
     author: 'author',
     tags: 'tags',
     difficulty: 'difficulty',
-    teamTag: 'teamTag',
     status: 'status',
     likes: 'likes',
     createdAt: 'createdAt',
@@ -227,7 +226,6 @@ describe('Search Result Structure', () => {
         type: 'all' as const,
         status: 'published',
         sortBy: 'relevance',
-        teamTag: undefined,
         tags: undefined,
       },
       pagination: {

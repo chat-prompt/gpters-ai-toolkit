@@ -7,7 +7,6 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
-import { TeamTagBadge } from '../../social/TeamTagSelector'
 import { TYPE_CONFIG } from './constants'
 import type { ItemCardProps } from './types'
 
@@ -58,9 +57,6 @@ export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
             <span className="text-[10px] font-semibold tracking-[0.2em] text-[var(--text-muted)] uppercase">
               {config.label}
             </span>
-            {item.teamTag && item.teamTag !== 'general' && (
-              <TeamTagBadge tag={item.teamTag} size="sm" />
-            )}
           </div>
           {item.difficulty && (
             <span

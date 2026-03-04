@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db, catalogItems } from '@/lib/db'
-import type { ItemType, Difficulty, TeamTag } from '@/lib/core/types'
+import type { ItemType, Difficulty } from '@/lib/core/types'
 import { ApiErrors, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -108,7 +108,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.description !== undefined) updateData.description = body.description
     if (body.authorId !== undefined) updateData.authorId = body.authorId
     if (body.tags !== undefined) updateData.tags = body.tags
-    if (body.teamTag !== undefined) updateData.teamTag = body.teamTag as TeamTag
     if (body.difficulty !== undefined) updateData.difficulty = body.difficulty as Difficulty
     if (body.pluginId !== undefined) updateData.pluginId = body.pluginId
     if (body.estimatedTime !== undefined) updateData.estimatedTime = body.estimatedTime

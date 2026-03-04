@@ -1,4 +1,4 @@
-import type { CatalogItemSummary, ItemType, Difficulty, TeamTag } from '@/lib/core/types'
+import type { CatalogItemSummary, ItemType, Difficulty } from '@/lib/core/types'
 
 export interface SearchableCatalogProps {
   catalog: CatalogItemSummary[]
@@ -33,7 +33,6 @@ export interface UseSearchFiltersReturn {
   activeFilter: ItemType | 'all'
   selectedTags: string[]
   selectedDifficulty: Difficulty | ''
-  selectedTeamTag: TeamTag | ''
   showFilters: boolean
   setShowFilters: (show: boolean) => void
   availableTags: string[]
@@ -43,7 +42,6 @@ export interface UseSearchFiltersReturn {
   handleTypeFilter: (type: ItemType | 'all') => void
   handleTagToggle: (tag: string) => void
   handleDifficultyChange: (difficulty: Difficulty | '') => void
-  handleTeamTagChange: (team: TeamTag | '') => void
   handleClearAllFilters: () => void
   skills: CatalogItemSummary[]
   agents: CatalogItemSummary[]

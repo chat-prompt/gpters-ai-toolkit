@@ -10,8 +10,6 @@ import { useState, useEffect, use, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import type { TeamTag } from '@/lib/core/types'
-import { TeamTagSelector } from '@/components/social/TeamTagSelector'
 import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/admin/SecurityAuditPanel'
 import type { SecurityAuditResult } from '@/lib/security/security-audit'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
@@ -47,7 +45,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     description: '',
     authorName: '',
     tags: '',
-    teamTag: 'general' as TeamTag,
     difficulty: '' as '' | typeof DIFFICULTIES[number],
     pluginId: '',
     estimatedTime: '',
@@ -74,7 +71,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           description: item.description || '',
           authorName: item.authorName || '',
           tags: (item.tags || []).join(', '),
-          teamTag: item.teamTag || 'general',
           difficulty: item.difficulty || '',
           pluginId: item.pluginId || '',
           estimatedTime: item.estimatedTime || '',
@@ -126,7 +122,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         name: formData.name,
         description: formData.description,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-        teamTag: formData.teamTag,
         difficulty: formData.difficulty || null,
         pluginId: formData.pluginId || null,
         estimatedTime: formData.estimatedTime || null,
@@ -284,11 +279,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
               />
             </div>
           </div>
-
-          <TeamTagSelector
-            value={formData.teamTag}
-            onChange={(value) => setFormData({ ...formData, teamTag: value })}
-          />
 
           <div>
             <label className="block text-sm text-[var(--text-secondary)] mb-2">

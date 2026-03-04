@@ -86,11 +86,6 @@ const ALL_TOOLS: McpTool[] = [
   //           enum: ['skill', 'agent', 'command', 'guide', 'all'],
   //           description: '플러그인 카테고리 필터 (기본: all)',
   //         },
-  //         teamTag: {
-  //           type: 'string',
-  //           enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-  //           description: '팀 태그 필터 (선택)',
-  //         },
   //         limit: {
   //           type: 'number',
   //           description: '최대 결과 수 (기본: 5, 최대: 20)',
@@ -135,11 +130,6 @@ const ALL_TOOLS: McpTool[] = [
   //           type: 'string',
   //           enum: ['skill', 'agent', 'command', 'guide', 'all'],
   //           description: '플러그인 카테고리 필터 (기본: all)',
-  //         },
-  //         teamTag: {
-  //           type: 'string',
-  //           enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-  //           description: '팀 태그 필터 (선택)',
   //         },
   //       },
   //     },
@@ -205,11 +195,6 @@ const ALL_TOOLS: McpTool[] = [
   //           items: { type: 'string' },
   //           description: '태그 목록',
   //         },
-  //         teamTag: {
-  //           type: 'string',
-  //           enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-  //           description: '팀 태그 (기본: general)',
-  //         },
   //         readme: {
   //           type: 'string',
   //           description: 'README.md 내용 (선택)',
@@ -269,11 +254,6 @@ const ALL_TOOLS: McpTool[] = [
   //           type: 'array',
   //           items: { type: 'string' },
   //           description: '새 태그 목록',
-  //         },
-  //         teamTag: {
-  //           type: 'string',
-  //           enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-  //           description: '새 팀 태그',
   //         },
   //         readme: {
   //           type: 'string',
@@ -364,11 +344,6 @@ const ALL_TOOLS: McpTool[] = [
           type: 'array',
           items: { type: 'string' },
           description: '태그 목록',
-        },
-        teamTag: {
-          type: 'string',
-          enum: ['platform', 'ai', 'data', 'product', 'infra', 'general'],
-          description: '팀 태그',
         },
         allowedTools: {
           type: 'string',

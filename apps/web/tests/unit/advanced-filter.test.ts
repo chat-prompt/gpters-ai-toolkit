@@ -40,7 +40,6 @@ const mockItems: CatalogItem[] = [
     authorName: 'alice',
     tags: ['code-quality', 'automation'],
     difficulty: 'easy',
-    teamTag: 'dev',
     status: 'published',
     likes: 15,
     mcpEnabled: true,
@@ -55,7 +54,6 @@ const mockItems: CatalogItem[] = [
     authorName: 'bob',
     tags: ['data', 'analysis'],
     difficulty: 'medium',
-    teamTag: 'data',
     status: 'published',
     likes: 8,
     mcpEnabled: true,
@@ -70,7 +68,6 @@ const mockItems: CatalogItem[] = [
     authorName: 'charlie',
     tags: ['git', 'automation'],
     difficulty: 'hard',
-    teamTag: 'dev',
     status: 'draft',
     likes: 3,
     mcpEnabled: false,
@@ -85,7 +82,6 @@ const mockItems: CatalogItem[] = [
     authorName: 'alice',
     tags: ['testing', 'automation'],
     difficulty: 'easy',
-    teamTag: 'dev',
     status: 'published',
     likes: 20,
     mcpEnabled: true,
@@ -271,12 +267,6 @@ describe('applyFilters', () => {
     const result = applyFilters(mockItems, filters)
     expect(result).toHaveLength(2)
     expect(result.every(item => item.difficulty === 'easy')).toBe(true)
-  })
-
-  it('should filter by team tag', () => {
-    const filters: FilterState = { ...DEFAULT_FILTER_STATE, teamTag: 'dev' }
-    const result = applyFilters(mockItems, filters)
-    expect(result).toHaveLength(3)
   })
 
   it('should filter by status', () => {
@@ -626,7 +616,6 @@ describe('Edge Cases', () => {
     const itemWithNulls = {
       ...mockItems[0],
       difficulty: undefined,
-      teamTag: undefined,
       updatedAt: undefined,
     } as unknown as CatalogItem
 
@@ -651,7 +640,6 @@ describe('DEFAULT_FILTER_STATE', () => {
     expect(DEFAULT_FILTER_STATE.tags).toEqual([])
     expect(DEFAULT_FILTER_STATE.tagsOperator).toBe('AND')
     expect(DEFAULT_FILTER_STATE.difficulty).toBe('')
-    expect(DEFAULT_FILTER_STATE.teamTag).toBe('')
     expect(DEFAULT_FILTER_STATE.status).toBe('all')
     expect(DEFAULT_FILTER_STATE.mcpEnabled).toBeNull()
     expect(DEFAULT_FILTER_STATE.likesRange).toEqual({})

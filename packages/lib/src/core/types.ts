@@ -25,9 +25,6 @@ export interface PluginFile {
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
-// Team tags for categorizing items by team ownership
-export type TeamTag = 'platform' | 'ai' | 'data' | 'product' | 'infra' | 'general'
-
 // Agent model options
 export type AgentModel = 'sonnet' | 'opus' | 'haiku' | 'inherit'
 
@@ -59,7 +56,6 @@ export interface CatalogItem {
   authorName?: string // Resolved author name for display
   authorEmail?: string // Resolved author email for display
   tags: string[]
-  teamTag?: TeamTag
   difficulty?: Difficulty
   pluginId?: string // 플러그인 설치 ID (스킬만)
   estimatedTime?: string // 예상 소요 시간 (가이드)
@@ -290,11 +286,3 @@ export const HOOK_EVENTS: Record<HookEvent, { label: string; description: string
   },
 }
 
-export const TEAM_TAGS: Record<TeamTag, { label: string; color: string; emoji: string }> = {
-  platform: { label: '플랫폼팀', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', emoji: '🛠️' },
-  ai: { label: 'AI팀', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', emoji: '🤖' },
-  data: { label: '데이터팀', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', emoji: '📊' },
-  product: { label: '프로덕트팀', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30', emoji: '🎨' },
-  infra: { label: '인프라팀', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', emoji: '⚙️' },
-  general: { label: '공통', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', emoji: '📦' },
-}

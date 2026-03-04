@@ -15,7 +15,6 @@ const { mockDb, mockCatalogItems, mockUsers, mockSuggestions } = vi.hoisted(() =
     description: 'description',
     authorId: 'authorId',
     tags: 'tags',
-    teamTag: 'teamTag',
     difficulty: 'difficulty',
     content: 'content',
     readme: 'readme',
@@ -187,7 +186,6 @@ describe('MCP Handlers', () => {
           description: 'A test skill',
           authorName: 'test-author',
           tags: ['test'],
-          teamTag: 'general',
           difficulty: 'easy',
         },
       ]
@@ -239,15 +237,6 @@ describe('MCP Handlers', () => {
       expect(mockChain.where).toHaveBeenCalled()
     })
 
-    it('should filter by teamTag', async () => {
-      const mockChain = createMockChain([])
-      vi.mocked(db.select).mockReturnValue(mockChain as never)
-
-      await searchPlugins({ query: 'test', teamTag: 'backend' })
-
-      expect(mockChain.where).toHaveBeenCalled()
-    })
-
     it('should handle empty results', async () => {
       const mockChain = createMockChain([])
       vi.mocked(db.select).mockReturnValue(mockChain as never)
@@ -268,7 +257,6 @@ describe('MCP Handlers', () => {
         description: 'A test skill',
         authorName: 'test-author',
         tags: ['test'],
-        teamTag: 'general',
         difficulty: 'easy',
         content: '# Test Content',
         readme: '# README',
@@ -315,7 +303,6 @@ describe('MCP Handlers', () => {
         description: '',
         authorName: 'test',
         tags: null,
-        teamTag: null,
         difficulty: null,
         content: 'content',
         readme: null,
@@ -340,7 +327,6 @@ describe('MCP Handlers', () => {
       const result = await getPluginContent({ pluginId: 'minimal-skill' })
 
       expect(result?.tags).toEqual([])
-      expect(result?.teamTag).toBeUndefined()
       expect(result?.version).toBe('1.0.0')
     })
   })
@@ -348,8 +334,8 @@ describe('MCP Handlers', () => {
   describe('listPlugins', () => {
     it('should list all marketplace-enabled plugins', async () => {
       const mockPlugins = [
-        { id: 'skill-1', name: 'Skill 1', type: 'skill', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
-        { id: 'skill-2', name: 'Skill 2', type: 'skill', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'skill-1', name: 'Skill 1', type: 'skill', description: '', authorName: 'test', tags: [], difficulty: null },
+        { id: 'skill-2', name: 'Skill 2', type: 'skill', description: '', authorName: 'test', tags: [], difficulty: null },
       ]
 
       const mockChain = {
@@ -367,7 +353,7 @@ describe('MCP Handlers', () => {
 
     it('should filter by category', async () => {
       const mockPlugins = [
-        { id: 'agent-1', name: 'Agent 1', type: 'agent', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'agent-1', name: 'Agent 1', type: 'agent', description: '', authorName: 'test', tags: [], difficulty: null },
       ]
 
       const mockChain = {
@@ -383,24 +369,12 @@ describe('MCP Handlers', () => {
       expect(result.plugins[0].type).toBe('agent')
     })
 
-    it('should filter by teamTag', async () => {
-      const mockChain = {
-        from: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([]),
-      }
-      vi.mocked(db.select).mockReturnValue(mockChain as never)
-
-      await listPlugins({ teamTag: 'backend' })
-
-      expect(mockChain.where).toHaveBeenCalled()
-    })
   })
 
   describe('getPluginsByCategory', () => {
     it('should get plugins by category with limit', async () => {
       const mockPlugins = [
-        { id: 'cmd-1', name: 'Command 1', type: 'command', description: '', authorName: 'test', tags: [], teamTag: null, difficulty: null },
+        { id: 'cmd-1', name: 'Command 1', type: 'command', description: '', authorName: 'test', tags: [], difficulty: null },
       ]
 
       const mockChain = createMockChain(mockPlugins)
@@ -1839,7 +1813,6 @@ describe('MCP Handlers', () => {
         description: 'A test skill',
         authorName: 'test-author',
         tags: ['test'],
-        teamTag: 'general',
         difficulty: 'easy',
         content: '# Test Skill Content',
         readme: null,
