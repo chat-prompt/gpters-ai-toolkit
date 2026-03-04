@@ -29,7 +29,7 @@ const FEATURES = [
     icon: '@',
     label: 'Agents',
     title: '전문 에이전트',
-    description: '코드 리뷰, 디버깅, 리팩토링 등 전문 에이전트를 팀과 공유하세요.',
+    description: '코드 리뷰, 디버깅, 리팩토링 등 전문 에이전트를 검색하고 설치하세요.',
   },
   {
     icon: '>',
@@ -41,7 +41,7 @@ const FEATURES = [
     icon: '?',
     label: 'Guides',
     title: '활용 가이드',
-    description: 'Claude Code 활용 노하우와 베스트 프랙티스를 팀 내에서 공유하세요.',
+    description: 'Claude Code 활용 노하우와 베스트 프랙티스를 확인하세요.',
   },
 ] as const
 
@@ -59,7 +59,7 @@ const TOOL_EXAMPLES = [
   },
   {
     tool: 'deploy_skill',
-    description: '새 스킬을 팀에 배포',
+    description: '새 스킬을 배포',
     example: 'deploy_skill(type="skill", name="my-skill", ...)',
   },
   {
