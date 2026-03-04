@@ -4,7 +4,7 @@
 
 import { apiCall } from '../client.js'
 import { resolveToken } from '../auth.js'
-import { jsonOut, info, error } from '../output.js'
+import { jsonOut, info, error, extractArray } from '../output.js'
 
 /** search 명령어 옵션 */
 export interface SearchOptions {
@@ -34,7 +34,8 @@ export async function runSearch(opts: SearchOptions): Promise<void> {
     error(result.error!)
   }
 
-  const items = Array.isArray(result.data) ? result.data : []
+  // API 응답 구조: { success, data: { plugins: [...] } }
+  const items = extractArray(result.data)
   info(`${items.length}개 결과 발견`)
   jsonOut(items)
 }

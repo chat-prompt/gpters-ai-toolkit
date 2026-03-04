@@ -21,6 +21,44 @@ export function info(msg: string): void {
 }
 
 /**
+ * API 응답에서 배열 데이터를 추출
+ *
+ * 지원 구조: 배열, { data: [...] }, { data: { plugins: [...] } }, { success, data: { plugins: [...] } }
+ *
+ * @param data - API 응답 데이터
+ * @returns 추출된 배열
+ */
+export function extractArray(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>
+    if (obj.data && typeof obj.data === 'object') {
+      const inner = obj.data as Record<string, unknown>
+      if (Array.isArray(inner)) return inner
+      if (Array.isArray(inner.plugins)) return inner.plugins
+    }
+  }
+  return []
+}
+
+/**
+ * API 응답에서 단일 객체 데이터를 추출
+ *
+ * 지원 구조: 객체, { data: {...} }, { success, data: {...} }
+ *
+ * @param data - API 응답 데이터
+ * @returns 추출된 객체
+ */
+export function extractObject(data: unknown): unknown {
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>
+    if ('success' in obj && 'data' in obj) return obj.data
+    if ('data' in obj) return obj.data
+  }
+  return data
+}
+
+/**
  * 에러 메시지를 stderr로 출력하고 프로세스 종료
  *
  * @param msg - 에러 메시지

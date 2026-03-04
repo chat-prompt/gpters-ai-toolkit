@@ -4,7 +4,7 @@
 
 import { apiCall } from '../client.js'
 import { resolveToken } from '../auth.js'
-import { jsonOut, error } from '../output.js'
+import { jsonOut, error, extractObject } from '../output.js'
 
 /**
  * get 명령어 실행
@@ -20,5 +20,5 @@ export async function runGet(pluginId: string): Promise<void> {
     error(result.error!)
   }
 
-  jsonOut(result.data)
+  jsonOut(extractObject(result.data))
 }
