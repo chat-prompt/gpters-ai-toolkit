@@ -36,8 +36,8 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 ### 플러그인 지원
 
 - **Claude Code Plugin** — 마켓플레이스에서 원클릭 설치
-- **OpenCode Plugin** — npm 레지스트리 기반 설치 (`@gpters-internal/opencode`)
-- **Codex Plugin** — Verdaccio 레지스트리 기반 (`@gpters-internal/codex-plugin`)
+- **OpenCode Plugin** — npm 퍼블릭 패키지 (`@gpters/opencode`)
+- **Codex Plugin** — npm 퍼블릭 패키지 (`@gpters/codex-plugin`)
 - **MCP 직접 연결** — `claude mcp add`로 HTTP MCP 서버 연결
 
 ### 분석 및 추적
@@ -58,12 +58,8 @@ claude plugin marketplace add chat-prompt/gpters-ai-toolkit 2>/dev/null; claude 
 ### OpenCode
 
 ```bash
-grep -q "verdaccio.gpters.org" ~/.opencode/.npmrc 2>/dev/null || echo '@gpters-internal:registry=https://verdaccio.gpters.org
-//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.opencode/.npmrc && \
-grep -q "verdaccio.gpters.org" ~/.cache/opencode/.npmrc 2>/dev/null || (mkdir -p ~/.cache/opencode && echo '@gpters-internal:registry=https://verdaccio.gpters.org
-//verdaccio.gpters.org/:_authToken=Njg2NmMxZDYxZjBjMWVkMmRmZDI2Y2ZlMjMyZWRmOWM6ZTg1MWUyYzhiMGUxNjhkMmM5ODMwM2MxOTJiZTk3YWI2YTVlMzA5ZWM5YWM4YTJiMzY5YjI1NGQ=' >> ~/.cache/opencode/.npmrc) && \
 [ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \
-node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters-internal/opencode')||c.plugin.push('@gpters-internal/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"
+node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters/opencode')||c.plugin.push('@gpters/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"
 ```
 
 ### MCP 직접 연결
@@ -313,8 +309,8 @@ pnpm db:studio      # Drizzle Studio
 | 플러그인 | 배포 방식 |
 |----------|-----------|
 | claude-code-plugin | Git push → 마켓플레이스 자동 반영 (새 세션부터) |
-| opencode-plugin | `npm publish` → Verdaccio (`@gpters-internal/opencode`) |
-| codex-plugin | `npm publish` → Verdaccio (`@gpters-internal/codex-plugin`) |
+| opencode-plugin | `npm publish` → npm public (`@gpters/opencode`) |
+| codex-plugin | `npm publish` → npm public (`@gpters/codex-plugin`) |
 | 웹 (Next.js) | Git push → Vercel 자동 배포 |
 
 ## 관련 링크
