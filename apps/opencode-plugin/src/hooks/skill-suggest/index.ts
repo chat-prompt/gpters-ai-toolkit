@@ -9,6 +9,9 @@ import type { UserMessage, Part } from "@opencode-ai/sdk"
 import { searchSkills, reportSearchSkip, type SkillSummary } from "./mcp-client"
 import { createLogger } from "../../utils/logger"
 import { getSessionMetrics } from "../session-reporter"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { homedir } from "node:os"
 
 const logger = createLogger("skill-suggest")
 
@@ -24,8 +27,8 @@ const SKIP_PATTERNS = [
 /** 검색할 필요 없는 짧은 메시지 최소 길이 */
 const MIN_MESSAGE_LENGTH = 10
 
-/** relevanceScore 최소 임계값 (DEV-3004 분석 결과: 0.65→0.60 하향 시 통과율 71%→91%) */
-const SCORE_THRESHOLD = 0.60
+/** relevanceScore 최소 임계값 (text-embedding-3-large 전환 후 0.60→0.40 하향) */
+const SCORE_THRESHOLD = 0.40
 
 /** 검색 쿼리 최대 길이 (키워드 추출 효과) */
 const MAX_QUERY_LENGTH = 80
@@ -39,6 +42,27 @@ interface SessionState {
 const sessionSkillCache = new Map<string, SessionState>()
 
 const CACHE_TTL = 5 * 60 * 1000
+
+/** searchMethod 설정값 타입 */
+type SearchMethod = "mcp" | "cli" | "auto"
+
+/**
+ * ~/.config/aitk/config.json에서 searchMethod 설정을 읽어 반환
+ *
+ * @returns 설정된 검색 방법 (기본값: "auto")
+ */
+function getSearchMethod(): SearchMethod {
+  try {
+    const configPath = join(homedir(), ".config", "aitk", "config.json")
+    const raw = readFileSync(configPath, "utf-8")
+    const config = JSON.parse(raw)
+    const method = config.searchMethod
+    if (method === "mcp" || method === "cli" || method === "auto") return method
+  } catch {
+    // 설정 파일 없거나 파싱 실패 시 기본값
+  }
+  return "auto"
+}
 
 function extractMessageContent(output: { parts: Array<{ type: string; text?: string }> }): string {
   const textPart = output.parts?.find((p) => p.type === "text")
@@ -71,7 +95,7 @@ function extractSearchParams(text: string): { query: string; context: string } {
 /**
  * 관련 스킬 목록을 시스템 프롬프트에 주입할 형식으로 포맷
  *
- * 스킬 로드 후 적용 결과를 report_skill_outcome으로 보고하는 힌트를 포함한다.
+ * searchMethod에 따라 MCP 또는 CLI 명령어를 안내한다.
  *
  * @param skills - 임계값을 통과한 관련 스킬 목록
  * @returns 시스템 프롬프트에 주입할 마크다운 문자열 (스킬 없으면 빈 문자열)
@@ -79,7 +103,16 @@ function extractSearchParams(text: string): { query: string; context: string } {
 function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
   if (skills.length === 0) return ""
 
+  const method = getSearchMethod()
   const skillLines = skills.map(s => `- **${s.name}** (id: ${s.id}): ${s.description}`).join("\n")
+
+  const loadInstruction = method === "cli"
+    ? 'load it using `Bash("aitk get \'<skill-id>\'")`'
+    : 'load it using `mcp_gpters-ai-toolkit_get_plugin_content(pluginId="<skill-id>")`'
+
+  const reportInstruction = method === "cli"
+    ? `Bash("aitk report-outcome --skill-id '<skill-id>' --applied true --summary '결과 한 줄 요약'")`
+    : `mcp_gpters-ai-toolkit_report_skill_outcome(skillId="<skill-id>", applied=true/false, summary="결과 한 줄 요약")`
 
   return `
 <available-skills>
@@ -89,11 +122,11 @@ Based on your request, these skills may be helpful:
 
 ${skillLines}
 
-**How to use**: If any skill seems relevant, load it using \`mcp_gpters-ai-toolkit_get_plugin_content(pluginId="<skill-id>")\` to get detailed instructions.
+**How to use**: If any skill seems relevant, ${loadInstruction} to get detailed instructions.
 
 **After applying a skill**, report the outcome:
 \`\`\`
-mcp_gpters-ai-toolkit_report_skill_outcome(skillId="<skill-id>", applied=true/false, summary="결과 한 줄 요약")
+${reportInstruction}
 \`\`\`
 - \`applied=true\`: 스킬 내용을 실제 작업에 적용한 경우
 - \`applied=false\`: 로드했지만 맥락에 맞지 않아 적용하지 않은 경우
@@ -138,7 +171,13 @@ export function createSkillSuggestHook(ctx: PluginInput) {
         }
 
         const { query, context } = extractSearchParams(messageText)
-        logger.debug(`Searching skills for session ${sessionID}, query: "${query}"`)
+        const searchMethod = getSearchMethod()
+        logger.debug(`Searching skills for session ${sessionID}, query: "${query}", method: ${searchMethod}`)
+
+        if (searchMethod === "cli") {
+          logger.debug("Search method is 'cli' — skipping MCP search (CLI handled by SKILL.md guidance)")
+          return
+        }
 
         const skills = await searchSkills(query, { category: "skill", limit: 3, userContext: context || undefined })
 
@@ -168,6 +207,11 @@ export function createSkillSuggestHook(ctx: PluginInput) {
           }
         }
       } catch (error) {
+        const searchMethod = getSearchMethod()
+        if (searchMethod === "mcp") {
+          logger.debug("MCP search failed and searchMethod is 'mcp' — skipping fallback")
+          return
+        }
         logger.error("Error in skill-suggest hook", error)
       }
     },

@@ -81,7 +81,7 @@ export const catalogItems = pgTable('catalog_items', {
   changelog: text('changelog'), // Latest version changelog
 
   // Vector embedding for semantic search (1536 dimensions for OpenAI text-embedding-3-small)
-  embedding: halfvec('embedding', { dimensions: 1536 }),
+  embedding: halfvec('embedding', { dimensions: 3072 }),
 
   // Multi-tenancy & collaboration fields
   /** Organization owner (nullable for migration compatibility) */

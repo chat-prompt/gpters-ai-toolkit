@@ -1,7 +1,7 @@
 /**
  * 임베딩 생성 모듈
  *
- * OpenAI text-embedding-3-small을 사용하여 텍스트의 벡터 임베딩을 생성합니다.
+ * OpenAI text-embedding-3-large를 사용하여 텍스트의 벡터 임베딩을 생성합니다.
  * LRU 캐시를 통해 동일 쿼리에 대한 중복 API 호출을 방지하며,
  * 서버리스 환경에서 검색 응답 시간을 단축합니다.
  */
@@ -13,15 +13,15 @@ import { embeddingCache } from './embedding-cache'
 const log = createLogger('embedding')
 
 /** OpenAI 임베딩 모델 ID */
-const EMBEDDING_MODEL = 'text-embedding-3-small'
+const EMBEDDING_MODEL = 'text-embedding-3-large'
 
 /** 임베딩 벡터 차원 수 */
-const EMBEDDING_DIMENSIONS = 1536
+const EMBEDDING_DIMENSIONS = 3072
 
 /**
  * 임베딩 입력 텍스트 최대 길이 (문자 수).
  *
- * text-embedding-3-small의 토큰 한도는 8,191.
+ * text-embedding-3-large의 토큰 한도는 8,191.
  * 한영 혼재 텍스트의 안전 마진을 고려하여 28,000자로 제한합니다.
  */
 const MAX_INPUT_CHARS = 28_000

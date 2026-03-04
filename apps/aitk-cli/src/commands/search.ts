@@ -14,6 +14,8 @@ export interface SearchOptions {
   type?: string
   /** 결과 제한 수 */
   limit?: number
+  /** 작업 맥락 (검색 정확도 향상용) */
+  context?: string
 }
 
 /** semantic_search JSON-RPC 응답 구조 */
@@ -37,6 +39,7 @@ export async function runSearch(opts: SearchOptions): Promise<void> {
   }
   if (opts.type) args.category = opts.type
   if (opts.limit) args.limit = opts.limit
+  if (opts.context) args.userContext = opts.context
 
   const result = await jsonRpcCall<ToolCallResult>('tools/call', {
     name: 'semantic_search',

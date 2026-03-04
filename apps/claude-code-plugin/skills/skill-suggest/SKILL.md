@@ -35,24 +35,47 @@ description: "새 작업/주제 변경 시 팀 스킬을 자동 검색합니다.
 
 ### 2단계: 스킬 검색
 
+검색 모드(`~/.config/aitk/config.json`의 `searchMethod`)에 따라 다르게 검색합니다:
+
+**MCP 모드 (`mcp` 또는 `auto`):**
 ```
 mcp__gpters-ai-toolkit__semantic_search(query="추출된 키워드", userContext="작업 맥락", limit=3, _source="skill-suggest")
 ```
 
-> `userContext`는 맥락이 있을 때만 전달합니다. 없으면 생략해도 됩니다.
+**CLI 모드 (`cli`):**
+```
+Bash("aitk search '추출된 키워드' --limit 3 --context '작업 맥락'")
+```
 
-### 3단계: 결과 판단 + 보고
+> `auto` 모드에서 MCP 연결 불가 시 CLI로 fallback합니다.
+> `userContext`/`--context`는 맥락이 있을 때만 전달합니다.
 
-검색 결과의 `relevanceScore`를 확인하고, **반드시 둘 중 하나를 실행**합니다:
+### 3단계: 결과 판단 + 로드
 
-**A. 0.60 이상 스킬이 있으면 → 로드:**
+검색 결과의 `relevanceScore`를 확인합니다:
+
+**A. 0.40 이상 스킬이 있으면 → 로드:**
+
+MCP 모드:
 ```
 mcp__gpters-ai-toolkit__get_plugin_content(pluginId="스킬ID")
 ```
 
-**B. 전부 0.60 미만이거나 관련 없으면 → 스킵 사유 보고:**
+CLI 모드:
+```
+Bash("aitk get '스킬ID'")
+```
+
+**B. 전부 0.40 미만이거나 관련 없으면 → 스킵 사유 보고:**
+
+MCP 모드:
 ```
 mcp__gpters-ai-toolkit__report_search_skip(query="검색어", resultIds=["id1","id2"], reason="스킵 사유 한 줄")
+```
+
+CLI 모드:
+```
+Bash("aitk report-skip --query '검색어' --reason '스킵 사유 한 줄' --result-ids 'id1,id2'")
 ```
 
 > 검색 후 아무 행동 없이 넘어가지 마세요. A 또는 B 중 하나는 반드시 실행합니다.
@@ -60,8 +83,40 @@ mcp__gpters-ai-toolkit__report_search_skip(query="검색어", resultIds=["id1","
 ### 4단계: 적용 결과 보고
 
 스킬을 로드해서 작업에 적용한 후, 결과를 보고합니다:
+
+MCP 모드:
 ```
 mcp__gpters-ai-toolkit__report_skill_outcome(skillId="스킬ID", applied=true/false, summary="결과 한 줄")
+```
+
+CLI 모드:
+```
+Bash("aitk report-outcome --skill-id '스킬ID' --applied true --summary '결과 한 줄'")
+```
+
+## 검색 모드 설정
+
+`~/.config/aitk/config.json`의 `searchMethod` 필드로 검색 방법을 설정할 수 있습니다:
+
+```json
+{
+  "searchMethod": "auto"
+}
+```
+
+| 값 | 동작 |
+|----|------|
+| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback (기본값) |
+| `mcp` | MCP만 사용. 연결 불가 시 검색 스킵 |
+| `cli` | aitk CLI만 사용 |
+
+설정 변경:
+```bash
+# CLI로 설정
+aitk config set searchMethod cli
+
+# 또는 직접 편집
+vi ~/.config/aitk/config.json
 ```
 
 ## 주의사항

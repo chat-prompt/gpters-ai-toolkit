@@ -9,6 +9,8 @@ import { runGet } from '../src/commands/get.js'
 import { runDeploy } from '../src/commands/deploy.js'
 import { runUpdates } from '../src/commands/updates.js'
 import { runReportSession } from '../src/commands/report-session.js'
+import { runReportSkip } from '../src/commands/report-skip.js'
+import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runLogin } from '../src/commands/login.js'
 import { error, info } from '../src/output.js'
 
@@ -51,11 +53,13 @@ function parseArgs(args: string[]): { flags: Record<string, string>; positional:
 const HELP = `aitk - GPTers AI Toolkit CLI
 
 Usage:
-  aitk search <query> [--type skill] [--limit 5]
+  aitk search <query> [--type skill] [--limit 5] [--context "작업 맥락"]
   aitk get <id>
   aitk deploy --id <slug> --type skill --name <name> --content <@file|text>
   aitk updates
   aitk report-session --count <N> [--version <ver>]
+  aitk report-skip --query <query> --reason <reason> [--result-ids id1,id2]
+  aitk report-outcome --skill-id <id> --applied true|false --summary <text>
   aitk login --token <token>
   aitk --version | --help
 
@@ -65,6 +69,8 @@ Commands:
   deploy          스킬/에이전트/커맨드 배포
   updates         설치된 스킬 업데이트 확인
   report-session  세션 이벤트 보고 (hook용)
+  report-skip     스킬 검색 스킵 사유 보고
+  report-outcome  스킬 적용 결과 보고
   login           인증 토큰 저장
 
 Output:
@@ -99,6 +105,7 @@ async function main(): Promise<void> {
         query,
         type: flags['type'],
         limit: flags['limit'] ? parseInt(flags['limit'], 10) : undefined,
+        context: flags['context'],
       })
       break
     }
@@ -137,6 +144,32 @@ async function main(): Promise<void> {
       await runReportSession({
         count,
         version: flags['version'],
+      })
+      break
+    }
+
+    case 'report-skip': {
+      const query = flags['query']
+      const reason = flags['reason']
+      if (!query) error('--query 필수: aitk report-skip --query <query> --reason <reason>')
+      if (!reason) error('--reason 필수: aitk report-skip --query <query> --reason <reason>')
+      await runReportSkip({
+        query,
+        resultIds: flags['result-ids'],
+        reason,
+      })
+      break
+    }
+
+    case 'report-outcome': {
+      const skillId = flags['skill-id']
+      const summary = flags['summary']
+      if (!skillId) error('--skill-id 필수: aitk report-outcome --skill-id <id> --applied true|false --summary <text>')
+      if (!summary) error('--summary 필수')
+      await runReportOutcome({
+        skillId,
+        applied: flags['applied'] === 'true',
+        summary,
       })
       break
     }
