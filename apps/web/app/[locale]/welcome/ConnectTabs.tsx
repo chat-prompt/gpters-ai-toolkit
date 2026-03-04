@@ -42,13 +42,13 @@ export function ConnectTabs({ baseUrl }: ConnectTabsProps) {
     {
       id: 'claude-code',
       label: 'Claude Code',
-      command: `claude mcp add gpters-ai-toolkit ${baseUrl}/api/mcp -t http`,
+      command: 'claude plugin marketplace add chat-prompt/gpters-ai-toolkit 2>/dev/null; claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin install gpters-ai-toolkit',
     },
     {
       id: 'opencode',
       label: 'OpenCode',
-      command: `# opencode.json의 plugin 배열에 추가
-"@gpters/opencode@latest"`,
+      command: `[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \\
+node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters/opencode')||c.plugin.push('@gpters/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"`,
       multiline: true,
     },
     {
