@@ -1,0 +1,74 @@
+{
+  "pageTitle": "Plugin Installation Guide",
+  "pageSubtitle": "Choose the installation method for your AI coding tool.",
+  "tabs": {
+    "claudeCode": {
+      "label": "Claude Code",
+      "description": "Plugin install"
+    },
+    "opencode": {
+      "label": "OpenCode",
+      "description": "npm registry"
+    },
+    "codex": {
+      "label": "Codex CLI",
+      "description": "npx setup"
+    },
+    "mcp": {
+      "label": "MCP Direct",
+      "description": "claude mcp add"
+    }
+  },
+  "steps": {
+    "pluginInstall": "Plugin Installation",
+    "pluginInstallDesc": "Run the following command in your terminal:",
+    "browserLogin": "Browser Login",
+    "browserLoginDesc": "Claude Code will automatically open a browser for Google login.",
+    "connectionCheck": "Connection Check",
+    "connectionCheckDesc": "Once setup is complete, verify the connection with:",
+    "oauthLogin": "OAuth Login",
+    "oauthLoginDesc": "Complete OAuth authentication with the MCP server:",
+    "restart": "Restart OpenCode",
+    "restartDesc": "Restart OpenCode to apply the settings.",
+    "mcpAdd": "Add MCP Server",
+    "mcpAddDesc": "Run the following command in your terminal:"
+  },
+  "loginSteps": {
+    "browserOpens": "Browser opens automatically",
+    "googleLogin": "Login with your Google account (org email)",
+    "done": "Done! Return to Claude Code and start using it",
+    "authComplete": "Authentication success message will appear in your terminal",
+    "restartDone": "Plugin will load automatically when you restart OpenCode"
+  },
+  "notes": {
+    "pluginNote": "Removes existing MCP direct connection and installs plugin in one step. Safe to re-run in already configured environments.",
+    "safeRerun": "Safe to re-run in already configured environments. Existing settings will not be overwritten.",
+    "browserFallback": "If the browser doesn't open automatically, log in on the website first then try again.",
+    "projectScope": "Run in project root directory for project-level config. Add -s user for global settings.",
+    "oauthSecurity": "OAuth 2.1 authentication — no need to copy tokens or set environment variables.",
+    "oauthAuto": "OAuth 2.1 authentication manages tokens automatically. No need to set environment variables.",
+    "codexAutoConfig": "Automatically adds MCP server config to ~/.codex/config.toml:"
+  },
+  "noteLabels": {
+    "note": "Note:",
+    "security": "Security:"
+  },
+  "copy": "Copy",
+  "copied": "Copied!",
+  "usageGuide": {
+    "title": "How to use after setup",
+    "naturalLanguage": "Natural language",
+    "directCall": "Direct call"
+  },
+  "privacy": {
+    "title": "Data Collection & Opt-Out",
+    "description": "The AI Toolkit MCP server collects anonymized usage data (tool call logs, session aggregates) for service improvement. Code, conversation content, and files are not collected.",
+    "optOutDesc": "To opt out of data collection, add the X-Analytics-Opt-Out: true header to your MCP settings:",
+    "privacyLink": "Privacy Policy",
+    "privacySuffix": "for details."
+  },
+  "help": {
+    "question": "Having issues?",
+    "reportIssue": "Report an issue"
+  }
+}

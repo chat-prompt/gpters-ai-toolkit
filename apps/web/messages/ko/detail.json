@@ -1,0 +1,81 @@
+{
+  "toc": {
+    "overview": "개요",
+    "examples": "사용 예시",
+    "dependencies": "의존성",
+    "files": "추가 파일",
+    "changelog": "변경 이력",
+    "related": "관련 아이템",
+    "settings": "Hook 설정",
+    "install": "설치 방법",
+    "description": "설명",
+    "contents": "포함 아이템"
+  },
+  "relatedItems": {
+    "title": "관련 아이템",
+    "subtitle": "비슷한 태그를 가진 스킬, 에이전트, 커맨드를 확인해보세요.",
+    "sameAuthor": "같은 작성자"
+  },
+  "dependencies": {
+    "title": "필요한 의존성",
+    "found": "{count}개 발견",
+    "description": "이 리소스를 사용하려면 다음 의존성이 필요합니다.",
+    "analyzeButton": "전체 의존성 분석",
+    "reanalyzeButton": "다시 분석",
+    "analyzing": "분석 중...",
+    "mcpServers": "MCP 서버",
+    "skills": "스킬",
+    "agents": "에이전트",
+    "unresolved": "미해결",
+    "circularDetected": "순환 의존성 감지됨",
+    "showDirectOnly": "▼ 직접 의존성만 보기",
+    "showFullTree": "▶ 전체 의존성 트리 보기",
+    "recommendedOrder": "권장 설치 순서",
+    "mcpHint": "MCP 서버는 Claude Code 설정에서 활성화해야 합니다. {command} 명령어로 설정할 수 있습니다."
+  },
+  "examples": {
+    "title": "사용 예시",
+    "count": "{count}개",
+    "collapse": "접기",
+    "showMore": "{count}개 더 보기",
+    "input": "입력",
+    "output": "출력",
+    "code": "코드"
+  },
+  "files": {
+    "title": "추가 파일",
+    "description": "이 리소스에는 {count}개의 추가 파일이 포함되어 있습니다. 각 파일을 클릭하여 내용을 확인하세요.",
+    "count": "{count}개",
+    "types": {
+      "script": {
+        "label": "실행 스크립트",
+        "description": "node/bash/python으로 실행 가능한 스크립트"
+      },
+      "reference": {
+        "label": "참조 문서",
+        "description": "컨텍스트 이해를 위한 참조 자료"
+      },
+      "template": {
+        "label": "템플릿",
+        "description": "프로젝트에 복사할 템플릿 파일"
+      },
+      "config": {
+        "label": "설정 파일",
+        "description": "프로젝트 설정에 추가할 파일"
+      }
+    }
+  },
+  "hook": {
+    "settingsTitle": "Hook 설정",
+    "installTitle": "설치 방법",
+    "installDescription": "아래 설정을 {settingsPath} 또는 {projectPath}에 추가하세요.",
+    "installTip": "이미 hooks 섹션이 있다면 해당 이벤트 배열에 설정을 추가하세요.",
+    "docsLink": "Hook 문서 보기 →",
+    "securityWarning": "보안 검사 결과: {count}개 위험 감지"
+  },
+  "package": {
+    "contentsTitle": "포함 아이템",
+    "contentsDescription": "이 패키지에 포함된 아이템들입니다. 각 아이템을 개별적으로 설치하거나, 전체 패키지를 한 번에 설치할 수 있습니다.",
+    "descriptionTitle": "패키지 설명"
+  }
+}

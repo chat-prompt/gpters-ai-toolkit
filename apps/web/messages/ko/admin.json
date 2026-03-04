@@ -1,0 +1,75 @@
+{
+  "menu": {
+    "label": "Admin 메뉴",
+    "currentPage": "현재 페이지",
+    "edit": "편집하기",
+    "createNew": "새로 만들기",
+    "manage": "관리",
+    "openDashboard": "대시보드 열기",
+    "catalog": "카탈로그 관리",
+    "tags": "태그 관리",
+    "mcpServers": "MCP 서버",
+    "users": "사용자 관리"
+  },
+  "prompts": {
+    "searchPlaceholder": "프롬프트 검색...",
+    "allFilter": "전체 ({count})",
+    "filter": "필터",
+    "clearFilters": "필터 초기화",
+    "difficulty": "난이도",
+    "tags": "태그",
+    "tagsSelected": "({count} 선택)",
+    "results": "{count}개의 프롬프트",
+    "resultsTotal": "(전체 {total}개)",
+    "expectedOutcome": "예상 결과",
+    "useCase": "사용 시나리오",
+    "related": "관련:",
+    "noResults": "검색 결과가 없습니다.",
+    "clearFiltersLink": "필터 초기화",
+    "collapse": "접기",
+    "showMore": "더 보기",
+    "promptExamples": "프롬프트 예시",
+    "viewAll": "전체 보기"
+  },
+  "stats": {
+    "overview": "Overview",
+    "totalItems": "Total Items",
+    "categories": "Categories",
+    "typeDistribution": "Content Type Distribution",
+    "topCategories": "Top Categories",
+    "recentlyAdded": "Recently Added",
+    "noData": "No data",
+    "noCategoryData": "No category data",
+    "noNewItems": "No new items in this period",
+    "period": {
+      "7d": "7 Days",
+      "30d": "30 Days",
+      "90d": "90 Days"
+    }
+  },
+  "welfare": {
+    "registeredSkills": "등록된 스킬",
+    "updates": "업데이트",
+    "skillViews": "스킬 조회",
+    "searches": "검색",
+    "qualityMetrics": "품질 지표",
+    "successRate": "성공률",
+    "avgResponseTime": "평균 응답시간",
+    "top3Skills": "TOP 3 스킬",
+    "skillRanking": "스킬 조회 순위",
+    "contributors": "배포자 목록",
+    "weeklyTrend": "주간별 트렌드",
+    "weeklyReport": "주간 리포트",
+    "copyReport": "Copy Report",
+    "copied": "Copied!",
+    "table": {
+      "week": "주차",
+      "newSkills": "신규 스킬",
+      "updates": "업데이트",
+      "views": "조회수",
+      "searches": "검색",
+      "successRate": "성공률"
+    },
+    "countSuffix": "개"
+  }
+}

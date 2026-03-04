@@ -4,6 +4,7 @@
  * Displays detailed information about a specific Claude Code hook
  * including event configuration, security analysis, and settings snippets.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { getItemById } from '@/lib/core/catalog'
 import { HOOK_EVENTS } from '@/lib/core/types'
 import type { HookEvent } from '@/lib/core/types'
@@ -57,8 +58,9 @@ function generateHookSettingsSnippet(item: {
   return JSON.stringify(settingsSnippet, null, 2)
 }
 
-export default async function HookPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function HookPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
+  const { locale, id } = await params
+  setRequestLocale(locale)
   const [item, session] = await Promise.all([getItemById(id), auth()])
 
   if (!item || item.type !== 'hook') {

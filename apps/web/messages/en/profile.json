@@ -1,0 +1,22 @@
+{
+  "title": "Profile",
+  "joinDate": "Joined",
+  "lastLogin": "Last login",
+  "organizations": "Organizations",
+  "currentOrg": "Current",
+  "switchTo": "Switch to",
+  "noOrgs": "No organization memberships found.",
+  "myItems": "My Items",
+  "noItems": "No items created yet.",
+  "stats": {
+    "totalItems": "Total Items",
+    "published": "Published",
+    "drafts": "Drafts"
+  },
+  "relativeTime": {
+    "justNow": "Just now",
+    "minutesAgo": "{count}m ago",
+    "hoursAgo": "{count}h ago",
+    "daysAgo": "{count}d ago"
+  }
+}

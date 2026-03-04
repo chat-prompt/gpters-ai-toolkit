@@ -1,0 +1,75 @@
+{
+  "menu": {
+    "label": "Admin menu",
+    "currentPage": "Current page",
+    "edit": "Edit",
+    "createNew": "Create new",
+    "manage": "Manage",
+    "openDashboard": "Open dashboard",
+    "catalog": "Catalog",
+    "tags": "Tags",
+    "mcpServers": "MCP Servers",
+    "users": "Users"
+  },
+  "prompts": {
+    "searchPlaceholder": "Search prompts...",
+    "allFilter": "All ({count})",
+    "filter": "Filter",
+    "clearFilters": "Clear filters",
+    "difficulty": "Difficulty",
+    "tags": "Tags",
+    "tagsSelected": "({count} selected)",
+    "results": "{count} prompts",
+    "resultsTotal": "(of {total} total)",
+    "expectedOutcome": "Expected outcome",
+    "useCase": "Use case",
+    "related": "Related:",
+    "noResults": "No results found.",
+    "clearFiltersLink": "Clear filters",
+    "collapse": "Collapse",
+    "showMore": "Show more",
+    "promptExamples": "Prompt examples",
+    "viewAll": "View all"
+  },
+  "stats": {
+    "overview": "Overview",
+    "totalItems": "Total Items",
+    "categories": "Categories",
+    "typeDistribution": "Content Type Distribution",
+    "topCategories": "Top Categories",
+    "recentlyAdded": "Recently Added",
+    "noData": "No data",
+    "noCategoryData": "No category data",
+    "noNewItems": "No new items in this period",
+    "period": {
+      "7d": "7 Days",
+      "30d": "30 Days",
+      "90d": "90 Days"
+    }
+  },
+  "welfare": {
+    "registeredSkills": "Registered Skills",
+    "updates": "Updates",
+    "skillViews": "Skill Views",
+    "searches": "Searches",
+    "qualityMetrics": "Quality Metrics",
+    "successRate": "Success Rate",
+    "avgResponseTime": "Avg Response Time",
+    "top3Skills": "TOP 3 Skills",
+    "skillRanking": "Skill View Ranking",
+    "contributors": "Contributors",
+    "weeklyTrend": "Weekly Trend",
+    "weeklyReport": "Weekly Report",
+    "copyReport": "Copy Report",
+    "copied": "Copied!",
+    "table": {
+      "week": "Week",
+      "newSkills": "New Skills",
+      "updates": "Updates",
+      "views": "Views",
+      "searches": "Searches",
+      "successRate": "Success Rate"
+    },
+    "countSuffix": ""
+  }
+}

@@ -11,6 +11,7 @@ import { signOut } from 'next-auth/react'
 import Image from 'next/image'
 import { Link } from '@/i18n/navigation'
 import { useRouter } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import type { UserRole } from '@/lib/security/rbac'
 
 /**
@@ -58,6 +59,7 @@ export function UserMenu({ user }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const t = useTranslations('common')
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -155,7 +157,7 @@ export function UserMenu({ user }: UserMenuProps) {
               className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
               onClick={() => setIsOpen(false)}
             >
-              프로필
+              {t('userMenu.profile')}
             </Link>
             {showAdminLink && (
               <>
@@ -179,7 +181,7 @@ export function UserMenu({ user }: UserMenuProps) {
               onClick={() => signOut({ callbackUrl: '/auth/signin' })}
               className="w-full px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
             >
-              로그아웃
+              {t('userMenu.signOut')}
             </button>
           </div>
         </div>

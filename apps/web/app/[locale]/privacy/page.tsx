@@ -4,6 +4,7 @@
  * Public page describing MCP data collection practices and opt-out methods.
  * Accessible without authentication.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
@@ -14,7 +15,9 @@ export const metadata = {
   description: 'MCP 서버 데이터 수집 정책 및 옵트아웃 안내',
 }
 
-export default function PrivacyPage() {
+export default async function PrivacyPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  setRequestLocale(locale)
   return (
     <div className="min-h-screen grid-pattern noise-overlay">
       {/* Ambient Background Gradients */}

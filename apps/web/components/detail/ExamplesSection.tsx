@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useMemo, memo } from 'react'
+import { useTranslations } from 'next-intl'
 import { CopyButton } from '../ui/CopyButton'
 import { MarkdownContent } from '../ui/MarkdownContent'
 import { parseExamplesFromContent, type Example } from '@/lib/search/parse-examples'
@@ -37,6 +38,7 @@ interface ExampleCardProps {
  * Individual example card with input/output display
  */
 const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
+  const t = useTranslations('detail.examples')
   const hasInputOutput = example.input && example.output
 
   return (
@@ -64,7 +66,7 @@ const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
           <div>
             <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)]">
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                입력
+                {t('input')}
               </span>
               <CopyButton text={example.input!} />
             </div>
@@ -77,7 +79,7 @@ const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
           <div>
             <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)]">
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                출력
+                {t('output')}
               </span>
               <CopyButton text={example.output!} />
             </div>
@@ -91,7 +93,7 @@ const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
         <div>
           <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)]">
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              {example.language || '코드'}
+              {example.language || t('code')}
             </span>
             <CopyButton text={example.code} />
           </div>
@@ -121,6 +123,7 @@ export const ExamplesSection = memo(function ExamplesSection({
   maxVisible = 3,
 }: ExamplesSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const t = useTranslations('detail.examples')
 
   const examples = useMemo(() => parseExamplesFromContent(content), [content])
 
@@ -139,10 +142,10 @@ export const ExamplesSection = memo(function ExamplesSection({
         <div className="flex items-center gap-3">
           <span className="text-xl">💡</span>
           <h2 className="text-lg font-medium text-[var(--text-primary)]">
-            사용 예시
+            {t('title')}
           </h2>
           <span className="px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-xs text-[var(--text-muted)]">
-            {examples.length}개
+            {examples.length}
           </span>
         </div>
       </div>
@@ -162,12 +165,12 @@ export const ExamplesSection = memo(function ExamplesSection({
         >
           {isExpanded ? (
             <>
-              <span>접기</span>
+              <span>{t('collapse')}</span>
               <span className="text-xs">▲</span>
             </>
           ) : (
             <>
-              <span>{hiddenCount}개 더 보기</span>
+              <span>{t('showMore', { count: hiddenCount })}</span>
               <span className="text-xs">▼</span>
             </>
           )}

@@ -4,6 +4,7 @@
  * Interactive onboarding guide for setting up the MCP server
  * integration and Claude Code hooks with step-by-step instructions.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 import { auth } from '@/lib/core/auth'
 import { GettingStartedContent } from './GettingStartedContent'
@@ -11,7 +12,9 @@ import { GettingStartedContent } from './GettingStartedContent'
 /** Internal email domain for full plugin access (empty = no internal features) */
 const INTERNAL_DOMAIN = process.env.INTERNAL_ORGANIZATION_DOMAIN || ''
 
-export default async function GettingStartedPage() {
+export default async function GettingStartedPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  setRequestLocale(locale)
   const session = await auth()
   const email = session?.user?.email ?? ''
   const isInternal = INTERNAL_DOMAIN ? email.endsWith(`@${INTERNAL_DOMAIN}`) : false

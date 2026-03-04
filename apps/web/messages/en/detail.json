@@ -1,0 +1,81 @@
+{
+  "toc": {
+    "overview": "Overview",
+    "examples": "Examples",
+    "dependencies": "Dependencies",
+    "files": "Additional Files",
+    "changelog": "Changelog",
+    "related": "Related Items",
+    "settings": "Hook Settings",
+    "install": "Installation",
+    "description": "Description",
+    "contents": "Included Items"
+  },
+  "relatedItems": {
+    "title": "Related Items",
+    "subtitle": "Check out skills, agents, and commands with similar tags.",
+    "sameAuthor": "Same author"
+  },
+  "dependencies": {
+    "title": "Required Dependencies",
+    "found": "{count} found",
+    "description": "The following dependencies are required to use this resource.",
+    "analyzeButton": "Analyze All Dependencies",
+    "reanalyzeButton": "Re-analyze",
+    "analyzing": "Analyzing...",
+    "mcpServers": "MCP Servers",
+    "skills": "Skills",
+    "agents": "Agents",
+    "unresolved": "Unresolved",
+    "circularDetected": "Circular dependency detected",
+    "showDirectOnly": "▼ Show direct dependencies only",
+    "showFullTree": "▶ Show full dependency tree",
+    "recommendedOrder": "Recommended install order",
+    "mcpHint": "MCP servers must be enabled in Claude Code settings. Configure with {command}."
+  },
+  "examples": {
+    "title": "Usage Examples",
+    "count": "{count} examples",
+    "collapse": "Collapse",
+    "showMore": "Show {count} more",
+    "input": "Input",
+    "output": "Output",
+    "code": "Code"
+  },
+  "files": {
+    "title": "Additional Files",
+    "description": "This resource includes {count} additional files. Click each file to view its contents.",
+    "count": "{count} files",
+    "types": {
+      "script": {
+        "label": "Executable Script",
+        "description": "Script runnable with node/bash/python"
+      },
+      "reference": {
+        "label": "Reference Document",
+        "description": "Reference material for context understanding"
+      },
+      "template": {
+        "label": "Template",
+        "description": "Template file to copy to your project"
+      },
+      "config": {
+        "label": "Config File",
+        "description": "File to add to project settings"
+      }
+    }
+  },
+  "hook": {
+    "settingsTitle": "Hook Settings",
+    "installTitle": "Installation",
+    "installDescription": "Add the following settings to {settingsPath} or {projectPath}.",
+    "installTip": "If you already have a hooks section, add the config to the corresponding event array.",
+    "docsLink": "View Hook docs →",
+    "securityWarning": "Security check: {count} risk(s) detected"
+  },
+  "package": {
+    "contentsTitle": "Included Items",
+    "contentsDescription": "These are the items included in this package. You can install each item individually or install the entire package at once.",
+    "descriptionTitle": "Package Description"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "title": "프로필",
+  "joinDate": "가입일",
+  "lastLogin": "마지막 로그인",
+  "organizations": "Organizations",
+  "currentOrg": "Current",
+  "switchTo": "Switch to",
+  "noOrgs": "No organization memberships found.",
+  "myItems": "내 아이템",
+  "noItems": "아직 생성한 아이템이 없습니다.",
+  "stats": {
+    "totalItems": "Total Items",
+    "published": "Published",
+    "drafts": "Drafts"
+  },
+  "relativeTime": {
+    "justNow": "방금 전",
+    "minutesAgo": "{count}분 전",
+    "hoursAgo": "{count}시간 전",
+    "daysAgo": "{count}일 전"
+  }
+}

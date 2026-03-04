@@ -3,5 +3,15 @@
     "badge": "Guides",
     "title": "Vibe Coding Guides",
     "description": "바이브 코딩을 위한 실용적인 설정 가이드 모음입니다.\n비개발자도 따라할 수 있는 단계별 안내를 제공합니다."
+  },
+  "search": {
+    "placeholder": "가이드 검색...",
+    "resultsCount": "{count}개의 가이드 검색됨",
+    "noResults": "\"{query}\"에 대한 결과가 없습니다",
+    "clearSearch": "검색어 지우기"
+  },
+  "empty": {
+    "title": "아직 가이드가 없습니다",
+    "subtitle": "곧 유용한 가이드들이 추가될 예정입니다"
   }
 }

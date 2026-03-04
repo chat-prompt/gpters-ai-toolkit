@@ -4,6 +4,7 @@
  * Displays detailed information about a specific skill including
  * content, installation guide, dependencies, changelog, and version history.
  */
+import { setRequestLocale } from 'next-intl/server'
 import { getItemById, getRelatedItems } from '@/lib/core/catalog'
 import { parseExamplesFromContent } from '@/lib/search/parse-examples'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
@@ -22,8 +23,9 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SkillPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function SkillPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
+  const { locale, id } = await params
+  setRequestLocale(locale)
   const [item, session] = await Promise.all([getItemById(id), auth()])
 
   if (!item || item.type !== 'skill') {

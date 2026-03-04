@@ -1,0 +1,45 @@
+{
+  "badge": "Terms of Service",
+  "title": "Terms of",
+  "titleHighlight": "Service",
+  "sections": {
+    "overview": {
+      "title": "1. Service Overview",
+      "content": "{siteName} (\"the Service\") is a platform for sharing skills, agents, and guides for AI coding tools. It provides skill search, viewing, and deployment via MCP (Model Context Protocol) server."
+    },
+    "conditions": {
+      "title": "2. Usage Conditions",
+      "items": [
+        "Google OAuth authentication is required to use the Service.",
+        "Content you post (skills, agents, guides, etc.) must be authored by you or content you have rights to distribute.",
+        "You must not distribute content that intentionally contains malicious code or security vulnerabilities.",
+        "You must not use data collected through the Service for unauthorized commercial purposes."
+      ]
+    },
+    "rights": {
+      "title": "3. Content Rights",
+      "content": "Intellectual property rights of content posted by users belong to the original author. By posting content to the Service, you grant other users a non-exclusive license to search, view, and install that content within the Service."
+    },
+    "disclaimer": {
+      "title": "4. Disclaimer",
+      "items": [
+        "The Service is provided \"as is\" with no warranty of availability or accuracy.",
+        "The Service operator is not liable for damages caused by skills/agents installed by users.",
+        "The Service may change or discontinue features without prior notice."
+      ]
+    },
+    "account": {
+      "title": "5. Account & Access",
+      "content": "The Service operator may restrict access or deactivate accounts of users who violate these terms. Organization administrators may manage access rights for their members."
+    },
+    "changes": {
+      "title": "6. Changes to Terms",
+      "content": "These terms may be changed with prior notice. Updated terms take effect from the time they are posted to the Service. Important changes will be announced via in-service notice or email."
+    },
+    "contact": {
+      "title": "7. Contact",
+      "content": "For questions about these terms, contact {email}."
+    }
+  },
+  "lastUpdated": "Last updated: March 2026"
+}

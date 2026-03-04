@@ -27,5 +27,9 @@
     "label": "Language",
     "ko": "한국어",
     "en": "English"
+  },
+  "userMenu": {
+    "profile": "Profile",
+    "signOut": "Sign out"
   }
 }

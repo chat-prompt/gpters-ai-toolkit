@@ -1,0 +1,52 @@
+{
+  "badge": "Privacy Policy",
+  "title": "데이터 수집",
+  "titleHighlight": "정책",
+  "sections": {
+    "overview": {
+      "title": "1. 개요",
+      "p1": "{siteName}은 Claude Code 스킬 공유 플랫폼입니다. MCP(Model Context Protocol) 서버를 통해 스킬 검색, 조회, 배포 기능을 제공하며, 서비스 개선을 위해 최소한의 사용 데이터를 수집합니다.",
+      "p2": "본 정책은 MCP 서버 사용 데이터에만 적용됩니다. 웹 인증(Google OAuth) 및 쿠키는 별도의 브라우저 세션 관리에 사용되며 본 정책의 범위 밖입니다."
+    },
+    "collected": {
+      "title": "2. 수집 데이터",
+      "columns": {
+        "item": "항목",
+        "purpose": "목적",
+        "retention": "보존 기간"
+      },
+      "rows": {
+        "auditLogs": "IP 해시, User-Agent, 클라이언트 정보, 요청/응답 메타데이터 — 보안 모니터링 및 디버깅",
+        "sessions": "세션 집계, 행동 로그 — 사용 패턴 분석",
+        "skillEvents": "검색, 조회, 배포 이벤트 — 스킬 품질 지표",
+        "analytics": "익명화 이벤트 외부 전송 — 집계 통계",
+        "retentionAudit": "30일",
+        "retentionSessions": "세션 종료 시",
+        "retentionSkillEvents": "무기한",
+        "retentionAnalytics": "외부 서비스 정책에 따름"
+      }
+    },
+    "notCollected": {
+      "title": "3. 수집하지 않는 것",
+      "items": [
+        "코드 내용 또는 파일 시스템 데이터",
+        "Claude와의 대화 내용",
+        "로컬 파일 경로 또는 프로젝트 구조",
+        "해시되지 않은 IP 주소 (원본 IP는 저장하지 않음)",
+        "비밀번호, 토큰, 인증 정보 원문"
+      ]
+    },
+    "optOut": {
+      "title": "4. 옵트아웃 방법",
+      "description": "MCP 요청 시 X-Analytics-Opt-Out: true 헤더를 포함하면 감사 로그, 세션 추적, 스킬 이벤트 기록, 외부 전송이 모두 비활성화됩니다.",
+      "rateLimitNote": "Rate limiting 및 보안 기능은 옵트아웃과 무관하게 유지되며, MCP 도구 응답에도 영향이 없습니다.",
+      "exampleTitle": "Claude Code 설정 예시",
+      "exampleDesc": "{settingsPath}의 MCP 서버 설정에 헤더를 추가하세요:"
+    },
+    "contact": {
+      "title": "5. 문의",
+      "description": "데이터 수집에 대한 질문이나 삭제 요청은 {email}로 연락해 주세요."
+    }
+  },
+  "lastUpdated": "최종 업데이트: 2026년 3월"
+}
