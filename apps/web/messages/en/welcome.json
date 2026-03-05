@@ -5,33 +5,26 @@
     "description": "Search and share skills for coding agents in one place.\nConnect via Claude Code plugin or the AITK CLI.",
     "cta": "Get Started"
   },
-  "features": {
-    "badge": "What We Offer",
-    "title": "What You'll Find",
-    "skills": {
-      "title": "Reusable Skills",
-      "description": "Install proven workflows like code review, TDD, and debugging as ready-to-use skills."
+  "howItWorks": {
+    "badge": "How It Works",
+    "title": "How It Works",
+    "step1": {
+      "title": "Ask in Natural Language",
+      "description": "\"Review my code\", \"Let's do TDD\" — just talk to your agent as usual."
     },
-    "agents": {
-      "title": "Specialist Agents",
-      "description": "Search and install specialist agents for code review, debugging, refactoring, and more."
+    "step2": {
+      "title": "Auto Skill Discovery",
+      "description": "Your agent reads the context and automatically finds the right skill from AI Toolkit."
     },
-    "commands": {
-      "title": "Custom Commands",
-      "description": "Simplify your development workflow with project-specific custom commands."
-    },
-    "hooks": {
-      "title": "Hooks",
-      "description": "Extend your workflow with event-driven automation. Connect to commits, builds, deploys, and more."
-    },
-    "packages": {
-      "title": "Packages",
-      "description": "Bundled collections of skills and agents that you can install all at once."
-    },
-    "guides": {
-      "title": "Usage Guides",
-      "description": "Check out coding agent tips, tricks, and best practices."
+    "step3": {
+      "title": "Instant Execution",
+      "description": "The skill loads and runs a proven workflow. No install or setup — it just works."
     }
+  },
+  "popularSkills": {
+    "badge": "Popular Skills",
+    "title": "Popular Skills",
+    "viewAll": "View all skills →"
   },
   "why": {
     "badge": "Why AI Toolkit",

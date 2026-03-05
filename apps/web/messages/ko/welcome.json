@@ -5,33 +5,26 @@
     "description": "코딩 에이전트용 스킬을 한곳에서 검색하고 공유하세요.\nClaude Code 플러그인 또는 AITK CLI로 바로 연결됩니다.",
     "cta": "시작하기"
   },
-  "features": {
-    "badge": "What We Offer",
-    "title": "제공하는 콘텐츠",
-    "skills": {
-      "title": "재사용 스킬",
-      "description": "코드 리뷰, TDD, 디버깅 등 검증된 워크플로우를 스킬로 설치해 바로 활용하세요."
+  "howItWorks": {
+    "badge": "How It Works",
+    "title": "이렇게 동작합니다",
+    "step1": {
+      "title": "자연어로 요청",
+      "description": "\"코드 리뷰해줘\", \"TDD로 개발하자\" — 평소처럼 에이전트에게 말하세요."
     },
-    "agents": {
-      "title": "전문 에이전트",
-      "description": "코드 리뷰, 디버깅, 리팩토링 등 전문 에이전트를 검색하고 설치하세요."
+    "step2": {
+      "title": "스킬 자동 검색",
+      "description": "에이전트가 맥락을 파악하고 AI Toolkit에서 관련 스킬을 자동으로 찾습니다."
     },
-    "commands": {
-      "title": "커스텀 커맨드",
-      "description": "프로젝트별 맞춤 커맨드로 개발 워크플로우를 간소화하세요."
-    },
-    "hooks": {
-      "title": "훅",
-      "description": "이벤트 기반 자동화로 워크플로우를 확장하세요. 커밋, 빌드, 배포 등에 연결됩니다."
-    },
-    "packages": {
-      "title": "패키지",
-      "description": "여러 스킬과 에이전트를 묶어 한 번에 설치할 수 있는 번들 패키지입니다."
-    },
-    "guides": {
-      "title": "활용 가이드",
-      "description": "코딩 에이전트 활용 노하우와 베스트 프랙티스를 확인하세요."
+    "step3": {
+      "title": "즉시 적용",
+      "description": "스킬이 로드되어 검증된 워크플로우로 작업을 수행합니다. 설치나 설정 없이 바로 실행됩니다."
     }
+  },
+  "popularSkills": {
+    "badge": "Popular Skills",
+    "title": "인기 스킬",
+    "viewAll": "전체 스킬 보기 →"
   },
   "why": {
     "badge": "Why AI Toolkit",

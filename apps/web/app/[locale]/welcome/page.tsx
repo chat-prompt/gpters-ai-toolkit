@@ -53,31 +53,32 @@ export default async function WelcomePage({
   setRequestLocale(locale)
   const t = await getTranslations('welcome')
 
-  /** Feature 카드 데이터 */
-  const FEATURES = [
+  /** How It Works 스텝 데이터 */
+  const HOW_IT_WORKS_STEPS = [
+    { key: 'step1', number: '1' },
+    { key: 'step2', number: '2' },
+    { key: 'step3', number: '3' },
+  ] as const
+
+  /** 인기 스킬 예시 데이터 */
+  const POPULAR_SKILLS = [
     {
-      icon: '/',
-      label: 'Skills',
-      title: t('features.skills.title'),
-      description: t('features.skills.description'),
+      name: '스킬 생성 가이드',
+      id: 'skill-creator',
+      description: '새로운 스킬을 생성하고 최적화하는 가이드',
+      icon: '🛠',
     },
     {
-      icon: '@',
-      label: 'Agents',
-      title: t('features.agents.title'),
-      description: t('features.agents.description'),
+      name: 'Excel 스프레드시트 생성',
+      id: 'create-xlsx',
+      description: 'XLSX 파일 생성, 편집, 분석 — openpyxl/pandas 기반',
+      icon: '📊',
     },
     {
-      icon: '>',
-      label: 'Commands',
-      title: t('features.commands.title'),
-      description: t('features.commands.description'),
-    },
-    {
-      icon: '?',
-      label: 'Guides',
-      title: t('features.guides.title'),
-      description: t('features.guides.description'),
+      name: '이메일 마케팅 전문가',
+      id: 'email-marketing-expert',
+      description: '이메일 마케팅 전략, 전달성, 자동화 가이드',
+      icon: '📧',
     },
   ] as const
 
@@ -141,40 +142,74 @@ export default async function WelcomePage({
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* How It Works Section */}
       <section className="relative z-10 py-20 px-8">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('features.badge')}
+            {t('howItWorks.badge')}
           </p>
           <h2
             className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
             style={{ fontFamily: 'var(--font-newsreader)' }}
           >
-            {t('features.title')}
+            {t('howItWorks.title')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {FEATURES.map((feature) => (
-              <div
-                key={feature.label}
-                className="group rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 hover:border-[var(--brand-primary)]/30 transition-colors"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="w-8 h-8 rounded-lg bg-[var(--bg-secondary)] flex items-center justify-center text-sm font-mono text-[var(--brand-primary)]">
-                    {feature.icon}
-                  </span>
-                  <span className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    {feature.label}
-                  </span>
+          <div className="space-y-6">
+            {HOW_IT_WORKS_STEPS.map((step) => (
+              <div key={step.key} className="flex items-start gap-5">
+                <span className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center text-white text-lg font-medium">
+                  {step.number}
+                </span>
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+                    {t(`howItWorks.${step.key}.title`)}
+                  </h3>
+                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                    {t(`howItWorks.${step.key}.description`)}
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                  {feature.description}
-                </p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Popular Skills Section */}
+      <section className="relative z-10 py-20 px-8">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
+            {t('popularSkills.badge')}
+          </p>
+          <h2
+            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
+            style={{ fontFamily: 'var(--font-newsreader)' }}
+          >
+            {t('popularSkills.title')}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {POPULAR_SKILLS.map((skill) => (
+              <Link
+                key={skill.id}
+                href={`/skill/${skill.id}`}
+                className="group rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 hover:border-[var(--brand-primary)]/30 transition-colors"
+              >
+                <div className="text-2xl mb-3">{skill.icon}</div>
+                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2 group-hover:text-[var(--brand-primary)] transition-colors">
+                  {skill.name}
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                  {skill.description}
+                </p>
+              </Link>
+            ))}
+          </div>
+          <div className="text-center mt-8">
+            <Link
+              href="/"
+              className="text-sm text-[var(--brand-primary)] hover:underline font-medium"
+            >
+              {t('popularSkills.viewAll')}
+            </Link>
           </div>
         </div>
       </section>
