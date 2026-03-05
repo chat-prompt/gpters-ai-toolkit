@@ -131,7 +131,15 @@ function renderPage(success: boolean, message: string): string {
  * @param serverUrl - AI Toolkit 서버 URL
  * @returns 수신한 토큰
  */
-function waitForToken(serverUrl: string): Promise<string> {
+/** 로그인 콜백 결과 */
+interface LoginResult {
+  /** 발급된 토큰 */
+  token: string
+  /** 로그인한 사용자 이메일 */
+  email?: string
+}
+
+function waitForToken(serverUrl: string): Promise<LoginResult> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       server.close()
@@ -142,12 +150,14 @@ function waitForToken(serverUrl: string): Promise<string> {
       const url = new URL(req.url ?? '/', `http://localhost`)
       if (url.pathname === '/callback') {
         const token = url.searchParams.get('token')
+        const email = url.searchParams.get('email')
         if (token) {
+          const emailMsg = email ? `<br>Logged in as <strong>${email}</strong>` : ''
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-          res.end(renderPage(true, 'Token saved.<br>You can now use aitk in your terminal.'))
+          res.end(renderPage(true, `Token saved.${emailMsg}<br>You can now use aitk in your terminal.`))
           clearTimeout(timeout)
           server.close()
-          resolve(token)
+          resolve({ token, email: email ?? undefined })
         } else {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
           res.end(renderPage(false, 'Token not received. Please try again.'))
@@ -206,10 +216,11 @@ export async function runLogin(token?: string): Promise<void> {
 
   // 브라우저 기반 로그인
   try {
-    const receivedToken = await waitForToken(config.serverUrl)
-    config.token = receivedToken
+    const result = await waitForToken(config.serverUrl)
+    config.token = result.token
     writeConfig(config)
-    info(`Login successful! Token saved: ${config.serverUrl}`)
+    const emailSuffix = result.email ? ` (${result.email})` : ''
+    info(`Login successful!${emailSuffix} Token saved: ${config.serverUrl}`)
   } catch (err) {
     error(err instanceof Error ? err.message : 'Login failed')
   }

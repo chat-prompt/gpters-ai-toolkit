@@ -13,10 +13,11 @@ import { runReportSkip } from '../src/commands/report-skip.js'
 import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runLogin } from '../src/commands/login.js'
 import { runConfig } from '../src/commands/config.js'
+import { runWhoami } from '../src/commands/whoami.js'
 import { error, info } from '../src/output.js'
 
 /** 버전 */
-const VERSION = '0.2.2'
+const VERSION = '0.2.3'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)
@@ -63,6 +64,7 @@ Usage:
   aitk report-skip --query <query> --reason <reason> [--result-ids id1,id2]
   aitk report-outcome --skill-id <id> --applied true|false --summary <text>
   aitk login --token <token>
+  aitk whoami
   aitk --version | --help
 
 Commands:
@@ -75,6 +77,7 @@ Commands:
   report-skip     Report skill search skip reason
   report-outcome  Report skill application outcome
   login           Save auth token
+  whoami          Show current authenticated user
 
 Output:
   stdout: JSON (for AI parsing)
@@ -189,6 +192,12 @@ Options:
   --token <token>    Manually save a token (skips browser flow)
 
 Without --token, opens browser for Google OAuth login.`,
+
+  whoami: `aitk whoami - Show current authenticated user
+
+Usage: aitk whoami
+
+Displays the email, name, and organization of the currently authenticated user.`,
 }
 
 /**
@@ -298,6 +307,11 @@ async function main(): Promise<void> {
 
     case 'login': {
       await runLogin(flags['token'])
+      break
+    }
+
+    case 'whoami': {
+      await runWhoami()
       break
     }
 

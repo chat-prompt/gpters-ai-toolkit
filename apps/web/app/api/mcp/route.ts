@@ -74,7 +74,7 @@ import {
   extractClientInfo,
   type ClientType,
 } from '@/lib/security/client-type'
-import { db, orgMemberships, mcpSessions } from '@gpters/db'
+import { db, orgMemberships, mcpSessions, users as usersTable, organizations } from '@gpters/db'
 import { eq } from 'drizzle-orm'
 
 // Force dynamic rendering - never cache this route
@@ -770,6 +770,37 @@ export async function POST(request: NextRequest) {
         case 'list':
           validationResult = validateListRequest(body)
           break
+        case 'whoami': {
+          // Return authenticated user info
+          if (!userId) {
+            return addCorsHeaders(
+              NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 })
+            )
+          }
+          const [userInfo] = await db
+            .select({ name: usersTable.name, email: usersTable.email })
+            .from(usersTable)
+            .where(eq(usersTable.id, userId))
+            .limit(1)
+          const [orgInfo] = orgId
+            ? await db
+                .select({ name: organizations.name })
+                .from(organizations)
+                .where(eq(organizations.id, orgId))
+                .limit(1)
+            : [undefined]
+          return addCorsHeaders(
+            NextResponse.json({
+              success: true,
+              user: {
+                id: userId,
+                name: userInfo?.name,
+                email: userInfo?.email,
+                org: orgId ? { id: orgId, name: orgInfo?.name } : null,
+              },
+            })
+          )
+        }
         case 'tools':
           // No validation needed for tools
           validationResult = { success: true, data: body }

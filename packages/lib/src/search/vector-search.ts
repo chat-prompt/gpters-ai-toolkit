@@ -126,6 +126,97 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     .limit(limit)
   const dbMs = Date.now() - dbStart
 
+  // Keyword fallback when semantic search returns no results
+  if (results.length === 0) {
+    log.info('Semantic search returned 0 results, trying keyword fallback', { query: cleanedQuery })
+    const keywordPattern = `%${cleanedQuery}%`
+    const keywordConditions = [
+      eq(catalogItems.status, 'published'),
+      or(
+        sql`${catalogItems.name} ILIKE ${keywordPattern}`,
+        sql`${catalogItems.description} ILIKE ${keywordPattern}`,
+        sql`${catalogItems.tags}::text ILIKE ${keywordPattern}`,
+      )!,
+    ]
+
+    if (type && type !== 'all') {
+      keywordConditions.push(eq(catalogItems.type, type))
+    }
+
+    // Apply same visibility filtering
+    if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
+      keywordConditions.push(
+        or(
+          eq(catalogItems.orgId, orgId),
+          eq(catalogItems.visibility, 'public'),
+          sql`${catalogItems.orgId} IS NULL`
+        )!
+      )
+    } else if (!userId) {
+      keywordConditions.push(
+        or(
+          eq(catalogItems.visibility, 'public'),
+          sql`${catalogItems.orgId} IS NULL`
+        )!
+      )
+    }
+
+    const fallbackStart = Date.now()
+    const fallbackResults = await db
+      .select({
+        id: catalogItems.id,
+        type: catalogItems.type,
+        name: catalogItems.name,
+        description: catalogItems.description,
+        authorId: catalogItems.authorId,
+        tags: catalogItems.tags,
+        difficulty: catalogItems.difficulty,
+        pluginId: catalogItems.pluginId,
+        estimatedTime: catalogItems.estimatedTime,
+        dependencies: catalogItems.dependencies,
+        likes: catalogItems.likes,
+        content: catalogItems.content,
+        readme: catalogItems.readme,
+        files: catalogItems.files,
+        allowedTools: catalogItems.allowedTools,
+        agentModel: catalogItems.agentModel,
+        agentPermissionMode: catalogItems.agentPermissionMode,
+        agentSkills: catalogItems.agentSkills,
+        commandArgumentHint: catalogItems.commandArgumentHint,
+        commandDisableModelInvocation: catalogItems.commandDisableModelInvocation,
+        hookEvent: catalogItems.hookEvent,
+        hookMatcher: catalogItems.hookMatcher,
+        hookCommand: catalogItems.hookCommand,
+        hookTimeout: catalogItems.hookTimeout,
+        hookBlocking: catalogItems.hookBlocking,
+        mcpEnabled: catalogItems.mcpEnabled,
+        version: catalogItems.version,
+        status: catalogItems.status,
+        changelog: catalogItems.changelog,
+        createdAt: catalogItems.createdAt,
+        updatedAt: catalogItems.updatedAt,
+        similarity: sql<number>`0.1`.as('similarity'),
+      })
+      .from(catalogItems)
+      .where(and(...keywordConditions))
+      .orderBy(desc(catalogItems.updatedAt))
+      .limit(limit)
+    const fallbackMs = Date.now() - fallbackStart
+
+    const searchTime = Date.now() - startTime
+    log.info('Keyword fallback completed', {
+      fallbackMs,
+      totalMs: searchTime,
+      resultCount: fallbackResults.length,
+    })
+
+    return {
+      items: fallbackResults as Array<CatalogItemRecord & { similarity: number }>,
+      total: fallbackResults.length,
+      searchTime,
+    }
+  }
+
   const searchTime = Date.now() - startTime
 
   log.info('Semantic search completed', {
@@ -209,7 +300,7 @@ export async function findSimilarItems(
 const MAX_QUERY_LENGTH = 500
 
 /** Minimum query length for meaningful semantic search */
-const MIN_QUERY_LENGTH = 3
+const MIN_QUERY_LENGTH = 2
 
 /**
  * Strips noise prefixes from a query and validates the remainder.
@@ -239,6 +330,9 @@ export function cleanQuery(query: string): string | null {
 
   // Too short to be a meaningful search
   if (cleaned.length < MIN_QUERY_LENGTH) return null
+
+  // Bare Hangul jamo (ㄱㄴㄷ..ㅎ, ㅏㅑ..ㅣ) without composed syllables — not meaningful
+  if (/^[\u3131-\u318E\s]+$/.test(cleaned)) return null
 
   // Too long — likely pasted error logs, code, or system prompts
   if (cleaned.length > MAX_QUERY_LENGTH) return null

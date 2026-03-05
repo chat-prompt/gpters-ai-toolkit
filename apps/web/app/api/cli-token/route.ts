@@ -91,8 +91,10 @@ export async function GET(request: NextRequest) {
 
     // localhost 콜백으로 리다이렉트
     if (port) {
+      const callbackParams = new URLSearchParams({ token })
+      if (session.user.email) callbackParams.set('email', session.user.email)
       return NextResponse.redirect(
-        `http://localhost:${port}/callback?token=${encodeURIComponent(token)}`
+        `http://localhost:${port}/callback?${callbackParams.toString()}`
       )
     }
 
