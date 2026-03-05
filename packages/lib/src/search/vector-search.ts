@@ -54,10 +54,17 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
   const queryEmbedding = await generateEmbedding(embeddingText)
   const embeddingMs = Date.now() - embeddingStart
 
-  const similarity = sql<number>`1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)})`
+  const vectorSimilarity = sql<number>`1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)})`
+
+  // Hybrid scoring: vector similarity + keyword match bonus
+  const keywordPattern = `%${cleanedQuery}%`
+  const similarity = sql<number>`(1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)}))
+    + CASE WHEN ${catalogItems.name} ILIKE ${keywordPattern} THEN 0.15 ELSE 0 END
+    + CASE WHEN ${catalogItems.description} ILIKE ${keywordPattern} THEN 0.10 ELSE 0 END
+    + CASE WHEN ${catalogItems.tags}::text ILIKE ${keywordPattern} THEN 0.05 ELSE 0 END`
 
   const conditions = [
-    gt(similarity, minSimilarity),
+    gt(vectorSimilarity, minSimilarity),
     eq(catalogItems.status, 'published'),
     sql`${catalogItems.embedding} IS NOT NULL`,
   ]
