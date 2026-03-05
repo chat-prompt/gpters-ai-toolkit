@@ -2,7 +2,7 @@
 # SessionStart hook: 세션 시작 시 플러그인 자동 업데이트 체크
 
 PLUGIN_NAME="gpters-ai-toolkit"
-MP_DIR="$HOME/.claude/plugins/marketplaces/chat-prompt-gpters-ai-toolkit"
+MP_DIR="$HOME/.claude/plugins/marketplaces/gpters-marketplace"
 CACHE_DIR="$HOME/.claude/plugins/cache/gpters-marketplace/$PLUGIN_NAME"
 INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
 SOURCE_DIR="$MP_DIR/apps/claude-code-plugin"

@@ -6,12 +6,23 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
+/** 스킬 검색 방법 */
+export type SearchMethod = 'auto' | 'mcp' | 'cli'
+
+/** 설정 가능한 키 목록 */
+export const CONFIGURABLE_KEYS: Record<string, { description: string; values?: string[] }> = {
+  searchMethod: { description: '스킬 검색 방법', values: ['auto', 'mcp', 'cli'] },
+  serverUrl: { description: 'API 서버 URL' },
+}
+
 /** CLI 설정 구조 */
 export interface AitkConfig {
   /** API 인증 토큰 */
   token?: string
   /** 서버 URL */
   serverUrl: string
+  /** 스킬 검색 방법 (auto | mcp | cli) */
+  searchMethod?: SearchMethod
 }
 
 /** 기본 서버 URL */
@@ -47,6 +58,7 @@ export function readConfig(): AitkConfig {
     return {
       serverUrl: parsed.serverUrl ?? DEFAULT_SERVER_URL,
       token: parsed.token,
+      searchMethod: parsed.searchMethod,
     }
   } catch {
     return { serverUrl: DEFAULT_SERVER_URL }

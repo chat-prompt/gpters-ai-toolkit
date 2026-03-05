@@ -1,6 +1,6 @@
 {
   "name": "@gpters/aitk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "GPTers AI Toolkit CLI - MCP fallback & standalone CLI tool",
   "type": "module",
   "bin": {
@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/config.ts src/auth.ts src/client.ts src/output.ts src/commands/search.ts src/commands/get.ts src/commands/deploy.ts src/commands/updates.ts src/commands/report-session.ts src/commands/report-skip.ts src/commands/report-outcome.ts src/commands/login.ts --outdir dist/src --target node --format esm && bun build bin/aitk.ts --outdir dist/bin --target node --format esm",
+    "build": "bun build src/config.ts src/auth.ts src/client.ts src/output.ts src/commands/search.ts src/commands/get.ts src/commands/deploy.ts src/commands/updates.ts src/commands/report-session.ts src/commands/report-skip.ts src/commands/report-outcome.ts src/commands/login.ts src/commands/config.ts --outdir dist/src --target node --format esm && bun build bin/aitk.ts --outdir dist/bin --target node --format esm",
     "dev": "bun build bin/aitk.ts --outdir dist/bin --target node --format esm --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
