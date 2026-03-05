@@ -30,15 +30,15 @@
     "badge": "Why AI Toolkit",
     "title": "Why AI Toolkit",
     "lazyLoading": {
-      "title": "Use Instantly, No Local Install",
+      "title": "Instant Use, Zero Install",
       "description": "No need to download skills in advance. With MCP server connected, skills are loaded on demand and always up to date."
     },
     "autoRecommend": {
-      "title": "Context-Aware Auto Recommendations",
+      "title": "Auto Recommendations",
       "description": "Your coding agent reads the context and automatically finds and applies relevant skills. Just describe what you need in natural language."
     },
     "multiAgent": {
-      "title": "Works With Any Coding Agent",
+      "title": "Any Coding Agent",
       "description": "Claude Code plugin, CLI, or MCP direct — share the same skills however you connect. Works with any coding agent that supports MCP."
     }
   },
