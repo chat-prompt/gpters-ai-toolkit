@@ -60,7 +60,7 @@ export async function runDeploy(opts: DeployOptions): Promise<void> {
   if (opts.description) params.description = opts.description
   if (opts.tags) params.tags = opts.tags.split(',').map((t) => t.trim())
 
-  const result = await apiCall('create', params, token)
+  const result = await apiCall('deploy', params, token)
 
   if (!result.ok) {
     if (result.status === 401) error(result.error!, 2)

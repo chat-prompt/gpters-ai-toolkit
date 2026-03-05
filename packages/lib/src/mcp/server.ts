@@ -333,6 +333,14 @@ export async function handleSimpleRequest(
         }
       }
 
+      case 'deploy': {
+        const result = await executeTool('deploy_skill', params, userId, userRole, orgId)
+        return {
+          success: !result.isError,
+          data: JSON.parse(result.content[0].text),
+        }
+      }
+
       case 'update': {
         const result = await executeTool('update_plugin', params, userId, userRole, orgId)
         return {
