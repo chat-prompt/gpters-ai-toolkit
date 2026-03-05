@@ -47,7 +47,7 @@ export async function apiCall<T = unknown>(
       method: 'POST',
       headers,
       body: JSON.stringify(params),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(30000),
     })
 
     if (response.status === 401) {
@@ -98,7 +98,7 @@ export async function jsonRpcCall<T = unknown>(
         method,
         params,
       }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(30000),
     })
 
     if (response.status === 401) {

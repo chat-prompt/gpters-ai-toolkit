@@ -801,8 +801,10 @@ export async function POST(request: NextRequest) {
             })
           )
         }
+        case 'create':
+        case 'deploy':
         case 'tools':
-          // No validation needed for tools
+          // No validation needed for create/deploy/tools
           validationResult = { success: true, data: body }
           break
         default:
