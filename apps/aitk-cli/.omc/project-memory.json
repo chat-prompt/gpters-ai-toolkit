@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1772589438369,
+  "lastScanned": 1772692239301,
   "projectRoot": "/Users/primadonna/projects/gpters-ai-toolkit/apps/aitk-cli",
   "techStack": {
     "languages": [
@@ -37,7 +37,7 @@
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
-      "build": "bun build src/config.ts src/auth.ts src/client.ts src/output.ts src/commands/search.ts src/commands/get.ts src/commands/deploy.ts src/commands/updates.ts src/commands/report-session.ts src/commands/login.ts --outdir dist/src --target node --format esm && bun build bin/aitk.ts --outdir dist/bin --target node --format esm",
+      "build": "bun build src/config.ts src/auth.ts src/client.ts src/output.ts src/commands/search.ts src/commands/get.ts src/commands/deploy.ts src/commands/updates.ts src/commands/report-session.ts src/commands/report-skip.ts src/commands/report-outcome.ts src/commands/login.ts src/commands/config.ts src/commands/whoami.ts --outdir dist/src --target node --format esm && bun build bin/aitk.ts --outdir dist/bin --target node --format esm",
       "dev": "bun build bin/aitk.ts --outdir dist/bin --target node --format esm --watch",
       "typecheck": "tsc --noEmit",
       "clean": "rm -rf dist",
@@ -69,7 +69,7 @@
       "path": "bin",
       "purpose": "Executable scripts",
       "fileCount": 1,
-      "lastAccessed": 1772589438351,
+      "lastAccessed": 1772692239285,
       "keyFiles": [
         "aitk.ts"
       ]
@@ -78,7 +78,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 1,
-      "lastAccessed": 1772589438351,
+      "lastAccessed": 1772692239285,
       "keyFiles": [
         "tsconfig.tsbuildinfo"
       ]
@@ -87,7 +87,7 @@
       "path": "src",
       "purpose": "Source code",
       "fileCount": 4,
-      "lastAccessed": 1772589438354,
+      "lastAccessed": 1772692239287,
       "keyFiles": [
         "auth.ts",
         "client.ts",
@@ -99,7 +99,7 @@
       "path": "tests",
       "purpose": "Test files",
       "fileCount": 2,
-      "lastAccessed": 1772589438354,
+      "lastAccessed": 1772692239288,
       "keyFiles": [
         "auth.test.ts",
         "client.test.ts"
@@ -109,7 +109,7 @@
       "path": "dist/bin",
       "purpose": "Executable scripts",
       "fileCount": 1,
-      "lastAccessed": 1772589438354,
+      "lastAccessed": 1772692239288,
       "keyFiles": [
         "aitk.js"
       ]
@@ -118,106 +118,82 @@
       "path": "dist/src",
       "purpose": "Source code",
       "fileCount": 0,
-      "lastAccessed": 1772589438354,
+      "lastAccessed": 1772692239288,
       "keyFiles": []
     }
   },
   "hotPaths": [
     {
       "path": "bin/aitk.ts",
-      "accessCount": 12,
-      "lastAccessed": 1772677314162,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/login.ts",
-      "accessCount": 12,
-      "lastAccessed": 1772677385055,
+      "accessCount": 5,
+      "lastAccessed": 1772692842058,
       "type": "file"
     },
     {
       "path": "package.json",
-      "accessCount": 7,
-      "lastAccessed": 1772673775431,
+      "accessCount": 3,
+      "lastAccessed": 1772696357024,
       "type": "file"
     },
     {
-      "path": "src/commands/search.ts",
-      "accessCount": 6,
-      "lastAccessed": 1772677368002,
+      "path": "src/auth.ts",
+      "accessCount": 1,
+      "lastAccessed": 1772692313147,
+      "type": "directory"
+    },
+    {
+      "path": "src/commands/deploy.ts",
+      "accessCount": 1,
+      "lastAccessed": 1772692757175,
       "type": "file"
     },
     {
       "path": "src/client.ts",
-      "accessCount": 5,
-      "lastAccessed": 1772677396347,
-      "type": "file"
-    },
-    {
-      "path": "tests/commands/search.test.ts",
-      "accessCount": 4,
-      "lastAccessed": 1772677419383,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/updates.ts",
-      "accessCount": 3,
-      "lastAccessed": 1772677328081,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/deploy.ts",
-      "accessCount": 3,
-      "lastAccessed": 1772677362087,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/config.ts",
-      "accessCount": 2,
-      "lastAccessed": 1772674224585,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/report-skip.ts",
-      "accessCount": 2,
-      "lastAccessed": 1772677363491,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/report-outcome.ts",
-      "accessCount": 2,
-      "lastAccessed": 1772677364246,
-      "type": "file"
-    },
-    {
-      "path": "tests/client.test.ts",
-      "accessCount": 2,
-      "lastAccessed": 1772677418355,
-      "type": "file"
-    },
-    {
-      "path": "src/commands/get.ts",
       "accessCount": 1,
-      "lastAccessed": 1772674261151,
+      "lastAccessed": 1772692758015,
       "type": "file"
     },
     {
-      "path": "src/commands/report-session.ts",
+      "path": "src/output.ts",
       "accessCount": 1,
-      "lastAccessed": 1772674262297,
+      "lastAccessed": 1772692758049,
       "type": "file"
     },
     {
-      "path": "src/commands",
+      "path": "src/commands/undeploy.ts",
       "accessCount": 1,
-      "lastAccessed": 1772677335051,
-      "type": "directory"
+      "lastAccessed": 1772692772037,
+      "type": "file"
     },
     {
-      "path": "src",
+      "path": "src/commands/suggest.ts",
       "accessCount": 1,
-      "lastAccessed": 1772677373552,
-      "type": "directory"
+      "lastAccessed": 1772692776563,
+      "type": "file"
+    },
+    {
+      "path": "src/commands/suggestions.ts",
+      "accessCount": 1,
+      "lastAccessed": 1772692781030,
+      "type": "file"
+    },
+    {
+      "path": "src/commands/resolve.ts",
+      "accessCount": 1,
+      "lastAccessed": 1772692785645,
+      "type": "file"
+    },
+    {
+      "path": "src/commands/add-files.ts",
+      "accessCount": 1,
+      "lastAccessed": 1772692790918,
+      "type": "file"
+    },
+    {
+      "path": "src/commands/remove-files.ts",
+      "accessCount": 1,
+      "lastAccessed": 1772692794510,
+      "type": "file"
     }
   ],
   "userDirectives": []

@@ -2,7 +2,7 @@
   "hero": {
     "titleHighlight": "AI Toolkit",
     "titleSuffix": "for Coding Agents",
-    "description": "Search and share skills for coding agents in one place.\nConnect via Claude Code plugin or the AITK CLI.",
+    "description": "Search and share skills for coding agents in one place.\nConnect via Claude Code plugin or the CLI.",
     "cta": "Get Started"
   },
   "howItWorks": {
@@ -39,7 +39,7 @@
     },
     "multiAgent": {
       "title": "Works With Any Coding Agent",
-      "description": "Claude Code plugin, AITK CLI, or MCP direct — share the same skills however you connect. Works with any coding agent that supports MCP."
+      "description": "Claude Code plugin, CLI, or MCP direct — share the same skills however you connect. Works with any coding agent that supports MCP."
     }
   },
   "connect": {

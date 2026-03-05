@@ -1,7 +1,1 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"echo \\\"=== claude-code ===\\\" && grep '\\\"version\\\"' apps/claude-code-plugin/.claude-plugin/plugin.json && echo \\\"=== opencode ===\\\" && grep '\\\"version\\\"' apps/opencode-plugin/package.json |...",
-  "error": "Exit code 2\n=== claude-code ===\ngrep: apps/claude-code-plugin/.claude-plugin/plugin.json: No such file or directory\n\n=== claude-code ===\ngrep: apps/claude-code-plugin/.claude-plugin/plugin.json: No such file or directory",
-  "timestamp": "2026-03-05T01:32:13.116Z",
-  "retry_count": 1
-}
+{}

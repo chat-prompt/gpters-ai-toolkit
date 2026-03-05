@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "mcp__gpters-ai-toolkit-local__semantic_search"
+      "mcp__gpters-ai-toolkit-local__semantic_search",
+      "mcp__claude_ai_Linear__list_projects",
+      "mcp__linear-fast__list_projects",
+      "mcp__claude_ai_Linear__get_project",
+      "mcp__claude_ai_Linear__list_issues",
+      "Bash(python3:*)",
+      "mcp__claude_ai_Linear__get_status_updates",
+      "Bash(pnpm build:*)"
     ]
-  }
+  },
+  "spinnerTipsEnabled": false
 }

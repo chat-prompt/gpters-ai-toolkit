@@ -1,6 +1,6 @@
 # MCP 사용 행태 분석
 
-`mcp_audit_logs` 데이터를 기반으로 MCP 플러그인 사용 행태 분석 리포트를 생성합니다.
+`mcp_audit_logs`, `skill_events` 데이터를 기반으로 MCP 플러그인 사용 행태 분석 리포트를 생성합니다.
 
 ## 실행 방법
 
@@ -31,6 +31,7 @@ node .claude/skills/analyze-mcp-usage/analyze-mcp-usage.mjs --days=7
 | 인기 스킬 | 클라이언트별 TOP 10 조회 스킬 |
 | 시간대별 사용량 | KST 기준 클라이언트별 분포 |
 | 일별 추이 | 최근 14일 클라이언트별 |
+| 스킬별 전환율 | skill_events 기반 search→load→apply 퍼널, 저조한 스킬 식별 |
 
 ## 에러 처리
 

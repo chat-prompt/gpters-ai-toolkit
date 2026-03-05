@@ -984,6 +984,149 @@ async function main() {
     }
   }
 
+  // ── 9-4. 검색 무결과율 (skill_events 기반) ──
+  // Go/No-go 핵심 지표: 무결과율 10% 이하
+  const ZERO_RESULT_SKILL_ID = '__zero_result__'
+  const MIN_SAMPLE = 100
+
+  separator('9-4. 검색 무결과율 (skill_events 기반) ★ Go/No-go 핵심')
+
+  // 범위 A: 전체 (skill_events)
+  const [zrAll] = await sql`
+    WITH search_queries AS (
+      SELECT DISTINCT session_id, query
+      FROM skill_events
+      WHERE action = 'search'
+        AND skill_id != ${ZERO_RESULT_SKILL_ID}
+        AND created_at >= NOW() - make_interval(days => ${days})
+        AND query IS NOT NULL
+    ),
+    zero_queries AS (
+      SELECT DISTINCT session_id, query
+      FROM skill_events
+      WHERE action = 'search'
+        AND skill_id = ${ZERO_RESULT_SKILL_ID}
+        AND created_at >= NOW() - make_interval(days => ${days})
+        AND query IS NOT NULL
+    )
+    SELECT
+      (SELECT COUNT(*)::int FROM search_queries) + (SELECT COUNT(*)::int FROM zero_queries) AS total,
+      (SELECT COUNT(*)::int FROM zero_queries) AS zero_cnt
+  `.catch(() => [{ total: 0, zero_cnt: 0 }])
+
+  const zrAllTotal = Number(zrAll.total) || 0
+  const zrAllZero = Number(zrAll.zero_cnt) || 0
+  const zrAllPct = zrAllTotal > 0 ? (zrAllZero / zrAllTotal * 100).toFixed(1) : '-'
+
+  // 범위 B: 실제 클라이언트만 (claude_code/opencode/codex)
+  const [zrClient] = await sql`
+    WITH client_sessions AS (
+      SELECT session_id FROM mcp_sessions
+      WHERE client_type IN ('claude_code', 'opencode', 'codex')
+    ),
+    search_queries AS (
+      SELECT DISTINCT se.session_id, se.query
+      FROM skill_events se
+      JOIN client_sessions cs ON cs.session_id = se.session_id
+      WHERE se.action = 'search'
+        AND se.skill_id != ${ZERO_RESULT_SKILL_ID}
+        AND se.created_at >= NOW() - make_interval(days => ${days})
+        AND se.query IS NOT NULL
+    ),
+    zero_queries AS (
+      SELECT DISTINCT se.session_id, se.query
+      FROM skill_events se
+      JOIN client_sessions cs ON cs.session_id = se.session_id
+      WHERE se.action = 'search'
+        AND se.skill_id = ${ZERO_RESULT_SKILL_ID}
+        AND se.created_at >= NOW() - make_interval(days => ${days})
+        AND se.query IS NOT NULL
+    )
+    SELECT
+      (SELECT COUNT(*)::int FROM search_queries) + (SELECT COUNT(*)::int FROM zero_queries) AS total,
+      (SELECT COUNT(*)::int FROM zero_queries) AS zero_cnt
+  `.catch(() => [{ total: 0, zero_cnt: 0 }])
+
+  const zrClientTotal = Number(zrClient.total) || 0
+  const zrClientZero = Number(zrClient.zero_cnt) || 0
+  const zrClientPct = zrClientTotal > 0 ? (zrClientZero / zrClientTotal * 100).toFixed(1) : '-'
+
+  // 일별 트렌드 (최근 7일)
+  const zrTrend = await sql`
+    WITH daily AS (
+      SELECT
+        DATE(created_at) AS day,
+        COUNT(DISTINCT CASE WHEN skill_id = ${ZERO_RESULT_SKILL_ID} THEN session_id || '::' || query END)::int AS zero_cnt,
+        COUNT(DISTINCT session_id || '::' || query)::int AS total_cnt
+      FROM skill_events
+      WHERE action = 'search'
+        AND created_at >= NOW() - INTERVAL '7 days'
+        AND query IS NOT NULL
+      GROUP BY DATE(created_at)
+      ORDER BY day DESC
+    )
+    SELECT * FROM daily
+  `.catch(() => [])
+
+  printTable(
+    ['범위', '총 검색', '무결과', '무결과율', '표본 유의미'],
+    [
+      ['A: 전체 (skill_events)', zrAllTotal, zrAllZero, `${zrAllPct}%`, zrAllTotal >= MIN_SAMPLE ? '✅' : `⚠️ (${MIN_SAMPLE}건 미만)`],
+      ['B: 실제 클라이언트', zrClientTotal, zrClientZero, `${zrClientPct}%`, zrClientTotal >= MIN_SAMPLE ? '✅' : `⚠️ (${MIN_SAMPLE}건 미만)`],
+    ],
+    [1, 2]
+  )
+
+  console.log(`  목표: 10% 이하 (Go/No-go 기준)`)
+
+  if (zrTrend.length > 0) {
+    console.log(`\n  [일별 무결과율 트렌드 — 최근 7일]`)
+    printTable(
+      ['날짜', '총 검색', '무결과', '무결과율'],
+      zrTrend.map((r) => {
+        const pct = r.total_cnt > 0 ? (r.zero_cnt / r.total_cnt * 100).toFixed(1) : '-'
+        return [
+          new Date(r.day).toLocaleDateString('ko-KR'),
+          r.total_cnt,
+          r.zero_cnt,
+          `${pct}%`,
+        ]
+      }),
+      [1, 2]
+    )
+  }
+
+  // 무결과 검색어 TOP 10 (개선 대상)
+  const zrTopQueries = await sql`
+    SELECT
+      query,
+      COUNT(DISTINCT session_id)::int AS sessions,
+      COUNT(*)::int AS cnt
+    FROM skill_events
+    WHERE action = 'search'
+      AND skill_id = ${ZERO_RESULT_SKILL_ID}
+      AND created_at >= NOW() - make_interval(days => ${days})
+      AND query IS NOT NULL
+    GROUP BY query
+    ORDER BY sessions DESC, cnt DESC
+    LIMIT 10
+  `.catch(() => [])
+
+  if (zrTopQueries.length > 0) {
+    console.log(`\n  [무결과 검색어 TOP 10 — 스킬 추가 후보]`)
+    printTable(
+      ['#', '검색어', '세션 수', '총 횟수'],
+      zrTopQueries.map((r, i) => {
+        const q = r.query.length > 50 ? r.query.slice(0, 47) + '...' : r.query
+        return [i + 1, q, r.sessions, r.cnt]
+      }),
+      [0, 2, 3]
+    )
+  }
+
+  // skill_events 기반 무결과율을 section 11 목표에서 사용
+  const seZeroResultPct = zrAllPct
+
   // ── 10. 스킬별 전환율 분석 (skill_events) ──
   let matchedHitPctValue = '-'  // section 11에서 재사용
   separator('10. 스킬별 전환율 분석 (skill_events)')
@@ -1142,11 +1285,19 @@ async function main() {
       higher: false,
     },
     {
-      name: '검색 무결과율',
+      name: '검색 무결과율 (audit_logs)',
       actual: parseFloat(zeroResultPct),
       target: TARGETS.zeroResultPct,
       unit: '%',
       higher: false,
+    },
+    {
+      name: '★ 검색 무결과율 (skill_events)',
+      actual: seZeroResultPct !== '-' ? parseFloat(seZeroResultPct) : 0,
+      target: TARGETS.zeroResultPct,
+      unit: '%',
+      higher: false,
+      note: `n=${zrAllTotal}${zrAllTotal < MIN_SAMPLE ? ' (표본 부족)' : ''}`,
     },
     {
       name: '에러율',
@@ -1194,6 +1345,247 @@ async function main() {
     m.higher ? m.actual >= m.target : m.actual <= m.target
   ).length
   console.log(`\n  종합: ${achievedCount}/${metrics.length} 달성`)
+
+  // ═══════════════════════════════════════════════════════════
+  // 12. Go/No-go Dashboard
+  // ═══════════════════════════════════════════════════════════
+  separator('12. Go/No-go Dashboard')
+
+  console.log(`  판정 기준: 6개 중 5개+ 충족 (필수 #1, #2, #4 포함) = Go`)
+  console.log(`  최종 판정일: 3/21`)
+  console.log('')
+
+  // ── 조건 1: 추천 적중률 (skill_events search→load 매칭) ──
+  const [gonogo1] = await sql`
+    WITH search_skills AS (
+      SELECT DISTINCT session_id, skill_id
+      FROM skill_events
+      WHERE action = 'search'
+        AND skill_id IS NOT NULL
+        AND created_at >= NOW() - make_interval(days => ${days})
+    ),
+    loaded_skills AS (
+      SELECT DISTINCT session_id, skill_id
+      FROM skill_events
+      WHERE action = 'load'
+        AND created_at >= NOW() - make_interval(days => ${days})
+    ),
+    matched AS (
+      SELECT ss.session_id, ss.skill_id
+      FROM search_skills ss
+      JOIN loaded_skills ls ON ss.session_id = ls.session_id AND ss.skill_id = ls.skill_id
+    )
+    SELECT
+      (SELECT COUNT(*) FROM search_skills)::int AS total_recs,
+      (SELECT COUNT(*) FROM matched)::int AS matched_loads
+  `.catch(() => [{ total_recs: 0, matched_loads: 0 }])
+
+  const gn1Total = gonogo1.total_recs || 0
+  const gn1Matched = gonogo1.matched_loads || 0
+  const gn1Pct = gn1Total > 0 ? (gn1Matched / gn1Total * 100) : 0
+  const gn1MinN = 100
+  const gn1Pass = gn1Total >= gn1MinN && gn1Pct >= 30
+
+  // ── 조건 2: 검색 무결과율 (훅 기반) ──
+  const [gonogo2] = await sql`
+    SELECT
+      COUNT(*)::int AS total_searches,
+      COUNT(*) FILTER (
+        WHERE search_results IS NULL
+          OR jsonb_array_length(search_results) = 0
+          OR (search_results->0->>'score')::float < ${threshold}
+      )::int AS zero_result
+    FROM mcp_audit_logs
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+      AND (tool = 'search_plugins' OR tool = 'semantic_search')
+      AND (
+        referral_source = 'suggest'
+        OR request_params->'params'->'arguments'->>'_source' = 'skill-suggest'
+      )
+  `.catch(() => [{ total_searches: 0, zero_result: 0 }])
+
+  const gn2Total = gonogo2.total_searches || 0
+  const gn2Zero = gonogo2.zero_result || 0
+  const gn2Pct = gn2Total > 0 ? (gn2Zero / gn2Total * 100) : 0
+  const gn2MinN = 100
+  const gn2Pass = gn2Total >= gn2MinN && gn2Pct <= 10
+
+  // ── 조건 3: 발견의 가치 (full funnel) ──
+  const [gonogo3] = await sql`
+    WITH funnel AS (
+      SELECT session_id, skill_id,
+        bool_or(action = 'search') AS searched,
+        bool_or(action = 'load') AS loaded,
+        bool_or(action IN ('apply', 'deploy')) AS converted
+      FROM skill_events
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+      GROUP BY session_id, skill_id
+    )
+    SELECT COUNT(*)::int AS full_funnel_count
+    FROM funnel
+    WHERE searched AND loaded AND converted
+  `.catch(() => [{ full_funnel_count: 0 }])
+
+  const gn3Count = gonogo3.full_funnel_count || 0
+  const gn3MinN = 3
+  const gn3Pass = gn3Count >= gn3MinN
+
+  // ── 조건 4: 검색 속도 P50 ──
+  const gn4P50 = summary.p50_search_time || 0
+  const gn4N = searchCount
+  const gn4MinN = 50
+  const gn4Pass = gn4N >= gn4MinN && gn4P50 <= 2000
+
+  // ── 조건 5: 외부 스킬 추천 적중 (full funnel 스킬 목록) ──
+  const gonogoExternal = await sql`
+    WITH funnel AS (
+      SELECT session_id, skill_id,
+        bool_or(action = 'search') AS searched,
+        bool_or(action = 'load') AS loaded,
+        bool_or(action IN ('apply', 'deploy')) AS converted
+      FROM skill_events
+      WHERE created_at >= NOW() - make_interval(days => ${days})
+      GROUP BY session_id, skill_id
+    )
+    SELECT DISTINCT skill_id
+    FROM funnel
+    WHERE searched AND loaded AND converted
+    ORDER BY skill_id
+    LIMIT 20
+  `.catch(() => [])
+
+  const gn5Skills = gonogoExternal.map((r) => r.skill_id)
+  const gn5Pass = gn5Skills.length >= 1
+
+  // ── 조건 6: 시간 절약 사례 (apply + deploy) ──
+  const [gonogo6] = await sql`
+    SELECT
+      COUNT(*) FILTER (WHERE action = 'apply')::int AS apply_count,
+      COUNT(*) FILTER (WHERE action = 'deploy')::int AS deploy_count,
+      COUNT(*)::int AS total_positive
+    FROM skill_events
+    WHERE created_at >= NOW() - make_interval(days => ${days})
+      AND action IN ('apply', 'deploy')
+  `.catch(() => [{ apply_count: 0, deploy_count: 0, total_positive: 0 }])
+
+  const gn6Total = gonogo6.total_positive || 0
+  const gn6MinN = 5
+  const gn6Pass = gn6Total >= gn6MinN
+
+  // ── Dashboard 출력 ──
+  const gonogoConditions = [
+    {
+      id: 1,
+      name: '추천 적중률',
+      criterion: '≥ 30%',
+      value: `${gn1Pct.toFixed(1)}%`,
+      n: gn1Total,
+      minN: gn1MinN,
+      pass: gn1Pass,
+      required: true,
+    },
+    {
+      id: 2,
+      name: '검색 무결과율 (훅)',
+      criterion: '≤ 10%',
+      value: `${gn2Pct.toFixed(1)}%`,
+      n: gn2Total,
+      minN: gn2MinN,
+      pass: gn2Pass,
+      required: true,
+    },
+    {
+      id: 3,
+      name: '발견의 가치',
+      criterion: '≥ 3건',
+      value: `${gn3Count}건`,
+      n: gn3Count,
+      minN: gn3MinN,
+      pass: gn3Pass,
+      required: false,
+    },
+    {
+      id: 4,
+      name: '검색 속도 P50',
+      criterion: '≤ 2,000ms',
+      value: `${gn4P50.toLocaleString()}ms`,
+      n: gn4N,
+      minN: gn4MinN,
+      pass: gn4Pass,
+      required: true,
+    },
+    {
+      id: 5,
+      name: '외부 스킬 추천',
+      criterion: '≥ 1건',
+      value: `${gn5Skills.length}건`,
+      n: gn5Skills.length,
+      minN: 1,
+      pass: gn5Pass,
+      required: false,
+    },
+    {
+      id: 6,
+      name: '시간 절약 사례',
+      criterion: '≥ 5건',
+      value: `${gn6Total}건 (apply ${gonogo6.apply_count || 0} + deploy ${gonogo6.deploy_count || 0})`,
+      n: gn6Total,
+      minN: gn6MinN,
+      pass: gn6Pass,
+      required: false,
+    },
+  ]
+
+  printTable(
+    ['#', '조건', '기준', '현재값', '표본(n)', '최소n', '신뢰도', '판정'],
+    gonogoConditions.map((c) => {
+      const confidence = c.n >= c.minN ? '충분' : `부족 (${c.n}/${c.minN})`
+      const status = c.n < c.minN
+        ? '⏳ 표본부족'
+        : c.pass
+          ? '✅ 충족'
+          : '❌ 미충족'
+      return [
+        `${c.id}${c.required ? '*' : ''}`,
+        c.name,
+        c.criterion,
+        c.value,
+        c.n,
+        c.minN,
+        confidence,
+        status,
+      ]
+    }),
+    [0, 4, 5]
+  )
+
+  console.log(`  (* = 필수 조건)`)
+
+  if (gn5Skills.length > 0) {
+    console.log(`\n  [Full funnel 완주 스킬] ${gn5Skills.join(', ')}`)
+  }
+
+  // ── 종합 판정 ──
+  const gonogoPassedCount = gonogoConditions.filter((c) => c.pass).length
+  const requiredPassed = gonogoConditions.filter((c) => c.required && c.pass).length
+  const requiredTotal = gonogoConditions.filter((c) => c.required).length
+  const insufficientSample = gonogoConditions.some((c) => c.n < c.minN)
+
+  let verdict = ''
+  if (insufficientSample) {
+    verdict = '⏳ 판정 유보 (표본 부족)'
+  } else if (gonogoPassedCount >= 5 && requiredPassed === requiredTotal) {
+    verdict = '🟢 Go'
+  } else if (gonogoPassedCount >= 4 && requiredPassed >= 2) {
+    verdict = '🟡 Conditional Go'
+  } else {
+    verdict = '🔴 No-go'
+  }
+
+  console.log(`\n  ┌─────────────────────────────────────┐`)
+  console.log(`  │ 종합 판정: ${verdict.padEnd(25)}│`)
+  console.log(`  │ 충족: ${gonogoPassedCount}/6 (필수 ${requiredPassed}/${requiredTotal})${' '.repeat(14)}│`)
+  console.log(`  └─────────────────────────────────────┘`)
 
   console.log(`\n✅ 분석 완료\n`)
 }
