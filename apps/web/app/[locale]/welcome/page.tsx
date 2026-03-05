@@ -7,9 +7,10 @@
  */
 import { Link } from '@/i18n/navigation'
 import { Footer } from '@/components/layout/Footer'
-import { CopyButton } from './CopyButton'
 import { ConnectTabs } from './ConnectTabs'
+import { SkillPreviewCards } from './SkillPreviewCards'
 import { getTranslations, setRequestLocale } from 'next-intl/server'
+import { getCatalog } from '@/lib/core/catalog'
 import type { Metadata } from 'next'
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
@@ -52,6 +53,8 @@ export default async function WelcomePage({
   const { locale } = await params
   setRequestLocale(locale)
   const t = await getTranslations('welcome')
+  const catalog = await getCatalog(locale)
+  const skillCount = catalog.length
 
   /** How It Works 스텝 데이터 */
   const HOW_IT_WORKS_STEPS = [
@@ -130,7 +133,7 @@ export default async function WelcomePage({
             {t('hero.titleSuffix')}
           </h1>
           <p className="text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto mb-10 whitespace-pre-line">
-            {t('hero.description')}
+            {t('hero.description', { count: skillCount })}
           </p>
           <a
             href="#connect"
@@ -269,31 +272,7 @@ export default async function WelcomePage({
           >
             {t('popularSkills.title')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {POPULAR_SKILLS.map((skill) => (
-              <Link
-                key={skill.id}
-                href={`/skill/${skill.id}`}
-                className="group rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 hover:border-[var(--brand-primary)]/30 transition-colors"
-              >
-                <div className="text-2xl mb-3">{skill.icon}</div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2 group-hover:text-[var(--brand-primary)] transition-colors">
-                  {skill.name}
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                  {skill.description}
-                </p>
-              </Link>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link
-              href="/"
-              className="text-sm text-[var(--brand-primary)] hover:underline font-medium"
-            >
-              {t('popularSkills.viewAll')}
-            </Link>
-          </div>
+          <SkillPreviewCards skills={POPULAR_SKILLS} viewAllLabel={t('popularSkills.viewAll')} />
         </div>
       </section>
 

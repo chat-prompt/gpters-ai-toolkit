@@ -2,7 +2,7 @@
   "hero": {
     "titleHighlight": "AI Toolkit",
     "titleSuffix": "for Coding Agents",
-    "description": "Search and share skills for coding agents in one place.\nConnect via Claude Code plugin or the CLI.",
+    "description": "{count} skills, zero install.\nConnect once and your coding agent finds and applies them automatically.",
     "cta": "Get Started"
   },
   "howItWorks": {
@@ -31,7 +31,7 @@
     "title": "Why AI Toolkit",
     "lazyLoading": {
       "title": "Instant Use, Zero Install",
-      "description": "No need to download skills in advance. With MCP server connected, skills are loaded on demand and always up to date."
+      "description": "No need to install a separate MCP for each skill. One server holds everything — skills load on demand and stay up to date."
     },
     "autoRecommend": {
       "title": "Auto Recommendations",
