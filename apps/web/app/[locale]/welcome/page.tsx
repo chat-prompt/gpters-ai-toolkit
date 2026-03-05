@@ -154,14 +154,14 @@ export default async function WelcomePage({
           >
             {t('why.title')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {([
               { key: 'lazyLoading', icon: '⚡' },
               { key: 'autoRecommend', icon: '🎯' },
               { key: 'multiAgent', icon: '🔗' },
             ] as const).map((item) => (
-              <div key={item.key} className="text-center">
-                <div className="text-3xl mb-4">{item.icon}</div>
+              <div key={item.key} className="flex flex-col items-center text-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6">
+                <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-[var(--bg-secondary)] text-2xl mb-5">{item.icon}</div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
                   {t(`why.${item.key}.title`)}
                 </h3>
