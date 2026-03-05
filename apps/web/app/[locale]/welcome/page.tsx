@@ -63,22 +63,22 @@ export default async function WelcomePage({
   /** 인기 스킬 예시 데이터 */
   const POPULAR_SKILLS = [
     {
-      name: '스킬 생성 가이드',
-      id: 'skill-creator',
-      description: '새로운 스킬을 생성하고 최적화하는 가이드',
-      icon: '🛠',
+      name: 'Deep Interview Prompt',
+      id: 'deep-interview-prompt',
+      description: '소크라틱 방식의 심층 인터뷰로 요구사항을 정밀하게 도출',
+      icon: '🎙',
     },
     {
-      name: 'Excel 스프레드시트 생성',
-      id: 'create-xlsx',
-      description: 'XLSX 파일 생성, 편집, 분석 — openpyxl/pandas 기반',
-      icon: '📊',
+      name: 'Vercel React Best Practices',
+      id: 'vercel-react-best-practices',
+      description: 'Vercel 엔지니어링 팀의 React/Next.js 성능 최적화 가이드',
+      icon: '⚡',
     },
     {
-      name: '이메일 마케팅 전문가',
-      id: 'email-marketing-expert',
-      description: '이메일 마케팅 전략, 전달성, 자동화 가이드',
-      icon: '📧',
+      name: 'Markdown to PDF 변환',
+      id: 'md2pdf',
+      description: 'Markdown 문서를 깔끔한 PDF로 변환 — 한글 지원',
+      icon: '📄',
     },
   ] as const
 
