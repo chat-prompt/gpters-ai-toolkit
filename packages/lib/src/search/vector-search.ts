@@ -32,7 +32,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     query,
     type = 'all',
     limit = 10,
-    minSimilarity = 0.2,
+    minSimilarity = 0.15,
     userId,
     userRole,
     orgId,
