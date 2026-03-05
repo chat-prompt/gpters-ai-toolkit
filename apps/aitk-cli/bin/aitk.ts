@@ -23,7 +23,7 @@ import { runRemoveFiles } from '../src/commands/remove-files.js'
 import { error, info } from '../src/output.js'
 
 /** 버전 */
-const VERSION = '0.3.0'
+const VERSION = '0.3.1'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)
