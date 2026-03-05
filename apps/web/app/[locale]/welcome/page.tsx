@@ -142,78 +142,6 @@ export default async function WelcomePage({
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('howItWorks.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            {t('howItWorks.title')}
-          </h2>
-          <div className="space-y-6">
-            {HOW_IT_WORKS_STEPS.map((step) => (
-              <div key={step.key} className="flex items-start gap-5">
-                <span className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center text-white text-lg font-medium">
-                  {step.number}
-                </span>
-                <div>
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
-                    {t(`howItWorks.${step.key}.title`)}
-                  </h3>
-                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                    {t(`howItWorks.${step.key}.description`)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Popular Skills Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('popularSkills.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            {t('popularSkills.title')}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {POPULAR_SKILLS.map((skill) => (
-              <Link
-                key={skill.id}
-                href={`/skill/${skill.id}`}
-                className="group rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 hover:border-[var(--brand-primary)]/30 transition-colors"
-              >
-                <div className="text-2xl mb-3">{skill.icon}</div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2 group-hover:text-[var(--brand-primary)] transition-colors">
-                  {skill.name}
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                  {skill.description}
-                </p>
-              </Link>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link
-              href="/"
-              className="text-sm text-[var(--brand-primary)] hover:underline font-medium"
-            >
-              {t('popularSkills.viewAll')}
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* Why AI Toolkit Section */}
       <section className="relative z-10 py-20 px-8">
         <div className="max-w-5xl mx-auto">
@@ -240,6 +168,38 @@ export default async function WelcomePage({
                 <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
                   {t(`why.${item.key}.description`)}
                 </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="relative z-10 py-20 px-8">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
+            {t('howItWorks.badge')}
+          </p>
+          <h2
+            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
+            style={{ fontFamily: 'var(--font-newsreader)' }}
+          >
+            {t('howItWorks.title')}
+          </h2>
+          <div className="space-y-6">
+            {HOW_IT_WORKS_STEPS.map((step) => (
+              <div key={step.key} className="flex items-start gap-5">
+                <span className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center text-white text-lg font-medium">
+                  {step.number}
+                </span>
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+                    {t(`howItWorks.${step.key}.title`)}
+                  </h3>
+                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                    {t(`howItWorks.${step.key}.description`)}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
@@ -294,6 +254,46 @@ export default async function WelcomePage({
             </Link>
             {t('connect.moreSetupSuffix')}
           </p>
+        </div>
+      </section>
+
+      {/* Popular Skills Section */}
+      <section className="relative z-10 py-20 px-8">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
+            {t('popularSkills.badge')}
+          </p>
+          <h2
+            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
+            style={{ fontFamily: 'var(--font-newsreader)' }}
+          >
+            {t('popularSkills.title')}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {POPULAR_SKILLS.map((skill) => (
+              <Link
+                key={skill.id}
+                href={`/skill/${skill.id}`}
+                className="group rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 hover:border-[var(--brand-primary)]/30 transition-colors"
+              >
+                <div className="text-2xl mb-3">{skill.icon}</div>
+                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2 group-hover:text-[var(--brand-primary)] transition-colors">
+                  {skill.name}
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                  {skill.description}
+                </p>
+              </Link>
+            ))}
+          </div>
+          <div className="text-center mt-8">
+            <Link
+              href="/"
+              className="text-sm text-[var(--brand-primary)] hover:underline font-medium"
+            >
+              {t('popularSkills.viewAll')}
+            </Link>
+          </div>
         </div>
       </section>
 
