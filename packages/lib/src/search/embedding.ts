@@ -45,60 +45,6 @@ function getOpenAIClient(): OpenAI {
   return openaiClient
 }
 
-/** Query expansion cache to avoid redundant translation calls */
-const queryExpansionCache = new Map<string, string>()
-
-/** Maximum cache entries for query expansion */
-const MAX_EXPANSION_CACHE = 200
-
-/**
- * 검색 쿼리를 한영 양방향으로 확장합니다.
- *
- * 한글 쿼리는 영어 번역을, 영어 쿼리는 한글 번역을 추가하여
- * 크로스링구얼 임베딩 품질을 향상시킵니다.
- *
- * @param query - 원본 검색 쿼리
- * @returns 원본 + 번역이 결합된 확장 쿼리
- */
-export async function expandQuery(query: string): Promise<string> {
-  const cached = queryExpansionCache.get(query)
-  if (cached) return cached
-
-  try {
-    const client = getOpenAIClient()
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'Translate the search query. If Korean, output English translation only. If English, output Korean translation only. Output ONLY the translation, nothing else.',
-        },
-        { role: 'user', content: query },
-      ],
-      max_tokens: 100,
-      temperature: 0,
-    })
-
-    const translation = response.choices[0]?.message?.content?.trim()
-    if (!translation) return query
-
-    const expanded = `${query} ${translation}`
-
-    // Cache management
-    if (queryExpansionCache.size >= MAX_EXPANSION_CACHE) {
-      const firstKey = queryExpansionCache.keys().next().value
-      if (firstKey) queryExpansionCache.delete(firstKey)
-    }
-    queryExpansionCache.set(query, expanded)
-
-    log.debug('Query expanded', { original: query, expanded })
-    return expanded
-  } catch (err) {
-    log.warn('Query expansion failed, using original', { query, error: err })
-    return query
-  }
-}
-
 /**
  * 텍스트에 대한 임베딩 벡터를 생성합니다.
  *

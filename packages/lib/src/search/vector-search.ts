@@ -1,7 +1,7 @@
 import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
 import { sql, eq, and, or, gt, desc } from 'drizzle-orm'
 import { cosineDistance } from 'drizzle-orm'
-import { generateEmbedding, expandQuery } from './embedding'
+import { generateEmbedding } from './embedding'
 import { createLogger } from '../core/logger'
 import { isSuperAdmin } from '../security/rbac'
 import type { ItemType } from '../core/types'
@@ -45,13 +45,10 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     return { items: [], total: 0, searchTime: 0 }
   }
 
-  // Expand query with bilingual translation for cross-lingual search
-  const expandedQuery = await expandQuery(cleanedQuery)
-
   // Combine query with userContext for improved embedding relevance
   const embeddingText = userContext
-    ? `${expandedQuery} ${userContext.trim()}`
-    : expandedQuery
+    ? `${cleanedQuery} ${userContext.trim()}`
+    : cleanedQuery
 
   const embeddingStart = Date.now()
   const queryEmbedding = await generateEmbedding(embeddingText)
