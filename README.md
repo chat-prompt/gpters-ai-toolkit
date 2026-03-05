@@ -1,30 +1,25 @@
 # GPTers AI Toolkit
 
-GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 공유 플랫폼입니다.
+코딩 에이전트용 스킬을 한곳에서 검색하고 공유하는 플랫폼입니다.
 
-비개발자의 바이브 코딩 과정에서 발생하는 노하우를 체계적으로 축적하고, 반복 패턴을 Skill/Command/Guide로 정제하여 팀 전체에 공유하는 **생산성 복리 엔진**입니다.
-
-## 생산성 복리 엔진
-
-> 코칭 과정에서 발생하는 노하우가 휘발되지 않고, 재사용 가능한 형태로 축적되어 팀 전체의 생산성이 복리처럼 성장하는 구조
-
-![복리 엔진 흐름도](docs/compound_productivity_engine.png)
+MCP 서버에 연결하면 스킬을 로컬에 설치할 필요 없이 필요한 순간에 자동으로 불러와 실행합니다. 코딩 에이전트가 작업 맥락을 파악하고 관련 스킬을 자동으로 찾아 적용하므로, 스킬 이름을 외울 필요 없이 자연어로 요청하면 됩니다.
 
 ## 주요 기능
 
-### 콘텐츠 관리
+### 스킬 마켓플레이스
 
-- **카탈로그** — 스킬, 에이전트, 커맨드, 훅, 가이드, 패키지를 검색, 필터링, 설치
-- **패키지** — 관련 아이템을 묶어서 한 번에 설치
-- **버전 관리** — 시맨틱 버저닝, 변경 이력, 롤백 지원
-- **드래프트/발행** — 작성 중인 콘텐츠와 발행된 콘텐츠 분리
-
-### MCP 통합
-
-- **MCP 서버** — Claude Code / OpenCode에서 직접 플러그인 검색 및 사용
-- **의미 기반 검색** — "코드 리뷰 도와주는 스킬 찾아줘" 같은 자연어 요청 지원
+- **의미 기반 검색** — "코드 리뷰해줘" 같은 자연어 요청으로 스킬 자동 검색
+- **Lazy Loading** — 로컬 설치 없이 MCP 서버에서 필요 시 즉시 로드
+- **자동 추천** — 코딩 에이전트가 맥락을 보고 관련 스킬을 자동으로 찾아 적용
 - **배포 시스템** — 대화 중 만든 스킬을 즉시 팀과 공유 (`deploy_skill`)
-- **개선 제안** — 다른 사람의 스킬에 개선을 제안하고 반영
+- **버전 관리** — 시맨틱 버저닝, 변경 이력, 롤백 지원
+
+### 플러그인 지원
+
+- **Claude Code Plugin** — 마켓플레이스에서 원클릭 설치
+- **AITK CLI** — `npx @gpters/aitk`로 어떤 코딩 에이전트에서든 사용
+- **MCP 직접 연결** — `claude mcp add`로 HTTP MCP 서버 연결
+- **OpenCode / Codex Plugin** — npm 퍼블릭 패키지
 
 ### 조직 관리
 
@@ -33,19 +28,11 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 - **RBAC** — super_admin, admin, editor, viewer 역할 기반 권한 관리
 - **가시성 제어** — public / private 아이템 가시성
 
-### 플러그인 지원
-
-- **Claude Code Plugin** — 마켓플레이스에서 원클릭 설치
-- **OpenCode Plugin** — npm 퍼블릭 패키지 (`@gpters/opencode`)
-- **Codex Plugin** — npm 퍼블릭 패키지 (`@gpters/codex-plugin`)
-- **MCP 직접 연결** — `claude mcp add`로 HTTP MCP 서버 연결
-
 ### 분석 및 추적
 
 - **세션 추적** — MCP 세션별 사용 패턴 분석
 - **스킬 이벤트** — 검색 → 조회 → 배포 퍼널 추적
 - **감사 로그** — MCP 요청/응답 로깅 및 보안 감사
-- **복리 엔진 지표** — 팀 생산성 메트릭 대시보드
 
 ## 빠른 시작
 
@@ -55,11 +42,10 @@ GPTers 팀을 위한 AI 코딩 스킬, 에이전트, 커맨드, 가이드, 훅 �
 claude plugin marketplace add chat-prompt/gpters-ai-toolkit 2>/dev/null; claude mcp remove gpters-ai-toolkit 2>/dev/null; claude plugin install gpters-ai-toolkit
 ```
 
-### OpenCode
+### AITK CLI
 
 ```bash
-[ ! -f ~/.config/opencode/opencode.json ] && echo '{"$schema":"https://opencode.ai/config.json","plugin":[]}' > ~/.config/opencode/opencode.json; \
-node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.json',c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugin=c.plugin||[];c.plugin.includes('@gpters/opencode')||c.plugin.push('@gpters/opencode@latest');fs.writeFileSync(f,JSON.stringify(c,null,2))"
+npx --yes @gpters/aitk login
 ```
 
 ### MCP 직접 연결
@@ -68,17 +54,17 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
 claude mcp add gpters-ai-toolkit https://ai-toolkit.gpters.org/api/mcp -t http
 ```
 
-브라우저에서 Google (@gpters.org) 로그인 후 자동 연결됩니다.
+브라우저에서 Google 로그인 후 자동 연결됩니다.
 
-> 설치 가이드: https://ai-toolkit.gpters.org/getting-started
+> 자세한 설정 방법: https://ai-toolkit.gpters.org/getting-started
 
 ### 사용하기
 
-Claude Code / OpenCode에서 자연어로 요청:
+연결 후에는 코딩 에이전트가 필요한 스킬을 자동으로 검색하고 적용합니다:
 
 ```
-"코드 리뷰 스킬 찾아줘"
-"DB 마이그레이션 도와주는 스킬 있어?"
+"코드 리뷰해줘"
+"TDD로 개발하자"
 "이 스킬 팀이랑 공유해줘"
 ```
 
@@ -221,7 +207,6 @@ gpters-ai-toolkit/
 | `GET` | `/api/stats` | 공개 통계 |
 | `GET` | `/api/user` | 현재 사용자 정보 |
 | `GET` | `/api/updates/check` | 버전 업데이트 확인 |
-| `GET` | `/api/welfare-engine/stats` | 복리 엔진 지표 |
 | `GET` | `/api/discovery-analysis` | 검색 분석 |
 | `POST` | `/api/cron/finalize-sessions` | 세션 정리 (Cron) |
 
@@ -317,9 +302,9 @@ pnpm db:studio      # Drizzle Studio
 
 | 링크 | 설명 |
 |------|------|
-| [AI Toolkit](https://ai-toolkit.gpters.org) | 마켓플레이스 (스킬 배포/검색) |
-| [설치 가이드](https://ai-toolkit.gpters.org/getting-started) | Claude Code / OpenCode / MCP 설치 |
-| [Linear 프로젝트](https://linear.app/geniefy/project/생산성-복리-엔진-프로젝트-541a0544201b) | 복리 엔진 프로젝트 관리 |
+| [AI Toolkit](https://ai-toolkit.gpters.org) | 스킬 마켓플레이스 |
+| [Welcome](https://ai-toolkit.gpters.org/welcome) | 소개 랜딩페이지 |
+| [설치 가이드](https://ai-toolkit.gpters.org/getting-started) | Claude Code / AITK CLI / MCP 설치 |
 
 ## 기여하기
 
