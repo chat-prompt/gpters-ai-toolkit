@@ -51,10 +51,10 @@ export async function apiCall<T = unknown>(
     })
 
     if (response.status === 401) {
-      return { ok: false, error: '인증 필요. "aitk login" 실행하세요.', status: 401 }
+      return { ok: false, error: 'Auth required. Run "aitk login" first.', status: 401 }
     }
     if (response.status === 429) {
-      return { ok: false, error: 'Rate limit 초과. 잠시 후 다시 시도하세요.', status: 429 }
+      return { ok: false, error: 'Rate limit exceeded. Please try again later.', status: 429 }
     }
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}`, status: response.status }
@@ -65,7 +65,7 @@ export async function apiCall<T = unknown>(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     if (message.includes('TimeoutError') || message.includes('abort')) {
-      return { ok: false, error: '요청 타임아웃 (5초)' }
+      return { ok: false, error: 'Request timeout (5s)' }
     }
     return { ok: false, error: message }
   }
@@ -102,7 +102,7 @@ export async function jsonRpcCall<T = unknown>(
     })
 
     if (response.status === 401) {
-      return { ok: false, error: '인증 필요. "aitk login" 실행하세요.', status: 401 }
+      return { ok: false, error: 'Auth required. Run "aitk login" first.', status: 401 }
     }
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}`, status: response.status }
@@ -116,7 +116,7 @@ export async function jsonRpcCall<T = unknown>(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     if (message.includes('TimeoutError') || message.includes('abort')) {
-      return { ok: false, error: '요청 타임아웃 (5초)' }
+      return { ok: false, error: 'Request timeout (5s)' }
     }
     return { ok: false, error: message }
   }

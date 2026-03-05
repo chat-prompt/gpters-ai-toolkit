@@ -50,7 +50,7 @@ describe('client', () => {
       const result = await apiCall('search', { query: 'test' })
       expect(result.ok).toBe(false)
       expect(result.status).toBe(401)
-      expect(result.error).toContain('인증')
+      expect(result.error).toContain('Auth required')
     })
 
     it('429 에러 매핑', async () => {

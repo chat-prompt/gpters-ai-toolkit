@@ -15,8 +15,8 @@ import { runLogin } from '../src/commands/login.js'
 import { runConfig } from '../src/commands/config.js'
 import { error, info } from '../src/output.js'
 
-/** 버전 (빌드 시 치환) */
-const VERSION = '0.1.0'
+/** 버전 */
+const VERSION = '0.2.2'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)

@@ -65,7 +65,7 @@ describe('search command', () => {
       expect(parsed[0].id).toBe('code-reviewer')
 
       const stderr = stderrChunks.join('')
-      expect(stderr).toContain('2개 결과')
+      expect(stderr).toContain('2 results found')
     } finally {
       process.stdout.write = originalStdoutWrite
       process.stderr.write = originalStderrWrite

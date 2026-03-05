@@ -42,6 +42,6 @@ export async function runReportOutcome(opts: ReportOutcomeOptions): Promise<void
     error(result.error!)
   }
 
-  info('결과 보고 완료')
+  info('Outcome reported')
   jsonOut(result.data)
 }

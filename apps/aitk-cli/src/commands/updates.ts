@@ -22,6 +22,6 @@ export async function runUpdates(): Promise<void> {
     error(result.error!)
   }
 
-  info('업데이트 확인 완료')
+  info('Update check complete')
   jsonOut(result.data)
 }

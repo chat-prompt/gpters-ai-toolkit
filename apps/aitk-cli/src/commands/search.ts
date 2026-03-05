@@ -54,19 +54,19 @@ export async function runSearch(opts: SearchOptions): Promise<void> {
   // JSON-RPC tools/call 응답: { content: [{ type: "text", text: JSON.stringify({plugins, total, ...}) }] }
   const toolResult = result.data
   if (toolResult?.isError) {
-    const errText = toolResult.content?.[0]?.text ?? '검색 실패'
+    const errText = toolResult.content?.[0]?.text ?? 'Search failed'
     error(errText)
   }
 
   const textContent = toolResult?.content?.[0]?.text
   if (!textContent) {
-    info('0개 결과 발견')
+    info('No results found')
     jsonOut([])
     return
   }
 
   const parsed = JSON.parse(textContent) as { plugins?: unknown[]; total?: number }
   const items = parsed.plugins ?? []
-  info(`${items.length}개 결과 발견`)
+  info(`${items.length} results found`)
   jsonOut(items)
 }

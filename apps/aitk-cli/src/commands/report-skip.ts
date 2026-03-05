@@ -43,6 +43,6 @@ export async function runReportSkip(opts: ReportSkipOptions): Promise<void> {
     error(result.error!)
   }
 
-  info('스킵 보고 완료')
+  info('Skip reported')
   jsonOut(result.data)
 }

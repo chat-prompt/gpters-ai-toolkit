@@ -35,7 +35,7 @@ function resolveContent(value: string): string {
     try {
       return readFileSync(filePath, 'utf-8')
     } catch {
-      error(`파일을 읽을 수 없습니다: ${filePath}`)
+      error(`Cannot read file: ${filePath}`)
     }
   }
   return value
@@ -48,7 +48,7 @@ function resolveContent(value: string): string {
  */
 export async function runDeploy(opts: DeployOptions): Promise<void> {
   const token = resolveToken()
-  if (!token) error('인증 필요. "aitk login" 실행하세요.', 2)
+  if (!token) error('Auth required. Run "aitk login" first.', 2)
 
   const content = resolveContent(opts.content)
   const params: Record<string, unknown> = {
