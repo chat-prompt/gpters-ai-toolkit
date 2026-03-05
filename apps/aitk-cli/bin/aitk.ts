@@ -14,10 +14,16 @@ import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runLogin } from '../src/commands/login.js'
 import { runConfig } from '../src/commands/config.js'
 import { runWhoami } from '../src/commands/whoami.js'
+import { runUndeploy } from '../src/commands/undeploy.js'
+import { runSuggest } from '../src/commands/suggest.js'
+import { runSuggestions } from '../src/commands/suggestions.js'
+import { runResolve } from '../src/commands/resolve.js'
+import { runAddFiles } from '../src/commands/add-files.js'
+import { runRemoveFiles } from '../src/commands/remove-files.js'
 import { error, info } from '../src/output.js'
 
 /** 버전 */
-const VERSION = '0.2.3'
+const VERSION = '0.3.0'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)
@@ -63,6 +69,12 @@ Usage:
   aitk report-session --count <N> [--version <ver>]
   aitk report-skip --query <query> --reason <reason> [--result-ids id1,id2]
   aitk report-outcome --skill-id <id> --applied true|false --summary <text>
+  aitk undeploy <id>
+  aitk suggest --plugin-id <id> --title <title> --description <desc> [--diff <diff>]
+  aitk suggestions [--plugin-id <id>] [--status pending|accepted|rejected] [--limit N]
+  aitk resolve --suggestion-id <id> --action accept|reject [--comment <text>]
+  aitk add-files --id <id> <file1> [file2...] [--type script|reference|template|config]
+  aitk remove-files --id <id> --files <name1,name2>
   aitk login --token <token>
   aitk whoami
   aitk --version | --help
@@ -71,8 +83,14 @@ Commands:
   search          Search team skills, agents, and commands
   get             Get plugin details by ID
   deploy          Deploy a skill, agent, or command
+  undeploy        Remove a deployed skill (owner only)
   updates         Check for installed skill updates
   config          View or change settings (searchMethod, serverUrl)
+  suggest         Suggest improvement for another's plugin
+  suggestions     List improvement suggestions
+  resolve         Accept or reject a suggestion
+  add-files       Add files to a plugin
+  remove-files    Remove files from a plugin
   report-session  Report session event (for hooks)
   report-skip     Report skill search skip reason
   report-outcome  Report skill application outcome
@@ -198,6 +216,85 @@ Without --token, opens browser for Google OAuth login.`,
 Usage: aitk whoami
 
 Displays the email, name, and organization of the currently authenticated user.`,
+
+  undeploy: `aitk undeploy - Remove a deployed skill (owner only)
+
+Usage: aitk undeploy <id>
+
+Arguments:
+  id                 Plugin ID to remove
+
+Examples:
+  aitk undeploy my-old-skill`,
+
+  suggest: `aitk suggest - Suggest improvement for another's plugin
+
+Usage: aitk suggest --plugin-id <id> --title <title> --description <desc> [options]
+
+Required:
+  --plugin-id <id>   Target plugin ID
+  --title <title>    Suggestion title
+  --description <d>  Detailed description
+
+Options:
+  --diff <text>      Code/content diff
+
+Examples:
+  aitk suggest --plugin-id code-reviewer --title "Add security check" --description "Add OWASP top 10 checks"`,
+
+  suggestions: `aitk suggestions - List improvement suggestions
+
+Usage: aitk suggestions [options]
+
+Options:
+  --plugin-id <id>   Filter by plugin ID
+  --status <s>       Filter: pending, accepted, rejected, all (default: all)
+  --limit <n>        Max results (default: 20)
+
+Examples:
+  aitk suggestions
+  aitk suggestions --plugin-id my-skill --status pending`,
+
+  resolve: `aitk resolve - Accept or reject a suggestion
+
+Usage: aitk resolve --suggestion-id <id> --action accept|reject [options]
+
+Required:
+  --suggestion-id <id>  Suggestion ID (from "aitk suggestions")
+  --action <action>     accept or reject
+
+Options:
+  --comment <text>      Response comment
+
+Examples:
+  aitk resolve --suggestion-id abc123 --action accept --comment "Great idea!"
+  aitk resolve --suggestion-id abc123 --action reject --comment "Doesn't fit current design"`,
+
+  'add-files': `aitk add-files - Add files to a plugin
+
+Usage: aitk add-files --id <id> <file1> [file2...] [options]
+
+Required:
+  --id <id>            Plugin ID
+  <files>              One or more local file paths
+
+Options:
+  --type <type>        File type: script, reference, template, config
+
+Examples:
+  aitk add-files --id my-skill scripts/run.mjs references/guide.md
+  aitk add-files --id my-skill config.json --type config`,
+
+  'remove-files': `aitk remove-files - Remove files from a plugin
+
+Usage: aitk remove-files --id <id> --files <name1,name2>
+
+Required:
+  --id <id>            Plugin ID
+  --files <names>      Comma-separated file names to remove
+
+Examples:
+  aitk remove-files --id my-skill --files "scripts/old.mjs,references/deprecated.md"`,
 }
 
 /**
@@ -312,6 +409,59 @@ async function main(): Promise<void> {
 
     case 'whoami': {
       await runWhoami()
+      break
+    }
+
+    case 'undeploy': {
+      const id = positional[0] ?? flags['id']
+      if (!id) error('Plugin ID required: aitk undeploy <id>')
+      await runUndeploy(id)
+      break
+    }
+
+    case 'suggest': {
+      const pluginId = flags['plugin-id']
+      const title = flags['title']
+      const description = flags['description']
+      if (!pluginId) error('--plugin-id required: aitk suggest --plugin-id <id> --title <title> --description <desc>')
+      if (!title) error('--title required')
+      if (!description) error('--description required')
+      await runSuggest({ pluginId, title, description, diff: flags['diff'] })
+      break
+    }
+
+    case 'suggestions': {
+      await runSuggestions({
+        pluginId: flags['plugin-id'],
+        status: flags['status'],
+        limit: flags['limit'] ? parseInt(flags['limit'], 10) : undefined,
+      })
+      break
+    }
+
+    case 'resolve': {
+      const suggestionId = flags['suggestion-id']
+      const action = flags['action']
+      if (!suggestionId) error('--suggestion-id required: aitk resolve --suggestion-id <id> --action accept|reject')
+      if (!action) error('--action required (accept or reject)')
+      await runResolve({ suggestionId, action, comment: flags['comment'] })
+      break
+    }
+
+    case 'add-files': {
+      const id = flags['id']
+      if (!id) error('--id required: aitk add-files --id <plugin-id> <file1> [file2...]')
+      if (positional.length === 0) error('At least one file path required')
+      await runAddFiles({ id, files: positional, type: flags['type'] })
+      break
+    }
+
+    case 'remove-files': {
+      const id = flags['id']
+      const fileNames = flags['files']
+      if (!id) error('--id required: aitk remove-files --id <plugin-id> --files <name1,name2>')
+      if (!fileNames) error('--files required (comma-separated file names)')
+      await runRemoveFiles({ id, fileNames: fileNames.split(',').map((f) => f.trim()) })
       break
     }
 
