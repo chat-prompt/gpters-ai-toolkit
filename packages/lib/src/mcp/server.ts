@@ -335,17 +335,9 @@ export async function handleSimpleRequest(
 
       case 'deploy': {
         const result = await executeTool('deploy_skill', params, userId, userRole, orgId)
-        let data: unknown
-        try {
-          data = JSON.parse(result.content[0].text)
-        } catch {
-          // deploy_skill may append non-JSON quality hints after the JSON object
-          const jsonMatch = result.content[0].text.match(/^[\s\S]*?\}/)
-          data = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: result.content[0].text }
-        }
         return {
           success: !result.isError,
-          data,
+          data: JSON.parse(result.content[0].text),
         }
       }
 

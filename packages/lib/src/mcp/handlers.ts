@@ -1786,20 +1786,11 @@ export async function executeTool(
         }
         const result = await deploySkill(input, userId, userRole, orgId)
 
-        // Build response text with optional quality hints
-        let responseText = JSON.stringify(result, null, 2)
-        if (result.success && result.qualityWarnings && result.qualityWarnings.length > 0) {
-          const hints = result.qualityWarnings
-            .map((w) => `- [${w.field}] ${w.message}`)
-            .join('\n')
-          responseText += `\n\n📋 품질 개선 힌트:\n${hints}`
-        }
-
         return {
           content: [
             {
               type: 'text',
-              text: responseText,
+              text: JSON.stringify(result, null, 2),
             },
           ],
           isError: !result.success,
