@@ -13,6 +13,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server'
 import { getCatalog } from '@/lib/core/catalog'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
 const MCP_COMMAND = `claude mcp add gpters-ai-toolkit ${BASE_URL}/api/mcp -t http`
