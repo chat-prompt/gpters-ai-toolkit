@@ -1,28 +1,15 @@
 /**
  * Root loading state component
  *
- * Displays skeleton UI with ambient gradients while the main
- * page content is loading via React Suspense.
+ * Displays a centered spinner while the main page content is loading.
  */
-import { SkeletonHeader, SkeletonListPage } from '@/components/ui/Skeleton'
-
 export default function Loading() {
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background Gradients */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-[var(--border-subtle)] border-t-[var(--accent-cyan)] rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-[var(--text-muted)] text-sm">로딩 중...</p>
       </div>
-
-      <SkeletonHeader />
-
-      {/* Hero Section Skeleton */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-7xl mx-auto">
-          <SkeletonListPage cardCount={6} />
-        </div>
-      </section>
     </div>
   )
 }
