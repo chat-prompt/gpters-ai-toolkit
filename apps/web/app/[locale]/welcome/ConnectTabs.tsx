@@ -47,7 +47,7 @@ export function ConnectTabs({ baseUrl }: ConnectTabsProps) {
     {
       id: 'cli',
       label: 'AITK CLI',
-      command: 'npx --yes @gpters/aitk login',
+      command: 'npm install -g @gpters/aitk && aitk login',
     },
     {
       id: 'mcp',

@@ -432,11 +432,10 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
  */
 function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
   const t = useTranslations('getting-started')
-  const installCmd = 'npx --yes @gpters/aitk login'
 
   return (
     <div className="space-y-6">
-      {/* Step 1: Install & Login */}
+      {/* Step 1: Install */}
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
           <StepBadge step={1} color="cyan" />
@@ -448,7 +447,24 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
               {t('steps.cliInstallDesc')}
             </p>
 
-            <CodeBlock code={installCmd} stepId="cli-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+            <CodeBlock code="npm install -g @gpters/aitk" stepId="cli-install" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: Login */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex items-start gap-4">
+          <StepBadge step={2} color="purple" />
+          <div className="flex-grow min-w-0">
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              {t('steps.cliLogin')}
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              {t('steps.cliLoginDesc')}
+            </p>
+
+            <CodeBlock code="aitk login" stepId="cli-login" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
             <InfoBox color="blue" label={t('noteLabels.note')}>
               {t('notes.cliNote')}
@@ -457,10 +473,10 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
         </div>
       </div>
 
-      {/* Step 2: Usage */}
+      {/* Step 3: Usage */}
       <div className="glass rounded-2xl p-6">
         <div className="flex items-start gap-4">
-          <StepBadge step={2} color="purple" />
+          <StepBadge step={3} color="green" />
           <div className="flex-grow min-w-0">
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
               {t('steps.cliUsage')}
@@ -470,23 +486,6 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
             </p>
 
             <CodeBlock code={'aitk search "code review"\naitk get code-reviewer'} stepId="cli-usage" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-          </div>
-        </div>
-      </div>
-
-      {/* Global Install (optional) */}
-      <div className="glass rounded-2xl p-6">
-        <div className="flex items-start gap-4">
-          <StepBadge step="+" color="green" />
-          <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              {t('steps.cliGlobalInstall')}
-            </h2>
-            <p className="text-sm text-[var(--text-secondary)] mb-4">
-              {t('steps.cliGlobalInstallDesc')}
-            </p>
-
-            <CodeBlock code="npm install -g @gpters/aitk" stepId="cli-global" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
           </div>
         </div>
       </div>
