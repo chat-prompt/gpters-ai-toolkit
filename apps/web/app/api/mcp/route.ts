@@ -837,7 +837,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const result = await handleSimpleRequest(action, validationResult.data || body, userId, userRole, orgId)
+      const result = await handleSimpleRequest(action, validationResult.data || body, userId, userRole, orgId, currentClientType)
 
       logAudit(
         `rest:${action}`,
@@ -871,7 +871,7 @@ export async function POST(request: NextRequest) {
 
     const rpcMethod = (body as Record<string, unknown>)?.method as string
     const tool = extractToolFromBody(body)
-    const response = await handleHttpRequest(body, userId, userRole, orgId)
+    const response = await handleHttpRequest(body, userId, userRole, orgId, currentClientType)
 
     // Handle notifications (null response means no response should be sent)
     // Per JSON-RPC 2.0 spec and MCP: notifications don't expect a response

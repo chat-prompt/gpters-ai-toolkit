@@ -75,6 +75,7 @@ export interface DeploySkillInput {
   changelog?: string             // What changed in this version
   files?: PluginFile[]
   dependencies?: string[]        // Agent dependencies with agent: prefix
+  platforms?: string[]            // Compatible platforms (null = all platforms)
 }
 
 export interface DeploySkillResponse {
@@ -129,6 +130,8 @@ export interface PluginSummary {
   tags: string[]
 
   difficulty?: Difficulty
+  /** 호환 플랫폼 목록 (undefined이면 전체 호환) */
+  platforms?: string[]
   relevanceScore?: number
 }
 
@@ -141,6 +144,8 @@ export interface PluginContent {
   tags: string[]
 
   difficulty?: Difficulty
+  /** 호환 플랫폼 목록 (undefined이면 전체 호환) */
+  platforms?: string[]
   content: string       // Main content (SKILL.md, agent definition, etc.)
   readme?: string       // Additional documentation
   files?: PluginFile[]  // Additional files (scripts, references, etc.)

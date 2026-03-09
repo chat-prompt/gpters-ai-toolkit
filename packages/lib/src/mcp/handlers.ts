@@ -284,6 +284,7 @@ export async function getPluginContent(
       agentSkills: catalogItems.agentSkills,
       commandArgumentHint: catalogItems.commandArgumentHint,
       commandDisableModelInvocation: catalogItems.commandDisableModelInvocation,
+      platforms: catalogItems.platforms,
       version: catalogItems.version,
       status: catalogItems.status,
       changelog: catalogItems.changelog,
@@ -332,6 +333,7 @@ export async function getPluginContent(
     authorName: item.authorName || 'Unknown',
     tags: item.tags || [],
     difficulty: item.difficulty || undefined,
+    platforms: item.platforms || undefined,
     content: item.content,
     readme: item.readme || undefined,
     files: item.files || undefined,
@@ -629,6 +631,7 @@ export async function deploySkill(
     changelog: explicitChangelog,
     files,
     dependencies,
+    platforms,
   } = input
 
   // Generate ID from name if not provided
@@ -764,6 +767,7 @@ export async function deploySkill(
         changelog: versionInfo.changelog,
         files: resolvedFiles,
         dependencies: dependencies || [],
+        platforms: platforms || null,
         mcpEnabled: status === 'published',
         ...(explicitVisibility ? { visibility: explicitVisibility } : {}),
         updatedAt: now,
@@ -809,6 +813,7 @@ export async function deploySkill(
       mcpEnabled: status === 'published',
       likes: 0,
       dependencies: dependencies || [],
+      platforms: platforms || null,
       authorId: authorId || null,
       orgId: orgId || null,
       visibility: explicitVisibility || (orgId ? 'public' : 'private'),
@@ -1523,7 +1528,8 @@ export async function executeTool(
   args: Record<string, unknown>,
   userId?: string,
   userRole?: string,
-  orgId?: string
+  orgId?: string,
+  clientType?: string
 ): Promise<McpToolResponse> {
   // 관리자 도구 호출 차단
   const { isAdminTool } = await import('./tools')
@@ -1565,6 +1571,7 @@ export async function executeTool(
           userRole,
           orgId,
           userContext: input.userContext,
+          clientType,
         })
         // authorId → authorName 매핑
         const authorIds = [...new Set(searchResult.items.map((item) => item.authorId).filter(Boolean))] as string[]
@@ -1588,6 +1595,7 @@ export async function executeTool(
             authorName: (item.authorId && authorMap.get(item.authorId)) || 'Unknown',
             tags: item.tags || [],
                     difficulty: item.difficulty || undefined,
+            platforms: item.platforms || undefined,
             relevanceScore: item.similarity,
           })),
           total: searchResult.total,

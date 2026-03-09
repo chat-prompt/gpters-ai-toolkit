@@ -18,6 +18,8 @@ export interface SemanticSearchOptions {
   orgId?: string
   /** Optional user context combined with query for improved embedding relevance */
   userContext?: string
+  /** MCP 클라이언트 타입 (플랫폼 필터링용) */
+  clientType?: string
 }
 
 export interface SemanticSearchResult {
@@ -37,6 +39,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     userRole,
     orgId,
     userContext,
+    clientType,
   } = options
 
   const cleanedQuery = cleanQuery(query)
@@ -71,6 +74,17 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
 
   if (type && type !== 'all') {
     conditions.push(eq(catalogItems.type, type))
+  }
+
+  // Platform compatibility filtering
+  // web_browser, cli, unknown은 필터링하지 않음 (모든 스킬 노출)
+  if (clientType && !['web_browser', 'unknown', 'cli'].includes(clientType)) {
+    conditions.push(
+      or(
+        sql`${catalogItems.platforms} IS NULL`,
+        sql`${catalogItems.platforms} @> ARRAY[${clientType}]::text[]`
+      )!
+    )
   }
 
   // Org-based visibility filtering
@@ -120,6 +134,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
       hookTimeout: catalogItems.hookTimeout,
       hookBlocking: catalogItems.hookBlocking,
       mcpEnabled: catalogItems.mcpEnabled,
+      platforms: catalogItems.platforms,
       version: catalogItems.version,
       status: catalogItems.status,
       changelog: catalogItems.changelog,
@@ -148,6 +163,16 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
 
     if (type && type !== 'all') {
       keywordConditions.push(eq(catalogItems.type, type))
+    }
+
+    // Apply same platform compatibility filtering
+    if (clientType && !['web_browser', 'unknown', 'cli'].includes(clientType)) {
+      keywordConditions.push(
+        or(
+          sql`${catalogItems.platforms} IS NULL`,
+          sql`${catalogItems.platforms} @> ARRAY[${clientType}]::text[]`
+        )!
+      )
     }
 
     // Apply same visibility filtering
@@ -197,6 +222,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
         hookTimeout: catalogItems.hookTimeout,
         hookBlocking: catalogItems.hookBlocking,
         mcpEnabled: catalogItems.mcpEnabled,
+        platforms: catalogItems.platforms,
         version: catalogItems.version,
         status: catalogItems.status,
         changelog: catalogItems.changelog,
@@ -284,6 +310,7 @@ export async function findSimilarItems(
       hookTimeout: catalogItems.hookTimeout,
       hookBlocking: catalogItems.hookBlocking,
       mcpEnabled: catalogItems.mcpEnabled,
+      platforms: catalogItems.platforms,
       version: catalogItems.version,
       status: catalogItems.status,
       changelog: catalogItems.changelog,

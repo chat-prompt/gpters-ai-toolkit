@@ -377,6 +377,14 @@ const ALL_TOOLS: McpTool[] = [
           type: 'string',
           description: '변경사항 설명 (업데이트 시)',
         },
+        platforms: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['claude_code', 'opencode', 'codex', 'cursor'],
+          },
+          description: '호환 플랫폼 목록. 미지정 시 모든 플랫폼에서 사용 가능. 예: ["claude_code", "codex"]',
+        },
         files: {
           type: 'array',
           items: {

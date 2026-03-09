@@ -82,10 +82,11 @@ async function handleToolsCall(
   },
   userId?: string,
   userRole?: string,
-  orgId?: string
+  orgId?: string,
+  clientType?: string
 ): Promise<McpToolResponse> {
   const { name, arguments: args = {} } = params
-  return executeTool(name, args, userId, userRole, orgId)
+  return executeTool(name, args, userId, userRole, orgId, clientType)
 }
 
 /**
@@ -116,7 +117,8 @@ export async function processRequest(
   request: McpRequest,
   userId?: string,
   userRole?: string,
-  orgId?: string
+  orgId?: string,
+  clientType?: string
 ): Promise<McpResponse | null> {
   const { id, method, params } = request
 
@@ -149,7 +151,7 @@ export async function processRequest(
 
       case 'tools/call': {
         const toolParams = params as { name: string; arguments?: Record<string, unknown> }
-        const result = await handleToolsCall(toolParams, userId, userRole, orgId)
+        const result = await handleToolsCall(toolParams, userId, userRole, orgId, clientType)
         return {
           jsonrpc: '2.0',
           id: id!,
@@ -254,12 +256,13 @@ export async function handleHttpRequest(
   body: unknown,
   userId?: string,
   userRole?: string,
-  orgId?: string
+  orgId?: string,
+  clientType?: string
 ): Promise<McpResponse | McpResponse[] | null> {
   // Handle batch requests
   if (Array.isArray(body)) {
     const responses = await Promise.all(
-      body.map((req) => processRequest(req as McpRequest, userId, userRole, orgId))
+      body.map((req) => processRequest(req as McpRequest, userId, userRole, orgId, clientType))
     )
     // Filter out null responses (notifications)
     const validResponses = responses.filter((r): r is McpResponse => r !== null)
@@ -267,7 +270,7 @@ export async function handleHttpRequest(
   }
 
   // Handle single request
-  return processRequest(body as McpRequest, userId, userRole, orgId)
+  return processRequest(body as McpRequest, userId, userRole, orgId, clientType)
 }
 
 /**
@@ -285,12 +288,13 @@ export async function handleSimpleRequest(
   params: Record<string, unknown>,
   userId?: string,
   userRole?: string,
-  orgId?: string
+  orgId?: string,
+  clientType?: string
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   try {
     switch (action) {
       case 'search': {
-        const result = await executeTool('search_plugins', params, userId, userRole, orgId)
+        const result = await executeTool('search_plugins', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -298,7 +302,7 @@ export async function handleSimpleRequest(
       }
 
       case 'get': {
-        const result = await executeTool('get_plugin_content', params, userId, userRole, orgId)
+        const result = await executeTool('get_plugin_content', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -306,7 +310,7 @@ export async function handleSimpleRequest(
       }
 
       case 'list': {
-        const result = await executeTool('list_plugins', params, userId, userRole, orgId)
+        const result = await executeTool('list_plugins', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -326,7 +330,7 @@ export async function handleSimpleRequest(
       }
 
       case 'create': {
-        const result = await executeTool('create_plugin', params, userId, userRole, orgId)
+        const result = await executeTool('create_plugin', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -334,7 +338,7 @@ export async function handleSimpleRequest(
       }
 
       case 'deploy': {
-        const result = await executeTool('deploy_skill', params, userId, userRole, orgId)
+        const result = await executeTool('deploy_skill', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -342,7 +346,7 @@ export async function handleSimpleRequest(
       }
 
       case 'update': {
-        const result = await executeTool('update_plugin', params, userId, userRole, orgId)
+        const result = await executeTool('update_plugin', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
@@ -350,7 +354,7 @@ export async function handleSimpleRequest(
       }
 
       case 'delete': {
-        const result = await executeTool('delete_plugin', params, userId, userRole, orgId)
+        const result = await executeTool('delete_plugin', params, userId, userRole, orgId, clientType)
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
