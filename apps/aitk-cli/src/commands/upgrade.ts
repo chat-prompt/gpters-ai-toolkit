@@ -26,6 +26,22 @@ function npmLatest(pkg: string): string | null {
   return run(`npm view ${pkg} version 2>/dev/null`)
 }
 
+/** 마켓플레이스 이름 후보 (환경에 따라 다를 수 있음) */
+const MARKETPLACE_NAMES = ['gpters-marketplace', 'chat-prompt-gpters-ai-toolkit']
+
+/** installed_plugins.json에서 플러그인의 마켓플레이스 이름 감지 */
+function detectMarketplace(): { version: string | null; marketplace: string } {
+  const installedPath = join(homedir(), '.claude', 'plugins', 'installed_plugins.json')
+  try {
+    const installed = JSON.parse(readFileSync(installedPath, 'utf-8'))
+    for (const mp of MARKETPLACE_NAMES) {
+      const entry = installed.plugins?.[`gpters-ai-toolkit@${mp}`]?.[0]
+      if (entry?.version) return { version: entry.version, marketplace: mp }
+    }
+  } catch { /* 파일 없음 */ }
+  return { version: null, marketplace: MARKETPLACE_NAMES[0] }
+}
+
 /** Claude Code 플러그인 업데이트 */
 function upgradeClaude(): void {
   info('\n📦 Claude Code Plugin')
@@ -35,27 +51,25 @@ function upgradeClaude(): void {
     return
   }
 
-  // installed_plugins.json에서 현재 버전 확인
-  const installedPath = join(homedir(), '.claude', 'plugins', 'installed_plugins.json')
-  let currentVer: string | null = null
-  try {
-    const installed = JSON.parse(readFileSync(installedPath, 'utf-8'))
-    const entry = installed.plugins?.['gpters-ai-toolkit@gpters-marketplace']?.[0]
-    currentVer = entry?.version ?? null
-  } catch {
-    // 파일 없음
-  }
+  const { version: currentVer, marketplace } = detectMarketplace()
+  const pluginRef = `gpters-ai-toolkit@${marketplace}`
 
   if (!currentVer) {
     info('  Installing...')
     try {
-      // 마켓플레이스 등록 + 플러그인 설치 (대화형 확인 지원을 위해 stdio inherit)
       execSync('claude plugin marketplace add chat-prompt/gpters-ai-toolkit', { stdio: 'inherit' })
     } catch { /* 이미 등록된 경우 무시 */ }
-    try {
-      execSync('claude plugin install gpters-ai-toolkit@gpters-marketplace', { stdio: 'inherit' })
-      info('  ✅ Installed (restart Claude Code to activate)')
-    } catch {
+    // 두 마켓플레이스 이름 모두 시도
+    let installed = false
+    for (const mp of MARKETPLACE_NAMES) {
+      try {
+        execSync(`claude plugin install gpters-ai-toolkit@${mp}`, { stdio: 'inherit' })
+        info('  ✅ Installed (restart Claude Code to activate)')
+        installed = true
+        break
+      } catch { /* 다음 이름 시도 */ }
+    }
+    if (!installed) {
       info('  ⚠️  Auto-install failed. Run manually:')
       info('     claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
       info('     claude plugin install gpters-ai-toolkit@gpters-marketplace')
@@ -65,10 +79,10 @@ function upgradeClaude(): void {
 
   info(`  Current: ${currentVer}`)
   try {
-    execSync('claude plugin update gpters-ai-toolkit@gpters-marketplace', { stdio: 'inherit' })
+    execSync(`claude plugin update ${pluginRef}`, { stdio: 'inherit' })
     info('  ✅ Updated (applies on next session)')
   } catch {
-    info('  ⚠️  Update failed — try: claude plugin update gpters-ai-toolkit@gpters-marketplace')
+    info(`  ⚠️  Update failed — try: claude plugin update ${pluginRef}`)
   }
 }
 
