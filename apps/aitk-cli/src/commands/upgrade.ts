@@ -26,8 +26,8 @@ function npmLatest(pkg: string): string | null {
   return run(`npm view ${pkg} version 2>/dev/null`)
 }
 
-/** 마켓플레이스 이름 후보 (환경에 따라 다를 수 있음) */
-const MARKETPLACE_NAMES = ['gpters-marketplace', 'chat-prompt-gpters-ai-toolkit']
+/** 마켓플레이스 이름 후보 (canonical 이름 우선) */
+const MARKETPLACE_NAMES = ['chat-prompt-gpters-ai-toolkit', 'gpters-marketplace']
 
 /** 디스크에 실제 존재하는 마켓플레이스 이름 순서 반환 (존재하는 것 우선) */
 function getMarketplaceOrder(): string[] {
@@ -56,6 +56,26 @@ function detectMarketplace(): { version: string | null; marketplace: string } {
   return { version: null, marketplace: order[0] }
 }
 
+/** 마켓플레이스 캐시의 marketplace.json name을 디렉토리 이름과 일치시킨다 */
+function repairMarketplaceCache(): void {
+  const mpDir = join(homedir(), '.claude', 'plugins', 'marketplaces')
+  for (const name of MARKETPLACE_NAMES) {
+    const cacheDir = join(mpDir, name, 'gpters-ai-toolkit')
+    const mjPath = join(cacheDir, 'marketplace.json')
+    if (!existsSync(mjPath)) continue
+    try {
+      const mj = JSON.parse(readFileSync(mjPath, 'utf-8'))
+      if (mj.name !== name) {
+        mj.name = name
+        writeFileSync(mjPath, JSON.stringify(mj, null, 2) + '\n')
+        info(`  🔧 Fixed marketplace.json name → ${name}`)
+      }
+      // git pull로 최신 플러그인 코드 반영
+      run(`git -C "${cacheDir}" pull --ff-only 2>/dev/null`)
+    } catch { /* ignore */ }
+  }
+}
+
 /** Claude Code 플러그인 업데이트 */
 function upgradeClaude(): void {
   info('\n📦 Claude Code Plugin')
@@ -64,6 +84,9 @@ function upgradeClaude(): void {
     info('  ⏭️  claude CLI not found — skipping')
     return
   }
+
+  // 마켓플레이스 캐시 복구 (name 불일치 수정 + git pull)
+  repairMarketplaceCache()
 
   const { version: currentVer, marketplace } = detectMarketplace()
 
@@ -85,7 +108,7 @@ function upgradeClaude(): void {
     if (!installed) {
       info('  ⚠️  Auto-install failed. Run manually:')
       info('     claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
-      info('     claude plugin install gpters-ai-toolkit@gpters-marketplace')
+      info('     claude plugin install gpters-ai-toolkit@chat-prompt-gpters-ai-toolkit')
     }
     return
   }

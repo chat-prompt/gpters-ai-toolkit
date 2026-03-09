@@ -24,7 +24,7 @@ import { runUpgrade } from '../src/commands/upgrade.js'
 import { error, info } from '../src/output.js'
 
 /** 버전 */
-const VERSION = '0.3.18'
+const VERSION = '0.3.19'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)
