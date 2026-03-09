@@ -104,7 +104,7 @@ function upgradeClaude(): void {
     execSync(`claude plugin update gpters-ai-toolkit@${marketplace}`, { stdio: 'inherit' })
     info('  ✅ Updated (applies on next session)')
   } catch {
-    info(`  ⚠️  Update failed — try: claude plugin update ${pluginRef}`)
+    info(`  ⚠️  Update failed — try: claude plugin update gpters-ai-toolkit@${marketplace}`)
   }
 }
 
