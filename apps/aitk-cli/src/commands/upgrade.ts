@@ -110,48 +110,44 @@ function upgradeOpencode(): void {
     return
   }
 
-  // OpenCode 플러그인 캐시 전체 초기화 (package.json, bun.lock, node_modules)
+  // OpenCode + bun 캐시 전체 초기화
   const cacheBase = join(homedir(), '.cache', 'opencode')
-  const cachePkg = join(cacheBase, 'package.json')
-  const cacheLock = join(cacheBase, 'bun.lock')
-  const cacheNodeModules = join(cacheBase, 'node_modules', '@gpters')
-  const cacheInternalModules = join(cacheBase, 'node_modules', '@gpters-internal')
 
-  // package.json에서 @gpters/opencode 버전을 latest로 갱신
-  if (existsSync(cachePkg)) {
+  // 1. ~/.cache/opencode/ 의 lock, node_modules, package.json 모두 삭제
+  //    OpenCode가 재시작 시 opencode.json 기반으로 재생성한다
+  for (const target of ['bun.lock', 'package-lock.json']) {
+    const p = join(cacheBase, target)
+    if (existsSync(p)) run(`rm -f "${p}"`)
+  }
+  for (const dir of [
+    join(cacheBase, 'node_modules', '@gpters'),
+    join(cacheBase, 'node_modules', '@gpters-internal'),
+  ]) {
+    if (existsSync(dir)) run(`rm -rf "${dir}"`)
+  }
+  // package.json에서 @gpters/opencode 버전을 정확한 최신 버전으로 고정
+  const cachePkg = join(cacheBase, 'package.json')
+  if (existsSync(cachePkg) && latest) {
     try {
       const pkg = JSON.parse(readFileSync(cachePkg, 'utf-8'))
       const deps = pkg.dependencies ?? {}
-      // @gpters-internal 제거 + @gpters/opencode를 latest로
       for (const key of Object.keys(deps)) {
         if (/gpters-internal/.test(key)) delete deps[key]
       }
-      if (latest) {
-        deps['@gpters/opencode'] = latest
-      } else {
-        delete deps['@gpters/opencode']
-      }
+      deps['@gpters/opencode'] = latest
       pkg.dependencies = deps
       writeFileSync(cachePkg, JSON.stringify(pkg, null, 2) + '\n')
-      info(`  📝 ${cachePkg} → @gpters/opencode@${latest}`)
-    } catch {
-      info(`  ⚠️  Failed to update ${cachePkg}`)
-    }
+    } catch { /* ignore */ }
   }
 
-  // bun.lock 삭제 (다음 실행 시 재생성)
-  if (existsSync(cacheLock)) {
-    run(`rm -f "${cacheLock}"`)
-    info(`  🗑️  Removed bun.lock`)
+  // 2. bun 글로벌 캐시에서 @gpters 패키지 삭제
+  const bunCache = join(homedir(), '.bun', 'install', 'cache', '@gpters')
+  if (existsSync(bunCache)) {
+    run(`rm -rf "${bunCache}"`)
+    info(`  🗑️  Bun cache cleared`)
   }
 
-  // node_modules 캐시 삭제
-  for (const dir of [cacheNodeModules, cacheInternalModules]) {
-    if (existsSync(dir)) {
-      run(`rm -rf "${dir}"`)
-    }
-  }
-  info(`  🗑️  Cache cleared`)
+  info(`  🗑️  OpenCode cache cleared`)
   info('  ℹ️  Restart OpenCode to apply update')
 }
 
