@@ -181,6 +181,11 @@ function upgradeOpencode(): void {
 function upgradeCodex(): void {
   info('\n📦 Codex Plugin')
 
+  if (!run('which codex')) {
+    info('  ⏭️  codex CLI not found — skipping')
+    return
+  }
+
   // 현재 설치 버전 확인
   const versionFiles = [
     join(homedir(), '.agents', 'skills', 'gpters', '.version'),
