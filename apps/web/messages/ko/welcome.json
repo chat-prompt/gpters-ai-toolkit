@@ -83,8 +83,8 @@
     },
     "deploy": {
       "title": "스킬 공유",
-      "description": "만든 스킬을 팀과 공유할 수 있습니다.",
-      "example1": "\"이 스킬을 팀에 배포해줘\"",
+      "description": "만든 스킬을 공유할 수 있습니다.",
+      "example1": "\"이 스킬을 배포해줘\"",
       "example2": "aitk deploy --id my-skill --type skill --name \"My Skill\" --content @skill.md"
     },
     "update": {

@@ -83,8 +83,8 @@
     },
     "deploy": {
       "title": "Share Skills",
-      "description": "Share your skills with the team.",
-      "example1": "\"Deploy this skill to the team\"",
+      "description": "Share your skills with others.",
+      "example1": "\"Deploy this skill\"",
       "example2": "aitk deploy --id my-skill --type skill --name \"My Skill\" --content @skill.md"
     },
     "update": {

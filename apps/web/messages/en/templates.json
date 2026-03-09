@@ -182,8 +182,8 @@
     }
   },
   "cta": {
-    "title": "Share your skills with the team",
-    "description": "Customize a skill based on a template, then register it in the catalog to share with teammates.",
+    "title": "Share your skills",
+    "description": "Customize a skill based on a template, then register it in the catalog to share with others.",
     "gettingStarted": "Getting Started",
     "browseCatalog": "Browse Catalog"
   }
