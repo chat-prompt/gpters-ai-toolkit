@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 
 /** 탭 식별자 */
-type TabId = 'claude-code' | 'cli' | 'mcp'
+type TabId = 'all-in-one' | 'claude-code' | 'cli' | 'mcp'
 
 /** 탭 정의 */
 interface Tab {
@@ -35,10 +35,15 @@ interface ConnectTabsProps {
  */
 export function ConnectTabs({ baseUrl }: ConnectTabsProps) {
   const t = useTranslations('welcome')
-  const [activeTab, setActiveTab] = useState<TabId>('claude-code')
+  const [activeTab, setActiveTab] = useState<TabId>('all-in-one')
   const [copied, setCopied] = useState(false)
 
   const tabs: Tab[] = [
+    {
+      id: 'all-in-one',
+      label: t('connect.pluginTabs.allInOne') ?? 'All-in-One',
+      command: 'npm i -g @gpters/aitk@latest && aitk upgrade',
+    },
     {
       id: 'claude-code',
       label: 'Claude Code',

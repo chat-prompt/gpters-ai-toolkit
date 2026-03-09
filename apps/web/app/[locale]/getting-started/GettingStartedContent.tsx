@@ -661,6 +661,35 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
         </p>
       </div>
 
+      {/* Quick Start */}
+      <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-[var(--accent-cyan)]/10 to-[var(--accent-purple)]/10 border border-[var(--accent-cyan)]/20">
+        <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+          {t('quickStart.title')}
+        </h2>
+        <p className="text-sm text-[var(--text-secondary)] mb-4">
+          {t('quickStart.description')}
+        </p>
+        <CodeBlock
+          code={t('quickStart.command')}
+          stepId="quick-start"
+          copiedStep={copiedStep}
+          onCopy={copyToClipboard}
+          wrap={false}
+          copyLabel={copyLabel}
+          copiedLabel={copiedLabel}
+        />
+        <InfoBox color="blue" label={t('noteLabels.note')}>
+          {t('quickStart.note')}
+        </InfoBox>
+      </div>
+
+      {/* Separator */}
+      <div className="flex items-center gap-4 mb-8">
+        <div className="flex-1 h-px bg-[var(--border-subtle)]" />
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{t('orSeparator')}</span>
+        <div className="flex-1 h-px bg-[var(--border-subtle)]" />
+      </div>
+
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-8">
         {tabs.map((tab) => (

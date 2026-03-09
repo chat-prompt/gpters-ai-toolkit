@@ -48,6 +48,7 @@
     "titleHighlight": "연결하기",
     "terminalLabel": "Claude Code에서 실행하세요:",
     "pluginTabs": {
+      "allInOne": "All-in-One",
       "claudeCode": "Claude Code",
       "opencode": "OpenCode",
       "codex": "Codex"

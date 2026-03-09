@@ -1,6 +1,13 @@
 {
   "pageTitle": "플러그인 설치 가이드",
   "pageSubtitle": "사용하는 AI 코딩 도구에 맞는 설치 방법을 선택하세요.",
+  "quickStart": {
+    "title": "All-in-One 설치",
+    "description": "한 줄로 Claude Code, OpenCode, Codex 플러그인을 모두 설치합니다.",
+    "command": "npm i -g @gpters/aitk@latest && aitk upgrade",
+    "note": "설치된 코딩 에이전트를 자동 감지하여 해당 플러그인만 설치합니다. 이후 업데이트도 같은 명령어로 가능합니다."
+  },
+  "orSeparator": "또는 개별 설치",
   "tabs": {
     "claudeCode": {
       "label": "Claude Code",

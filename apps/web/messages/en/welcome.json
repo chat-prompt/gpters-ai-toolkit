@@ -48,6 +48,7 @@
     "titleHighlight": "Connection",
     "terminalLabel": "Run in Claude Code:",
     "pluginTabs": {
+      "allInOne": "All-in-One",
       "claudeCode": "Claude Code",
       "opencode": "OpenCode",
       "codex": "Codex"

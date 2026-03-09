@@ -1,6 +1,13 @@
 {
   "pageTitle": "Plugin Installation Guide",
   "pageSubtitle": "Choose the installation method for your AI coding tool.",
+  "quickStart": {
+    "title": "All-in-One Install",
+    "description": "Install all plugins (Claude Code, OpenCode, Codex) with a single command.",
+    "command": "npm i -g @gpters/aitk@latest && aitk upgrade",
+    "note": "Automatically detects installed coding agents and sets up only the relevant plugins. Use the same command for future updates."
+  },
+  "orSeparator": "or install individually",
   "tabs": {
     "claudeCode": {
       "label": "Claude Code",
