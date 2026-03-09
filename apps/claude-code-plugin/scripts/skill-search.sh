@@ -10,7 +10,7 @@ echo $((COUNT + 1)) > "$COUNTER_FILE"
 
 # ~/.config/aitk/config.json에서 searchMethod 읽기 (mcp | cli | auto)
 CONFIG_FILE="$HOME/.config/aitk/config.json"
-SEARCH_METHOD="auto"
+SEARCH_METHOD="cli"
 if [ -f "$CONFIG_FILE" ]; then
   METHOD=$(node -e "try{console.log(require('$CONFIG_FILE').searchMethod||'auto')}catch{console.log('auto')}" 2>/dev/null)
   [ -n "$METHOD" ] && SEARCH_METHOD="$METHOD"

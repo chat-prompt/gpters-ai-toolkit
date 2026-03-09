@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { info } from '../output.js'
+import { ensureConfig } from '../config.js'
 
 /** 명령어 실행 결과 (null이면 실패) */
 function run(cmd: string): string | null {
@@ -187,6 +188,11 @@ function upgradeCodex(): void {
  */
 export function runUpgrade(): void {
   info('=== GPTers Plugin Upgrade ===')
+
+  // 설정 파일이 없으면 기본값(searchMethod: cli)으로 생성
+  if (ensureConfig()) {
+    info('\n⚙️  Config created: ~/.config/aitk/config.json (searchMethod: cli)')
+  }
 
   upgradeClaude()
   upgradeOpencode()

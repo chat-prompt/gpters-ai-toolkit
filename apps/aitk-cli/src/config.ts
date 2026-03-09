@@ -58,10 +58,10 @@ export function readConfig(): AitkConfig {
     return {
       serverUrl: parsed.serverUrl ?? DEFAULT_SERVER_URL,
       token: parsed.token,
-      searchMethod: parsed.searchMethod,
+      searchMethod: parsed.searchMethod ?? 'cli',
     }
   } catch {
-    return { serverUrl: DEFAULT_SERVER_URL }
+    return { serverUrl: DEFAULT_SERVER_URL, searchMethod: 'cli' }
   }
 }
 
@@ -74,4 +74,19 @@ export function writeConfig(config: AitkConfig): void {
   const dir = getConfigDir()
   mkdirSync(dir, { recursive: true })
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2) + '\n', 'utf-8')
+}
+
+/**
+ * 설정 파일이 없으면 기본값으로 생성
+ *
+ * @returns 생성 여부 (true면 새로 생성됨)
+ */
+export function ensureConfig(): boolean {
+  try {
+    readFileSync(getConfigPath(), 'utf-8')
+    return false
+  } catch {
+    writeConfig({ serverUrl: DEFAULT_SERVER_URL, searchMethod: 'cli' })
+    return true
+  }
 }
