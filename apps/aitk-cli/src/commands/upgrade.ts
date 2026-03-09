@@ -52,34 +52,48 @@ function upgradeClaude(): void {
   }
 
   const { version: currentVer, marketplace } = detectMarketplace()
-  const pluginRef = `gpters-ai-toolkit@${marketplace}`
+  const canonical = MARKETPLACE_NAMES[0] // gpters-marketplace
+
+  // 구 마켓플레이스 이름으로 설치된 경우 마이그레이션
+  if (currentVer && marketplace !== canonical) {
+    info(`  Current: ${currentVer} (marketplace: ${marketplace})`)
+    info(`  🔄 Migrating to ${canonical}...`)
+    try {
+      execSync(`claude plugin uninstall gpters-ai-toolkit@${marketplace}`, { stdio: 'inherit' })
+    } catch { /* 무시 */ }
+    try {
+      execSync('claude plugin marketplace add chat-prompt/gpters-ai-toolkit', { stdio: 'inherit' })
+    } catch { /* 이미 등록 */ }
+    try {
+      execSync(`claude plugin install gpters-ai-toolkit@${canonical}`, { stdio: 'inherit' })
+      info('  ✅ Migrated (restart Claude Code to activate)')
+    } catch {
+      info('  ⚠️  Migration failed. Run manually:')
+      info(`     claude plugin uninstall gpters-ai-toolkit@${marketplace}`)
+      info(`     claude plugin install gpters-ai-toolkit@${canonical}`)
+    }
+    return
+  }
 
   if (!currentVer) {
     info('  Installing...')
     try {
       execSync('claude plugin marketplace add chat-prompt/gpters-ai-toolkit', { stdio: 'inherit' })
     } catch { /* 이미 등록된 경우 무시 */ }
-    // 두 마켓플레이스 이름 모두 시도
-    let installed = false
-    for (const mp of MARKETPLACE_NAMES) {
-      try {
-        execSync(`claude plugin install gpters-ai-toolkit@${mp}`, { stdio: 'inherit' })
-        info('  ✅ Installed (restart Claude Code to activate)')
-        installed = true
-        break
-      } catch { /* 다음 이름 시도 */ }
-    }
-    if (!installed) {
+    try {
+      execSync(`claude plugin install gpters-ai-toolkit@${canonical}`, { stdio: 'inherit' })
+      info('  ✅ Installed (restart Claude Code to activate)')
+    } catch {
       info('  ⚠️  Auto-install failed. Run manually:')
       info('     claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
-      info('     claude plugin install gpters-ai-toolkit@gpters-marketplace')
+      info(`     claude plugin install gpters-ai-toolkit@${canonical}`)
     }
     return
   }
 
   info(`  Current: ${currentVer}`)
   try {
-    execSync(`claude plugin update ${pluginRef}`, { stdio: 'inherit' })
+    execSync(`claude plugin update gpters-ai-toolkit@${canonical}`, { stdio: 'inherit' })
     info('  ✅ Updated (applies on next session)')
   } catch {
     info(`  ⚠️  Update failed — try: claude plugin update ${pluginRef}`)
