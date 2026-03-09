@@ -29,8 +29,11 @@ export function useSearchFilters({
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | ''>(
     (searchParams.get('difficulty') as Difficulty) || ''
   )
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(
+    searchParams.get('platform') || null
+  )
   const [showFilters, setShowFilters] = useState(
-    Boolean(searchParams.get('tags') || searchParams.get('difficulty'))
+    Boolean(searchParams.get('tags') || searchParams.get('difficulty') || searchParams.get('platform'))
   )
 
   // Sync URL with filter state
@@ -90,9 +93,18 @@ export function useSearchFilters({
     [updateURL]
   )
 
+  const handlePlatformChange = useCallback(
+    (platform: string | null) => {
+      setSelectedPlatform(platform)
+      updateURL({ platform: platform || null })
+    },
+    [updateURL]
+  )
+
   const handleClearAllFilters = useCallback(() => {
     setSelectedTags([])
     setSelectedDifficulty('')
+    setSelectedPlatform(null)
     setSearchQuery('')
     setActiveFilter('all')
     router.replace(pathname, { scroll: false })
@@ -123,6 +135,13 @@ export function useSearchFilters({
       // Difficulty filter
       if (selectedDifficulty && item.difficulty !== selectedDifficulty) {
         return false
+      }
+
+      // Platform filter - null platforms means all platforms compatible
+      if (selectedPlatform) {
+        if (item.platforms && !item.platforms.includes(selectedPlatform)) {
+          return false
+        }
       }
 
       return true
@@ -211,10 +230,10 @@ export function useSearchFilters({
     // No search query - just sort by updated date
     filtered.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
     return { filteredCatalog: filtered, didYouMean: [] }
-  }, [catalog, searchQuery, activeFilter, selectedTags, selectedDifficulty])
+  }, [catalog, searchQuery, activeFilter, selectedTags, selectedDifficulty, selectedPlatform])
 
   const hasActiveFilters =
-    selectedTags.length > 0 || selectedDifficulty !== ''
+    selectedTags.length > 0 || selectedDifficulty !== '' || selectedPlatform !== null
 
   // Memoize category groupings
   const { skills, agents, commands, hooks, packages } = useMemo(
@@ -266,6 +285,7 @@ export function useSearchFilters({
     activeFilter,
     selectedTags,
     selectedDifficulty,
+    selectedPlatform,
     showFilters,
     setShowFilters,
     availableTags,
@@ -275,6 +295,7 @@ export function useSearchFilters({
     handleTypeFilter,
     handleTagToggle,
     handleDifficultyChange,
+    handlePlatformChange,
     handleClearAllFilters,
     skills,
     agents,

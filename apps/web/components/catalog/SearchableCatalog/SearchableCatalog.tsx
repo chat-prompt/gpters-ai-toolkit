@@ -11,6 +11,7 @@
 
 import { Link } from '@/i18n/navigation'
 import { TAGS, DIFFICULTY_LABELS, type Difficulty } from '@/lib/core/types'
+import { SKILL_PLATFORMS, PLATFORM_LABELS } from '@/lib/security/client-type'
 import { SearchAutocomplete } from '../SearchAutocomplete'
 import { ItemCard } from './ItemCard'
 import { SectionHeader } from './SectionHeader'
@@ -38,6 +39,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     activeFilter,
     selectedTags,
     selectedDifficulty,
+    selectedPlatform,
     showFilters,
     setShowFilters,
     availableTags,
@@ -47,6 +49,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     handleTypeFilter,
     handleTagToggle,
     handleDifficultyChange,
+    handlePlatformChange,
     handleClearAllFilters,
     skills,
     agents,
@@ -178,6 +181,32 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
               </div>
             </div>
 
+            {/* Platform Filter */}
+            <div className="mb-5">
+              <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
+                Platform
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SKILL_PLATFORMS.map((platform) => {
+                  const info = PLATFORM_LABELS[platform]
+                  const isActive = selectedPlatform === platform
+                  return (
+                    <button
+                      key={platform}
+                      onClick={() => handlePlatformChange(isActive ? null : platform)}
+                      className={`text-xs px-3 py-1.5 rounded-full transition-all ${
+                        isActive
+                          ? `${info.color} ring-1 ring-current`
+                          : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {info.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Tag Filter */}
             <div>
               <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
@@ -226,6 +255,17 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
               {DIFFICULTY_LABELS[selectedDifficulty].label}
               <button
                 onClick={() => handleDifficultyChange('')}
+                className="ml-1 hover:text-rose-400 transition-colors"
+              >
+                ✕
+              </button>
+            </span>
+          )}
+          {selectedPlatform && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+              {PLATFORM_LABELS[selectedPlatform as keyof typeof PLATFORM_LABELS]?.label || selectedPlatform}
+              <button
+                onClick={() => handlePlatformChange(null)}
                 className="ml-1 hover:text-rose-400 transition-colors"
               >
                 ✕

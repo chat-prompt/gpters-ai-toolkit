@@ -33,6 +33,7 @@ export interface UseSearchFiltersReturn {
   activeFilter: ItemType | 'all'
   selectedTags: string[]
   selectedDifficulty: Difficulty | ''
+  selectedPlatform: string | null
   showFilters: boolean
   setShowFilters: (show: boolean) => void
   availableTags: string[]
@@ -42,6 +43,7 @@ export interface UseSearchFiltersReturn {
   handleTypeFilter: (type: ItemType | 'all') => void
   handleTagToggle: (tag: string) => void
   handleDifficultyChange: (difficulty: Difficulty | '') => void
+  handlePlatformChange: (platform: string | null) => void
   handleClearAllFilters: () => void
   skills: CatalogItemSummary[]
   agents: CatalogItemSummary[]

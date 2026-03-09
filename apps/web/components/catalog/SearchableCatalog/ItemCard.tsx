@@ -7,6 +7,7 @@
 import { memo } from 'react'
 import { Link } from '@/i18n/navigation'
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
+import { PLATFORM_LABELS, type SkillPlatform } from '@/lib/security/client-type'
 import { TYPE_CONFIG } from './constants'
 import type { ItemCardProps } from './types'
 
@@ -88,6 +89,24 @@ export const ItemCard = memo(function ItemCard({ item, index }: ItemCardProps) {
             </span>
           ))}
         </div>
+
+        {/* Platform Badges */}
+        {item.platforms && item.platforms.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {item.platforms.map((platform) => {
+              const info = PLATFORM_LABELS[platform as SkillPlatform]
+              if (!info) return null
+              return (
+                <span
+                  key={platform}
+                  className={`text-[9px] px-1.5 py-0.5 rounded-md ${info.color} font-medium`}
+                >
+                  {info.shortLabel}
+                </span>
+              )
+            })}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]">
