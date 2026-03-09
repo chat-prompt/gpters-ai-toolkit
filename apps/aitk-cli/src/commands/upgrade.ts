@@ -110,17 +110,48 @@ function upgradeOpencode(): void {
     return
   }
 
-  // OpenCode 플러그인 캐시 삭제 (최신 버전 fetch 강제)
-  const cacheDirs = [
-    join(homedir(), '.cache', 'opencode', 'node_modules', '@gpters', 'opencode'),
-    join(homedir(), '.cache', 'opencode', 'node_modules', '@gpters-internal'),
-  ]
-  for (const dir of cacheDirs) {
-    if (existsSync(dir)) {
-      run(`rm -rf "${dir}"`)
-      info(`  🗑️  Cache cleared: ${dir}`)
+  // OpenCode 플러그인 캐시 전체 초기화 (package.json, bun.lock, node_modules)
+  const cacheBase = join(homedir(), '.cache', 'opencode')
+  const cachePkg = join(cacheBase, 'package.json')
+  const cacheLock = join(cacheBase, 'bun.lock')
+  const cacheNodeModules = join(cacheBase, 'node_modules', '@gpters')
+  const cacheInternalModules = join(cacheBase, 'node_modules', '@gpters-internal')
+
+  // package.json에서 @gpters/opencode 버전을 latest로 갱신
+  if (existsSync(cachePkg)) {
+    try {
+      const pkg = JSON.parse(readFileSync(cachePkg, 'utf-8'))
+      const deps = pkg.dependencies ?? {}
+      // @gpters-internal 제거 + @gpters/opencode를 latest로
+      for (const key of Object.keys(deps)) {
+        if (/gpters-internal/.test(key)) delete deps[key]
+      }
+      if (latest) {
+        deps['@gpters/opencode'] = latest
+      } else {
+        delete deps['@gpters/opencode']
+      }
+      pkg.dependencies = deps
+      writeFileSync(cachePkg, JSON.stringify(pkg, null, 2) + '\n')
+      info(`  📝 ${cachePkg} → @gpters/opencode@${latest}`)
+    } catch {
+      info(`  ⚠️  Failed to update ${cachePkg}`)
     }
   }
+
+  // bun.lock 삭제 (다음 실행 시 재생성)
+  if (existsSync(cacheLock)) {
+    run(`rm -f "${cacheLock}"`)
+    info(`  🗑️  Removed bun.lock`)
+  }
+
+  // node_modules 캐시 삭제
+  for (const dir of [cacheNodeModules, cacheInternalModules]) {
+    if (existsSync(dir)) {
+      run(`rm -rf "${dir}"`)
+    }
+  }
+  info(`  🗑️  Cache cleared`)
   info('  ℹ️  Restart OpenCode to apply update')
 }
 
