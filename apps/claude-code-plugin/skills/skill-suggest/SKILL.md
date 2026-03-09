@@ -15,9 +15,9 @@ description: "새 작업/주제 변경 시 팀 스킬을 자동 검색합니다.
 
 | searchMethod | 검색 방법 |
 |---|---|
-| `cli` | `Bash("aitk search '키워드'")` — **MCP 도구 사용 금지** |
+| `cli` | `Bash("aitk search '키워드'")` — **MCP 도구 사용 금지** (기본값) |
 | `mcp` | `mcp__gpters-ai-toolkit__semantic_search(...)` |
-| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback (기본값) |
+| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback |
 
 > **주의**: `searchMethod`가 `cli`인데 MCP 도구(`semantic_search`)로 검색하면 안 됩니다. 사용자가 의도적으로 CLI 모드를 선택한 것이므로 반드시 `aitk` CLI를 사용하세요.
 
@@ -121,15 +121,15 @@ Bash("aitk report-outcome --skill-id '스킬ID' --applied true --summary '결과
 
 ```json
 {
-  "searchMethod": "auto"
+  "searchMethod": "cli"
 }
 ```
 
 | 값 | 동작 |
 |----|------|
-| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback (기본값) |
+| `cli` | aitk CLI만 사용 (기본값) |
 | `mcp` | MCP만 사용. 연결 불가 시 검색 스킵 |
-| `cli` | aitk CLI만 사용 |
+| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback |
 
 설정 변경:
 ```bash

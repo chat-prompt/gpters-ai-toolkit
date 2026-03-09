@@ -49,7 +49,7 @@ type SearchMethod = "mcp" | "cli" | "auto"
 /**
  * ~/.config/aitk/config.json에서 searchMethod 설정을 읽어 반환
  *
- * @returns 설정된 검색 방법 (기본값: "auto")
+ * @returns 설정된 검색 방법 (기본값: "cli")
  */
 function getSearchMethod(): SearchMethod {
   try {
@@ -61,7 +61,7 @@ function getSearchMethod(): SearchMethod {
   } catch {
     // 설정 파일 없거나 파싱 실패 시 기본값
   }
-  return "auto"
+  return "cli"
 }
 
 function extractMessageContent(output: { parts: Array<{ type: string; text?: string }> }): string {

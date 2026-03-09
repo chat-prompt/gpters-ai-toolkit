@@ -2,9 +2,9 @@
 # SessionStart hook: 검색 모드 설정 안내
 
 CONFIG_FILE="$HOME/.config/aitk/config.json"
-SEARCH_METHOD="auto"
+SEARCH_METHOD="cli"
 if [ -f "$CONFIG_FILE" ]; then
-  METHOD=$(node -e "try{console.log(require('$CONFIG_FILE').searchMethod||'auto')}catch{console.log('auto')}" 2>/dev/null)
+  METHOD=$(node -e "try{console.log(require('$CONFIG_FILE').searchMethod||'cli')}catch{console.log('cli')}" 2>/dev/null)
   [ -n "$METHOD" ] && SEARCH_METHOD="$METHOD"
 fi
 
@@ -17,9 +17,9 @@ if [ "$AITK_INSTALLED" = "true" ]; then
   cat <<CONTEXT
 <toolkit-config>
 스킬 검색 모드: ${SEARCH_METHOD} (변경: aitk config set searchMethod <auto|mcp|cli>)
-- "auto": MCP 우선, 실패 시 aitk CLI fallback (기본값)
+- "cli": aitk CLI만 사용 (기본값)
 - "mcp": MCP만 사용
-- "cli": aitk CLI만 사용
+- "auto": MCP 우선, 실패 시 aitk CLI fallback
 </toolkit-config>
 CONTEXT
 else
