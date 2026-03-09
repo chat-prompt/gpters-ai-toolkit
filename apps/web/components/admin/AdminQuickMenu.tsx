@@ -49,6 +49,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
+  const t = useTranslations('admin.menu')
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -109,8 +110,6 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
     { type: 'guide', href: '/admin/catalog/new?type=guide' },
     { type: 'hook', href: '/admin/catalog/new?type=hook' },
   ]
-
-  const t = useTranslations('admin.menu')
 
   // Management links
   const managementLinks = [

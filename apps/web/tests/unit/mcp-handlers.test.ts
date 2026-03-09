@@ -1440,7 +1440,7 @@ describe('MCP Handlers', () => {
       })
 
       expect(result.isError).toBe(false)
-      expect(result.content[0].text).toContain('품질 개선 힌트')
+      expect(result.content[0].text).toContain('qualityWarnings')
       expect(result.content[0].text).toContain('description')
       expect(result.content[0].text).toContain('content')
     })

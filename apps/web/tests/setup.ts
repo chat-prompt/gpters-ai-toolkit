@@ -1,5 +1,7 @@
-import { beforeAll, afterAll, afterEach } from 'vitest'
-import '@testing-library/jest-dom/vitest'
+import { beforeAll, afterAll, afterEach, expect } from 'vitest'
+import * as matchers from '@testing-library/jest-dom/matchers'
+
+expect.extend(matchers)
 
 // Note: NODE_ENV is automatically set to 'test' by vitest
 
