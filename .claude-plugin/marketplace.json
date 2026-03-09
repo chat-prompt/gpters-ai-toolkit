@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "chat-prompt-gpters-ai-toolkit",
+  "owner": {
+    "name": "GPTers",
+    "email": "contact@gpters.org"
+  },
+  "plugins": [
+    {
+      "name": "gpters-ai-toolkit",
+      "source": "./apps/claude-code-plugin",
+      "description": "GPTers AI Toolkit - 팀 스킬 자동 검색 및 MCP 연동",
+      "author": {
+        "name": "GPTers",
+        "email": "contact@gpters.org"
+      },
+      "homepage": "https://ai-toolkit.gpters.org",
+      "category": "productivity"
+    }
+  ]
+}
