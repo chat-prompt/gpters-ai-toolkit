@@ -87,27 +87,43 @@ export default async function WelcomePage({
     },
   ] as const
 
-  /** MCP 도구 예시 데이터 */
-  const TOOL_EXAMPLES = [
+  /** 사용 예시 데이터 */
+  const USAGE_EXAMPLES = [
     {
-      tool: 'semantic_search',
-      description: t('tools.semanticSearch'),
-      example: 'semantic_search("code review")',
+      icon: '💬',
+      title: t('usage.naturalLanguage.title'),
+      description: t('usage.naturalLanguage.description'),
+      examples: [
+        t('usage.naturalLanguage.example1'),
+        t('usage.naturalLanguage.example2'),
+        t('usage.naturalLanguage.example3'),
+      ],
     },
     {
-      tool: 'get_plugin_content',
-      description: t('tools.getPluginContent'),
-      example: 'get_plugin_content("code-reviewer")',
+      icon: '🚀',
+      title: t('usage.deploy.title'),
+      description: t('usage.deploy.description'),
+      examples: [
+        t('usage.deploy.example1'),
+        t('usage.deploy.example2'),
+      ],
     },
     {
-      tool: 'deploy_skill',
-      description: t('tools.deploySkill'),
-      example: 'deploy_skill(type="skill", name="my-skill", ...)',
+      icon: '🔄',
+      title: t('usage.update.title'),
+      description: t('usage.update.description'),
+      examples: [
+        t('usage.update.example1'),
+      ],
     },
     {
-      tool: 'check_updates',
-      description: t('tools.checkUpdates'),
-      example: 'check_updates(["code-reviewer", "refactor-guide"])',
+      icon: '🔍',
+      title: t('usage.cli.title'),
+      description: t('usage.cli.description'),
+      examples: [
+        t('usage.cli.example1'),
+        t('usage.cli.example2'),
+      ],
     },
   ] as const
 
@@ -278,33 +294,38 @@ export default async function WelcomePage({
         </div>
       </section>
 
-      {/* What's Inside Section */}
+      {/* Usage Examples Section */}
       <section className="relative z-10 py-20 px-8">
         <div className="max-w-5xl mx-auto">
           <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('tools.badge')}
+            {t('usage.badge')}
           </p>
           <h2
             className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
             style={{ fontFamily: 'var(--font-newsreader)' }}
           >
-            {t('tools.title')}
+            {t('usage.title')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {TOOL_EXAMPLES.map((item) => (
+            {USAGE_EXAMPLES.map((item) => (
               <div
-                key={item.tool}
+                key={item.title}
                 className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-5"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <code className="text-sm font-mono font-semibold text-[var(--brand-primary)]">
-                    {item.tool}
-                  </code>
+                  <span className="text-xl">{item.icon}</span>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                    {item.title}
+                  </h3>
                 </div>
                 <p className="text-sm text-[var(--text-secondary)] mb-3">{item.description}</p>
-                <pre className="bg-[var(--bg-secondary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-muted)] overflow-x-auto">
-                  {item.example}
-                </pre>
+                <div className="space-y-1.5">
+                  {item.examples.map((ex, i) => (
+                    <pre key={i} className="bg-[var(--bg-secondary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-muted)] overflow-x-auto">
+                      {ex}
+                    </pre>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

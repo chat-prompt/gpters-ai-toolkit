@@ -71,12 +71,32 @@
     "gettingStartedLink": "Getting Started guide",
     "moreSetupSuffix": "."
   },
-  "tools": {
-    "badge": "What's Inside",
-    "title": "MCP Tools Preview",
-    "semanticSearch": "Search skills and agents with natural language",
-    "getPluginContent": "Get full skill content",
-    "deploySkill": "Deploy a new skill to your team",
-    "checkUpdates": "Check for installed skill updates"
+  "usage": {
+    "badge": "How to Use",
+    "title": "How to Use",
+    "naturalLanguage": {
+      "title": "Natural Language",
+      "description": "Just talk to your coding agent — skills are applied automatically.",
+      "example1": "\"Review my code\"",
+      "example2": "\"Show me the DB schema\"",
+      "example3": "\"Improve this using the refactoring guide\""
+    },
+    "deploy": {
+      "title": "Share Skills",
+      "description": "Share your skills with the team.",
+      "example1": "\"Deploy this skill to the team\"",
+      "example2": "aitk deploy --id my-skill --type skill --name \"My Skill\" --content @skill.md"
+    },
+    "update": {
+      "title": "Update",
+      "description": "Update all plugins to the latest version at once.",
+      "example1": "aitk upgrade"
+    },
+    "cli": {
+      "title": "CLI Search",
+      "description": "Search and retrieve skills directly from the terminal.",
+      "example1": "aitk search \"code review\"",
+      "example2": "aitk get code-reviewer"
+    }
   }
 }

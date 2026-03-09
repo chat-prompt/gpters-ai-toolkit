@@ -71,12 +71,32 @@
     "gettingStartedLink": "시작 가이드",
     "moreSetupSuffix": "를 참고하세요."
   },
-  "tools": {
-    "badge": "What's Inside",
-    "title": "MCP 도구 미리보기",
-    "semanticSearch": "자연어로 스킬·에이전트 검색",
-    "getPluginContent": "스킬 전체 내용 조회",
-    "deploySkill": "새 스킬을 팀에 배포",
-    "checkUpdates": "설치된 스킬 업데이트 확인"
+  "usage": {
+    "badge": "How to Use",
+    "title": "이렇게 사용하세요",
+    "naturalLanguage": {
+      "title": "자연어로 요청",
+      "description": "코딩 에이전트에게 평소처럼 말하면 스킬이 자동으로 적용됩니다.",
+      "example1": "\"코드 리뷰해줘\"",
+      "example2": "\"DB 스키마 알려줘\"",
+      "example3": "\"리팩토링 가이드 참고해서 개선해줘\""
+    },
+    "deploy": {
+      "title": "스킬 공유",
+      "description": "만든 스킬을 팀과 공유할 수 있습니다.",
+      "example1": "\"이 스킬을 팀에 배포해줘\"",
+      "example2": "aitk deploy --id my-skill --type skill --name \"My Skill\" --content @skill.md"
+    },
+    "update": {
+      "title": "업데이트",
+      "description": "모든 플러그인을 한 번에 최신 버전으로 업데이트합니다.",
+      "example1": "aitk upgrade"
+    },
+    "cli": {
+      "title": "CLI로 검색",
+      "description": "터미널에서 직접 스킬을 검색하고 조회할 수 있습니다.",
+      "example1": "aitk search \"code review\"",
+      "example2": "aitk get code-reviewer"
+    }
   }
 }
