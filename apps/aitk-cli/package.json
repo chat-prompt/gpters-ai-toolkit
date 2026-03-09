@@ -1,6 +1,6 @@
 {
   "name": "@gpters/aitk",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "GPTers AI Toolkit CLI - MCP fallback & standalone CLI tool",
   "type": "module",
   "bin": {

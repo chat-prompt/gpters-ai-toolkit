@@ -47,9 +47,21 @@ function upgradeClaude(): void {
   }
 
   if (!currentVer) {
-    info('  ⚠️  Not installed. Run:')
-    info('     claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
-    info('     claude plugin install gpters-ai-toolkit@gpters-marketplace')
+    info('  Installing...')
+    // 마켓플레이스 등록
+    const addResult = run('claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
+    if (addResult === null) {
+      // 이미 등록된 경우 무시
+    }
+    // 플러그인 설치
+    const installResult = run('claude plugin install gpters-ai-toolkit@gpters-marketplace')
+    if (installResult !== null) {
+      info('  ✅ Installed (restart Claude Code to activate)')
+    } else {
+      info('  ⚠️  Auto-install failed. Run manually:')
+      info('     claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
+      info('     claude plugin install gpters-ai-toolkit@gpters-marketplace')
+    }
     return
   }
 
@@ -107,7 +119,22 @@ function upgradeOpencode(): void {
   }
 
   if (!found) {
-    info('  ⏭️  opencode.json not found — skipping')
+    // opencode CLI가 설치되어 있으면 설정 파일 자동 생성
+    if (run('which opencode')) {
+      const configDir = join(homedir(), '.config', 'opencode')
+      const configPath = join(configDir, 'opencode.json')
+      try {
+        run(`mkdir -p "${configDir}"`)
+        writeFileSync(configPath, JSON.stringify({ plugin: ['@gpters/opencode@latest'] }, null, 2) + '\n')
+        info(`  ✅ Created ${configPath} with @gpters/opencode@latest`)
+        info('  ℹ️  Restart OpenCode to activate')
+      } catch (err) {
+        info(`  ⚠️  Auto-setup failed: ${err}`)
+        info('     Add "@gpters/opencode@latest" to opencode.json plugin array manually')
+      }
+    } else {
+      info('  ⏭️  opencode not installed — skipping')
+    }
     return
   }
 
