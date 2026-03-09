@@ -20,7 +20,7 @@ fi
 case "$SEARCH_METHOD" in
   mcp)
     cat <<'CONTEXT'
-<team-skills>새 작업/주제 변경 시 팀 스킬을 검색하세요. 기존 대화의 후속이면 무시하세요.
+<team-skills>이전 대화의 직접적 후속(확인, 수정, "계속해줘" 등)이 아니면 반드시 검색하세요. 새 기술/도구 질문, 사용법, 구현 요청 모두 포함됩니다.
 검색: mcp__gpters-ai-toolkit__semantic_search(query="한영 병기 키워드 2~4단어 (예: '환불 refund', 'code review 코드리뷰')", userContext="작업 맥락(있으면)", limit=3, _source="skill-suggest")
 MCP 연결 불가 시 검색을 건너뛰세요.
 규칙: 0.40 이상→get_plugin_content로 로드, 미만→report_search_skip으로 스킵 보고.
@@ -29,7 +29,7 @@ CONTEXT
     ;;
   cli)
     cat <<'CONTEXT'
-<team-skills>새 작업/주제 변경 시 팀 스킬을 검색하세요. 기존 대화의 후속이면 무시하세요.
+<team-skills>이전 대화의 직접적 후속(확인, 수정, "계속해줘" 등)이 아니면 반드시 검색하세요. 새 기술/도구 질문, 사용법, 구현 요청 모두 포함됩니다.
 검색: Bash("aitk search '한영 병기 키워드 (예: 환불 refund)' --limit 3 --context '작업 맥락(있으면)'")
 규칙: 0.40 이상→Bash("aitk get '스킬ID'")로 로드, 미만→Bash("aitk report-skip --query '검색어' --reason '사유'")로 스킵 보고.
 적용 후: Bash("aitk report-outcome --skill-id '스킬ID' --applied true --summary '결과'")로 보고. 상세 절차는 skill-suggest SKILL.md 참조.</team-skills>
@@ -38,7 +38,7 @@ CONTEXT
   *)
     # auto: MCP 우선, 불가 시 CLI fallback (기본 동작)
     cat <<'CONTEXT'
-<team-skills>새 작업/주제 변경 시 팀 스킬을 검색하세요. 기존 대화의 후속이면 무시하세요.
+<team-skills>이전 대화의 직접적 후속(확인, 수정, "계속해줘" 등)이 아니면 반드시 검색하세요. 새 기술/도구 질문, 사용법, 구현 요청 모두 포함됩니다.
 검색: mcp__gpters-ai-toolkit__semantic_search(query="한영 병기 키워드 2~4단어 (예: '환불 refund', 'code review 코드리뷰')", userContext="작업 맥락(있으면)", limit=3, _source="skill-suggest")
 MCP 연결 불가 시: Bash("aitk search '한영 병기 키워드' --limit 3") 로 fallback
 규칙: 0.40 이상→get_plugin_content로 로드, 미만→report_search_skip으로 스킵 보고.

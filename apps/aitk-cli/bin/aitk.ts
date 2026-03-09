@@ -20,10 +20,11 @@ import { runSuggestions } from '../src/commands/suggestions.js'
 import { runResolve } from '../src/commands/resolve.js'
 import { runAddFiles } from '../src/commands/add-files.js'
 import { runRemoveFiles } from '../src/commands/remove-files.js'
+import { runUpgrade } from '../src/commands/upgrade.js'
 import { error, info } from '../src/output.js'
 
 /** 버전 */
-const VERSION = '0.3.1'
+const VERSION = '0.3.3'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)
@@ -63,7 +64,8 @@ const HELP = `aitk - GPTers AI Toolkit CLI
 Usage:
   aitk search <query> [--type skill] [--limit 5] [--context "context"]
   aitk get <id>
-  aitk deploy --id <slug> --type skill --name <name> --content <@file|text>
+  aitk deploy --id <slug> --type skill --name <name> --content <@file|text> [--platforms claude_code,codex]
+  aitk upgrade
   aitk updates
   aitk config [list|get|set] [key] [value]
   aitk report-session --count <N> [--version <ver>]
@@ -82,6 +84,7 @@ Usage:
 Commands:
   search          Search team skills, agents, and commands
   get             Get plugin details by ID
+  upgrade         Upgrade all GPTers plugins (Claude Code, OpenCode, Codex)
   deploy          Deploy a skill, agent, or command
   undeploy        Remove a deployed skill (owner only)
   updates         Check for installed skill updates
@@ -143,12 +146,25 @@ Required:
   --content <text>   Content text or @filepath to read from file
 
 Options:
-  --description <d>  Item description
-  --tags <t1,t2>     Comma-separated tags
+  --description <d>       Item description
+  --tags <t1,t2>          Comma-separated tags
+  --platforms <p1,p2>     Comma-separated platforms (claude_code,opencode,codex,cursor)
 
 Examples:
   aitk deploy --id my-skill --type skill --name "My Skill" --content @skill.md
-  aitk deploy --id helper --type agent --name Helper --content "..." --tags "util,dev"`,
+  aitk deploy --id helper --type agent --name Helper --content "..." --tags "util,dev"
+  aitk deploy --id codex-tool --type skill --name "Codex Tool" --content @skill.md --platforms codex`,
+
+  upgrade: `aitk upgrade - Upgrade all GPTers plugins
+
+Usage: aitk upgrade
+
+Checks versions and updates all GPTers plugins at once:
+  - Claude Code: marketplace plugin update
+  - OpenCode: migrate @gpters-internal/opencode → @gpters/opencode
+  - Codex: migrate @gpters-internal/codex → @gpters/codex-plugin
+
+Also migrates from old @gpters-internal/* private packages to public @gpters/* packages.`,
 
   updates: `aitk updates - Check for installed skill updates
 
@@ -357,7 +373,13 @@ async function main(): Promise<void> {
         content: flags['content'],
         description: flags['description'],
         tags: flags['tags'],
+        platforms: flags['platforms'],
       })
+      break
+    }
+
+    case 'upgrade': {
+      runUpgrade()
       break
     }
 
