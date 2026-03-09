@@ -60,9 +60,11 @@ function detectMarketplace(): { version: string | null; marketplace: string } {
 function repairMarketplaceCache(): void {
   const mpDir = join(homedir(), '.claude', 'plugins', 'marketplaces')
   for (const name of MARKETPLACE_NAMES) {
-    const cacheDir = join(mpDir, name, 'gpters-ai-toolkit')
+    const cacheDir = join(mpDir, name)
     const mjPath = join(cacheDir, 'marketplace.json')
     if (!existsSync(mjPath)) continue
+    // git pull 먼저 (최신 marketplace.json 반영)
+    run(`git -C "${cacheDir}" pull --ff-only 2>/dev/null`)
     try {
       const mj = JSON.parse(readFileSync(mjPath, 'utf-8'))
       if (mj.name !== name) {
@@ -70,8 +72,6 @@ function repairMarketplaceCache(): void {
         writeFileSync(mjPath, JSON.stringify(mj, null, 2) + '\n')
         info(`  🔧 Fixed marketplace.json name → ${name}`)
       }
-      // git pull로 최신 플러그인 코드 반영
-      run(`git -C "${cacheDir}" pull --ff-only 2>/dev/null`)
     } catch { /* ignore */ }
   }
 }
