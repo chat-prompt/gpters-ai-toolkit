@@ -107,7 +107,21 @@ function upgradeOpencode(): void {
 
   if (!found) {
     info('  ⏭️  opencode.json not found — skipping')
+    return
   }
+
+  // OpenCode 플러그인 캐시 삭제 (최신 버전 fetch 강제)
+  const cacheDirs = [
+    join(homedir(), '.cache', 'opencode', 'node_modules', '@gpters', 'opencode'),
+    join(homedir(), '.cache', 'opencode', 'node_modules', '@gpters-internal'),
+  ]
+  for (const dir of cacheDirs) {
+    if (existsSync(dir)) {
+      run(`rm -rf "${dir}"`)
+      info(`  🗑️  Cache cleared: ${dir}`)
+    }
+  }
+  info('  ℹ️  Restart OpenCode to apply update')
 }
 
 /** Codex 플러그인 마이그레이션 + 업데이트 */
