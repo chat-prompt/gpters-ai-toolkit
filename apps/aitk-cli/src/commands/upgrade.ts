@@ -83,23 +83,22 @@ function upgradeOpencode(): void {
       const plugins: string[] = config.plugin ?? []
 
       const oldPkg = plugins.find((p) => /gpters-internal\/(openco|opencode)/.test(p))
-      const hasNew = plugins.some((p) => /^@gpters\/opencode/.test(p))
 
-      // 마이그레이션: @gpters-internal/* 제거
-      config.plugin = plugins.filter((p) => !/gpters-internal\/(openco|opencode)/.test(p))
+      // 기존 gpters 관련 항목 모두 제거 (internal + public 모두)
+      config.plugin = plugins.filter(
+        (p) => !/gpters-internal\/(openco|opencode)/.test(p) && !/^@gpters\/opencode/.test(p)
+      )
 
-      // @gpters/opencode 추가 (없으면)
-      if (!hasNew) {
-        config.plugin.push('@gpters/opencode')
-      }
+      // @gpters/opencode@latest로 교체 (항상 최신 버전 fetch 강제)
+      config.plugin.push('@gpters/opencode@latest')
 
       writeFileSync(f, JSON.stringify(config, null, 2) + '\n')
 
       if (oldPkg) {
         info(`  🔄 ${f}`)
-        info(`     ${oldPkg} → @gpters/opencode`)
+        info(`     ${oldPkg} → @gpters/opencode@latest`)
       } else {
-        info(`  ✅ ${f} — @gpters/opencode`)
+        info(`  ✅ ${f} — @gpters/opencode@latest`)
       }
     } catch (err) {
       info(`  ⚠️  Failed to process ${f}: ${err}`)
