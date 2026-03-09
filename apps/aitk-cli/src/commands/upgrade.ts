@@ -29,17 +29,31 @@ function npmLatest(pkg: string): string | null {
 /** 마켓플레이스 이름 후보 (환경에 따라 다를 수 있음) */
 const MARKETPLACE_NAMES = ['gpters-marketplace', 'chat-prompt-gpters-ai-toolkit']
 
+/** 디스크에 실제 존재하는 마켓플레이스 이름 순서 반환 (존재하는 것 우선) */
+function getMarketplaceOrder(): string[] {
+  const mpDir = join(homedir(), '.claude', 'plugins', 'marketplaces')
+  const sorted = [...MARKETPLACE_NAMES].sort((a, b) => {
+    const aExists = existsSync(join(mpDir, a))
+    const bExists = existsSync(join(mpDir, b))
+    if (aExists && !bExists) return -1
+    if (!aExists && bExists) return 1
+    return 0
+  })
+  return sorted
+}
+
 /** installed_plugins.json에서 플러그인의 마켓플레이스 이름 감지 */
 function detectMarketplace(): { version: string | null; marketplace: string } {
   const installedPath = join(homedir(), '.claude', 'plugins', 'installed_plugins.json')
+  const order = getMarketplaceOrder()
   try {
     const installed = JSON.parse(readFileSync(installedPath, 'utf-8'))
-    for (const mp of MARKETPLACE_NAMES) {
+    for (const mp of order) {
       const entry = installed.plugins?.[`gpters-ai-toolkit@${mp}`]?.[0]
       if (entry?.version) return { version: entry.version, marketplace: mp }
     }
   } catch { /* 파일 없음 */ }
-  return { version: null, marketplace: MARKETPLACE_NAMES[0] }
+  return { version: null, marketplace: order[0] }
 }
 
 /** Claude Code 플러그인 업데이트 */
@@ -58,9 +72,9 @@ function upgradeClaude(): void {
     try {
       execSync('claude plugin marketplace add chat-prompt/gpters-ai-toolkit', { stdio: 'inherit' })
     } catch { /* 이미 등록된 경우 무시 */ }
-    // 환경에 따라 마켓플레이스 이름이 다르므로 모두 시도
+    // 디스크에 등록된 마켓플레이스 이름을 우선 시도
     let installed = false
-    for (const mp of MARKETPLACE_NAMES) {
+    for (const mp of getMarketplaceOrder()) {
       try {
         execSync(`claude plugin install gpters-ai-toolkit@${mp}`, { stdio: 'inherit' })
         info('  ✅ Installed (restart Claude Code to activate)')
