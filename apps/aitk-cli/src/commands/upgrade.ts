@@ -67,6 +67,15 @@ function upgradeClaude(): void {
 
   const { version: currentVer, marketplace } = detectMarketplace()
 
+  // 마켓플레이스 git 캐시를 최신으로 pull (claude plugin update가 안 할 수 있음)
+  const mpDir = join(homedir(), '.claude', 'plugins', 'marketplaces', marketplace)
+  if (existsSync(mpDir)) {
+    const pullResult = run(`cd "${mpDir}" && git pull origin main 2>&1`)
+    if (pullResult && !pullResult.includes('Already up to date')) {
+      info(`  🔄 Marketplace cache updated`)
+    }
+  }
+
   if (!currentVer) {
     info('  Installing...')
     try {
