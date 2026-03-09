@@ -101,10 +101,23 @@ function extractSearchParams(text: string): { query: string; context: string } {
  * @returns 시스템 프롬프트에 주입할 마크다운 문자열 (스킬 없으면 빈 문자열)
  */
 function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
-  if (skills.length === 0) return ""
-
   const method = getSearchMethod()
+
+  if (skills.length === 0 && method === "cli") {
+    return `
+<team-skills>새 작업/주제 변경 시 팀 스킬을 검색하세요. 기존 대화의 후속이면 무시하세요.
+검색: Bash("aitk search '한영 병기 키워드 (예: 환불 refund)' --limit 3 --context '작업 맥락(있으면)'")
+규칙: 0.40 이상→Bash("aitk get '스킬ID'")로 로드, 미만→Bash("aitk report-skip --query '검색어' --reason '사유'")로 스킵 보고.
+적용 후: Bash("aitk report-outcome --skill-id '스킬ID' --applied true --summary '결과'")로 보고.</team-skills>
+`.trim()
+  }
+
+  if (skills.length === 0) return ""
   const skillLines = skills.map(s => `- **${s.name}** (id: ${s.id}): ${s.description}`).join("\n")
+
+  const searchInstruction = method === "cli"
+    ? 'search using `Bash("aitk search \'키워드\' --limit 5")`'
+    : 'search using `mcp_gpters-ai-toolkit_semantic_search(query="키워드", limit=5)`'
 
   const loadInstruction = method === "cli"
     ? 'load it using `Bash("aitk get \'<skill-id>\'")`'
@@ -121,6 +134,8 @@ function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
 Based on your request, these skills may be helpful:
 
 ${skillLines}
+
+**Search method (searchMethod: ${method})**: When user asks to search skills, ${searchInstruction}. Do NOT use a different method than configured.
 
 **How to use**: If any skill seems relevant, ${loadInstruction} to get detailed instructions.
 
@@ -175,7 +190,12 @@ export function createSkillSuggestHook(ctx: PluginInput) {
         logger.debug(`Searching skills for session ${sessionID}, query: "${query}", method: ${searchMethod}`)
 
         if (searchMethod === "cli") {
-          logger.debug("Search method is 'cli' — skipping MCP search (CLI handled by SKILL.md guidance)")
+          logger.debug("Search method is 'cli' — injecting CLI guidance instead of MCP search")
+          sessionSkillCache.set(sessionID, {
+            lastQuery: query,
+            skills: [],
+            timestamp: Date.now(),
+          })
           return
         }
 

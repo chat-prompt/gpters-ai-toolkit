@@ -86,16 +86,6 @@ export class GptersConfigManager {
     this.write({ preferPlanMode: value })
   }
 
-  getAutoCommit(): boolean {
-    // const config = this.read()
-    // return config.autoCommit ?? true
-    return false
-  }
-
-  setAutoCommit(value: boolean): void {
-    this.write({ autoCommit: value })
-  }
-
   getConfigPath(): string {
     return this.configPath
   }

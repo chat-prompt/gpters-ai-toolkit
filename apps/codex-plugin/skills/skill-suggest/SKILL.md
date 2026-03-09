@@ -3,11 +3,28 @@ name: skill-suggest
 description: "새 작업/주제 변경 시 팀 스킬을 자동 검색합니다."
 ---
 
-# Skill Suggest (자동 트리거)
+# Skill Suggest (자동 트리거 + 수동 검색)
 
-> **IMPORTANT**: 새 작업을 시작하거나 주제가 바뀔 때 아래 워크플로우를 수행하세요.
+> **IMPORTANT**: 이 스킬은 두 가지 경우에 적용됩니다:
+> 1. 새 작업을 시작하거나 주제가 바뀔 때 (자동 트리거)
+> 2. 사용자가 직접 스킬/플러그인 검색을 요청했을 때 ("스킬 검색해줘", "유튜브 관련 스킬 찾아줘" 등)
 
-## 검색 여부 판단 (반드시 먼저 확인)
+## 검색 방법 결정 (모든 검색에 필수)
+
+스킬 검색 시 **반드시** `~/.config/aitk/config.json`의 `searchMethod` 설정을 확인하고, 설정에 맞는 방법으로 검색합니다:
+
+| searchMethod | 검색 방법 |
+|---|---|
+| `cli` | `Bash("aitk search '키워드'")` — **MCP 도구 사용 금지** |
+| `mcp` | `mcp_gpters-ai-toolkit_semantic_search(...)` |
+| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback (기본값) |
+
+> **주의**: `searchMethod`가 `cli`인데 MCP 도구(`semantic_search`)로 검색하면 안 됩니다. 사용자가 의도적으로 CLI 모드를 선택한 것이므로 반드시 `aitk` CLI를 사용하세요.
+
+## 검색 여부 판단 (자동 트리거 시에만 확인)
+
+사용자가 직접 검색을 요청한 경우에는 이 판단을 건너뛰고 바로 검색합니다.
+자동 트리거 시에만 아래 기준으로 판단합니다:
 
 **검색하는 경우:**
 - 새로운 작업/기능 구현을 시작할 때
