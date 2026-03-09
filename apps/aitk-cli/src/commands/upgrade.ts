@@ -48,16 +48,14 @@ function upgradeClaude(): void {
 
   if (!currentVer) {
     info('  Installing...')
-    // 마켓플레이스 등록
-    const addResult = run('claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
-    if (addResult === null) {
-      // 이미 등록된 경우 무시
-    }
-    // 플러그인 설치
-    const installResult = run('claude plugin install gpters-ai-toolkit@gpters-marketplace')
-    if (installResult !== null) {
+    try {
+      // 마켓플레이스 등록 + 플러그인 설치 (대화형 확인 지원을 위해 stdio inherit)
+      execSync('claude plugin marketplace add chat-prompt/gpters-ai-toolkit', { stdio: 'inherit' })
+    } catch { /* 이미 등록된 경우 무시 */ }
+    try {
+      execSync('claude plugin install gpters-ai-toolkit@gpters-marketplace', { stdio: 'inherit' })
       info('  ✅ Installed (restart Claude Code to activate)')
-    } else {
+    } catch {
       info('  ⚠️  Auto-install failed. Run manually:')
       info('     claude plugin marketplace add chat-prompt/gpters-ai-toolkit')
       info('     claude plugin install gpters-ai-toolkit@gpters-marketplace')
@@ -66,10 +64,10 @@ function upgradeClaude(): void {
   }
 
   info(`  Current: ${currentVer}`)
-  const result = run('claude plugin update gpters-ai-toolkit@gpters-marketplace')
-  if (result !== null) {
+  try {
+    execSync('claude plugin update gpters-ai-toolkit@gpters-marketplace', { stdio: 'inherit' })
     info('  ✅ Updated (applies on next session)')
-  } else {
+  } catch {
     info('  ⚠️  Update failed — try: claude plugin update gpters-ai-toolkit@gpters-marketplace')
   }
 }
