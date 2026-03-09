@@ -48,6 +48,8 @@ export const catalogItems = pgTable('catalog_items', {
   pluginId: text('plugin_id'),
   estimatedTime: text('estimated_time'),
   dependencies: text('dependencies').array().default([]), // e.g., ["mcp:github", "skill:git-commit"]
+  // Platform compatibility (null = all platforms)
+  platforms: text('platforms').array(),
   likes: integer('likes').notNull().default(0),
   content: text('content').notNull(),
   readme: text('readme'),

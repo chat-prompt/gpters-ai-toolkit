@@ -11,7 +11,7 @@
 /**
  * Known MCP client types
  */
-export type ClientType = 'claude_code' | 'opencode' | 'cursor' | 'codex' | 'web_browser' | 'cli' | 'unknown'
+export type ClientType = 'claude_code' | 'opencode' | 'openclaw' | 'cursor' | 'codex' | 'web_browser' | 'cli' | 'unknown'
 
 /**
  * MCP client info from initialize request params
@@ -43,9 +43,15 @@ const CLIENT_NAME_TYPE_MAP: Record<string, ClientType> = {
   'claude-code': 'claude_code',
   'claude desktop': 'claude_code',
   'opencode': 'opencode',
+  'openclaw': 'openclaw',
+  'mcporter': 'openclaw',
+  'mcporter-openclaw': 'openclaw',
+  'openclaw mcporter': 'openclaw',
   'cursor': 'cursor',
   'codex': 'codex',
   'codex-mcp-client': 'codex',
+  'aitk cli': 'cli',
+  'aitk': 'cli',
 }
 
 /**
@@ -55,6 +61,7 @@ const USER_AGENT_PATTERNS: Array<{ pattern: RegExp; type: ClientType }> = [
   { pattern: /claude[- ]?code/i, type: 'claude_code' },
   { pattern: /claude[- ]?desktop/i, type: 'claude_code' },
   { pattern: /opencode/i, type: 'opencode' },
+  { pattern: /openclaw|mcporter/i, type: 'openclaw' },
   { pattern: /cursor/i, type: 'cursor' },
   { pattern: /codex/i, type: 'codex' },
   { pattern: /mozilla|chrome|safari|firefox|edge/i, type: 'web_browser' },
@@ -142,4 +149,21 @@ export function resolveClientType(ctx: ClientTypeContext): ClientType {
     resolveFromUserAgent(ctx.userAgent) ??
     'unknown'
   )
+}
+
+/**
+ * 스킬 호환성에 사용되는 플랫폼 타입 (배포/검색 필터용)
+ * web_browser, cli, unknown은 스킬 실행 플랫폼이 아니므로 제외
+ */
+export const SKILL_PLATFORMS = ['claude_code', 'opencode', 'codex', 'cursor'] as const
+export type SkillPlatform = typeof SKILL_PLATFORMS[number]
+
+/**
+ * 플랫폼 표시 레이블 및 색상 (UI용)
+ */
+export const PLATFORM_LABELS: Record<SkillPlatform, { label: string; shortLabel: string; color: string }> = {
+  claude_code: { label: 'Claude Code', shortLabel: 'Claude', color: 'bg-orange-100 text-orange-800' },
+  opencode: { label: 'OpenCode', shortLabel: 'Open', color: 'bg-blue-100 text-blue-800' },
+  codex: { label: 'Codex', shortLabel: 'Codex', color: 'bg-green-100 text-green-800' },
+  cursor: { label: 'Cursor', shortLabel: 'Cursor', color: 'bg-purple-100 text-purple-800' },
 }

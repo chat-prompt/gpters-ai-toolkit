@@ -60,6 +60,7 @@ export interface CatalogItem {
   pluginId?: string // 플러그인 설치 ID (스킬만)
   estimatedTime?: string // 예상 소요 시간 (가이드)
   dependencies?: string[] // 의존성 목록 (e.g., "mcp:github", "skill:git-commit")
+  platforms?: string[] // 호환 플랫폼 목록 (null이면 전체 호환)
   likes: number // 좋아요 수
   content: string // skill.md 내용
   readme?: string // README.md 내용
