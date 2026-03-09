@@ -16,8 +16,8 @@ const MCP_SERVER_URL = getMcpServerUrl()
 /** Tab identifier type */
 type TabId = 'claude-code' | 'opencode' | 'codex' | 'cli' | 'mcp'
 
-/** Tab IDs only visible to internal (@gpters.org) users */
-const INTERNAL_ONLY_TABS: Set<TabId> = new Set(['opencode', 'codex'])
+/** Tab IDs only visible to internal (@gpters.org) users — currently none */
+const INTERNAL_ONLY_TABS: Set<TabId> = new Set()
 
 /**
  * Reusable step badge component
