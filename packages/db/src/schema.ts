@@ -260,6 +260,20 @@ export const mcpServers = pgTable('mcp_servers', {
   label: text('label').notNull(), // Display label (e.g., "GitHub MCP")
   description: text('description').notNull().default(''),
   documentationUrl: text('documentation_url'),
+  /** CLI install command (e.g., "claude mcp add github -- npx @modelcontextprotocol/server-github") */
+  installCommand: text('install_command'),
+  /** npm package name (e.g., "@modelcontextprotocol/server-github") */
+  npmPackage: text('npm_package'),
+  /** GitHub repository (e.g., "modelcontextprotocol/servers") */
+  githubRepo: text('github_repo'),
+  /** Supported platforms (e.g., ["claude-code", "cursor", "opencode"]) */
+  platforms: text('platforms').array(),
+  /** Use case scenarios (e.g., ["코드 리뷰", "PR 생성"]) */
+  useCases: text('use_cases').array(),
+  /** Alternative approach when MCP is unavailable */
+  fallbackApproach: text('fallback_approach'),
+  /** Last sync timestamp for automated updates */
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 })

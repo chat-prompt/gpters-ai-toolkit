@@ -132,15 +132,21 @@ export interface Dependency {
 }
 
 export const MCP_SERVERS: Record<string, { label: string; description: string }> = {
-  github: { label: 'GitHub MCP', description: 'GitHub API 통합' },
-  filesystem: { label: 'Filesystem MCP', description: '파일 시스템 접근' },
-  postgresql: { label: 'PostgreSQL MCP', description: 'PostgreSQL 데이터베이스' },
-  sqlite: { label: 'SQLite MCP', description: 'SQLite 데이터베이스' },
-  slack: { label: 'Slack MCP', description: 'Slack 통합' },
-  notion: { label: 'Notion MCP', description: 'Notion API 통합' },
-  linear: { label: 'Linear MCP', description: 'Linear 이슈 관리' },
-  puppeteer: { label: 'Puppeteer MCP', description: '브라우저 자동화' },
-  brave: { label: 'Brave Search MCP', description: '웹 검색' },
+  github: { label: 'GitHub MCP', description: 'GitHub API 통합 — 레포, 이슈, PR, 코드 검색' },
+  filesystem: { label: 'Filesystem MCP', description: '로컬 파일 시스템 읽기/쓰기/검색' },
+  postgresql: { label: 'PostgreSQL MCP', description: 'PostgreSQL 데이터베이스 쿼리 및 스키마 탐색' },
+  sqlite: { label: 'SQLite MCP', description: 'SQLite 데이터베이스 쿼리 및 관리' },
+  slack: { label: 'Slack MCP', description: 'Slack 워크스페이스 메시지 및 채널 관리' },
+  notion: { label: 'Notion MCP', description: 'Notion 페이지/데이터베이스 읽기 및 수정' },
+  linear: { label: 'Linear MCP', description: 'Linear 이슈 및 프로젝트 관리' },
+  puppeteer: { label: 'Puppeteer MCP', description: '브라우저 자동화 및 웹 스크래핑' },
+  brave: { label: 'Brave Search MCP', description: '웹 검색 및 정보 수집' },
+  stripe: { label: 'Stripe MCP', description: 'Stripe 결제 API — 고객, 결제, 구독 관리' },
+  supabase: { label: 'Supabase MCP', description: 'Supabase 프로젝트 및 데이터베이스 관리' },
+  playwright: { label: 'Playwright MCP', description: 'Playwright 브라우저 자동화 및 E2E 테스트' },
+  sentry: { label: 'Sentry MCP', description: 'Sentry 에러 모니터링 및 이슈 조회' },
+  context7: { label: 'Context7 MCP', description: '라이브러리 최신 문서 및 코드 예제 조회' },
+  vercel: { label: 'Vercel MCP', description: 'Vercel 프로젝트 배포 및 관리' },
 }
 
 export function parseDependency(dep: string): Dependency {
