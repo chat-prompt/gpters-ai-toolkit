@@ -70,3 +70,13 @@ export {
   SERVER_INFO,
   PROTOCOL_VERSION,
 } from './server'
+
+// Export exercise-aware skill search (DEV-3055)
+export {
+  searchSkillsForExercise,
+  type SkillSearchRequest,
+  type SkillSearchResponse,
+  type SkillSearchResultItem,
+  type McpServerResultItem,
+  type CliToolResultItem,
+} from './skills-search'
