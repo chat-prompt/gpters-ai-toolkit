@@ -281,6 +281,29 @@ export const mcpServers = pgTable('mcp_servers', {
 export type McpServerRecord = typeof mcpServers.$inferSelect
 export type NewMcpServerRecord = typeof mcpServers.$inferInsert
 
+// CLI Tools table — exercise-aware CLI tool recommendations (DEV-3062)
+export const cliTools = pgTable('cli_tools', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  /** CLI install command (e.g., "npm install -g vercel") */
+  installCommand: text('install_command').notNull(),
+  latestVersion: text('latest_version'),
+  npmPackage: text('npm_package'),
+  /** Version sync source (e.g., "npm", "pypi", "github") */
+  syncSource: text('sync_source').default('npm'),
+  /** Context7 library ID for version tracking (e.g., "/vercel/next.js") */
+  context7LibraryId: text('context7_library_id'),
+  /** Related tags for techStack matching */
+  relatedTags: text('related_tags').array(),
+  /** Priority tier: 1=essential, 2=common, 3=general */
+  tier: integer('tier').default(3),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+})
+
+export type CliToolRecord = typeof cliTools.$inferSelect
+export type NewCliToolRecord = typeof cliTools.$inferInsert
+
 // Junction table for catalog items <-> tags (many-to-many)
 export const catalogItemTags = pgTable('catalog_item_tags', {
   itemId: text('item_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),

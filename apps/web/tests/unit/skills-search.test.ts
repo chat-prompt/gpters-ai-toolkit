@@ -23,7 +23,16 @@ vi.mock('@gpters/db', () => ({
     id: 'id',
     label: 'label',
     description: 'description',
+    installCommand: 'install_command',
+    fallbackApproach: 'fallback_approach',
     updatedAt: 'updated_at',
+  },
+  cliTools: {
+    name: 'name',
+    installCommand: 'install_command',
+    latestVersion: 'latest_version',
+    relatedTags: 'related_tags',
+    tier: 'tier',
   },
 }))
 

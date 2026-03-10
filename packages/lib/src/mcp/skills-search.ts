@@ -6,7 +6,7 @@
  * response optimized for server-to-server consumption.
  */
 
-import { db, catalogItems, mcpServers } from '@gpters/db'
+import { db, catalogItems, mcpServers, cliTools } from '@gpters/db'
 import { eq, and, sql, desc } from 'drizzle-orm'
 import { semanticSearch } from '../search/vector-search'
 import { createLogger } from '../core/logger'
@@ -119,10 +119,11 @@ export async function searchSkillsForExercise(
     ? `기술 스택: ${techStack.join(', ')}`
     : undefined
 
-  // Parallel: skill search + MCP server lookup
-  const [skillResult, mcpResult] = await Promise.all([
+  // Parallel: skill search + MCP server lookup + CLI tools
+  const [skillResult, mcpResult, cliResult] = await Promise.all([
     searchSkills(topic, userContext, platform, effectiveLimit),
     searchMcpServers(techStack),
+    searchCliTools(techStack, level),
   ])
 
   // Detect stale models in skill content
@@ -147,13 +148,14 @@ export async function searchSkillsForExercise(
     platform,
     skillCount: skills.length,
     mcpCount: mcpServersResult.length,
+    cliCount: cliResult.length,
     durationMs: searchDurationMs,
   })
 
   return {
     skills,
     mcpServers: mcpServersResult,
-    cliTools: [], // Phase 1b: cli_tools 테이블 생성 후 구현
+    cliTools: cliResult,
     meta: {
       searchDurationMs,
       totalSkillsSearched: skillResult.total,
@@ -200,6 +202,8 @@ async function searchMcpServers(
       id: mcpServers.id,
       label: mcpServers.label,
       description: mcpServers.description,
+      installCommand: mcpServers.installCommand,
+      fallbackApproach: mcpServers.fallbackApproach,
     })
     .from(mcpServers)
     .where(
@@ -216,6 +220,45 @@ async function searchMcpServers(
     id: s.id,
     label: s.label,
     description: s.description,
-    // Phase 1b: install_command, fallback_approach 컬럼 추가 후 포함
+    installCommand: s.installCommand ?? undefined,
+    fallbackApproach: s.fallbackApproach ?? undefined,
+  }))
+}
+
+/**
+ * Find CLI tools matching the given tech stack
+ *
+ * Uses ARRAY overlap operator (&&) against related_tags.
+ * Beginner level gets only tier 1 (essential) tools.
+ */
+async function searchCliTools(
+  techStack: string[],
+  level: string
+): Promise<CliToolResultItem[]> {
+  if (techStack.length === 0) return []
+
+  const tags = techStack.map(t => t.toLowerCase())
+
+  // Beginner: only tier 1. Intermediate: tier 1-2. Advanced: all tiers.
+  const maxTier = level === 'beginner' ? 1 : level === 'intermediate' ? 3 : 3
+
+  const tools = await db
+    .select({
+      name: cliTools.name,
+      installCommand: cliTools.installCommand,
+      latestVersion: cliTools.latestVersion,
+      tier: cliTools.tier,
+    })
+    .from(cliTools)
+    .where(
+      sql`${cliTools.relatedTags} && ${tags}::text[] AND ${cliTools.tier} <= ${maxTier}`
+    )
+    .orderBy(cliTools.tier)
+    .limit(5)
+
+  return tools.map(t => ({
+    name: t.name,
+    installCommand: t.installCommand,
+    latestVersion: t.latestVersion ?? undefined,
   }))
 }
