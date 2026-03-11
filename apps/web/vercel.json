@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/finalize-sessions",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-cli-versions",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/import-community-skills",
+      "schedule": "0 5 * * 0"
     }
   ]
 }
