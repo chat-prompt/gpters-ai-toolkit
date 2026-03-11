@@ -194,7 +194,19 @@ describe('Skills Search E2E (DEV-3065)', () => {
       // beginner: MCP 서버 생략
       expect(data.mcpServers).toEqual([])
 
-      console.log(`  React Todo: ${data.skills.length} skills, ${data.cliTools.length} CLI`)
+      // beginner: cliTools는 tier 1(essential)만 포함 — 응답에 tier 미노출이므로 개수로 간접 검증
+      // tier 1 도구: node, npm, npx, python, git, docker (최대 6개)
+      expect(data.cliTools.length).toBeLessThanOrEqual(6)
+
+      // 각 CLI 도구의 필수 필드 검증
+      for (const cli of data.cliTools) {
+        expect(cli.name).toBeDefined()
+        expect(typeof cli.name).toBe('string')
+        expect(cli.installCommand).toBeDefined()
+        expect(typeof cli.installCommand).toBe('string')
+      }
+
+      console.log(`  React Todo: ${data.skills.length} skills, ${data.cliTools.length} CLI (tier 1 only)`)
     })
 
     // ─── 시나리오 3: Playwright 테스트 (advanced) ─────────────────

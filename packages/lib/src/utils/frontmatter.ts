@@ -106,6 +106,62 @@ export function parseFrontmatter(markdown: string): ParsedMarkdown {
   return { frontmatter, content }
 }
 
+/** Raw frontmatter result with generic key-value pairs */
+export interface RawFrontmatterResult {
+  /** Key-value pairs from frontmatter header */
+  meta: Record<string, string>
+  /** Content body after frontmatter */
+  body: string
+}
+
+/**
+ * Parse raw YAML-like frontmatter into generic key-value pairs
+ *
+ * Supports flat keys and nested `metadata:` sections (Vercel format).
+ * Used for community skill imports where the schema is not predefined.
+ *
+ * @param markdown - Raw markdown content with optional `---` delimited frontmatter
+ * @returns Generic meta object and body content
+ */
+export function parseRawFrontmatter(markdown: string): RawFrontmatterResult {
+  const match = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
+  if (!match) return { meta: {} as Record<string, string>, body: markdown }
+
+  const meta: Record<string, string> = {}
+  const lines = match[1].split('\n')
+  for (const line of lines) {
+    const colonIdx = line.indexOf(':')
+    if (colonIdx === -1) continue
+    const key = line.slice(0, colonIdx).trim()
+    if (key === 'metadata') continue
+    let value = line.slice(colonIdx + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    if (value) meta[key] = value
+  }
+
+  if (match[1].includes('metadata:')) {
+    const metaSection = match[1].match(/metadata:\n((?:\s{2,}.+\n?)*)/)?.[1]
+    if (metaSection) {
+      for (const line of metaSection.split('\n')) {
+        const colonIdx = line.indexOf(':')
+        if (colonIdx === -1) continue
+        const key = line.slice(0, colonIdx).trim()
+        let value = line.slice(colonIdx + 1).trim()
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1)
+        }
+        if (value) meta[`metadata_${key}`] = value
+      }
+    }
+  }
+
+  return { meta, body: match[2].trim() }
+}
+
 /**
  * Generate ID from name (kebab-case)
  */

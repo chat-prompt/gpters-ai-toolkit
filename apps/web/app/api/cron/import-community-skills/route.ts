@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createLogger } from '@gpters/lib/core'
+import { parseRawFrontmatter } from '@gpters/lib/utils'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -33,31 +34,6 @@ const SKIP_LIST = new Set([
   'deploy-to-vercel.zip',
   'web-design-guidelines.zip',
 ])
-
-/**
- * Parse YAML-like frontmatter from SKILL.md content
- */
-function parseFrontmatter(markdown: string) {
-  const match = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
-  if (!match) return { meta: {} as Record<string, string>, body: markdown }
-
-  const meta: Record<string, string> = {}
-  const lines = match[1].split('\n')
-  for (const line of lines) {
-    const colonIdx = line.indexOf(':')
-    if (colonIdx === -1) continue
-    const key = line.slice(0, colonIdx).trim()
-    if (key === 'metadata') continue
-    let value = line.slice(colonIdx + 1).trim()
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1)
-    }
-    if (value) meta[key] = value
-  }
-
-  return { meta, body: match[2].trim() }
-}
 
 /**
  * Fetch directory listing from GitHub API
@@ -159,7 +135,7 @@ export async function GET(request: NextRequest) {
             continue
           }
 
-          const { meta, body } = parseFrontmatter(content)
+          const { meta, body } = parseRawFrontmatter(content)
           const skillName = meta.name || skill.name
           const description = meta.description || `Community skill: ${skillName}`
 

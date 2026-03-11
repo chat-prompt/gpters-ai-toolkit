@@ -2,48 +2,11 @@
  * Community skills import logic tests (DEV-3066)
  *
  * Tests frontmatter parsing and skill ID generation
+ * using the shared parseRawFrontmatter utility.
  */
 
 import { describe, it, expect } from 'vitest'
-
-/** Inline copy of parseFrontmatter for unit testing */
-function parseFrontmatter(markdown: string) {
-  const match = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
-  if (!match) return { meta: {} as Record<string, string>, body: markdown }
-
-  const meta: Record<string, string> = {}
-  const lines = match[1].split('\n')
-  for (const line of lines) {
-    const colonIdx = line.indexOf(':')
-    if (colonIdx === -1) continue
-    const key = line.slice(0, colonIdx).trim()
-    let value = line.slice(colonIdx + 1).trim()
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1)
-    }
-    meta[key] = value
-  }
-
-  if (match[1].includes('metadata:')) {
-    const metaSection = match[1].match(/metadata:\n((?:\s{2,}.+\n?)*)/)?.[1]
-    if (metaSection) {
-      for (const line of metaSection.split('\n')) {
-        const colonIdx = line.indexOf(':')
-        if (colonIdx === -1) continue
-        const key = line.slice(0, colonIdx).trim()
-        let value = line.slice(colonIdx + 1).trim()
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.slice(1, -1)
-        }
-        meta[`metadata_${key}`] = value
-      }
-    }
-  }
-
-  return { meta, body: match[2].trim() }
-}
+import { parseRawFrontmatter } from '@gpters/lib/utils'
 
 describe('Community Skills Import — Frontmatter Parser', () => {
   it('should parse Anthropic SKILL.md format', () => {
@@ -57,7 +20,7 @@ license: Proprietary
 
 Some content here.`
 
-    const { meta, body } = parseFrontmatter(markdown)
+    const { meta, body } = parseRawFrontmatter(markdown)
 
     expect(meta.name).toBe('pdf')
     expect(meta.description).toBe('Use this skill for PDF operations')
@@ -80,7 +43,7 @@ metadata:
 
 Content here.`
 
-    const { meta, body } = parseFrontmatter(markdown)
+    const { meta, body } = parseRawFrontmatter(markdown)
 
     expect(meta.name).toBe('vercel-react-best-practices')
     expect(meta.description).toBe('React optimization guidelines')
@@ -95,7 +58,7 @@ Content here.`
 
 Some content without frontmatter.`
 
-    const { meta, body } = parseFrontmatter(markdown)
+    const { meta, body } = parseRawFrontmatter(markdown)
 
     expect(Object.keys(meta)).toHaveLength(0)
     expect(body).toBe(markdown)
@@ -109,7 +72,7 @@ version: '2.0.0'
 
 Body`
 
-    const { meta } = parseFrontmatter(markdown)
+    const { meta } = parseRawFrontmatter(markdown)
 
     expect(meta.name).toBe('test-skill')
     expect(meta.version).toBe('2.0.0')
@@ -123,7 +86,7 @@ description: Build apps with the Claude API: tool use, streaming, and more
 
 Body`
 
-    const { meta } = parseFrontmatter(markdown)
+    const { meta } = parseRawFrontmatter(markdown)
 
     expect(meta.name).toBe('claude-api')
     expect(meta.description).toBe('Build apps with the Claude API: tool use, streaming, and more')
@@ -136,7 +99,7 @@ description: Empty skill
 ---
 `
 
-    const { meta, body } = parseFrontmatter(markdown)
+    const { meta, body } = parseRawFrontmatter(markdown)
 
     expect(meta.name).toBe('empty')
     expect(body).toBe('')

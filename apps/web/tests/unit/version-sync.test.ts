@@ -1,44 +1,11 @@
 /**
  * Version sync and stale detection tests (DEV-3067)
+ *
+ * Tests pure functions from version-sync module directly.
  */
 
 import { describe, it, expect } from 'vitest'
-
-// Inline copies for unit testing (avoids DB/network deps)
-
-function isNewerVersion(current: string, latest: string): boolean {
-  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
-  const c = parse(current)
-  const l = parse(latest)
-  for (let i = 0; i < Math.max(c.length, l.length); i++) {
-    const cv = c[i] || 0
-    const lv = l[i] || 0
-    if (lv > cv) return true
-    if (lv < cv) return false
-  }
-  return false
-}
-
-function detectStaleLibraryVersions(
-  content: string | null,
-  versionMap: Map<string, string>
-): string | undefined {
-  if (!content) return undefined
-  const stale: string[] = []
-  const versionRefs = content.matchAll(/(\w[\w-]*)@(\d+)(?:\.\d+)?(?:\.\d+)?/g)
-  for (const match of versionRefs) {
-    const pkgName = match[1].toLowerCase()
-    const refMajor = parseInt(match[2], 10)
-    const latestVersion = versionMap.get(pkgName)
-    if (!latestVersion) continue
-    const latestMajor = parseInt(latestVersion.split('.')[0], 10)
-    if (refMajor < latestMajor) {
-      stale.push(`${match[0]} (최신: ${latestVersion})`)
-    }
-  }
-  if (stale.length === 0) return undefined
-  return `⚠️ 구버전 라이브러리 참조: ${stale.join(', ')}`
-}
+import { isNewerVersion, detectStaleLibraryVersions } from '@gpters/lib/mcp'
 
 describe('isNewerVersion', () => {
   it('should detect newer major version', () => {
