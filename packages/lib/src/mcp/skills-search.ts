@@ -7,11 +7,60 @@
  */
 
 import { db, catalogItems, mcpServers, cliTools } from '@gpters/db'
-import { sql, desc } from 'drizzle-orm'
+import { sql, desc, isNotNull } from 'drizzle-orm'
 import { semanticSearch } from '../search/vector-search'
+import { detectStaleLibraryVersions } from './version-sync'
 import { createLogger } from '../core/logger'
 
 const log = createLogger('skills-search')
+
+/** Cached CLI tool version map for stale library detection */
+let cachedVersionMap: Map<string, string> | null = null
+
+/** Expiry timestamp for the cached version map */
+let cacheExpiry = 0
+
+/** Cache TTL: 5 minutes */
+const VERSION_MAP_CACHE_TTL_MS = 5 * 60 * 1000
+
+/**
+ * Fetch CLI tool name → latestVersion map from the database
+ *
+ * Results are cached in-memory for 5 minutes to avoid repeated DB queries
+ * during bursts of search requests. Returns an empty map on failure
+ * so that search results are never blocked by version-check errors.
+ *
+ * @returns Map of lowercase tool name to latest version string
+ */
+async function getCliToolVersionMap(): Promise<Map<string, string>> {
+  if (cachedVersionMap && Date.now() < cacheExpiry) return cachedVersionMap
+
+  try {
+    const tools = await db
+      .select({ name: cliTools.name, latestVersion: cliTools.latestVersion })
+      .from(cliTools)
+      .where(isNotNull(cliTools.latestVersion))
+
+    cachedVersionMap = new Map(
+      tools.map(t => [t.name.toLowerCase(), t.latestVersion!])
+    )
+    cacheExpiry = Date.now() + VERSION_MAP_CACHE_TTL_MS
+    return cachedVersionMap
+  } catch (err) {
+    log.warn('Failed to fetch CLI tool version map', {
+      error: (err as Error).message,
+    })
+    return new Map()
+  }
+}
+
+/**
+ * Reset the in-memory version map cache (for testing only)
+ */
+export function _resetVersionMapCache(): void {
+  cachedVersionMap = null
+  cacheExpiry = 0
+}
 
 /** Request parameters for exercise skill search */
 export interface SkillSearchRequest {
@@ -119,21 +168,25 @@ export async function searchSkillsForExercise(
     ? `기술 스택: ${techStack.join(', ')}`
     : undefined
 
-  // Parallel: skill search + MCP server lookup + CLI tools
-  const [skillResult, mcpResult, cliResult] = await Promise.all([
+  // Parallel: skill search + MCP server lookup + CLI tools + version map
+  const [skillResult, mcpResult, cliResult, versionMap] = await Promise.all([
     searchSkills(topic, userContext, platform, effectiveLimit),
     searchMcpServers(techStack),
     searchCliTools(techStack, level),
+    getCliToolVersionMap(),
   ])
 
-  // Detect stale models in skill content
+  // Detect stale models and library versions in skill content
   const skills: SkillSearchResultItem[] = skillResult.items.map(item => ({
     id: item.id,
     name: item.name,
     description: item.description || '',
     type: item.type,
     score: Math.round(item.similarity * 1000) / 1000,
-    staleWarning: detectStaleModels(item.content),
+    staleWarning: [
+      detectStaleModels(item.content),
+      detectStaleLibraryVersions(item.content, versionMap),
+    ].filter(Boolean).join(' | ') || undefined,
   }))
 
   // Filter MCP servers for beginners

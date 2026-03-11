@@ -354,8 +354,8 @@ describe('Skills Search E2E (DEV-3065)', () => {
         const data = await res.json()
 
         expect(data.category).toBe(category)
-        expect(data.label).toBeDefined()
-        expect(typeof data.label).toBe('string')
+        expect(data.description).toBeDefined()
+        expect(typeof data.description).toBe('string')
         expect(Array.isArray(data.skills)).toBe(true)
         expect(data.meta).toBeDefined()
         expect(data.meta.catalogVersion).toMatch(/^\d{4}-\d{2}-\d{2}$/)

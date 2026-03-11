@@ -14,6 +14,7 @@ import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { ApiErrors, apiSuccess, parseJsonBody } from '@/lib/utils/api-utils'
 import { logMcpRequest } from '@/lib/security/mcp-audit'
 import { createLogger } from '@/lib/core/logger'
+import { recordExerciseSearchEvents } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,19 +76,19 @@ export async function POST(request: NextRequest) {
 
     const responseTime = Date.now() - startTime
 
-    // 5. Audit logging (fire-and-forget)
+    // 5. Audit logging & event recording (fire-and-forget)
     after(async () => {
-      try {
-        const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-          || request.headers.get('x-real-ip')
-          || 'unknown'
-        const encoder = new TextEncoder()
-        const data = encoder.encode(clientIp)
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-        const ipHash = Array.from(new Uint8Array(hashBuffer))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('')
+      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || request.headers.get('x-real-ip')
+        || 'unknown'
+      const encoder = new TextEncoder()
+      const data = encoder.encode(clientIp)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const ipHash = Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
 
+      try {
         await logMcpRequest({
           method: 'POST /api/skills/search',
           tool: 'exercise_skill_search',
@@ -114,6 +115,18 @@ export async function POST(request: NextRequest) {
         })
       } catch (err) {
         log.error('Failed to log audit entry', err)
+      }
+
+      // Record exercise search events for skill funnel analytics
+      try {
+        await recordExerciseSearchEvents({
+          sessionId: ipHash,
+          skillIds: result.skills.map(s => s.id),
+          exerciseTopic: body.topic,
+          referralSource: auth.serviceName,
+        })
+      } catch (err) {
+        log.error('Failed to record exercise search events', err)
       }
     })
 

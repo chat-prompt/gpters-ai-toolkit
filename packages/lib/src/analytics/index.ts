@@ -27,6 +27,8 @@ export {
   recordSearchSkipEvent,
   recordDeployEvent,
   recordSuggestEvent,
+  recordExerciseSearchEvents,
+  recordExerciseApplyEvent,
 } from './skill-events'
 export {
   getSkillFunnelStats,

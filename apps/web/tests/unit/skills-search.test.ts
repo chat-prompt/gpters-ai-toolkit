@@ -1,12 +1,13 @@
 /**
  * Skills Search Handler Tests
  *
- * Unit tests for exercise-aware skill search logic (DEV-3055)
+ * Unit tests for exercise-aware skill search logic (DEV-3055, DEV-3069)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockSemanticSearch = vi.fn()
+const mockDetectStaleLibraryVersions = vi.fn()
 
 const mockDb = {
   select: vi.fn().mockReturnThis(),
@@ -36,8 +37,18 @@ vi.mock('@gpters/db', () => ({
   },
 }))
 
+vi.mock('drizzle-orm', () => ({
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
+  desc: (col: unknown) => col,
+  isNotNull: (col: unknown) => col,
+}))
+
 vi.mock('../../../../packages/lib/src/search/vector-search', () => ({
   semanticSearch: mockSemanticSearch,
+}))
+
+vi.mock('../../../../packages/lib/src/mcp/version-sync', () => ({
+  detectStaleLibraryVersions: mockDetectStaleLibraryVersions,
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -49,11 +60,13 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   }),
 }))
 
-const { searchSkillsForExercise } = await import('../../../../packages/lib/src/mcp/skills-search')
+const { searchSkillsForExercise, _resetVersionMapCache } = await import('../../../../packages/lib/src/mcp/skills-search')
 
 describe('searchSkillsForExercise', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    _resetVersionMapCache()
+    mockDetectStaleLibraryVersions.mockReturnValue(undefined)
     mockDb.select.mockReturnThis()
     mockDb.from.mockReturnThis()
     mockDb.where.mockReturnThis()
@@ -272,5 +285,119 @@ describe('searchSkillsForExercise', () => {
 
     expect(result.skills[0].staleWarning).toContain('gpt-4o')
     expect(result.skills[0].staleWarning).toContain('gemini-1.5')
+  })
+
+  it('should detect stale library versions via detectStaleLibraryVersions', async () => {
+    mockDetectStaleLibraryVersions.mockReturnValue(
+      '⚠️ 구버전 라이브러리 참조: next@14 (최신: 15.2.0)'
+    )
+
+    mockSemanticSearch.mockResolvedValue({
+      items: [
+        {
+          id: 'old-next',
+          name: 'Old Next Skill',
+          description: 'Uses old Next.js',
+          type: 'skill',
+          content: 'npm install next@14',
+          similarity: 0.6,
+        },
+      ],
+      total: 50,
+      searchTime: 80,
+    })
+
+    const result = await searchSkillsForExercise({ topic: 'Next.js 앱' })
+
+    expect(result.skills[0].staleWarning).toContain('구버전 라이브러리 참조')
+    expect(result.skills[0].staleWarning).toContain('next@14')
+    expect(mockDetectStaleLibraryVersions).toHaveBeenCalledWith(
+      'npm install next@14',
+      expect.any(Map)
+    )
+  })
+
+  it('should merge model and library stale warnings with pipe separator', async () => {
+    mockDetectStaleLibraryVersions.mockReturnValue(
+      '⚠️ 구버전 라이브러리 참조: stripe@14 (최신: 17.0.0)'
+    )
+
+    mockSemanticSearch.mockResolvedValue({
+      items: [
+        {
+          id: 'double-stale',
+          name: 'Double Stale',
+          description: 'Uses old model and old lib',
+          type: 'skill',
+          content: 'Use claude-3-opus with stripe@14',
+          similarity: 0.45,
+        },
+      ],
+      total: 30,
+      searchTime: 70,
+    })
+
+    const result = await searchSkillsForExercise({ topic: 'Stripe 연동' })
+
+    expect(result.skills[0].staleWarning).toContain('구버전 모델')
+    expect(result.skills[0].staleWarning).toContain(' | ')
+    expect(result.skills[0].staleWarning).toContain('구버전 라이브러리 참조')
+  })
+
+  it('should return undefined staleWarning when neither model nor library is stale', async () => {
+    mockDetectStaleLibraryVersions.mockReturnValue(undefined)
+
+    mockSemanticSearch.mockResolvedValue({
+      items: [
+        {
+          id: 'fresh-skill',
+          name: 'Fresh Skill',
+          description: 'Up to date',
+          type: 'skill',
+          content: 'Use claude-opus-4-6 with next@15',
+          similarity: 0.8,
+        },
+      ],
+      total: 10,
+      searchTime: 60,
+    })
+
+    const result = await searchSkillsForExercise({ topic: 'Fresh skill' })
+
+    expect(result.skills[0].staleWarning).toBeUndefined()
+  })
+
+  it('should gracefully handle version map DB query failure', async () => {
+    // Make the version map DB query fail by throwing on the 3rd select chain
+    // (1st = MCP servers, 2nd = CLI tools, 3rd = version map)
+    let selectCallCount = 0
+    mockDb.limit.mockImplementation(() => {
+      selectCallCount++
+      if (selectCallCount === 3) {
+        return Promise.reject(new Error('DB connection timeout'))
+      }
+      return Promise.resolve([])
+    })
+
+    mockSemanticSearch.mockResolvedValue({
+      items: [
+        {
+          id: 'test-skill',
+          name: 'Test Skill',
+          description: 'Test',
+          type: 'skill',
+          content: 'some content',
+          similarity: 0.7,
+        },
+      ],
+      total: 10,
+      searchTime: 50,
+    })
+
+    // Should not throw — search completes despite version map failure
+    const result = await searchSkillsForExercise({ topic: 'test' })
+
+    expect(result.skills).toHaveLength(1)
+    expect(result.skills[0].id).toBe('test-skill')
   })
 })

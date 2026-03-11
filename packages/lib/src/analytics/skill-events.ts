@@ -243,3 +243,82 @@ export async function recordSuggestEvent(params: {
   }
 }
 
+/**
+ * Record exercise search events when Rona searches for skills during exercise generation.
+ *
+ * Similar to {@link recordSearchEvents}, but uses the `exercise_search` action
+ * to distinguish exercise-driven searches from regular MCP searches.
+ * When results are empty, records a single zero-result event.
+ *
+ * @param params - Exercise search event parameters
+ * @param params.sessionId - MCP or service session ID
+ * @param params.skillIds - IDs of skills returned in the exercise search results
+ * @param params.exerciseTopic - Exercise topic used as the search query
+ * @param params.referralSource - Origin of the exercise search request
+ */
+export async function recordExerciseSearchEvents(params: {
+  sessionId: string
+  skillIds: string[]
+  exerciseTopic?: string
+  referralSource?: string
+}): Promise<void> {
+  try {
+    if (params.skillIds.length === 0) {
+      await db.insert(skillEvents).values({
+        sessionId: params.sessionId,
+        skillId: ZERO_RESULT_SKILL_ID,
+        action: 'exercise_search' as const,
+        query: params.exerciseTopic,
+        context: params.referralSource,
+        rank: 0,
+        score: 0,
+      })
+      return
+    }
+
+    const rows = params.skillIds.map((skillId, index) => ({
+      sessionId: params.sessionId,
+      skillId,
+      action: 'exercise_search' as const,
+      query: params.exerciseTopic,
+      context: params.referralSource,
+      rank: index + 1,
+    }))
+
+    await db.insert(skillEvents).values(rows)
+  } catch (error) {
+    log.warn('Failed to record exercise search events', { error, sessionId: params.sessionId })
+  }
+}
+
+/**
+ * Record an exercise apply event when a student uses a skill from an exercise.
+ *
+ * Tracks individual skill adoption originating from exercise-generated content,
+ * enabling exercise-to-apply conversion analysis.
+ *
+ * @param params - Exercise apply event parameters
+ * @param params.sessionId - MCP or service session ID
+ * @param params.skillId - ID of the skill applied via exercise
+ * @param params.userId - Authenticated user ID (optional)
+ * @param params.exerciseSummary - Brief summary of the exercise context
+ */
+export async function recordExerciseApplyEvent(params: {
+  sessionId: string
+  skillId: string
+  userId?: string
+  exerciseSummary?: string
+}): Promise<void> {
+  try {
+    await db.insert(skillEvents).values({
+      sessionId: params.sessionId,
+      userId: params.userId,
+      skillId: params.skillId,
+      action: 'exercise_apply' as const,
+      context: params.exerciseSummary,
+    })
+  } catch (error) {
+    log.warn('Failed to record exercise apply event', { error, sessionId: params.sessionId })
+  }
+}
+

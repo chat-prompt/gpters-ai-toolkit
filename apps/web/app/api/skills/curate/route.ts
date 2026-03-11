@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
           requestParams: { category },
           responseStatus: 'success',
           responseTime,
-          referralSource: 'curate',
+          referralSource: 'rona-exercise',
         })
       } catch (err) {
         log.error('Failed to log audit entry', err)
