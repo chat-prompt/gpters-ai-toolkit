@@ -88,3 +88,13 @@ export {
   type SkillCurateResponse,
   type CuratedSkillItem,
 } from './skills-curate'
+
+// Export version sync (DEV-3067)
+export {
+  fetchLatestVersion,
+  isNewerVersion,
+  detectStaleLibraryVersions,
+  syncCliToolVersions,
+  type VersionCheckResult,
+  type VersionSyncSummary,
+} from './version-sync'
