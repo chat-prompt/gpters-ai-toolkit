@@ -48,8 +48,7 @@ export async function GET(request: NextRequest) {
 
     if (!result) {
       return ApiErrors.notFound(
-        `Category "${category}" not found. ` +
-        `Available categories: ${listCuratedCategories().join(', ')}`
+        `Category not found. Available categories: ${listCuratedCategories().join(', ')}`
       )
     }
 

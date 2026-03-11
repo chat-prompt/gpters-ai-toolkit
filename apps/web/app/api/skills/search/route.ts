@@ -43,8 +43,16 @@ export async function POST(request: NextRequest) {
     return ApiErrors.badRequest('Missing or empty required field: topic')
   }
 
+  if (body.topic.length > 500) {
+    return ApiErrors.badRequest('topic must be 500 characters or fewer')
+  }
+
   if (body.techStack && !Array.isArray(body.techStack)) {
     return ApiErrors.badRequest('techStack must be an array of strings')
+  }
+
+  if (body.techStack && body.techStack.length > 10) {
+    return ApiErrors.badRequest('techStack must contain 10 items or fewer')
   }
 
   if (body.level && !['beginner', 'intermediate', 'advanced'].includes(body.level)) {

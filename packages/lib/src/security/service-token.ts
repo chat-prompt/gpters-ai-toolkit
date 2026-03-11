@@ -6,6 +6,7 @@
  * the welfare engine's REST endpoints.
  */
 
+import { timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createLogger } from '../core/logger'
 import { ApiErrors } from '../utils/api-utils'
@@ -63,7 +64,7 @@ export function validateServiceToken(request: NextRequest): ServiceAuthResult {
   }
 
   // Constant-time comparison to prevent timing attacks
-  if (!timingSafeEqual(token, expectedToken)) {
+  if (!safeTokenCompare(token, expectedToken)) {
     log.warn('Invalid service token attempt', { serviceName })
     return {
       authenticated: false,
@@ -76,15 +77,15 @@ export function validateServiceToken(request: NextRequest): ServiceAuthResult {
 }
 
 /**
- * Constant-time string comparison to prevent timing attacks
+ * Constant-time token comparison using Node.js crypto
  *
- * Pads shorter string to prevent length leakage via early return.
+ * Falls back to length check for different-length strings
+ * to avoid Buffer allocation errors, while still preventing
+ * timing attacks on the comparison itself.
  */
-function timingSafeEqual(a: string, b: string): boolean {
-  const maxLen = Math.max(a.length, b.length)
-  let result = a.length ^ b.length // non-zero if lengths differ
-  for (let i = 0; i < maxLen; i++) {
-    result |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
-  }
-  return result === 0
+function safeTokenCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) return false
+  return cryptoTimingSafeEqual(bufA, bufB)
 }
