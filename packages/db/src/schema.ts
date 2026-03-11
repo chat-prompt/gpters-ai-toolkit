@@ -802,12 +802,14 @@ export type NewSuggestionRecord = typeof suggestions.$inferInsert
 
 /** Skill interaction action types */
 export const skillEventActionEnum = pgEnum('skill_event_action', [
-  'search',   // semantic_search에서 결과로 노출
-  'load',     // get_plugin_content로 상세 로드
-  'apply',    // report_skill_outcome(applied=true)
-  'skip',     // report_search_skip 또는 report_skill_outcome(applied=false)
-  'deploy',   // deploy_skill 호출
-  'suggest',  // suggest_improvement 호출
+  'search',           // semantic_search에서 결과로 노출
+  'load',             // get_plugin_content로 상세 로드
+  'apply',            // report_skill_outcome(applied=true)
+  'skip',             // report_search_skip 또는 report_skill_outcome(applied=false)
+  'deploy',           // deploy_skill 호출
+  'suggest',          // suggest_improvement 호출
+  'exercise_search',  // 실습 생성 시 스킬/도구 탐색
+  'exercise_apply',   // 생성된 실습을 사용자가 실행
 ])
 
 /**

@@ -80,3 +80,11 @@ export {
   type McpServerResultItem,
   type CliToolResultItem,
 } from './skills-search'
+
+// Export curated skill categories (DEV-3063)
+export {
+  getCuratedSkills,
+  listCuratedCategories,
+  type SkillCurateResponse,
+  type CuratedSkillItem,
+} from './skills-curate'
