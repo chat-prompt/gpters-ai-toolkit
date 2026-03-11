@@ -13,6 +13,11 @@ export default defineConfig({
     exclude: ['tests/e2e/**/*'],
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    server: {
+      deps: {
+        inline: ['next-auth'],
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html'],
@@ -36,6 +41,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      'next/server': path.resolve(__dirname, './tests/mocks/next-server.ts'),
     },
   },
 })
