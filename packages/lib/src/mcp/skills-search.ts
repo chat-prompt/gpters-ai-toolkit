@@ -294,6 +294,8 @@ async function searchCliTools(
   if (techStack.length === 0) return []
 
   const tags = techStack.map(t => t.toLowerCase())
+  // PostgreSQL array literal format: {"item1","item2"}
+  const pgArray = `{${tags.map(t => `"${t}"`).join(',')}}`
 
   // Beginner: tier 1 only. Intermediate: tier 1-2. Advanced: all tiers.
   const maxTier = level === 'beginner' ? 1 : level === 'intermediate' ? 2 : 3
@@ -307,7 +309,7 @@ async function searchCliTools(
     })
     .from(cliTools)
     .where(
-      sql`${cliTools.relatedTags} && ${tags}::text[] AND ${cliTools.tier} <= ${maxTier}`
+      sql`${cliTools.relatedTags} && ${pgArray}::text[] AND ${cliTools.tier} <= ${maxTier}`
     )
     .orderBy(cliTools.tier)
     .limit(5)
