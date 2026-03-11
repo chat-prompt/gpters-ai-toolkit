@@ -95,6 +95,11 @@ export const catalogItems = pgTable('catalog_items', {
   /** Count of times this item has been forked */
   forkCount: integer('fork_count').notNull().default(0),
 
+  /** External source repo (e.g., "anthropics/skills") for imported skills */
+  sourceRepo: text('source_repo'),
+  /** Commit SHA from source repo for update detection */
+  sourceCommitSha: text('source_commit_sha'),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
