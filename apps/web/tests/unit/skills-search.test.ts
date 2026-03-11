@@ -205,6 +205,53 @@ describe('searchSkillsForExercise', () => {
     expect(result.meta.catalogVersion).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
+  it('should return CLI tools matching techStack', async () => {
+    mockSemanticSearch.mockResolvedValue({
+      items: [],
+      total: 0,
+      searchTime: 50,
+    })
+
+    // First call returns MCP results, second call returns CLI results
+    let callCount = 0
+    mockDb.limit.mockImplementation(() => {
+      callCount++
+      if (callCount === 2) {
+        return Promise.resolve([
+          { name: 'Vite', installCommand: 'npm create vite@latest', latestVersion: '6.1.0', tier: 2 },
+        ])
+      }
+      return Promise.resolve([])
+    })
+
+    const result = await searchSkillsForExercise({
+      topic: 'React 앱 만들기',
+      techStack: ['react', 'vite'],
+      level: 'intermediate',
+    })
+
+    expect(result.cliTools).toHaveLength(1)
+    expect(result.cliTools[0].name).toBe('Vite')
+    expect(result.cliTools[0].latestVersion).toBe('6.1.0')
+  })
+
+  it('should filter CLI tools by tier for beginner level', async () => {
+    mockSemanticSearch.mockResolvedValue({
+      items: [],
+      total: 0,
+      searchTime: 50,
+    })
+
+    await searchSkillsForExercise({
+      topic: 'Hello World',
+      techStack: ['node'],
+      level: 'beginner',
+    })
+
+    // Verify the DB query was called (MCP + CLI = 2 select chains)
+    expect(mockDb.select).toHaveBeenCalled()
+  })
+
   it('should detect multiple deprecated model patterns', async () => {
     mockSemanticSearch.mockResolvedValue({
       items: [

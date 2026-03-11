@@ -7,7 +7,7 @@
  */
 
 import { db, catalogItems, mcpServers, cliTools } from '@gpters/db'
-import { eq, and, sql, desc } from 'drizzle-orm'
+import { sql, desc } from 'drizzle-orm'
 import { semanticSearch } from '../search/vector-search'
 import { createLogger } from '../core/logger'
 
@@ -194,8 +194,11 @@ async function searchMcpServers(
 ): Promise<McpServerResultItem[]> {
   if (techStack.length === 0) return []
 
-  // Build ILIKE conditions for each tech stack keyword
-  const pattern = techStack.map(t => t.toLowerCase()).join('|')
+  // Escape regex special characters to prevent injection
+  const escaped = techStack.map(t =>
+    t.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  )
+  const pattern = escaped.join('|')
 
   const servers = await db
     .select({
@@ -239,8 +242,8 @@ async function searchCliTools(
 
   const tags = techStack.map(t => t.toLowerCase())
 
-  // Beginner: only tier 1. Intermediate: tier 1-2. Advanced: all tiers.
-  const maxTier = level === 'beginner' ? 1 : level === 'intermediate' ? 3 : 3
+  // Beginner: tier 1 only. Intermediate: tier 1-2. Advanced: all tiers.
+  const maxTier = level === 'beginner' ? 1 : level === 'intermediate' ? 2 : 3
 
   const tools = await db
     .select({
