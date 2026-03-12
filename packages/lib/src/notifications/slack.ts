@@ -210,3 +210,58 @@ export async function notifySlackDeploy(params: SlackDeployParams): Promise<void
     log.error('Failed to send Slack deploy notification', error)
   }
 }
+
+// ============================================
+// EvoSkill Notifications
+// ============================================
+
+export interface EvoActionParams {
+  skillsCreated: number
+  suggestionsCreated: number
+  processed: number
+  errors: number
+}
+
+/**
+ * Send Slack notification for EvoSkill generation actions.
+ * Never throws — errors are logged and swallowed.
+ */
+export async function notifySlackEvoAction(params: EvoActionParams): Promise<void> {
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    const blocks: SlackBlock[] = [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: '\uD83E\uDDEC EvoSkill \uC790\uB3D9 \uC2A4\uD0AC \uC9C4\uD654', emoji: true },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*\uCC98\uB9AC:*\n${params.processed}\uAC74` },
+          { type: 'mrkdwn', text: `*\uC2A4\uD0AC \uC0DD\uC131:*\n${params.skillsCreated}\uAC74` },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*\uAC1C\uC120 \uC81C\uC548:*\n${params.suggestionsCreated}\uAC74` },
+          { type: 'mrkdwn', text: `*\uC624\uB958:*\n${params.errors}\uAC74` },
+        ],
+      },
+    ]
+
+    if (params.skillsCreated > 0) {
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: '\uD83D\uDCDD Draft \uC0C1\uD0DC\uB85C \uC0DD\uC131\uB428 \u2014 \uD37C\uB110 \uC9C0\uD45C \uAE30\uBC18 \uC790\uB3D9 \uC2B9\uACA9/\uD3D0\uAE30 \uC608\uC815' }],
+      })
+    }
+
+    await sendSlackWebhook(webhookUrl, { blocks })
+    log.info('EvoSkill Slack notification sent')
+  } catch (error) {
+    log.error('Failed to send EvoSkill Slack notification', error)
+  }
+}

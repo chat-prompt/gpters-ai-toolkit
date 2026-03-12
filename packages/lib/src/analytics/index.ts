@@ -46,3 +46,21 @@ export {
   measureZeroResultRateByClient,
   type ZeroResultMetrics,
 } from './search-metrics'
+export {
+  analyzeFailurePatterns,
+  detectZeroResultClusters,
+  detectLowConversion,
+  detectRepeatedSkips,
+  type FailurePattern,
+  type AnalysisResult,
+} from './evo-analyzer'
+export {
+  generateFromPatterns,
+  type GenerateResult,
+} from './evo-agent'
+export {
+  evaluateEvoDrafts,
+  type SelectionDecision,
+  type SelectionResult,
+  type Verdict,
+} from './evo-selector'
