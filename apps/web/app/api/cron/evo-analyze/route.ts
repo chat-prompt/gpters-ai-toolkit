@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeFailurePatterns } from '@/lib/analytics'
+import { notifySlackEvoAnalyze } from '@gpters/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await analyzeFailurePatterns()
+
+    await notifySlackEvoAnalyze(result)
 
     return NextResponse.json({
       success: true,

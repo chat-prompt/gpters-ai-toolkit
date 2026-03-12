@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { evaluateEvoDrafts } from '@/lib/analytics'
+import { notifySlackEvoPromote } from '@gpters/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await evaluateEvoDrafts()
+
+    await notifySlackEvoPromote({
+      promoted: result.promoted,
+      retired: result.retired,
+      held: result.held,
+      errors: result.errors,
+    })
 
     return NextResponse.json({
       success: true,

@@ -222,9 +222,60 @@ export interface EvoActionParams {
   errors: number
 }
 
+export interface EvoAnalyzeParams {
+  patternsFound: number
+  byType: { zero_result_cluster: number; low_conversion: number; repeated_skip: number }
+  errors: number
+}
+
+export interface EvoPromoteParams {
+  promoted: number
+  retired: number
+  held: number
+  errors: number
+}
+
 /**
- * Send Slack notification for EvoSkill generation actions.
- * Never throws — errors are logged and swallowed.
+ * Slack notification for evo-analyze cron (failure pattern detection).
+ */
+export async function notifySlackEvoAnalyze(params: EvoAnalyzeParams): Promise<void> {
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    const blocks: SlackBlock[] = [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: '\uD83D\uDD0D EvoSkill \uC2E4\uD328 \uD328\uD134 \uBD84\uC11D', emoji: true },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*\uC2E0\uADDC \uD328\uD134:*\n${params.patternsFound}\uAC74` },
+          { type: 'mrkdwn', text: `*\uC624\uB958:*\n${params.errors}\uAC74` },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*\uBB34\uACB0\uACFC \uD074\uB7EC\uC2A4\uD130:*\n${params.byType.zero_result_cluster}\uAC74` },
+          { type: 'mrkdwn', text: `*\uB0AE\uC740 \uC804\uD658\uC728:*\n${params.byType.low_conversion}\uAC74` },
+        ],
+      },
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `\uBC18\uBCF5 \uC2A4\uD0B5: ${params.byType.repeated_skip}\uAC74 | \uB9E4\uC77C 06:00 UTC \uC2E4\uD589` }],
+      },
+    ]
+
+    await sendSlackWebhook(webhookUrl, { blocks })
+  } catch (error) {
+    log.error('Failed to send EvoSkill analyze notification', error)
+  }
+}
+
+/**
+ * Slack notification for evo-generate cron (skill generation).
  */
 export async function notifySlackEvoAction(params: EvoActionParams): Promise<void> {
   try {
@@ -234,7 +285,7 @@ export async function notifySlackEvoAction(params: EvoActionParams): Promise<voi
     const blocks: SlackBlock[] = [
       {
         type: 'header',
-        text: { type: 'plain_text', text: '\uD83E\uDDEC EvoSkill \uC790\uB3D9 \uC2A4\uD0AC \uC9C4\uD654', emoji: true },
+        text: { type: 'plain_text', text: '\uD83E\uDDEC EvoSkill \uC2A4\uD0AC \uC0DD\uC131', emoji: true },
       },
       {
         type: 'section',
@@ -259,9 +310,52 @@ export async function notifySlackEvoAction(params: EvoActionParams): Promise<voi
       })
     }
 
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '\uB9E4\uC77C 07:00 UTC \uC2E4\uD589' }],
+    })
+
     await sendSlackWebhook(webhookUrl, { blocks })
-    log.info('EvoSkill Slack notification sent')
   } catch (error) {
-    log.error('Failed to send EvoSkill Slack notification', error)
+    log.error('Failed to send EvoSkill generate notification', error)
+  }
+}
+
+/**
+ * Slack notification for evo-promote cron (Pareto selection).
+ */
+export async function notifySlackEvoPromote(params: EvoPromoteParams): Promise<void> {
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    const blocks: SlackBlock[] = [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: '\uD83C\uDFC6 EvoSkill Pareto \uC120\uD0DD', emoji: true },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*\uC2B9\uACA9:*\n${params.promoted}\uAC74` },
+          { type: 'mrkdwn', text: `*\uD3D0\uAE30:*\n${params.retired}\uAC74` },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*\uBCF4\uB958:*\n${params.held}\uAC74` },
+          { type: 'mrkdwn', text: `*\uC624\uB958:*\n${params.errors}\uAC74` },
+        ],
+      },
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: '\uB9E4\uC8FC \uC6D4\uC694\uC77C 08:00 UTC \uC2E4\uD589' }],
+      },
+    ]
+
+    await sendSlackWebhook(webhookUrl, { blocks })
+  } catch (error) {
+    log.error('Failed to send EvoSkill promote notification', error)
   }
 }

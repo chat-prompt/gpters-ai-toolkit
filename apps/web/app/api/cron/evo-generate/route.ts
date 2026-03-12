@@ -23,15 +23,12 @@ export async function GET(request: NextRequest) {
   try {
     const result = await generateFromPatterns()
 
-    // Send Slack notification if any actions were taken
-    if (result.skillsCreated > 0 || result.suggestionsCreated > 0) {
-      await notifySlackEvoAction({
-        skillsCreated: result.skillsCreated,
-        suggestionsCreated: result.suggestionsCreated,
-        processed: result.processed,
-        errors: result.errors,
-      })
-    }
+    await notifySlackEvoAction({
+      skillsCreated: result.skillsCreated,
+      suggestionsCreated: result.suggestionsCreated,
+      processed: result.processed,
+      errors: result.errors,
+    })
 
     return NextResponse.json({
       success: true,
