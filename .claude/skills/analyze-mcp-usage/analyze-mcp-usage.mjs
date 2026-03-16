@@ -139,7 +139,7 @@ async function main() {
   const [summary] = await sql`
     SELECT
       COUNT(*)::int AS total_logs,
-      COUNT(DISTINCT ip_hash)::int AS unique_users,
+      COUNT(DISTINCT t.user_id)::int AS unique_users,
       COUNT(*) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search')::int AS search_count,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content')::int AS view_count,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content' AND referral_source = 'search')::int AS view_from_search,
@@ -163,8 +163,9 @@ async function main() {
       ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p50_search_time,
       ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p95_search_time,
       ROUND(AVG(response_time) FILTER (WHERE tool IS NOT NULL AND tool NOT IN ('search_plugins', 'semantic_search', 'report_session_event')))::int AS avg_other_time
-    FROM mcp_audit_logs
-    WHERE created_at >= NOW() - make_interval(days => ${days})
+    FROM mcp_audit_logs l
+    LEFT JOIN oauth_access_tokens t ON l.access_token_id = t.id
+    WHERE l.created_at >= NOW() - make_interval(days => ${days})
   `
 
   const searchCount = summary.search_count || 0
@@ -442,6 +443,21 @@ async function main() {
     ORDER BY cnt DESC
   `
 
+  // 사용자별 스킵 분석
+  const skipByUser = await sql`
+    SELECT
+      COALESCE(u.name, '(알 수 없음)') AS user_name,
+      COALESCE(l.client_type, 'unknown') AS client,
+      COUNT(*)::int AS cnt
+    FROM mcp_audit_logs l
+    LEFT JOIN oauth_access_tokens t ON l.access_token_id = t.id
+    LEFT JOIN users u ON t.user_id = u.id
+    WHERE l.created_at >= NOW() - make_interval(days => ${days})
+      AND l.tool = 'report_search_skip'
+    GROUP BY u.name, l.client_type
+    ORDER BY cnt DESC
+  `
+
   if (skipData.length > 0) {
     console.log(`\n  [검색 스킵 분석 — report_search_skip]`)
 
@@ -488,6 +504,16 @@ async function main() {
         ]),
       [0, 2]
     )
+
+    // 사용자별 스킵 현황
+    if (skipByUser.length > 0) {
+      console.log(`\n  사용자별 스킵 현황:`)
+      printTable(
+        ['#', '사용자', '클라이언트', '스킵 횟수'],
+        skipByUser.map((r, i) => [i + 1, r.user_name, r.client, r.cnt]),
+        [0, 3]
+      )
+    }
   }
 
   // ── 4-4. 스킬 적용률 분석 (report_skill_outcome) — (구 4-5) ──
@@ -502,6 +528,23 @@ async function main() {
       AND tool = 'report_skill_outcome'
     GROUP BY skill_id, applied, summary
     ORDER BY cnt DESC
+  `
+
+  // 사용자별 outcome 분석
+  const outcomeByUser = await sql`
+    SELECT
+      COALESCE(u.name, '(알 수 없음)') AS user_name,
+      COALESCE(l.client_type, 'unknown') AS client,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE (l.request_params->'params'->'arguments'->>'applied')::boolean = true)::int AS applied,
+      COUNT(*) FILTER (WHERE (l.request_params->'params'->'arguments'->>'applied')::boolean = false)::int AS not_applied
+    FROM mcp_audit_logs l
+    LEFT JOIN oauth_access_tokens t ON l.access_token_id = t.id
+    LEFT JOIN users u ON t.user_id = u.id
+    WHERE l.created_at >= NOW() - make_interval(days => ${days})
+      AND l.tool = 'report_skill_outcome'
+    GROUP BY u.name, l.client_type
+    ORDER BY total DESC
   `
 
   if (outcomeData.length > 0) {
@@ -571,6 +614,16 @@ async function main() {
           r.cnt,
         ]),
         [0, 3]
+      )
+    }
+
+    // 사용자별 outcome 현황
+    if (outcomeByUser.length > 0) {
+      console.log(`\n  사용자별 스킬 적용 현황:`)
+      printTable(
+        ['#', '사용자', '클라이언트', '총 보고', '적용', '미적용'],
+        outcomeByUser.map((r, i) => [i + 1, r.user_name, r.client, r.total, r.applied, r.not_applied]),
+        [0, 3, 4, 5]
       )
     }
   }
@@ -653,14 +706,15 @@ async function main() {
 
   const dailyTrend = await sql`
     SELECT
-      TO_CHAR((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS day,
-      COALESCE(client_type, 'unknown') AS client,
+      TO_CHAR((l.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS day,
+      COALESCE(l.client_type, 'unknown') AS client,
       COUNT(*)::int AS cnt,
-      COUNT(DISTINCT ip_hash)::int AS users
-    FROM mcp_audit_logs
-    WHERE created_at >= NOW() - make_interval(days => ${displayDays})
-    GROUP BY (created_at AT TIME ZONE 'Asia/Seoul')::date, COALESCE(client_type, 'unknown')
-    ORDER BY (created_at AT TIME ZONE 'Asia/Seoul')::date DESC, client
+      COUNT(DISTINCT t.user_id)::int AS users
+    FROM mcp_audit_logs l
+    LEFT JOIN oauth_access_tokens t ON l.access_token_id = t.id
+    WHERE l.created_at >= NOW() - make_interval(days => ${displayDays})
+    GROUP BY (l.created_at AT TIME ZONE 'Asia/Seoul')::date, COALESCE(l.client_type, 'unknown')
+    ORDER BY (l.created_at AT TIME ZONE 'Asia/Seoul')::date DESC, client
   `
 
   // 피벗: 일자 × 클라이언트
@@ -761,11 +815,12 @@ async function main() {
       tool,
       COUNT(*)::int AS cnt,
       COUNT(DISTINCT session_id)::int AS sessions,
-      COUNT(DISTINCT ip_hash)::int AS users
-    FROM mcp_audit_logs
-    WHERE created_at >= NOW() - make_interval(days => ${days})
-      AND tool IN ('undeploy_skill', 'check_updates', 'suggest_improvement', 'list_suggestions', 'resolve_suggestion', 'add_files', 'remove_files', 'report_session_event')
-    GROUP BY tool
+      COUNT(DISTINCT t.user_id)::int AS users
+    FROM mcp_audit_logs l
+    LEFT JOIN oauth_access_tokens t ON l.access_token_id = t.id
+    WHERE l.created_at >= NOW() - make_interval(days => ${days})
+      AND l.tool IN ('undeploy_skill', 'check_updates', 'suggest_improvement', 'list_suggestions', 'resolve_suggestion', 'add_files', 'remove_files', 'report_session_event')
+    GROUP BY l.tool
     ORDER BY cnt DESC
   `
 
@@ -1022,7 +1077,7 @@ async function main() {
   const [zrClient] = await sql`
     WITH client_sessions AS (
       SELECT session_id FROM mcp_sessions
-      WHERE client_type IN ('claude_code', 'opencode', 'codex')
+      WHERE client_type IN ('claude_code', 'opencode', 'openclaw', 'codex', 'cli')
     ),
     search_queries AS (
       SELECT DISTINCT se.session_id, se.query

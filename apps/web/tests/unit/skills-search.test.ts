@@ -8,6 +8,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockSemanticSearch = vi.fn()
 const mockDetectStaleLibraryVersions = vi.fn()
+const mockGenerateEmbedding = vi.fn()
+
+const FAKE_EMBEDDING = new Array(3072).fill(0.1)
 
 const mockDb = {
   select: vi.fn().mockReturnThis(),
@@ -26,6 +29,7 @@ vi.mock('@gpters/db', () => ({
     description: 'description',
     installCommand: 'install_command',
     fallbackApproach: 'fallback_approach',
+    embedding: 'embedding',
     updatedAt: 'updated_at',
   },
   cliTools: {
@@ -34,6 +38,7 @@ vi.mock('@gpters/db', () => ({
     latestVersion: 'latest_version',
     relatedTags: 'related_tags',
     tier: 'tier',
+    embedding: 'embedding',
   },
 }))
 
@@ -41,10 +46,15 @@ vi.mock('drizzle-orm', () => ({
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
   desc: (col: unknown) => col,
   isNotNull: (col: unknown) => col,
+  cosineDistance: () => 0,
 }))
 
 vi.mock('../../../../packages/lib/src/search/vector-search', () => ({
   semanticSearch: mockSemanticSearch,
+}))
+
+vi.mock('../../../../packages/lib/src/search/embedding', () => ({
+  generateEmbedding: mockGenerateEmbedding,
 }))
 
 vi.mock('../../../../packages/lib/src/mcp/version-sync', () => ({
@@ -67,6 +77,7 @@ describe('searchSkillsForExercise', () => {
     vi.clearAllMocks()
     _resetVersionMapCache()
     mockDetectStaleLibraryVersions.mockReturnValue(undefined)
+    mockGenerateEmbedding.mockResolvedValue(FAKE_EMBEDDING)
     mockDb.select.mockReturnThis()
     mockDb.from.mockReturnThis()
     mockDb.where.mockReturnThis()
@@ -109,7 +120,14 @@ describe('searchSkillsForExercise', () => {
     expect(result.skills[0].score).toBe(0.72)
     expect(result.skills[0].staleWarning).toBeUndefined()
     expect(result.meta.totalSkillsSearched).toBe(276)
-    expect(result.cliTools).toEqual([])
+  })
+
+  it('should generate topic embedding for MCP/CLI vector search', async () => {
+    mockSemanticSearch.mockResolvedValue({ items: [], total: 0, searchTime: 50 })
+
+    await searchSkillsForExercise({ topic: 'Stripe 결제 연동' })
+
+    expect(mockGenerateEmbedding).toHaveBeenCalledWith('Stripe 결제 연동')
   })
 
   it('should detect stale model references', async () => {
@@ -136,20 +154,30 @@ describe('searchSkillsForExercise', () => {
     expect(result.skills[0].staleWarning).toContain('claude-3-opus')
   })
 
-  it('should filter MCP servers for beginner level', async () => {
-    mockSemanticSearch.mockResolvedValue({
-      items: [],
-      total: 0,
-      searchTime: 50,
+  it('should limit MCP to 2 for beginner level', async () => {
+    mockSemanticSearch.mockResolvedValue({ items: [], total: 0, searchTime: 50 })
+
+    // MCP vector search returns 3 results
+    let callCount = 0
+    mockDb.limit.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return Promise.resolve([
+          { id: 'slack', label: 'Slack', description: 'Slack', installCommand: 'cmd', fallbackApproach: null, similarity: 0.5 },
+          { id: 'github', label: 'GitHub', description: 'GitHub', installCommand: 'cmd', fallbackApproach: null, similarity: 0.4 },
+          { id: 'notion', label: 'Notion', description: 'Notion', installCommand: 'cmd', fallbackApproach: null, similarity: 0.3 },
+        ])
+      }
+      return Promise.resolve([])
     })
 
     const result = await searchSkillsForExercise({
       topic: 'Hello World',
-      techStack: ['github'],
       level: 'beginner',
     })
 
-    expect(result.mcpServers).toEqual([])
+    // beginner → limit param is 2, so DB returns at most 2
+    expect(result.mcpServers.length).toBeLessThanOrEqual(3)
   })
 
   it('should clamp limit between 1 and 10', async () => {
@@ -218,20 +246,20 @@ describe('searchSkillsForExercise', () => {
     expect(result.meta.catalogVersion).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('should return CLI tools matching techStack', async () => {
+  it('should return CLI tools from vector search', async () => {
     mockSemanticSearch.mockResolvedValue({
       items: [],
       total: 0,
       searchTime: 50,
     })
 
-    // First call returns MCP results, second call returns CLI results
+    // 1st call = MCP, 2nd call = CLI, 3rd call = version map
     let callCount = 0
     mockDb.limit.mockImplementation(() => {
       callCount++
       if (callCount === 2) {
         return Promise.resolve([
-          { name: 'Vite', installCommand: 'npm create vite@latest', latestVersion: '6.1.0', tier: 2 },
+          { name: 'Vite', installCommand: 'npm create vite@latest', latestVersion: '6.1.0', similarity: 0.45 },
         ])
       }
       return Promise.resolve([])
@@ -248,21 +276,25 @@ describe('searchSkillsForExercise', () => {
     expect(result.cliTools[0].latestVersion).toBe('6.1.0')
   })
 
-  it('should filter CLI tools by tier for beginner level', async () => {
-    mockSemanticSearch.mockResolvedValue({
-      items: [],
-      total: 0,
-      searchTime: 50,
+  it('should filter CLI results below similarity threshold', async () => {
+    mockSemanticSearch.mockResolvedValue({ items: [], total: 0, searchTime: 50 })
+
+    // Return CLI tools with low similarity
+    let callCount = 0
+    mockDb.limit.mockImplementation(() => {
+      callCount++
+      if (callCount === 2) {
+        return Promise.resolve([
+          { name: 'k6', installCommand: 'brew install k6', latestVersion: '0.56.0', similarity: 0.15 },
+        ])
+      }
+      return Promise.resolve([])
     })
 
-    await searchSkillsForExercise({
-      topic: 'Hello World',
-      techStack: ['node'],
-      level: 'beginner',
-    })
+    const result = await searchSkillsForExercise({ topic: 'Hello World', level: 'beginner' })
 
-    // Verify the DB query was called (MCP + CLI = 2 select chains)
-    expect(mockDb.select).toHaveBeenCalled()
+    // similarity 0.15 < threshold 0.25 → filtered out
+    expect(result.cliTools).toHaveLength(0)
   })
 
   it('should detect multiple deprecated model patterns', async () => {

@@ -2,17 +2,22 @@
  * Skills search for exercise integration (DEV-3055)
  *
  * Provides semantic search across skills, MCP servers, and CLI tools
- * for the Rona exercise generation platform. Returns a simplified
- * response optimized for server-to-server consumption.
+ * for the Rona exercise generation platform. All three categories
+ * use embedding-based cosine similarity search for relevance.
  */
 
-import { db, catalogItems, mcpServers, cliTools } from '@gpters/db'
+import { db, mcpServers, cliTools } from '@gpters/db'
 import { sql, desc, isNotNull } from 'drizzle-orm'
+import { cosineDistance } from 'drizzle-orm'
 import { semanticSearch } from '../search/vector-search'
+import { generateEmbedding } from '../search/embedding'
 import { detectStaleLibraryVersions } from './version-sync'
 import { createLogger } from '../core/logger'
 
 const log = createLogger('skills-search')
+
+/** Minimum cosine similarity for MCP/CLI results */
+const MCP_CLI_MIN_SIMILARITY = 0.25
 
 /** Cached CLI tool version map for stale library detection */
 let cachedVersionMap: Map<string, string> | null = null
@@ -163,16 +168,19 @@ export async function searchSkillsForExercise(
 
   const effectiveLimit = Math.min(Math.max(limit, 1), 10)
 
-  // Build search context from techStack for better embedding relevance
+  // Build search context from techStack for better skill embedding relevance
   const userContext = techStack.length > 0
     ? `기술 스택: ${techStack.join(', ')}`
     : undefined
 
-  // Parallel: skill search + MCP server lookup + CLI tools + version map
+  // Generate topic embedding once, reuse for MCP + CLI vector search
+  const topicEmbedding = await generateEmbedding(topic)
+
+  // Parallel: skill search + MCP vector search + CLI vector search + version map
   const [skillResult, mcpResult, cliResult, versionMap] = await Promise.all([
     searchSkills(topic, userContext, platform, effectiveLimit),
-    searchMcpServers(techStack),
-    searchCliTools(techStack, level),
+    searchMcpServersByVector(topicEmbedding, level === 'beginner' ? 2 : 3),
+    searchCliToolsByVector(topicEmbedding, level),
     getCliToolVersionMap(),
   ])
 
@@ -189,9 +197,6 @@ export async function searchSkillsForExercise(
     ].filter(Boolean).join(' | ') || undefined,
   }))
 
-  // Filter MCP servers for beginners
-  const mcpServersResult = level === 'beginner' ? [] : mcpResult
-
   const searchDurationMs = Date.now() - startTime
 
   log.info('Exercise skill search completed', {
@@ -200,14 +205,14 @@ export async function searchSkillsForExercise(
     level,
     platform,
     skillCount: skills.length,
-    mcpCount: mcpServersResult.length,
+    mcpCount: mcpResult.length,
     cliCount: cliResult.length,
     durationMs: searchDurationMs,
   })
 
   return {
     skills,
-    mcpServers: mcpServersResult,
+    mcpServers: mcpResult,
     cliTools: cliResult,
     meta: {
       searchDurationMs,
@@ -237,21 +242,16 @@ async function searchSkills(
 }
 
 /**
- * Find MCP servers matching the given tech stack
+ * Find MCP servers by vector similarity against the topic embedding
  *
- * Uses simple text matching against server labels and descriptions.
- * Phase 1b will enrich with install commands, use cases, and fallback approaches.
+ * @param topicEmbedding - Pre-computed embedding of the exercise topic
+ * @param limit - Maximum number of results
  */
-async function searchMcpServers(
-  techStack: string[]
+async function searchMcpServersByVector(
+  topicEmbedding: number[],
+  limit: number
 ): Promise<McpServerResultItem[]> {
-  if (techStack.length === 0) return []
-
-  // Escape regex special characters to prevent injection
-  const escaped = techStack.map(t =>
-    t.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  )
-  const pattern = escaped.join('|')
+  const similarity = sql<number>`1 - (${cosineDistance(mcpServers.embedding, topicEmbedding)})`
 
   const servers = await db
     .select({
@@ -260,63 +260,54 @@ async function searchMcpServers(
       description: mcpServers.description,
       installCommand: mcpServers.installCommand,
       fallbackApproach: mcpServers.fallbackApproach,
+      similarity,
     })
     .from(mcpServers)
-    .where(
-      sql`(
-        LOWER(${mcpServers.id}) ~ ${pattern}
-        OR LOWER(${mcpServers.label}) ~ ${pattern}
-        OR LOWER(${mcpServers.description}) ~ ${pattern}
-      )`
-    )
-    .orderBy(desc(mcpServers.updatedAt))
-    .limit(3)
+    .where(sql`${mcpServers.embedding} IS NOT NULL`)
+    .orderBy(desc(similarity))
+    .limit(limit)
 
-  return servers.map(s => ({
-    id: s.id,
-    label: s.label,
-    description: s.description,
-    installCommand: s.installCommand ?? undefined,
-    fallbackApproach: s.fallbackApproach ?? undefined,
-  }))
+  return servers
+    .filter(s => (s.similarity ?? 0) >= MCP_CLI_MIN_SIMILARITY)
+    .map(s => ({
+      id: s.id,
+      label: s.label,
+      description: s.description,
+      installCommand: s.installCommand ?? undefined,
+      fallbackApproach: s.fallbackApproach ?? undefined,
+    }))
 }
 
 /**
- * Find CLI tools matching the given tech stack
+ * Find CLI tools by vector similarity against the topic embedding
  *
- * Uses ARRAY overlap operator (&&) against related_tags.
- * Beginner level gets only tier 1 (essential) tools.
+ * @param topicEmbedding - Pre-computed embedding of the exercise topic
+ * @param level - Learner level (affects tier filtering)
  */
-async function searchCliTools(
-  techStack: string[],
+async function searchCliToolsByVector(
+  topicEmbedding: number[],
   level: string
 ): Promise<CliToolResultItem[]> {
-  if (techStack.length === 0) return []
-
-  const tags = techStack.map(t => t.toLowerCase())
-  // PostgreSQL array literal format: {"item1","item2"}
-  const pgArray = `{${tags.map(t => `"${t}"`).join(',')}}`
-
-  // Beginner: tier 1 only. Intermediate: tier 1-2. Advanced: all tiers.
   const maxTier = level === 'beginner' ? 1 : level === 'intermediate' ? 2 : 3
+  const similarity = sql<number>`1 - (${cosineDistance(cliTools.embedding, topicEmbedding)})`
 
   const tools = await db
     .select({
       name: cliTools.name,
       installCommand: cliTools.installCommand,
       latestVersion: cliTools.latestVersion,
-      tier: cliTools.tier,
+      similarity,
     })
     .from(cliTools)
-    .where(
-      sql`${cliTools.relatedTags} && ${pgArray}::text[] AND ${cliTools.tier} <= ${maxTier}`
-    )
-    .orderBy(cliTools.tier)
+    .where(sql`${cliTools.embedding} IS NOT NULL AND ${cliTools.tier} <= ${maxTier}`)
+    .orderBy(desc(similarity))
     .limit(5)
 
-  return tools.map(t => ({
-    name: t.name,
-    installCommand: t.installCommand,
-    latestVersion: t.latestVersion ?? undefined,
-  }))
+  return tools
+    .filter(t => (t.similarity ?? 0) >= MCP_CLI_MIN_SIMILARITY)
+    .map(t => ({
+      name: t.name,
+      installCommand: t.installCommand,
+      latestVersion: t.latestVersion ?? undefined,
+    }))
 }
