@@ -23,6 +23,8 @@ export interface DeployOptions {
   tags?: string
   /** 플랫폼 (콤마 구분, 예: claude_code,codex) */
   platforms?: string
+  /** 공개 범위 (public: 전체 공개, private: 같은 조직만) */
+  visibility?: string
 }
 
 /**
@@ -62,6 +64,7 @@ export async function runDeploy(opts: DeployOptions): Promise<void> {
   if (opts.description) params.description = opts.description
   if (opts.tags) params.tags = opts.tags.split(',').map((t) => t.trim())
   if (opts.platforms) params.platforms = opts.platforms.split(',').map((p) => p.trim())
+  if (opts.visibility) params.visibility = opts.visibility
 
   const result = await apiCall('deploy', params, token)
 
