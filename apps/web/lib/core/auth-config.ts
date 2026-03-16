@@ -113,6 +113,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         user.orgIds = orgIds
 
+        // Rona 유저 매핑 (이메일 기반, fire-and-forget)
+        const ronaUrl = process.env.RONA_API_URL
+        const ronaToken = process.env.RONA_SERVICE_TOKEN
+        if (ronaUrl && ronaToken && !existingUser[0]?.ronaUserId) {
+          try {
+            const ronaRes = await fetch(`${ronaUrl}/api/v1/users/verify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${ronaToken}`,
+              },
+              body: JSON.stringify({ email }),
+            })
+            if (ronaRes.ok) {
+              const ronaData = await ronaRes.json()
+              if (ronaData.verified && ronaData.user?.id) {
+                await db.update(users)
+                  .set({ ronaUserId: ronaData.user.id, updatedAt: new Date() })
+                  .where(eq(users.id, userId))
+                log.info('Rona user mapped', { userId, ronaUserId: ronaData.user.id })
+              }
+            }
+          } catch (ronaErr) {
+            log.warn('Rona user mapping failed (non-critical)', { userId, error: ronaErr })
+          }
+        }
+
       } catch (error) {
         log.error('Failed during sign in', error, { action: 'signIn', userId: user.id })
         return false

@@ -166,6 +166,7 @@ export const users = pgTable('users', {
   name: text('name'),
   image: text('image'),
   role: userRoleEnum('role').notNull().default('viewer'),
+  ronaUserId: text('rona_user_id'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
