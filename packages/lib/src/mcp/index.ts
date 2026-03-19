@@ -98,3 +98,12 @@ export {
   type VersionCheckResult,
   type VersionSyncSummary,
 } from './version-sync'
+
+// Export model docs sync (EDU-6875)
+export {
+  syncModelDocs,
+  getLatestModels,
+  type ProviderModelInfo,
+  type ModelDocsSyncSummary,
+  type ModelsApiResponse,
+} from './model-docs-sync'

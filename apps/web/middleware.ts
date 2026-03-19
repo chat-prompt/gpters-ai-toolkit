@@ -58,6 +58,7 @@ function isPublicRoute(pathname: string): boolean {
     strippedPath.startsWith('/privacy') ||
     strippedPath.startsWith('/welcome') ||
     strippedPath.startsWith('/api/skills') ||
+    strippedPath.startsWith('/api/models') ||
     strippedPath.startsWith('/api/cron') ||
     strippedPath.startsWith('/oauth') ||
     strippedPath.startsWith('/.well-known') ||

@@ -953,6 +953,63 @@ export const evoFailurePatterns = pgTable('evo_failure_patterns', {
 export type EvoFailurePatternRecord = typeof evoFailurePatterns.$inferSelect
 export type NewEvoFailurePatternRecord = typeof evoFailurePatterns.$inferInsert
 
+// ============================================
+// AI Model Docs Table (EDU-6875: Context Hub 모델 문서 관리)
+// ============================================
+
+/** AI provider enum for model docs */
+export const aiProviderEnum = pgEnum('ai_provider', ['anthropic', 'google', 'openai'])
+
+/** Sync status for model docs */
+export const syncStatusEnum = pgEnum('sync_status', ['success', 'partial', 'failed'])
+
+/**
+ * AI model documentation synced from official sources.
+ *
+ * Stores per-provider model mapping tables (latest models, API IDs, deprecated list)
+ * for consumption by Rona and other services via the /api/models endpoint.
+ */
+export const aiModelDocs = pgTable('ai_model_docs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** AI provider (anthropic, google, openai) */
+  provider: aiProviderEnum('provider').notNull().unique(),
+  /** Structured model data [{name, apiId, deprecated, recommended}] */
+  models: jsonb('models').$type<Array<{
+    name: string
+    apiId: string
+    deprecated: boolean
+    recommended: boolean
+  }>>().notNull().default([]),
+  /** Latest models display string (e.g., "Opus 4.6, Sonnet 4.6, Haiku 4.5") */
+  latestModels: text('latest_models'),
+  /** API model IDs display string (e.g., "claude-opus-4-6, claude-sonnet-4-6") */
+  apiIds: text('api_ids'),
+  /** Deprecated model patterns display string (e.g., "~~3.5~~, ~~3~~") */
+  deprecatedPatterns: text('deprecated_patterns'),
+  /** SDK version if applicable */
+  sdkVersion: text('sdk_version'),
+  /** Date of last official update (from source) */
+  updatedOn: text('updated_on'),
+  /** Raw content from documentation source */
+  rawContent: text('raw_content'),
+  /** SHA-256 hash of rawContent for change detection */
+  contentHash: text('content_hash'),
+  /** Last successful sync timestamp */
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  /** Status of last sync attempt */
+  syncStatus: syncStatusEnum('sync_status').default('success'),
+  /** Error message if sync failed */
+  syncError: text('sync_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('ai_model_docs_provider_idx').on(table.provider),
+  index('ai_model_docs_last_synced_at_idx').on(table.lastSyncedAt),
+])
+
+export type AiModelDocRecord = typeof aiModelDocs.$inferSelect
+export type NewAiModelDocRecord = typeof aiModelDocs.$inferInsert
+
 /**
  * Audit log for EvoSkill cron runs (analyze, generate, promote).
  *
