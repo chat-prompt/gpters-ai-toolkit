@@ -310,6 +310,14 @@ export const cliTools = pgTable('cli_tools', {
   relatedTags: text('related_tags').array(),
   /** Priority tier: 1=essential, 2=common, 3=general */
   tier: integer('tier').default(3),
+  /** chub document ID for SDK docs sync (e.g., "openai/chat") */
+  chubDocId: text('chub_doc_id'),
+  /** chub language for docs fetch (e.g., "javascript", "python") */
+  chubLang: text('chub_lang').default('javascript'),
+  /** Raw SDK documentation from chub (markdown) */
+  rawDocs: text('raw_docs'),
+  /** SHA-256 hash of rawDocs for change detection */
+  rawDocsHash: text('raw_docs_hash'),
   /** Vector embedding for semantic search (3072 dimensions, text-embedding-3-large) */
   embedding: halfvec('embedding', { dimensions: 3072 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

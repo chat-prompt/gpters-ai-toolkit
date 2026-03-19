@@ -60,6 +60,7 @@ function isPublicRoute(pathname: string): boolean {
     strippedPath.startsWith('/api/skills') ||
     strippedPath.startsWith('/api/models') ||
     strippedPath.startsWith('/api/sdk-docs') ||
+    strippedPath.startsWith('/api/tool-docs') ||
     strippedPath.startsWith('/api/cron') ||
     strippedPath.startsWith('/oauth') ||
     strippedPath.startsWith('/.well-known') ||
