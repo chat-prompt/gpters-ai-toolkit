@@ -53,6 +53,14 @@ export interface ModelsApiResponse {
   lastSyncedAt: string | null
 }
 
+/** Response format for GET /api/sdk-docs */
+export interface SdkDocsApiResponse {
+  provider: string
+  sdkDocs: string
+  updatedOn: string | null
+  lastSyncedAt: string | null
+}
+
 // --- Source URLs ---
 
 const SOURCES = [
@@ -459,4 +467,180 @@ export async function getLatestModels(): Promise<ModelsApiResponse> {
     providers,
     lastSyncedAt: lastSyncedAt?.toISOString() || null,
   }
+}
+
+// --- SDK Documentation (Phase 2: EDU-6880) ---
+
+/** Context7 SDK docs source URLs */
+const SDK_SOURCES: Record<string, { libraryId: string; topics: string[] }> = {
+  anthropic: {
+    libraryId: '/anthropic/anthropic-sdk-python',
+    topics: ['quickstart getting started', 'messages create chat'],
+  },
+  google: {
+    libraryId: '/google/generative-ai-js',
+    topics: ['quickstart getting started', 'generate content models'],
+  },
+  openai: {
+    libraryId: '/openai/openai-node',
+    topics: ['quickstart getting started', 'chat completions create'],
+  },
+}
+
+const CONTEXT7_API_BASE = 'https://context7.com/api/v1'
+
+/**
+ * Fetch SDK documentation from Context7 API for a given library
+ */
+async function fetchSdkDocsFromContext7(
+  libraryId: string,
+  topics: string[]
+): Promise<string | null> {
+  try {
+    const sections: string[] = []
+
+    for (const topic of topics) {
+      const url = `${CONTEXT7_API_BASE}${libraryId}?topic=${encodeURIComponent(topic)}&tokens=5000`
+      const res = await fetch(url, {
+        headers: { 'Accept': 'text/plain' },
+        signal: AbortSignal.timeout(10_000),
+      })
+
+      if (!res.ok) {
+        log.warn('Context7 SDK docs fetch failed', { libraryId, topic, status: res.status })
+        continue
+      }
+
+      const text = await res.text()
+      if (text && text.length > 100) {
+        sections.push(text)
+      }
+    }
+
+    if (sections.length === 0) return null
+    return sections.join('\n\n---\n\n')
+  } catch (err) {
+    log.warn('Context7 SDK docs error', { libraryId, error: (err as Error).message })
+    return null
+  }
+}
+
+/**
+ * Sync SDK documentation from Context7 for all providers
+ *
+ * Fetches SDK quickstart + API patterns and stores in ai_model_docs.sdkDocs.
+ * Called as part of the daily sync-model-docs cron.
+ */
+export async function syncSdkDocs(): Promise<{ synced: number; failed: number; unchanged: number }> {
+  let synced = 0
+  let failed = 0
+  let unchanged = 0
+
+  for (const [provider, source] of Object.entries(SDK_SOURCES)) {
+    log.info('Syncing SDK docs', { provider, libraryId: source.libraryId })
+
+    const docs = await fetchSdkDocsFromContext7(source.libraryId, source.topics)
+    if (!docs) {
+      failed++
+      log.warn('SDK docs fetch failed', { provider })
+      continue
+    }
+
+    // Check hash for change detection
+    const hash = await hashContent(docs)
+    const existing = await db
+      .select({ sdkDocsHash: aiModelDocs.sdkDocsHash })
+      .from(aiModelDocs)
+      .where(eq(aiModelDocs.provider, provider as 'anthropic' | 'google' | 'openai'))
+      .limit(1)
+
+    if (existing.length > 0 && existing[0].sdkDocsHash === hash) {
+      unchanged++
+      continue
+    }
+
+    // Update SDK docs
+    await db
+      .update(aiModelDocs)
+      .set({
+        sdkDocs: docs,
+        sdkDocsHash: hash,
+        updatedAt: new Date(),
+      })
+      .where(eq(aiModelDocs.provider, provider as 'anthropic' | 'google' | 'openai'))
+
+    synced++
+    log.info('SDK docs synced', { provider, length: docs.length })
+  }
+
+  return { synced, failed, unchanged }
+}
+
+/**
+ * Get SDK documentation for a specific provider
+ *
+ * @param provider - AI provider name (anthropic, google, openai)
+ * @param section - Optional section filter (not yet implemented, returns full docs)
+ */
+export async function getSdkDocs(
+  provider: string,
+  _section?: string
+): Promise<SdkDocsApiResponse | null> {
+  const providerKey = provider.toLowerCase()
+  if (!['anthropic', 'google', 'openai'].includes(providerKey)) return null
+
+  const rows = await db
+    .select({
+      provider: aiModelDocs.provider,
+      sdkDocs: aiModelDocs.sdkDocs,
+      updatedOn: aiModelDocs.updatedOn,
+      lastSyncedAt: aiModelDocs.lastSyncedAt,
+    })
+    .from(aiModelDocs)
+    .where(eq(aiModelDocs.provider, providerKey as 'anthropic' | 'google' | 'openai'))
+    .limit(1)
+
+  if (rows.length === 0 || !rows[0].sdkDocs) return null
+
+  const providerNameMap: Record<string, string> = {
+    anthropic: 'Anthropic',
+    google: 'Google',
+    openai: 'OpenAI',
+  }
+
+  return {
+    provider: providerNameMap[providerKey] || providerKey,
+    sdkDocs: rows[0].sdkDocs,
+    updatedOn: rows[0].updatedOn,
+    lastSyncedAt: rows[0].lastSyncedAt?.toISOString() || null,
+  }
+}
+
+/**
+ * Get SDK docs for all providers (bulk)
+ */
+export async function getAllSdkDocs(): Promise<SdkDocsApiResponse[]> {
+  const rows = await db
+    .select({
+      provider: aiModelDocs.provider,
+      sdkDocs: aiModelDocs.sdkDocs,
+      updatedOn: aiModelDocs.updatedOn,
+      lastSyncedAt: aiModelDocs.lastSyncedAt,
+    })
+    .from(aiModelDocs)
+
+  const providerNameMap: Record<string, string> = {
+    anthropic: 'Anthropic',
+    google: 'Google',
+    openai: 'OpenAI',
+  }
+
+  return rows
+    .filter((r) => r.sdkDocs)
+    .map((r) => ({
+      provider: providerNameMap[r.provider] || r.provider,
+      sdkDocs: r.sdkDocs!,
+      updatedOn: r.updatedOn,
+      lastSyncedAt: r.lastSyncedAt?.toISOString() || null,
+    }))
 }

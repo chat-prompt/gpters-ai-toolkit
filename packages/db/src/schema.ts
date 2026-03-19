@@ -990,10 +990,14 @@ export const aiModelDocs = pgTable('ai_model_docs', {
   sdkVersion: text('sdk_version'),
   /** Date of last official update (from source) */
   updatedOn: text('updated_on'),
-  /** Raw content from documentation source */
+  /** Raw content from documentation source (model page) */
   rawContent: text('raw_content'),
   /** SHA-256 hash of rawContent for change detection */
   contentHash: text('content_hash'),
+  /** SDK documentation markdown (install, API patterns, error handling) */
+  sdkDocs: text('sdk_docs'),
+  /** SHA-256 hash of sdkDocs for change detection */
+  sdkDocsHash: text('sdk_docs_hash'),
   /** Last successful sync timestamp */
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   /** Status of last sync attempt */

@@ -107,3 +107,11 @@ export {
   type ModelDocsSyncSummary,
   type ModelsApiResponse,
 } from './model-docs-sync'
+
+// Export SDK docs sync (EDU-6880, Phase 2)
+export {
+  syncSdkDocs,
+  getSdkDocs,
+  getAllSdkDocs,
+  type SdkDocsApiResponse,
+} from './model-docs-sync'
