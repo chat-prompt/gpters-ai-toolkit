@@ -1,21 +1,22 @@
 /**
- * Vercel Cron endpoint for syncing AI model + SDK documentation (EDU-6875, EDU-6880)
+ * Vercel Cron endpoint for syncing AI model documentation (EDU-6875)
  *
- * Runs daily at 17:00 UTC (02:00 KST).
- * 1. Model sync: Fetches latest model info from official provider pages
- * 2. SDK sync: Fetches SDK documentation from Context7 API
+ * Runs daily at 17:00 UTC (02:00 KST). Fetches latest model info from
+ * Anthropic, Google, and OpenAI official pages and updates ai_model_docs table.
+ *
+ * SDK docs sync is handled separately by GitHub Actions + chub CLI (EDU-6880).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { syncModelDocs, syncSdkDocs } from '@gpters/lib/mcp'
+import { syncModelDocs } from '@gpters/lib/mcp'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+export const maxDuration = 60
 
 /**
- * GET handler for model + SDK docs sync cron job
+ * GET handler for model docs sync cron job
  *
- * Validates CRON_SECRET header, then runs both syncs sequentially.
+ * Validates CRON_SECRET header, then runs sync against official provider pages.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -26,16 +27,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Phase 1: Model mapping table sync
-    const modelSummary = await syncModelDocs()
-
-    // Phase 2: SDK documentation sync (Context7)
-    const sdkSummary = await syncSdkDocs()
+    const summary = await syncModelDocs()
 
     return NextResponse.json({
       success: true,
-      models: modelSummary,
-      sdk: sdkSummary,
+      ...summary,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

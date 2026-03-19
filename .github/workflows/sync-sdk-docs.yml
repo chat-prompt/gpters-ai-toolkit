@@ -1,0 +1,31 @@
+name: Sync SDK Docs (chub)
+
+on:
+  schedule:
+    - cron: '30 17 * * *'  # 매일 KST 02:30 (모델 싱크 30분 후)
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install chub CLI
+        run: npm install -g context-hub
+
+      - name: Run SDK docs sync
+        run: cd packages/db && pnpm exec tsx scripts/sync-sdk-docs.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
