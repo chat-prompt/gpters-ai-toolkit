@@ -28,18 +28,14 @@ const SDK_DOCS = [
 // --- 실습 빈출 도구 문서 (cli_tools 테이블) ---
 
 const TOOL_DOCS = [
-  { name: 'nextjs', chubId: 'nextjs/app-router', lang: 'javascript' },
-  { name: 'express', chubId: 'express/package', lang: 'javascript' },
-  { name: 'drizzle', chubId: 'drizzle/package', lang: 'javascript' },
-  { name: 'prisma', chubId: 'prisma/package', lang: 'javascript' },
-  { name: 'playwright', chubId: 'playwright/package', lang: 'javascript' },
-  { name: 'slack-bolt', chubId: 'slack/bolt-js', lang: 'javascript' },
-  { name: 'stripe', chubId: 'stripe/package', lang: 'javascript' },
-  { name: 'supabase', chubId: 'supabase/supabase-js', lang: 'javascript' },
-  { name: 'langchain', chubId: 'langchain/package', lang: 'python' },
-  { name: 'vercel-ai-sdk', chubId: 'vercel/ai-sdk', lang: 'javascript' },
-  { name: 'cheerio', chubId: 'cheerio/package', lang: 'javascript' },
-  { name: 'hono', chubId: 'hono/package', lang: 'javascript' },
+  { name: 'nextjs', chubId: 'next/next', lang: 'javascript' },
+  { name: 'express', chubId: 'express/express', lang: 'javascript' },
+  { name: 'prisma', chubId: 'prisma/orm', lang: 'javascript' },
+  { name: 'playwright', chubId: 'playwright/playwright', lang: 'javascript' },
+  { name: 'stripe', chubId: 'stripe/package', lang: 'python' },
+  { name: 'supabase', chubId: 'supabase/client', lang: 'javascript' },
+  { name: 'langchain', chubId: 'langchain/community', lang: 'python' },
+  { name: 'cheerio', chubId: 'typescript/cheerio', lang: 'typescript' },
 ]
 
 function hashContent(content: string): string {
