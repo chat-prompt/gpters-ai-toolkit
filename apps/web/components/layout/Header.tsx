@@ -135,9 +135,9 @@ export function Header({ user }: HeaderProps) {
           <div className="flex items-center gap-3">
             {user && <OrgSwitcher />}
             <LocaleSwitcher />
-            <ThemeToggle />
             {user && <UpdateNotificationBell />}
             {user && <AdminQuickMenu userRole={user.role} />}
+            <ThemeToggle />
             {user && <UserMenu user={user} />}
           </div>
         </div>
