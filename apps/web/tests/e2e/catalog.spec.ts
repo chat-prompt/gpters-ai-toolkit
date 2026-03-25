@@ -32,7 +32,7 @@ test.describe('Catalog Page', () => {
 
       // These elements might not be visible if redirected to signin
       // So we check if the page contains them OR we're on signin
-      const isOnSignin = await page.locator('text=Google 계정으로 로그인').isVisible().catch(() => false)
+      const isOnSignin = page.url().includes('/auth/signin')
 
       if (!isOnSignin) {
         await expect(heroTitle).toBeVisible()
