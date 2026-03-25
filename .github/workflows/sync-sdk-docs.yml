@@ -21,7 +21,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install chub CLI
-        run: npm install -g context-hub
+        run: npm install -g @aisuite/chub
 
       - name: Run SDK docs sync
         run: cd packages/db && pnpm exec tsx scripts/sync-sdk-docs.ts
