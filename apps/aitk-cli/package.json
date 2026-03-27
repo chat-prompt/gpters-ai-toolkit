@@ -1,6 +1,6 @@
 {
   "name": "@gpters/aitk",
-  "version": "0.3.22",
+  "version": "0.4.0",
   "description": "GPTers AI Toolkit CLI - MCP fallback & standalone CLI tool",
   "type": "module",
   "bin": {
@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/config.ts src/auth.ts src/client.ts src/output.ts src/commands/search.ts src/commands/get.ts src/commands/deploy.ts src/commands/undeploy.ts src/commands/updates.ts src/commands/suggest.ts src/commands/suggestions.ts src/commands/resolve.ts src/commands/add-files.ts src/commands/remove-files.ts src/commands/report-session.ts src/commands/report-skip.ts src/commands/report-outcome.ts src/commands/login.ts src/commands/config.ts src/commands/whoami.ts src/commands/upgrade.ts --outdir dist/src --target node --format esm && bun build bin/aitk.ts --outdir dist/bin --target node --format esm",
+    "build": "bun build src/config.ts src/auth.ts src/client.ts src/output.ts src/commands/search.ts src/commands/get.ts src/commands/deploy.ts src/commands/undeploy.ts src/commands/updates.ts src/commands/suggest.ts src/commands/suggestions.ts src/commands/resolve.ts src/commands/add-files.ts src/commands/remove-files.ts src/commands/report-session.ts src/commands/report-skip.ts src/commands/report-outcome.ts src/commands/login.ts src/commands/device-login.ts src/commands/config.ts src/commands/whoami.ts src/commands/upgrade.ts --outdir dist/src --target node --format esm && bun build bin/aitk.ts --outdir dist/bin --target node --format esm",
     "dev": "bun build bin/aitk.ts --outdir dist/bin --target node --format esm --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
