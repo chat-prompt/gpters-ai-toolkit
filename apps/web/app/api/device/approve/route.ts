@@ -6,9 +6,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
-import { db, deviceCodes } from '@/lib/db'
+import { db, deviceCodes, users } from '@/lib/db'
 import { createLogger } from '@/lib/core/logger'
-import { eq, and, gt } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 const log = createLogger('api:device:approve')
 
@@ -19,8 +19,17 @@ const log = createLogger('api:device:approve')
  */
 export async function POST(request: NextRequest) {
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  // dbUser.id는 NextAuth ID이므로, DB에서 실제 user ID를 조회
+  const [dbUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, session.user.email))
+  if (!dbUser) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
   let body: { user_code?: string; action?: string }
@@ -47,7 +56,7 @@ export async function POST(request: NextRequest) {
       ? `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}`
       : cleaned
 
-    log.info('Looking up device code', { formatted, userId: session.user.id })
+    log.info('Looking up device code', { formatted, userId: dbUser.id })
 
     const results = await db
       .select()
@@ -69,16 +78,16 @@ export async function POST(request: NextRequest) {
     if (action === 'approve') {
       await db
         .update(deviceCodes)
-        .set({ status: 'approved', userId: session.user.id })
+        .set({ status: 'approved', userId: dbUser.id })
         .where(eq(deviceCodes.id, record.id))
-      log.info('Device code approved', { userCode: record.userCode, userId: session.user.id })
+      log.info('Device code approved', { userCode: record.userCode, userId: dbUser.id })
       return NextResponse.json({ success: true, message: 'Device authorized' })
     } else {
       await db
         .update(deviceCodes)
         .set({ status: 'denied' })
         .where(eq(deviceCodes.id, record.id))
-      log.info('Device code denied', { userCode: record.userCode, userId: session.user.id })
+      log.info('Device code denied', { userCode: record.userCode, userId: dbUser.id })
       return NextResponse.json({ success: true, message: 'Device authorization denied' })
     }
   } catch (err) {
