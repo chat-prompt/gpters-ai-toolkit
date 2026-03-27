@@ -30,6 +30,7 @@
   },
   "userMenu": {
     "profile": "Profile",
+    "apiKeys": "API Keys",
     "signOut": "Sign out"
   },
   "dialog": {

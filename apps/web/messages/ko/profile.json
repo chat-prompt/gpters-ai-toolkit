@@ -18,5 +18,33 @@
     "minutesAgo": "{count}분 전",
     "hoursAgo": "{count}시간 전",
     "daysAgo": "{count}일 전"
+  },
+  "apiKeys": {
+    "title": "API 키",
+    "description": "헤드리스/서버 환경용 API 키를 생성하고 관리합니다.",
+    "createNew": "새 키 생성",
+    "namePlaceholder": "예: CI 서버",
+    "generate": "생성",
+    "copyWarning": "이 키는 한 번만 표시됩니다. 지금 복사하세요.",
+    "createSuccess": "API 키가 생성되었습니다",
+    "revoke": "폐기",
+    "revokeConfirmTitle": "API 키를 폐기하시겠습니까?",
+    "revokeConfirmDescription": "이 키는 즉시 작동이 중지됩니다. 이 작업은 되돌릴 수 없습니다.",
+    "noKeys": "아직 API 키가 없습니다. 헤드리스 환경에서 인증하려면 키를 생성하세요.",
+    "status": {
+      "active": "활성",
+      "revoked": "폐기됨"
+    }
+  },
+  "device": {
+    "title": "디바이스 인증",
+    "description": "터미널에 표시된 코드를 입력하여 디바이스를 인증합니다.",
+    "codeLabel": "디바이스 코드",
+    "codePlaceholder": "ABCD-1234",
+    "verify": "디바이스 인증",
+    "deny": "거부",
+    "success": "디바이스가 인증되었습니다! 터미널로 돌아가세요.",
+    "denied": "인증이 거부되었습니다.",
+    "invalidCode": "유효하지 않거나 만료된 코드입니다. 다시 시도해 주세요."
   }
 }

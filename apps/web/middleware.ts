@@ -54,6 +54,7 @@ function isPublicRoute(pathname: string): boolean {
     strippedPath.startsWith('/api/auth') ||
     strippedPath.startsWith('/api/mcp') ||
     strippedPath.startsWith('/api/cli-token') ||
+    strippedPath.startsWith('/api/device') ||
     strippedPath.startsWith('/api/hooks') ||
     strippedPath.startsWith('/privacy') ||
     strippedPath.startsWith('/welcome') ||

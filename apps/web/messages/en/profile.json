@@ -18,5 +18,33 @@
     "minutesAgo": "{count}m ago",
     "hoursAgo": "{count}h ago",
     "daysAgo": "{count}d ago"
+  },
+  "apiKeys": {
+    "title": "API Keys",
+    "description": "Create and manage API keys for headless/server environments.",
+    "createNew": "Create New Key",
+    "namePlaceholder": "e.g., My CI Server",
+    "generate": "Generate",
+    "copyWarning": "This key will only be shown once. Copy it now.",
+    "createSuccess": "API key created",
+    "revoke": "Revoke",
+    "revokeConfirmTitle": "Revoke API Key?",
+    "revokeConfirmDescription": "This key will immediately stop working. This action cannot be undone.",
+    "noKeys": "No API keys yet. Create one to authenticate from headless environments.",
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    }
+  },
+  "device": {
+    "title": "Device Authorization",
+    "description": "Enter the code shown in your terminal to authorize this device.",
+    "codeLabel": "Device Code",
+    "codePlaceholder": "ABCD-1234",
+    "verify": "Authorize Device",
+    "deny": "Deny",
+    "success": "Device authorized! You can return to your terminal.",
+    "denied": "Authorization denied.",
+    "invalidCode": "Invalid or expired code. Please try again."
   }
 }

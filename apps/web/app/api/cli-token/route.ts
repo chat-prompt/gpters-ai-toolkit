@@ -6,40 +6,13 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
-import { db, oauthClients, users } from '@/lib/db'
+import { db, users } from '@/lib/db'
 import { createAccessToken } from '@/lib/security/oauth-tokens'
+import { ensureCliClient, CLI_TOKEN_TTL_MS, CLI_TOKEN_SCOPE } from '@/lib/security/cli-client'
 import { createLogger } from '@/lib/core/logger'
 import { eq } from 'drizzle-orm'
 
 const log = createLogger('api:cli-token')
-
-/** aitk-cli OAuth 클라이언트 ID */
-const CLI_CLIENT_ID = 'aitk-cli'
-/** CLI 토큰 만료: 90일 */
-const TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000
-
-/**
- * aitk-cli OAuth 클라이언트가 DB에 존재하는지 확인하고, 없으면 생성
- *
- * @returns 클라이언트 ID
- */
-async function ensureCliClient(): Promise<string> {
-  const [existing] = await db
-    .select({ id: oauthClients.id })
-    .from(oauthClients)
-    .where(eq(oauthClients.id, CLI_CLIENT_ID))
-
-  if (existing) return existing.id
-
-  await db.insert(oauthClients).values({
-    id: CLI_CLIENT_ID,
-    name: 'aitk CLI',
-    redirectUris: ['http://localhost'],
-  })
-
-  log.info('Created aitk-cli OAuth client')
-  return CLI_CLIENT_ID
-}
 
 /**
  * GET /api/cli-token?port=PORT
@@ -79,11 +52,11 @@ export async function GET(request: NextRequest) {
     const clientId = await ensureCliClient()
 
     // 토큰 발급
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS)
+    const expiresAt = new Date(Date.now() + CLI_TOKEN_TTL_MS)
     const { token } = await createAccessToken({
       clientId,
       userId: user.id,
-      scope: 'mcp:tools mcp:prompts',
+      scope: CLI_TOKEN_SCOPE,
       expiresAt,
     })
 

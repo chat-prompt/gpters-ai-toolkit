@@ -159,6 +159,16 @@ export function UserMenu({ user }: UserMenuProps) {
             >
               {t('userMenu.profile')}
             </Link>
+            <Link
+              href="/profile/api-keys"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              {t('userMenu.apiKeys')}
+            </Link>
             {showAdminLink && (
               <>
                 <div className="border-t border-[var(--border-subtle)] my-1" />

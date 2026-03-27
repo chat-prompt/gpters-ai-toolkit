@@ -484,6 +484,7 @@ export const oauthAccessTokens = pgTable('oauth_access_tokens', {
   tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of token
   clientId: text('client_id').notNull().references(() => oauthClients.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name'), // User-facing label for API key management
   scope: text('scope'), // Optional scopes
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
@@ -568,6 +569,41 @@ export const oauthRefreshTokensRelations = relations(oauthRefreshTokens, ({ one 
   accessToken: one(oauthAccessTokens, {
     fields: [oauthRefreshTokens.accessTokenId],
     references: [oauthAccessTokens.id],
+  }),
+}))
+
+// OAuth Device Codes - RFC 8628 Device Authorization Grant
+export const deviceCodeStatusEnum = pgEnum('device_code_status', ['pending', 'approved', 'denied', 'expired'])
+
+export const deviceCodes = pgTable('device_codes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  deviceCode: text('device_code').notNull().unique(), // Opaque code for CLI polling
+  userCode: text('user_code').notNull().unique(), // Human-readable "ABCD-1234"
+  clientId: text('client_id').notNull().references(() => oauthClients.id, { onDelete: 'cascade' }),
+  scope: text('scope'),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // Set on approval
+  status: deviceCodeStatusEnum('status').notNull().default('pending'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  interval: integer('interval').notNull().default(5), // Polling interval in seconds
+  lastPolledAt: timestamp('last_polled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('device_codes_device_code_idx').on(table.deviceCode),
+  index('device_codes_user_code_idx').on(table.userCode),
+  index('device_codes_expires_at_idx').on(table.expiresAt),
+])
+
+export type DeviceCodeRecord = typeof deviceCodes.$inferSelect
+export type NewDeviceCodeRecord = typeof deviceCodes.$inferInsert
+
+export const deviceCodesRelations = relations(deviceCodes, ({ one }) => ({
+  client: one(oauthClients, {
+    fields: [deviceCodes.clientId],
+    references: [oauthClients.id],
+  }),
+  user: one(users, {
+    fields: [deviceCodes.userId],
+    references: [users.id],
   }),
 }))
 

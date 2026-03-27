@@ -30,6 +30,7 @@
   },
   "userMenu": {
     "profile": "프로필",
+    "apiKeys": "API 키",
     "signOut": "로그아웃"
   },
   "dialog": {

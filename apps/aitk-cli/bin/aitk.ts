@@ -12,6 +12,7 @@ import { runReportSession } from '../src/commands/report-session.js'
 import { runReportSkip } from '../src/commands/report-skip.js'
 import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runLogin } from '../src/commands/login.js'
+import { runDeviceLogin } from '../src/commands/device-login.js'
 import { runConfig } from '../src/commands/config.js'
 import { runWhoami } from '../src/commands/whoami.js'
 import { runUndeploy } from '../src/commands/undeploy.js'
@@ -77,7 +78,7 @@ Usage:
   aitk resolve --suggestion-id <id> --action accept|reject [--comment <text>]
   aitk add-files --id <id> <file1> [file2...] [--type script|reference|template|config]
   aitk remove-files --id <id> --files <name1,name2>
-  aitk login --token <token>
+  aitk login [--token <token>] [--device]
   aitk whoami
   aitk --version | --help
 
@@ -97,7 +98,7 @@ Commands:
   report-session  Report session event (for hooks)
   report-skip     Report skill search skip reason
   report-outcome  Report skill application outcome
-  login           Save auth token
+  login           Save auth token (browser, --device, or --token)
   whoami          Show current authenticated user
 
 Output:
@@ -222,12 +223,14 @@ Required:
 
   login: `aitk login - Authenticate with AI Toolkit
 
-Usage: aitk login [--token <token>]
+Usage: aitk login [--token <token>] [--device]
 
 Options:
   --token <token>    Manually save a token (skips browser flow)
+  --device           Use Device Flow for headless/server environments
 
-Without --token, opens browser for Google OAuth login.`,
+Without options, opens browser for Google OAuth login.
+With --device, shows a code to enter on another device (phone/PC).`,
 
   whoami: `aitk whoami - Show current authenticated user
 
@@ -428,7 +431,11 @@ async function main(): Promise<void> {
     }
 
     case 'login': {
-      await runLogin(flags['token'])
+      if (flags['device'] === 'true') {
+        await runDeviceLogin()
+      } else {
+        await runLogin(flags['token'])
+      }
       break
     }
 
