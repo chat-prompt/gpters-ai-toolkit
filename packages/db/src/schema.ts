@@ -573,8 +573,6 @@ export const oauthRefreshTokensRelations = relations(oauthRefreshTokens, ({ one 
 }))
 
 // OAuth Device Codes - RFC 8628 Device Authorization Grant
-export const deviceCodeStatusEnum = pgEnum('device_code_status', ['pending', 'approved', 'denied', 'expired'])
-
 export const deviceCodes = pgTable('device_codes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   deviceCode: text('device_code').notNull().unique(), // Opaque code for CLI polling
@@ -582,7 +580,7 @@ export const deviceCodes = pgTable('device_codes', {
   clientId: text('client_id').notNull().references(() => oauthClients.id, { onDelete: 'cascade' }),
   scope: text('scope'),
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // Set on approval
-  status: deviceCodeStatusEnum('status').notNull().default('pending'),
+  status: text('status').notNull().default('pending'), // pending | approved | denied | expired
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   interval: integer('interval').notNull().default(5), // Polling interval in seconds
   lastPolledAt: timestamp('last_polled_at', { withTimezone: true }),
