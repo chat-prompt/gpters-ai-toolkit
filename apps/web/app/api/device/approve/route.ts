@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
 import { db, deviceCodes } from '@/lib/db'
 import { createLogger } from '@/lib/core/logger'
-import { eq, and, gt, sql } from 'drizzle-orm'
+import { eq, and, gt } from 'drizzle-orm'
 
 const log = createLogger('api:device:approve')
 
@@ -41,14 +41,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // user_code로 조회 (대소문자 무시, pending 상태, 미만료)
-    const normalizedCode = user_code.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    // user_code 정규화: 하이픈 제거 후 대문자, 다시 XXXX-XXXX 포맷으로
+    const cleaned = user_code.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const formatted = cleaned.length >= 5
+      ? `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}`
+      : cleaned
     const [record] = await db
       .select()
       .from(deviceCodes)
       .where(
         and(
-          sql`REPLACE(UPPER(${deviceCodes.userCode}), '-', '') = ${normalizedCode}`,
+          eq(deviceCodes.userCode, formatted),
           eq(deviceCodes.status, 'pending'),
           gt(deviceCodes.expiresAt, new Date())
         )
@@ -77,7 +80,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Device authorization denied' })
     }
   } catch (err) {
-    log.error('Device approval failed', { error: err })
+    log.error('Device approval failed', { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Approval failed' }, { status: 500 })
   }
 }
