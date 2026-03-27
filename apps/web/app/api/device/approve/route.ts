@@ -46,16 +46,18 @@ export async function POST(request: NextRequest) {
     const formatted = cleaned.length >= 5
       ? `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}`
       : cleaned
-    const [record] = await db
+
+    log.info('Looking up device code', { formatted, userId: session.user.id })
+
+    const results = await db
       .select()
       .from(deviceCodes)
-      .where(
-        and(
-          eq(deviceCodes.userCode, formatted),
-          eq(deviceCodes.status, 'pending'),
-          gt(deviceCodes.expiresAt, new Date())
-        )
-      )
+      .where(eq(deviceCodes.userCode, formatted))
+
+    log.info('Device code lookup result', { count: results.length, statuses: results.map(r => r.status) })
+
+    // pending 상태 + 미만료 필터
+    const record = results.find(r => r.status === 'pending' && r.expiresAt > new Date())
 
     if (!record) {
       return NextResponse.json(
@@ -80,7 +82,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Device authorization denied' })
     }
   } catch (err) {
-    log.error('Device approval failed', { error: err instanceof Error ? err.message : String(err) })
-    return NextResponse.json({ error: 'Approval failed' }, { status: 500 })
+    const errMsg = err instanceof Error ? err.message : JSON.stringify(err)
+    log.error('Device approval failed', { error: errMsg, stack: err instanceof Error ? err.stack : undefined })
+    return NextResponse.json({ error: `Approval failed: ${errMsg}` }, { status: 500 })
   }
 }
