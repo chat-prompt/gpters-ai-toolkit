@@ -40,11 +40,11 @@ const { handlersMock, toolsMock, mockExecuteTool, mockListPrompts, mockGetPrompt
 // Mock handlers at both the app re-export and the package source paths
 // so server.ts's internal './handlers' import is also intercepted
 vi.mock('@/lib/mcp/handlers', handlersMock)
-vi.mock('/Users/primadonna/projects/gpters-ai-toolkit/packages/lib/src/mcp/handlers', handlersMock)
+vi.mock('../../../../packages/lib/src/mcp/handlers', handlersMock)
 
 // Mock tools at both levels
 vi.mock('@/lib/mcp/tools', toolsMock)
-vi.mock('/Users/primadonna/projects/gpters-ai-toolkit/packages/lib/src/mcp/tools', toolsMock)
+vi.mock('../../../../packages/lib/src/mcp/tools', toolsMock)
 
 import {
   processRequest,

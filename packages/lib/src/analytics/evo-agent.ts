@@ -21,6 +21,7 @@ const log = createLogger('evo-agent')
 const GENERATION_MODEL = 'gemini-2.0-flash'
 const BATCH_SIZE = parseInt(process.env.EVOSKILL_BATCH_SIZE || '10', 10)
 const INPUT_CHAR_LIMIT = 2000
+const MAX_RETRY = parseInt(process.env.EVOSKILL_MAX_RETRY || '3', 10)
 
 // ---------------------------------------------------------------------------
 // Types
@@ -255,17 +256,19 @@ export async function generateFromPatterns(): Promise<GenerateResult> {
   }
 
   try {
-    // Fetch pending patterns, ordered by severity desc
+    // Fetch pending patterns that have not exhausted their retry budget,
+    // ordered by severity desc then fewest retries first.
     const patterns = await db
       .select()
       .from(evoFailurePatterns)
-      .where(eq(evoFailurePatterns.status, 'pending'))
+      .where(sql`${evoFailurePatterns.status} = 'pending' AND ${evoFailurePatterns.retryCount} < ${MAX_RETRY}`)
       .orderBy(sql`
         CASE severity
           WHEN 'high' THEN 1
           WHEN 'medium' THEN 2
           ELSE 3
-        END
+        END,
+        retry_count ASC
       `)
       .limit(BATCH_SIZE)
 
@@ -305,10 +308,23 @@ export async function generateFromPatterns(): Promise<GenerateResult> {
 
       // Update pattern status based on result
       if (genResult.action === 'skipped') {
+        const nextRetry = (pattern.retryCount ?? 0) + 1
+        const exhausted = nextRetry >= MAX_RETRY
         await db.update(evoFailurePatterns)
-          .set({ status: 'pending' }) // Back to pending for retry
+          .set({
+            status: exhausted ? 'failed' : 'pending',
+            retryCount: nextRetry,
+            lastError: genResult.error ?? 'unknown',
+          })
           .where(eq(evoFailurePatterns.id, pattern.id))
         result.skipped++
+        if (exhausted) {
+          log.warn('Pattern marked failed after max retries', {
+            patternId: pattern.id,
+            patternType: pattern.patternType,
+            error: genResult.error,
+          })
+        }
       } else {
         await db.update(evoFailurePatterns)
           .set({

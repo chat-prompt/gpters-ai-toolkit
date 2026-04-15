@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { generateWeeklyReport, type WeeklyReportData } from '@/lib/analytics'
-import { renderWeeklyImage } from '@gpters/lib/reports/render-weekly-image'
+import { renderWeeklyImage } from '@gpters/lib/reports'
 import { put } from '@vercel/blob'
 
 export const dynamic = 'force-dynamic'

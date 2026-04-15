@@ -959,6 +959,7 @@ export const evoPatternStatusEnum = pgEnum('evo_pattern_status', [
   'processing',
   'resolved',
   'dismissed',
+  'failed',
 ])
 
 /** EvoSkill run types */
@@ -982,6 +983,10 @@ export const evoFailurePatterns = pgTable('evo_failure_patterns', {
   resolvedAction: text('resolved_action'),
   /** ID of the catalog item or suggestion created to resolve this pattern */
   resolvedItemId: text('resolved_item_id'),
+  /** Retry attempts used by the generate agent before giving up */
+  retryCount: integer('retry_count').notNull().default(0),
+  /** Last error message recorded when generation was skipped/failed */
+  lastError: text('last_error'),
   analyzedAt: timestamp('analyzed_at', { withTimezone: true }).defaultNow(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

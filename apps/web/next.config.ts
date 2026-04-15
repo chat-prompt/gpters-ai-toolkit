@@ -5,7 +5,7 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 const nextConfig: NextConfig = {
   // Exclude server-only packages from client bundles
-  serverExternalPackages: ['@neondatabase/serverless', '@octokit/rest', 'jszip', 'drizzle-orm'],
+  serverExternalPackages: ['@neondatabase/serverless', '@octokit/rest', 'jszip', 'drizzle-orm', '@resvg/resvg-js'],
 
   // Image optimization
   images: {
