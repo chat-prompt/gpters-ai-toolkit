@@ -64,3 +64,11 @@ export {
   type SelectionResult,
   type Verdict,
 } from './evo-selector'
+export {
+  generateWeeklyReport,
+  TARGETS as WEEKLY_REPORT_TARGETS,
+  type WeeklyReportData,
+  type TargetMetric,
+  type ClientBreakdown,
+  type SessionFunnel,
+} from './weekly-report'

@@ -20,6 +20,7 @@
   "dependencies": {
     "@gpters/db": "workspace:*",
     "@gpters/lib": "workspace:*",
+    "@vercel/blob": "^2.3.3",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "jszip": "^3.10.1",
