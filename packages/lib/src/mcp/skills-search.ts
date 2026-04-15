@@ -19,6 +19,16 @@ const log = createLogger('skills-search')
 /** Minimum cosine similarity for MCP/CLI results */
 const MCP_CLI_MIN_SIMILARITY = 0.25
 
+/**
+ * Confidence threshold for skill results.
+ *
+ * Skills with a final score below this value are flagged with
+ * `lowConfidence: true` so downstream consumers (e.g. Rona exercise
+ * pipeline) can choose to ignore them. Results are NOT dropped from
+ * the response to keep the API contract stable.
+ */
+const SKILL_CONFIDENCE_THRESHOLD = 0.40
+
 /** Cached CLI tool version map for stale library detection */
 let cachedVersionMap: Map<string, string> | null = null
 
@@ -88,6 +98,12 @@ export interface SkillSearchResultItem {
   description: string
   type: 'skill' | 'agent' | 'command' | 'guide' | 'hook' | 'package'
   score: number
+  /**
+   * True when `score` is below {@link SKILL_CONFIDENCE_THRESHOLD}.
+   * Downstream consumers should treat low-confidence results as
+   * optional hints, not authoritative matches.
+   */
+  lowConfidence?: boolean
   staleWarning?: string
 }
 
@@ -116,6 +132,10 @@ export interface SkillSearchResponse {
     searchDurationMs: number
     totalSkillsSearched: number
     catalogVersion: string
+    /** Confidence threshold used to set {@link SkillSearchResultItem.lowConfidence} */
+    confidenceThreshold: number
+    /** Count of returned skills with score >= confidenceThreshold */
+    confidentSkillCount: number
   }
 }
 
@@ -173,30 +193,39 @@ export async function searchSkillsForExercise(
     ? `기술 스택: ${techStack.join(', ')}`
     : undefined
 
-  // Generate topic embedding once, reuse for MCP + CLI vector search
-  const topicEmbedding = await generateEmbedding(topic)
+  // Generate a single embedding for (topic + userContext) and reuse it for
+  // skill semantic search, MCP vector search, and CLI vector search. This
+  // eliminates the duplicate OpenAI embeddings.create call that previously
+  // dominated the P50 response time (~500ms per request).
+  const embeddingInput = userContext ? `${topic} ${userContext}` : topic
+  const queryEmbedding = await generateEmbedding(embeddingInput)
 
   // Parallel: skill search + MCP vector search + CLI vector search + version map
   const [skillResult, mcpResult, cliResult, versionMap] = await Promise.all([
-    searchSkills(topic, userContext, platform, effectiveLimit),
-    searchMcpServersByVector(topicEmbedding, level === 'beginner' ? 2 : 3),
-    searchCliToolsByVector(topicEmbedding, level),
+    searchSkills(topic, userContext, platform, effectiveLimit, queryEmbedding),
+    searchMcpServersByVector(queryEmbedding, level === 'beginner' ? 2 : 3),
+    searchCliToolsByVector(queryEmbedding, level),
     getCliToolVersionMap(),
   ])
 
   // Detect stale models and library versions in skill content
-  const skills: SkillSearchResultItem[] = skillResult.items.map(item => ({
-    id: item.id,
-    name: item.name,
-    description: item.description || '',
-    type: item.type,
-    score: Math.round(item.similarity * 1000) / 1000,
-    staleWarning: [
-      detectStaleModels(item.content),
-      detectStaleLibraryVersions(item.content, versionMap),
-    ].filter(Boolean).join(' | ') || undefined,
-  }))
+  const skills: SkillSearchResultItem[] = skillResult.items.map(item => {
+    const score = Math.round(item.similarity * 1000) / 1000
+    return {
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      type: item.type,
+      score,
+      lowConfidence: score < SKILL_CONFIDENCE_THRESHOLD ? true : undefined,
+      staleWarning: [
+        detectStaleModels(item.content),
+        detectStaleLibraryVersions(item.content, versionMap),
+      ].filter(Boolean).join(' | ') || undefined,
+    }
+  })
 
+  const confidentSkillCount = skills.filter(s => !s.lowConfidence).length
   const searchDurationMs = Date.now() - startTime
 
   log.info('Exercise skill search completed', {
@@ -205,6 +234,7 @@ export async function searchSkillsForExercise(
     level,
     platform,
     skillCount: skills.length,
+    confidentSkillCount,
     mcpCount: mcpResult.length,
     cliCount: cliResult.length,
     durationMs: searchDurationMs,
@@ -218,18 +248,23 @@ export async function searchSkillsForExercise(
       searchDurationMs,
       totalSkillsSearched: skillResult.total,
       catalogVersion: new Date().toISOString().slice(0, 10),
+      confidenceThreshold: SKILL_CONFIDENCE_THRESHOLD,
+      confidentSkillCount,
     },
   }
 }
 
 /**
  * Semantic search across published skills
+ *
+ * @param queryEmbedding - Pre-computed embedding to avoid duplicate OpenAI call
  */
 async function searchSkills(
   query: string,
   userContext: string | undefined,
   platform: string | undefined,
-  limit: number
+  limit: number,
+  queryEmbedding?: number[]
 ) {
   return semanticSearch({
     query,
@@ -238,6 +273,7 @@ async function searchSkills(
     minSimilarity: 0.15,
     userContext,
     clientType: platform,
+    queryEmbedding,
   })
 }
 

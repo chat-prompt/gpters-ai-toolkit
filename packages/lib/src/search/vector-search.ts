@@ -20,6 +20,15 @@ export interface SemanticSearchOptions {
   userContext?: string
   /** MCP 클라이언트 타입 (플랫폼 필터링용) */
   clientType?: string
+  /**
+   * Pre-computed embedding for the (query + userContext) combination.
+   * When provided, skips the internal `generateEmbedding` call and reuses
+   * this vector directly. Callers that need the same embedding for multiple
+   * downstream queries (e.g. exercise skill search fanning out to MCP and
+   * CLI vector search) should compute it once and pass it here to avoid
+   * duplicate OpenAI API calls.
+   */
+  queryEmbedding?: number[]
 }
 
 export interface SemanticSearchResult {
@@ -40,6 +49,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     orgId,
     userContext,
     clientType,
+    queryEmbedding: providedEmbedding,
   } = options
 
   const cleanedQuery = cleanQuery(query)
@@ -54,8 +64,8 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     : cleanedQuery
 
   const embeddingStart = Date.now()
-  const queryEmbedding = await generateEmbedding(embeddingText)
-  const embeddingMs = Date.now() - embeddingStart
+  const queryEmbedding = providedEmbedding ?? await generateEmbedding(embeddingText)
+  const embeddingMs = providedEmbedding ? 0 : Date.now() - embeddingStart
 
   const vectorSimilarity = sql<number>`1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)})`
 

@@ -140,7 +140,7 @@ async function main() {
     SELECT
       COUNT(*)::int AS total_logs,
       COUNT(DISTINCT t.user_id)::int AS unique_users,
-      COUNT(*) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search')::int AS search_count,
+      COUNT(*) FILTER (WHERE tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))::int AS search_count,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content')::int AS view_count,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content' AND referral_source = 'search')::int AS view_from_search,
       COUNT(*) FILTER (WHERE tool = 'deploy_skill')::int AS deploy_count,
@@ -159,10 +159,10 @@ async function main() {
       -- 응답시간: report_session_event 제외 (대량 이벤트로 메트릭 오염 방지)
       COUNT(*) FILTER (WHERE tool IS DISTINCT FROM 'report_session_event')::int AS effective_logs,
       ROUND(AVG(response_time) FILTER (WHERE tool IS DISTINCT FROM 'report_session_event'))::int AS avg_response_time,
-      ROUND(AVG(response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS avg_search_time,
-      ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p50_search_time,
-      ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search'))::int AS p95_search_time,
-      ROUND(AVG(response_time) FILTER (WHERE tool IS NOT NULL AND tool NOT IN ('search_plugins', 'semantic_search', 'report_session_event')))::int AS avg_other_time
+      ROUND(AVG(response_time) FILTER (WHERE tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search')))::int AS avg_search_time,
+      ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search')))::int AS p50_search_time,
+      ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) FILTER (WHERE tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search')))::int AS p95_search_time,
+      ROUND(AVG(response_time) FILTER (WHERE tool IS NOT NULL AND tool NOT IN ('search_plugins', 'semantic_search', 'exercise_skill_search', 'report_session_event')))::int AS avg_other_time
     FROM mcp_audit_logs l
     LEFT JOIN oauth_access_tokens t ON l.access_token_id = t.id
     WHERE l.created_at >= NOW() - make_interval(days => ${days})
@@ -205,7 +205,7 @@ async function main() {
     SELECT
       COALESCE(client_type, 'unknown') AS client,
       COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE tool = 'search_plugins' OR tool = 'semantic_search')::int AS searches,
+      COUNT(*) FILTER (WHERE tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))::int AS searches,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content')::int AS views,
       COUNT(*) FILTER (WHERE tool = 'get_plugin_content' AND referral_source = 'search')::int AS views_from_search,
       COUNT(*) FILTER (WHERE tool = 'deploy_skill')::int AS deploys,
@@ -248,7 +248,7 @@ async function main() {
       COUNT(*)::int AS cnt
     FROM mcp_audit_logs
     WHERE created_at >= NOW() - make_interval(days => ${days})
-      AND (tool = 'search_plugins' OR tool = 'semantic_search')
+      AND (tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))
       AND request_params->'params'->'arguments'->>'query' IS NOT NULL
     GROUP BY COALESCE(client_type, 'unknown'), request_params->'params'->'arguments'->>'query'
     ORDER BY client, cnt DESC
@@ -293,7 +293,7 @@ async function main() {
         END AS is_low_relevance
       FROM mcp_audit_logs
       WHERE created_at >= NOW() - make_interval(days => ${days})
-        AND (tool = 'search_plugins' OR tool = 'semantic_search')
+        AND (tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))
     ),
     sessions_with_view AS (
       SELECT DISTINCT session_id
@@ -339,7 +339,7 @@ async function main() {
         END AS top_score
       FROM mcp_audit_logs
       WHERE created_at >= NOW() - make_interval(days => ${days})
-        AND (tool = 'search_plugins' OR tool = 'semantic_search')
+        AND (tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))
         AND request_params->'params'->'arguments'->>'query' IS NOT NULL
     ),
     sessions_with_view AS (
@@ -398,7 +398,7 @@ async function main() {
       SELECT DISTINCT session_id
       FROM mcp_audit_logs
       WHERE created_at >= NOW() - make_interval(days => ${days})
-        AND (tool = 'search_plugins' OR tool = 'semantic_search')
+        AND (tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))
         AND session_id IS NOT NULL
     ),
     view_sessions AS (
@@ -1452,7 +1452,7 @@ async function main() {
       )::int AS zero_result
     FROM mcp_audit_logs
     WHERE created_at >= NOW() - make_interval(days => ${days})
-      AND (tool = 'search_plugins' OR tool = 'semantic_search')
+      AND (tool IN ('search_plugins', 'semantic_search', 'exercise_skill_search'))
       AND (
         referral_source = 'suggest'
         OR request_params->'params'->'arguments'->>'_source' = 'skill-suggest'

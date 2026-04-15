@@ -399,6 +399,59 @@ describe('searchSkillsForExercise', () => {
     expect(result.skills[0].staleWarning).toBeUndefined()
   })
 
+  it('should flag results below 0.40 as lowConfidence and exclude them from confidentSkillCount', async () => {
+    mockSemanticSearch.mockResolvedValue({
+      items: [
+        {
+          id: 'strong-match',
+          name: 'Strong Match',
+          description: 'Above threshold',
+          type: 'skill',
+          content: null,
+          similarity: 0.55,
+        },
+        {
+          id: 'weak-match',
+          name: 'Weak Match',
+          description: 'Below threshold',
+          type: 'skill',
+          content: null,
+          similarity: 0.32,
+        },
+      ],
+      total: 2,
+      searchTime: 50,
+    })
+
+    const result = await searchSkillsForExercise({ topic: 'Stripe 결제 연동' })
+
+    expect(result.skills).toHaveLength(2)
+    expect(result.skills[0].id).toBe('strong-match')
+    expect(result.skills[0].lowConfidence).toBeUndefined()
+    expect(result.skills[1].id).toBe('weak-match')
+    expect(result.skills[1].lowConfidence).toBe(true)
+
+    expect(result.meta.confidenceThreshold).toBe(0.40)
+    expect(result.meta.confidentSkillCount).toBe(1)
+  })
+
+  it('should flag score at exactly 0.39 as lowConfidence but allow 0.40 as confident', async () => {
+    mockSemanticSearch.mockResolvedValue({
+      items: [
+        { id: 'boundary-high', name: 'Boundary High', description: '', type: 'skill', content: null, similarity: 0.40 },
+        { id: 'boundary-low', name: 'Boundary Low', description: '', type: 'skill', content: null, similarity: 0.39 },
+      ],
+      total: 2,
+      searchTime: 50,
+    })
+
+    const result = await searchSkillsForExercise({ topic: 'test' })
+
+    expect(result.skills[0].lowConfidence).toBeUndefined()
+    expect(result.skills[1].lowConfidence).toBe(true)
+    expect(result.meta.confidentSkillCount).toBe(1)
+  })
+
   it('should gracefully handle version map DB query failure', async () => {
     // Make the version map DB query fail by throwing on the 3rd select chain
     // (1st = MCP servers, 2nd = CLI tools, 3rd = version map)
