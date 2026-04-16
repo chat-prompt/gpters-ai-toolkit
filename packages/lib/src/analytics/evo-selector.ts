@@ -2,6 +2,7 @@
  * EvoSkill Pareto selector
  *
  * Evaluates draft skills (evoGenerated=true) against funnel metrics
+ * derived from mcp_audit_logs (not skill_events, which has FK issues)
  * and automatically promotes or retires them:
  *
  * - Promote: 7+ days old, 10+ searches, STL≥15%, LTA≥10%
@@ -12,7 +13,6 @@
 import { db, catalogItems, evoRunLogs } from '@gpters/db'
 import { eq, and, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
-import { getSkillFunnelStats } from './skill-stats'
 
 const log = createLogger('evo-selector')
 
@@ -133,9 +133,68 @@ export async function evaluateEvoDrafts(): Promise<SelectionResult> {
       return result
     }
 
-    // Get funnel stats for all skills at once (cached)
-    const funnelStats = await getSkillFunnelStats({ period: '30d' })
-    const funnelMap = new Map(funnelStats.map((s) => [s.skillId, s]))
+    // Get funnel stats from mcp_audit_logs (search_results appearances + loads + outcomes)
+    const draftIds = drafts.map((d) => d.id)
+    const funnelRows = await db.execute<{
+      skill_id: string
+      searches: string
+      loads: string
+      applies: string
+    }>(sql`
+      WITH appearances AS (
+        SELECT
+          (jsonb_array_elements(search_results)->>'itemId') AS skill_id,
+          COUNT(*) AS cnt
+        FROM mcp_audit_logs
+        WHERE tool IN ('semantic_search', 'exercise_skill_search')
+          AND search_results IS NOT NULL
+          AND jsonb_typeof(search_results) = 'array'
+          AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ),
+      loads AS (
+        SELECT
+          COALESCE(
+            request_params->'params'->'arguments'->>'pluginId',
+            request_params->>'pluginId'
+          ) AS skill_id,
+          COUNT(*) AS cnt
+        FROM mcp_audit_logs
+        WHERE tool = 'get_plugin_content'
+          AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ),
+      outcomes AS (
+        SELECT
+          COALESCE(
+            request_params->'params'->'arguments'->>'skillId',
+            request_params->>'skillId'
+          ) AS skill_id,
+          COUNT(*) AS cnt
+        FROM mcp_audit_logs
+        WHERE tool = 'report_skill_outcome'
+          AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      )
+      SELECT
+        a.skill_id,
+        a.cnt::text AS searches,
+        COALESCE(l.cnt, 0)::text AS loads,
+        COALESCE(o.cnt, 0)::text AS applies
+      FROM appearances a
+      LEFT JOIN loads l ON a.skill_id = l.skill_id
+      LEFT JOIN outcomes o ON a.skill_id = o.skill_id
+      WHERE a.skill_id = ANY(${draftIds})
+    `)
+
+    const funnelMap = new Map<string, { searches: number; loads: number; applies: number }>()
+    for (const row of funnelRows.rows) {
+      funnelMap.set(row.skill_id, {
+        searches: parseInt(row.searches, 10) || 0,
+        loads: parseInt(row.loads, 10) || 0,
+        applies: parseInt(row.applies, 10) || 0,
+      })
+    }
 
     for (const draft of drafts) {
       const ageDays = Math.floor(
@@ -143,8 +202,8 @@ export async function evaluateEvoDrafts(): Promise<SelectionResult> {
       )
       const funnel = funnelMap.get(draft.id)
       const searches = funnel?.searches ?? 0
-      const stlRate = funnel?.searchToLoadRate ?? 0
-      const ltaRate = funnel?.loadToApplyRate ?? 0
+      const stlRate = searches > 0 ? (funnel?.loads ?? 0) / searches : 0
+      const ltaRate = (funnel?.loads ?? 0) > 0 ? (funnel?.applies ?? 0) / (funnel?.loads ?? 1) : 0
 
       const { verdict, reason } = judge(ageDays, searches, stlRate, ltaRate)
 
