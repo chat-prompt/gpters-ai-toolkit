@@ -85,16 +85,16 @@ Rules:
     })
 
     const text = response.text?.trim()
-    if (!text) return null
+    if (!text) throw new Error('Gemini returned empty response')
 
     // Extract JSON from possible markdown code blocks
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
+    if (!jsonMatch) throw new Error(`No JSON in Gemini response: ${text.slice(0, 200)}`)
 
     return JSON.parse(jsonMatch[0])
   } catch (err) {
     log.warn('Failed to generate skill draft', { error: (err as Error).message })
-    return null
+    throw err
   }
 }
 
@@ -140,15 +140,15 @@ Focus on:
     })
 
     const text = response.text?.trim()
-    if (!text) return null
+    if (!text) throw new Error('Gemini returned empty response')
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
+    if (!jsonMatch) throw new Error(`No JSON in Gemini response: ${text.slice(0, 200)}`)
 
     return JSON.parse(jsonMatch[0])
   } catch (err) {
     log.warn('Failed to generate improvement suggestion', { error: (err as Error).message })
-    return null
+    throw err
   }
 }
 
