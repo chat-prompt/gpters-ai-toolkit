@@ -1,19 +1,23 @@
 /**
  * EvoSkill failure pattern analyzer
  *
- * Detects three types of failure signals from skill_events:
- * 1. zero_result_cluster — same query fails 3+ times with no results
- * 2. low_conversion — skill has STL<10% or LTA<5% with 30+ searches
- * 3. repeated_skip — skill skipped 5+ times
+ * Detects failure signals from mcp_audit_logs (not skill_events, which has
+ * a session_id FK to mcp_sessions that silently drops rows for service-token
+ * or session-less callers). mcp_audit_logs captures every MCP request with
+ * tool name, request_params and search_results, giving a complete picture.
+ *
+ * Detectors:
+ * 1. zero_result_cluster — same query reported via `report_search_skip` 2+ times
+ * 2. low_conversion — skill appears in search results 30+ times but get_plugin_content
+ *    load ratio is below 10%
+ * 3. repeated_skip — disabled (overlaps with low_conversion on the new data source)
  *
  * Results are upserted into evo_failure_patterns for downstream processing.
  */
 
 import { db, evoFailurePatterns, evoRunLogs } from '@gpters/db'
-import { sql, eq, and } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
-import { ZERO_RESULT_SKILL_ID } from './skill-events'
-import { getSkillFunnelStats } from './skill-stats'
 
 const log = createLogger('evo-analyzer')
 
@@ -27,9 +31,9 @@ function envInt(key: string, fallback: number): number {
 }
 
 const ANALYSIS_PERIOD_DAYS = envInt('EVOSKILL_ANALYSIS_PERIOD_DAYS', 14)
-const ZERO_RESULT_MIN_COUNT = envInt('EVOSKILL_ZERO_RESULT_MIN_COUNT', 3)
+const ZERO_RESULT_MIN_COUNT = envInt('EVOSKILL_ZERO_RESULT_MIN_COUNT', 2)
 const LOW_CONV_MIN_SEARCHES = envInt('EVOSKILL_LOW_CONV_MIN_SEARCHES', 30)
-const SKIP_MIN_COUNT = envInt('EVOSKILL_SKIP_MIN_COUNT', 5)
+const LOW_CONV_LOAD_RATE_THRESHOLD = 0.1
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,10 +56,11 @@ export interface AnalysisResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Detect zero-result query clusters.
+ * Detect zero-result query clusters from explicit `report_search_skip` calls.
  *
- * Groups zero-result search events by query, keeping only those
- * that appear >= ZERO_RESULT_MIN_COUNT times in the analysis period.
+ * Users (and their Claude Code clients) call the `report_search_skip` MCP tool
+ * whenever they give up on a search — typically because no returned skill was
+ * relevant. Group those queries and keep clusters of >= ZERO_RESULT_MIN_COUNT.
  */
 export async function detectZeroResultClusters(): Promise<FailurePattern[]> {
   const rows = await db.execute<{
@@ -65,16 +70,15 @@ export async function detectZeroResultClusters(): Promise<FailurePattern[]> {
     last_seen: string
   }>(sql`
     SELECT
-      query,
+      LOWER(TRIM(request_params->'params'->'arguments'->>'query')) AS query,
       COUNT(*)::text AS count,
       MIN(created_at)::text AS first_seen,
       MAX(created_at)::text AS last_seen
-    FROM skill_events
-    WHERE skill_id = ${ZERO_RESULT_SKILL_ID}
-      AND action = 'search'
-      AND query IS NOT NULL
+    FROM mcp_audit_logs
+    WHERE tool = 'report_search_skip'
+      AND request_params->'params'->'arguments'->>'query' IS NOT NULL
       AND created_at >= NOW() - make_interval(days => ${ANALYSIS_PERIOD_DAYS})
-    GROUP BY query
+    GROUP BY 1
     HAVING COUNT(*) >= ${ZERO_RESULT_MIN_COUNT}
     ORDER BY COUNT(*) DESC
     LIMIT 50
@@ -96,79 +100,89 @@ export async function detectZeroResultClusters(): Promise<FailurePattern[]> {
 }
 
 /**
- * Detect skills with low funnel conversion.
+ * Detect skills with low search-to-load conversion.
  *
- * Uses getSkillFunnelStats to find skills where:
- * - searches >= LOW_CONV_MIN_SEARCHES AND
- * - (searchToLoadRate < 10% OR loadToApplyRate < 5%)
+ * Counts how often each skill appears in `semantic_search` / `exercise_skill_search`
+ * result sets (search_results jsonb) and compares it to the number of times the
+ * same skillId was actually opened via `get_plugin_content`. Skills that show up
+ * in search >= LOW_CONV_MIN_SEARCHES times but get opened < LOW_CONV_LOAD_RATE_THRESHOLD
+ * are flagged.
  */
 export async function detectLowConversion(): Promise<FailurePattern[]> {
-  const stats = await getSkillFunnelStats({ period: '30d' })
+  const rows = await db.execute<{
+    skill_id: string
+    searches: string
+    loads: string
+    load_rate: string
+  }>(sql`
+    WITH appearances AS (
+      SELECT
+        (jsonb_array_elements(search_results)->>'itemId') AS skill_id,
+        COUNT(*) AS search_count
+      FROM mcp_audit_logs
+      WHERE tool IN ('semantic_search', 'exercise_skill_search')
+        AND search_results IS NOT NULL
+        AND jsonb_typeof(search_results) = 'array'
+        AND created_at >= NOW() - make_interval(days => ${ANALYSIS_PERIOD_DAYS})
+      GROUP BY 1
+    ),
+    loads AS (
+      SELECT
+        COALESCE(
+          request_params->'params'->'arguments'->>'pluginId',
+          request_params->>'pluginId'
+        ) AS skill_id,
+        COUNT(*) AS load_count
+      FROM mcp_audit_logs
+      WHERE tool = 'get_plugin_content'
+        AND created_at >= NOW() - make_interval(days => ${ANALYSIS_PERIOD_DAYS})
+      GROUP BY 1
+    )
+    SELECT
+      a.skill_id,
+      a.search_count::text AS searches,
+      COALESCE(l.load_count, 0)::text AS loads,
+      ROUND(
+        (COALESCE(l.load_count, 0)::numeric / NULLIF(a.search_count, 0)) * 100,
+        2
+      )::text AS load_rate
+    FROM appearances a
+    LEFT JOIN loads l ON a.skill_id = l.skill_id
+    WHERE a.skill_id IS NOT NULL
+      AND a.search_count >= ${LOW_CONV_MIN_SEARCHES}
+      AND (COALESCE(l.load_count, 0)::float / a.search_count) < ${LOW_CONV_LOAD_RATE_THRESHOLD}
+    ORDER BY a.search_count DESC
+    LIMIT 50
+  `)
 
-  return stats
-    .filter((s) => {
-      if (s.searches < LOW_CONV_MIN_SEARCHES) return false
-      if (s.skillId === ZERO_RESULT_SKILL_ID) return false
-      return s.searchToLoadRate < 0.10 || s.loadToApplyRate < 0.05
-    })
-    .map((s) => {
-      const isVeryLow = s.searchToLoadRate < 0.05 && s.searches >= 50
-      return {
-        patternType: 'low_conversion' as const,
-        signalData: {
-          skillId: s.skillId,
-          searches: s.searches,
-          loads: s.loads,
-          applies: s.applies,
-          searchToLoadRate: Math.round(s.searchToLoadRate * 100),
-          loadToApplyRate: Math.round(s.loadToApplyRate * 100),
-        },
-        severity: isVeryLow ? 'high' : s.searchToLoadRate < 0.10 ? 'medium' : 'low',
-      }
-    })
+  return rows.rows.map((row) => {
+    const searches = parseInt(row.searches, 10)
+    const loads = parseInt(row.loads, 10)
+    const loadRatePct = parseFloat(row.load_rate)
+    const isVeryLow = loadRatePct < 5 && searches >= 50
+    return {
+      patternType: 'low_conversion' as const,
+      signalData: {
+        skillId: row.skill_id,
+        searches,
+        loads,
+        searchToLoadRate: loadRatePct,
+      },
+      severity: isVeryLow ? 'high' : loadRatePct < 5 ? 'medium' : 'low',
+    }
+  })
 }
 
 /**
  * Detect repeatedly skipped skills.
  *
- * Groups skip events by skill_id, keeping those with >= SKIP_MIN_COUNT.
+ * Disabled: with the mcp_audit_logs data source there is no reliable
+ * per-skill skip signal — `report_search_skip` is a per-query signal
+ * (handled by {@link detectZeroResultClusters}) and the low-conversion
+ * detector already covers "users kept ignoring this skill".
  */
 export async function detectRepeatedSkips(): Promise<FailurePattern[]> {
-  const rows = await db.execute<{
-    skill_id: string
-    skip_count: string
-    unique_sessions: string
-    sample_contexts: string
-  }>(sql`
-    SELECT
-      skill_id,
-      COUNT(*)::text AS skip_count,
-      COUNT(DISTINCT session_id)::text AS unique_sessions,
-      (ARRAY_AGG(DISTINCT context) FILTER (WHERE context IS NOT NULL))[1:3]::text AS sample_contexts
-    FROM skill_events
-    WHERE action = 'skip'
-      AND skill_id != ${ZERO_RESULT_SKILL_ID}
-      AND created_at >= NOW() - make_interval(days => ${ANALYSIS_PERIOD_DAYS})
-    GROUP BY skill_id
-    HAVING COUNT(*) >= ${SKIP_MIN_COUNT}
-    ORDER BY COUNT(*) DESC
-    LIMIT 50
-  `)
-
-  return rows.rows.map((row) => {
-    const skipCount = parseInt(row.skip_count, 10)
-    const uniqueSessions = parseInt(row.unique_sessions, 10)
-    return {
-      patternType: 'repeated_skip' as const,
-      signalData: {
-        skillId: row.skill_id,
-        skipCount,
-        uniqueSessions,
-        sampleContexts: row.sample_contexts,
-      },
-      severity: skipCount >= 15 ? 'high' : skipCount >= 8 ? 'medium' : 'low',
-    }
-  })
+  return []
 }
 
 // ---------------------------------------------------------------------------
