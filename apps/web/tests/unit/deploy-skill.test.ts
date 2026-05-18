@@ -159,9 +159,9 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('lets a non-author org member update an existing skill', async () => {
-    // Existing skill owned by 'original-author'
+    // Existing skill owned by 'original-author' in org-1
     const mockSelectChain = createMockChain([
-      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null },
+      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-1' },
     ])
     const mockUpdateChain = {
       set: vi.fn().mockReturnThis(),
@@ -171,7 +171,7 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
     vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
     vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
 
-    // 'collaborator-id' is NOT the authorId
+    // 'collaborator-id' is NOT the authorId, but is in the same org
     const result = await deploySkill(
       {
         id: 'sample-skill',
@@ -192,7 +192,7 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
 
   it('still blocks unauthenticated updates (no authorId)', async () => {
     const mockSelectChain = createMockChain([
-      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null },
+      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-1' },
     ])
     vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
 
@@ -211,5 +211,29 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('인증이 필요합니다')
+  })
+
+  it('blocks cross-org updates', async () => {
+    // Existing skill belongs to org-A
+    const mockSelectChain = createMockChain([
+      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-A' },
+    ])
+    vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+    // Caller is from org-B (not super_admin)
+    const result = await deploySkill(
+      {
+        id: 'sample-skill',
+        type: 'skill',
+        name: 'Sample',
+        content: 'new content',
+      },
+      'other-org-user',
+      'editor',
+      'org-B'
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('다른 조직')
   })
 })

@@ -8,7 +8,7 @@ import { createLogger } from '../core/logger'
 import { db, catalogItems, users, suggestions } from '@gpters/db'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { checkMetadataQuality } from '../plugin/skill-validator'
-import { isSuperAdmin } from '../security/rbac'
+import { isSuperAdmin, type UserRole } from '../security/rbac'
 import { notifySlackDeploy } from '../notifications/slack'
 
 const log = createLogger('mcp-handler')
@@ -658,6 +658,7 @@ export async function deploySkill(
       version: catalogItems.version,
       authorId: catalogItems.authorId,
       files: catalogItems.files,
+      orgId: catalogItems.orgId,
     })
     .from(catalogItems)
     .where(eq(catalogItems.id, id))
@@ -699,6 +700,21 @@ export async function deploySkill(
         status: 'published',
         webUrl: '',
           error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
+      }
+    }
+
+    // Cross-org guard: only members of the owning org (or super_admin) may update.
+    // Mirrors the REST PUT guard in apps/web/app/api/catalog/[id]/route.ts.
+    const isSuperAdminUser = userRole && isSuperAdmin(userRole as UserRole)
+    if (!isSuperAdminUser && existingItem.orgId && existingItem.orgId !== orgId) {
+      return {
+        success: false,
+        id,
+        version: existingItem.version || '1.0.0',
+        changelog: '',
+        status: 'published',
+        webUrl: '',
+        error: '다른 조직의 스킬은 수정할 수 없습니다.',
       }
     }
   }
