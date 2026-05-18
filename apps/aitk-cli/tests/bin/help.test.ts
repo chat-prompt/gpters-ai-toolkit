@@ -10,8 +10,8 @@ describe('aitk bin — suggest removal (EDU-7987 D2)', () => {
     expect(binSrc).not.toMatch(/runResolve\b/)
   })
   it('has no help text for suggest commands', () => {
-    expect(binSrc).not.toMatch(/aitk suggest -/)
-    expect(binSrc).not.toMatch(/aitk suggestions -/)
-    expect(binSrc).not.toMatch(/aitk resolve -/)
+    expect(binSrc).not.toMatch(/\baitk suggest\b/)
+    expect(binSrc).not.toMatch(/\baitk suggestions\b/)
+    expect(binSrc).not.toMatch(/\baitk resolve\b/)
   })
 })

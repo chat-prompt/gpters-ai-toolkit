@@ -295,6 +295,12 @@ async function main(): Promise<void> {
     }
   }
 
+  // Targeted error for commands removed in v0.5.0 (EDU-7987)
+  const REMOVED_COMMANDS = new Set(['suggest', 'suggestions', 'resolve'])
+  if (REMOVED_COMMANDS.has(command)) {
+    error(`Command "${command}" was removed in v0.5.0. The suggest feature was retired (EDU-7987). Edit skills directly via "aitk deploy" or the web UI.`, 1)
+  }
+
   switch (command) {
     case 'search': {
       const query = positional[0] ?? flags['query']
