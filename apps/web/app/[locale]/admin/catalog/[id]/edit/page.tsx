@@ -159,6 +159,10 @@ export default function EditCatalogItem({ params }: EditPageProps) {
       })
 
       if (res.ok) {
+        // Reset dirty tracking so a follow-up edit (without leaving the page)
+        // starts from a clean baseline and the changelog gate re-arms.
+        setInitialContent(formData.content)
+        setFormData((prev) => ({ ...prev, changelog: '' }))
         // Redirect to returnUrl if provided, otherwise go to admin catalog
         router.push(returnUrl || '/admin/catalog')
       } else {
@@ -455,13 +459,14 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+            <label htmlFor="changelog" className="block text-sm text-[var(--text-secondary)] mb-2">
               변경 사유 (changelog)
               {isContentDirty && (
                 <span className="text-red-500 ml-1">*</span>
               )}
             </label>
             <textarea
+              id="changelog"
               value={formData.changelog}
               onChange={(e) => setFormData({ ...formData, changelog: e.target.value })}
               placeholder="이번 변경의 핵심을 한 줄 이상 적어주세요"
