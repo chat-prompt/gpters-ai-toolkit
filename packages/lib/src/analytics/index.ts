@@ -26,7 +26,6 @@ export {
   recordAutoSkipEvents,
   recordSearchSkipEvent,
   recordDeployEvent,
-  recordSuggestEvent,
   recordExerciseSearchEvents,
   recordExerciseApplyEvent,
 } from './skill-events'

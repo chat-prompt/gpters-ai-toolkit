@@ -3,10 +3,11 @@
  *
  * Processes pending failure patterns using Gemini Flash to:
  * - zero_result_cluster → generate new skill draft
- * - low_conversion → suggest improvements to existing skill
- * - repeated_skip → suggest description/tag improvements
+ * - low_conversion → no-op (EDU-7987: suggest removed; patterns are skipped)
+ * - repeated_skip → no-op (EDU-7987: suggest removed; patterns are skipped)
  *
  * Max 10 patterns per run, input capped at 2000 chars.
+ * TODO: clean up low_conversion/repeated_skip pattern detector upstream.
  */
 
 import { db, evoFailurePatterns, evoRunLogs, catalogItems } from '@gpters/db'
@@ -134,22 +135,6 @@ async function processZeroResultCluster(
   return { patternId: pattern.id, action: 'skill_created', itemId: result.id }
 }
 
-async function processLowConversion(
-  _client: GoogleGenAI,
-  pattern: { id: string; signalData: Record<string, unknown> }
-): Promise<GenerationResult> {
-  // Suggest feature removed (EDU-7987 D2) — low_conversion patterns are skipped
-  return { patternId: pattern.id, action: 'skipped', error: 'suggest feature removed' }
-}
-
-async function processRepeatedSkip(
-  _client: GoogleGenAI,
-  pattern: { id: string; signalData: Record<string, unknown> }
-): Promise<GenerationResult> {
-  // Suggest feature removed (EDU-7987 D2) — repeated_skip patterns are skipped
-  return { patternId: pattern.id, action: 'skipped', error: 'suggest feature removed' }
-}
-
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -197,6 +182,25 @@ export async function generateFromPatterns(): Promise<GenerateResult> {
     }
 
     for (const pattern of patterns) {
+      // EDU-7987 D2: suggest feature removed. low_conversion and repeated_skip
+      // patterns have no runnable processor — mark as failed immediately to
+      // preserve audit trail without burning retry budget on every cron tick.
+      if (pattern.patternType === 'low_conversion' || pattern.patternType === 'repeated_skip') {
+        await db.update(evoFailurePatterns)
+          .set({
+            status: 'failed',
+            lastError: 'suggest feature removed (EDU-7987 D2)',
+          })
+          .where(eq(evoFailurePatterns.id, pattern.id))
+        result.skipped++
+        result.processed++
+        log.info('Pattern type deprecated — marked failed', {
+          patternId: pattern.id,
+          patternType: pattern.patternType,
+        })
+        continue
+      }
+
       // Mark as processing
       await db.update(evoFailurePatterns)
         .set({ status: 'processing' })
@@ -210,12 +214,6 @@ export async function generateFromPatterns(): Promise<GenerateResult> {
         switch (pattern.patternType) {
           case 'zero_result_cluster':
             genResult = await processZeroResultCluster(client, { id: pattern.id, signalData })
-            break
-          case 'low_conversion':
-            genResult = await processLowConversion(client, { id: pattern.id, signalData })
-            break
-          case 'repeated_skip':
-            genResult = await processRepeatedSkip(client, { id: pattern.id, signalData })
             break
           default:
             genResult = { patternId: pattern.id, action: 'skipped', error: `Unknown type: ${pattern.patternType}` }
