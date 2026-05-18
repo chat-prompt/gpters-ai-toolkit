@@ -144,6 +144,7 @@ vi.mock('../../../../packages/lib/src/utils', () => ({
 const db = mockDb
 
 import { deploySkill } from '@/lib/mcp/handlers'
+import { determineVersion } from '../../../../packages/lib/src/versioning/version'
 
 /** Helper: create a fluent mock chain that resolves with the given rows */
 function createMockChain(result: unknown[] = []) {
@@ -235,5 +236,87 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('다른 조직')
+  })
+})
+
+describe('deploySkill — changelog enforcement (EDU-7987 D3)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('rejects update without changelog', async () => {
+    const mockSelectChain = createMockChain([
+      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-1' },
+    ])
+    vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+    const result = await deploySkill(
+      {
+        id: 'sample-skill',
+        type: 'skill',
+        name: 'Sample',
+        content: 'new content',
+        // no changelog
+      },
+      'collaborator-id',
+      'editor',
+      'org-1'
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('changelog')
+  })
+
+  it('rejects update with whitespace-only changelog', async () => {
+    const mockSelectChain = createMockChain([
+      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-1' },
+    ])
+    vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+    const result = await deploySkill(
+      {
+        id: 'sample-skill',
+        type: 'skill',
+        name: 'Sample',
+        content: 'new content',
+        changelog: '   ',
+      },
+      'collaborator-id',
+      'editor',
+      'org-1'
+    )
+    expect(result.success).toBe(false)
+  })
+
+  it('auto-fills "Initial release" for new deployments', async () => {
+    // Override mock: existing returns [] (brand new skill)
+    const mockSelectChain = createMockChain([])
+    vi.mocked(db.select).mockReturnValueOnce(mockSelectChain as never)
+
+    const mockInsertChain = {
+      values: vi.fn().mockResolvedValue(undefined),
+    }
+    vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+    // Override determineVersion to reflect the auto-filled "Initial release" changelog
+    vi.mocked(determineVersion).mockReturnValueOnce({
+      version: '1.0.0',
+      type: 'none',
+      changelog: 'Initial release',
+    })
+
+    const result = await deploySkill(
+      {
+        id: 'brand-new',
+        type: 'skill',
+        name: 'New Skill',
+        content: 'hello',
+        description: 'desc',
+        tags: ['x'],
+        // no changelog
+      },
+      'collaborator-id',
+      'editor',
+      'org-1'
+    )
+    expect(result.success).toBe(true)
+    expect(result.changelog).toBe('Initial release')
   })
 })

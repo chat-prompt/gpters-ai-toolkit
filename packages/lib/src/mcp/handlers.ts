@@ -736,6 +736,24 @@ export async function deploySkill(
     }
   }
 
+  // Enforce changelog: required on updates, auto-fill on new deployments
+  let effectiveChangelog = explicitChangelog?.trim() ?? ''
+  if (isUpdate) {
+    if (!effectiveChangelog) {
+      return {
+        success: false,
+        id,
+        version: existingItem!.version || '1.0.0',
+        changelog: '',
+        status: 'published',
+        webUrl: '',
+        error: '업데이트 시 changelog는 필수입니다. 이번 변경 사유를 한 줄 이상 적어주세요.',
+      }
+    }
+  } else if (!effectiveChangelog) {
+    effectiveChangelog = 'Initial release'
+  }
+
   // Run non-blocking metadata quality check
   const qualityWarnings = checkMetadataQuality({
     description,
@@ -747,7 +765,7 @@ export async function deploySkill(
   const versionInfo = determineVersion(
     existingItem ? { content: existingItem.content, version: existingItem.version || '1.0.0' } : null,
     resolvedContent!,
-    explicitChangelog
+    effectiveChangelog
   )
 
   const now = new Date()

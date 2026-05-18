@@ -537,6 +537,7 @@ describe('MCP Handlers', () => {
         name: 'Existing Skill',
         id: 'existing-skill',
         content: '# Updated Content',
+        changelog: '기존 스킬 업데이트',
       }, 'user-1')
 
       expect(result.success).toBe(true)
@@ -593,6 +594,7 @@ describe('MCP Handlers', () => {
         name: 'My Skill',
         id: 'my-skill',
         content: '# Updated content',
+        changelog: '콘텐츠 업데이트',
       }, 'user-1')
 
       expect(result.success).toBe(true)
