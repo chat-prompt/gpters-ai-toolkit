@@ -318,5 +318,6 @@ describe('deploySkill — changelog enforcement (EDU-7987 D3)', () => {
     )
     expect(result.success).toBe(true)
     expect(result.changelog).toBe('Initial release')
+    expect(determineVersion).toHaveBeenCalledWith(null, expect.anything(), 'Initial release')
   })
 })
