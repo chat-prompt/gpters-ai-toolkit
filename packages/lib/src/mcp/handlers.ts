@@ -688,7 +688,7 @@ export async function deploySkill(
     }
   }
 
-  // Check ownership for updates - only author or admin can update
+  // Authentication is required for updates; any org member may update
   if (isUpdate && existingItem) {
     if (!authorId) {
       return {
@@ -699,19 +699,6 @@ export async function deploySkill(
         status: 'published',
         webUrl: '',
           error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
-      }
-    }
-
-    const hasAdminRole = userRole === 'admin'
-    if (existingItem.authorId !== authorId && !hasAdminRole) {
-      return {
-        success: false,
-        id,
-        version: existingItem.version || '1.0.0',
-        changelog: '',
-        status: 'published',
-        webUrl: '',
-          error: `본인이 배포한 플러그인만 업데이트할 수 있습니다. '${name}'의 소유자가 아닙니다.`,
       }
     }
   }
