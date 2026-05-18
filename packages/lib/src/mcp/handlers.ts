@@ -44,7 +44,7 @@ import type {
 } from './types'
 import type { ItemType, CatalogItem } from '../core/types'
 import { determineVersion, generateIdFromName, hasUpdate, incrementVersion } from '../versioning/version'
-import { createVersionSnapshot } from '../versioning/skill-version'
+import { analyzeChanges, createVersionSnapshot } from '../versioning/skill-version'
 import { getBaseUrl } from '../utils'
 import { generateEmbedding, prepareTextForEmbedding } from '../search/embedding'
 import { semanticSearch as semanticSearchImpl } from '../search/vector-search'
@@ -729,10 +729,14 @@ export async function deploySkill(
     }
   }
 
-  // Enforce changelog: required on updates, auto-fill on new deployments
+  // Enforce changelog: required on content-changing updates, auto-fill on new deployments.
+  // Metadata-only updates (tags/description/etc) are exempt to match REST PUT behavior.
   let effectiveChangelog = explicitChangelog?.trim() ?? ''
   if (isUpdate) {
-    if (!effectiveChangelog) {
+    const hasContentChange =
+      resolvedContent !== undefined &&
+      analyzeChanges(existingItem!.content, resolvedContent).hasChanges
+    if (hasContentChange && !effectiveChangelog) {
       return {
         success: false,
         id,

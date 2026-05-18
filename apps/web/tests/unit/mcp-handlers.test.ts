@@ -125,6 +125,12 @@ vi.mock('../../../../packages/lib/src/versioning/version', () => ({
 
 vi.mock('../../../../packages/lib/src/versioning/skill-version', () => ({
   createVersionSnapshot: vi.fn().mockResolvedValue(undefined),
+  analyzeChanges: vi.fn().mockReturnValue({
+    hasChanges: true,
+    breaking: false,
+    newFeatures: false,
+    summary: 'content changed',
+  }),
 }))
 
 vi.mock('../../../../packages/lib/src/search/embedding', () => ({
