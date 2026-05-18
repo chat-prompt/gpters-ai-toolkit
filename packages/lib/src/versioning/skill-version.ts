@@ -12,6 +12,7 @@ import {
   analyzeChanges,
 } from './version'
 
+/** Re-exported from ./version for downstream callers that gate on hasChanges (e.g. catalog PUT handler). */
 export { analyzeChanges }
 
 // ============================================
@@ -281,6 +282,7 @@ export async function compareWithPreviousVersion(
  *
  * @param item - Updated catalog item record
  * @param previousContent - Content before the update (for change analysis)
+ * @param options - Versioning metadata (required)
  * @param options.changelog - Required human-written summary of the change (no auto-fallback)
  * @param options.createdBy - User ID of the editor
  * @returns The newly created version row, or null when content has no significant change
