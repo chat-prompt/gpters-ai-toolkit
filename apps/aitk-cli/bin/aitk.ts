@@ -151,6 +151,7 @@ Options:
   --tags <t1,t2>          Comma-separated tags
   --platforms <p1,p2>     Comma-separated platforms (claude_code,opencode,codex,cursor)
   --visibility <v>        Scope: public (all users) or private (same org only)
+  --changelog <text>      Required when updating an existing skill (change summary)
 
 Examples:
   aitk deploy --id my-skill --type skill --name "My Skill" --content @skill.md
@@ -380,6 +381,7 @@ async function main(): Promise<void> {
         tags: flags['tags'],
         platforms: flags['platforms'],
         visibility: flags['visibility'],
+        changelog: flags['changelog'],
       })
       break
     }
