@@ -2,7 +2,8 @@
  * Skill Version Management Tests
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, expectTypeOf } from 'vitest'
+import type { createVersionOnUpdate } from '@/lib/versioning/skill-version'
 
 // Mock the database
 vi.mock('@/lib/db', () => ({
@@ -347,5 +348,14 @@ describe('Version Diff', () => {
 
     expect(linesAdded).toBe(2) // line4, line5
     expect(linesRemoved).toBe(1) // line3
+  })
+})
+
+describe('createVersionOnUpdate signature', () => {
+  it('requires changelog in options', () => {
+    type Options = Parameters<typeof createVersionOnUpdate>[2]
+    expectTypeOf<Options>().toHaveProperty('changelog')
+    // changelog must be a required string (not optional)
+    expectTypeOf<Options['changelog']>().toEqualTypeOf<string>()
   })
 })

@@ -219,31 +219,6 @@ export async function recordDeployEvent(params: {
 }
 
 /**
- * Record a suggest event for a skill
- *
- * @param params - Suggest event parameters
- * @param params.sessionId - MCP session ID
- * @param params.userId - Authenticated user ID (optional)
- * @param params.skillId - ID of the skill that received a suggestion
- */
-export async function recordSuggestEvent(params: {
-  sessionId: string
-  userId?: string
-  skillId: string
-}): Promise<void> {
-  try {
-    await db.insert(skillEvents).values({
-      sessionId: params.sessionId,
-      userId: params.userId,
-      skillId: params.skillId,
-      action: 'suggest',
-    })
-  } catch (error) {
-    log.warn('Failed to record suggest event', { error, sessionId: params.sessionId })
-  }
-}
-
-/**
  * Record exercise search events when Rona searches for skills during exercise generation.
  *
  * Similar to {@link recordSearchEvents}, but uses the `exercise_search` action

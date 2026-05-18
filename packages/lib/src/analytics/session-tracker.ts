@@ -65,8 +65,6 @@ export function mapToolToAction(tool?: string): SessionAction {
       return 'view'
     case 'deploy_skill':
       return 'deploy'
-    case 'suggest_improvement':
-      return 'suggest'
     default:
       return 'other'
   }
@@ -93,8 +91,6 @@ export function extractSkillId(body: unknown, tool?: string): string | undefined
       return args.pluginId as string | undefined
     case 'deploy_skill':
       return (args.id as string | undefined) || (args.name as string | undefined)
-    case 'suggest_improvement':
-      return args.pluginId as string | undefined
     default:
       return undefined
   }

@@ -14,7 +14,7 @@ import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { Permissions, isSuperAdmin, type UserRole } from '@/lib/security/rbac'
 import { cachedJsonResponse, addSurrogateKey } from '@/lib/utils/api-cache'
-import { createVersionOnUpdate } from '@/lib/versioning/skill-version'
+import { analyzeChanges, createVersionOnUpdate } from '@/lib/versioning/skill-version'
 import { auth } from '@/lib/core/auth'
 
 const log = createLogger('api:catalog')
@@ -135,6 +135,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.hookTimeout !== undefined) updateData.hookTimeout = body.hookTimeout
     if (body.hookBlocking !== undefined) updateData.hookBlocking = body.hookBlocking
 
+    // Enforce changelog when content has meaningful changes
+    const hasContentChange = body.content !== undefined &&
+      analyzeChanges(existing.content, body.content).hasChanges
+
+    if (hasContentChange) {
+      const changelog = (body.changelog ?? '').trim()
+      if (!changelog) {
+        return ApiErrors.badRequest('업데이트 시 changelog는 필수입니다. 이번 변경 사유를 한 줄 이상 적어주세요.')
+      }
+    }
+
     // Check if content changed for version history
     const contentChanged = body.content !== undefined && body.content !== existing.content
     const previousContent = existing.content
@@ -147,7 +158,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (contentChanged && updated) {
       try {
         await createVersionOnUpdate(updated, previousContent, {
-          changelog: body.changelog,
+          changelog: (body.changelog ?? '').trim(),
           createdBy: currentUser?.id,
         })
         log.info('Created version history entry', { itemId: id })

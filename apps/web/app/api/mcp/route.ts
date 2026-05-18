@@ -66,7 +66,6 @@ import {
   recordAutoSkipEvents,
   recordSearchSkipEvent,
   recordDeployEvent,
-  recordSuggestEvent,
   finalizeSession,
 } from '@/lib/analytics'
 import {
@@ -700,16 +699,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        if (tool === 'suggest_improvement') {
-          const skillId = extractSkillId(body, tool)
-          if (skillId) {
-            await recordSuggestEvent({
-              sessionId: sid,
-              userId: auth?.userId,
-              skillId,
-            }).catch(() => {})
-          }
-        }
       }
     })
   }

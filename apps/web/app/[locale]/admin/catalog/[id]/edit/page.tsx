@@ -3,6 +3,8 @@
  *
  * Form for editing existing catalog items with security audit,
  * version management, and status controls.
+ * Requires a non-empty changelog entry when the content field is modified
+ * (dirty-detection gate) before the form can be submitted.
  */
 'use client'
 
@@ -38,6 +40,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   const [securityAuditResult, setSecurityAuditResult] = useState<SecurityAuditResult | null>(null)
   const [showSecurityPanel, setShowSecurityPanel] = useState(false)
   const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
+  /** The content value loaded from the server, used to detect dirty state. */
+  const [initialContent, setInitialContent] = useState('')
 
   const [formData, setFormData] = useState({
     id: '',
@@ -84,6 +88,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           orgId: item.orgId || '',
           visibility: item.visibility || 'private',
         })
+        setInitialContent(item.content)
       } else {
         setError('Item not found')
       }
@@ -112,6 +117,15 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     }
     fetchOrgs()
   }, [])
+
+  /** True when the content textarea value differs from the server-loaded value. */
+  const isContentDirty = formData.content !== initialContent
+  /**
+   * Disables the submit button when content is dirty but the changelog field
+   * is still empty. The server also enforces this constraint (Task 4), so this
+   * is a UX-layer guard only.
+   */
+  const isSubmitDisabled = saving || (isContentDirty && formData.changelog.trim().length === 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -145,6 +159,10 @@ export default function EditCatalogItem({ params }: EditPageProps) {
       })
 
       if (res.ok) {
+        // Reset dirty tracking so a follow-up edit (without leaving the page)
+        // starts from a clean baseline and the changelog gate re-arms.
+        setInitialContent(formData.content)
+        setFormData((prev) => ({ ...prev, changelog: '' }))
         // Redirect to returnUrl if provided, otherwise go to admin catalog
         router.push(returnUrl || '/admin/catalog')
       } else {
@@ -441,16 +459,26 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Changelog (latest version)
+            <label htmlFor="changelog" className="block text-sm text-[var(--text-secondary)] mb-2">
+              변경 사유 (changelog)
+              {isContentDirty && (
+                <span className="text-red-500 ml-1">*</span>
+              )}
             </label>
             <textarea
+              id="changelog"
               value={formData.changelog}
               onChange={(e) => setFormData({ ...formData, changelog: e.target.value })}
-              placeholder="What changed in this version?"
+              placeholder="이번 변경의 핵심을 한 줄 이상 적어주세요"
               className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] resize-none"
               rows={3}
+              required={isContentDirty}
             />
+            {isContentDirty && formData.changelog.trim().length === 0 && (
+              <p className="mt-1 text-xs text-red-500">
+                콘텐츠가 변경되어 changelog 입력이 필수입니다.
+              </p>
+            )}
           </div>
         </div>
 
@@ -492,7 +520,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           </Link>
           <button
             type="submit"
-            disabled={saving}
+            disabled={isSubmitDisabled}
             className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Changes'}

@@ -12,6 +12,9 @@ import {
   analyzeChanges,
 } from './version'
 
+/** Re-exported from ./version for downstream callers that gate on hasChanges (e.g. catalog PUT handler). */
+export { analyzeChanges }
+
 // ============================================
 // Types
 // ============================================
@@ -275,37 +278,36 @@ export async function compareWithPreviousVersion(
 }
 
 /**
- * Create a new version when item is updated
+ * Create a new version when an item is updated.
+ *
+ * @param item - Updated catalog item record
+ * @param previousContent - Content before the update (for change analysis)
+ * @param options - Versioning metadata (required)
+ * @param options.changelog - Required human-written summary of the change (no auto-fallback)
+ * @param options.createdBy - User ID of the editor
+ * @returns The newly created version row, or null when content has no significant change
  */
 export async function createVersionOnUpdate(
   item: CatalogItemRecord,
   previousContent: string,
-  options: { changelog?: string; createdBy?: string } = {}
+  options: { changelog: string; createdBy?: string }
 ): Promise<ItemVersionRecord | null> {
-  // Analyze changes
   const analysis = analyzeChanges(previousContent, item.content)
-
   if (!analysis.hasChanges) {
-    return null // No significant changes, skip version creation
+    return null
   }
 
-  // Determine version type
   let versionType: VersionType = 'patch'
-  if (analysis.breaking) {
-    versionType = 'major'
-  } else if (analysis.newFeatures) {
-    versionType = 'minor'
-  }
+  if (analysis.breaking) versionType = 'major'
+  else if (analysis.newFeatures) versionType = 'minor'
 
-  // Calculate new version
   const currentVersion = item.version || '1.0.0'
   const newVersion = incrementVersion(currentVersion, versionType)
 
-  // Create version snapshot
   return createVersionSnapshot(item, {
     version: newVersion,
     versionType,
-    changelog: options.changelog || analysis.summary,
+    changelog: options.changelog,
     createdBy: options.createdBy,
   })
 }

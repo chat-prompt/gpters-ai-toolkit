@@ -41,9 +41,6 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('deploy_skill')
       expect(toolNames).toContain('undeploy_skill')
       expect(toolNames).toContain('check_updates')
-      expect(toolNames).toContain('suggest_improvement')
-      expect(toolNames).toContain('list_suggestions')
-      expect(toolNames).toContain('resolve_suggestion')
       expect(toolNames).toContain('add_files')
       expect(toolNames).toContain('remove_files')
       expect(toolNames).toContain('report_session_event')
@@ -51,8 +48,17 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('report_skill_outcome')
     })
 
-    it('should have 13 public tools', () => {
-      expect(MCP_TOOLS).toHaveLength(13)
+    it('should have 10 public tools', () => {
+      expect(MCP_TOOLS).toHaveLength(10)
+    })
+
+    describe('Suggest feature removal (EDU-7987 D2)', () => {
+      it('does not expose suggest tools', () => {
+        const toolNames = MCP_TOOLS.map((t) => t.name)
+        expect(toolNames).not.toContain('suggest_improvement')
+        expect(toolNames).not.toContain('list_suggestions')
+        expect(toolNames).not.toContain('resolve_suggestion')
+      })
     })
 
     describe('semantic_search tool', () => {
