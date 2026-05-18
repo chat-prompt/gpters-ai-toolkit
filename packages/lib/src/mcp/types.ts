@@ -251,65 +251,6 @@ export interface GetPromptInput {
   arguments?: Record<string, string>
 }
 
-// Collaboration: Suggestion types
-export interface SuggestImprovementInput {
-  pluginId: string
-  title: string
-  description: string
-  diff?: string
-  suggestedByName?: string
-}
-
-export interface SuggestImprovementResponse {
-  success: boolean
-  suggestionId: string
-  pluginId: string
-  pluginName: string
-  message: string
-}
-
-export interface ListSuggestionsInput {
-  pluginId?: string
-  status?: 'pending' | 'accepted' | 'rejected' | 'all'
-  limit?: number
-}
-
-export interface SuggestionSummary {
-  id: string
-  pluginId: string
-  pluginName: string
-  title: string
-  description: string
-  status: 'pending' | 'accepted' | 'rejected'
-  suggestedByName: string | null
-  createdAt: string
-  resolvedAt: string | null
-  resolveComment: string | null
-}
-
-export interface ListSuggestionsResponse {
-  suggestions: SuggestionSummary[]
-  total: number
-}
-
-export interface ResolveSuggestionInput {
-  suggestionId: string
-  action: 'accept' | 'reject'
-  comment?: string
-}
-
-export interface ResolveSuggestionResponse {
-  success: boolean
-  suggestionId: string
-  action: 'accept' | 'reject'
-  pluginId: string
-  pluginName: string
-  newVersion?: string
-  /** diff가 있었고 content에 자동 적용되었는지 여부 */
-  contentApplied?: boolean
-  message: string
-}
-
 // Undeploy (delete own plugin) inputs
 export interface UndeploySkillInput {
   id: string

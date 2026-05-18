@@ -824,6 +824,11 @@ export const mcpSessionsRelations = relations(mcpSessions, ({ one }) => ({
 // Suggestions Table (Collaboration)
 // ============================================
 
+/**
+ * @deprecated 2026-05-18 — Suggest feature removed (EDU-7987 D2).
+ * Table retained for 1 month; drop in a separate migration PR.
+ * Do not write new rows. Reads only for historical inspection.
+ */
 export const suggestions = pgTable('suggestions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   pluginId: text('plugin_id').notNull().references(() => catalogItems.id, { onDelete: 'cascade' }),

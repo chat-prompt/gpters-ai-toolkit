@@ -14,7 +14,6 @@ import { eq, sql } from 'drizzle-orm'
 import { GoogleGenAI } from '@google/genai'
 import { createLogger } from '../core/logger'
 import { deploySkill } from '../mcp/handlers'
-import { suggestImprovement } from '../mcp/handlers'
 
 const log = createLogger('evo-agent')
 
@@ -98,59 +97,6 @@ Rules:
   }
 }
 
-/**
- * Generate an improvement suggestion for a low-conversion or skipped skill.
- */
-async function generateImprovementSuggestion(
-  client: GoogleGenAI,
-  skillId: string,
-  skillName: string,
-  skillDescription: string,
-  patternType: string,
-  metrics: Record<string, unknown>
-): Promise<{ title: string; description: string; diff?: string } | null> {
-  const metricsStr = JSON.stringify(metrics).slice(0, INPUT_CHAR_LIMIT)
-  const issueType = patternType === 'low_conversion'
-    ? '검색 후 로드율 또는 적용율이 매우 낮습니다'
-    : '사용자들이 반복적으로 이 스킬을 건너뛰고 있습니다'
-
-  const prompt = `You are an expert at improving Claude Code skills. A skill has a usage problem:
-
-Skill: "${skillName}" (ID: ${skillId})
-Description: "${skillDescription.slice(0, 500)}"
-Problem: ${issueType}
-Metrics: ${metricsStr}
-
-Suggest an improvement. Return ONLY valid JSON:
-{
-  "title": "Short Korean title for the improvement suggestion",
-  "description": "Detailed Korean explanation of what should be changed and why",
-  "diff": "Optional: specific text changes to make (before → after format)"
-}
-
-Focus on:
-- Clearer description that matches search intent
-- Better tags for discoverability
-- More practical, actionable content`
-
-  try {
-    const response = await client.models.generateContent({
-      model: GENERATION_MODEL,
-      contents: prompt,
-    })
-
-    const text = response.text?.trim()
-    if (!text) throw new Error('Gemini returned empty response')
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error(`No JSON in Gemini response: ${text.slice(0, 200)}`)
-
-    return JSON.parse(jsonMatch[0])
-  } catch (err) {
-    log.warn('Failed to generate improvement suggestion', { error: (err as Error).message })
-    throw err
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Pattern processors
@@ -189,46 +135,19 @@ async function processZeroResultCluster(
 }
 
 async function processLowConversion(
-  client: GoogleGenAI,
+  _client: GoogleGenAI,
   pattern: { id: string; signalData: Record<string, unknown> }
 ): Promise<GenerationResult> {
-  const skillId = pattern.signalData.skillId as string
-
-  // Fetch current skill info
-  const [skill] = await db
-    .select({ id: catalogItems.id, name: catalogItems.name, description: catalogItems.description })
-    .from(catalogItems)
-    .where(eq(catalogItems.id, skillId))
-    .limit(1)
-
-  if (!skill) return { patternId: pattern.id, action: 'skipped', error: `Skill ${skillId} not found` }
-
-  const suggestion = await generateImprovementSuggestion(
-    client, skillId, skill.name, skill.description, 'low_conversion', pattern.signalData
-  )
-  if (!suggestion) return { patternId: pattern.id, action: 'skipped', error: 'LLM suggestion failed' }
-
-  const result = await suggestImprovement({
-    pluginId: skillId,
-    title: suggestion.title,
-    description: suggestion.description,
-    diff: suggestion.diff,
-    suggestedByName: 'EvoSkill Bot',
-  })
-
-  if (!result.success) {
-    return { patternId: pattern.id, action: 'skipped', error: result.message }
-  }
-
-  return { patternId: pattern.id, action: 'suggestion_filed', itemId: result.suggestionId }
+  // Suggest feature removed (EDU-7987 D2) — low_conversion patterns are skipped
+  return { patternId: pattern.id, action: 'skipped', error: 'suggest feature removed' }
 }
 
 async function processRepeatedSkip(
-  client: GoogleGenAI,
+  _client: GoogleGenAI,
   pattern: { id: string; signalData: Record<string, unknown> }
 ): Promise<GenerationResult> {
-  // Same flow as low_conversion — suggest improvements
-  return processLowConversion(client, pattern)
+  // Suggest feature removed (EDU-7987 D2) — repeated_skip patterns are skipped
+  return { patternId: pattern.id, action: 'skipped', error: 'suggest feature removed' }
 }
 
 // ---------------------------------------------------------------------------

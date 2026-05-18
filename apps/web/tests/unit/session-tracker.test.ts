@@ -29,10 +29,6 @@ describe('mapToolToAction', () => {
     expect(mapToolToAction('deploy_skill')).toBe('deploy')
   })
 
-  it('maps suggest_improvement to suggest', () => {
-    expect(mapToolToAction('suggest_improvement')).toBe('suggest')
-  })
-
   it('maps unknown tools to other', () => {
     expect(mapToolToAction('list_plugins')).toBe('other')
     expect(mapToolToAction('check_updates')).toBe('other')
@@ -70,15 +66,6 @@ describe('extractSkillId', () => {
       },
     }
     expect(extractSkillId(body, 'deploy_skill')).toBe('New Skill')
-  })
-
-  it('extracts pluginId from suggest_improvement', () => {
-    const body = {
-      params: {
-        arguments: { pluginId: 'data-source', title: 'Fix', description: 'test' },
-      },
-    }
-    expect(extractSkillId(body, 'suggest_improvement')).toBe('data-source')
   })
 
   it('returns undefined for unknown tools', () => {
