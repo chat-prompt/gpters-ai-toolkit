@@ -1,6 +1,8 @@
 # AI Toolkit 사용 현황 리포트 (2025-12-29 ~ 2026-05-18)
 
-> EDU-8059 후속 분석. `mcp_audit_logs` + `mcp_sessions` 기반.
+## 한 줄 요약
+
+**607명이 4.7개월 동안 11만 번 호출했고**, claude code가 메인 창구지만 35%는 다른 도구(aitk CLI, opencode, codex)에서 들어옴. 사내 업무 직결 스킬이 압도적으로 잘 쓰이고, suggest 기능은 4.7개월 동안 41번 쓰여 폐기 결정의 데이터적 근거가 됨.
 
 ## 데이터 개요
 
@@ -112,20 +114,29 @@
 - `mcp_sessions.skill_interactions`는 빈 객체가 다수 — 세션 종료 시점 집계 누락 가능
 - 4개월간 데이터지만 일부 도구는 도입 시기가 다름 (예: `exercise_skill_search`는 비교적 후기)
 
-## 즉시 활용 가능한 인사이트
+## 의미 있는 발견 3가지
 
-1. **검색 도구 통합/단순화 검토** — `semantic_search` vs `exercise_skill_search` 역할 구분 명확화 (또는 통합)
-2. **로드 단계 에러 6.2% 원인 조사** — `get_plugin_content`의 85건 실패는 권한·존재하지 않는 ID 모두 가능. 에러 메시지 그룹화 필요
-3. **suggest 폐기 결정 정당화 데이터** — 4.7개월간 41회는 분명 dead weight. EDU-7987 D2 결정 근거로 사용 가능
-4. **인기 스킬 패턴 → 신규 스킬 제작 가이드** — 사내 워크플로우 직결 스킬이 압도적으로 쓰임. 일반 가이드성 스킬보다 즉시 실행 가능한 자동화에 투자 가치 높음
-5. **클라이언트 다변화 가치 입증** — Claude Code 65% 외 35%가 다른 클라이언트(aitk, opencode, codex, openclaw 등). 멀티 채널 유지 가치 있음
+**1. 사내 업무 자동화 스킬이 압도적**
+Top 5가 전부 `gpters-sender`, `airtable-sdk`, `slack`, `g-proj` 같은 사내 워크플로우 직결 스킬. 일반 코딩 가이드나 외부 SDK 래퍼는 거의 안 쓰임. → 새 스킬은 일반론보다 "지금 막히는 업무 자동화"에 투자할 가치가 있음.
 
-## 추가 분석 제안 (Follow-up)
+**2. 멀티 클라이언트 가치 입증**
+claude code 외 35%가 aitk CLI(8.9K), opencode(5.6K), rona-practice(3.6K), codex(1.7K) 등 다양한 클라이언트. MCP 표준 유지 비용은 작지 않지만, 한 채널 의존 안 하는 게 분명 의미 있음.
 
-- 사용자별 활동 분포 (Power user vs 일반 사용자)
-- 스킬별 first-load → repeat-load 패턴 (sticky 여부)
-- 에러 메시지 클러스터링
-- 작성자별 본인 스킬 사용률 (dogfooding)
+**3. suggest 폐기 결정 데이터 정당화**
+suggest_improvement(13) + list_suggestions(16) + resolve_suggestion(12) = **4.7개월 41회**. EDU-7987에서 폐기한 게 데이터 기준으로도 정확.
+
+## 손볼 만한 거 (선택)
+
+- **검색 도구 2종 정리**: `semantic_search`(4.7K) + `exercise_skill_search`(3.7K) 병존. 역할 구분 명확화 또는 통합 검토 시점
+- **`get_plugin_content` 에러 6.2% 점검**: 85건 실패가 권한 문제인지 사라진 스킬 ID인지 확인하면 사용자 마찰 해소
+- **검색→로드 전환율 15%**: 검색 결과 7개 중 1개만 실제 로드까지 가는 비율. 검색 결과 품질·UI 개선 여지
+
+## 추가 분석 후보 (필요 시)
+
+- Power user 식별 (호출 분포 분석)
+- 스킬별 sticky 여부 (first-load → repeat 비율)
+- 작성자별 본인 스킬 사용률 (dogfooding 점검)
+- 정기 주간 리포트 자동화 (Slack)
 
 ---
 
