@@ -26,6 +26,30 @@ function getServerUrl(): string {
 }
 
 /**
+ * 실패한 응답 본문에서 서버가 제공한 에러 메시지를 추출
+ *
+ * 서버는 deploy 등에서 `{ success: false, data: { error } }` 또는
+ * `{ success: false, error }` 형태로 구체적인 사유(예: "업데이트 시 changelog는
+ * 필수입니다")를 내려준다. 이를 버리지 않고 사용자에게 그대로 전달한다.
+ *
+ * @param response - 실패한 fetch 응답
+ * @returns 추출된 에러 메시지, 없거나 파싱 불가 시 undefined
+ */
+async function readServerError(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as Record<string, unknown>
+    const nested = body?.data as Record<string, unknown> | undefined
+    const candidates = [nested?.error, body?.error, nested?.message, body?.message]
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim().length > 0) return candidate
+    }
+  } catch {
+    // 본문이 JSON이 아니거나 비어있음 — 호출부에서 HTTP status로 fallback
+  }
+  return undefined
+}
+
+/**
  * Simple REST API 호출 (POST /api/mcp?action=...)
  *
  * @param action - API 액션 (search, get, create 등)
@@ -57,7 +81,12 @@ export async function apiCall<T = unknown>(
       return { ok: false, error: 'Rate limit exceeded. Please try again later.', status: 429 }
     }
     if (!response.ok) {
-      return { ok: false, error: `HTTP ${response.status}`, status: response.status }
+      const serverError = await readServerError(response)
+      return {
+        ok: false,
+        error: serverError ?? `HTTP ${response.status}`,
+        status: response.status,
+      }
     }
 
     const data = (await response.json()) as T

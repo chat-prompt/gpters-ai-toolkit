@@ -71,6 +71,45 @@ describe('client', () => {
       expect(result.ok).toBe(false)
       expect(result.error).toBe('network error')
     })
+
+    it('400 응답 시 서버 에러 메시지 노출 (deploy 중첩 형태)', async () => {
+      globalThis.fetch = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            data: { success: false, error: '업데이트 시 changelog는 필수입니다.' },
+          }),
+          { status: 400 }
+        )
+      ) as typeof fetch
+
+      const result = await apiCall('deploy', { id: 'x' }, 'tok')
+      expect(result.ok).toBe(false)
+      expect(result.status).toBe(400)
+      expect(result.error).toBe('업데이트 시 changelog는 필수입니다.')
+    })
+
+    it('400 응답 시 서버 에러 메시지 노출 (최상위 error)', async () => {
+      globalThis.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({ success: false, error: 'Unknown action: foo' }), {
+          status: 400,
+        })
+      ) as typeof fetch
+
+      const result = await apiCall('foo', {}, 'tok')
+      expect(result.ok).toBe(false)
+      expect(result.error).toBe('Unknown action: foo')
+    })
+
+    it('JSON이 아닌 에러 본문은 HTTP status로 fallback', async () => {
+      globalThis.fetch = vi.fn(async () =>
+        new Response('<html>502 Bad Gateway</html>', { status: 502 })
+      ) as typeof fetch
+
+      const result = await apiCall('search', {}, 'tok')
+      expect(result.ok).toBe(false)
+      expect(result.error).toBe('HTTP 502')
+    })
   })
 
   describe('jsonRpcCall', () => {

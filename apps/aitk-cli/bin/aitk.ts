@@ -22,7 +22,7 @@ import { runUpgrade } from '../src/commands/upgrade.js'
 import { error, info } from '../src/output.js'
 
 /** 버전 */
-const VERSION = '0.5.0'
+const VERSION = '0.5.1'
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)
@@ -62,7 +62,9 @@ const HELP = `aitk - GPTers AI Toolkit CLI
 Usage:
   aitk search <query> [--type skill] [--limit 5] [--context "context"]
   aitk get <id>
-  aitk deploy --id <slug> --type skill --name <name> --content <@file|text> [--platforms claude_code,codex]
+  aitk deploy --id <slug> --type <type> --name <name> --content <@file|text>
+              [--description <d>] [--tags a,b] [--changelog <text>] [--platforms claude_code,codex]
+              (new skills require --description & --tags; updates require --changelog)
   aitk upgrade
   aitk updates
   aitk config [list|get|set] [key] [value]
@@ -137,12 +139,15 @@ Required:
   --name <name>      Display name
   --content <text>   Content text or @filepath to read from file
 
+  New skills also require --description and --tags.
+  Updating an existing skill requires --changelog.
+
 Options:
-  --description <d>       Item description
-  --tags <t1,t2>          Comma-separated tags
+  --description <d>       Item description (required for new skills)
+  --tags <t1,t2>          Comma-separated tags (required for new skills)
   --platforms <p1,p2>     Comma-separated platforms (claude_code,opencode,codex,cursor)
   --visibility <v>        Scope: public (all users) or private (same org only)
-  --changelog <text>      Required when updating an existing skill (change summary)
+  --changelog <text>      Change summary (required when updating an existing skill)
 
 Examples:
   aitk deploy --id my-skill --type skill --name "My Skill" --content @skill.md
