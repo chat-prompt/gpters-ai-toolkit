@@ -235,6 +235,7 @@ export function calculateScore(
   const lowerDescription = item.description.toLowerCase()
   const lowerTags = item.tags.map(t => t.toLowerCase())
   const lowerId = item.id.toLowerCase()
+  const lowerAuthor = (item.authorName || '').toLowerCase()
 
   // Exact name match (highest priority)
   if (lowerName === lowerQuery || lowerId === lowerQuery) {
@@ -270,6 +271,13 @@ export function calculateScore(
       score += 20
       matchedKeywords.push(keyword)
       if (matchType !== 'exact' && matchType !== 'keyword') matchType = 'keyword'
+    }
+
+    // Author name contains keyword
+    if (lowerAuthor && lowerAuthor.includes(lowerKeyword)) {
+      score += 25
+      matchedKeywords.push(keyword)
+      if (matchType !== 'exact') matchType = 'keyword'
     }
 
     // Description contains keyword

@@ -201,6 +201,13 @@ describe('Search Utils', () => {
       const { score: withoutKorean } = calculateScore(codeReviewerItem, [], 'random english')
       expect(withKorean).toBeGreaterThan(withoutKorean)
     })
+
+    it('gives score for author name matches', () => {
+      const item: CatalogItem = { ...codeReviewerItem, authorName: '진우' }
+      const { score, matchedKeywords } = calculateScore(item, ['진우'], '진우')
+      expect(score).toBeGreaterThan(0)
+      expect(matchedKeywords).toContain('진우')
+    })
   })
 
   describe('naturalLanguageSearch', () => {
@@ -266,6 +273,16 @@ describe('Search Utils', () => {
       const results = naturalLanguageSearch(mockCatalog, 'code review')
       expect(results.length).toBeGreaterThan(0)
       expect(results[0].item.id).toBe('code-reviewer')
+    })
+
+    it('finds items by Korean author name', () => {
+      const catalogWithAuthor: CatalogItem[] = [
+        { ...mockCatalog[0], authorName: '진우' },
+        ...mockCatalog.slice(1),
+      ]
+      const results = naturalLanguageSearch(catalogWithAuthor, '진우')
+      expect(results.length).toBeGreaterThan(0)
+      expect(results.map(r => r.item.id)).toContain('code-reviewer')
     })
   })
 
