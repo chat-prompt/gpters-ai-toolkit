@@ -1,8 +1,7 @@
 /**
- * Guide detail page
+ * 가이드 상세 페이지
  *
- * Displays detailed content for a specific guide or tutorial
- * with markdown rendering and changelog display.
+ * 가이드 본문(markdown)과 변경 이력을 보여준다.
  */
 import { setRequestLocale } from 'next-intl/server'
 import { getGuideById } from '@/lib/core/catalog'
@@ -17,6 +16,11 @@ import { Link } from '@/i18n/navigation'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * 가이드 상세 페이지
+ *
+ * @param params - 로케일·가이드 id 라우트 파라미터
+ */
 export default async function GuidePage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
   setRequestLocale(locale)
@@ -27,14 +31,14 @@ export default async function GuidePage({ params }: { params: Promise<{ locale: 
   }
 
   return (
-    <DetailPageLayout accentColor="emerald">
+    <DetailPageLayout>
       {/* Back Navigation */}
       <nav className="mb-6">
         <Link
           href="/guides"
-          className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent-emerald)] transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
         >
-          <span>←</span>
+          <span aria-hidden>←</span>
           <span>가이드 목록</span>
         </Link>
       </nav>
@@ -62,13 +66,10 @@ export default async function GuidePage({ params }: { params: Promise<{ locale: 
         />
       )}
 
-      {/* Guide Content */}
-      <ContentSection title="guide.md" icon="📚" content={guide.content} />
+      {/* 본문·README — 파일 이름이 곧 제목이다 */}
+      <ContentSection title="guide.md" content={guide.content} />
 
-      {/* README */}
-      {guide.readme && (
-        <ContentSection title="README.md" icon="📖" content={guide.readme} />
-      )}
+      {guide.readme && <ContentSection title="README.md" content={guide.readme} />}
 
       {/* Admin Edit Button */}
       <AdminEditButton itemId={guide.id} returnUrl={`/guides/${guide.id}`} />

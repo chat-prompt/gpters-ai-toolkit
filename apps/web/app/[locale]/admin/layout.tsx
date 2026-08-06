@@ -14,18 +14,22 @@ import { useSession, signIn } from 'next-auth/react'
 import { AdminAuthProvider, useAdminAuth } from '@/components/admin/AdminAuthProvider'
 import type { UserRole } from '@/lib/security/rbac'
 
-// Role badge component
+/**
+ * 역할 배지 — 알약 배경 대신 점 하나와 글자로 표시한다.
+ * 권한이 높을수록 눈에 띄는 점 색을 쓴다.
+ */
 function RoleBadge({ role }: { role: UserRole }) {
-  const colors: Record<UserRole, string> = {
-    super_admin: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-    admin: 'bg-red-500/20 text-red-400 border-red-500/30',
-    editor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    viewer: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  const dotTone: Record<UserRole, string> = {
+    super_admin: 'bg-[var(--accent-orange)]',
+    admin: 'bg-[var(--accent-orange)]',
+    editor: 'bg-[var(--text-secondary)]',
+    viewer: 'bg-[var(--text-muted)]',
   }
 
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${colors[role]}`}>
-      {role.charAt(0).toUpperCase() + role.slice(1)}
+    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+      <span className={`size-1.5 shrink-0 rounded-full ${dotTone[role]}`} />
+      {role}
     </span>
   )
 }
@@ -47,7 +51,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
+      <div className="page-shell items-center justify-center">
         <div className="text-[var(--text-muted)]">Loading...</div>
       </div>
     )
@@ -55,9 +59,9 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
 
   if (!effectiveUser) {
     return (
-      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
-        <div className="glass rounded-2xl p-8 w-full max-w-md text-center">
-          <h1 className="text-2xl font-light text-[var(--text-primary)] mb-4">
+      <div className="page-shell items-center justify-center">
+        <div className="surface-card w-full max-w-md rounded-2xl p-8 text-center">
+          <h1 className="page-title mb-4">
             Admin Dashboard
           </h1>
           <p className="text-[var(--text-secondary)] mb-6">
@@ -65,7 +69,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
           </p>
           <button
             onClick={() => signIn('google', { callbackUrl: '/admin' })}
-            className="w-full py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
+            className="w-full py-3 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity"
           >
             Sign in with Google
           </button>
@@ -77,9 +81,9 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
   // Logged in but no admin role - show access denied
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
-        <div className="glass rounded-2xl p-8 w-full max-w-md text-center">
-          <h1 className="text-2xl font-light text-[var(--text-primary)] mb-4">
+      <div className="page-shell items-center justify-center">
+        <div className="surface-card w-full max-w-md rounded-2xl p-8 text-center">
+          <h1 className="page-title mb-4">
             Access Denied
           </h1>
           <p className="text-[var(--text-secondary)] mb-2">
@@ -97,7 +101,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             </Link>
             <button
               onClick={() => logout()}
-              className="flex-1 py-3 rounded-lg border border-red-500/30 text-red-400 font-medium hover:bg-red-500/10 transition-colors"
+              className="flex-1 py-3 rounded-lg border border-[var(--accent-orange)]/30 text-[var(--accent-orange)] font-medium hover:bg-[var(--accent-orange)]/10 transition-colors"
             >
               Sign Out
             </button>
@@ -115,9 +119,9 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
   ]
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      <header className="relative z-10 border-b border-[var(--border-subtle)]">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
+    <div className="page-shell">
+      <header className="border-b border-[var(--border-subtle)]">
+        <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-4 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/admin" className="text-lg font-medium text-[var(--text-primary)]">
               Admin
@@ -131,10 +135,10 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`text-sm transition-colors ${
+                    className={`text-sm transition-colors border-b-2 -mb-px pb-px ${
                       isActive
-                        ? 'text-[var(--accent-cyan)]'
-                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        ? 'text-[var(--text-primary)] border-[var(--text-primary)]'
+                        : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
                     }`}
                   >
                     {item.label}
@@ -170,7 +174,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             </Link>
             <button
               onClick={() => logout()}
-              className="text-sm text-red-400 hover:text-red-300"
+              className="text-sm text-[var(--accent-orange)] hover:opacity-80"
             >
               Logout
             </button>
@@ -178,7 +182,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="relative z-10">
+      <main className="page-main">
         {children}
       </main>
     </div>

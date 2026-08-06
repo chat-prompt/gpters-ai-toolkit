@@ -135,30 +135,24 @@ export default function ApiKeysPage() {
   const revokedKeys = keys.filter((k) => !k.isActive)
 
   return (
-    <div className="min-h-screen">
-      <main className="max-w-5xl mx-auto px-8 py-12">
+    <div className="page-shell">
+      <main className="page-main">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <Link
-                href="/profile"
-                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-              >
-                ← Profile
-              </Link>
-            </div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-              {t('apiKeys.title')}
-            </h1>
-            <p className="text-[var(--text-secondary)] text-sm mt-1">
-              {t('apiKeys.description')}
-            </p>
+            <Link
+              href="/profile"
+              className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              ← Profile
+            </Link>
+            <h1 className="page-title mt-2">{t('apiKeys.title')}</h1>
+            <p className="page-subtitle">{t('apiKeys.description')}</p>
           </div>
           {!showCreateForm && !newKey && (
             <button
               onClick={() => setShowCreateForm(true)}
-              className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium text-sm hover:opacity-90 transition-opacity"
+              className="px-4 py-2 rounded-lg border border-[var(--border-hover)] text-[var(--text-primary)] font-medium text-sm hover:bg-[var(--bg-tertiary)] transition-colors"
             >
               {t('apiKeys.createNew')}
             </button>
@@ -167,20 +161,13 @@ export default function ApiKeysPage() {
 
         {/* New key display (shown once after creation) */}
         {newKey && (
-          <div className="glass rounded-2xl p-6 mb-8 border-2 border-amber-500/30">
-            <div className="flex items-start gap-3 mb-4">
-              <span className="text-2xl">⚠️</span>
-              <div>
-                <h3 className="font-semibold text-[var(--text-primary)]">
-                  {newKey.name}
-                </h3>
-                <p className="text-amber-400 text-sm mt-1">
-                  {t('apiKeys.copyWarning')}
-                </p>
-              </div>
+          <div className="surface-card mb-8 border-[var(--border-hover)]">
+            <div className="mb-4">
+              <h3 className="font-semibold text-[var(--text-primary)]">{newKey.name}</h3>
+              <p className="text-[var(--text-secondary)] text-sm mt-1">{t('apiKeys.copyWarning')}</p>
             </div>
-            <div className="flex items-center gap-2 bg-[var(--bg-secondary)] rounded-lg p-3">
-              <code className="flex-1 text-sm font-mono text-[var(--accent-cyan)] break-all select-all">
+            <div className="flex items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg p-3">
+              <code className="flex-1 text-sm font-mono text-[var(--text-primary)] break-all select-all">
                 {newKey.token}
               </code>
               <CopyButton text={newKey.token} />
@@ -199,10 +186,8 @@ export default function ApiKeysPage() {
 
         {/* Create form */}
         {showCreateForm && (
-          <div className="glass rounded-2xl p-6 mb-8">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-4">
-              {t('apiKeys.createNew')}
-            </h3>
+          <div className="surface-card mb-8">
+            <h3 className="font-semibold text-[var(--text-primary)] mb-4">{t('apiKeys.createNew')}</h3>
             <div className="flex gap-3">
               <input
                 type="text"
@@ -213,7 +198,7 @@ export default function ApiKeysPage() {
                   if (e.key === 'Escape') setShowCreateForm(false)
                 }}
                 placeholder={t('apiKeys.namePlaceholder')}
-                className="flex-1 px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-cyan)] text-sm"
+                className="flex-1 px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-hover)] text-sm"
                 maxLength={100}
                 autoFocus
                 disabled={creating}
@@ -221,7 +206,7 @@ export default function ApiKeysPage() {
               <button
                 onClick={handleCreate}
                 disabled={!newKeyName.trim() || creating}
-                className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                className="px-4 py-2 rounded-lg border border-[var(--border-hover)] text-[var(--text-primary)] font-medium text-sm hover:bg-[var(--bg-tertiary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {creating ? '...' : t('apiKeys.generate')}
               </button>
@@ -240,68 +225,48 @@ export default function ApiKeysPage() {
 
         {/* Key list */}
         {loading ? (
-          <div className="glass rounded-2xl p-12 text-center">
-            <div className="text-[var(--text-muted)]">Loading...</div>
+          <div className="surface-card text-center py-12">
+            <p className="text-sm text-[var(--text-muted)]">Loading...</p>
           </div>
         ) : keys.length === 0 ? (
-          <div className="glass rounded-2xl p-12 text-center">
-            <div className="text-4xl mb-4 opacity-20">🔑</div>
-            <p className="text-[var(--text-secondary)]">{t('apiKeys.noKeys')}</p>
+          <div className="surface-card text-center py-12">
+            <p className="text-sm text-[var(--text-secondary)]">{t('apiKeys.noKeys')}</p>
           </div>
         ) : (
-          <div className="glass rounded-2xl overflow-hidden">
-            <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-[var(--border-subtle)]">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                    Last Used
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="text-right px-6 py-3 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="text-left py-3 px-2 eyebrow font-normal">Name</th>
+                  <th className="text-left py-3 px-2 eyebrow font-normal">Created</th>
+                  <th className="text-left py-3 px-2 eyebrow font-normal">Last Used</th>
+                  <th className="text-left py-3 px-2 eyebrow font-normal">Status</th>
+                  <th className="text-right py-3 px-2 eyebrow font-normal">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[var(--border-subtle)]">
                 {activeKeys.map((key) => (
-                  <tr
-                    key={key.id}
-                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-secondary)] transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">
-                        {key.name || 'Unnamed'}
-                      </span>
+                  <tr key={key.id} className="transition-colors duration-200 hover:bg-[var(--bg-tertiary)]/40">
+                    <td className="px-2 py-4">
+                      <span className="font-medium text-[var(--text-primary)]">{key.name || 'Unnamed'}</span>
                       {key.usageCount > 0 && (
-                        <span className="ml-2 text-xs text-[var(--text-muted)]">
+                        <span className="ml-2 font-mono text-xs tabular-nums text-[var(--text-muted)]">
                           {key.usageCount} uses
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-[var(--text-secondary)]">
-                      {formatDate(key.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-[var(--text-secondary)]">
-                      {formatRelativeTime(key.lastUsedAt)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <td className="px-2 py-4 text-[var(--text-secondary)]">{formatDate(key.createdAt)}</td>
+                    <td className="px-2 py-4 text-[var(--text-secondary)]">{formatRelativeTime(key.lastUsedAt)}</td>
+                    <td className="px-2 py-4">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-primary)]" />
                         {t('apiKeys.status.active')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-2 py-4 text-right">
                       <button
                         onClick={() => handleRevoke(key.id, key.name)}
-                        className="text-sm text-red-400 hover:text-red-300 transition-colors"
+                        className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline underline-offset-4 transition-colors"
                       >
                         {t('apiKeys.revoke')}
                       </button>
@@ -309,27 +274,14 @@ export default function ApiKeysPage() {
                   </tr>
                 ))}
                 {revokedKeys.map((key) => (
-                  <tr
-                    key={key.id}
-                    className="border-b border-[var(--border-subtle)] opacity-50"
-                  >
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-[var(--text-secondary)] line-through">
-                        {key.name || 'Unnamed'}
-                      </span>
+                  <tr key={key.id} className="opacity-50">
+                    <td className="px-2 py-4">
+                      <span className="text-[var(--text-secondary)] line-through">{key.name || 'Unnamed'}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-[var(--text-muted)]">
-                      {formatDate(key.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-[var(--text-muted)]">
-                      {formatRelativeTime(key.lastUsedAt)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                        {t('apiKeys.status.revoked')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4" />
+                    <td className="px-2 py-4 text-[var(--text-muted)]">{formatDate(key.createdAt)}</td>
+                    <td className="px-2 py-4 text-[var(--text-muted)]">{formatRelativeTime(key.lastUsedAt)}</td>
+                    <td className="px-2 py-4 text-[var(--text-muted)]">{t('apiKeys.status.revoked')}</td>
+                    <td className="px-2 py-4" />
                   </tr>
                 ))}
               </tbody>

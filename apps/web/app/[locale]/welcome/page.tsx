@@ -1,9 +1,8 @@
 /**
- * Welcome landing page
+ * 소개 랜딩 페이지
  *
- * 코딩 에이전트 사용자에게 AI Toolkit 플랫폼을 소개하고
- * 플러그인 연결 방법을 안내하는 퍼블릭 랜딩페이지.
- * Claude Code, OpenCode, Codex 세 가지 플러그인을 모두 안내한다.
+ * 코딩 에이전트 사용자에게 AI Toolkit 을 소개하고 플러그인 연결 방법을 안내한다.
+ * 로그인 없이 열리는 화면이라, 무엇을 주는 곳인지부터 읽히게 조판한다.
  */
 import { Link } from '@/i18n/navigation'
 import { Footer } from '@/components/layout/Footer'
@@ -17,20 +16,18 @@ export const dynamic = 'force-dynamic'
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Toolkit'
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-toolkit.gpters.org'
-const MCP_COMMAND = `claude mcp add gpters-ai-toolkit ${BASE_URL}/api/mcp -t http`
 
-/** 플러그인별 연결 커맨드 */
-const PLUGIN_COMMANDS = {
-  claudeCode: MCP_COMMAND,
-  opencode: `# opencode settings.json\n{\n  "mcpServers": {\n    "gpters-ai-toolkit": {\n      "type": "http",\n      "url": "${BASE_URL}/api/mcp"\n    }\n  }\n}`,
-  codex: `# codex MCP config\ncodex --mcp-config '{"gpters-ai-toolkit":{"type":"http","url":"${BASE_URL}/api/mcp"}}'`,
-} as const
+/** 구획 사이 간격 — 페이지 전체에서 같은 리듬을 쓴다 */
+const SECTION_CLASS = 'mt-20 border-t border-[var(--border-subtle)] pt-12'
+
+/** 구획 제목 */
+const SECTION_TITLE_CLASS = 'mt-3 text-2xl md:text-3xl font-medium tracking-tight text-[var(--text-primary)]'
 
 /**
- * Generate locale-aware metadata for the welcome page
+ * 로케일에 맞는 메타데이터를 만든다
  *
- * @param params - Route params containing the locale
- * @returns Metadata object with localized title and description
+ * @param params - locale 을 담은 라우트 파라미터
+ * @returns 로케일별 제목·설명이 담긴 메타데이터
  */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params
@@ -43,9 +40,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 /**
- * Welcome landing page with i18n support
+ * 소개 랜딩 페이지
  *
- * @param params - Route params including locale
+ * @param params - locale 을 담은 라우트 파라미터
  */
 export default async function WelcomePage({
   params,
@@ -58,39 +55,38 @@ export default async function WelcomePage({
   const catalog = await getCatalog(locale)
   const skillCount = catalog.length
 
-  /** How It Works 스텝 데이터 */
+  /** 동작 방식 단계 */
   const HOW_IT_WORKS_STEPS = [
     { key: 'step1', number: '1' },
     { key: 'step2', number: '2' },
     { key: 'step3', number: '3' },
   ] as const
 
-  /** 인기 스킬 예시 데이터 */
+  /** 왜 쓰는지 — 문구는 i18n 에서 가져온다 */
+  const WHY_KEYS = ['lazyLoading', 'autoRecommend', 'multiAgent'] as const
+
+  /** 인기 스킬 예시 */
   const POPULAR_SKILLS = [
     {
       name: 'Deep Interview Prompt',
       id: 'deep-interview-prompt',
       description: '소크라틱 방식의 심층 인터뷰로 요구사항을 정밀하게 도출',
-      icon: '🎙',
     },
     {
       name: 'Vercel React Best Practices',
       id: 'vercel-react-best-practices',
       description: 'Vercel 엔지니어링 팀의 React/Next.js 성능 최적화 가이드',
-      icon: '⚡',
     },
     {
       name: 'Markdown to PDF 변환',
       id: 'md2pdf',
       description: 'Markdown 문서를 깔끔한 PDF로 변환 — 한글 지원',
-      icon: '📄',
     },
   ] as const
 
-  /** 사용 예시 데이터 */
+  /** 사용 예시 */
   const USAGE_EXAMPLES = [
     {
-      icon: '💬',
       title: t('usage.naturalLanguage.title'),
       description: t('usage.naturalLanguage.description'),
       examples: [
@@ -100,7 +96,6 @@ export default async function WelcomePage({
       ],
     },
     {
-      icon: '🚀',
       title: t('usage.deploy.title'),
       description: t('usage.deploy.description'),
       examples: [
@@ -109,7 +104,6 @@ export default async function WelcomePage({
       ],
     },
     {
-      icon: '🔄',
       title: t('usage.update.title'),
       description: t('usage.update.description'),
       examples: [
@@ -117,7 +111,6 @@ export default async function WelcomePage({
       ],
     },
     {
-      icon: '🔍',
       title: t('usage.cli.title'),
       description: t('usage.cli.description'),
       examples: [
@@ -128,211 +121,142 @@ export default async function WelcomePage({
   ] as const
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background Gradients */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
-      {/* Hero Section */}
-      <section className="relative z-10 pt-24 pb-20 px-8">
-        <div className="max-w-6xl mx-auto text-center">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-6">
-            {SITE_NAME}
-          </p>
-          <h1
-            className="text-5xl md:text-7xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-6"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
-              {t('hero.titleHighlight')}
-            </span>{' '}
+    <div className="page-shell">
+      <main className="page-main">
+        {/* 왼쪽 정렬 — 가운데 정렬 히어로를 쓰지 않는다 */}
+        <header className="reveal max-w-2xl pt-8">
+          <p className="eyebrow">{SITE_NAME}</p>
+          <h1 className="mt-3 text-4xl md:text-5xl font-medium leading-tight tracking-tight text-[var(--text-primary)]">
+            <span className="text-[var(--brand-primary)]">{t('hero.titleHighlight')}</span>{' '}
             {t('hero.titleSuffix')}
           </h1>
-          <p className="text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto mb-10 whitespace-pre-line">
+          <p className="page-subtitle whitespace-pre-line">
             {t('hero.description', { count: skillCount })}
           </p>
           <a
             href="#connect"
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-lg text-sm font-medium bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] text-white hover:opacity-90 transition-opacity"
+            className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--text-primary)] px-6 py-2.5 text-sm font-medium text-[var(--bg-primary)] transition-opacity hover:opacity-90 active:translate-y-px"
           >
             {t('hero.cta')}
             <span aria-hidden="true">&darr;</span>
           </a>
-        </div>
-      </section>
+        </header>
 
-      {/* Why AI Toolkit Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('why.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            {t('why.title')}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {([
-              { key: 'lazyLoading', icon: '⚡' },
-              { key: 'autoRecommend', icon: '🎯' },
-              { key: 'multiAgent', icon: '🔗' },
-            ] as const).map((item) => (
-              <div key={item.key} className="flex flex-col items-center text-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6">
-                <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-[var(--bg-secondary)] text-2xl mb-5">{item.icon}</div>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
-                  {t(`why.${item.key}.title`)}
+        {/* 왜 쓰는지 */}
+        <section className={SECTION_CLASS}>
+          <p className="eyebrow">{t('why.badge')}</p>
+          <h2 className={SECTION_TITLE_CLASS}>{t('why.title')}</h2>
+          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3 items-start">
+            {WHY_KEYS.map((key) => (
+              <div key={key} className="surface-card">
+                <h3 className="text-base font-medium text-[var(--text-primary)]">
+                  {t(`why.${key}.title`)}
                 </h3>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                  {t(`why.${item.key}.description`)}
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
+                  {t(`why.${key}.description`)}
                 </p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* How It Works Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('howItWorks.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            {t('howItWorks.title')}
-          </h2>
-          <div className="space-y-6">
+        {/* 동작 방식 */}
+        <section className={SECTION_CLASS}>
+          <p className="eyebrow">{t('howItWorks.badge')}</p>
+          <h2 className={SECTION_TITLE_CLASS}>{t('howItWorks.title')}</h2>
+          <ol className="mt-8 max-w-3xl divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
             {HOW_IT_WORKS_STEPS.map((step) => (
-              <div key={step.key} className="flex items-start gap-5">
-                <span className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center text-white text-lg font-medium">
+              <li key={step.key} className="flex items-start gap-5 py-5">
+                <span className="font-mono text-sm tabular-nums text-[var(--text-muted)]">
                   {step.number}
                 </span>
-                <div>
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+                <div className="min-w-0">
+                  <h3 className="text-base font-medium text-[var(--text-primary)]">
                     {t(`howItWorks.${step.key}.title`)}
                   </h3>
-                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                  <p className="mt-1 text-sm leading-relaxed text-[var(--text-secondary)]">
                     {t(`howItWorks.${step.key}.description`)}
                   </p>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
-      </section>
+          </ol>
+        </section>
 
-      {/* Connect Section */}
-      <section id="connect" className="relative z-10 py-20 px-8">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('connect.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
+        {/* 연결하기 */}
+        <section id="connect" className={`${SECTION_CLASS} scroll-mt-8`}>
+          <p className="eyebrow">{t('connect.badge')}</p>
+          <h2 className={SECTION_TITLE_CLASS}>
             {t('connect.title')}{' '}
-            <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
-              {t('connect.titleHighlight')}
-            </span>
+            <span className="text-[var(--brand-primary)]">{t('connect.titleHighlight')}</span>
           </h2>
 
-          {/* Plugin Connection Tabs */}
-          <div className="mb-10">
+          <div className="mt-8 max-w-3xl">
             <ConnectTabs baseUrl={BASE_URL} />
-          </div>
 
-          {/* Steps */}
-          <div className="space-y-6">
-            {(['1', '2', '3'] as const).map((step) => (
-              <div key={step} className="flex items-start gap-4">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center text-white text-sm font-medium">
-                  {step}
-                </span>
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
-                    {t(`connect.steps.${step}.title`)}
-                  </h3>
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    {t(`connect.steps.${step}.description`)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+            <ol className="mt-8 divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
+              {(['1', '2', '3'] as const).map((step) => (
+                <li key={step} className="flex items-start gap-5 py-4">
+                  <span className="font-mono text-sm tabular-nums text-[var(--text-muted)]">
+                    {step}
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-medium text-[var(--text-primary)]">
+                      {t(`connect.steps.${step}.title`)}
+                    </h3>
+                    <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                      {t(`connect.steps.${step}.description`)}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
 
-          {/* Getting Started link */}
-          <p className="text-sm text-[var(--text-secondary)] mt-8 text-center">
-            {t('connect.moreSetup')}{' '}
-            <Link href="/getting-started" className="text-[var(--brand-primary)] hover:underline font-medium">
-              {t('connect.gettingStartedLink')}
-            </Link>
-            {t('connect.moreSetupSuffix')}
-          </p>
-        </div>
-      </section>
-
-      {/* Popular Skills Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('popularSkills.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            {t('popularSkills.title')}
-          </h2>
-          <SkillPreviewCards skills={POPULAR_SKILLS} viewAllLabel={t('popularSkills.viewAll')} />
-        </div>
-      </section>
-
-      {/* Usage Examples Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4 text-center">
-            {t('usage.badge')}
-          </p>
-          <h2
-            className="text-3xl md:text-4xl font-light text-[var(--text-primary)] leading-[1.2] tracking-[-0.02em] mb-12 text-center"
-            style={{ fontFamily: 'var(--font-newsreader)' }}
-          >
-            {t('usage.title')}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {USAGE_EXAMPLES.map((item) => (
-              <div
-                key={item.title}
-                className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-5"
+            <p className="mt-6 text-sm text-[var(--text-secondary)]">
+              {t('connect.moreSetup')}{' '}
+              <Link
+                href="/getting-started"
+                className="font-medium text-[var(--brand-primary)] hover:underline"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xl">{item.icon}</span>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                    {item.title}
-                  </h3>
-                </div>
-                <p className="text-sm text-[var(--text-secondary)] mb-3">{item.description}</p>
-                <div className="space-y-1.5">
-                  {item.examples.map((ex, i) => (
-                    <pre key={i} className="bg-[var(--bg-secondary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-muted)] overflow-x-auto">
-                      {ex}
+                {t('connect.gettingStartedLink')}
+              </Link>
+              {t('connect.moreSetupSuffix')}
+            </p>
+          </div>
+        </section>
+
+        {/* 인기 스킬 */}
+        <section className={SECTION_CLASS}>
+          <p className="eyebrow">{t('popularSkills.badge')}</p>
+          <h2 className={`${SECTION_TITLE_CLASS} mb-8`}>{t('popularSkills.title')}</h2>
+          <SkillPreviewCards skills={POPULAR_SKILLS} viewAllLabel={t('popularSkills.viewAll')} />
+        </section>
+
+        {/* 사용 예시 */}
+        <section className={SECTION_CLASS}>
+          <p className="eyebrow">{t('usage.badge')}</p>
+          <h2 className={SECTION_TITLE_CLASS}>{t('usage.title')}</h2>
+          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 items-start">
+            {USAGE_EXAMPLES.map((item) => (
+              <div key={item.title} className="surface-card">
+                <h3 className="text-base font-medium text-[var(--text-primary)]">{item.title}</h3>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">{item.description}</p>
+                <div className="mt-4 space-y-2">
+                  {item.examples.map((example, i) => (
+                    <pre
+                      key={i}
+                      className="overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] px-3 py-2 font-mono text-xs text-[var(--text-secondary)]"
+                    >
+                      {example}
                     </pre>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* Footer */}
       <Footer />
     </div>
   )

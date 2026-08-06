@@ -1,8 +1,8 @@
 /**
- * Home page
+ * 홈 — 스킬·에이전트·커맨드 카탈로그
  *
- * Main landing page displaying the searchable catalog of
- * skills, agents, commands, hooks, and guides.
+ * 히어로는 한 화면을 넘기지 않을 만큼만 두고, 검색창과 유형 필터가 바로
+ * 이어지게 한다 — 이 화면에서 사람들이 가장 먼저 하는 일이 찾기이기 때문이다.
  */
 import { getCatalog } from '@/lib/core/catalog'
 import { SearchableCatalog } from '@/components/catalog/SearchableCatalog'
@@ -13,6 +13,11 @@ import { getTranslations, setRequestLocale } from 'next-intl/server'
 // Revalidate every 60 seconds
 export const revalidate = 60
 
+/**
+ * 홈 페이지
+ *
+ * @param params - 로케일 라우트 파라미터
+ */
 export default async function Home({
   params,
 }: {
@@ -24,35 +29,22 @@ export default async function Home({
   const catalog = await getCatalog()
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background Gradients */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
+    <div className="page-shell">
       <ServerHeader />
 
-      {/* Hero Section */}
-      <section className="relative z-10 py-20 px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="max-w-4xl">
-            <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-6">
-              {t('hero.badge')}
-            </p>
-            <h2 className="text-5xl md:text-6xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-6" style={{ fontFamily: 'var(--font-newsreader)' }}>
-              {t('hero.titleLine1')}
-              <br />
-              <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">{t('hero.titleLine2')}</span>
-            </h2>
-            <p className="text-lg text-[var(--text-secondary)] leading-relaxed max-w-xl whitespace-pre-line">
-              {t('hero.description')}
-            </p>
-          </div>
+      <main className="page-main">
+        {/* 왼쪽 정렬 — 가운데 정렬 히어로를 쓰지 않는다 */}
+        <header className="reveal max-w-2xl">
+          <p className="eyebrow">{t('hero.badge')}</p>
+          <h1 className="mt-3 text-3xl md:text-4xl font-medium tracking-tight leading-tight text-[var(--text-primary)]">
+            {t('hero.titleLine1')}{' '}
+            <span className="text-[var(--brand-primary)]">{t('hero.titleLine2')}</span>
+          </h1>
+          <p className="page-subtitle whitespace-pre-line">{t('hero.description')}</p>
+        </header>
 
-          <SearchableCatalog catalog={catalog} />
-        </div>
-      </section>
+        <SearchableCatalog catalog={catalog} />
+      </main>
 
       <Footer />
     </div>

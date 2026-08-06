@@ -1,13 +1,14 @@
 /**
- * Hero section component for catalog item detail pages
+ * 상세 페이지 머리글
  *
- * Displays item type, title, description, tags, and metadata
- * with type-specific styling and interactive like button.
+ * 종류 라벨 → 제목 → 설명 → 태그 → 메타 스트립 순으로 위계를 세운다.
+ * 작성자·버전·갱신일처럼 부수적인 값은 맨 아래 한 줄로 몰아 두어,
+ * 제목과 설명이 먼저 읽히게 한다.
  */
 import { TAGS, DIFFICULTY_LABELS } from '@/lib/core/types'
 import { StatusBadge } from '../ui/StatusBadge'
 import { VersionPopover } from '../ui/VersionPopover'
-import { ReactNode } from 'react'
+import { Fragment, ReactNode } from 'react'
 
 /** Supported catalog item types */
 export type ItemType = 'skill' | 'agent' | 'command' | 'hook' | 'guide' | 'package'
@@ -42,27 +43,40 @@ interface ItemHeroProps {
   extraBadges?: ReactNode
 }
 
-const TYPE_CONFIG: Record<ItemType, { icon: string; label: string; color: string }> = {
-  skill: { icon: '⚡', label: 'Skill', color: 'text-[var(--accent-cyan)]' },
-  agent: { icon: '◈', label: 'Agent', color: 'text-[var(--accent-purple)]' },
-  command: { icon: '▸', label: 'Command', color: 'text-rose-400' },
-  hook: { icon: '🪝', label: 'Hook', color: 'text-orange-400' },
-  guide: { icon: '📚', label: 'Guide', color: 'text-emerald-400' },
-  package: { icon: '📦', label: 'Package', color: 'text-indigo-400' },
+/** 항목 종류별 표시 이름 — 색과 아이콘 대신 이름으로만 구분한다 */
+const TYPE_LABELS: Record<ItemType, string> = {
+  skill: 'Skill',
+  agent: 'Agent',
+  command: 'Command',
+  hook: 'Hook',
+  guide: 'Guide',
+  package: 'Package',
 }
 
 /**
- * Hero section displaying item metadata and actions
+ * 상세 페이지 머리글
+ *
+ * @param type - 항목 종류
+ * @param name - 항목 이름
+ * @param description - 한 줄 설명
+ * @param authorName - 작성자 계정
+ * @param tags - 태그 키 목록
+ * @param itemId - 항목 식별자
+ * @param difficulty - 난이도
+ * @param updatedAt - 마지막 갱신일
+ * @param status - 공개 상태
+ * @param version - 버전 문자열
+ * @param estimatedTime - 예상 소요 시간
+ * @param extraBadges - 종류별로 덧붙이는 배지
  *
  * @example
  * ```tsx
  * <ItemHero
  *   type="skill"
+ *   itemId="code-reviewer"
  *   name="Code Reviewer"
  *   description="AI-powered code review assistant"
  *   tags={['automation', 'code-quality']}
- *   likes={42}
- *   itemId="code-reviewer"
  * />
  * ```
  */
@@ -80,61 +94,65 @@ export function ItemHero({
   estimatedTime,
   extraBadges,
 }: ItemHeroProps) {
-  const config = TYPE_CONFIG[type]
+  const difficultyLabel = difficulty
+    ? DIFFICULTY_LABELS[difficulty as keyof typeof DIFFICULTY_LABELS]?.label ?? difficulty
+    : null
+
+  // 한 줄 메타 스트립 — 값이 없는 항목은 아예 빠지고, 남은 것끼리만 구분점을 찍는다
+  const metaItems: ReactNode[] = []
+  if (authorName) {
+    metaItems.push(<span className="font-mono">@{authorName}</span>)
+  }
+  if (version) {
+    metaItems.push(<VersionPopover version={version} itemId={itemId} size="sm" />)
+  }
+  if (updatedAt) {
+    metaItems.push(<span className="font-mono tabular-nums">Updated {updatedAt}</span>)
+  }
+  if (difficultyLabel) {
+    metaItems.push(<span>{difficultyLabel}</span>)
+  }
+  if (estimatedTime) {
+    metaItems.push(<span className="font-mono tabular-nums">{estimatedTime}</span>)
+  }
 
   return (
     <div className="mb-12">
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-2xl">{config.icon}</span>
-        <span className={`text-[10px] font-semibold tracking-[0.2em] ${config.color} uppercase`}>
-          {config.label}
-        </span>
-        {difficulty && (
-          <span className="text-[10px] px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
-            {DIFFICULTY_LABELS[difficulty as keyof typeof DIFFICULTY_LABELS]?.label || difficulty}
-          </span>
-        )}
-        {estimatedTime && (
-          <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400">
-            ⏱ {estimatedTime}
-          </span>
-        )}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="eyebrow">{TYPE_LABELS[type]}</span>
         {extraBadges}
-        {version && <VersionPopover version={version} itemId={itemId} size="sm" />}
         {status === 'draft' && <StatusBadge status={status} />}
       </div>
 
-      <h1
-        className="text-4xl font-light text-[var(--text-primary)] tracking-tight mb-4"
-        style={{ fontFamily: 'var(--font-newsreader)' }}
-      >
+      <h1 className="mt-4 text-3xl md:text-4xl font-medium tracking-tight text-[var(--text-primary)]">
         {name}
       </h1>
 
-      <p className="text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl mb-8">
-        {description}
-      </p>
+      <p className="page-subtitle">{description}</p>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {tags.map((tag) => (
-          <span
-            key={tag}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
-          >
-            {TAGS[tag]?.label || tag}
-          </span>
-        ))}
-      </div>
+      {tags.length > 0 && (
+        <div className="mt-6 flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-3 py-1 text-xs text-[var(--text-secondary)]"
+            >
+              {TAGS[tag]?.label || tag}
+            </span>
+          ))}
+        </div>
+      )}
 
-      <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
-        {authorName && <span>@{authorName}</span>}
-        {updatedAt && (
-          <>
-            <span className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
-            <span>Updated {updatedAt}</span>
-          </>
-        )}
-      </div>
+      {metaItems.length > 0 && (
+        <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-[var(--border-subtle)] pt-4 text-xs text-[var(--text-muted)]">
+          {metaItems.map((item, index) => (
+            <Fragment key={index}>
+              {index > 0 && <span aria-hidden="true">·</span>}
+              {item}
+            </Fragment>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

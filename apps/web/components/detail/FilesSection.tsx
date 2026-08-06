@@ -1,10 +1,11 @@
-/**
- * Files section component for displaying plugin files grouped by type
- *
- * Renders additional files (scripts, references, templates, configs)
- * with expandable content previews and type-specific styling.
- */
 'use client'
+
+/**
+ * 추가 파일 구획
+ *
+ * 스킬에 딸려 오는 스크립트·참조 문서·템플릿·설정 파일을 종류별로 묶어 보여준다.
+ * 파일 이름과 내용은 자리가 맞아야 읽히므로 고정폭을 쓴다.
+ */
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -15,35 +16,15 @@ import { CopyButton } from '../ui/CopyButton'
  * Props for the FilesSection component
  */
 interface FilesSectionProps {
-  /** Array of plugin files to display */
+  /** 보여줄 파일 목록 */
   files: PluginFile[]
 }
 
-/** File type icon and color metadata (labels/descriptions come from translations) */
-const FILE_TYPE_META: Record<
-  FileType,
-  { icon: string; color: string }
-> = {
-  script: {
-    icon: '🔧',
-    color: 'border-emerald-500/30 bg-emerald-500/5',
-  },
-  reference: {
-    icon: '📚',
-    color: 'border-blue-500/30 bg-blue-500/5',
-  },
-  template: {
-    icon: '📋',
-    color: 'border-purple-500/30 bg-purple-500/5',
-  },
-  config: {
-    icon: '⚙️',
-    color: 'border-amber-500/30 bg-amber-500/5',
-  },
-}
-
 /**
- * Infer file type from filename extension if not explicitly provided
+ * 확장자로 파일 종류를 추정한다 (명시된 종류가 없을 때만)
+ *
+ * @param filename - 파일 이름
+ * @returns 추정한 파일 종류
  */
 function inferFileType(filename: string): FileType {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -60,7 +41,10 @@ function inferFileType(filename: string): FileType {
 }
 
 /**
- * Group files by their type
+ * 파일을 종류별로 묶는다
+ *
+ * @param files - 파일 목록
+ * @returns 종류를 키로 하는 파일 묶음
  */
 function groupFilesByType(files: PluginFile[]): Map<FileType, PluginFile[]> {
   const grouped = new Map<FileType, PluginFile[]>()
@@ -75,53 +59,46 @@ function groupFilesByType(files: PluginFile[]): Map<FileType, PluginFile[]> {
 }
 
 /**
- * Individual file display with expandable content
+ * 파일 한 줄 — 눌러서 내용을 펼친다
+ *
+ * @param file - 표시할 파일
  */
 function FileItem({ file }: { file: PluginFile }) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const type = (file.type as FileType) || inferFileType(file.name)
-  const meta = FILE_TYPE_META[type]
-  const t = useTranslations('detail.files')
+  const lineCount = (file.content ?? '').split('\n').length
 
   return (
-    <div
-      className={`border rounded-xl overflow-hidden transition-all ${meta.color} ${
-        isExpanded ? 'shadow-lg' : ''
-      }`}
-    >
-      {/* File header */}
-      <div className="w-full px-4 py-3 flex items-center justify-between">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)]">
+      <div className="flex items-center justify-between gap-2 px-4 py-3">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-3 flex-1 hover:bg-white/5 transition-colors rounded-lg -ml-2 px-2 py-1"
+          aria-expanded={isExpanded}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <span className="text-lg">{meta.icon}</span>
-          <div className="text-left">
-            <div className="text-sm font-mono text-[var(--text-primary)]">{file.name}</div>
-            <div className="text-xs text-[var(--text-muted)] mt-0.5">
-              {(file.content ?? '').split('\n').length} lines
+          <div className="min-w-0">
+            <div className="truncate font-mono text-sm text-[var(--text-primary)]">{file.name}</div>
+            <div className="mt-0.5 font-mono text-xs tabular-nums text-[var(--text-muted)]">
+              {lineCount} lines
             </div>
           </div>
           <svg
-            className={`w-5 h-5 text-[var(--text-secondary)] transition-transform ml-auto ${
+            className={`ml-auto h-4 w-4 shrink-0 text-[var(--text-muted)] transition-transform ${
               isExpanded ? 'rotate-180' : ''
             }`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        <div className="flex items-center gap-2 ml-2">
-          <CopyButton text={file.content} />
-        </div>
+        <CopyButton text={file.content} />
       </div>
 
-      {/* Expandable content */}
       {isExpanded && (
         <div className="border-t border-[var(--border-subtle)] bg-[var(--bg-primary)]">
-          <pre className="p-4 text-xs font-mono text-[var(--text-primary)] overflow-x-auto max-h-96 overflow-y-auto">
+          <pre className="max-h-96 overflow-auto p-4 font-mono text-xs leading-relaxed text-[var(--text-primary)]">
             <code>{file.content}</code>
           </pre>
         </div>
@@ -131,29 +108,28 @@ function FileItem({ file }: { file: PluginFile }) {
 }
 
 /**
- * File type group with header and file list
+ * 같은 종류의 파일 묶음
+ *
+ * @param type - 파일 종류
+ * @param files - 그 종류에 속한 파일들
  */
 function FileTypeGroup({ type, files }: { type: FileType; files: PluginFile[] }) {
-  const meta = FILE_TYPE_META[type]
   const t = useTranslations('detail.files')
 
   return (
     <div className="mb-6 last:mb-0">
-      {/* Type header */}
-      <div className="flex items-center gap-3 mb-3">
-        <span className="text-2xl">{meta.icon}</span>
+      <div className="mb-3 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-[var(--text-primary)]">{t(`types.${type}.label`)}</h3>
-          <p className="text-xs text-[var(--text-muted)]">{t(`types.${type}.description`)}</p>
+          <h3 className="text-sm font-medium text-[var(--text-primary)]">
+            {t(`types.${type}.label`)}
+          </h3>
+          <p className="mt-0.5 text-xs text-[var(--text-muted)]">{t(`types.${type}.description`)}</p>
         </div>
-        <div className="ml-auto">
-          <span className="px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)] font-medium">
-            {files.length}
-          </span>
-        </div>
+        <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--text-muted)]">
+          {files.length}
+        </span>
       </div>
 
-      {/* File list */}
       <div className="space-y-2">
         {files.map((file, index) => (
           <FileItem key={`${file.name}-${index}`} file={file} />
@@ -164,16 +140,13 @@ function FileTypeGroup({ type, files }: { type: FileType; files: PluginFile[] })
 }
 
 /**
- * Main files section component
+ * 추가 파일 목록
  *
- * Displays plugin files grouped by type with expandable previews
+ * @param files - 보여줄 파일 목록
  *
  * @example
  * ```tsx
- * <FilesSection files={[
- *   { name: 'run.mjs', content: '...', type: 'script' },
- *   { name: 'guide.md', content: '...', type: 'reference' }
- * ]} />
+ * <FilesSection files={[{ name: 'run.mjs', content: '...', type: 'script' }]} />
  * ```
  */
 export function FilesSection({ files }: FilesSectionProps) {
@@ -187,18 +160,14 @@ export function FilesSection({ files }: FilesSectionProps) {
   const typeOrder: FileType[] = ['script', 'reference', 'template', 'config']
 
   return (
-    <div className="glass rounded-2xl p-8 mb-8">
-      {/* Section header */}
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-xl">📁</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('title')}</h2>
-      </div>
-
-      <p className="text-sm text-[var(--text-secondary)] mb-6">
+    <div className="surface-card mb-8">
+      <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)]">
+        {t('title')}
+      </h2>
+      <p className="mt-1 mb-6 text-sm text-[var(--text-secondary)]">
         {t('description', { count: files.length })}
       </p>
 
-      {/* File groups */}
       <div>
         {typeOrder.map((type) => {
           const filesOfType = groupedFiles.get(type)

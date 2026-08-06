@@ -1,63 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600&display=swap');
 @import "tailwindcss";
+
+/*
+ * 색 체계
+ *
+ * 중립 무채색이 바탕이고, 강조는 브랜드 주황 하나다.
+ * 상태색(성공·경고)만 예외로 두고, 그 밖의 색은 쓰지 않는다.
+ */
 
 /* Dark theme (default) */
 :root {
-  --bg-primary: #0a0b0e;
-  --bg-secondary: #12141a;
-  --bg-tertiary: #1a1d26;
-  --bg-card: rgba(26, 29, 38, 0.6);
+  --bg-primary: #0c0c0d;
+  --bg-secondary: #141416;
+  --bg-tertiary: #1c1c1f;
+  --bg-card: rgba(20, 20, 22, 0.72);
 
-  --text-primary: #f0f2f5;
-  --text-secondary: #8b93a6;
-  --text-muted: #5a6478;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a1a1a6;
+  --text-muted: #71717a;
 
-  --accent-cyan: #00d4ff;
-  --accent-green: #00ff88;
-  --accent-purple: #a855f7;
-  --accent-orange: #ff6b35;
+  --accent-cyan: #38bdf8;
+  --accent-green: #22c55e;
+  --accent-purple: #a78bfa;
+  --accent-orange: #f97316;
 
   --brand-primary: #F26522;
   --brand-secondary: #FF8C42;
 
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-hover: rgba(255, 255, 255, 0.22);
+  --border-strong: rgba(255, 255, 255, 0.85);
 
-  --glow-cyan: 0 0 40px rgba(0, 212, 255, 0.15);
-  --glow-green: 0 0 40px rgba(0, 255, 136, 0.15);
+  --glow-cyan: none;
+  --glow-green: none;
 
   --grid-color: rgba(255, 255, 255, 0.02);
-  --selection-bg: var(--accent-cyan);
-  --selection-text: var(--bg-primary);
+  --selection-bg: var(--brand-primary);
+  --selection-text: #ffffff;
 }
 
 /* Light theme */
 [data-theme="light"] {
   --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e5e5e5;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f0f0f0;
   --bg-card: rgba(255, 255, 255, 0.95);
 
   --text-primary: #0a0a0a;
-  --text-secondary: #404040;
-  --text-muted: #737373;
+  --text-secondary: #52525b;
+  --text-muted: #8b8b93;
 
-  --accent-cyan: #0891b2;
-  --accent-green: #059669;
-  --accent-purple: #9333ea;
+  --accent-cyan: #0284c7;
+  --accent-green: #16a34a;
+  --accent-purple: #7c5cf0;
   --accent-orange: #ea580c;
 
   --brand-primary: #D95A1E;
   --brand-secondary: #E07538;
 
-  --border-subtle: rgba(0, 0, 0, 0.12);
-  --border-hover: rgba(0, 0, 0, 0.20);
+  --border-subtle: rgba(10, 10, 10, 0.10);
+  --border-hover: rgba(10, 10, 10, 0.24);
+  --border-strong: rgba(10, 10, 10, 0.85);
 
-  --glow-cyan: 0 0 40px rgba(8, 145, 178, 0.15);
-  --glow-green: 0 0 40px rgba(5, 150, 105, 0.15);
+  --glow-cyan: none;
+  --glow-green: none;
 
-  --grid-color: rgba(0, 0, 0, 0.04);
-  --selection-bg: var(--accent-cyan);
+  --grid-color: rgba(10, 10, 10, 0.04);
+  --selection-bg: var(--brand-primary);
   --selection-text: #ffffff;
 }
 
@@ -69,25 +77,43 @@ html {
   scroll-behavior: smooth;
 }
 
+/*
+ * 본문은 산세리프다.
+ *
+ * 예전에는 사이트 전체가 고정폭(JetBrains Mono)이었는데, 글이 코드처럼 읽히고
+ * 한글 자간이 깨졌다. 고정폭은 숫자·식별자처럼 자리가 맞아야 하는 곳에서만 쓴다
+ * (`font-mono` 유틸리티).
+ */
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family:
+    'Pretendard Variable', Pretendard, var(--font-geist-sans), -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.011em;
   min-height: 100vh;
 }
 
 /* Grid Pattern Background */
+/*
+ * 배경 격자는 걷어냈다 — 장식이 내용보다 먼저 읽히면 안 된다.
+ * 페이지들이 이 클래스를 아직 붙이고 있어 이름은 남겨 둔다.
+ */
 .grid-pattern {
-  background-image:
-    linear-gradient(var(--grid-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-  background-size: 64px 64px;
+  background-image: none;
 }
 
 /* Noise Texture Overlay */
+/*
+ * 노이즈 오버레이 제거 — z-index 1000으로 전 화면을 덮던 레이어였다.
+ * 페이지들이 아직 클래스를 붙이고 있어 규칙만 비워 둔다.
+ */
 .noise-overlay::before {
+  content: none;
+}
+
+.noise-overlay-legacy::before {
   content: '';
   position: fixed;
   top: 0;
@@ -127,13 +153,13 @@ body {
   background-clip: text;
 }
 
-/* Glow Effects */
-.glow-cyan {
-  box-shadow: var(--glow-cyan);
-}
-
+/*
+ * 네온 글로우는 걷어냈다 — 빛나는 테두리는 화면을 싸구려로 만든다.
+ * 깊이는 그림자(.surface-card)나 1px 경계선으로 표현한다.
+ */
+.glow-cyan,
 .glow-green {
-  box-shadow: var(--glow-green);
+  box-shadow: none;
 }
 
 /* Stagger Animation */
@@ -195,10 +221,15 @@ body {
   background: var(--text-secondary);
 }
 
-/* Focus States */
-input:focus, button:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-cyan);
+/* Focus States — 키보드 이동에만 테두리를 보인다 */
+input:focus-visible,
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* Selection */
@@ -307,4 +338,203 @@ html.theme-transition *::after {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* AX 대시보드 — 등장·로딩 모션 */
+@keyframes ax-reveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ax-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.reveal,
+.ax-reveal {
+  animation: ax-reveal 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--ax-delay, 0ms);
+}
+
+.shimmer,
+.ax-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--bg-secondary) 25%,
+    var(--bg-tertiary) 50%,
+    var(--bg-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: ax-shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .ax-reveal,
+  .shimmer,
+  .ax-shimmer {
+    animation: none;
+  }
+  .shimmer,
+  .ax-shimmer {
+    background: var(--bg-secondary);
+  }
+}
+
+/* AX 대시보드 — 벤토 카드 */
+/*
+ * 카드
+ *
+ * 부드러운 그림자로 띄우는 대신 선으로 깎는다.
+ * 모서리는 작게(12px), 경계는 또렷하게 — 떠 있는 느낌보다 짜임새를 택했다.
+ */
+.surface-card,
+.ax-card {
+  padding: 1.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  transition: border-color 200ms ease, background-color 200ms ease;
+}
+
+@media (min-width: 768px) {
+  .surface-card,
+  .ax-card {
+    padding: 2rem;
+  }
+}
+
+.surface-card:hover,
+.ax-card:hover {
+  border-color: var(--border-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-card:hover,
+  .ax-card:hover {
+    transform: none;
+  }
+}
+
+/*
+ * 사이트 공통 조판 유틸
+ *
+ * 페이지마다 같은 값을 다시 적지 않도록 한 곳에 모았다.
+ */
+.page-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.page-main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+  padding-block: 2.5rem 6rem;
+}
+
+@media (min-width: 768px) {
+  .page-main {
+    padding-inline: 2.5rem;
+  }
+}
+
+/* 페이지 제목 — 세리프·그라디언트 없이 굵기와 자간으로만 위계를 만든다 */
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+@media (min-width: 768px) {
+  .page-title {
+    font-size: 2rem;
+  }
+}
+
+.page-subtitle {
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 60ch;
+}
+
+/* 작은 대문자 라벨 (지표 이름·구획 머리) */
+.eyebrow {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+}
+
+/*
+ * 알약 버튼
+ *
+ * 채운 버튼 대신 2px 외곽선을 기본으로 두고, hover에서 색을 뒤집는다.
+ * 화면 어디서든 "누를 수 있는 것"이 같은 모양으로 보이게 하려는 것이다.
+ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.125rem;
+  border-radius: 9999px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.pill:hover {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.pill:active {
+  transform: translateY(1px);
+}
+
+/* 강조 동작 — 화면당 하나만 */
+.pill-accent {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  color: var(--bg-primary);
+}
+
+.pill-accent:hover {
+  background: transparent;
+  color: var(--brand-primary);
+}
+
+/* 보조 동작 — 선을 흐리게 */
+.pill-quiet {
+  border-width: 1px;
+  border-color: var(--border-hover);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.875rem;
+}
+
+.pill-quiet:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill:active {
+    transform: none;
+  }
 }

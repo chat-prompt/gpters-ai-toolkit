@@ -20,6 +20,13 @@ interface McpServer {
   updatedAt: string
 }
 
+/** 폼 입력 공통 클래스 */
+const inputClass =
+  'w-full px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-hover)] transition-colors'
+
+/** 폼 라벨 공통 클래스 */
+const labelClass = 'block text-sm text-[var(--text-muted)] mb-2'
+
 export default function McpServersAdminPage() {
   useAdminAuth() // For layout protection
   const { confirm } = useConfirmDialog()
@@ -116,14 +123,14 @@ export default function McpServersAdminPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-12">
-      <div className="flex items-center justify-between mb-8">
+    <div className="max-w-5xl">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <Link href="/admin" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-2 inline-block">
             ← Back to Dashboard
           </Link>
-          <h1 className="text-3xl font-light text-[var(--text-primary)]">MCP Servers</h1>
-          <p className="text-[var(--text-secondary)] mt-1">Manage MCP server definitions</p>
+          <h1 className="page-title">MCP Servers</h1>
+          <p className="page-subtitle">Manage MCP server definitions</p>
         </div>
         <button
           onClick={() => {
@@ -131,7 +138,7 @@ export default function McpServersAdminPage() {
             setFormData({ id: '', label: '', description: '', documentationUrl: '' })
             setShowForm(true)
           }}
-          className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90"
+          className="px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] text-sm font-medium hover:opacity-90"
         >
           + Add MCP Server
         </button>
@@ -140,53 +147,53 @@ export default function McpServersAdminPage() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="glass rounded-2xl p-8 max-w-md w-full mx-4">
+          <div className="surface-card rounded-2xl p-6 max-w-md w-full mx-4">
             <h2 className="text-xl font-medium text-[var(--text-primary)] mb-6">
               {editingServer ? 'Edit MCP Server' : 'New MCP Server'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               {!editingServer && (
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] mb-2">ID (slug)</label>
+                  <label className={labelClass}>ID (slug)</label>
                   <input
                     type="text"
                     value={formData.id}
                     onChange={(e) => setFormData({ ...formData, id: e.target.value })}
                     placeholder="e.g., github, slack"
-                    className="w-full px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)]"
+                    className={inputClass}
                     required
                   />
                 </div>
               )}
               <div>
-                <label className="block text-sm text-[var(--text-muted)] mb-2">Label</label>
+                <label className={labelClass}>Label</label>
                 <input
                   type="text"
                   value={formData.label}
                   onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                   placeholder="e.g., GitHub MCP"
-                  className="w-full px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)]"
+                  className={inputClass}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--text-muted)] mb-2">Description</label>
+                <label className={labelClass}>Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] h-20"
+                  className={`${inputClass} h-20`}
                   placeholder="What does this MCP server do?"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--text-muted)] mb-2">Documentation URL (optional)</label>
+                <label className={labelClass}>Documentation URL (optional)</label>
                 <input
                   type="url"
                   value={formData.documentationUrl}
                   onChange={(e) => setFormData({ ...formData, documentationUrl: e.target.value })}
                   placeholder="https://..."
-                  className="w-full px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)]"
+                  className={inputClass}
                 />
               </div>
               <div className="flex gap-3 pt-4">
@@ -199,7 +206,7 @@ export default function McpServersAdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium"
+                  className="flex-1 px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium"
                 >
                   {editingServer ? 'Update' : 'Create'}
                 </button>
@@ -213,32 +220,32 @@ export default function McpServersAdminPage() {
       {loading ? (
         <div className="text-[var(--text-muted)]">Loading...</div>
       ) : (
-        <div className="glass rounded-2xl overflow-hidden">
-          <table className="w-full">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border-subtle)]">
-                <th className="text-left px-6 py-4 text-sm text-[var(--text-muted)]">ID</th>
-                <th className="text-left px-6 py-4 text-sm text-[var(--text-muted)]">Label</th>
-                <th className="text-left px-6 py-4 text-sm text-[var(--text-muted)]">Description</th>
-                <th className="text-left px-6 py-4 text-sm text-[var(--text-muted)]">Docs</th>
-                <th className="text-right px-6 py-4 text-sm text-[var(--text-muted)]">Actions</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">ID</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Label</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Description</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Docs</th>
+                <th className="eyebrow text-right px-3 py-2 font-normal">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {servers.map((server) => (
-                <tr key={server.id} className="border-b border-[var(--border-subtle)] last:border-0">
-                  <td className="px-6 py-4 text-[var(--text-primary)] font-mono text-sm">{server.id}</td>
-                  <td className="px-6 py-4 text-[var(--text-primary)]">{server.label}</td>
-                  <td className="px-6 py-4 text-[var(--text-secondary)] text-sm max-w-xs truncate">
+                <tr key={server.id}>
+                  <td className="px-3 py-2.5 text-[var(--text-primary)] font-mono text-xs">{server.id}</td>
+                  <td className="px-3 py-2.5 text-[var(--text-primary)]">{server.label}</td>
+                  <td className="px-3 py-2.5 text-[var(--text-secondary)] max-w-xs truncate">
                     {server.description || '-'}
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-3 py-2.5">
                     {server.documentationUrl ? (
                       <a
                         href={server.documentationUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[var(--accent-cyan)] hover:underline"
+                        className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
                       >
                         View
                       </a>
@@ -246,16 +253,16 @@ export default function McpServersAdminPage() {
                       <span className="text-[var(--text-muted)]">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-2.5 text-right">
                     <button
                       onClick={() => handleEdit(server)}
-                      className="text-[var(--accent-cyan)] hover:underline text-sm mr-4"
+                      className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] mr-4"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(server.id)}
-                      className="text-red-400 hover:underline text-sm"
+                      className="text-[var(--accent-orange)] hover:opacity-80"
                     >
                       Delete
                     </button>
@@ -264,7 +271,7 @@ export default function McpServersAdminPage() {
               ))}
               {servers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={5} className="px-3 py-8 text-center text-[var(--text-muted)]">
                     No MCP servers found. Create your first MCP server!
                   </td>
                 </tr>

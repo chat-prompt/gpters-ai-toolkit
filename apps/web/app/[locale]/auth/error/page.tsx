@@ -1,8 +1,7 @@
 /**
  * Auth error page
  *
- * Displays authentication error messages with glassmorphism card
- * and animated gradient orb background. Provides explanations
+ * Displays authentication error messages with explanations
  * for access denied, configuration, and verification failures.
  */
 import { Link } from '@/i18n/navigation'
@@ -30,29 +29,13 @@ export default async function AuthErrorPage({
   const errorInfo = errorMessages[error || 'Default'] || errorMessages.Default
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] grid-pattern flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Floating gradient orbs */}
-      <div
-        aria-hidden="true"
-        className="absolute top-[-10%] left-[-5%] w-72 h-72 rounded-full bg-[var(--accent-cyan)] opacity-20 blur-3xl animate-float-slow [.light_&]:opacity-10"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute bottom-[-10%] right-[-5%] w-72 h-72 rounded-full bg-[var(--accent-purple)] opacity-20 blur-3xl animate-float-slow-delayed [.light_&]:opacity-10"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute bottom-[10%] left-[30%] w-72 h-72 rounded-full bg-[var(--accent-green)] opacity-20 blur-3xl animate-float-slow-delayed-2 [.light_&]:opacity-10"
-      />
-
-      {/* Card */}
-      <div className="w-full max-w-md relative z-10 animate-fade-up">
-        <div className="glass rounded-2xl p-8 transition-all duration-200 hover:border-[var(--border-hover)]">
-          {/* Error Icon */}
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/10 mb-5" style={{ boxShadow: '0 0 20px rgba(239, 68, 68, 0.3)' }}>
+    <div className="page-shell items-center justify-center">
+      <div className="w-full max-w-md px-4">
+        <div className="surface-card">
+          <div className="mb-6 flex items-center gap-4">
+            <div className="shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-full border border-[var(--border-hover)]">
               <svg
-                className="w-8 h-8 text-red-400"
+                className="w-6 h-6 text-[var(--text-secondary)]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -65,17 +48,17 @@ export default async function AuthErrorPage({
                 />
               </svg>
             </div>
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-              {errorInfo.title}
-            </h2>
-            <p className="text-sm text-[var(--text-muted)]">
-              {errorInfo.description}
-            </p>
+            <div className="min-w-0">
+              <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)]">
+                {errorInfo.title}
+              </h2>
+              <p className="text-sm text-[var(--text-muted)]">{errorInfo.description}</p>
+            </div>
           </div>
 
           <Link
             href="/auth/signin"
-            className="cursor-pointer block w-full text-center px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm font-medium border border-[var(--border-subtle)] transition-all duration-200 hover:border-[var(--accent-cyan)]/50 hover:shadow-[0_0_20px_rgba(0,212,255,0.1)]"
+            className="block w-full text-center px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm font-medium border border-[var(--border-subtle)] transition-colors duration-200 hover:border-[var(--border-hover)]"
           >
             {t('retryLogin')}
           </Link>

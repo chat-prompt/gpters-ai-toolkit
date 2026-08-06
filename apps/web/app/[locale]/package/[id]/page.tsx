@@ -29,6 +29,11 @@ export async function generateStaticParams() {
     .map(item => ({ id: item.id }))
 }
 
+/**
+ * 패키지 상세 페이지
+ *
+ * @param params - locale 과 항목 id 를 담은 라우트 파라미터
+ */
 export default async function PackagePage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
   setRequestLocale(locale)
@@ -43,33 +48,33 @@ export default async function PackagePage({ params }: { params: Promise<{ locale
 
   // Build TOC items based on available content
   const tocItems: TocItem[] = [
-    { id: 'overview', label: '개요', icon: '📋' },
+    { id: 'overview', label: '개요' },
   ]
 
   if (item.packageContents && item.packageContents.length > 0) {
-    tocItems.push({ id: 'contents', label: '포함 아이템', icon: '📦' })
+    tocItems.push({ id: 'contents', label: '포함 아이템' })
   }
 
   if (item.dependencies && item.dependencies.length > 0) {
-    tocItems.push({ id: 'dependencies', label: '의존성', icon: '🔗' })
+    tocItems.push({ id: 'dependencies', label: '의존성' })
   }
 
   if (item.changelog) {
-    tocItems.push({ id: 'changelog', label: '변경 이력', icon: '📋' })
+    tocItems.push({ id: 'changelog', label: '변경 이력' })
   }
 
-  tocItems.push({ id: 'content', label: '설명', icon: '📄' })
+  tocItems.push({ id: 'content', label: '설명' })
 
   if (item.readme) {
-    tocItems.push({ id: 'readme', label: 'README', icon: '📖' })
+    tocItems.push({ id: 'readme', label: 'README' })
   }
 
   if (relatedItems.length > 0) {
-    tocItems.push({ id: 'related', label: '관련 아이템', icon: '🔗' })
+    tocItems.push({ id: 'related', label: '관련 아이템' })
   }
 
   return (
-    <DetailPageLayout accentColor="indigo">
+    <DetailPageLayout>
       <TableOfContents items={tocItems} />
 
       {item.status === 'draft' && <DraftBanner />}
@@ -94,10 +99,8 @@ export default async function PackagePage({ params }: { params: Promise<{ locale
         <Section id="contents" className="mb-8">
           <div className="mb-6">
             <SectionHeader
-              icon="📦"
               title="포함 아이템"
               count={item.packageContents.length}
-              accentColor="text-indigo-400"
             />
             <p className="text-sm text-[var(--text-secondary)] mt-2">
               이 패키지에 포함된 아이템들입니다. 각 아이템을 개별적으로 설치하거나, 전체 패키지를 한 번에 설치할 수 있습니다.
@@ -137,7 +140,7 @@ export default async function PackagePage({ params }: { params: Promise<{ locale
       {/* README */}
       {item.readme && (
         <Section id="readme">
-          <ContentSection title="README.md" icon="📖" content={item.readme} />
+          <ContentSection title="README.md" content={item.readme} />
         </Section>
       )}
 

@@ -31,27 +31,13 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
   const t = await getTranslations('privacy')
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background Gradients */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
+    <div className="page-shell">
       <ServerHeader />
 
-      <main className="relative z-10 max-w-3xl mx-auto px-8 py-12">
-        <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4">
-          {t('badge')}
-        </p>
-        <h1
-          className="text-4xl md:text-5xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-8"
-          style={{ fontFamily: 'var(--font-newsreader)' }}
-        >
-          {t('title')}{' '}
-          <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
-            {t('titleHighlight')}
-          </span>
+      <main className="page-main max-w-[70ch]">
+        <p className="eyebrow">{t('badge')}</p>
+        <h1 className="page-title mt-2 mb-8">
+          {t('title')} {t('titleHighlight')}
         </h1>
 
         <div className="space-y-10 text-[var(--text-secondary)] leading-relaxed">
@@ -74,23 +60,23 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
                     <th className="text-left py-2 text-[var(--text-primary)]">{t('sections.collected.columns.retention')}</th>
                   </tr>
                 </thead>
-                <tbody className="text-[var(--text-secondary)]">
-                  <tr className="border-b border-[var(--border-subtle)]">
+                <tbody className="divide-y divide-[var(--border-subtle)] text-[var(--text-secondary)]">
+                  <tr>
                     <td className="py-2 pr-4 font-mono text-xs">mcp_audit_logs</td>
                     <td className="py-2 pr-4">{t('sections.collected.rows.auditLogs')}</td>
                     <td className="py-2">{t('sections.collected.rows.retentionAudit')}</td>
                   </tr>
-                  <tr className="border-b border-[var(--border-subtle)]">
+                  <tr>
                     <td className="py-2 pr-4 font-mono text-xs">mcp_sessions</td>
                     <td className="py-2 pr-4">{t('sections.collected.rows.sessions')}</td>
                     <td className="py-2">{t('sections.collected.rows.retentionSessions')}</td>
                   </tr>
-                  <tr className="border-b border-[var(--border-subtle)]">
+                  <tr>
                     <td className="py-2 pr-4 font-mono text-xs">skill_events</td>
                     <td className="py-2 pr-4">{t('sections.collected.rows.skillEvents')}</td>
                     <td className="py-2">{t('sections.collected.rows.retentionSkillEvents')}</td>
                   </tr>
-                  <tr className="border-b border-[var(--border-subtle)]">
+                  <tr>
                     <td className="py-2 pr-4 font-mono text-xs">gpters-analytics</td>
                     <td className="py-2 pr-4">{t('sections.collected.rows.analytics')}</td>
                     <td className="py-2">{t('sections.collected.rows.retentionAnalytics')}</td>
@@ -124,7 +110,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
                 settingsPath: '.claude/settings.json',
               })}
             </p>
-            <pre className="bg-[var(--bg-secondary)] rounded-lg p-4 overflow-x-auto text-xs font-mono leading-relaxed">
+            <pre className="bg-[var(--bg-tertiary)] rounded-lg p-4 overflow-x-auto text-xs font-mono leading-relaxed">
 {`{
   "mcpServers": {
     "gpters-ai-toolkit": {
@@ -146,7 +132,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
               {t('sections.contact.descriptionPrefix')}{' '}
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="text-[var(--brand-primary)] hover:underline"
+                className="text-[var(--text-primary)] underline underline-offset-4 hover:text-[var(--text-secondary)] transition-colors"
               >
                 {CONTACT_EMAIL}
               </a>

@@ -38,13 +38,14 @@ interface Organization {
   role: string
 }
 
-const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; href: string }> = {
-  skill: { label: 'Skill', icon: '⚡', color: 'text-[var(--accent-cyan)]', href: '/skill' },
-  agent: { label: 'Agent', icon: '◈', color: 'text-[var(--accent-purple)]', href: '/agent' },
-  command: { label: 'Command', icon: '▸', color: 'text-rose-400', href: '/command' },
-  hook: { label: 'Hook', icon: '🪝', color: 'text-orange-400', href: '/hook' },
-  guide: { label: 'Guide', icon: '📚', color: 'text-emerald-400', href: '/guides' },
-  package: { label: 'Package', icon: '📦', color: 'text-amber-400', href: '/package' },
+/** 아이템 타입별 표기 — 아이콘 대신 짧은 대문자 라벨을 쓴다 */
+const TYPE_CONFIG: Record<string, { label: string; href: string }> = {
+  skill: { label: 'Skill', href: '/skill' },
+  agent: { label: 'Agent', href: '/agent' },
+  command: { label: 'Command', href: '/command' },
+  hook: { label: 'Hook', href: '/hook' },
+  guide: { label: 'Guide', href: '/guides' },
+  package: { label: 'Package', href: '/package' },
 }
 
 function formatDate(dateString: string | null): string {
@@ -118,19 +119,21 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
-        <div className="text-[var(--text-muted)]">Loading...</div>
+      <div className="page-shell items-center justify-center">
+        <p className="text-sm text-[var(--text-muted)]">Loading...</p>
       </div>
     )
   }
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen grid-pattern noise-overlay flex items-center justify-center">
+      <div className="page-shell items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4 opacity-20">⚠️</div>
-          <p className="text-[var(--text-secondary)]">{error || 'Failed to load profile'}</p>
-          <Link href="/" className="text-[var(--accent-cyan)] hover:underline mt-4 inline-block">
+          <p className="text-sm text-[var(--text-secondary)]">{error || 'Failed to load profile'}</p>
+          <Link
+            href="/"
+            className="mt-4 inline-block text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline underline-offset-4 transition-colors"
+          >
             ← Back to Catalog
           </Link>
         </div>
@@ -141,142 +144,137 @@ export default function ProfilePage() {
   const { user, items, stats } = profile
 
   return (
-    <div className="min-h-screen">
-      <main className="max-w-5xl mx-auto px-8 py-12">
+    <div className="page-shell">
+      <main className="page-main">
         {/* Profile Header */}
-        <div className="glass rounded-2xl p-8 mb-8">
-          <div className="flex items-start gap-6">
-            {/* Avatar */}
-            <div className="flex-shrink-0">
-              {user.image ? (
-                <Image
-                  src={user.image}
-                  alt=""
-                  width={80}
-                  height={80}
-                  className="w-20 h-20 rounded-full"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-[var(--accent-cyan)] flex items-center justify-center text-black text-2xl font-medium">
-                  {user.name?.[0] || user.email[0]}
-                </div>
-              )}
-            </div>
-
-            {/* User Info */}
-            <div className="flex-grow">
-              <h1 className="text-2xl font-medium text-[var(--text-primary)] mb-1">
-                {user.name || user.email.split('@')[0]}
-              </h1>
-              <p className="text-sm text-[var(--text-muted)] mb-4">{user.email}</p>
-
-              <div className="flex flex-wrap gap-6 text-sm">
-                <div>
-                  <span className="text-[var(--text-muted)]">{t('joinDate')}: </span>
-                  <span className="text-[var(--text-secondary)]">{formatDate(user.createdAt)}</span>
-                </div>
-                <div>
-                  <span className="text-[var(--text-muted)]">{t('lastLogin')}: </span>
-                  <span className="text-[var(--text-secondary)]">{formatRelativeTime(user.lastLoginAt, t)}</span>
-                </div>
+        <header className="mb-8 flex items-start gap-5">
+          <div className="shrink-0">
+            {user.image ? (
+              <Image
+                src={user.image}
+                alt=""
+                width={64}
+                height={64}
+                className="w-16 h-16 rounded-full"
+                unoptimized
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-primary)] text-xl font-medium">
+                {user.name?.[0] || user.email[0]}
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Organizations */}
-        <div className="glass rounded-2xl p-8 mb-8">
-          <h2 className="text-lg font-medium text-[var(--text-primary)] mb-6 flex items-center gap-2">
-            🏢 Organizations
-          </h2>
-          <div className="space-y-3">
-            {orgs.map(org => (
-              <div key={org.id} className="flex items-center justify-between p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-                <div className="flex items-center gap-3">
-                  <span className="text-[var(--text-primary)] font-medium">{org.name}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)] uppercase tracking-wider">
-                    {org.role.replace('org_', '')}
-                  </span>
-                  {org.id === currentOrgId && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30">
-                      Current
-                    </span>
-                  )}
-                </div>
-                {org.id !== currentOrgId && (
-                  <button onClick={() => switchOrg(org.id)}
-                    className="text-xs text-[var(--accent-cyan)] hover:underline">
-                    Switch to
-                  </button>
-                )}
-              </div>
-            ))}
-            {orgs.length === 0 && (
-              <p className="text-[var(--text-muted)] text-sm">No organization memberships found.</p>
             )}
           </div>
-        </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-          <div className="glass rounded-xl p-4 text-center">
-            <div className="text-2xl font-light text-[var(--text-primary)]">{stats.totalItems}</div>
-            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Total Items</div>
+          <div className="min-w-0">
+            <h1 className="page-title">{user.name || user.email.split('@')[0]}</h1>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">{user.email}</p>
+
+            <div className="mt-4 flex flex-wrap gap-6">
+              <div>
+                <p className="eyebrow">{t('joinDate')}</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">{formatDate(user.createdAt)}</p>
+              </div>
+              <div>
+                <p className="eyebrow">{t('lastLogin')}</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  {formatRelativeTime(user.lastLoginAt, t)}
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="glass rounded-xl p-4 text-center">
-            <div className="text-2xl font-light text-emerald-400">{stats.published}</div>
-            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Published</div>
+        </header>
+
+        {/* Organizations */}
+        <section className="surface-card mb-6">
+          <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-4">Organizations</h2>
+          {orgs.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No organization memberships found.</p>
+          ) : (
+            <ul className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
+              {orgs.map((org) => (
+                <li key={org.id} className="flex items-center justify-between gap-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm text-[var(--text-primary)] truncate">{org.name}</span>
+                    <span className="eyebrow shrink-0">{org.role.replace('org_', '')}</span>
+                    {org.id === currentOrgId && (
+                      <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-[var(--border-hover)] text-[var(--text-secondary)]">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                  {org.id !== currentOrgId && (
+                    <button
+                      onClick={() => switchOrg(org.id)}
+                      className="shrink-0 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline underline-offset-4 transition-colors"
+                    >
+                      Switch to
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Stats band */}
+        <div className="mb-10 grid grid-cols-3 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
+          <div className="bg-[var(--bg-primary)] px-6 py-6">
+            <p className="eyebrow">Total Items</p>
+            <p className="mt-2 font-mono text-3xl tabular-nums tracking-tight text-[var(--text-primary)]">
+              {stats.totalItems}
+            </p>
           </div>
-          <div className="glass rounded-xl p-4 text-center">
-            <div className="text-2xl font-light text-yellow-400">{stats.drafts}</div>
-            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">Drafts</div>
+          <div className="bg-[var(--bg-primary)] px-6 py-6">
+            <p className="eyebrow">Published</p>
+            <p className="mt-2 font-mono text-3xl tabular-nums tracking-tight text-[var(--text-primary)]">
+              {stats.published}
+            </p>
+          </div>
+          <div className="bg-[var(--bg-primary)] px-6 py-6">
+            <p className="eyebrow">Drafts</p>
+            <p className="mt-2 font-mono text-3xl tabular-nums tracking-tight text-[var(--text-primary)]">
+              {stats.drafts}
+            </p>
           </div>
         </div>
 
         {/* Items List */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('myItems')}</h2>
-          </div>
+        <section>
+          <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-4">{t('myItems')}</h2>
 
           {items.length === 0 ? (
-            <div className="glass rounded-2xl p-12 text-center">
-              <div className="text-4xl mb-4 opacity-20">📝</div>
-              <p className="text-[var(--text-secondary)] mb-4">{t('noItems')}</p>
+            <div className="surface-card text-center py-12">
+              <p className="text-sm text-[var(--text-secondary)]">{t('noItems')}</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <ul className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
               {items.map((item) => {
-                const config = TYPE_CONFIG[item.type] || { label: item.type, icon: '📄', color: 'text-gray-400', href: '/item' }
+                const config = TYPE_CONFIG[item.type] || { label: item.type, href: '/item' }
                 return (
-                  <Link
-                    key={item.id}
-                    href={`${config.href}/${item.id}`}
-                    className="block glass rounded-xl p-4 hover:bg-[var(--bg-secondary)] transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
+                  <li key={item.id}>
+                    <Link
+                      href={`${config.href}/${item.id}`}
+                      className="flex items-center justify-between gap-4 py-3 hover:bg-[var(--bg-tertiary)]/40 transition-colors -mx-2 px-2 rounded-lg"
+                    >
                       <div className="flex items-center gap-3 flex-grow min-w-0">
-                        <span className={`text-lg ${config.color}`}>{config.icon}</span>
+                        <span className="eyebrow shrink-0 w-16">{config.label}</span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="text-sm font-medium text-[var(--text-primary)] truncate">
                               {item.name}
                             </h3>
                             {item.status === 'draft' && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-[var(--border-hover)] text-[var(--text-muted)]">
                                 Draft
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
-                            {item.description}
-                          </p>
+                          <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">{item.description}</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4 ml-4 flex-shrink-0">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-4 ml-4 shrink-0">
+                        <div className="hidden sm:flex items-center gap-2">
                           {item.tags.slice(0, 2).map((tag) => (
                             <span
                               key={tag}
@@ -290,13 +288,13 @@ export default function ProfilePage() {
                           {formatRelativeTime(item.updatedAt || null, t)}
                         </span>
                       </div>
-                    </div>
-                  </Link>
+                    </Link>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           )}
-        </div>
+        </section>
       </main>
     </div>
   )

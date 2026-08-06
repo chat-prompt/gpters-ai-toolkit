@@ -9,7 +9,7 @@ import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server'
 import { locales } from '@/i18n/config'
 import { Providers } from '@/components/layout/Providers'
-import { Geist, Geist_Mono, Newsreader } from 'next/font/google'
+import { Geist, Geist_Mono } from 'next/font/google'
 import { getBaseUrl } from '@/lib/utils/config'
 import type { Metadata } from 'next'
 
@@ -21,13 +21,6 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
-})
-
-const newsreader = Newsreader({
-  variable: '--font-newsreader',
-  subsets: ['latin'],
-  style: ['normal', 'italic'],
-  weight: ['300', '400', '500', '600'],
 })
 
 /**
@@ -113,7 +106,26 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} antialiased`}>
+      <head>
+        {/*
+          Pretendard — 본문 서체.
+          Geist에는 한글 글리프가 없어 한글이 OS 기본 서체로 떨어졌다.
+          로나(rona.so)와 같은 서체를 써서 제품 간 인상을 맞춘다.
+        */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link
+          rel="preload"
+          as="style"
+          crossOrigin="anonymous"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+        />
+        <link
+          rel="stylesheet"
+          crossOrigin="anonymous"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+        />
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <NextIntlClientProvider locale={locale} messages={messages}>
             {children}

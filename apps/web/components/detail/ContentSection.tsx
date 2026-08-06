@@ -1,8 +1,7 @@
 /**
- * Content section component for displaying markdown content
+ * 마크다운 본문 구획
  *
- * Renders markdown content in a styled card with optional
- * copy button and customizable icon.
+ * 제목 줄과 복사 버튼을 얹고, 본문은 한 단 안쪽 면에 깔아 카드와 구분한다.
  */
 import { CopyButton } from '../ui/CopyButton'
 import { MarkdownContent } from '../ui/MarkdownContent'
@@ -11,21 +10,19 @@ import { MarkdownContent } from '../ui/MarkdownContent'
  * Props for the ContentSection component
  */
 interface ContentSectionProps {
-  /** Section title */
+  /** 구획 제목 — 대개 파일 이름이라 고정폭으로 보여준다 */
   title: string
-  /** Icon emoji for the section header */
-  icon?: string
-  /** Markdown content to render */
+  /** 마크다운 본문 */
   content: string
-  /** Whether to show copy button */
+  /** 복사 버튼 노출 여부 */
   showCopy?: boolean
 }
 
 /**
- * Remove YAML frontmatter from markdown content
+ * 마크다운 앞머리(YAML frontmatter)를 걷어낸다
  *
- * @param content - Raw markdown content possibly containing frontmatter
- * @returns Content with frontmatter removed
+ * @param content - frontmatter가 남아 있을 수 있는 원본 마크다운
+ * @returns frontmatter를 뺀 본문
  */
 function removeFrontmatter(content: string): string {
   const frontmatterRegex = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/
@@ -33,37 +30,33 @@ function removeFrontmatter(content: string): string {
 }
 
 /**
- * Styled section with markdown content and copy functionality
+ * 마크다운 본문 카드
+ *
+ * @param title - 구획 제목
+ * @param content - 마크다운 본문
+ * @param showCopy - 복사 버튼 노출 여부
  *
  * @example
  * ```tsx
- * <ContentSection
- *   title="Documentation"
- *   icon="📄"
- *   content={markdownContent}
- *   showCopy={true}
- * />
+ * <ContentSection title="skill.md" content={markdownContent} />
  * ```
  */
 export function ContentSection({
   title,
-  icon = '📄',
   content,
   showCopy = true,
 }: ContentSectionProps) {
   const cleanContent = removeFrontmatter(content)
 
   return (
-    <div className="glass rounded-2xl p-8 mb-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <span className="text-xl">{icon}</span>
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">{title}</h2>
-        </div>
+    <div className="surface-card mb-8">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h2 className="font-mono text-sm text-[var(--text-primary)]">{title}</h2>
         {showCopy && <CopyButton text={cleanContent} />}
       </div>
 
-      <div className="bg-[var(--bg-primary)] rounded-xl p-6 overflow-x-auto">
+      {/* 읽는 면은 카드보다 한 단 눕혀 본문과 카드 테두리를 구분한다 */}
+      <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-6">
         <MarkdownContent content={cleanContent} />
       </div>
     </div>

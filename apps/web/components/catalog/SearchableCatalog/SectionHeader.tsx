@@ -1,37 +1,27 @@
 /**
- * Section header component for catalog item type groupings
+ * 카탈로그 구획 머리글
  *
- * Displays a styled header with icon, title, count, and decorative line.
+ * 제목과 개수만 두고 아래에 실선을 그어 목록의 시작을 알린다.
  */
 import { memo } from 'react'
 import type { SectionHeaderProps } from './types'
 
 /**
- * Section header with icon, title, and item count
+ * 구획 머리글
+ *
+ * @param title - 구획 제목
+ * @param count - 구획에 속한 항목 수
  *
  * @example
  * ```tsx
- * <SectionHeader icon="⚡" title="Skills" count={42} accentColor="text-cyan-400" />
+ * <SectionHeader title="Skills" count={42} />
  * ```
  */
-export const SectionHeader = memo(function SectionHeader({
-  icon,
-  title,
-  count,
-  accentColor,
-}: SectionHeaderProps) {
+export const SectionHeader = memo(function SectionHeader({ title, count }: SectionHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-8">
-      <div className="flex items-center gap-4">
-        <span className={`text-2xl ${accentColor}`}>{icon}</span>
-        <div>
-          <h2 className="text-xl font-medium text-[var(--text-primary)] tracking-tight">{title}</h2>
-          <p className="text-xs text-[var(--text-muted)] mt-1 uppercase tracking-wider">
-            {count} items available
-          </p>
-        </div>
-      </div>
-      <div className="h-px flex-1 ml-8 bg-gradient-to-r from-[var(--border-subtle)] to-transparent" />
+    <div className="mb-5 flex items-baseline gap-3 border-b border-[var(--border-subtle)] pb-3">
+      <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)]">{title}</h2>
+      <span className="font-mono text-xs tabular-nums text-[var(--text-muted)]">{count}</span>
     </div>
   )
 })

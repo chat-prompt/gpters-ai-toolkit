@@ -22,6 +22,11 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * 커맨드 상세 페이지
+ *
+ * @param params - locale 과 항목 id 를 담은 라우트 파라미터
+ */
 export default async function CommandPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
   setRequestLocale(locale)
@@ -39,33 +44,33 @@ export default async function CommandPage({ params }: { params: Promise<{ locale
 
   // Build TOC items based on available content
   const tocItems: TocItem[] = [
-    { id: 'overview', label: '개요', icon: '⌘' },
+    { id: 'overview', label: '개요' },
   ]
 
   if (hasExamples) {
-    tocItems.push({ id: 'examples', label: '사용 예시', icon: '💡' })
+    tocItems.push({ id: 'examples', label: '사용 예시' })
   }
 
   if (item.dependencies && item.dependencies.length > 0) {
-    tocItems.push({ id: 'dependencies', label: '의존성', icon: '🔗' })
+    tocItems.push({ id: 'dependencies', label: '의존성' })
   }
 
   if (item.changelog) {
-    tocItems.push({ id: 'changelog', label: '변경 이력', icon: '📋' })
+    tocItems.push({ id: 'changelog', label: '변경 이력' })
   }
 
-  tocItems.push({ id: 'content', label: 'command.md', icon: '📄' })
+  tocItems.push({ id: 'content', label: 'command.md' })
 
   if (item.readme) {
-    tocItems.push({ id: 'readme', label: 'README', icon: '📖' })
+    tocItems.push({ id: 'readme', label: 'README' })
   }
 
   if (relatedItems.length > 0) {
-    tocItems.push({ id: 'related', label: '관련 아이템', icon: '🔗' })
+    tocItems.push({ id: 'related', label: '관련 아이템' })
   }
 
   return (
-    <DetailPageLayout accentColor="rose">
+    <DetailPageLayout>
       <TableOfContents items={tocItems} />
 
       {item.status === 'draft' && <DraftBanner />}
@@ -119,7 +124,7 @@ export default async function CommandPage({ params }: { params: Promise<{ locale
       {/* README */}
       {item.readme && (
         <Section id="readme">
-          <ContentSection title="README.md" icon="📖" content={item.readme} />
+          <ContentSection title="README.md" content={item.readme} />
         </Section>
       )}
 

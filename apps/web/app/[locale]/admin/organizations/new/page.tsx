@@ -11,6 +11,13 @@ import { useRouter } from '@/i18n/navigation'
 import { useSession } from 'next-auth/react'
 import { Link } from '@/i18n/navigation'
 
+/** 폼 입력 공통 클래스 */
+const inputClass =
+  'w-full px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-hover)] transition-colors'
+
+/** 폼 라벨 공통 클래스 */
+const labelClass = 'block text-sm font-medium text-[var(--text-secondary)] mb-2'
+
 export default function NewOrganizationPage() {
   const router = useRouter()
   const { data: session } = useSession()
@@ -95,52 +102,46 @@ export default function NewOrganizationPage() {
 
   if (!isSuperAdmin) {
     return (
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        <div className="glass rounded-2xl p-8 text-center">
-          <h1 className="text-2xl font-light text-[var(--text-primary)] mb-4">
-            Access Denied
-          </h1>
-          <p className="text-[var(--text-secondary)] mb-6">
-            Only super_admin can create organizations.
-          </p>
-          <Link
-            href="/admin/organizations"
-            className="inline-block px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
-          >
-            Back to Organizations
-          </Link>
-        </div>
+      <div className="surface-card rounded-2xl p-8 text-center">
+        <h1 className="page-title mb-4">Access Denied</h1>
+        <p className="text-[var(--text-secondary)] mb-6">
+          Only super_admin can create organizations.
+        </p>
+        <Link
+          href="/admin/organizations"
+          className="inline-block px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          Back to Organizations
+        </Link>
       </div>
     )
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-12">
-      <div className="mb-8">
+    <div className="max-w-3xl">
+      <div className="mb-6">
         <Link
           href="/admin/organizations"
           className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-4 inline-block"
         >
           ← Back to Organizations
         </Link>
-        <h1 className="text-3xl font-light text-[var(--text-primary)] mb-2">
-          Create Organization
-        </h1>
-        <p className="text-[var(--text-secondary)]">
+        <h1 className="page-title">Create Organization</h1>
+        <p className="page-subtitle">
           Set up a new organization with initial domains and settings.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="glass rounded-2xl p-6 space-y-6">
+      <form onSubmit={handleSubmit} className="surface-card rounded-2xl p-6 space-y-6">
         {error && (
-          <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
+          <div className="p-4 rounded-lg bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 text-[var(--accent-orange)]">
             {error}
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            Organization Name <span className="text-red-400">*</span>
+          <label className={labelClass}>
+            Organization Name <span className="text-[var(--accent-orange)]">*</span>
           </label>
           <input
             type="text"
@@ -148,13 +149,13 @@ export default function NewOrganizationPage() {
             onChange={e => handleNameChange(e.target.value)}
             required
             placeholder="GPTers Inc."
-            className="w-full px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+            className={inputClass}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            Slug <span className="text-red-400">*</span>
+          <label className={labelClass}>
+            Slug <span className="text-[var(--accent-orange)]">*</span>
           </label>
           <input
             type="text"
@@ -163,7 +164,7 @@ export default function NewOrganizationPage() {
             required
             placeholder="gpters-inc"
             pattern="[a-z0-9-]+"
-            className="w-full px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+            className={inputClass}
           />
           <p className="mt-1 text-xs text-[var(--text-muted)]">
             Lowercase letters, numbers, and hyphens only. Auto-generated from name.
@@ -171,21 +172,19 @@ export default function NewOrganizationPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            Description
-          </label>
+          <label className={labelClass}>Description</label>
           <textarea
             value={description}
             onChange={e => setDescription(e.target.value)}
             rows={3}
             placeholder="A brief description of the organization..."
-            className="w-full px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+            className={inputClass}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            Allowed Domains <span className="text-red-400">*</span>
+          <label className={labelClass}>
+            Allowed Domains <span className="text-[var(--accent-orange)]">*</span>
           </label>
           <div className="space-y-2">
             {domains.map((domain, index) => (
@@ -195,13 +194,13 @@ export default function NewOrganizationPage() {
                   value={domain}
                   onChange={e => handleDomainChange(index, e.target.value)}
                   placeholder="gpters.org"
-                  className="flex-1 px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                  className={`flex-1 ${inputClass}`}
                 />
                 {domains.length > 1 && (
                   <button
                     type="button"
                     onClick={() => handleRemoveDomain(index)}
-                    className="px-3 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="px-3 py-2 rounded-lg border border-[var(--accent-orange)]/30 text-[var(--accent-orange)] hover:bg-[var(--accent-orange)]/10 transition-colors"
                   >
                     Remove
                   </button>
@@ -212,7 +211,7 @@ export default function NewOrganizationPage() {
           <button
             type="button"
             onClick={handleAddDomain}
-            className="mt-2 text-sm text-[var(--accent-cyan)] hover:underline"
+            className="mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
           >
             + Add another domain
           </button>
@@ -225,7 +224,7 @@ export default function NewOrganizationPage() {
           <button
             type="submit"
             disabled={creating || !name || !slug}
-            className="px-6 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="px-6 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {creating ? 'Creating...' : 'Create Organization'}
           </button>

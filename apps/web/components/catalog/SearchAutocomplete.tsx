@@ -26,8 +26,6 @@ interface Suggestion {
   value: string
   /** Display label for the suggestion */
   label: string
-  /** Optional icon emoji for the suggestion */
-  icon?: string
   /** Item type for item suggestions */
   itemType?: ItemType
   /** Optional description text */
@@ -36,13 +34,18 @@ interface Suggestion {
   matchType?: 'exact' | 'keyword' | 'fuzzy' | 'natural' | 'fts'
 }
 
-const TYPE_ICONS: Record<ItemType, string> = {
-  skill: '⚡',
-  agent: '◈',
-  command: '▸',
-  guide: '📚',
-  hook: '🪝',
-  package: '📦',
+/**
+ * 제안 한 줄 앞에 붙는 분류 라벨
+ *
+ * 예전에는 유형마다 이모지를 달았는데, 목록이 길어지면 이름보다 그림이 먼저
+ * 읽혔다. 어떤 검색 방식으로 걸렸는지(FTS·NL 같은) 표시하던 배지도 뺐다 —
+ * 찾는 사람에게 필요한 정보가 아니다.
+ *
+ * @param suggestion - 제안 항목
+ * @returns 대문자로 그릴 짧은 분류 이름
+ */
+function suggestionKind(suggestion: Suggestion): string {
+  return suggestion.itemType ?? suggestion.type
 }
 
 /**
@@ -71,7 +74,6 @@ interface SearchAutocompleteProps {
  * Features:
  * - Hybrid search combining server FTS and client-side NLP
  * - Korean language support with keyword extraction
- * - Match type badges (FTS, EXACT, KEYWORD, NL)
  * - Keyboard navigation (↑↓ arrows, Enter, Escape)
  * - Direct navigation to items on selection
  *
@@ -145,7 +147,6 @@ export function SearchAutocomplete({
             type: 'nlp',
             value: result.item.id,
             label: result.item.name,
-            icon: TYPE_ICONS[result.item.type],
             itemType: result.item.type,
             description: result.matchedKeywords.length > 0
               ? `${result.item.description.slice(0, 40)}... (${result.matchedKeywords.slice(0, 2).join(', ')})`
@@ -164,7 +165,6 @@ export function SearchAutocomplete({
           type: 'item',
           value: item.id,
           label: item.name,
-          icon: TYPE_ICONS[item.type],
           itemType: item.type,
           description: item.description.slice(0, 60) + (item.description.length > 60 ? '...' : ''),
         })
@@ -179,7 +179,6 @@ export function SearchAutocomplete({
           type: 'item',
           value: item.id,
           label: item.name,
-          icon: TYPE_ICONS[item.type],
           itemType: item.type,
           description: item.description.slice(0, 60) + (item.description.length > 60 ? '...' : ''),
         })
@@ -200,7 +199,6 @@ export function SearchAutocomplete({
             type: 'tag',
             value: key,
             label: tag.label,
-            icon: '🏷️',
           })
           seen.add(`tag:${key}`)
         }
@@ -217,7 +215,6 @@ export function SearchAutocomplete({
             type: 'author',
             value: item.authorName,
             label: `@${item.authorName}`,
-            icon: '👤',
           })
           seen.add(`author:${item.authorName}`)
         }
@@ -248,7 +245,6 @@ export function SearchAutocomplete({
             type: 'server',
             value: item.id,
             label: item.name,
-            icon: TYPE_ICONS[item.type],
             itemType: item.type,
             matchType: 'fts',
           })
@@ -367,7 +363,7 @@ export function SearchAutocomplete({
         onFocus={() => value.length >= 2 && setIsOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full px-6 py-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+        className="w-full px-5 py-3.5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm hover:border-[var(--border-hover)] focus:border-[var(--brand-primary)] transition-colors"
         autoComplete="off"
       />
 
@@ -379,12 +375,13 @@ export function SearchAutocomplete({
               handleInputChange('')
               setIsOpen(false)
             }}
+            aria-label="검색어 지우기"
             className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
           </button>
         )}
-        <kbd className="px-2 py-1 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
+        <kbd className="font-mono px-2 py-1 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
           ⌘K
         </kbd>
       </div>
@@ -393,67 +390,45 @@ export function SearchAutocomplete({
       {isOpen && (suggestions.length > 0 || isLoadingServerSuggestions) && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] shadow-2xl overflow-hidden animate-fade-up"
+          className="reveal absolute z-50 w-full mt-2 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] shadow-[0_24px_48px_-24px_rgba(0,0,0,0.4)] overflow-hidden"
         >
           {/* Loading indicator */}
           {isLoadingServerSuggestions && suggestions.length === 0 && (
-            <div className="px-4 py-3 flex items-center gap-3 text-[var(--text-muted)]">
-              <span className="animate-spin">⟳</span>
-              <span className="text-sm">Searching...</span>
-            </div>
+            <div className="px-4 py-3 text-sm text-[var(--text-muted)]">Searching...</div>
           )}
           {suggestions.map((suggestion, index) => (
             <button
               key={`${suggestion.type}:${suggestion.value}`}
               onClick={() => handleSelectSuggestion(suggestion)}
-              className={`w-full px-4 py-3 flex items-start gap-3 text-left transition-colors ${
+              className={`w-full px-4 py-2.5 flex items-baseline gap-3 text-left transition-colors ${
                 index === selectedIndex
                   ? 'bg-[var(--bg-tertiary)]'
                   : 'hover:bg-[var(--bg-tertiary)]'
               }`}
             >
-              <span className="text-lg flex-shrink-0 mt-0.5">{suggestion.icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-[var(--text-primary)] truncate">
-                    {suggestion.label}
-                  </span>
-                  {suggestion.type === 'server' ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
-                      FTS
-                    </span>
-                  ) : suggestion.type === 'nlp' ? (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      suggestion.matchType === 'exact'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : suggestion.matchType === 'keyword'
-                        ? 'bg-cyan-500/20 text-cyan-400'
-                        : 'bg-purple-500/20 text-purple-400'
-                    }`}>
-                      {suggestion.matchType === 'exact' ? 'EXACT' : suggestion.matchType === 'keyword' ? 'KEYWORD' : 'NL'}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                      {suggestion.type}
-                    </span>
-                  )}
-                </div>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] w-16 shrink-0">
+                {suggestionKind(suggestion)}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-[var(--text-primary)] truncate">
+                  {suggestion.label}
+                </span>
                 {suggestion.description && (
-                  <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                  <span className="block text-xs text-[var(--text-muted)] truncate mt-0.5">
                     {suggestion.description}
-                  </p>
+                  </span>
                 )}
-              </div>
+              </span>
               {index === selectedIndex && (
-                <span className="text-[10px] text-[var(--text-muted)] self-center">↵</span>
+                <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">↵</span>
               )}
             </button>
           ))}
 
           {/* Search hint */}
           <div className="px-4 py-2 border-t border-[var(--border-subtle)] bg-[var(--bg-primary)]">
-            <span className="text-[10px] text-[var(--text-muted)]">
-              ↑↓ to navigate • ↵ to select • esc to close
+            <span className="font-mono text-[10px] text-[var(--text-muted)]">
+              ↑↓ navigate · ↵ select · esc close
             </span>
           </div>
         </div>
