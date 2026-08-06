@@ -6,6 +6,7 @@
  */
 import { auth } from '@/lib/core/auth'
 import { Header } from './Header'
+import { resolveAxViewer } from '@/lib/features/ax'
 import type { UserRole } from '@/lib/security/rbac'
 
 /** Enable development auth bypass */
@@ -37,5 +38,12 @@ export async function ServerHeader() {
   const session = await auth()
   const user = DEV_BYPASS_AUTH ? DEV_USER : session?.user
 
-  return <Header user={user} />
+  // AX 대시보드 접근 판정은 서버에서만 가능하다 (내부 도메인 값이 서버 전용).
+  // 여기서 걸러 두지 않으면 권한 없는 사용자가 탭을 눌렀다가 홈으로 되돌려진다.
+  const canViewAx = resolveAxViewer({
+    email: user?.email,
+    role: user?.role as UserRole | undefined,
+  }).canAccess
+
+  return <Header user={user} canViewAx={canViewAx} />
 }

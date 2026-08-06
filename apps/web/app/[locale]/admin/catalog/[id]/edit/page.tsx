@@ -22,6 +22,13 @@ const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
 const STATUSES = ['draft', 'published'] as const
 
+/** 폼 입력 공통 클래스 */
+const inputClass =
+  'w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-hover)] transition-colors'
+
+/** 폼 라벨 공통 클래스 */
+const labelClass = 'block text-sm text-[var(--text-secondary)] mb-2'
+
 interface EditPageProps {
   params: Promise<{ id: string }>
 }
@@ -178,7 +185,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-8 py-12">
+      <div className="max-w-4xl">
         <div className="text-[var(--text-muted)]">Loading...</div>
       </div>
     )
@@ -186,11 +193,11 @@ export default function EditCatalogItem({ params }: EditPageProps) {
 
   if (error && !formData.id) {
     return (
-      <div className="max-w-4xl mx-auto px-8 py-12">
-        <div className="text-red-400">{error}</div>
+      <div className="max-w-4xl">
+        <div className="text-[var(--accent-orange)]">{error}</div>
         <Link
           href="/admin/catalog"
-          className="text-[var(--accent-cyan)] hover:underline mt-4 inline-block"
+          className="text-[var(--text-primary)] hover:underline mt-4 inline-block"
         >
           Back to Catalog
         </Link>
@@ -199,8 +206,8 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-8 py-12">
-      <div className="mb-8">
+    <div className="max-w-4xl">
+      <div className="mb-6">
         <Link
           href={returnUrl || '/admin/catalog'}
           className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-4 inline-block"
@@ -208,9 +215,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           ← {returnUrl ? '돌아가기' : 'Back to Catalog'}
         </Link>
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-light text-[var(--text-primary)]">
-            Edit: {formData.name}
-          </h1>
+          <h1 className="page-title">Edit: {formData.name}</h1>
           <SecurityAuditBadge
             result={securityAuditResult}
             onClick={() => setShowSecurityPanel(!showSecurityPanel)}
@@ -233,16 +238,14 @@ export default function EditCatalogItem({ params }: EditPageProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="glass rounded-2xl p-8 space-y-6">
+        <div className="surface-card rounded-2xl p-6 space-y-6">
           {/* Type */}
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Type
-            </label>
+            <label className={labelClass}>Type</label>
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value as typeof ITEM_TYPES[number] })}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+              className={inputClass}
             >
               {ITEM_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -253,61 +256,51 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Name *
-            </label>
+            <label className={labelClass}>Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+              className={inputClass}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Description
-            </label>
+            <label className={labelClass}>Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] resize-none"
+              className={`${inputClass} resize-none`}
               rows={3}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Author (read-only)
-              </label>
+              <label className={labelClass}>Author (read-only)</label>
               <div className="w-full px-4 py-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
                 @{formData.authorName || 'Unknown'}
               </div>
             </div>
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Tags (comma-separated)
-              </label>
+              <label className={labelClass}>Tags (comma-separated)</label>
               <input
                 type="text"
                 value={formData.tags}
                 onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Organization
-            </label>
+            <label className={labelClass}>Organization</label>
             {session?.user?.role === 'super_admin' ? (
               <select
                 value={formData.orgId}
                 onChange={(e) => setFormData({ ...formData, orgId: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               >
                 <option value="">Select organization...</option>
                 {orgs.map((org) => (
@@ -324,22 +317,20 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Visibility
-            </label>
-            <div className="flex gap-3">
+            <label className={labelClass}>Visibility</label>
+            <div className="flex gap-2">
               {(['private', 'public'] as const).map((v) => (
                 <button
                   key={v}
                   type="button"
                   onClick={() => setFormData({ ...formData, visibility: v })}
-                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                  className={`px-4 py-2 rounded-lg text-sm border transition-colors capitalize ${
                     formData.visibility === v
-                      ? 'bg-[var(--accent-cyan)] text-black'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                      ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                      : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
                   }`}
                 >
-                  {v === 'private' ? '🔒 Private' : '🌍 Public'}
+                  {v}
                 </button>
               ))}
             </div>
@@ -352,13 +343,11 @@ export default function EditCatalogItem({ params }: EditPageProps) {
 
           <div className="grid grid-cols-3 gap-6">
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Difficulty
-              </label>
+              <label className={labelClass}>Difficulty</label>
               <select
                 value={formData.difficulty}
                 onChange={(e) => setFormData({ ...formData, difficulty: e.target.value as '' | typeof DIFFICULTIES[number] })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               >
                 <option value="">None</option>
                 {DIFFICULTIES.map((d) => (
@@ -369,74 +358,64 @@ export default function EditCatalogItem({ params }: EditPageProps) {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Plugin ID
-              </label>
+              <label className={labelClass}>Plugin ID</label>
               <input
                 type="text"
                 value={formData.pluginId}
                 onChange={(e) => setFormData({ ...formData, pluginId: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               />
             </div>
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Est. Time
-              </label>
+              <label className={labelClass}>Est. Time</label>
               <input
                 type="text"
                 value={formData.estimatedTime}
                 onChange={(e) => setFormData({ ...formData, estimatedTime: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              Content * (Markdown)
-            </label>
+            <label className={labelClass}>Content * (Markdown)</label>
             <textarea
               value={formData.content}
               onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] font-mono text-sm resize-none"
+              className={`${inputClass} font-mono text-sm resize-none`}
               rows={15}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-              README (optional)
-            </label>
+            <label className={labelClass}>README (optional)</label>
             <textarea
               value={formData.readme}
               onChange={(e) => setFormData({ ...formData, readme: e.target.value })}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] font-mono text-sm resize-none"
+              className={`${inputClass} font-mono text-sm resize-none`}
               rows={8}
             />
           </div>
         </div>
 
         {/* Version & Status Management */}
-        <div className="glass rounded-2xl p-8 space-y-6">
-          <h2 className="text-xl font-medium text-[var(--text-primary)] flex items-center gap-2">
-            📦 Version & Status
+        <div className="surface-card rounded-2xl p-6 space-y-6">
+          <h2 className="text-xl font-medium text-[var(--text-primary)]">
+            Version & Status
           </h2>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Status
-              </label>
+              <label className={labelClass}>Status</label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof STATUSES[number] })}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {s === 'draft' ? '🚧 Draft' : '✅ Published'}
+                    {s === 'draft' ? 'Draft' : 'Published'}
                   </option>
                 ))}
               </select>
@@ -445,24 +424,22 @@ export default function EditCatalogItem({ params }: EditPageProps) {
               </p>
             </div>
             <div>
-              <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                Version (semver)
-              </label>
+              <label className={labelClass}>Version (semver)</label>
               <input
                 type="text"
                 value={formData.version}
                 onChange={(e) => setFormData({ ...formData, version: e.target.value })}
                 placeholder="1.0.0"
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                className={inputClass}
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="changelog" className="block text-sm text-[var(--text-secondary)] mb-2">
+            <label htmlFor="changelog" className={labelClass}>
               변경 사유 (changelog)
               {isContentDirty && (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-[var(--accent-orange)] ml-1">*</span>
               )}
             </label>
             <textarea
@@ -470,12 +447,12 @@ export default function EditCatalogItem({ params }: EditPageProps) {
               value={formData.changelog}
               onChange={(e) => setFormData({ ...formData, changelog: e.target.value })}
               placeholder="이번 변경의 핵심을 한 줄 이상 적어주세요"
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] resize-none"
+              className={`${inputClass} resize-none`}
               rows={3}
               required={isContentDirty}
             />
             {isContentDirty && formData.changelog.trim().length === 0 && (
-              <p className="mt-1 text-xs text-red-500">
+              <p className="mt-1 text-xs text-[var(--accent-orange)]">
                 콘텐츠가 변경되어 changelog 입력이 필수입니다.
               </p>
             )}
@@ -484,9 +461,9 @@ export default function EditCatalogItem({ params }: EditPageProps) {
 
         {/* CLI Settings */}
         {formData.type !== 'guide' && (
-          <div className="glass rounded-2xl p-8 space-y-6">
-            <h2 className="text-xl font-medium text-[var(--text-primary)] flex items-center gap-2">
-              <span className="text-[var(--accent-cyan)]">CLI</span> Settings
+          <div className="surface-card rounded-2xl p-6 space-y-6">
+            <h2 className="text-xl font-medium text-[var(--text-primary)]">
+              CLI Settings
             </h2>
             <p className="text-sm text-[var(--text-muted)]">
               Enable this item for CLI plugin installation.
@@ -498,7 +475,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
                   type="checkbox"
                   checked={formData.mcpEnabled}
                   onChange={(e) => setFormData({ ...formData, mcpEnabled: e.target.checked })}
-                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:ring-[var(--border-hover)] cursor-pointer"
                 />
                 <span className="text-[var(--text-primary)]">Enable for CLI</span>
               </label>
@@ -508,7 +485,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         )}
 
         {error && (
-          <div className="text-red-400 text-sm">{error}</div>
+          <div className="text-[var(--accent-orange)] text-sm">{error}</div>
         )}
 
         <div className="flex justify-end gap-4">
@@ -521,7 +498,7 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           <button
             type="submit"
             disabled={isSubmitDisabled}
-            className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="px-6 py-3 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>

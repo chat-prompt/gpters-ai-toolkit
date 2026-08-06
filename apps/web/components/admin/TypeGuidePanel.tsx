@@ -18,6 +18,9 @@ interface TypeGuidePanelProps {
   className?: string
 }
 
+/** 필드 힌트 칩 공통 클래스 — 알약 배경 없이 테두리로만 구분 */
+const fieldChipClass = 'px-2 py-1 rounded text-xs border border-[var(--border-subtle)] text-[var(--text-secondary)]'
+
 /**
  * Displays contextual guidance panel for catalog item types
  *
@@ -30,16 +33,13 @@ export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
   const { guide } = config
 
   return (
-    <div className={`glass rounded-2xl p-6 ${className}`}>
+    <div className={`surface-card rounded-2xl p-6 ${className}`}>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-2xl">{config.icon}</span>
-        <div>
-          <h3 className="text-lg font-medium text-[var(--text-primary)]">
-            {guide.title}
-          </h3>
-          <p className="text-sm text-[var(--text-muted)]">{config.description}</p>
-        </div>
+      <div className="mb-6">
+        <h3 className="text-lg font-medium text-[var(--text-primary)]">
+          {guide.title}
+        </h3>
+        <p className="text-sm text-[var(--text-muted)]">{config.description}</p>
       </div>
 
       {/* Guide Sections */}
@@ -53,9 +53,9 @@ export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
               {section.content}
             </p>
             {section.tip && (
-              <div className="mt-2 px-3 py-2 rounded-lg bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20">
-                <p className="text-xs text-[var(--accent-cyan)]">
-                  <span className="font-medium">Tip:</span> {section.tip}
+              <div className="mt-2 px-3 py-2 rounded-lg border border-[var(--border-subtle)]">
+                <p className="text-xs text-[var(--text-secondary)]">
+                  <span className="font-medium text-[var(--text-primary)]">Tip:</span> {section.tip}
                 </p>
               </div>
             )}
@@ -75,7 +75,7 @@ export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
                 key={idx}
                 className="flex items-start gap-3 text-sm"
               >
-                <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--accent-purple)] font-mono text-xs shrink-0">
+                <code className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)] font-mono text-xs shrink-0">
                   {item.syntax}
                 </code>
                 <span className="text-[var(--text-muted)]">{item.description}</span>
@@ -91,46 +91,26 @@ export function TypeGuidePanel({ type, className = '' }: TypeGuidePanelProps) {
           {t('typeFields')}
         </h4>
         <div className="flex flex-wrap gap-2">
-          <span className="px-2 py-1 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
-            name
-          </span>
-          <span className="px-2 py-1 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
-            description
-          </span>
+          <span className={fieldChipClass}>name</span>
+          <span className={fieldChipClass}>description</span>
           {config.fields.showDifficulty && (
-            <span className="px-2 py-1 rounded text-xs bg-blue-500/20 text-blue-400">
-              difficulty
-            </span>
+            <span className={fieldChipClass}>difficulty</span>
           )}
           {config.fields.showEstimatedTime && (
-            <span className="px-2 py-1 rounded text-xs bg-blue-500/20 text-blue-400">
-              estimatedTime
-            </span>
+            <span className={fieldChipClass}>estimatedTime</span>
           )}
           {config.fields.showAllowedTools && (
-            <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
-              allowed-tools
-            </span>
+            <span className={fieldChipClass}>allowed-tools</span>
           )}
           {config.fields.showAgentFields && (
             <>
-              <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
-                model
-              </span>
-              <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
-                permissionMode
-              </span>
-              <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
-                skills
-              </span>
+              <span className={fieldChipClass}>model</span>
+              <span className={fieldChipClass}>permissionMode</span>
+              <span className={fieldChipClass}>skills</span>
             </>
           )}
           {config.fields.showCommandFields && (
-            <>
-              <span className="px-2 py-1 rounded text-xs bg-cyan-500/20 text-cyan-400">
-                argument-hint
-              </span>
-            </>
+            <span className={fieldChipClass}>argument-hint</span>
           )}
         </div>
       </div>

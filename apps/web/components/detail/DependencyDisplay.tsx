@@ -1,8 +1,8 @@
 /**
- * Simple dependency display component
+ * 의존성 목록 카드
  *
- * Shows a list of required dependencies with type icons,
- * links to internal items, and MCP server hints.
+ * 이 항목을 쓰려면 무엇이 먼저 있어야 하는지 보여준다. 종류마다 색을 달리
+ * 칠하던 방식은 걷어내고, 고정폭 라벨 하나로만 구분한다.
  */
 import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
@@ -12,27 +12,26 @@ import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
  * Props for the DependencyDisplay component
  */
 interface DependencyDisplayProps {
-  /** List of dependency strings in format "type:id" */
+  /** "type:id" 형식의 의존성 문자열 목록 */
   dependencies: string[]
 }
 
-/** Icon mapping for dependency types */
-const TYPE_ICONS: Record<string, string> = {
-  mcp: '🔌',
-  skill: '⚡',
-  agent: '◈',
-  other: '📦',
+/** 의존성 종류별 표시 라벨 */
+const TYPE_LABELS: Record<string, string> = {
+  mcp: 'MCP',
+  skill: 'SKILL',
+  agent: 'AGENT',
+  other: 'DEP',
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  mcp: 'border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10',
-  skill: 'border-[var(--accent-cyan)]/30 bg-[var(--accent-cyan)]/5 hover:bg-[var(--accent-cyan)]/10',
-  agent: 'border-[var(--accent-purple)]/30 bg-[var(--accent-purple)]/5 hover:bg-[var(--accent-purple)]/10',
-  other: 'border-[var(--border-subtle)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)]',
-}
+/** 의존성 한 칸의 공통 모양 — 링크로 감싸든 아니든 같은 모양을 쓴다 */
+const ITEM_CLASS =
+  'flex h-full items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] px-4 py-3 transition-colors hover:border-[var(--border-hover)]'
 
 /**
- * Displays required dependencies with links and type indicators
+ * 의존성 목록
+ *
+ * @param dependencies - "type:id" 형식의 의존성 문자열 목록
  *
  * @example
  * ```tsx
@@ -48,42 +47,38 @@ export async function DependencyDisplay({ dependencies }: DependencyDisplayProps
   const parsedDeps = dependencies.map(parseDependency)
 
   return (
-    <div className="glass rounded-2xl p-6 mb-8">
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-xl">🔗</span>
-        <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('dependencies.title')}</h2>
-      </div>
-
-      <p className="text-sm text-[var(--text-secondary)] mb-4">
+    <div className="surface-card mb-8">
+      <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)]">
+        {t('dependencies.title')}
+      </h2>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">
         {t('dependencies.description')}
       </p>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {parsedDeps.map((dep, index) => {
-          const icon = TYPE_ICONS[dep.type] || TYPE_ICONS.other
-          const colorClass = TYPE_COLORS[dep.type] || TYPE_COLORS.other
           const mcpInfo = dep.type === 'mcp' ? MCP_SERVERS[dep.id] : null
 
-          // Link to internal items if they're skills or agents
+          // 내부 카탈로그에 있는 종류만 상세 페이지로 이어 준다
           const isInternalLink = dep.type === 'skill' || dep.type === 'agent'
           const href = isInternalLink ? `/${dep.type}/${dep.id}` : undefined
 
           const content = (
-            <div
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${colorClass}`}
-            >
-              <span className="text-lg">{icon}</span>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-[var(--text-primary)]">
+            <div className={ITEM_CLASS}>
+              <span className="eyebrow shrink-0 pt-0.5">
+                {TYPE_LABELS[dep.type] || TYPE_LABELS.other}
+              </span>
+              <div className="min-w-0">
+                <span className="block text-sm font-medium text-[var(--text-primary)]">
                   {dep.label}
                 </span>
                 {mcpInfo && (
-                  <span className="text-xs text-[var(--text-muted)]">
+                  <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
                     {mcpInfo.description}
                   </span>
                 )}
                 {isInternalLink && (
-                  <span className="text-xs text-[var(--text-muted)]">
+                  <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
                     {t('dependencies.clickToView')}
                   </span>
                 )}
@@ -117,15 +112,14 @@ export async function DependencyDisplay({ dependencies }: DependencyDisplayProps
       </div>
 
       {parsedDeps.some((d) => d.type === 'mcp') && (
-        <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-          <p className="text-xs text-[var(--text-muted)]">
-            💡 <strong>{t('dependencies.mcpServers')}</strong>{t('dependencies.mcpHintBefore')}{' '}
-            <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">
-              claude mcp
-            </code>{' '}
-            {t('dependencies.mcpHintAfter')}
-          </p>
-        </div>
+        <p className="mt-4 border-t border-[var(--border-subtle)] pt-4 text-xs text-[var(--text-muted)]">
+          <strong className="font-medium text-[var(--text-secondary)]">
+            {t('dependencies.mcpServers')}
+          </strong>
+          {t('dependencies.mcpHintBefore')}{' '}
+          <code className="rounded bg-[var(--bg-tertiary)] px-1 py-0.5 font-mono">claude mcp</code>{' '}
+          {t('dependencies.mcpHintAfter')}
+        </p>
       )}
     </div>
   )

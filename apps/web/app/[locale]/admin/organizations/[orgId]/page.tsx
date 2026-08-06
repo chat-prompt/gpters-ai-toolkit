@@ -34,22 +34,32 @@ interface Member {
   joinedAt: string
 }
 
-const ORG_ROLE_LABELS: Record<OrgRole, { label: string; color: string }> = {
-  org_admin: {
-    label: 'Admin',
-    color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  },
-  org_editor: {
-    label: 'Editor',
-    color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  },
-  org_viewer: {
-    label: 'Viewer',
-    color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-  },
+/** 조직 내 역할별 표시 이름과 점 색 */
+const ORG_ROLE_LABELS: Record<OrgRole, { label: string; dot: string }> = {
+  org_admin: { label: 'Admin', dot: 'bg-[var(--accent-orange)]' },
+  org_editor: { label: 'Editor', dot: 'bg-[var(--text-secondary)]' },
+  org_viewer: { label: 'Viewer', dot: 'bg-[var(--text-muted)]' },
 }
 
 const ORG_ROLE_OPTIONS: OrgRole[] = ['org_admin', 'org_editor', 'org_viewer']
+
+/** 폼 입력 공통 클래스 */
+const inputClass =
+  'w-full px-4 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-hover)] transition-colors'
+
+/** 폼 라벨 공통 클래스 */
+const labelClass = 'block text-sm font-medium text-[var(--text-secondary)] mb-2'
+
+/** 역할 배지 — 알약 배경 대신 점 하나와 글자 */
+function OrgRoleBadge({ role }: { role: OrgRole }) {
+  const info = ORG_ROLE_LABELS[role]
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
+      <span className={`size-1.5 shrink-0 rounded-full ${info.dot}`} />
+      {info.label}
+    </span>
+  )
+}
 
 export default function OrganizationDetailPage() {
   const params = useParams()
@@ -343,19 +353,17 @@ export default function OrganizationDetailPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        <div className="text-[var(--text-muted)]">Loading organization...</div>
-      </div>
+      <div className="text-[var(--text-muted)]">Loading organization...</div>
     )
   }
 
   if (error || !org) {
     return (
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        <div className="text-red-400">{error || 'Organization not found'}</div>
+      <div>
+        <div className="text-[var(--accent-orange)]">{error || 'Organization not found'}</div>
         <Link
           href="/admin/organizations"
-          className="mt-4 inline-block text-[var(--accent-cyan)] hover:underline"
+          className="mt-4 inline-block text-[var(--text-primary)] hover:underline"
         >
           ← Back to Organizations
         </Link>
@@ -364,8 +372,8 @@ export default function OrganizationDetailPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-8 py-12">
-      <div className="mb-8">
+    <div>
+      <div className="mb-6">
         <Link
           href="/admin/organizations"
           className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-4 inline-block"
@@ -374,26 +382,19 @@ export default function OrganizationDetailPage() {
         </Link>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-light text-[var(--text-primary)] mb-2">
-              {org.name}
-            </h1>
-            <div className="flex items-center gap-3">
-              <code className="text-sm text-[var(--text-secondary)]">{org.slug}</code>
-              <span
-                className={`inline-block px-3 py-1 rounded-lg text-xs font-medium border ${
-                  org.isActive
-                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                }`}
-              >
-                {org.isActive ? 'Active' : 'Inactive'}
+            <h1 className="page-title">{org.name}</h1>
+            <div className="flex items-center gap-3 mt-2">
+              <code className="font-mono text-sm text-[var(--text-secondary)]">{org.slug}</code>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={`size-1.5 shrink-0 rounded-full ${org.isActive ? 'bg-[var(--accent-green)]' : 'bg-[var(--text-muted)]'}`} />
+                <span className="text-xs text-[var(--text-secondary)]">{org.isActive ? 'Active' : 'Inactive'}</span>
               </span>
             </div>
           </div>
           {isSuperAdmin && (
             <button
               onClick={handleToggleActive}
-              className="px-4 py-2 rounded-lg border border-[var(--border-subtle)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+              className="px-4 py-2 rounded-lg border border-[var(--border-subtle)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors text-sm"
             >
               {org.isActive ? 'Deactivate' : 'Activate'}
             </button>
@@ -402,7 +403,7 @@ export default function OrganizationDetailPage() {
       </div>
 
       <div className="space-y-6">
-        <div className="glass rounded-2xl p-6">
+        <div className="surface-card rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-medium text-[var(--text-primary)]">
               Organization Info
@@ -410,7 +411,7 @@ export default function OrganizationDetailPage() {
             {canEdit && !editMode && (
               <button
                 onClick={() => setEditMode(true)}
-                className="text-sm text-[var(--accent-cyan)] hover:underline"
+                className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
               >
                 Edit
               </button>
@@ -420,32 +421,28 @@ export default function OrganizationDetailPage() {
           {editMode ? (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                  Name
-                </label>
+                <label className={labelClass}>Name</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                  Description
-                </label>
+                <label className={labelClass}>Description</label>
                 <textarea
                   value={editDescription}
                   onChange={e => setEditDescription(e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                  className={inputClass}
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>
@@ -464,28 +461,28 @@ export default function OrganizationDetailPage() {
           ) : (
             <div className="space-y-3">
               <div>
-                <div className="text-sm text-[var(--text-muted)] mb-1">Name</div>
+                <div className="eyebrow mb-1">Name</div>
                 <div className="text-[var(--text-primary)]">{org.name}</div>
               </div>
               <div>
-                <div className="text-sm text-[var(--text-muted)] mb-1">Slug</div>
-                <code className="text-[var(--text-secondary)]">{org.slug}</code>
+                <div className="eyebrow mb-1">Slug</div>
+                <code className="font-mono text-sm text-[var(--text-secondary)]">{org.slug}</code>
               </div>
               {org.description && (
                 <div>
-                  <div className="text-sm text-[var(--text-muted)] mb-1">Description</div>
+                  <div className="eyebrow mb-1">Description</div>
                   <div className="text-[var(--text-primary)]">{org.description}</div>
                 </div>
               )}
               <div>
-                <div className="text-sm text-[var(--text-muted)] mb-1">Created</div>
-                <div className="text-[var(--text-secondary)]">{formatDate(org.createdAt)}</div>
+                <div className="eyebrow mb-1">Created</div>
+                <div className="font-mono text-sm text-[var(--text-secondary)]">{formatDate(org.createdAt)}</div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="glass rounded-2xl p-6">
+        <div className="surface-card rounded-2xl p-6">
           <h2 className="text-xl font-medium text-[var(--text-primary)] mb-4">
             Members ({members.length})
           </h2>
@@ -498,12 +495,12 @@ export default function OrganizationDetailPage() {
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
                   placeholder="Email address"
-                  className="flex-1 px-4 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                  className={`flex-1 ${inputClass}`}
                 />
                 <select
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value as OrgRole)}
-                  className="px-4 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                  className={inputClass}
                 >
                   {ORG_ROLE_OPTIONS.map(role => (
                     <option key={role} value={role}>
@@ -514,7 +511,7 @@ export default function OrganizationDetailPage() {
                 <button
                   type="submit"
                   disabled={inviting || !inviteEmail}
-                  className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
                 >
                   {inviting ? 'Inviting...' : 'Invite'}
                 </button>
@@ -522,25 +519,24 @@ export default function OrganizationDetailPage() {
             </form>
           )}
 
-          <div className="space-y-3">
+          <div className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
             {members.map(member => {
-              const roleInfo = ORG_ROLE_LABELS[member.role]
               const isCurrentUser = session?.user?.id === member.userId
 
               return (
                 <div
                   key={member.userId}
-                  className="flex items-center justify-between p-4 rounded-lg bg-[var(--bg-tertiary)]"
+                  className="flex items-center justify-between py-3"
                 >
                   <div className="flex-1">
                     <div className="text-[var(--text-primary)] font-medium">
                       {member.name || 'Unknown'}
                       {isCurrentUser && (
-                        <span className="ml-2 text-xs text-[var(--accent-cyan)]">(you)</span>
+                        <span className="ml-2 text-xs text-[var(--text-muted)]">(you)</span>
                       )}
                     </div>
                     <div className="text-sm text-[var(--text-secondary)]">{member.email}</div>
-                    <div className="text-xs text-[var(--text-muted)] mt-1">
+                    <div className="text-xs text-[var(--text-muted)] mt-1 font-mono">
                       Joined {formatDate(member.joinedAt)}
                     </div>
                   </div>
@@ -550,7 +546,7 @@ export default function OrganizationDetailPage() {
                         value={member.role}
                         onChange={e => handleChangeRole(member.userId, e.target.value as OrgRole)}
                         disabled={updatingMemberId === member.userId}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${roleInfo.color} bg-transparent`}
+                        className="px-2 py-1 rounded-lg text-xs font-medium border border-[var(--border-subtle)] bg-transparent text-[var(--text-primary)] cursor-pointer"
                       >
                         {ORG_ROLE_OPTIONS.map(role => (
                           <option key={role} value={role} className="bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -559,15 +555,13 @@ export default function OrganizationDetailPage() {
                         ))}
                       </select>
                     ) : (
-                      <span className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${roleInfo.color}`}>
-                        {roleInfo.label}
-                      </span>
+                      <OrgRoleBadge role={member.role} />
                     )}
                     {canEdit && !isCurrentUser && (
                       <button
                         onClick={() => handleRemoveMember(member.userId)}
                         disabled={removingMemberId === member.userId}
-                        className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
+                        className="text-sm text-[var(--accent-orange)] hover:opacity-80 disabled:opacity-50"
                       >
                         {removingMemberId === member.userId ? 'Removing...' : 'Remove'}
                       </button>
@@ -579,7 +573,7 @@ export default function OrganizationDetailPage() {
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-6">
+        <div className="surface-card rounded-2xl p-6">
           <h2 className="text-xl font-medium text-[var(--text-primary)] mb-4">
             Allowed Domains ({domains.length})
           </h2>
@@ -592,12 +586,12 @@ export default function OrganizationDetailPage() {
                   value={newDomain}
                   onChange={e => setNewDomain(e.target.value)}
                   placeholder="example.com"
-                  className="flex-1 px-4 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)]"
+                  className={`flex-1 ${inputClass}`}
                 />
                 <button
                   type="submit"
                   disabled={addingDomain || !newDomain}
-                  className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
                 >
                   {addingDomain ? 'Adding...' : 'Add Domain'}
                 </button>
@@ -605,18 +599,18 @@ export default function OrganizationDetailPage() {
             </form>
           )}
 
-          <div className="space-y-2">
+          <div className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
             {domains.map(domain => (
               <div
                 key={domain}
-                className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-tertiary)]"
+                className="flex items-center justify-between py-2.5"
               >
-                <code className="text-[var(--text-primary)]">{domain}</code>
+                <code className="font-mono text-sm text-[var(--text-primary)]">{domain}</code>
                 {canEdit && (
                   <button
                     onClick={() => handleRemoveDomain(domain)}
                     disabled={removingDomain === domain}
-                    className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
+                    className="text-sm text-[var(--accent-orange)] hover:opacity-80 disabled:opacity-50"
                   >
                     {removingDomain === domain ? 'Removing...' : 'Remove'}
                   </button>

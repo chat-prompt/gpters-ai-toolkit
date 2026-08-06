@@ -77,7 +77,9 @@ cp .env.example .env.local
 |------|------|--------|
 | `NEXT_PUBLIC_SITE_NAME` | 사이트 이름 | `AI Toolkit` |
 | `CONTACT_EMAIL` | 문의 이메일 | `admin@example.com` |
-| `INTERNAL_ORGANIZATION_DOMAIN` | 내부 전용 기능 도메인 | 빈 값 (비활성) |
+| `INTERNAL_ORGANIZATION_DOMAIN` | 내부 전용 기능 도메인 + AX 대시보드 접근 판정 | 빈 값 (비활성) |
+| `VERCEL_API_TOKEN` | AX 대시보드 배포 사이트 패널 | — (미설정 시 해당 패널만 안내 표시) |
+| `VERCEL_TEAM_ID` | Vercel 팀 계정 조회 시 | — |
 | `GH_TOKEN` | GitHub API 토큰 (플러그인 싱크) | — |
 | `GH_OWNER` | GitHub 조직/사용자명 | — |
 | `GH_REPO` | GitHub 저장소명 | — |

@@ -1,16 +1,13 @@
 /**
- * Main catalog component with search, filtering, and categorized display
+ * 검색·필터가 붙은 카탈로그 화면
  *
- * Provides a full-featured catalog browsing experience with:
- * - Autocomplete search with natural language support
- * - Type-based filtering (skills, agents, commands, hooks, packages)
- * - Tag, difficulty, and team filters
- * - Categorized grid display with animation
+ * 검색창 → 유형 필터 → 개수 밴드 → 유형별 목록 순으로 쌓는다.
+ * 유형 구분에 쓰던 색과 이모지는 걷어내고, 선택 상태는 명암으로만 나타낸다.
  */
 'use client'
 
 import { Link } from '@/i18n/navigation'
-import { TAGS, DIFFICULTY_LABELS, type Difficulty } from '@/lib/core/types'
+import { TAGS, DIFFICULTY_LABELS, type Difficulty, type ItemType } from '@/lib/core/types'
 import { SKILL_PLATFORMS, PLATFORM_LABELS } from '@/lib/security/client-type'
 import { SearchAutocomplete } from '../SearchAutocomplete'
 import { ItemCard } from './ItemCard'
@@ -18,14 +15,17 @@ import { SectionHeader } from './SectionHeader'
 import { useSearchFilters } from './useSearchFilters'
 import type { SearchableCatalogProps } from './types'
 
+/** 선택된 알약 버튼 — 강조색 대신 명암을 뒤집는다 */
+const PILL_ACTIVE = 'border-transparent bg-[var(--text-primary)] text-[var(--bg-primary)]'
+
+/** 선택되지 않은 알약 버튼 */
+const PILL_IDLE =
+  'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+
 /**
- * Searchable catalog with filtering and categorized grid display
+ * 검색·필터가 붙은 카탈로그
  *
- * Features:
- * - Full-text search with autocomplete
- * - Type, tag, difficulty, and team filtering
- * - "Did you mean" suggestions for no results
- * - Animated card display with staggered animation
+ * @param catalog - 화면에 뿌릴 카탈로그 항목 전체
  *
  * @example
  * ```tsx
@@ -63,10 +63,34 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     totalPackages,
   } = useSearchFilters({ catalog })
 
+  /** 유형 필터 버튼 — 라벨과 전체 개수 */
+  const typeFilters: { value: ItemType | 'all'; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: catalog.length },
+    { value: 'skill', label: 'Skills', count: totalSkills },
+    { value: 'agent', label: 'Agents', count: totalAgents },
+    { value: 'command', label: 'Commands', count: totalCommands },
+    { value: 'hook', label: 'Hooks', count: totalHooks },
+    { value: 'package', label: 'Packages', count: totalPackages },
+  ]
+
+  /** 현재 필터에 걸린 유형별 목록 */
+  const sections: { type: ItemType; title: string; items: typeof catalog }[] = [
+    { type: 'skill', title: 'Skills', items: skills },
+    { type: 'agent', title: 'Agents', items: agents },
+    { type: 'command', title: 'Commands', items: commands },
+    { type: 'hook', title: 'Hooks', items: hooks },
+    { type: 'package', title: 'Packages', items: packages },
+  ]
+
+  const visibleSections = sections.filter(
+    (section) =>
+      section.items.length > 0 && (activeFilter === 'all' || activeFilter === section.type)
+  )
+
   return (
     <>
-      {/* Search & Filter */}
-      <div className="mt-12 max-w-4xl">
+      {/* 검색 — 히어로 바로 아래에 붙여 가장 먼저 눈에 걸리게 한다 */}
+      <div className="reveal mt-8 max-w-3xl" style={{ '--ax-delay': '80ms' } as React.CSSProperties}>
         <SearchAutocomplete
           value={searchQuery}
           onChange={setSearchQuery}
@@ -74,118 +98,63 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           placeholder="Search skills, agents, commands..."
         />
 
-        {/* Type Filter Buttons */}
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={() => handleTypeFilter('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'all'
-                ? 'bg-[var(--accent-cyan)] text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            All ({catalog.length})
-          </button>
-          <button
-            onClick={() => handleTypeFilter('skill')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'skill'
-                ? 'bg-[var(--accent-cyan)] text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            ⚡ Skills ({totalSkills})
-          </button>
-          <button
-            onClick={() => handleTypeFilter('agent')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'agent'
-                ? 'bg-[var(--accent-purple)] text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            ◈ Agents ({totalAgents})
-          </button>
-          <button
-            onClick={() => handleTypeFilter('command')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'command'
-                ? 'bg-rose-400 text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            ▸ Commands ({totalCommands})
-          </button>
-          <button
-            onClick={() => handleTypeFilter('hook')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'hook'
-                ? 'bg-orange-400 text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            🪝 Hooks ({totalHooks})
-          </button>
-          <button
-            onClick={() => handleTypeFilter('package')}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              activeFilter === 'package'
-                ? 'bg-indigo-400 text-black'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            📦 Packages ({totalPackages})
-          </button>
+        {/* 유형 필터 — 모바일에서 줄바꿈되게 한다 */}
+        <div className="flex flex-wrap gap-2 mt-3">
+          {typeFilters.map((filter) => (
+            <button
+              key={filter.value}
+              onClick={() => handleTypeFilter(filter.value)}
+              aria-pressed={activeFilter === filter.value}
+              className={`px-3.5 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                activeFilter === filter.value ? PILL_ACTIVE : PILL_IDLE
+              }`}
+            >
+              {filter.label} <span className="font-mono tabular-nums">({filter.count})</span>
+            </button>
+          ))}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 ${
+            aria-expanded={showFilters}
+            className={`px-3.5 py-1.5 rounded-full border text-xs font-medium transition-colors flex items-center gap-1.5 ${
               showFilters || hasActiveFilters
-                ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--accent-cyan)]'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                ? 'border-[var(--border-hover)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                : PILL_IDLE
             }`}
           >
-            <span>⚙</span>
             Filters
-            {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-[var(--accent-cyan)]" />}
+            {hasActiveFilters && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-primary)]" />
+            )}
           </button>
         </div>
 
-        {/* Advanced Filters Panel */}
+        {/* 상세 필터 */}
         {showFilters && (
-          <div className="mt-4 p-5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] animate-fade-up">
-            {/* Difficulty Filter */}
+          <div className="reveal mt-3 p-5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
+            {/* 난이도 */}
             <div className="mb-5">
-              <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
-                Difficulty
-              </div>
-              <div className="flex gap-2">
+              <p className="eyebrow mb-2.5">Difficulty</p>
+              <div className="flex flex-wrap gap-2">
                 {(['easy', 'medium', 'hard'] as Difficulty[]).map((level) => (
                   <button
                     key={level}
                     onClick={() =>
                       handleDifficultyChange(selectedDifficulty === level ? '' : level)
                     }
-                    className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-                      selectedDifficulty === level
-                        ? level === 'easy'
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                          : level === 'medium'
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
-                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
-                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    aria-pressed={selectedDifficulty === level}
+                    className={`px-3.5 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                      selectedDifficulty === level ? PILL_ACTIVE : PILL_IDLE
                     }`}
                   >
-                    {DIFFICULTY_LABELS[level].emoji} {DIFFICULTY_LABELS[level].label}
+                    {DIFFICULTY_LABELS[level].label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Platform Filter */}
+            {/* 플랫폼 */}
             <div className="mb-5">
-              <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
-                Platform
-              </div>
+              <p className="eyebrow mb-2.5">Platform</p>
               <div className="flex flex-wrap gap-2">
                 {SKILL_PLATFORMS.map((platform) => {
                   const info = PLATFORM_LABELS[platform]
@@ -194,10 +163,9 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                     <button
                       key={platform}
                       onClick={() => handlePlatformChange(isActive ? null : platform)}
-                      className={`text-xs px-3 py-1.5 rounded-full transition-all ${
-                        isActive
-                          ? `${info.color} ring-1 ring-current`
-                          : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      aria-pressed={isActive}
+                      className={`px-3.5 py-1.5 rounded-full border text-xs transition-colors ${
+                        isActive ? PILL_ACTIVE : PILL_IDLE
                       }`}
                     >
                       {info.label}
@@ -207,20 +175,19 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
               </div>
             </div>
 
-            {/* Tag Filter */}
+            {/* 태그 */}
             <div>
-              <div className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">
-                Tags {selectedTags.length > 0 && `(${selectedTags.length} selected)`}
-              </div>
+              <p className="eyebrow mb-2.5">
+                Tags {selectedTags.length > 0 && `(${selectedTags.length})`}
+              </p>
               <div className="flex flex-wrap gap-2">
                 {availableTags.map((tag) => (
                   <button
                     key={tag}
                     onClick={() => handleTagToggle(tag)}
-                    className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
-                      selectedTags.includes(tag)
-                        ? 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/50'
-                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                    aria-pressed={selectedTags.includes(tag)}
+                    className={`px-3 py-1.5 rounded-lg border text-xs transition-colors ${
+                      selectedTags.includes(tag) ? PILL_ACTIVE : PILL_IDLE
                     }`}
                   >
                     {TAGS[tag]?.label || tag}
@@ -229,14 +196,12 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
               </div>
             </div>
 
-            {/* Clear Filters */}
             {hasActiveFilters && (
               <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
                 <button
                   onClick={handleClearAllFilters}
-                  className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors flex items-center gap-2"
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
-                  <span>✕</span>
                   Clear all filters
                 </button>
               </div>
@@ -245,185 +210,77 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
         )}
       </div>
 
-      {/* Active Filters Summary */}
+      {/* 접힌 상태에서도 무엇이 걸려 있는지 보이게 한다 */}
       {hasActiveFilters && !showFilters && (
-        <div className="mt-4 flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-[var(--text-muted)]">Active filters:</span>
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           {selectedDifficulty && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
-              {DIFFICULTY_LABELS[selectedDifficulty].emoji}{' '}
-              {DIFFICULTY_LABELS[selectedDifficulty].label}
-              <button
-                onClick={() => handleDifficultyChange('')}
-                className="ml-1 hover:text-rose-400 transition-colors"
-              >
-                ✕
-              </button>
-            </span>
+            <FilterChip
+              label={DIFFICULTY_LABELS[selectedDifficulty].label}
+              onRemove={() => handleDifficultyChange('')}
+            />
           )}
           {selectedPlatform && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
-              {PLATFORM_LABELS[selectedPlatform as keyof typeof PLATFORM_LABELS]?.label || selectedPlatform}
-              <button
-                onClick={() => handlePlatformChange(null)}
-                className="ml-1 hover:text-rose-400 transition-colors"
-              >
-                ✕
-              </button>
-            </span>
+            <FilterChip
+              label={
+                PLATFORM_LABELS[selectedPlatform as keyof typeof PLATFORM_LABELS]?.label ||
+                selectedPlatform
+              }
+              onRemove={() => handlePlatformChange(null)}
+            />
           )}
           {selectedTags.map((tag) => (
-            <span
+            <FilterChip
               key={tag}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)]"
-            >
-              {TAGS[tag]?.label || tag}
-              <button
-                onClick={() => handleTagToggle(tag)}
-                className="ml-1 hover:text-rose-400 transition-colors"
-              >
-                ✕
-              </button>
-            </span>
+              label={TAGS[tag]?.label || tag}
+              onRemove={() => handleTagToggle(tag)}
+            />
           ))}
           <button
             onClick={handleClearAllFilters}
-            className="text-xs text-[var(--text-muted)] hover:text-rose-400 transition-colors"
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
           >
             Clear all
           </button>
         </div>
       )}
 
-      {/* Stats */}
-      <div className="mt-6 flex items-center gap-12">
-        <div>
-          <div className="text-3xl font-light text-[var(--text-primary)]">{skills.length}</div>
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">
-            Skills
+      {/* 개수 밴드 — 칸 사이는 1px 선으로만 나눈다 */}
+      <div
+        className="reveal mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px rounded-2xl overflow-hidden bg-[var(--border-subtle)]"
+        style={{ '--ax-delay': '160ms' } as React.CSSProperties}
+      >
+        {sections.map((section) => (
+          <div key={section.type} className="bg-[var(--bg-primary)] px-5 py-4">
+            <p className="font-mono text-2xl leading-none tabular-nums tracking-tight text-[var(--text-primary)]">
+              {section.items.length}
+            </p>
+            <p className="eyebrow mt-2">{section.title}</p>
           </div>
-        </div>
-        <div className="w-px h-8 bg-[var(--border-subtle)]" />
-        <div>
-          <div className="text-3xl font-light text-[var(--text-primary)]">{agents.length}</div>
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">
-            Agents
-          </div>
-        </div>
-        <div className="w-px h-8 bg-[var(--border-subtle)]" />
-        <div>
-          <div className="text-3xl font-light text-[var(--text-primary)]">{commands.length}</div>
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">
-            Commands
-          </div>
-        </div>
-        <div className="w-px h-8 bg-[var(--border-subtle)]" />
-        <div>
-          <div className="text-3xl font-light text-[var(--text-primary)]">{hooks.length}</div>
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">
-            Hooks
-          </div>
-        </div>
-        <div className="w-px h-8 bg-[var(--border-subtle)]" />
-        <div>
-          <div className="text-3xl font-light text-[var(--text-primary)]">{packages.length}</div>
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mt-1">
-            Packages
-          </div>
-        </div>
-        {(searchQuery || hasActiveFilters) && (
-          <>
-            <div className="w-px h-8 bg-[var(--border-subtle)]" />
-            <div className="text-xs text-[var(--text-muted)]">
-              Showing {filteredCatalog.length} of {catalog.length} items
-              {hasActiveFilters && ' (filtered)'}
-            </div>
-          </>
-        )}
+        ))}
       </div>
 
-      {/* Content */}
-      <div className="mt-16">
-        {/* Skills Section */}
-        {skills.length > 0 && (activeFilter === 'all' || activeFilter === 'skill') && (
-          <section className="mb-20">
-            <SectionHeader
-              icon="⚡"
-              title="Skills"
-              count={skills.length}
-              accentColor="text-[var(--accent-cyan)]"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {skills.map((item, i) => (
+      {(searchQuery || hasActiveFilters) && (
+        <p className="mt-3 font-mono text-xs tabular-nums text-[var(--text-muted)]">
+          {filteredCatalog.length} / {catalog.length}
+        </p>
+      )}
+
+      <div className="mt-12">
+        {visibleSections.map((section) => (
+          <section key={section.type} className="mb-12">
+            <SectionHeader title={section.title} count={section.items.length} />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {section.items.map((item, i) => (
                 <ItemCard key={item.id} item={item} index={i} />
               ))}
             </div>
           </section>
-        )}
+        ))}
 
-        {/* Agents Section */}
-        {agents.length > 0 && (activeFilter === 'all' || activeFilter === 'agent') && (
-          <section className="mb-20">
-            <SectionHeader
-              icon="◈"
-              title="Agents"
-              count={agents.length}
-              accentColor="text-[var(--accent-purple)]"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {agents.map((item, i) => (
-                <ItemCard key={item.id} item={item} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Commands Section */}
-        {commands.length > 0 && (activeFilter === 'all' || activeFilter === 'command') && (
-          <section className="mb-20">
-            <SectionHeader
-              icon="▸"
-              title="Commands"
-              count={commands.length}
-              accentColor="text-rose-400"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {commands.map((item, i) => (
-                <ItemCard key={item.id} item={item} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Hooks Section */}
-        {hooks.length > 0 && (activeFilter === 'all' || activeFilter === 'hook') && (
-          <section className="mb-20">
-            <SectionHeader icon="🪝" title="Hooks" count={hooks.length} accentColor="text-orange-400" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {hooks.map((item, i) => (
-                <ItemCard key={item.id} item={item} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Packages Section */}
-        {packages.length > 0 && (activeFilter === 'all' || activeFilter === 'package') && (
-          <section className="mb-20">
-            <SectionHeader icon="📦" title="Packages" count={packages.length} accentColor="text-indigo-400" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {packages.map((item, i) => (
-                <ItemCard key={item.id} item={item} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* No Results */}
+        {/* 빈 결과 */}
         {filteredCatalog.length === 0 && (
-          <div className="text-center py-32">
-            <div className="text-6xl mb-6 opacity-20">∅</div>
-            <p className="text-[var(--text-secondary)] text-lg mb-4">
+          <div className="py-20 text-center">
+            <p className="text-[var(--text-secondary)]">
               {searchQuery
                 ? `No results for "${searchQuery}"`
                 : hasActiveFilters
@@ -431,16 +288,15 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                   : 'No items yet'}
             </p>
 
-            {/* Did you mean suggestions */}
             {didYouMean.length > 0 && (
-              <div className="mb-6">
-                <p className="text-[var(--text-muted)] text-sm mb-2">Did you mean:</p>
+              <div className="mt-6">
+                <p className="eyebrow mb-2.5">Did you mean</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {didYouMean.map((suggestion, i) => (
                     <button
-                      key={i}
+                      key={`${i}-${suggestion}`}
                       onClick={() => setSearchQuery(suggestion)}
-                      className="px-3 py-1.5 rounded-lg text-sm bg-[var(--bg-tertiary)] text-[var(--accent-cyan)] hover:bg-[var(--bg-secondary)] transition-colors"
+                      className={`px-3.5 py-1.5 rounded-full border text-xs transition-colors ${PILL_IDLE}`}
                     >
                       {suggestion}
                     </button>
@@ -449,24 +305,44 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
               </div>
             )}
 
-            {searchQuery || hasActiveFilters ? (
-              <button
-                onClick={handleClearAllFilters}
-                className="text-[var(--accent-cyan)] hover:underline"
-              >
-                Clear all filters
-              </button>
-            ) : (
-              <Link
-                href="/upload"
-                className="inline-flex items-center gap-2 text-[var(--accent-cyan)] hover:underline"
-              >
-                Share the first skill →
-              </Link>
-            )}
+            <div className="mt-6">
+              {searchQuery || hasActiveFilters ? (
+                <button
+                  onClick={handleClearAllFilters}
+                  className="text-sm text-[var(--brand-primary)] hover:underline"
+                >
+                  Clear all filters
+                </button>
+              ) : (
+                <Link href="/upload" className="text-sm text-[var(--brand-primary)] hover:underline">
+                  Share the first skill →
+                </Link>
+              )}
+            </div>
           </div>
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * 적용 중인 필터 하나를 보여주고 지우는 칩
+ *
+ * @param label - 필터 이름
+ * @param onRemove - 이 필터를 해제하는 핸들러
+ */
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)]">
+      {label}
+      <button
+        onClick={onRemove}
+        aria-label={`${label} 필터 해제`}
+        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+      >
+        ✕
+      </button>
+    </span>
   )
 }

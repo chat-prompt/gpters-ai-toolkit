@@ -1,8 +1,8 @@
 /**
- * Draft status banner component
+ * 작성 중 안내 띠
  *
- * Displays warning banner for draft items indicating
- * they are not visible in the public catalog.
+ * 아직 공개 카탈로그에 뜨지 않는 항목임을 알린다. 경고색으로 화면을 물들이지
+ * 않고 왼쪽 세로선 하나로만 표시한다 — 읽을 내용은 아래 본문이지 이 띠가 아니다.
  */
 import { getTranslations } from 'next-intl/server'
 
@@ -10,12 +10,14 @@ import { getTranslations } from 'next-intl/server'
  * Props for the DraftBanner component
  */
 interface DraftBannerProps {
-  /** Additional CSS classes */
+  /** 추가 CSS 클래스 */
   className?: string
 }
 
 /**
- * Yellow warning banner for draft status items
+ * 작성 중(draft) 항목 안내 띠
+ *
+ * @param className - 추가 CSS 클래스
  *
  * @example
  * ```tsx
@@ -27,17 +29,10 @@ export async function DraftBanner({ className = '' }: DraftBannerProps) {
 
   return (
     <div
-      className={`rounded-xl p-4 mb-8 bg-yellow-500/10 border border-yellow-500/30 ${className}`}
+      className={`mb-8 border-l-2 border-[var(--brand-primary)] bg-[var(--bg-secondary)] py-3 pl-4 pr-4 ${className}`}
     >
-      <div className="flex items-center gap-3">
-        <span className="text-xl">🚧</span>
-        <div>
-          <div className="text-sm font-medium text-yellow-400">Draft</div>
-          <p className="text-xs text-yellow-400/70 mt-0.5">
-            {t('draft.description')}
-          </p>
-        </div>
-      </div>
+      <p className="eyebrow">Draft</p>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">{t('draft.description')}</p>
     </div>
   )
 }

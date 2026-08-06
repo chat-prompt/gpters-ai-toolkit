@@ -1,36 +1,38 @@
-/**
- * Table of contents component with scroll tracking
- *
- * Provides sticky navigation for detail pages with
- * active section highlighting based on scroll position.
- */
 'use client'
+
+/**
+ * 상세 페이지 목차
+ *
+ * 넓은 화면에서만 오른쪽에 고정으로 붙어, 스크롤 위치에 맞춰 현재 구획을 짚어 준다.
+ * 좁은 화면에서는 본문을 가리지 않도록 아예 감춘다.
+ */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslations } from 'next-intl'
 
 /**
- * Table of contents item structure
+ * 목차 항목
  */
 export interface TocItem {
-  /** Element ID to scroll to */
+  /** 이동할 요소 ID */
   id: string
-  /** Display label */
+  /** 표시 이름 */
   label: string
-  /** Optional icon emoji */
-  icon?: string
 }
 
 /**
  * Props for the TableOfContents component
  */
 interface TableOfContentsProps {
-  /** List of sections to navigate */
+  /** 목차에 세울 구획 목록 */
   items: TocItem[]
 }
 
 /**
- * Calculate initial active section ID based on scroll position
+ * 지금 스크롤 위치에 해당하는 구획 ID를 구한다
+ *
+ * @param items - 목차 항목 목록
+ * @returns 현재 구획 ID
  */
 function getInitialActiveId(items: TocItem[]): string {
   if (typeof window === 'undefined' || items.length === 0) {
@@ -50,26 +52,23 @@ function getInitialActiveId(items: TocItem[]): string {
 }
 
 /**
- * Sticky table of contents with scroll-aware active highlighting
+ * 스크롤을 따라 현재 구획을 짚어 주는 고정 목차
+ *
+ * @param items - 목차에 세울 구획 목록
  *
  * @example
  * ```tsx
- * <TableOfContents
- *   items={[
- *     { id: 'overview', label: 'Overview', icon: '📄' },
- *     { id: 'install', label: 'Installation', icon: '📥' },
- *   ]}
- * />
+ * <TableOfContents items={[{ id: 'overview', label: '개요' }]} />
  * ```
  */
 export function TableOfContents({ items }: TableOfContentsProps) {
   const t = useTranslations('detail')
-  // Initialize with first item, will update on mount
+  // 첫 항목으로 시작하고, 마운트 뒤 실제 스크롤 위치로 맞춘다
   const initialId = useMemo(() => items[0]?.id || '', [items])
   const [activeId, setActiveId] = useState<string>(initialId)
 
   const handleScroll = useCallback(() => {
-    const scrollPosition = window.scrollY + 120 // offset for header
+    const scrollPosition = window.scrollY + 120 // 헤더 높이만큼 띄운다
 
     for (let i = items.length - 1; i >= 0; i--) {
       const element = document.getElementById(items[i].id)
@@ -84,7 +83,6 @@ export function TableOfContents({ items }: TableOfContentsProps) {
     }
   }, [items])
 
-  // Set initial active ID after mount
   useEffect(() => {
     setActiveId(getInitialActiveId(items))
   }, [items])
@@ -111,29 +109,29 @@ export function TableOfContents({ items }: TableOfContentsProps) {
   if (items.length === 0) return null
 
   return (
-    <nav className="hidden xl:block fixed right-8 top-32 w-48 z-20">
-      <div className="glass rounded-xl p-4">
-        <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-          {t('toc.heading')}
-        </h3>
-        <ul className="space-y-1">
-          {items.map((item) => (
+    <nav className="fixed right-8 top-32 z-20 hidden w-48 xl:block">
+      <p className="eyebrow">{t('toc.heading')}</p>
+      {/* 세로선 하나에 항목을 매달아, 지금 보는 구획만 선이 진해진다 */}
+      <ul className="mt-3 border-l border-[var(--border-subtle)]">
+        {items.map((item) => {
+          const isActive = activeId === item.id
+          return (
             <li key={item.id}>
               <button
                 onClick={() => scrollToSection(item.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
-                  activeId === item.id
-                    ? 'bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] font-medium'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
+                aria-current={isActive ? 'true' : undefined}
+                className={`-ml-px w-full border-l py-1.5 pl-3 text-left text-[13px] transition-colors ${
+                  isActive
+                    ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                {item.icon && <span className="text-xs">{item.icon}</span>}
-                <span className="truncate">{item.label}</span>
+                <span className="block truncate">{item.label}</span>
               </button>
             </li>
-          ))}
-        </ul>
-      </div>
+          )
+        })}
+      </ul>
     </nav>
   )
 }
@@ -142,22 +140,25 @@ export function TableOfContents({ items }: TableOfContentsProps) {
  * Props for the Section wrapper component
  */
 interface SectionProps {
-  /** Element ID for TOC navigation */
+  /** 목차가 가리킬 요소 ID */
   id: string
-  /** Section content */
+  /** 구획 내용 */
   children: React.ReactNode
-  /** Additional CSS classes */
+  /** 추가 CSS 클래스 */
   className?: string
 }
 
 /**
- * Section wrapper that adds scroll offset for TOC navigation
+ * 목차 이동 시 헤더에 가리지 않도록 여백을 두는 구획 래퍼
+ *
+ * @param id - 목차가 가리킬 요소 ID
+ * @param children - 구획 내용
+ * @param className - 추가 CSS 클래스
  *
  * @example
  * ```tsx
  * <Section id="overview">
- *   <h2>Overview</h2>
- *   <p>Content here...</p>
+ *   <ItemHero {...heroProps} />
  * </Section>
  * ```
  */

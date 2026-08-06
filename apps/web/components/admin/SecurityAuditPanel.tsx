@@ -113,20 +113,23 @@ export function SecurityAuditPanel({
     })
   }
 
+  /** 위험도 배지 — 알약 배경 대신 점 하나와 글자. 점 색은 위험도별 시맨틱 색을 그대로 쓴다 */
   const getRiskBadge = (risk: RiskLevel) => {
-    const { label, color, bgColor } = RISK_LABELS[risk]
+    const { label, color } = RISK_LABELS[risk]
+    const dotColor = color.replace('text-', 'bg-')
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${bgColor} ${color}`}>
-        {label}
+      <span className="inline-flex items-center gap-1.5">
+        <span className={`size-1.5 shrink-0 rounded-full ${dotColor}`} />
+        <span className={`text-xs font-medium ${color}`}>{label}</span>
       </span>
     )
   }
 
   const getCategoryBadge = (category: IssueCategory) => {
-    const { label, icon } = CATEGORY_LABELS[category]
+    const { label } = CATEGORY_LABELS[category]
     return (
-      <span className="px-2 py-1 rounded-full text-xs font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
-        {icon} {label}
+      <span className="px-2 py-1 rounded border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-secondary)]">
+        {label}
       </span>
     )
   }
@@ -139,46 +142,43 @@ export function SecurityAuditPanel({
     return (
       <div className="space-y-4">
         {/* Overall Status */}
-        <div className={`flex items-center justify-between p-4 rounded-lg ${
+        <div className={`flex items-center justify-between p-4 rounded-lg border ${
           passed
-            ? 'bg-green-500/10 border border-green-500/30'
-            : 'bg-red-500/10 border border-red-500/30'
+            ? 'bg-[var(--accent-green)]/10 border-[var(--accent-green)]/30'
+            : 'bg-[var(--accent-orange)]/10 border-[var(--accent-orange)]/30'
         }`}>
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{passed ? '✅' : '⚠️'}</span>
-            <div>
-              <p className={`font-medium ${passed ? 'text-green-400' : 'text-red-400'}`}>
-                {passed ? 'Security Check Passed' : 'Security Issues Found'}
-              </p>
-              <p className="text-sm text-[var(--text-muted)]">
-                {summary.total} issue{summary.total !== 1 ? 's' : ''} detected
-              </p>
-            </div>
+          <div>
+            <p className={`font-medium ${passed ? 'text-[var(--accent-green)]' : 'text-[var(--accent-orange)]'}`}>
+              {passed ? 'Security Check Passed' : 'Security Issues Found'}
+            </p>
+            <p className="text-sm text-[var(--text-muted)]">
+              {summary.total} issue{summary.total !== 1 ? 's' : ''} detected
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-[var(--text-muted)]">Overall Risk:</span>
+            <span className="eyebrow">Overall Risk</span>
             {getRiskBadge(overallRisk)}
           </div>
         </div>
 
         {/* Issue Breakdown */}
         {summary.total > 0 && (
-          <div className="grid grid-cols-4 gap-3">
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
-              <p className="text-2xl font-bold text-red-400">{summary.critical}</p>
-              <p className="text-xs text-[var(--text-muted)]">Critical</p>
+          <div className="grid grid-cols-4 border-t border-l border-[var(--border-subtle)]">
+            <div className="p-3 border-r border-b border-[var(--border-subtle)] text-center">
+              <p className="font-mono text-xl tabular-nums text-[var(--text-primary)]">{summary.critical}</p>
+              <p className="eyebrow mt-1">Critical</p>
             </div>
-            <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-center">
-              <p className="text-2xl font-bold text-orange-400">{summary.high}</p>
-              <p className="text-xs text-[var(--text-muted)]">High</p>
+            <div className="p-3 border-r border-b border-[var(--border-subtle)] text-center">
+              <p className="font-mono text-xl tabular-nums text-[var(--text-primary)]">{summary.high}</p>
+              <p className="eyebrow mt-1">High</p>
             </div>
-            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-center">
-              <p className="text-2xl font-bold text-yellow-400">{summary.medium}</p>
-              <p className="text-xs text-[var(--text-muted)]">Medium</p>
+            <div className="p-3 border-r border-b border-[var(--border-subtle)] text-center">
+              <p className="font-mono text-xl tabular-nums text-[var(--text-primary)]">{summary.medium}</p>
+              <p className="eyebrow mt-1">Medium</p>
             </div>
-            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-center">
-              <p className="text-2xl font-bold text-blue-400">{summary.low}</p>
-              <p className="text-xs text-[var(--text-muted)]">Low</p>
+            <div className="p-3 border-r border-b border-[var(--border-subtle)] text-center">
+              <p className="font-mono text-xl tabular-nums text-[var(--text-primary)]">{summary.low}</p>
+              <p className="eyebrow mt-1">Low</p>
             </div>
           </div>
         )}
@@ -227,13 +227,13 @@ export function SecurityAuditPanel({
 
             <div>
               <p className="text-sm text-[var(--text-secondary)] mb-1">Matched Pattern:</p>
-              <code className="block text-xs p-2 rounded bg-[var(--bg-primary)] text-[var(--accent-cyan)] font-mono overflow-x-auto">
+              <code className="block text-xs p-2 rounded bg-[var(--bg-primary)] text-[var(--text-secondary)] font-mono overflow-x-auto">
                 {issue.matchedPattern}
               </code>
             </div>
 
-            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-              <p className="text-sm text-green-400 font-medium mb-1">Recommendation:</p>
+            <div className="p-3 rounded-lg bg-[var(--accent-green)]/10 border border-[var(--accent-green)]/30">
+              <p className="text-sm text-[var(--accent-green)] font-medium mb-1">Recommendation:</p>
               <p className="text-sm text-[var(--text-primary)]">{issue.recommendation}</p>
             </div>
           </div>
@@ -260,24 +260,18 @@ export function SecurityAuditPanel({
   }
 
   return (
-    <div className={`glass rounded-2xl p-6 space-y-6 ${className}`}>
+    <div className={`surface-card rounded-2xl p-6 space-y-6 ${className}`}>
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-[var(--text-primary)] flex items-center gap-2">
-          <span>🔒</span> Security Audit
+        <h3 className="text-lg font-medium text-[var(--text-primary)]">
+          Security Audit
         </h3>
         <button
           type="button"
           onClick={runAudit}
           disabled={status === 'running'}
-          className="px-4 py-2 rounded-lg bg-[var(--accent-cyan)] text-black text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {status === 'running' ? (
-            <span className="flex items-center gap-2">
-              <span className="animate-spin">⟳</span> Scanning...
-            </span>
-          ) : (
-            'Run Audit'
-          )}
+          {status === 'running' ? 'Scanning...' : 'Run Audit'}
         </button>
       </div>
 
@@ -296,12 +290,12 @@ export function SecurityAuditPanel({
       )}
 
       {status === 'error' && error && (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
-          <p className="text-red-400">{error}</p>
+        <div className="p-4 rounded-lg bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30">
+          <p className="text-[var(--accent-orange)]">{error}</p>
           <button
             type="button"
             onClick={runAudit}
-            className="mt-2 text-sm text-[var(--accent-cyan)] hover:underline"
+            className="mt-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
           >
             Try again
           </button>
@@ -313,7 +307,7 @@ export function SecurityAuditPanel({
           {renderSummary()}
           {renderIssues()}
 
-          <div className="text-xs text-[var(--text-muted)] text-right">
+          <div className="text-xs text-[var(--text-muted)] font-mono text-right">
             Audited at: {new Date(result.auditedAt).toLocaleString()}
           </div>
         </>
@@ -342,24 +336,26 @@ export function SecurityAuditBadge({
       <button
         type="button"
         onClick={onClick}
-        className="px-3 py-1 rounded-full text-xs font-medium bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
       >
-        🔒 Not audited
+        <span className="size-1.5 shrink-0 rounded-full bg-[var(--text-muted)]" />
+        Not audited
       </button>
     )
   }
 
   const { passed, summary, overallRisk } = result
-  const { color, bgColor } = RISK_LABELS[overallRisk]
+  const { color } = RISK_LABELS[overallRisk]
+  const dotColor = passed ? 'bg-[var(--accent-green)]' : color.replace('text-', 'bg-')
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1 rounded-full text-xs font-medium ${bgColor} ${color} hover:opacity-80 transition-opacity flex items-center gap-1`}
+      className="inline-flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity"
     >
-      {passed ? '✅' : '⚠️'}
-      <span>
+      <span className={`size-1.5 shrink-0 rounded-full ${dotColor}`} />
+      <span className="text-[var(--text-secondary)]">
         {passed ? 'Passed' : `${summary.total} issue${summary.total !== 1 ? 's' : ''}`}
       </span>
     </button>

@@ -36,6 +36,14 @@ interface HeaderProps {
     /** User's RBAC role */
     role?: UserRole
   } | null
+  /**
+   * Whether this user may open the AX dashboard.
+   *
+   * Decided on the server (the internal-domain check is server-only),
+   * so the tab is hidden rather than bouncing the user back home.
+   * Defaults to false — callers that do not pass it show no AX tab.
+   */
+  canViewAx?: boolean
 }
 
 /**
@@ -43,7 +51,7 @@ interface HeaderProps {
  *
  * Features:
  * - Logo with home link
- * - Tab navigation (Getting Started, Catalog, Guides, Prompts, Stats)
+ * - Tab navigation (Getting Started, Catalog, Guides, AX Dashboard, Stats)
  * - Theme toggle
  * - Update notification bell (authenticated users)
  * - Admin quick menu (authorized users)
@@ -52,22 +60,23 @@ interface HeaderProps {
  *
  * @example
  * ```tsx
- * <Header user={session?.user} />
+ * <Header user={session?.user} canViewAx={canViewAx} />
  * ```
  */
-export function Header({ user }: HeaderProps) {
+export function Header({ user, canViewAx = false }: HeaderProps) {
   const pathname = usePathname()
   const t = useTranslations('common.nav')
 
   const isGuidesTab = pathname.startsWith('/guides')
   const isStartTab = pathname.startsWith('/getting-started')
   const isStatsTab = pathname.startsWith('/stats')
+  const isAxTab = pathname.startsWith('/ax')
   const canViewStats = user?.role && STATS_ROLES.includes(user.role)
-  const isCatalogTab = !isGuidesTab && !isStartTab && !(isStatsTab && canViewStats)
+  const isCatalogTab = !isGuidesTab && !isStartTab && !isAxTab && !(isStatsTab && canViewStats)
 
   return (
-    <header className="relative z-[1010] border-b border-[var(--border-subtle)]">
-      <div className="max-w-7xl mx-auto px-8 py-5">
+    <header className="sticky top-0 z-[1010] border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/85 backdrop-blur-md">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-4">
         <div className="flex items-center justify-between">
           {/* Logo & Nav */}
           <div className="flex items-center gap-8">
@@ -85,12 +94,12 @@ export function Header({ user }: HeaderProps) {
             </Link>
 
             {/* Tab Navigation */}
-            <nav className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 flex-shrink-0">
+            <nav className="flex items-center gap-0.5 flex-shrink-0">
               <Link
                 href="/getting-started"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 whitespace-nowrap ${
                   isStartTab
-                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
@@ -98,9 +107,9 @@ export function Header({ user }: HeaderProps) {
               </Link>
               <Link
                 href="/"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 ${
                   isCatalogTab
-                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
@@ -108,20 +117,32 @@ export function Header({ user }: HeaderProps) {
               </Link>
               <Link
                 href="/guides"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 ${
                   isGuidesTab
-                    ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {t('guides')}
               </Link>
+              {canViewAx && (
+                <Link
+                  href="/ax"
+                  className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 whitespace-nowrap ${
+                    isAxTab
+                      ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {t('ax')}
+                </Link>
+              )}
               {canViewStats && (
                 <Link
                   href="/stats"
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 ${
                     isStatsTab
-                      ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                      ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                   }`}
                 >

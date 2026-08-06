@@ -34,6 +34,21 @@ interface TypeSpecificFieldsProps {
   onChange: (field: string, value: string | boolean | number) => void
 }
 
+/** 선택형 필드(칩·버튼)의 공통 상태 클래스 — 선택 시 테두리+글자로만 표시한다 */
+const chipClass = (active: boolean) =>
+  `px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+    active
+      ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+      : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+  }`
+
+/** 폼 입력 공통 클래스 */
+const inputClass =
+  'w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--border-hover)] transition-colors'
+
+/** 폼 라벨 공통 클래스 */
+const labelClass = 'block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3'
+
 /**
  * Dynamic form fields for type-specific catalog item properties
  *
@@ -66,22 +81,16 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
       {/* Difficulty - for skill, guide */}
       {fields.showDifficulty && (
         <div>
-          <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            Difficulty
-          </label>
-          <div className="flex gap-3">
+          <label className={labelClass}>Difficulty</label>
+          <div className="flex gap-2">
             {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
               <button
                 key={d}
                 type="button"
                 onClick={() => onChange('difficulty', values.difficulty === d ? '' : d)}
-                className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-                  values.difficulty === d
-                    ? 'bg-[var(--accent-cyan)] text-black'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
+                className={chipClass(values.difficulty === d)}
               >
-                {DIFFICULTY_LABELS[d].emoji} {DIFFICULTY_LABELS[d].label}
+                {DIFFICULTY_LABELS[d].label}
               </button>
             ))}
           </div>
@@ -91,15 +100,13 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
       {/* Estimated Time - for guide */}
       {fields.showEstimatedTime && (
         <div>
-          <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            {t('estimatedTime')}
-          </label>
+          <label className={labelClass}>{t('estimatedTime')}</label>
           <input
             type="text"
             value={values.estimatedTime}
             onChange={(e) => onChange('estimatedTime', e.target.value)}
             placeholder={t('estimatedTimePlaceholder')}
-            className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+            className={`${inputClass} max-w-xs`}
           />
         </div>
       )}
@@ -107,9 +114,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
       {/* Allowed Tools - for skill, agent, command */}
       {fields.showAllowedTools && (
         <div>
-          <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-            Allowed Tools
-          </label>
+          <label className={labelClass}>Allowed Tools</label>
           <p className="text-xs text-[var(--text-muted)] mb-3">
             {type === 'agent' ? t('agentToolsHint') : t('featureToolsHint')}
             {' '}{t('toolsEmpty')}
@@ -120,11 +125,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                 key={tool}
                 type="button"
                 onClick={() => handleToolToggle(tool)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  currentTools.includes(tool)
-                    ? 'bg-[var(--accent-purple)] text-white'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
+                className={chipClass(currentTools.includes(tool))}
               >
                 {tool}
               </button>
@@ -132,7 +133,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
           </div>
           {currentTools.length > 0 && (
             <div className="mt-3 px-3 py-2 rounded-lg bg-[var(--bg-tertiary)]">
-              <code className="text-xs text-[var(--accent-cyan)] font-mono">
+              <code className="text-xs text-[var(--text-secondary)] font-mono">
                 allowed-tools: {currentTools.join(', ')}
               </code>
             </div>
@@ -145,23 +146,21 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
         <>
           {/* Agent Model */}
           <div>
-            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Model
-            </label>
-            <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>Model</label>
+            <div className="grid grid-cols-2 gap-2">
               {(Object.keys(AGENT_MODELS) as AgentModel[]).map((model) => (
                 <button
                   key={model}
                   type="button"
                   onClick={() => onChange('agentModel', values.agentModel === model ? '' : model)}
-                  className={`px-4 py-3 rounded-lg text-left transition-all ${
+                  className={`px-4 py-3 rounded-lg text-left border transition-colors ${
                     values.agentModel === model
-                      ? 'bg-[var(--accent-purple)] text-white'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      ? 'border-[var(--text-primary)]'
+                      : 'border-[var(--border-subtle)] hover:border-[var(--border-hover)]'
                   }`}
                 >
-                  <div className="text-sm font-medium">{AGENT_MODELS[model].label}</div>
-                  <div className={`text-xs mt-0.5 ${values.agentModel === model ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>
+                  <div className="text-sm font-medium text-[var(--text-primary)]">{AGENT_MODELS[model].label}</div>
+                  <div className="text-xs mt-0.5 text-[var(--text-muted)]">
                     {AGENT_MODELS[model].description}
                   </div>
                 </button>
@@ -171,9 +170,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
 
           {/* Permission Mode */}
           <div>
-            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Permission Mode
-            </label>
+            <label className={labelClass}>Permission Mode</label>
             <div className="flex flex-wrap gap-2">
               {(Object.keys(AGENT_PERMISSION_MODES) as AgentPermissionMode[]).map((mode) => (
                 <button
@@ -181,11 +178,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                   type="button"
                   onClick={() => onChange('agentPermissionMode', values.agentPermissionMode === mode ? '' : mode)}
                   title={AGENT_PERMISSION_MODES[mode].description}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    values.agentPermissionMode === mode
-                      ? 'bg-[var(--accent-purple)] text-white'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
+                  className={chipClass(values.agentPermissionMode === mode)}
                 >
                   {AGENT_PERMISSION_MODES[mode].label}
                 </button>
@@ -200,9 +193,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
 
           {/* Agent Skills */}
           <div>
-            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              Skills to Load
-            </label>
+            <label className={labelClass}>Skills to Load</label>
             <p className="text-xs text-[var(--text-muted)] mb-3">
               {t('agentSkillsHint')}
             </p>
@@ -211,7 +202,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               value={values.agentSkills}
               onChange={(e) => onChange('agentSkills', e.target.value)}
               placeholder={t('agentSkillsPlaceholder')}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
+              className={`${inputClass} font-mono`}
             />
           </div>
         </>
@@ -222,9 +213,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
         <>
           {/* Argument Hint */}
           <div>
-            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              Argument Hint
-            </label>
+            <label className={labelClass}>Argument Hint</label>
             <p className="text-xs text-[var(--text-muted)] mb-3">
               {t('argumentHintDesc')}
             </p>
@@ -233,7 +222,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               value={values.commandArgumentHint}
               onChange={(e) => onChange('commandArgumentHint', e.target.value)}
               placeholder={t('argumentHintPlaceholder')}
-              className="w-full max-w-md px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
+              className={`${inputClass} max-w-md font-mono`}
             />
           </div>
 
@@ -244,7 +233,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                 type="checkbox"
                 checked={values.commandDisableModelInvocation}
                 onChange={(e) => onChange('commandDisableModelInvocation', e.target.checked)}
-                className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+                className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:ring-[var(--border-hover)] cursor-pointer"
               />
               <div>
                 <span className="text-sm text-[var(--text-primary)]">
@@ -264,23 +253,21 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
         <>
           {/* Hook Event */}
           <div>
-            <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Hook Event *
-            </label>
-            <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>Hook Event *</label>
+            <div className="grid grid-cols-2 gap-2">
               {(Object.keys(HOOK_EVENTS) as HookEvent[]).map((event) => (
                 <button
                   key={event}
                   type="button"
                   onClick={() => onChange('hookEvent', values.hookEvent === event ? '' : event)}
-                  className={`px-4 py-3 rounded-lg text-left transition-all ${
+                  className={`px-4 py-3 rounded-lg text-left border transition-colors ${
                     values.hookEvent === event
-                      ? 'bg-[var(--accent-cyan)] text-black'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      ? 'border-[var(--text-primary)]'
+                      : 'border-[var(--border-subtle)] hover:border-[var(--border-hover)]'
                   }`}
                 >
-                  <div className="text-sm font-medium">{HOOK_EVENTS[event].label}</div>
-                  <div className={`text-xs mt-0.5 line-clamp-2 ${values.hookEvent === event ? 'text-black/70' : 'text-[var(--text-muted)]'}`}>
+                  <div className="text-sm font-medium text-[var(--text-primary)]">{HOOK_EVENTS[event].label}</div>
+                  <div className="text-xs mt-0.5 line-clamp-2 text-[var(--text-muted)]">
                     {HOOK_EVENTS[event].description}
                   </div>
                 </button>
@@ -291,20 +278,14 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
           {/* Hook Matcher */}
           {values.hookEvent && HOOK_EVENTS[values.hookEvent as HookEvent]?.matchers.length > 0 && (
             <div>
-              <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-3">
-                Matcher
-              </label>
+              <label className={labelClass}>Matcher</label>
               <div className="flex flex-wrap gap-2 mb-3">
                 {HOOK_EVENTS[values.hookEvent as HookEvent].matchers.map((matcher) => (
                   <button
                     key={matcher}
                     type="button"
                     onClick={() => onChange('hookMatcher', values.hookMatcher === matcher ? '' : matcher)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      values.hookMatcher === matcher
-                        ? 'bg-[var(--accent-purple)] text-white'
-                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
+                    className={chipClass(values.hookMatcher === matcher)}
                   >
                     {matcher}
                   </button>
@@ -315,7 +296,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                 value={values.hookMatcher}
                 onChange={(e) => onChange('hookMatcher', e.target.value)}
                 placeholder={t('hookMatcherPlaceholder')}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors"
+                className={`${inputClass} font-mono`}
               />
             </div>
           )}
@@ -332,11 +313,11 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               value={values.hookCommand}
               onChange={(e) => onChange('hookCommand', e.target.value)}
               placeholder={t('hookCommandPlaceholder')}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors resize-none"
+              className={`${inputClass} resize-none`}
               rows={3}
             />
             <p className="text-xs text-[var(--text-muted)] mt-2">
-              {t('hookVariablesDesc')} <code className="text-[var(--accent-cyan)]">$session_id</code>, <code className="text-[var(--accent-cyan)]">$transcript_path</code>, <code className="text-[var(--accent-cyan)]">$hook_event_name</code>
+              {t('hookVariablesDesc')} <code className="text-[var(--text-secondary)]">$session_id</code>, <code className="text-[var(--text-secondary)]">$transcript_path</code>, <code className="text-[var(--text-secondary)]">$hook_event_name</code>
             </p>
           </div>
 
@@ -351,7 +332,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
               onChange={(e) => onChange('hookTimeout', e.target.value ? parseInt(e.target.value, 10) : '')}
               placeholder={t('hookTimeoutPlaceholder')}
               min={0}
-              className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+              className={`${inputClass} max-w-xs`}
             />
           </div>
 
@@ -362,7 +343,7 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
                 type="checkbox"
                 checked={values.hookBlocking}
                 onChange={(e) => onChange('hookBlocking', e.target.checked)}
-                className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+                className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:ring-[var(--border-hover)] cursor-pointer"
               />
               <div>
                 <span className="text-sm text-[var(--text-primary)]">
@@ -378,10 +359,10 @@ export function TypeSpecificFields({ type, values, onChange }: TypeSpecificField
           {/* Preview */}
           {values.hookEvent && values.hookCommand && (
             <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
-              <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              <div className="eyebrow mb-2">
                 {t('configPreview')}
               </div>
-              <pre className="text-xs font-mono text-[var(--accent-cyan)] overflow-x-auto">
+              <pre className="text-xs font-mono text-[var(--text-secondary)] overflow-x-auto">
 {`{
   "hooks": {
     "${values.hookEvent}": [

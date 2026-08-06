@@ -17,8 +17,8 @@ interface Skill {
   id: string
   /** 스킬 설명 */
   description: string
-  /** 아이콘 이모지 */
-  icon: string
+  /** 아이콘 — 비워 두면 자리를 잡지 않는다 */
+  icon?: string
 }
 
 /** SkillPreviewCards props */
@@ -56,7 +56,7 @@ export function SkillPreviewCards({ skills, viewAllLabel }: SkillPreviewCardsPro
             onClick={() => setSelected(skill)}
             className="group rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 backdrop-blur-sm p-6 hover:border-[var(--brand-primary)]/30 transition-colors text-left cursor-pointer"
           >
-            <div className="text-2xl mb-3">{skill.icon}</div>
+            {skill.icon && <div className="text-2xl mb-3">{skill.icon}</div>}
             <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2 group-hover:text-[var(--brand-primary)] transition-colors">
               {skill.name}
             </h3>
@@ -98,7 +98,7 @@ export function SkillPreviewCards({ skills, viewAllLabel }: SkillPreviewCardsPro
                 <path d="M5 5l10 10M15 5L5 15" />
               </svg>
             </button>
-            <div className="text-4xl mb-4">{selected.icon}</div>
+            {selected.icon && <div className="text-4xl mb-4">{selected.icon}</div>}
             <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-3">
               {selected.name}
             </h3>

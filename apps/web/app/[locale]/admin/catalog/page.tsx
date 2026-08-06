@@ -44,24 +44,20 @@ interface CatalogItem {
   updatedAt: string
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  skill: 'text-cyan-400',
-  agent: 'text-purple-400',
-  command: 'text-rose-400',
-  guide: 'text-emerald-400',
-}
-
-const TYPE_ICONS: Record<string, string> = {
-  skill: '⚡',
-  agent: '◈',
-  command: '▸',
-  guide: '📚',
-}
-
 interface Organization {
   id: string
   name: string
   slug: string
+}
+
+/** 상태 배지 — 알약 배경 대신 점 하나와 글자 */
+function StatusDot({ draft }: { draft: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`size-1.5 shrink-0 rounded-full ${draft ? 'bg-[var(--text-muted)]' : 'bg-[var(--accent-green)]'}`} />
+      <span className="text-[11px] text-[var(--text-secondary)]">{draft ? 'Draft' : 'Published'}</span>
+    </span>
+  )
 }
 
 export default function CatalogList() {
@@ -159,20 +155,16 @@ export default function CatalogList() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-8 py-12">
-      <div className="flex items-center justify-between mb-8">
+    <div>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-light text-[var(--text-primary)] mb-2">
-            Catalog
-          </h1>
-          <p className="text-[var(--text-secondary)]">
-            {filteredItems.length} items
-          </p>
+          <h1 className="page-title">Catalog</h1>
+          <p className="page-subtitle">{filteredItems.length} items</p>
         </div>
         {canCreate(userRole) && (
           <Link
             href="/admin/catalog/new"
-            className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity"
+            className="px-4 py-2 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] text-sm font-medium hover:opacity-90 transition-opacity"
           >
             Create New
           </Link>
@@ -180,17 +172,17 @@ export default function CatalogList() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 mb-8">
+      <div className="flex flex-col gap-3 mb-6">
         {/* Type Filters */}
         <div className="flex gap-2">
           {filters.map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 filter === f
-                  ? 'bg-[var(--accent-cyan)] text-black'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'
+                  ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--border-hover)]'
               }`}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -199,24 +191,24 @@ export default function CatalogList() {
         </div>
         {/* Org Filters (super_admin only) */}
         {isSuperAdmin && organizations.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider self-center mr-2">Org:</span>
+          <div className="flex gap-2 flex-wrap items-center">
+            <span className="eyebrow mr-1">Org</span>
             <button
               onClick={() => setOrgFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 orgFilter === 'all'
-                  ? 'bg-[var(--accent-cyan)] text-black border-transparent'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                  ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               All
             </button>
             <button
               onClick={() => setOrgFilter('legacy')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 orgFilter === 'legacy'
-                  ? 'bg-[var(--accent-cyan)] text-black border-transparent'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                  ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                  : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               Legacy
@@ -225,13 +217,13 @@ export default function CatalogList() {
               <button
                 key={org.id}
                 onClick={() => setOrgFilter(org.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   orgFilter === org.id
-                    ? 'bg-[var(--accent-cyan)] text-black border-transparent'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                    ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                    : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                🏢 {org.name}
+                {org.name}
               </button>
             ))}
           </div>
@@ -248,7 +240,7 @@ export default function CatalogList() {
           {items.length === 0 && canCreate(userRole) ? (
             <Link
               href="/admin/catalog/new"
-              className="text-[var(--accent-cyan)] hover:underline"
+              className="text-[var(--text-primary)] hover:underline"
             >
               Create your first item
             </Link>
@@ -257,99 +249,72 @@ export default function CatalogList() {
           ) : (
             <button
               onClick={() => { setFilter('all'); }}
-              className="text-[var(--accent-cyan)] hover:underline"
+              className="text-[var(--text-primary)] hover:underline"
             >
               Clear all filters
             </button>
           )}
         </div>
       ) : (
-        <div className="glass rounded-2xl overflow-hidden">
-          <table className="w-full">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border-subtle)]">
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Type
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  ID
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Name
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Status
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Organization
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Visibility
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Author
-                </th>
-                <th className="text-right px-6 py-4 text-sm font-medium text-[var(--text-muted)]">
-                  Actions
-                </th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Type</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">ID</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Name</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Status</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Organization</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Visibility</th>
+                <th className="eyebrow text-left px-3 py-2 font-normal">Author</th>
+                <th className="eyebrow text-right px-3 py-2 font-normal">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {filteredItems.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors"
+                  className="hover:bg-[var(--bg-secondary)] transition-colors"
                 >
-                  <td className="px-6 py-4">
-                    <span className={`${TYPE_COLORS[item.type]} flex items-center gap-2`}>
-                      <span>{TYPE_ICONS[item.type]}</span>
-                      <span className="text-xs uppercase tracking-wider">
-                        {item.type}
-                      </span>
+                  <td className="px-3 py-2.5">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                      {item.type}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <code className="text-sm text-[var(--text-secondary)]">
+                  <td className="px-3 py-2.5">
+                    <code className="font-mono text-xs text-[var(--text-secondary)]">
                       {item.id}
                     </code>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2.5">
                     <span className="text-[var(--text-primary)]">{item.name}</span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      {item.status === 'draft' ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                          Draft
-                        </span>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                          Published
-                        </span>
-                      )}
+                      <StatusDot draft={item.status === 'draft'} />
                       {item.version && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)] font-mono">
+                        <span className="font-mono text-[10px] tabular-nums text-[var(--text-muted)]">
                           v{item.version}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2.5">
                     <OrgBadge orgName={item.orgId ? (orgMap.get(item.orgId) || item.orgId) : null} size="sm" />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2.5">
                     <VisibilityBadge visibility={item.visibility ?? null} size="sm" />
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-[var(--text-muted)]">
+                  <td className="px-3 py-2.5">
+                    <span className="text-xs text-[var(--text-muted)]">
                       @{item.authorName || 'Unknown'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="px-3 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-3">
                       <Link
                         href={`/${item.type === 'guide' ? 'guides' : item.type}/${item.id}`}
-                        className="px-3 py-1.5 rounded text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                        className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                         target="_blank"
                       >
                         View
@@ -357,7 +322,7 @@ export default function CatalogList() {
                       {canEdit(userRole) && (
                         <Link
                           href={`/admin/catalog/${item.id}/edit`}
-                          className="px-3 py-1.5 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] transition-colors"
+                          className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                         >
                           Edit
                         </Link>
@@ -365,7 +330,7 @@ export default function CatalogList() {
                       {canDelete(userRole) && (
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-400/10 transition-colors"
+                          className="text-xs text-[var(--accent-orange)] hover:opacity-80 transition-opacity"
                         >
                           Delete
                         </button>

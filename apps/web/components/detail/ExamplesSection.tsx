@@ -1,10 +1,11 @@
-/**
- * Examples section component for displaying usage examples
- *
- * Parses and displays code examples from markdown content
- * with input/output comparison and syntax highlighting.
- */
 'use client'
+
+/**
+ * 사용 예시 구획
+ *
+ * 본문 마크다운에서 예시를 뽑아 입력·출력 짝으로 보여준다.
+ * 예시가 많으면 앞의 몇 개만 펴 두고 나머지는 접는다.
+ */
 
 import { useState, useMemo, memo } from 'react'
 import { useTranslations } from 'next-intl'
@@ -16,9 +17,9 @@ import { parseExamplesFromContent, type Example } from '@/lib/search/parse-examp
  * Props for the ExamplesSection component
  */
 interface ExamplesSectionProps {
-  /** Markdown content containing examples to parse */
+  /** 예시를 뽑아낼 마크다운 본문 */
   content: string
-  /** Maximum examples to show before collapse */
+  /** 접기 전까지 펴 둘 예시 개수 */
   maxVisible?: number
 }
 
@@ -30,75 +31,71 @@ interface ExamplesSectionProps {
  * Props for the ExampleCard component
  */
 interface ExampleCardProps {
-  /** Parsed example data */
+  /** 파싱된 예시 하나 */
   example: Example
 }
 
+/** 코드 칸 머리 — 무엇이 담겼는지 알리는 줄 */
+const CODE_HEADER_CLASS =
+  'flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-4 py-2'
+
+/** 코드 본문 — 여기는 고정폭이 맞다 */
+const CODE_BODY_CLASS =
+  'overflow-x-auto p-4 font-mono text-xs leading-relaxed text-[var(--text-primary)]'
+
 /**
- * Individual example card with input/output display
+ * 예시 한 칸 — 입력·출력이 모두 있으면 나란히 놓는다
+ *
+ * @param example - 파싱된 예시
  */
 const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
   const t = useTranslations('detail.examples')
   const hasInputOutput = example.input && example.output
 
   return (
-    <div className="bg-[var(--bg-primary)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
-      {/* Example Header */}
+    <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)]">
       {example.title && (
-        <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-          <h4 className="text-sm font-medium text-[var(--text-primary)]">
-            {example.title}
-          </h4>
+        <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-4 py-3">
+          <h4 className="text-sm font-medium text-[var(--text-primary)]">{example.title}</h4>
         </div>
       )}
 
-      {/* Description */}
       {example.description && (
-        <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
+        <div className="border-b border-[var(--border-subtle)] px-4 py-3">
           <MarkdownContent content={example.description} />
         </div>
       )}
 
-      {/* Input/Output Layout */}
       {hasInputOutput ? (
-        <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[var(--border-subtle)]">
-          {/* Input */}
-          <div>
-            <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                {t('input')}
-              </span>
+        <div className="grid divide-y divide-[var(--border-subtle)] md:grid-cols-2 md:divide-x md:divide-y-0">
+          <div className="min-w-0">
+            <div className={CODE_HEADER_CLASS}>
+              <span className="eyebrow">{t('input')}</span>
               <CopyButton text={example.input!} />
             </div>
-            <pre className="p-4 overflow-x-auto text-sm">
-              <code className="text-emerald-400">{example.input}</code>
+            <pre className={CODE_BODY_CLASS}>
+              <code>{example.input}</code>
             </pre>
           </div>
 
-          {/* Output */}
-          <div>
-            <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                {t('output')}
-              </span>
+          <div className="min-w-0">
+            <div className={CODE_HEADER_CLASS}>
+              <span className="eyebrow">{t('output')}</span>
               <CopyButton text={example.output!} />
             </div>
-            <pre className="p-4 overflow-x-auto text-sm">
-              <code className="text-cyan-400">{example.output}</code>
+            <pre className={CODE_BODY_CLASS}>
+              <code>{example.output}</code>
             </pre>
           </div>
         </div>
       ) : example.code ? (
-        /* Single Code Block */
-        <div>
-          <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)]">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              {example.language || t('code')}
-            </span>
+        <div className="min-w-0">
+          <div className={CODE_HEADER_CLASS}>
+            <span className="eyebrow">{example.language || t('code')}</span>
             <CopyButton text={example.code} />
           </div>
-          <pre className="p-4 overflow-x-auto text-sm">
-            <code className="text-emerald-400">{example.code}</code>
+          <pre className={CODE_BODY_CLASS}>
+            <code>{example.code}</code>
           </pre>
         </div>
       ) : null}
@@ -111,7 +108,10 @@ const ExampleCard = memo(function ExampleCard({ example }: ExampleCardProps) {
 // ============================================================================
 
 /**
- * Collapsible section displaying parsed usage examples
+ * 사용 예시 목록
+ *
+ * @param content - 예시를 뽑아낼 마크다운 본문
+ * @param maxVisible - 접기 전까지 펴 둘 예시 개수
  *
  * @example
  * ```tsx
@@ -136,44 +136,28 @@ export const ExamplesSection = memo(function ExamplesSection({
   const hiddenCount = examples.length - maxVisible
 
   return (
-    <div className="glass rounded-2xl p-8 mb-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <span className="text-xl">💡</span>
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">
-            {t('title')}
-          </h2>
-          <span className="px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-xs text-[var(--text-muted)]">
-            {examples.length}
-          </span>
-        </div>
+    <div className="surface-card mb-8">
+      <div className="mb-5 flex flex-wrap items-baseline gap-3">
+        <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)]">
+          {t('title')}
+        </h2>
+        <span className="font-mono text-xs tabular-nums text-[var(--text-muted)]">
+          {examples.length}
+        </span>
       </div>
 
-      {/* Examples List */}
       <div className="space-y-4">
         {visibleExamples.map((example) => (
           <ExampleCard key={example.id} example={example} />
         ))}
       </div>
 
-      {/* Expand/Collapse Button */}
       {shouldCollapse && (
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="mt-4 w-full py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-sm font-medium hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center gap-2"
+          className="mt-4 w-full rounded-xl border border-[var(--border-subtle)] py-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]"
         >
-          {isExpanded ? (
-            <>
-              <span>{t('collapse')}</span>
-              <span className="text-xs">▲</span>
-            </>
-          ) : (
-            <>
-              <span>{t('showMore', { count: hiddenCount })}</span>
-              <span className="text-xs">▼</span>
-            </>
-          )}
+          {isExpanded ? t('collapse') : t('showMore', { count: hiddenCount })}
         </button>
       )}
     </div>

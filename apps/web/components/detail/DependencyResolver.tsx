@@ -1,38 +1,38 @@
-/**
- * Dependency resolver component with tree visualization
- *
- * Displays and analyzes dependencies for catalog items,
- * including transitive dependencies, circular detection,
- * and recommended installation order.
- */
 'use client'
 
-import { useState, useEffect } from 'react'
+/**
+ * 의존성 분석 카드
+ *
+ * 직접 의존성만 먼저 보여주고, 요청이 있을 때만 전이 의존성까지 서버에서
+ * 풀어 온다 — 대부분의 방문은 목록만 보고 끝나기 때문이다.
+ */
+
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { parseDependency, MCP_SERVERS } from '@/lib/core/types'
 
 /**
- * Resolved dependency with metadata
+ * 풀어낸 의존성 하나
  */
 interface ResolvedDependency {
-  /** Dependency type */
+  /** 의존성 종류 */
   type: 'mcp' | 'skill' | 'agent' | 'other'
-  /** Dependency identifier */
+  /** 의존성 식별자 */
   id: string
-  /** Display label */
+  /** 표시 이름 */
   label: string
-  /** Whether this is a direct dependency */
+  /** 직접 의존성 여부 */
   direct: boolean
-  /** Depth in dependency tree */
+  /** 의존성 트리에서의 깊이 */
   depth: number
-  /** Whether dependency is available */
+  /** 사용 가능 여부 */
   available: boolean
-  /** List of items that require this dependency */
+  /** 이 의존성을 요구하는 항목들 */
   requiredBy: string[]
-  /** Configuration URL for MCP servers */
+  /** MCP 서버 설정 문서 주소 */
   configUrl?: string
-  /** Linked catalog item info */
+  /** 카탈로그에 있는 항목 정보 */
   catalogItem?: {
     id: string
     name: string
@@ -41,12 +41,12 @@ interface ResolvedDependency {
 }
 
 /**
- * API response structure for dependency resolution
+ * 의존성 분석 API 응답
  */
 interface DependencyResolutionData {
-  /** Whether resolution succeeded */
+  /** 분석 성공 여부 */
   success: boolean
-  /** Resolution data when successful */
+  /** 성공 시 분석 결과 */
   data?: {
     rootId: string
     totalCount: number
@@ -62,7 +62,7 @@ interface DependencyResolutionData {
     circularPaths: string[][]
     installOrder: string[]
   }
-  /** Error message when failed */
+  /** 실패 시 오류 메시지 */
   error?: string
 }
 
@@ -70,36 +70,37 @@ interface DependencyResolutionData {
  * Props for the DependencyResolver component
  */
 interface DependencyResolverProps {
-  /** Item being analyzed */
+  /** 분석 대상 항목 */
   itemId: string
-  /** List of dependency strings */
+  /** "type:id" 형식의 의존성 문자열 목록 */
   dependencies: string[]
 }
 
-/** Icon mapping for dependency types */
-const TYPE_ICONS: Record<string, string> = {
-  mcp: '🔌',
-  skill: '⚡',
-  agent: '◈',
-  other: '📦',
+/** 의존성 종류별 표시 라벨 */
+const TYPE_LABELS: Record<string, string> = {
+  mcp: 'MCP',
+  skill: 'SKILL',
+  agent: 'AGENT',
+  other: 'DEP',
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  mcp: 'border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10',
-  skill: 'border-[var(--accent-cyan)]/30 bg-[var(--accent-cyan)]/5 hover:bg-[var(--accent-cyan)]/10',
-  agent: 'border-[var(--accent-purple)]/30 bg-[var(--accent-purple)]/5 hover:bg-[var(--accent-purple)]/10',
-  other: 'border-[var(--border-subtle)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)]',
-}
+/** 의존성 한 칸의 공통 모양 */
+const ITEM_CLASS =
+  'flex h-full items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] px-4 py-3 transition-colors hover:border-[var(--border-hover)]'
+
+/** 작은 표식(전이·누락) 공통 모양 */
+const MARK_CLASS =
+  'rounded-full border border-[var(--border-subtle)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]'
 
 /**
- * Interactive dependency analyzer with tree visualization
+ * 의존성 분석기
+ *
+ * @param itemId - 분석 대상 항목 식별자
+ * @param dependencies - "type:id" 형식의 의존성 문자열 목록
  *
  * @example
  * ```tsx
- * <DependencyResolver
- *   itemId="advanced-skill"
- *   dependencies={['mcp:github', 'skill:base-helper']}
- * />
+ * <DependencyResolver itemId="advanced-skill" dependencies={['mcp:github']} />
  * ```
  */
 export function DependencyResolver({ itemId, dependencies }: DependencyResolverProps) {
@@ -109,7 +110,7 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
   const [error, setError] = useState<string | null>(null)
   const t = useTranslations('detail.dependencies')
 
-  // Only show basic deps if there are direct dependencies
+  // 직접 의존성이 하나도 없으면 카드 자체를 세우지 않는다
   if (!dependencies || dependencies.length === 0) {
     return null
   }
@@ -134,43 +135,31 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
   }
 
   const renderDependencyItem = (dep: ResolvedDependency, index: number) => {
-    const icon = TYPE_ICONS[dep.type] || TYPE_ICONS.other
-    const colorClass = TYPE_COLORS[dep.type] || TYPE_COLORS.other
     const mcpInfo = dep.type === 'mcp' ? MCP_SERVERS[dep.id] : null
 
     const isInternalLink = dep.type === 'skill' || dep.type === 'agent'
     const href = isInternalLink ? `/${dep.type}/${dep.catalogItem?.id || dep.id}` : undefined
 
     const content = (
-      <div
-        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${colorClass} ${
-          !dep.direct ? 'opacity-70' : ''
-        }`}
-      >
-        <span className="text-lg">{icon}</span>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
+      <div className={`${ITEM_CLASS} ${!dep.direct ? 'opacity-70' : ''}`}>
+        <span className="eyebrow shrink-0 pt-0.5">{TYPE_LABELS[dep.type] || TYPE_LABELS.other}</span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-[var(--text-primary)]">
               {dep.catalogItem?.name || dep.label}
             </span>
-            {!dep.direct && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
-                transitive
-              </span>
-            )}
+            {!dep.direct && <span className={MARK_CLASS}>transitive</span>}
             {!dep.available && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">
-                missing
-              </span>
+              <span className={`${MARK_CLASS} text-[var(--brand-primary)]`}>missing</span>
             )}
           </div>
           {mcpInfo && (
-            <span className="text-xs text-[var(--text-muted)]">
+            <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
               {mcpInfo.description}
             </span>
           )}
           {dep.depth > 0 && (
-            <span className="text-xs text-[var(--text-muted)]">
+            <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
               Required by: {dep.requiredBy.slice(0, 2).join(', ')}
               {dep.requiredBy.length > 2 && ` +${dep.requiredBy.length - 2} more`}
             </span>
@@ -204,13 +193,14 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
   }
 
   return (
-    <div className="glass rounded-2xl p-6 mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-xl">🔗</span>
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">{t('title')}</h2>
+    <div className="surface-card mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)]">
+            {t('title')}
+          </h2>
           {resolved?.data && (
-            <span className="text-xs px-2 py-1 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
+            <span className="font-mono text-xs tabular-nums text-[var(--text-muted)]">
               {t('found', { count: resolved.data.totalCount })}
             </span>
           )}
@@ -218,48 +208,61 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
         <button
           onClick={fetchResolution}
           disabled={loading}
-          className="text-xs px-3 py-1.5 rounded-lg bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] hover:bg-[var(--accent-cyan)]/20 transition-colors disabled:opacity-50"
+          className="rounded-full border border-[var(--border-hover)] px-3 py-1.5 font-mono text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--text-muted)] hover:text-[var(--text-primary)] active:translate-y-px disabled:opacity-50"
         >
           {loading ? t('analyzing') : resolved ? t('reanalyzeButton') : t('analyzeButton')}
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+        <p className="mt-4 border-l-2 border-[var(--brand-primary)] pl-4 text-sm text-[var(--text-secondary)]">
           {error}
-        </div>
+        </p>
       )}
 
-      {/* Basic dependencies (always shown) */}
+      {/* 분석 전 — 직접 의존성만 보여준다 */}
       {!resolved && (
         <>
-          <p className="text-sm text-[var(--text-secondary)] mb-4">
-            {t('description')}
-          </p>
-          <div className="flex flex-wrap gap-3">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">{t('description')}</p>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {parsedDeps.map((dep, index) => {
-              const icon = TYPE_ICONS[dep.type] || TYPE_ICONS.other
-              const colorClass = TYPE_COLORS[dep.type] || TYPE_COLORS.other
               const mcpInfo = dep.type === 'mcp' ? MCP_SERVERS[dep.id] : null
               const isInternalLink = dep.type === 'skill' || dep.type === 'agent'
               const href = isInternalLink ? `/${dep.type}/${dep.id}` : undefined
 
               const content = (
-                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${colorClass}`}>
-                  <span className="text-lg">{icon}</span>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-[var(--text-primary)]">{dep.label}</span>
-                    {mcpInfo && <span className="text-xs text-[var(--text-muted)]">{mcpInfo.description}</span>}
+                <div className={ITEM_CLASS}>
+                  <span className="eyebrow shrink-0 pt-0.5">
+                    {TYPE_LABELS[dep.type] || TYPE_LABELS.other}
+                  </span>
+                  <div className="min-w-0">
+                    <span className="block text-sm font-medium text-[var(--text-primary)]">
+                      {dep.label}
+                    </span>
+                    {mcpInfo && (
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {mcpInfo.description}
+                      </span>
+                    )}
                   </div>
                 </div>
               )
 
               if (isInternalLink && href) {
-                return <Link key={index} href={href}>{content}</Link>
+                return (
+                  <Link key={index} href={href}>
+                    {content}
+                  </Link>
+                )
               }
               if (dep.type === 'mcp') {
                 return (
-                  <a key={index} href={`https://github.com/modelcontextprotocol/servers/tree/main/src/${dep.id}`} target="_blank" rel="noopener noreferrer">
+                  <a
+                    key={index}
+                    href={`https://github.com/modelcontextprotocol/servers/tree/main/src/${dep.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     {content}
                   </a>
                 )
@@ -270,71 +273,62 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
         </>
       )}
 
-      {/* Resolved dependencies */}
+      {/* 분석 후 */}
       {resolved?.data && (
         <>
-          {/* Summary */}
-          <div className="grid grid-cols-4 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
-              <div className="text-xl font-bold text-blue-400">{resolved.data.summary.mcp}</div>
-              <div className="text-xs text-[var(--text-muted)]">{t('mcpServers')}</div>
-            </div>
-            <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
-              <div className="text-xl font-bold text-[var(--accent-cyan)]">{resolved.data.summary.skills}</div>
-              <div className="text-xs text-[var(--text-muted)]">{t('skills')}</div>
-            </div>
-            <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
-              <div className="text-xl font-bold text-[var(--accent-purple)]">{resolved.data.summary.agents}</div>
-              <div className="text-xs text-[var(--text-muted)]">{t('agents')}</div>
-            </div>
-            <div className="p-3 rounded-lg bg-[var(--bg-secondary)] text-center">
-              <div className={`text-xl font-bold ${resolved.data.summary.unresolved > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {resolved.data.summary.unresolved}
+          {/* 요약 수치 — 칸 사이를 1px 선으로만 나눈다 */}
+          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] md:grid-cols-4">
+            {[
+              { label: t('mcpServers'), value: resolved.data.summary.mcp },
+              { label: t('skills'), value: resolved.data.summary.skills },
+              { label: t('agents'), value: resolved.data.summary.agents },
+              { label: t('unresolved'), value: resolved.data.summary.unresolved },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-[var(--bg-primary)] px-5 py-4">
+                <p className="eyebrow">{stat.label}</p>
+                <p className="mt-1.5 font-mono text-2xl leading-none tabular-nums tracking-tight text-[var(--text-primary)]">
+                  {stat.value}
+                </p>
               </div>
-              <div className="text-xs text-[var(--text-muted)]">{t('unresolved')}</div>
-            </div>
+            ))}
           </div>
 
-          {/* Circular dependency warning */}
+          {/* 순환 의존성 경고 */}
           {resolved.data.hasCircularDependencies && (
-            <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-              <div className="flex items-center gap-2 text-yellow-400 text-sm font-medium mb-1">
-                <span>⚠️</span>
-                <span>{t('circularDetected')}</span>
-              </div>
-              <p className="text-xs text-yellow-400/80">
+            <div className="mt-4 border-l-2 border-[var(--brand-primary)] pl-4">
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                {t('circularDetected')}
+              </p>
+              <p className="mt-1 font-mono text-xs break-all text-[var(--text-muted)]">
                 {resolved.data.circularPaths.map((path) => path.join(' → ')).join('; ')}
               </p>
             </div>
           )}
 
-          {/* Toggle tree view */}
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              onClick={() => setShowTree(!showTree)}
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              {showTree ? t('showDirectOnly') : t('showFullTree')}
-            </button>
-          </div>
+          <button
+            onClick={() => setShowTree(!showTree)}
+            className="mt-4 text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+          >
+            {showTree ? t('showDirectOnly') : t('showFullTree')}
+          </button>
 
-          {/* Dependency list */}
-          <div className="flex flex-wrap gap-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {(showTree
               ? resolved.data.dependencies
               : resolved.data.dependencies.filter((d) => d.direct)
             ).map(renderDependencyItem)}
           </div>
 
-          {/* Installation order hint */}
+          {/* 권장 설치 순서 */}
           {showTree && resolved.data.installOrder.length > 0 && (
-            <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-              <p className="text-xs text-[var(--text-muted)] mb-2">
-                💡 <strong>{t('recommendedOrder')}</strong>
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
+              <p className="eyebrow">{t('recommendedOrder')}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
                 {resolved.data.installOrder.map((id, i) => (
-                  <span key={id} className="text-xs px-2 py-1 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+                  <span
+                    key={id}
+                    className="rounded-lg bg-[var(--bg-tertiary)] px-2 py-1 font-mono text-xs tabular-nums text-[var(--text-secondary)]"
+                  >
                     {i + 1}. {id}
                   </span>
                 ))}
@@ -344,17 +338,17 @@ export function DependencyResolver({ itemId, dependencies }: DependencyResolverP
         </>
       )}
 
-      {/* MCP server hint */}
+      {/* MCP 서버 안내 */}
       {parsedDeps.some((d) => d.type === 'mcp') && (
-        <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-          <p className="text-xs text-[var(--text-muted)]">
-            💡 {t.rich('mcpHint', {
-              command: () => (
-                <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">claude mcp</code>
-              )
-            })}
-          </p>
-        </div>
+        <p className="mt-4 border-t border-[var(--border-subtle)] pt-4 text-xs text-[var(--text-muted)]">
+          {t.rich('mcpHint', {
+            command: () => (
+              <code className="rounded bg-[var(--bg-tertiary)] px-1 py-0.5 font-mono">
+                claude mcp
+              </code>
+            ),
+          })}
+        </p>
       )}
     </div>
   )

@@ -2,8 +2,7 @@
  * Sign in page
  *
  * Authentication page with Google OAuth login.
- * Features glassmorphism card with animated gradient
- * orb background. Redirects authenticated users to callback URL.
+ * Redirects authenticated users to callback URL.
  */
 import { signIn } from '@/lib/core/auth'
 import { redirect } from 'next/navigation'
@@ -44,41 +43,18 @@ export default async function SignInPage({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] grid-pattern flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Floating gradient orbs */}
-      <div
-        aria-hidden="true"
-        className="absolute top-[-10%] left-[-5%] w-72 h-72 rounded-full bg-[var(--accent-cyan)] opacity-20 blur-3xl animate-float-slow [.light_&]:opacity-10"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute bottom-[-10%] right-[-5%] w-72 h-72 rounded-full bg-[var(--accent-purple)] opacity-20 blur-3xl animate-float-slow-delayed [.light_&]:opacity-10"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute bottom-[10%] left-[30%] w-72 h-72 rounded-full bg-[var(--accent-green)] opacity-20 blur-3xl animate-float-slow-delayed-2 [.light_&]:opacity-10"
-      />
-
-      {/* Card */}
-      <div className="w-full max-w-md relative z-10 animate-fade-up">
-        <div className="glass rounded-2xl p-8 transition-all duration-200 hover:border-[var(--border-hover)] hover:shadow-[var(--glow-cyan)]">
+    <div className="page-shell items-center justify-center">
+      <div className="w-full max-w-md px-4">
+        <div className="surface-card">
           {/* Logo & Branding */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] mb-5 animate-glow-pulse">
-              <Image
-                src="/gpters-logo.png"
-                alt="AI Toolkit"
-                width={48}
-                height={48}
-                className="rounded-lg"
-              />
+          <div className="mb-8 flex items-center gap-4">
+            <div className="shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+              <Image src="/gpters-logo.png" alt="AI Toolkit" width={28} height={28} className="rounded-md" />
             </div>
-            <h1 className="text-2xl font-semibold gradient-text-cyan mb-2">
-              AI Toolkit
-            </h1>
-            <p className="text-sm text-[var(--text-secondary)]">
-              {t('subtitle')}
-            </p>
+            <div className="min-w-0">
+              <h1 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">AI Toolkit</h1>
+              <p className="text-sm text-[var(--text-secondary)]">{t('subtitle')}</p>
+            </div>
           </div>
 
           {/* Login Form */}
@@ -90,7 +66,7 @@ export default async function SignInPage({
           >
             <button
               type="submit"
-              className="cursor-pointer w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm font-medium border border-[var(--border-subtle)] transition-all duration-200 hover:border-[var(--accent-cyan)]/50 hover:shadow-[0_0_20px_rgba(0,212,255,0.1)]"
+              className="cursor-pointer w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm font-medium border border-[var(--border-subtle)] transition-colors duration-200 hover:border-[var(--border-hover)]"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
@@ -113,9 +89,7 @@ export default async function SignInPage({
               {t('googleLogin')}
             </button>
           </form>
-
         </div>
-
       </div>
     </div>
   )

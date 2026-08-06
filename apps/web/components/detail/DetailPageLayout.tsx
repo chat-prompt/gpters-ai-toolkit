@@ -1,61 +1,42 @@
 /**
- * Layout component for catalog item detail pages
+ * 상세 페이지 공통 레이아웃
  *
- * Provides consistent structure with ambient background glow,
- * navigation header, and centered content container.
+ * 헤더와 본문 폭만 책임진다. 예전에는 항목 종류마다 다른 색의 앰비언트 원을
+ * 배경에 깔았는데, 장식이 내용보다 먼저 읽혀서 걷어냈다 — 종류 구분은
+ * 머리글의 라벨이 맡는다.
  */
 import { ReactNode } from 'react'
 import { ServerHeader } from '../layout/ServerHeader'
 
 /**
- * Props for the DetailPageLayout component
+ * DetailPageLayout props
  */
 interface DetailPageLayoutProps {
-  /** Page content to render */
+  /** 페이지 본문 */
   children: ReactNode
-  /** Accent color name for background glow (cyan, purple, rose, orange, emerald) */
-  accentColor: string
-}
-
-const ACCENT_COLORS: Record<string, string> = {
-  cyan: 'bg-[var(--accent-cyan)]',
-  purple: 'bg-[var(--accent-purple)]',
-  rose: 'bg-rose-400',
-  orange: 'bg-orange-500',
-  emerald: 'bg-emerald-500',
 }
 
 /**
- * Server component layout for detail pages with ambient background
+ * 상세 페이지 레이아웃
+ *
+ * @param children - 페이지 본문
  *
  * @example
  * ```tsx
- * <DetailPageLayout accentColor="cyan">
+ * <DetailPageLayout>
  *   <ItemHero {...heroProps} />
  *   <ContentSection {...contentProps} />
  * </DetailPageLayout>
  * ```
  */
-export async function DetailPageLayout({
-  children,
-  accentColor,
-}: DetailPageLayoutProps) {
-  const bgColor = ACCENT_COLORS[accentColor] || ACCENT_COLORS.cyan
-
+export async function DetailPageLayout({ children }: DetailPageLayoutProps) {
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div
-          className={`absolute top-[-20%] right-[-10%] w-[600px] h-[600px] ${bgColor} opacity-[0.03] blur-[120px] rounded-full`}
-        />
-      </div>
-
-      {/* Full Navigation Header */}
+    <div className="page-shell">
       <ServerHeader />
 
-      <main className="relative z-10 max-w-5xl mx-auto px-8 py-12">
-        {children}
+      <main className="page-main">
+        {/* 읽는 화면이라 본문 폭은 공통 최대치보다 좁게 잡는다 */}
+        <div className="mx-auto max-w-5xl">{children}</div>
       </main>
     </div>
   )

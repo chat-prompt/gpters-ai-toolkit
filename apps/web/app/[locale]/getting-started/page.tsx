@@ -12,6 +12,11 @@ import { GettingStartedContent } from './GettingStartedContent'
 /** Internal email domain for full plugin access (empty = no internal features) */
 const INTERNAL_DOMAIN = process.env.INTERNAL_ORGANIZATION_DOMAIN || ''
 
+/**
+ * 시작 가이드 페이지
+ *
+ * @param params - locale 을 담은 라우트 파라미터
+ */
 export default async function GettingStartedPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   setRequestLocale(locale)
@@ -20,17 +25,14 @@ export default async function GettingStartedPage({ params }: { params: Promise<{
   const isInternal = INTERNAL_DOMAIN ? email.endsWith(`@${INTERNAL_DOMAIN}`) : false
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
+    <div className="page-shell">
       <ServerHeader />
 
-      <main className="relative z-10 max-w-3xl mx-auto px-8 py-12">
-        <GettingStartedContent isInternal={isInternal} />
+      <main className="page-main">
+        {/* 순서대로 읽어 내려가는 화면이라 본문 폭을 좁게 잡는다 */}
+        <div className="mx-auto max-w-3xl">
+          <GettingStartedContent isInternal={isInternal} />
+        </div>
       </main>
     </div>
   )

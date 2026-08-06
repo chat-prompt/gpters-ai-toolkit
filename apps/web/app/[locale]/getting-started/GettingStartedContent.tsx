@@ -20,20 +20,15 @@ type TabId = 'claude-code' | 'opencode' | 'codex' | 'cli' | 'mcp'
 const INTERNAL_ONLY_TABS: Set<TabId> = new Set()
 
 /**
- * Reusable step badge component
+ * 단계 표식
  *
- * @param step - Step number or check mark
- * @param color - Accent color name (cyan, purple, green)
+ * 단계마다 색을 달리 칠하던 방식은 걷어냈다 — 순서는 숫자가 이미 말해 준다.
+ *
+ * @param step - 단계 번호 또는 완료 표시
  */
-function StepBadge({ step, color }: { step: string | number; color: 'cyan' | 'purple' | 'green' }) {
-  const colorMap = {
-    cyan: 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border-[var(--accent-cyan)]/30',
-    purple: 'bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] border-[var(--accent-purple)]/30',
-    green: 'bg-green-500/20 text-green-400 border-green-500/30',
-  }
-
+function StepBadge({ step }: { step: string | number }) {
   return (
-    <div className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center text-sm font-bold border ${colorMap[color]}`}>
+    <div className="w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] font-mono text-sm tabular-nums text-[var(--text-secondary)]">
       {step}
     </div>
   )
@@ -78,7 +73,7 @@ function CodeBlock({
         onClick={() => onCopy(code, stepId)}
         className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
           copiedStep === stepId
-            ? 'bg-green-500/20 text-green-400'
+            ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
             : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
         }`}
       >
@@ -89,32 +84,22 @@ function CodeBlock({
 }
 
 /**
- * Info box component for tips and notes
+ * 참고·주의 문구
  *
- * @param color - Box color theme
- * @param label - Bold label text
- * @param children - Box content
+ * @param label - 굵게 붙는 머리말
+ * @param children - 문구 본문
  */
 function InfoBox({
-  color,
   label,
   children,
 }: {
-  color: 'blue' | 'green'
   label: string
   children: React.ReactNode
 }) {
-  const colorMap = {
-    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400/90',
-    green: 'bg-green-500/10 border-green-500/20 text-green-400/90',
-  }
-
   return (
-    <div className={`mt-4 p-3 rounded-lg border ${colorMap[color]}`}>
-      <div className="text-xs">
-        <strong>{label}</strong> {children}
-      </div>
-    </div>
+    <p className="mt-4 border-l-2 border-[var(--border-hover)] pl-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+      <strong className="font-medium text-[var(--text-primary)]">{label}</strong> {children}
+    </p>
   )
 }
 
@@ -142,11 +127,11 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
   return (
     <div className="space-y-6">
       {/* Step 1: Plugin Install */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={1} color="cyan" />
+          <StepBadge step={1} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.pluginInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -155,7 +140,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
 
             <CodeBlock code={installCmd} stepId="cc-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.pluginNote')}
             </InfoBox>
           </div>
@@ -163,11 +148,11 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
       </div>
 
       {/* Step 2: Browser Login */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={2} color="purple" />
+          <StepBadge step={2} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.browserLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -176,7 +161,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
 
             <div className="space-y-3">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -184,7 +169,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   2
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -192,7 +177,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -201,11 +186,11 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
               </div>
             </div>
 
-            <InfoBox color="green" label={t('noteLabels.security')}>
+            <InfoBox label={t('noteLabels.security')}>
               {t('notes.oauthSecurity')}
             </InfoBox>
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.browserFallback')}
             </InfoBox>
           </div>
@@ -213,11 +198,11 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
       </div>
 
       {/* Connection Check */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step="✓" color="green" />
+          <StepBadge step="✓" />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -228,7 +213,7 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs font-mono text-[var(--text-muted)]">
-                gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
+                gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-[var(--text-secondary)]">✓ Connected</span>
               </div>
             </div>
           </div>
@@ -249,11 +234,11 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
   return (
     <div className="space-y-6">
       {/* Step 1: One-liner Install */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={1} color="cyan" />
+          <StepBadge step={1} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.pluginInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -262,7 +247,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
 
             <CodeBlock code={installCmd} stepId="oc-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.safeRerun')}
             </InfoBox>
           </div>
@@ -270,11 +255,11 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
       </div>
 
       {/* Step 2: Restart */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={2} color="purple" />
+          <StepBadge step={2} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.restart')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -282,7 +267,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
             </p>
 
             <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-              <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+              <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                 ✓
               </div>
               <span className="text-sm text-[var(--text-secondary)]">
@@ -294,11 +279,11 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
       </div>
 
       {/* Connection Check */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step="✓" color="green" />
+          <StepBadge step="✓" />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -309,7 +294,7 @@ node -e "const fs=require('fs'),f=process.env.HOME+'/.config/opencode/opencode.j
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs font-mono text-[var(--text-muted)]">
-                gpters-ai-toolkit <span className="text-green-400">✓ Connected</span>
+                gpters-ai-toolkit <span className="text-[var(--text-secondary)]">✓ Connected</span>
               </div>
             </div>
           </div>
@@ -329,11 +314,11 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
   return (
     <div className="space-y-6">
       {/* Step 1: Setup Command */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={1} color="cyan" />
+          <StepBadge step={1} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.pluginInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -344,7 +329,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
 
             <CodeBlock code={installCmd} stepId="codex-install" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.safeRerun')}
             </InfoBox>
           </div>
@@ -352,11 +337,11 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
       </div>
 
       {/* Step 2: OAuth Login */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={2} color="purple" />
+          <StepBadge step={2} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.oauthLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -367,7 +352,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
 
             <div className="space-y-3 mt-4">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -375,7 +360,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   2
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -383,7 +368,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -392,7 +377,7 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
               </div>
             </div>
 
-            <InfoBox color="green" label={t('noteLabels.security')}>
+            <InfoBox label={t('noteLabels.security')}>
               {t('notes.oauthAuto')}
             </InfoBox>
           </div>
@@ -400,11 +385,11 @@ function CodexTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProp
       </div>
 
       {/* Connection Check */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step="✓" color="green" />
+          <StepBadge step="✓" />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -436,11 +421,11 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
   return (
     <div className="space-y-6">
       {/* Step 1: Install */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={1} color="cyan" />
+          <StepBadge step={1} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.cliInstall')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -453,11 +438,11 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
       </div>
 
       {/* Step 2: Login */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={2} color="purple" />
+          <StepBadge step={2} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.cliLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -466,7 +451,7 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
 
             <CodeBlock code="aitk login" stepId="cli-login" copiedStep={copiedStep} onCopy={onCopy} wrap={false} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.cliNote')}
             </InfoBox>
           </div>
@@ -474,11 +459,11 @@ function CliTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps)
       </div>
 
       {/* Step 3: Usage */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={3} color="green" />
+          <StepBadge step={3} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.cliUsage')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -502,11 +487,11 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
   return (
     <div className="space-y-6">
       {/* Step 1: CLI Command */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={1} color="cyan" />
+          <StepBadge step={1} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.mcpAdd')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -515,7 +500,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
 
             <CodeBlock code={getMcpCommand()} stepId="mcp-cli" copiedStep={copiedStep} onCopy={onCopy} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.projectScope')}
             </InfoBox>
           </div>
@@ -523,11 +508,11 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
       </div>
 
       {/* Step 2: Browser Login */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step={2} color="purple" />
+          <StepBadge step={2} />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.browserLogin')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -536,7 +521,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
 
             <div className="space-y-3">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   1
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -544,7 +529,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-cyan)]/20 flex items-center justify-center text-xs text-[var(--accent-cyan)]">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   2
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -552,7 +537,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
                 </span>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-tertiary)]">
-                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400">
+                <div className="w-6 h-6 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex items-center justify-center font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                   ✓
                 </div>
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -561,11 +546,11 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
               </div>
             </div>
 
-            <InfoBox color="green" label={t('noteLabels.security')}>
+            <InfoBox label={t('noteLabels.security')}>
               {t('notes.oauthSecurity')}
             </InfoBox>
 
-            <InfoBox color="blue" label={t('noteLabels.note')}>
+            <InfoBox label={t('noteLabels.note')}>
               {t('notes.browserFallback')}
             </InfoBox>
           </div>
@@ -573,11 +558,11 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
       </div>
 
       {/* Connection Check */}
-      <div className="glass rounded-2xl p-6">
+      <div className="surface-card">
         <div className="flex items-start gap-4">
-          <StepBadge step="✓" color="green" />
+          <StepBadge step="✓" />
           <div className="flex-grow min-w-0">
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+            <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
               {t('steps.connectionCheck')}
             </h2>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -588,7 +573,7 @@ function McpDirectTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContent
 
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
               <div className="text-xs font-mono text-[var(--text-muted)]">
-                gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-green-400">✓ Connected</span>
+                gpters-ai-toolkit: {MCP_SERVER_URL} <span className="text-[var(--text-secondary)]">✓ Connected</span>
               </div>
             </div>
           </div>
@@ -651,19 +636,15 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
 
   return (
     <>
-      {/* Page Header */}
-      <div className="text-center mb-12">
-        <h1 className="text-3xl font-medium text-[var(--text-primary)] mb-3">
-          {t('pageTitle')}
-        </h1>
-        <p className="text-[var(--text-secondary)]">
-          {t('pageSubtitle')}
-        </p>
-      </div>
+      {/* 페이지 머리글 — 왼쪽 정렬 */}
+      <header className="reveal mb-10">
+        <h1 className="page-title">{t('pageTitle')}</h1>
+        <p className="page-subtitle">{t('pageSubtitle')}</p>
+      </header>
 
       {/* Quick Start */}
-      <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-[var(--accent-cyan)]/10 to-[var(--accent-purple)]/10 border border-[var(--accent-cyan)]/20">
-        <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+      <div className="surface-card mb-8">
+        <h2 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-2">
           {t('quickStart.title')}
         </h2>
         <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -678,7 +659,7 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
           copyLabel={copyLabel}
           copiedLabel={copiedLabel}
         />
-        <InfoBox color="blue" label={t('noteLabels.note')}>
+        <InfoBox label={t('noteLabels.note')}>
           {t('quickStart.note')}
         </InfoBox>
       </div>
@@ -691,19 +672,20 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-8">
+      <div className="mb-8 flex flex-wrap gap-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+            aria-pressed={activeTab === tab.id}
+            className={`min-w-[9rem] flex-1 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'glass border border-[var(--accent-cyan)]/40 text-[var(--text-primary)]'
-                : 'bg-[var(--bg-tertiary)]/50 border border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                ? 'border-[var(--border-hover)] bg-[var(--bg-secondary)] text-[var(--text-primary)]'
+                : 'border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-secondary)]'
             }`}
           >
             <div>{tab.label}</div>
-            <div className={`text-xs mt-0.5 ${activeTab === tab.id ? 'text-[var(--accent-cyan)]' : 'text-[var(--text-muted)]'}`}>
+            <div className="mt-0.5 text-xs text-[var(--text-muted)]">
               {tab.description}
             </div>
           </button>
@@ -718,8 +700,8 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       {activeTab === 'mcp' && <McpDirectTab copiedStep={copiedStep} onCopy={copyToClipboard} copyLabel={copyLabel} copiedLabel={copiedLabel} />}
 
       {/* Usage Guide */}
-      <div className="mt-8 p-6 rounded-2xl bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20">
-        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">
+      <div className="surface-card mt-8">
+        <h3 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-4">
           {t('usageGuide.title')}
         </h3>
         <div className="space-y-4">
@@ -743,8 +725,8 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       </div>
 
       {/* Privacy & Opt-Out */}
-      <div className="mt-8 p-6 rounded-2xl bg-[var(--bg-tertiary)]/50 border border-[var(--border-subtle)]">
-        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-3">
+      <div className="surface-card mt-8">
+        <h3 className="text-base font-medium tracking-tight text-[var(--text-primary)] mb-3">
           {t('privacy.title')}
         </h3>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
@@ -787,7 +769,7 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
 
         <p className="text-xs text-[var(--text-muted)] mt-3">
           {t('privacy.seeAlsoPrefix')}{' '}
-          <Link href="/privacy" className="text-[var(--accent-cyan)] hover:underline">
+          <Link href="/privacy" className="text-[var(--brand-primary)] hover:underline">
             {t('privacy.privacyLink')}
           </Link>
           {t('privacy.privacySuffix')}
@@ -795,10 +777,10 @@ export function GettingStartedContent({ isInternal }: { isInternal: boolean }) {
       </div>
 
       {/* Help Link */}
-      <div className="mt-8 text-center">
+      <div className="mt-8">
         <p className="text-sm text-[var(--text-muted)]">
           {t('help.question')}{' '}
-          <a href="https://github.com/chat-prompt/gpters-ai-toolkit/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-cyan)] hover:underline">
+          <a href="https://github.com/chat-prompt/gpters-ai-toolkit/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-primary)] hover:underline">
             {t('help.reportIssue')}
           </a>
         </p>

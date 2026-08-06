@@ -70,41 +70,27 @@ export default function DevicePage() {
   const codeComplete = code.replace(/-/g, '').length === 8
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="glass rounded-2xl p-8 max-w-md w-full text-center">
+    <div className="page-shell items-center justify-center px-4">
+      <div className="surface-card max-w-md w-full text-center">
         {/* Header */}
         <div className="mb-8">
-          <div className="text-4xl mb-4">🔐</div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">
-            {t('device.title')}
-          </h1>
-          <p className="text-[var(--text-secondary)] text-sm">
-            {t('device.description')}
-          </p>
+          <h1 className="page-title">{t('device.title')}</h1>
+          <p className="page-subtitle mx-auto">{t('device.description')}</p>
         </div>
 
         {state === 'success' ? (
           <div className="py-8">
-            <div className="text-5xl mb-4">✅</div>
-            <p className="text-[var(--text-primary)] font-medium">
-              {t('device.success')}
-            </p>
+            <p className="eyebrow">{t('device.success')}</p>
           </div>
         ) : state === 'denied' ? (
           <div className="py-8">
-            <div className="text-5xl mb-4">🚫</div>
-            <p className="text-[var(--text-secondary)]">
-              {t('device.denied')}
-            </p>
+            <p className="text-sm text-[var(--text-secondary)]">{t('device.denied')}</p>
           </div>
         ) : (
           <>
             {/* Code input */}
-            <div className="mb-6">
-              <label
-                htmlFor="device-code"
-                className="block text-sm text-[var(--text-muted)] mb-2"
-              >
+            <div className="mb-6 text-left">
+              <label htmlFor="device-code" className="block text-sm text-[var(--text-muted)] mb-2">
                 {t('device.codeLabel')}
               </label>
               <input
@@ -119,7 +105,7 @@ export default function DevicePage() {
                   }
                 }}
                 placeholder={t('device.codePlaceholder')}
-                className="w-full text-center text-3xl font-mono tracking-[0.3em] px-4 py-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:tracking-[0.1em] placeholder:text-xl focus:outline-none focus:border-[var(--accent-cyan)] focus:ring-1 focus:ring-[var(--accent-cyan)]"
+                className="w-full text-center text-3xl font-mono tracking-[0.3em] px-4 py-4 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:tracking-[0.1em] placeholder:text-xl focus:outline-none focus:border-[var(--border-hover)]"
                 maxLength={9}
                 autoComplete="off"
                 spellCheck={false}
@@ -129,7 +115,7 @@ export default function DevicePage() {
 
             {/* Error message */}
             {state === 'error' && errorMsg && (
-              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              <div className="mb-4 p-3 rounded-lg border border-[var(--border-hover)] text-[var(--text-secondary)] text-sm">
                 {errorMsg}
               </div>
             )}
@@ -146,7 +132,7 @@ export default function DevicePage() {
               <button
                 onClick={() => handleAction('approve')}
                 disabled={!codeComplete || state === 'loading'}
-                className="flex-[2] py-3 px-4 rounded-xl bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity text-sm"
+                className="flex-[2] py-3 px-4 rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity text-sm"
               >
                 {state === 'loading' ? '...' : t('device.verify')}
               </button>

@@ -20,6 +20,13 @@ import type { ItemType, Difficulty, AgentModel, AgentPermissionMode, HookEvent }
 
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
 
+/** 폼 입력 공통 클래스 — 라벨은 위, 값은 이 스타일로 통일 */
+const inputClass =
+  'w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--border-hover)] transition-colors'
+
+/** 폼 라벨 공통 클래스 */
+const labelClass = 'block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2'
+
 export default function NewCatalogItem() {
   const t = useTranslations('admin.newItem')
   const router = useRouter()
@@ -217,17 +224,15 @@ export default function NewCatalogItem() {
   const config = TYPE_CONFIG[type]
 
   return (
-    <div className="max-w-7xl mx-auto px-8 py-12">
-      <div className="mb-8">
+    <div>
+      <div className="mb-6">
         <Link
           href="/admin/catalog"
           className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-4 inline-block"
         >
           ← Back to Catalog
         </Link>
-        <h1 className="text-3xl font-light text-[var(--text-primary)]">
-          Create New Item
-        </h1>
+        <h1 className="page-title">Create New Item</h1>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -235,61 +240,53 @@ export default function NewCatalogItem() {
           {/* Left Column: Form */}
           <div className="lg:col-span-2 space-y-6">
             {/* Type Selection */}
-            <div className="glass rounded-2xl p-8">
+            <div className="surface-card rounded-2xl p-6">
               <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">
                 {t('typeSelection')}
               </h2>
-              <div className="grid grid-cols-5 gap-3">
-                {ITEM_TYPES.map((t) => {
-                  const tConfig = TYPE_CONFIG[t]
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => handleTypeChange(t)}
-                      className={`p-4 rounded-xl transition-all ${
-                        type === t
-                          ? 'bg-[var(--accent-cyan)] text-black'
-                          : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      <div className="text-2xl mb-2">{tConfig.icon}</div>
-                      <div className="text-sm font-medium capitalize">{t}</div>
-                    </button>
-                  )
-                })}
+              <div className="grid grid-cols-5 gap-2">
+                {ITEM_TYPES.map((itemType) => (
+                  <button
+                    key={itemType}
+                    type="button"
+                    onClick={() => handleTypeChange(itemType)}
+                    className={`px-3 py-3 rounded-lg text-sm font-medium capitalize border transition-colors ${
+                      type === itemType
+                        ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                        : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {itemType}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* Basic Info */}
-            <div className="glass rounded-2xl p-8 space-y-6">
+            <div className="surface-card rounded-2xl p-6 space-y-6">
               <h2 className="text-lg font-medium text-[var(--text-primary)]">
                 {t('basicInfo')}
               </h2>
 
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                    ID *
-                  </label>
+                  <label className={labelClass}>ID *</label>
                   <input
                     type="text"
                     value={id}
                     onChange={(e) => setId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                    className={inputClass}
                     placeholder="my-skill-id"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                    Name *
-                  </label>
+                  <label className={labelClass}>Name *</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                    className={inputClass}
                     placeholder={config.namePlaceholder}
                     required
                   />
@@ -297,13 +294,11 @@ export default function NewCatalogItem() {
               </div>
 
               <div>
-                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                  Description
-                </label>
+                <label className={labelClass}>Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors resize-none"
+                  className={`${inputClass} resize-none`}
                   rows={3}
                   placeholder={config.descriptionPlaceholder}
                 />
@@ -311,40 +306,34 @@ export default function NewCatalogItem() {
 
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                    Author
-                  </label>
+                  <label className={labelClass}>Author</label>
                   <input
                     type="text"
                     value={author}
                     onChange={(e) => setAuthor(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                    className={inputClass}
                     placeholder="username"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                    Tags (comma-separated)
-                  </label>
+                  <label className={labelClass}>Tags (comma-separated)</label>
                   <input
                     type="text"
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                    className={inputClass}
                     placeholder={config.suggestedTags.join(', ')}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                  Organization
-                </label>
+                <label className={labelClass}>Organization</label>
                 {session?.user?.role === 'super_admin' ? (
                   <select
                     value={orgId}
                     onChange={(e) => setOrgId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                    className={inputClass}
                   >
                     <option value="">Select organization...</option>
                     {orgs.map((org) => (
@@ -361,22 +350,20 @@ export default function NewCatalogItem() {
               </div>
 
               <div>
-                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                  Visibility
-                </label>
-                <div className="flex gap-3">
+                <label className={labelClass}>Visibility</label>
+                <div className="flex gap-2">
                   {(['private', 'public'] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
                       onClick={() => setVisibility(v)}
-                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                      className={`px-4 py-2 rounded-lg text-sm border transition-colors capitalize ${
                         visibility === v
-                          ? 'bg-[var(--accent-cyan)] text-black'
-                          : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                          ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                          : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
                       }`}
                     >
-                      {v === 'private' ? '🔒 Private' : '🌍 Public'}
+                      {v}
                     </button>
                   ))}
                 </div>
@@ -389,14 +376,12 @@ export default function NewCatalogItem() {
 
               {type === 'skill' && (
                 <div>
-                  <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                    Plugin ID (external skills only)
-                  </label>
+                  <label className={labelClass}>Plugin ID (external skills only)</label>
                   <input
                     type="text"
                     value={pluginId}
                     onChange={(e) => setPluginId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                    className={inputClass}
                     placeholder="@author/plugin-name"
                   />
                 </div>
@@ -404,9 +389,9 @@ export default function NewCatalogItem() {
             </div>
 
             {/* Type-Specific Fields */}
-            <div className="glass rounded-2xl p-8">
+            <div className="surface-card rounded-2xl p-6">
               <h2 className="text-lg font-medium text-[var(--text-primary)] mb-6">
-                {config.icon} {t('typeSettings', { type: type.charAt(0).toUpperCase() + type.slice(1) })}
+                {t('typeSettings', { type: type.charAt(0).toUpperCase() + type.slice(1) })}
               </h2>
               <TypeSpecificFields
                 type={type}
@@ -430,19 +415,17 @@ export default function NewCatalogItem() {
             </div>
 
             {/* Content */}
-            <div className="glass rounded-2xl p-8 space-y-6">
+            <div className="surface-card rounded-2xl p-6 space-y-6">
               <h2 className="text-lg font-medium text-[var(--text-primary)]">
                 Content
               </h2>
 
               <div>
-                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                  Content * (Markdown)
-                </label>
+                <label className={labelClass}>Content * (Markdown)</label>
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors resize-none"
+                  className={`${inputClass} font-mono resize-none`}
                   rows={20}
                   placeholder={config.contentPlaceholder}
                   required
@@ -450,13 +433,11 @@ export default function NewCatalogItem() {
               </div>
 
               <div>
-                <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                  README (optional)
-                </label>
+                <label className={labelClass}>README (optional)</label>
                 <textarea
                   value={readme}
                   onChange={(e) => setReadme(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm font-mono focus:border-[var(--accent-cyan)] transition-colors resize-none"
+                  className={`${inputClass} font-mono resize-none`}
                   rows={8}
                   placeholder="Additional documentation for users..."
                 />
@@ -465,9 +446,9 @@ export default function NewCatalogItem() {
 
             {/* CLI Settings */}
             {type !== 'guide' && type !== 'hook' && (
-              <div className="glass rounded-2xl p-8 space-y-6">
-                <h2 className="text-lg font-medium text-[var(--text-primary)] flex items-center gap-2">
-                  <span className="text-[var(--accent-cyan)]">CLI</span> Settings
+              <div className="surface-card rounded-2xl p-6 space-y-6">
+                <h2 className="text-lg font-medium text-[var(--text-primary)]">
+                  CLI Settings
                 </h2>
                 <p className="text-sm text-[var(--text-muted)]">
                   Enable this item for CLI plugin installation.
@@ -479,7 +460,7 @@ export default function NewCatalogItem() {
                       type="checkbox"
                       checked={mcpEnabled}
                       onChange={(e) => setMarketplaceEnabled(e.target.checked)}
-                      className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--accent-cyan)] focus:ring-[var(--accent-cyan)] cursor-pointer"
+                      className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:ring-[var(--border-hover)] cursor-pointer"
                     />
                     <span className="text-[var(--text-primary)]">Enable for CLI</span>
                   </label>
@@ -487,15 +468,13 @@ export default function NewCatalogItem() {
 
                 {mcpEnabled && (
                   <div>
-                    <label className="block text-sm text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                      Version (semver)
-                    </label>
+                    <label className={labelClass}>Version (semver)</label>
                     <input
                       type="text"
                       value={version}
                       onChange={(e) => setMarketplaceVersion(e.target.value)}
                       placeholder="1.0.0"
-                      className="w-full max-w-xs px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--accent-cyan)] transition-colors"
+                      className={`${inputClass} max-w-xs`}
                     />
                   </div>
                 )}
@@ -503,7 +482,7 @@ export default function NewCatalogItem() {
             )}
 
             {error && (
-              <div className="text-red-400 text-sm">{error}</div>
+              <div className="text-[var(--accent-orange)] text-sm">{error}</div>
             )}
 
             <div className="flex justify-end gap-4">
@@ -516,7 +495,7 @@ export default function NewCatalogItem() {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 rounded-lg bg-[var(--accent-cyan)] text-black font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="px-6 py-3 rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)] font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {loading ? 'Creating...' : 'Create Item'}
               </button>

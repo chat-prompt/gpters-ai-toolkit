@@ -31,27 +31,13 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
   const t = await getTranslations('terms')
 
   return (
-    <div className="min-h-screen grid-pattern noise-overlay">
-      {/* Ambient Background Gradients */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[var(--accent-cyan)] opacity-[0.03] blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[var(--accent-purple)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
+    <div className="page-shell">
       <ServerHeader />
 
-      <main className="relative z-10 max-w-3xl mx-auto px-8 py-12">
-        <p className="text-[var(--brand-primary)] text-xs font-medium uppercase tracking-[0.3em] mb-4">
-          {t('badge')}
-        </p>
-        <h1
-          className="text-4xl md:text-5xl font-light text-[var(--text-primary)] leading-[1.1] tracking-[-0.03em] mb-8"
-          style={{ fontFamily: 'var(--font-newsreader)' }}
-        >
-          {t('title')}{' '}
-          <span className="bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] bg-clip-text text-transparent font-medium">
-            {t('titleHighlight')}
-          </span>
+      <main className="page-main max-w-[70ch]">
+        <p className="eyebrow">{t('badge')}</p>
+        <h1 className="page-title mt-2 mb-8">
+          {t('title')} {t('titleHighlight')}
         </h1>
 
         <div className="space-y-10 text-[var(--text-secondary)] leading-relaxed">
@@ -106,7 +92,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
               {t('sections.contact.contentPrefix')}{' '}
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="text-[var(--brand-primary)] hover:underline"
+                className="text-[var(--text-primary)] underline underline-offset-4 hover:text-[var(--text-secondary)] transition-colors"
               >
                 {CONTACT_EMAIL}
               </a>

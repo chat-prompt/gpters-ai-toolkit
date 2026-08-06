@@ -1,41 +1,18 @@
+/**
+ * 카탈로그 항목 유형별 표시 설정
+ *
+ * 유형 구분은 라벨 하나로만 한다 — 예전에는 유형마다 이모지·그라디언트·
+ * 네온 글로우를 달았는데, 카드 열두 장이 늘어서면 장식이 제목보다 먼저 읽혔다.
+ */
 import type { ItemType } from '@/lib/core/types'
 import type { TypeFilterConfig } from './types'
 
+/** 항목 유형 → 표시 설정 */
 export const TYPE_CONFIG: Record<ItemType, TypeFilterConfig> = {
-  skill: {
-    label: 'SKILL',
-    icon: '⚡',
-    gradient: 'from-cyan-400 to-emerald-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(0,212,255,0.3)]',
-  },
-  agent: {
-    label: 'AGENT',
-    icon: '◈',
-    gradient: 'from-purple-400 to-pink-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]',
-  },
-  command: {
-    label: 'COMMAND',
-    icon: '▸',
-    gradient: 'from-rose-400 to-red-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(251,113,133,0.3)]',
-  },
-  guide: {
-    label: 'GUIDE',
-    icon: '📚',
-    gradient: 'from-emerald-400 to-teal-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(16,185,129,0.3)]',
-  },
-  hook: {
-    label: 'HOOK',
-    icon: '🪝',
-    gradient: 'from-orange-400 to-amber-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(251,146,60,0.3)]',
-  },
-  package: {
-    label: 'PACKAGE',
-    icon: '📦',
-    gradient: 'from-indigo-400 to-violet-400',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(99,102,241,0.3)]',
-  },
+  skill: { label: 'SKILL' },
+  agent: { label: 'AGENT' },
+  command: { label: 'COMMAND' },
+  guide: { label: 'GUIDE' },
+  hook: { label: 'HOOK' },
+  package: { label: 'PACKAGE' },
 }

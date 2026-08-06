@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, halfvec, real } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, halfvec, real, numeric } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -1085,3 +1085,55 @@ export const evoRunLogs = pgTable('evo_run_logs', {
   index('evo_run_logs_run_type_idx').on(table.runType),
   index('evo_run_logs_started_at_idx').on(table.startedAt),
 ])
+
+// ============================================
+// AX Dashboard
+// ============================================
+
+export const axBillingCycleEnum = pgEnum('ax_billing_cycle', ['monthly', 'yearly'])
+export const axSubscriptionStatusEnum = pgEnum('ax_subscription_status', ['active', 'canceled'])
+
+/**
+ * 팀원별 구독 현황 (AX 대시보드)
+ *
+ * 결제내역 트래커 시트가 SSOT이고, 이 테이블은 대시보드가 읽는 사본이다.
+ * `pnpm --filter @gpters/db exec tsx scripts/import-ax-subscriptions.ts <csv>` 로 갱신한다.
+ *
+ * 개인 식별 데이터(ownerName/payer)를 담으므로 API는 관리자에게만 행 단위로 내려주고,
+ * 일반 조직 구성원에게는 벤더별 집계만 노출한다.
+ */
+export const axSubscriptions = pgTable('ax_subscriptions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** 서비스 제공자 (예: Anthropic, OpenAI) */
+  vendor: text('vendor').notNull(),
+  /** 플랜명 (예: Max20x, Pro) */
+  plan: text('plan').notNull(),
+  /** 좌석 사용자 이름. 팀 공용 구독이면 null */
+  ownerName: text('owner_name'),
+  /** 매월 결제일 (1~31). 같은 사람이 같은 플랜을 둘 이상 쓰는 경우를 가르는 값이기도 하다 */
+  renewalDay: integer('renewal_day'),
+  /** 결제 주체 ("본인" 또는 대신 결제하는 사람 이름) */
+  payer: text('payer'),
+  /**
+   * 청구 금액 (통화 단위 그대로. 환율 환산은 하지 않는다)
+   *
+   * float가 아니라 numeric이다 — 연 단위 원화 청구액은 float32 정밀도(약 1,677만)를
+   * 넘어서 금액이 틀어진다. 드라이버가 문자열로 주므로 읽는 쪽에서 숫자로 바꾼다.
+   */
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  currency: text('currency').notNull().default('KRW'),
+  billingCycle: axBillingCycleEnum('billing_cycle').notNull().default('monthly'),
+  status: axSubscriptionStatusEnum('status').notNull().default('active'),
+  note: text('note'),
+  /** 마지막 import 시각 */
+  syncedAt: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('ax_subscriptions_vendor_idx').on(table.vendor),
+  index('ax_subscriptions_status_idx').on(table.status),
+  index('ax_subscriptions_owner_name_idx').on(table.ownerName),
+])
+
+export type AxSubscriptionRecord = typeof axSubscriptions.$inferSelect
+export type NewAxSubscriptionRecord = typeof axSubscriptions.$inferInsert
