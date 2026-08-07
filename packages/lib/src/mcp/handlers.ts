@@ -5,7 +5,9 @@
  */
 
 import { createLogger } from '../core/logger'
-import { db, catalogItems, users } from '@gpters/db'
+import { db, catalogItems, users, axClientUsage } from '@gpters/db'
+import { validateUsageReport } from '../features/ax/usage-report'
+import type { AxUsageReportRecord } from '../features/ax/usage-report'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { checkMetadataQuality } from '../plugin/skill-validator'
 import { isSuperAdmin, type UserRole } from '../security/rbac'
@@ -1277,6 +1279,132 @@ export async function removeFiles(
 }
 
 /**
+ * `report_usage` 결과
+ */
+export interface ReportUsageResponse {
+  success: boolean
+  /** 서버가 인증 사용자에서 유도한 팀원 이름 (성공 시에만) */
+  memberName?: string
+  /** 새로 만든 행 수 */
+  inserted?: number
+  /** 덮어쓴 행 수 */
+  updated?: number
+  error?: string
+  /** 검증 실패 시 필드별 사유 */
+  errors?: string[]
+}
+
+/**
+ * 인증 사용자로부터 팀원 이름을 얻는다
+ *
+ * 클라이언트가 보낸 이름을 쓰지 않는 이유는 남의 이름으로 사용량을 기록할 수 있기 때문이다.
+ * 이름이 비어 있는 계정은 이메일 로컬파트로 대신한다 — 대시보드가 사람을 묶는 키라
+ * 비어 있으면 행이 통째로 유실된다.
+ *
+ * @param userId - 인증 세션의 사용자 ID
+ * @returns 팀원 이름. 사용자를 못 찾으면 null
+ */
+async function resolveMemberName(userId: string): Promise<string | null> {
+  const [user] = await db
+    .select({ name: users.name, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (!user) return null
+  return user.name?.trim() || user.email?.split('@')[0] || null
+}
+
+/**
+ * CLI가 보낸 사용량 집계를 `ax_client_usage`에 반영한다
+ *
+ * (memberName, client, periodStart)를 키로 upsert 한다. 같은 사람이 같은 구간을
+ * 다시 보내면 덮어쓰므로, CLI를 몇 번 돌려도 대시보드 총량이 부풀지 않는다.
+ *
+ * @param args - MCP 도구 인자 (`{ records: [...] }`)
+ * @param userId - 인증 세션의 사용자 ID
+ * @returns 반영 결과. 검증 실패 시 사유를 그대로 담아 돌려준다
+ */
+export async function reportUsage(
+  args: Record<string, unknown>,
+  userId?: string
+): Promise<ReportUsageResponse> {
+  if (!userId) {
+    return { success: false, error: '인증이 필요합니다' }
+  }
+
+  const validation = validateUsageReport(args)
+  if (!validation.ok) {
+    return { success: false, error: validation.errors.join('; '), errors: validation.errors }
+  }
+
+  const memberName = await resolveMemberName(userId)
+  if (!memberName) {
+    return { success: false, error: '인증 사용자를 찾을 수 없습니다' }
+  }
+
+  let inserted = 0
+  let updated = 0
+
+  for (const record of validation.payload.records) {
+    const values = toUsageRow(record, memberName)
+
+    const [existing] = await db
+      .select({ id: axClientUsage.id })
+      .from(axClientUsage)
+      .where(
+        and(
+          eq(axClientUsage.memberName, memberName),
+          eq(axClientUsage.client, values.client),
+          eq(axClientUsage.periodStart, values.periodStart)
+        )
+      )
+      .limit(1)
+
+    if (existing) {
+      await db.update(axClientUsage).set(values).where(eq(axClientUsage.id, existing.id))
+      updated++
+    } else {
+      await db.insert(axClientUsage).values(values)
+      inserted++
+    }
+  }
+
+  log.info('AX usage reported', { memberName, inserted, updated })
+  return { success: true, memberName, inserted, updated }
+}
+
+/**
+ * 검증을 통과한 레코드를 `ax_client_usage` 행으로 옮긴다
+ *
+ * @param record - 검증된 레코드
+ * @param memberName - 서버가 유도한 팀원 이름
+ * @returns insert·update 양쪽에 그대로 쓰는 값
+ */
+function toUsageRow(record: AxUsageReportRecord, memberName: string) {
+  const now = new Date()
+  return {
+    memberName,
+    client: record.client,
+    planRaw: record.planRaw,
+    plan: record.plan,
+    periodStart: new Date(record.periodStart),
+    periodEnd: new Date(record.periodEnd),
+    inputTokens: record.inputTokens,
+    outputTokens: record.outputTokens,
+    cachedTokens: record.cachedTokens,
+    sessions: record.sessions,
+    models: record.models,
+    // numeric 컬럼은 드라이버가 문자열을 받는다. null은 "한도를 안 주는 클라이언트"라는 뜻이라
+    // 0으로 바꾸지 않는다.
+    limitUsedPercent: record.limitUsedPercent != null ? record.limitUsedPercent.toFixed(2) : null,
+    limitResetsAt: record.limitResetsAt ? new Date(record.limitResetsAt) : null,
+    syncedAt: now,
+    updatedAt: now,
+  }
+}
+
+/**
  * Check if the user has admin role
  */
 function isAdmin(userRole?: string): boolean {
@@ -1683,6 +1811,19 @@ export async function executeTool(
               pluginVersion: args.pluginVersion as string | undefined,
             },
           },
+        }
+      }
+
+      case 'report_usage': {
+        const result = await reportUsage(args, userId)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+          isError: !result.success,
         }
       }
 

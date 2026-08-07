@@ -557,6 +557,88 @@ deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합
     },
   },
   {
+    name: 'report_usage',
+    description: `AI 코딩 클라이언트 사용량 집계를 기록합니다 (AX 대시보드 · 클라이언트 사용량 패널).
+
+aitk CLI가 각 팀원 머신의 로컬 트랜스크립트를 집계해 호출합니다.
+보내는 값은 집계 수치와 플랜 문자열뿐입니다 — 대화 내용·파일 경로·인증 토큰은 보내지 않습니다.
+
+누구의 사용량인지는 서버가 인증 세션에서 정합니다. 이름을 인자로 보낼 수 없습니다.
+(클라이언트, periodStart)가 같으면 덮어씁니다 — 같은 구간을 다시 보내도 총량이 부풀지 않습니다.
+
+한도 필드는 없을 수 있습니다. Claude Code는 남은 한도를 로컬에 남기지 않으므로
+limitUsedPercent·limitResetsAt을 null로 보냅니다. 0으로 채우면 "한도를 안 쓴 사람"과 구분되지 않습니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        records: {
+          type: 'array',
+          description: '클라이언트별 집계 (한 번에 최대 20건, 같은 클라이언트·구간 중복 불가)',
+          items: {
+            type: 'object',
+            properties: {
+              client: {
+                type: 'string',
+                enum: ['claude-code', 'codex'],
+                description: '클라이언트 종류',
+              },
+              planRaw: {
+                type: ['string', 'null'],
+                description: '클라이언트가 보고한 원시 티어 문자열 (예: "default_claude_max_20x", "prolite")',
+              },
+              plan: {
+                type: ['string', 'null'],
+                description: '사람이 읽는 플랜명 (예: "Claude Max 20x")',
+              },
+              periodStart: {
+                type: 'string',
+                description: '집계 구간 시작 (ISO 8601). 저장 키의 일부다',
+              },
+              periodEnd: {
+                type: 'string',
+                description: '집계 구간 끝 (ISO 8601). 최대 90일',
+              },
+              inputTokens: { type: 'number', description: '입력 토큰 합 (0 이상의 정수)' },
+              outputTokens: { type: 'number', description: '출력 토큰 합 (0 이상의 정수)' },
+              cachedTokens: { type: 'number', description: '캐시 읽기 토큰 합 (0 이상의 정수)' },
+              sessions: { type: 'number', description: '세션 수 (0 이상의 정수)' },
+              models: {
+                type: 'object',
+                description: '모델명 → 토큰 수 (최대 50종)',
+                additionalProperties: { type: 'number' },
+              },
+              limitUsedPercent: {
+                type: ['number', 'null'],
+                description: '주간 한도 사용률 0~100. 보고하지 않는 클라이언트는 null (Claude Code는 항상 null)',
+              },
+              limitResetsAt: {
+                type: ['string', 'null'],
+                description: '한도 리셋 시각 (ISO 8601). 없으면 null',
+              },
+            },
+            // 전부 필수다. nullable 필드도 "없음"을 null로 명시해야 한다 —
+            // 키를 빼면 "보고할 값이 없다"와 "보내는 걸 잊었다"가 구분되지 않는다.
+            required: [
+              'client',
+              'planRaw',
+              'plan',
+              'periodStart',
+              'periodEnd',
+              'inputTokens',
+              'outputTokens',
+              'cachedTokens',
+              'sessions',
+              'models',
+              'limitUsedPercent',
+              'limitResetsAt',
+            ],
+          },
+        },
+      },
+      required: ['records'],
+    },
+  },
+  {
     name: 'remove_files',
     description: `플러그인에서 파일을 삭제합니다.
 

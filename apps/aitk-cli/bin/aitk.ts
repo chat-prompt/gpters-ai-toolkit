@@ -11,6 +11,7 @@ import { runUpdates } from '../src/commands/updates.js'
 import { runReportSession } from '../src/commands/report-session.js'
 import { runReportSkip } from '../src/commands/report-skip.js'
 import { runReportOutcome } from '../src/commands/report-outcome.js'
+import { runUsageReport } from '../src/commands/usage-report.js'
 import { runLogin } from '../src/commands/login.js'
 import { runDeviceLogin } from '../src/commands/device-login.js'
 import { runConfig } from '../src/commands/config.js'
@@ -71,6 +72,7 @@ Usage:
   aitk report-session --count <N> [--version <ver>]
   aitk report-skip --query <query> --reason <reason> [--result-ids id1,id2]
   aitk report-outcome --skill-id <id> --applied true|false --summary <text>
+  aitk usage report [--days 7] [--dry-run]
   aitk undeploy <id>
   aitk add-files --id <id> <file1> [file2...] [--type script|reference|template|config]
   aitk remove-files --id <id> --files <name1,name2>
@@ -91,6 +93,7 @@ Commands:
   report-session  Report session event (for hooks)
   report-skip     Report skill search skip reason
   report-outcome  Report skill application outcome
+  usage           Report local Claude Code / Codex token usage
   login           Save auth token (browser, --device, or --token)
   whoami          Show current authenticated user
 
@@ -217,6 +220,23 @@ Required:
   --skill-id <id>    Skill ID that was loaded
   --applied <bool>   Whether the skill was actually applied (true/false)
   --summary <text>   One-line outcome summary`,
+
+  usage: `aitk usage - Report local Claude Code / Codex token usage
+
+Usage: aitk usage report [--days <N>] [--dry-run]
+
+Aggregates token counts from local transcripts (~/.claude/projects,
+~/.codex/sessions) and reports them to the team dashboard.
+Only aggregate numbers and the plan name leave your machine —
+never conversation content, file paths, or credentials.
+
+Options:
+  --days <N>         Aggregation window in days (default: 7, max: 90)
+  --dry-run          Print the aggregate without sending it
+
+Examples:
+  aitk usage report
+  aitk usage report --days 30 --dry-run`,
 
   login: `aitk login - Authenticate with AI Toolkit
 
@@ -387,6 +407,18 @@ async function main(): Promise<void> {
         skillId,
         applied: flags['applied'] === 'true',
         summary,
+      })
+      break
+    }
+
+    case 'usage': {
+      const sub = positional[0]
+      if (sub !== 'report') {
+        error(`Unknown subcommand: aitk usage ${sub ?? ''}\nUsage: aitk usage report [--days N] [--dry-run]`)
+      }
+      await runUsageReport({
+        days: flags['days'] ? parseInt(flags['days'], 10) : 7,
+        dryRun: flags['dry-run'] === 'true',
       })
       break
     }
