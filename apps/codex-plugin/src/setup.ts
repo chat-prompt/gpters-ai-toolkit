@@ -7,8 +7,9 @@
 import { join, dirname } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, chmodSync, existsSync } from 'node:fs'
 import type { Scope } from './paths.js'
-import { getConfigTomlPath, getSkillsDir, getAgentsMdPath } from './paths.js'
-import { ensureMcpConfig } from './config-toml.js'
+import { getConfigTomlPath, getSkillsDir, getAgentsMdPath, getHooksJsonPath } from './paths.js'
+import { ensureMcpConfig, ensureHooksFeature } from './config-toml.js'
+import { ensureUsageHook } from './hooks-json.js'
 import { installSkills, installAgentsMd } from './skills-installer.js'
 import { promptScope, promptAgentsMd } from './prompts.js'
 
@@ -44,6 +45,8 @@ export interface SetupResult {
   mcpConfig: 'added' | 'skipped'
   /** AGENTS.md 결과 */
   agentsMd: 'created' | 'skipped' | 'not_found' | 'not_requested'
+  /** 사용량 자동 보고 훅 설치 결과 */
+  usageHook: 'installed' | 'skipped' | 'failed'
   /** 자동 업데이트 스크립트 설치 결과 */
   autoUpdate: 'installed' | 'skipped'
 }
@@ -83,6 +86,13 @@ export async function runSetup(options: SetupOptions): Promise<SetupResult> {
     autoUpdateResult = installAutoUpdate(options.packageRoot, targetDir)
   }
 
+  // 5. 사용량 자동 보고 훅 (user scope만)
+  //    project scope는 이 레포에만 적용되는데, 사용량은 사람 단위라 의미가 없다.
+  let usageHookResult: SetupResult['usageHook'] = 'skipped'
+  if (scope === 'user' && options.packageRoot) {
+    usageHookResult = installUsageHook(options.packageRoot, targetDir)
+  }
+
   return {
     scope,
     skillsCopied: skillResult.copied,
@@ -90,6 +100,43 @@ export async function runSetup(options: SetupOptions): Promise<SetupResult> {
     mcpConfig: mcpResult,
     agentsMd: agentsMdResult,
     autoUpdate: autoUpdateResult,
+    usageHook: usageHookResult,
+  }
+}
+
+/**
+ * 사용량 보고 스크립트를 설치하고 훅으로 등록한다.
+ *
+ * 스크립트를 `~/.agents/gpters-usage-report.sh`에 복사한 뒤 `~/.codex/hooks.json`의
+ * SessionStart에 얹고, `[features] hooks = true`를 보장한다. 셋 중 하나라도 안 되면
+ * 훅이 돌지 않으므로 실패를 그대로 돌려준다.
+ *
+ * @param packageRoot - 패키지 루트 디렉토리 경로
+ * @param skillsDir - 스킬 설치 디렉토리 경로
+ * @returns 설치 결과
+ */
+export function installUsageHook(
+  packageRoot: string,
+  skillsDir: string
+): 'installed' | 'skipped' | 'failed' {
+  try {
+    const scriptSrc = join(packageRoot, 'scripts', 'gpters-usage-report.sh')
+    if (!existsSync(scriptSrc)) return 'skipped'
+
+    const agentsBaseDir = dirname(dirname(skillsDir)) // ~/.agents/skills/gpters → ~/.agents
+    const destPath = join(agentsBaseDir, 'gpters-usage-report.sh')
+    mkdirSync(agentsBaseDir, { recursive: true })
+    copyFileSync(scriptSrc, destPath)
+    chmodSync(destPath, 0o755)
+
+    // 이 스위치가 꺼져 있으면 훅을 등록해도 실행되지 않는다
+    if (ensureHooksFeature(getConfigTomlPath()) === 'failed') return 'failed'
+
+    const hookResult = ensureUsageHook(getHooksJsonPath(), destPath)
+    if (hookResult === 'failed') return 'failed'
+    return hookResult === 'added' ? 'installed' : 'skipped'
+  } catch {
+    return 'failed'
   }
 }
 
@@ -160,6 +207,13 @@ export function printSummary(result: SetupResult): void {
 
   if (result.autoUpdate === 'installed') {
     console.log('자동 업데이트: 설치됨 (~/.agents/auto-update.sh)')
+  }
+
+  if (result.usageHook === 'installed') {
+    console.log('사용량 자동 보고: 설치됨 (하루 1회, 끄기: AITK_USAGE_REPORT=0)')
+  } else if (result.usageHook === 'failed') {
+    // 조용히 넘기면 대시보드에 데이터가 안 쌓이는 이유를 알 길이 없다
+    console.log('사용량 자동 보고: 설치 실패 (~/.codex/hooks.json 확인 필요)')
   }
 
   console.log('\n다음 단계:')

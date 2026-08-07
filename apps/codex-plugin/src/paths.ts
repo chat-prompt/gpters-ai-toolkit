@@ -27,6 +27,21 @@ export function getConfigTomlPath(): string {
 }
 
 /**
+ * Codex hooks.json 경로를 반환한다.
+ *
+ * config.toml과 같은 디렉토리에 있다.
+ *
+ * @returns hooks.json 절대 경로
+ */
+export function getHooksJsonPath(): string {
+  const base =
+    process.platform === 'win32'
+      ? (process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'))
+      : homedir()
+  return join(base, '.codex', 'hooks.json')
+}
+
+/**
  * 스킬 설치 대상 디렉토리를 반환한다.
  *
  * - user: `~/.agents/skills/gpters/` (macOS/Linux) 또는 `%APPDATA%/.agents/skills/gpters/` (Windows)
