@@ -6,6 +6,24 @@ GPTers AI Toolkit MCP 서버와 연동하여, 작업 시작 시 관련 팀 스�
 
 - **skill-suggest**: 사용자의 요청을 분석하여 GPTers AI Toolkit에서 관련 스킬을 자동 검색합니다. 검색된 스킬의 가이드라인과 체크리스트를 현재 작업에 적용하여, 팀의 베스트 프랙티스를 일관되게 활용할 수 있습니다.
 - **MCP 서버 자동 연결**: 플러그인 설치 시 GPTers AI Toolkit MCP 서버(`https://ai-toolkit.gpters.org/api/mcp`)가 자동으로 등록됩니다. 별도의 `claude mcp add` 명령이 필요하지 않습니다.
+- **사용량 자동 보고**: 하루 한 번, 세션 시작 시 Claude Code와 Codex 사용량을 집계해 [AX 대시보드](https://ai-toolkit.gpters.org/ko/ax)로 보냅니다. `aitk` CLI가 설치돼 있어야 동작합니다.
+
+### 사용량 보고가 보내는 것
+
+토큰 수, 세션 수, 모델별 사용량, 플랜명, 주간 한도 사용률만 보냅니다. **대화 내용·파일 경로·인증 토큰은 전송하지 않습니다.** Codex 플랜 확인에 쓰는 `id_token`은 로컬에서만 열어 플랜 문자열을 꺼내며, 토큰 자체는 저장하지도 보내지도 않습니다.
+
+집계는 백그라운드에서 돌아 세션 시작을 지연시키지 않고, 하루 한 번만 실행됩니다. 끄려면:
+
+```bash
+export AITK_USAGE_REPORT=0
+```
+
+수동으로 확인하거나 보내려면:
+
+```bash
+aitk usage report --dry-run   # 무엇을 보낼지 출력만
+aitk usage report             # 지금 보내기
+```
 
 ## 사전 요구사항
 
