@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { hasMcpSection, appendMcpSection, ensureMcpConfig } from '../src/config-toml.js'
+import { hasMcpSection, appendMcpSection, ensureMcpConfig, ensureHooksFeature, hasHooksFeature } from '../src/config-toml.js'
 
 describe('hasMcpSection', () => {
   it('빈 문자열이면 false를 반환한다', () => {
@@ -88,5 +88,55 @@ describe('ensureMcpConfig', () => {
 
     const result = ensureMcpConfig(configPath)
     expect(result).toBe('skipped')
+  })
+})
+
+describe('ensureHooksFeature', () => {
+  it('설정이 없으면 [features] hooks = true 를 추가한다', () => {
+    const p = join(mkdtempSync(join(tmpdir(), 'codex-cfg-')), 'config.toml')
+    expect(ensureHooksFeature(p)).toBe('added')
+    expect(hasHooksFeature(readFileSync(p, 'utf-8'))).toBe(true)
+  })
+
+  it('이미 [features] 가 있으면 그 안에 넣는다', () => {
+    const p = join(mkdtempSync(join(tmpdir(), 'codex-cfg-')), 'config.toml')
+    writeFileSync(p, '[features]\njs_repl = false\n')
+    expect(ensureHooksFeature(p)).toBe('added')
+
+    const out = readFileSync(p, 'utf-8')
+    expect(hasHooksFeature(out)).toBe(true)
+    // 기존 키를 잃지 않는다
+    expect(out).toContain('js_repl = false')
+    // [features] 섹션이 중복되지 않는다
+    expect(out.match(/^\[features\]/gm)).toHaveLength(1)
+  })
+
+  it('이미 켜져 있으면 건드리지 않는다', () => {
+    const p = join(mkdtempSync(join(tmpdir(), 'codex-cfg-')), 'config.toml')
+    const before = '[features]\nhooks = true\n'
+    writeFileSync(p, before)
+
+    expect(ensureHooksFeature(p)).toBe('skipped')
+    expect(readFileSync(p, 'utf-8')).toBe(before)
+  })
+
+  it('사용자가 꺼둔 설정은 뒤집지 않는다', () => {
+    // 우리가 원하는 건 기본값 제공이지 의사 뒤집기가 아니다
+    const p = join(mkdtempSync(join(tmpdir(), 'codex-cfg-')), 'config.toml')
+    const before = '[features]\nhooks = false\n'
+    writeFileSync(p, before)
+
+    expect(ensureHooksFeature(p)).toBe('skipped')
+    expect(readFileSync(p, 'utf-8')).toBe(before)
+  })
+
+  it('기존 MCP 설정을 보존한다', () => {
+    const p = join(mkdtempSync(join(tmpdir(), 'codex-cfg-')), 'config.toml')
+    writeFileSync(p, '[mcp_servers.other]\nurl = "https://x"\n')
+    ensureHooksFeature(p)
+
+    const out = readFileSync(p, 'utf-8')
+    expect(out).toContain('[mcp_servers.other]')
+    expect(hasHooksFeature(out)).toBe(true)
   })
 })
