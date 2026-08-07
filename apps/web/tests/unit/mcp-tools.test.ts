@@ -46,10 +46,11 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('report_session_event')
       expect(toolNames).toContain('report_search_skip')
       expect(toolNames).toContain('report_skill_outcome')
+      expect(toolNames).toContain('report_usage')
     })
 
-    it('should have 10 public tools', () => {
-      expect(MCP_TOOLS).toHaveLength(10)
+    it('should have 11 public tools', () => {
+      expect(MCP_TOOLS).toHaveLength(11)
     })
 
     describe('Suggest feature removal (EDU-7987 D2)', () => {
