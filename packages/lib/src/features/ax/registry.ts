@@ -16,10 +16,12 @@ import { canViewPanel } from './access'
 import { skillUsagePanel } from './skills'
 import { vercelDeploymentsPanel } from './vercel'
 import { subscriptionsPanel } from './subscriptions'
+import { clientUsagePanel } from './usage'
 
 /** 등록된 패널 — 배열 순서가 화면 표시 순서다 */
 export const AX_PANELS: AxPanel[] = [
   skillUsagePanel,
+  clientUsagePanel,
   subscriptionsPanel,
   vercelDeploymentsPanel,
 ]
