@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, boolean, primaryKey, jsonb, index, halfvec, real, numeric } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, halfvec, real, numeric } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -1137,3 +1137,54 @@ export const axSubscriptions = pgTable('ax_subscriptions', {
 
 export type AxSubscriptionRecord = typeof axSubscriptions.$inferSelect
 export type NewAxSubscriptionRecord = typeof axSubscriptions.$inferInsert
+
+/** AI 코딩 클라이언트 종류 */
+export const axUsageClientEnum = pgEnum('ax_usage_client', ['claude-code', 'codex'])
+
+/**
+ * 팀원별 AI 클라이언트 사용량 (수집기가 각자 로컬에서 보낸 집계)
+ *
+ * 원본은 각 팀원 머신의 트랜스크립트다. 서버는 집계 결과만 받는다 —
+ * 대화 내용도, 인증 토큰도 넘어오지 않는다.
+ */
+export const axClientUsage = pgTable('ax_client_usage', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** 팀원 이름. ax_subscriptions.owner_name과 같은 표기를 쓴다 */
+  memberName: text('member_name').notNull(),
+  client: axUsageClientEnum('client').notNull(),
+  /** 클라이언트가 보고한 원시 티어 문자열 (예: default_claude_max_20x, prolite) */
+  planRaw: text('plan_raw'),
+  /** 사람이 읽는 플랜명 */
+  plan: text('plan'),
+  periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
+  periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
+  /**
+   * 토큰 수는 bigint다 — 주간 캐시 읽기만으로 40억을 넘어 integer(21억)를 넘긴다.
+   * mode:'number'로 받는다. 2^53까지는 JS number가 정확하므로 이 규모에서는 안전하다.
+   */
+  inputTokens: bigint('input_tokens', { mode: 'number' }).notNull().default(0),
+  outputTokens: bigint('output_tokens', { mode: 'number' }).notNull().default(0),
+  cachedTokens: bigint('cached_tokens', { mode: 'number' }).notNull().default(0),
+  sessions: integer('sessions').notNull().default(0),
+  /** 모델명 → 토큰 수 */
+  models: jsonb('models').$type<Record<string, number>>().default({}),
+  /**
+   * 주간 한도 사용률.
+   *
+   * nullable인 게 핵심이다 — Claude Code는 한도 정보를 로컬에 남기지 않아
+   * 값이 존재하지 않는다. 0으로 채우면 "한도를 안 쓴 사람"과 구분되지 않는다.
+   */
+  limitUsedPercent: numeric('limit_used_percent', { precision: 5, scale: 2 }),
+  limitResetsAt: timestamp('limit_resets_at', { withTimezone: true }),
+  /** 마지막 수집 시각 */
+  syncedAt: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('ax_client_usage_member_idx').on(table.memberName),
+  index('ax_client_usage_client_idx').on(table.client),
+  index('ax_client_usage_period_idx').on(table.periodStart),
+])
+
+export type AxClientUsageRecord = typeof axClientUsage.$inferSelect
+export type NewAxClientUsageRecord = typeof axClientUsage.$inferInsert

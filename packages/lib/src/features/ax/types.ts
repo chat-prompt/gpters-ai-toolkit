@@ -168,6 +168,59 @@ export interface AxSubscriptionMemberRow {
   status: 'active' | 'canceled'
 }
 
+/** AI 코딩 클라이언트 종류 */
+export type AxUsageClient = 'claude-code' | 'codex'
+
+/**
+ * 클라이언트별 사용량 집계 한 줄
+ *
+ * `reportsLimit`이 false면 그 클라이언트는 한도를 로컬에 남기지 않는다는 뜻이다.
+ * 화면은 이 값을 보고 "데이터 없음(오류)"과 "원래 안 주는 값"을 구분해야 한다.
+ */
+export interface AxClientUsageClientRow {
+  client: AxUsageClient
+  /** 이 클라이언트를 쓴 사람 수 */
+  members: number
+  totalTokens: number
+  sessions: number
+  /** 이 클라이언트가 주간 한도 사용률을 보고하는지 */
+  reportsLimit: boolean
+  /** 한도를 보고한 사람들의 평균 사용률. reportsLimit이 false면 null */
+  avgLimitUsedPercent: number | null
+}
+
+/**
+ * 팀원별 사용량 한 줄 (관리자에게만 내려간다)
+ *
+ * 구독 패널과 같은 이유로 이메일은 담지 않는다.
+ */
+export interface AxClientUsageMemberRow {
+  memberName: string
+  client: AxUsageClient
+  plan: string | null
+  totalTokens: number
+  sessions: number
+  /** 주간 한도 사용률. 클라이언트가 보고하지 않으면 null */
+  limitUsedPercent: number | null
+  /** 한도 리셋 시각 (ISO 8601) */
+  limitResetsAt: string | null
+}
+
+/** 클라이언트 사용량 패널이 내려주는 집계 */
+export interface AxClientUsageData {
+  /** 수집기가 마지막으로 보낸 시각 (ISO 8601) */
+  syncedAt: string | null
+  /** 집계 구간 (ISO 8601) */
+  periodStart: string | null
+  periodEnd: string | null
+  totalTokens: number
+  byClient: AxClientUsageClientRow[]
+  /** 모델별 토큰 사용량 (내림차순) */
+  byModel: Array<{ model: string; tokens: number }>
+  /** 팀원별 상세. 관리자에게만 채워지고 그 외에는 null */
+  members: AxClientUsageMemberRow[] | null
+}
+
 /** 구독 패널이 내려주는 집계. 팀원별 상세는 관리자에게만 채워진다 */
 export interface AxSubscriptionData {
   /**

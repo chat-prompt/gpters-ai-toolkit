@@ -11,6 +11,7 @@ import type { AxPanelViewProps } from './types'
 import { SkillUsagePanel } from './SkillUsagePanel'
 import { VercelProjectsPanel } from './VercelProjectsPanel'
 import { SubscriptionsPanel } from './SubscriptionsPanel'
+import { ClientUsagePanel } from './ClientUsagePanel'
 import { FallbackPanel } from './FallbackPanel'
 
 /**
@@ -26,6 +27,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   'skill-usage': SkillUsagePanel,
   'vercel-deployments': VercelProjectsPanel,
   subscriptions: SubscriptionsPanel,
+  'client-usage': ClientUsagePanel,
 }
 
 /**
@@ -38,5 +40,11 @@ export function getAxPanelView(panelId: string): AxPanelView {
   return AX_PANEL_VIEWS[panelId] ?? FallbackPanel
 }
 
-export { SkillUsagePanel, VercelProjectsPanel, SubscriptionsPanel, FallbackPanel }
+export {
+  SkillUsagePanel,
+  VercelProjectsPanel,
+  SubscriptionsPanel,
+  ClientUsagePanel,
+  FallbackPanel,
+}
 export type { AxPanelViewProps }
