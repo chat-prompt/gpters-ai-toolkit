@@ -9,6 +9,19 @@ import { collectClaudeCode } from '../usage/claude-code.js'
 import { collectCodex } from '../usage/codex.js'
 import type { UsageRecord } from '../usage/types.js'
 
+/**
+ * UTC 기준 그날 0시로 내린다
+ *
+ * 로컬 타임존을 쓰면 같은 순간에 돌려도 사람마다 구간 경계가 달라져,
+ * 서버에서 같은 구간으로 묶이지 않는다.
+ *
+ * @param date - 기준 시각
+ * @returns 그날 0시(UTC)
+ */
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
 /** 수신 계약이 거부하는 상한. 넘겨 보내지 않고 여기서 막는다 */
 const MAX_DAYS = 90
 
@@ -30,7 +43,14 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
     error(`--days must be between 1 and ${MAX_DAYS}`)
   }
 
-  const end = new Date()
+  // 구간 경계를 UTC 하루 단위로 스냅한다.
+  //
+  // 서버는 (member, client, period_start)로 upsert 하는데, 경계가 실행 시각이면
+  // 초 단위로 매번 달라져 키가 절대 일치하지 않는다 — 하루에 두 번 돌리면 행이
+  // 두 벌 쌓인다. 하루로 스냅하면 같은 날 몇 번을 돌려도 같은 행을 갱신한다.
+  //
+  // end는 오늘 0시가 아니라 내일 0시다. 오늘 0시로 잡으면 오늘 쓴 양이 통째로 빠진다.
+  const end = new Date(startOfUtcDay(new Date()).getTime() + 86_400_000)
   const start = new Date(end.getTime() - opts.days * 86_400_000)
   const window = { start, end }
 

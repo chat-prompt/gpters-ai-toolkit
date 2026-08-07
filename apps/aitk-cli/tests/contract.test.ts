@@ -17,7 +17,7 @@ const collected = vi.hoisted(() => ({
   codex: null as UsageRecord | null,
 }))
 
-vi.mock('../src/usage/claude-code.js', () => ({ collectClaudeCode: async () => collected.claude }))
+vi.mock('../src/usage/claude-code.js', () => ({ collectClaudeCode: vi.fn(async () => collected.claude) }))
 vi.mock('../src/usage/codex.js', () => ({ collectCodex: async () => collected.codex }))
 vi.mock('../src/client.js', () => ({
   jsonRpcCall: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
@@ -33,6 +33,7 @@ vi.mock('../src/output.js', () => ({
 
 import { runUsageReport } from '../src/commands/usage-report.js'
 import { jsonRpcCall } from '../src/client.js'
+import { collectClaudeCode } from '../src/usage/claude-code.js'
 
 /** 한도를 보고하지 않는 클라이언트 (Claude Code) */
 const CLAUDE: UsageRecord = {
@@ -127,5 +128,44 @@ describe('CLI가 보내는 payload는 서버 검증기를 통과한다', () => {
         'sessions',
       ].sort()
     )
+  })
+})
+
+describe('집계 구간 경계', () => {
+  /** 수집기가 실제로 받은 window를 꺼낸다 */
+  function receivedWindow(): { start: Date; end: Date } {
+    const call = vi.mocked(collectClaudeCode).mock.calls.at(-1)
+    expect(call, 'collectClaudeCode가 호출되지 않았습니다').toBeDefined()
+    return (call as [{ start: Date; end: Date }])[0]
+  }
+
+  it('같은 날 여러 번 돌려도 구간이 동일하다', async () => {
+    // 서버 upsert 키가 (member, client, period_start)다. 경계가 실행 시각이면
+    // 초 단위로 매번 달라져 키가 일치하지 않고, 돌릴 때마다 행이 쌓인다.
+    collected.claude = CLAUDE
+
+    await runUsageReport({ days: 7, dryRun: true })
+    const first = receivedWindow()
+
+    await new Promise((resolve) => setTimeout(resolve, 15))
+
+    await runUsageReport({ days: 7, dryRun: true })
+    const second = receivedWindow()
+
+    expect(second.start.getTime()).toBe(first.start.getTime())
+    expect(second.end.getTime()).toBe(first.end.getTime())
+  })
+
+  it('구간 끝이 오늘을 포함한다', async () => {
+    // end를 오늘 0시로 잡으면 오늘 쓴 양이 통째로 빠진다
+    collected.claude = CLAUDE
+
+    await runUsageReport({ days: 7, dryRun: true })
+    const { start, end } = receivedWindow()
+
+    expect(end.getTime()).toBeGreaterThan(Date.now())
+    expect(end.getTime() - start.getTime()).toBe(7 * 86_400_000)
+    // UTC 하루 경계에 스냅돼 있어야 한다
+    expect(end.toISOString()).toMatch(/T00:00:00\.000Z$/)
   })
 })
