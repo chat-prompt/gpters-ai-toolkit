@@ -7,10 +7,8 @@
 import { setRequestLocale } from 'next-intl/server'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 import { auth } from '@/lib/core/auth'
+import { isInternalEmail } from '@/lib/features/ax'
 import { GettingStartedContent } from './GettingStartedContent'
-
-/** Internal email domain for full plugin access (empty = no internal features) */
-const INTERNAL_DOMAIN = process.env.INTERNAL_ORGANIZATION_DOMAIN || ''
 
 /**
  * 시작 가이드 페이지
@@ -21,8 +19,9 @@ export default async function GettingStartedPage({ params }: { params: Promise<{
   const { locale } = await params
   setRequestLocale(locale)
   const session = await auth()
-  const email = session?.user?.email ?? ''
-  const isInternal = INTERNAL_DOMAIN ? email.endsWith(`@${INTERNAL_DOMAIN}`) : false
+  // 도메인 판정은 isInternalEmail 한 곳에서만 한다. 여기서 직접 비교하던 사본은
+  // 환경변수 값에 붙은 공백·개행을 다듬지 않아 사내 구성원도 항상 false였다.
+  const isInternal = isInternalEmail(session?.user?.email)
 
   return (
     <div className="page-shell">

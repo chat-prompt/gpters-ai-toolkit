@@ -142,3 +142,22 @@ describe('canViewPanel', () => {
     expect(canViewPanel(blocked, 'admin')).toBe(false)
   })
 })
+
+describe('환경변수 값이 지저분해도 판정이 흔들리지 않는다', () => {
+  /**
+   * 실제로 났던 사고를 고정한다.
+   *
+   * Vercel의 INTERNAL_ORGANIZATION_DOMAIN 값 끝에 개행이 붙어 있었고,
+   * `email.endsWith('@' + domain)`을 직접 쓰던 화면에서는 사내 구성원도 항상 false였다.
+   * 판정을 isInternalEmail 한 곳으로 모았으니, 그 함수가 다듬기를 계속 하는지 지킨다.
+   */
+  it.each([
+    ['개행', 'gpters.org\n'],
+    ['앞뒤 공백', '  gpters.org  '],
+    ['대문자', 'GPTERS.ORG'],
+  ])('%s가 섞여 있어도 내부 구성원을 통과시킨다', (_label, value) => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = value
+    expect(isInternalEmail('primadonna@gpters.org')).toBe(true)
+    expect(isInternalEmail('outsider@example.com')).toBe(false)
+  })
+})
