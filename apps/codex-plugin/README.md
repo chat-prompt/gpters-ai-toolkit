@@ -40,6 +40,23 @@ url = "https://ai-toolkit.gpters.org/api/mcp"
 
 프로젝트 레벨 설치 시 팀 컨벤션이 포함된 `AGENTS.md` 템플릿을 생성합니다.
 
+### 4. 사용량 자동 보고 훅 (user 설치만)
+
+`~/.codex/hooks.json`의 `SessionStart`에 훅을 등록해, 하루 한 번 Claude Code와 Codex 사용량을 [AX 대시보드](https://ai-toolkit.gpters.org/ko/ax)로 보냅니다. `aitk` CLI 0.6.0 이상이 필요합니다.
+
+> **등록만으로는 실행되지 않습니다.** Codex는 훅마다 명령 해시를 승인받아야 실행합니다. 설치 후 **다음 Codex 실행 시 한 번 승인**해야 동작합니다. 설치 프로그램이 몰래 실행 코드를 심지 못하게 막는 Codex의 보안 장치이며, 이 플러그인은 승인 해시를 직접 쓰지 않습니다.
+
+기존 훅은 건드리지 않습니다. `hooks.json`을 읽을 수 없거나 형식을 알 수 없으면 아무것도 쓰지 않고 물러납니다.
+
+**보내는 것**: 토큰 수, 세션 수, 모델별 사용량, 플랜명, 주간 한도 사용률
+**보내지 않는 것**: 대화 내용, 파일 경로, 인증 토큰 (Codex `id_token`은 로컬에서만 열어 플랜 문자열만 꺼냅니다)
+
+```bash
+export AITK_USAGE_REPORT=0   # 끄기
+aitk usage report --dry-run  # 무엇을 보낼지 확인
+aitk usage report            # 지금 보내기
+```
+
 ## 개발
 
 ```bash

@@ -21,9 +21,10 @@ import { runAddFiles } from '../src/commands/add-files.js'
 import { runRemoveFiles } from '../src/commands/remove-files.js'
 import { runUpgrade } from '../src/commands/upgrade.js'
 import { error, info } from '../src/output.js'
+import pkg from '../package.json' with { type: 'json' }
 
-/** 버전 */
-const VERSION = '0.5.1'
+/** 버전 — package.json 하나만 고치면 되도록 여기서 읽는다 (하드코딩하면 배포본이 거짓 버전을 답한다) */
+const VERSION = pkg.version
 
 /**
  * 명명된 인자 파싱 (--key value 또는 --key=value)

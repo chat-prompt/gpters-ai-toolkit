@@ -49,3 +49,30 @@ describe('npm 배포본', () => {
     expect(pkg.files).toContain('scripts')
   })
 })
+
+describe('훅 환경 내성', () => {
+  const script = readFileSync(CODEX_SCRIPT, 'utf-8')
+
+  it('PATH에만 기대지 않고 aitk를 탐색한다', () => {
+    // 훅은 최소 환경에서 돈다. mise/nvm 사용자는 PATH에 aitk가 없다.
+    expect(script).toContain('find_aitk')
+    expect(script).toMatch(/mise\/installs\/node/)
+  })
+
+  it('버전 문자열이 아니라 실제 명령 지원 여부로 고른다', () => {
+    // 한 머신에 node 버전별로 aitk가 10개 깔려 있었고 v0.3.22~v0.5.1이 섞여 있었다.
+    // 게다가 --version은 소스에 하드코딩돼 있어 믿을 수 없었다.
+    expect(script).toContain('usage report')
+    expect(script).toContain('--help')
+  })
+
+  it('aitk의 bin 디렉터리를 PATH에 얹는다', () => {
+    // aitk는 `#!/usr/bin/env node` — node가 없으면 찾아도 못 띄운다
+    expect(script).toMatch(/PATH="\$\(dirname "\$AITK"\)/)
+  })
+
+  it('스로틀 검사가 aitk 탐색보다 먼저 온다', () => {
+    // 탐색은 후보마다 프로세스를 띄운다. 세션마다 그 비용을 치르면 안 된다.
+    expect(script.indexOf('usage-report-last')).toBeLessThan(script.indexOf('find_aitk()'))
+  })
+})

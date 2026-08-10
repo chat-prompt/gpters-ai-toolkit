@@ -169,3 +169,19 @@ describe('집계 구간 경계', () => {
     expect(end.toISOString()).toMatch(/T00:00:00\.000Z$/)
   })
 })
+
+describe('버전 보고', () => {
+  it('--version이 package.json과 같은 값을 답한다', async () => {
+    // 하드코딩된 상수를 쓰다가 배포본 0.6.0이 "v0.5.1"이라고 답한 적이 있다.
+    // 업그레이드 판정에 쓰이진 않지만, 디버깅할 때 사람을 엉뚱한 데로 보낸다.
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf-8'))
+    const source = readFileSync(join(import.meta.dirname, '..', 'bin', 'aitk.ts'), 'utf-8')
+
+    // 상수로 되돌아가면(= 버전 문자열이 소스에 박히면) 실패한다
+    expect(source).toMatch(/const VERSION = pkg\.version/)
+    expect(source).not.toMatch(/const VERSION = ['"]\d/)
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+})
