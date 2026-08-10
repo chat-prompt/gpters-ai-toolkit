@@ -210,10 +210,12 @@ export function printSummary(result: SetupResult): void {
   }
 
   if (result.usageHook === 'installed') {
-    console.log('사용량 자동 보고: 설치됨 (하루 1회, 끄기: AITK_USAGE_REPORT=0)')
+    // "설치됨"만 말하면 거짓말이 된다. Codex는 승인되지 않은 훅을 실행하지 않는다.
+    console.log('사용량 자동 보고: 등록됨 — 다음 Codex 실행 시 승인해야 동작합니다')
+    console.log('  (하루 1회 집계 · 끄기: AITK_USAGE_REPORT=0)')
   } else if (result.usageHook === 'failed') {
     // 조용히 넘기면 대시보드에 데이터가 안 쌓이는 이유를 알 길이 없다
-    console.log('사용량 자동 보고: 설치 실패 (~/.codex/hooks.json 확인 필요)')
+    console.log('사용량 자동 보고: 등록 실패 (~/.codex/hooks.json 확인 필요)')
   }
 
   console.log('\n다음 단계:')
