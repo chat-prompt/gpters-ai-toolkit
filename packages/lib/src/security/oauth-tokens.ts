@@ -10,6 +10,7 @@ import { db, oauthAccessTokens, oauthClients, oauthRefreshTokens, users } from '
 import { eq, and, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 import { getBaseUrl } from '../utils'
+import { isGptersEmail } from '../account-access'
 
 const log = createLogger('oauth-tokens')
 
@@ -123,6 +124,19 @@ export interface OAuthAuthResult {
 export async function createAccessToken(
   options: CreateAccessTokenOptions
 ): Promise<CreateAccessTokenResult> {
+  const [tokenOwner] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, options.userId))
+
+  if (!isGptersEmail(tokenOwner?.email)) {
+    log.warn('Access token issuance denied: account is not authorized', {
+      userId: options.userId,
+      clientId: options.clientId,
+    })
+    throw new Error('Account is not authorized')
+  }
+
   const rawToken = generateToken()
   const tokenHash = await hashToken(rawToken)
 
@@ -174,6 +188,7 @@ export async function validateAccessToken(
         scope: oauthAccessTokens.scope,
         isActive: oauthAccessTokens.isActive,
         expiresAt: oauthAccessTokens.expiresAt,
+        userEmail: users.email,
         userRole: users.role,
         clientName: oauthClients.name,
       })
@@ -185,6 +200,13 @@ export async function validateAccessToken(
     if (!tokenRecord) {
       log.warn('Access token validation failed: token not found')
       return { valid: false, error: 'Invalid token' }
+    }
+
+    if (!isGptersEmail(tokenRecord.userEmail)) {
+      log.warn('Access token validation failed: account is not authorized', {
+        accessTokenId: tokenRecord.id,
+      })
+      return { valid: false, error: 'Account is not authorized' }
     }
 
     // Check if active

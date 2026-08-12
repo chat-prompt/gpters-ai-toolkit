@@ -118,6 +118,11 @@ vi.mock('@gpters/lib/security', () => ({
   // Types are erased at runtime, no need to mock them
 }))
 
+vi.mock('@gpters/lib/account-access', () => ({
+  isGptersEmail: (email: string | null | undefined) =>
+    typeof email === 'string' && /^[^@]+@gpters\.org$/i.test(email.trim()),
+}))
+
 // Mock NextAuth
 const mockSignInCallback = vi.fn()
 const mockSessionCallback = vi.fn()
@@ -206,15 +211,13 @@ describe('Auth Module', () => {
     })
 
     it('should reject sign in when no matching org found', async () => {
-      // organizations query returns empty
-      pushSelectResult([])
-
       const result = await mockSignInCallback({
         user: { id: 'user-1', email: 'test@gmail.com', name: 'Test' },
         account: { provider: 'google', providerAccountId: '123' },
       })
 
       expect(result).toBe(false)
+      expect(mockSelect).not.toHaveBeenCalled()
     })
 
     it('should allow sign in when matching org exists', async () => {
@@ -394,7 +397,7 @@ describe('Auth Module', () => {
     })
 
     it('should add user id and role to token on first sign in', async () => {
-      const token = {}
+      const token = { email: 'member@gpters.org' }
       const user = { id: 'user-123', role: 'admin', orgIds: ['org-1'] }
 
       const result = await mockJwtCallback({ token, user })
@@ -405,7 +408,7 @@ describe('Auth Module', () => {
     })
 
     it('should set initial org context on first sign in', async () => {
-      const token = {}
+      const token = { email: 'member@gpters.org' }
       const user = { id: 'user-123', role: 'viewer', orgIds: ['org-1'] }
 
       const result = await mockJwtCallback({ token, user })
@@ -415,7 +418,7 @@ describe('Auth Module', () => {
     })
 
     it('should preserve token on subsequent requests without user', async () => {
-      const token = { id: 'existing-id', role: 'viewer', tokenRefreshedAt: Date.now() }
+      const token = { id: 'existing-id', email: 'member@gpters.org', role: 'viewer', tokenRefreshedAt: Date.now() }
 
       const result = await mockJwtCallback({ token, user: undefined })
 
@@ -423,8 +426,38 @@ describe('Auth Module', () => {
       expect(result.role).toBe('viewer')
     })
 
+    it('should invalidate an existing session for an external email immediately', async () => {
+      const token = {
+        id: 'external-id',
+        email: 'jwhyun2215@gmail.com',
+        role: 'viewer',
+        orgIds: ['public-org'],
+        tokenRefreshedAt: Date.now(),
+      }
+
+      const result = await mockJwtCallback({ token, user: undefined })
+
+      expect(result).toBeNull()
+      expect(mockSelect).not.toHaveBeenCalled()
+    })
+
+    it('should invalidate a session when the GPTers user was deleted', async () => {
+      const token = {
+        id: 'deleted-id',
+        email: 'deleted@gpters.org',
+        role: 'viewer',
+        orgIds: ['org-1'],
+        tokenRefreshedAt: 0,
+      }
+      pushSelectResult([])
+
+      const result = await mockJwtCallback({ token, user: undefined })
+
+      expect(result).toBeNull()
+    })
+
     it('should update token when user object is present', async () => {
-      const token = { id: 'old-id', role: 'viewer' }
+      const token = { id: 'old-id', email: 'member@gpters.org', role: 'viewer' }
       const user = { id: 'new-id', role: 'admin', orgIds: ['org-2'] }
 
       const result = await mockJwtCallback({ token, user })
@@ -454,8 +487,6 @@ describe('Auth Module', () => {
 
       for (const email of invalidEmails) {
         resetSelectResults()
-        // organizations query returns empty (no matching org)
-        pushSelectResult([])
 
         const result = await mockSignInCallback({
           user: { id: 'user-1', email, name: 'Test' },

@@ -3,6 +3,7 @@ import Google from 'next-auth/providers/google'
 import { db, users, organizations, orgMemberships } from '@gpters/db'
 import { eq, sql, and } from 'drizzle-orm'
 import { createLogger } from '@gpters/lib/core'
+import { isGptersEmail } from '@gpters/lib/account-access'
 import type { UserRole, OrgRole } from '@gpters/lib/security'
 
 const log = createLogger('auth')
@@ -21,11 +22,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      const email = user.email
-      if (!email) return false
+      if (!isGptersEmail(user.email)) {
+        log.warn('Login denied: account is outside the GPTers domain')
+        return false
+      }
 
-      const domain = email.split('@')[1]
-      if (!domain) return false
+      const email = user.email.trim().toLowerCase()
+      user.email = email
+      const domain = email.trim().toLowerCase().split('@')[1]
 
       try {
         const matchingOrgs = await db
@@ -39,24 +43,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           )
 
         if (matchingOrgs.length === 0) {
-          // Fallback: enroll external users into the public organization
-          const [publicOrg] = await db
-            .select()
-            .from(organizations)
-            .where(
-              and(
-                eq(organizations.slug, 'public'),
-                eq(organizations.isActive, true)
-              )
-            )
-
-          if (!publicOrg) {
-            log.warn('Login denied: no matching orgs and no public org', { email, domain })
-            return false
-          }
-
-          matchingOrgs.push(publicOrg)
-          log.info('External user matched to public org', { email, domain, orgId: publicOrg.id })
+          log.warn('Login denied: no matching organizations', { email, domain })
+          return false
         }
 
         const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1)
@@ -168,6 +156,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session
     },
     async jwt({ token, user }) {
+      if (!isGptersEmail(token.email)) {
+        return null
+      }
+
       // On sign-in: populate token from user object (already set by signIn callback)
       if (user) {
         token.id = user.id
@@ -192,7 +184,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       try {
-        const email = token.email as string
+        const email = token.email.trim().toLowerCase()
         if (email) {
           const [dbUser] = await db
             .select({
@@ -202,28 +194,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .from(users)
             .where(eq(users.email, email))
 
-          if (dbUser) {
-            token.role = dbUser.role as UserRole
+          if (!dbUser) {
+            return null
+          }
 
-            const userOrgMemberships = await db
-              .select({
-                orgId: orgMemberships.orgId,
-                role: orgMemberships.role,
-              })
-              .from(orgMemberships)
-              .where(eq(orgMemberships.userId, dbUser.id))
+          token.role = dbUser.role as UserRole
 
-            if (userOrgMemberships.length > 0) {
-              token.orgIds = userOrgMemberships.map(m => m.orgId)
-              if (!token.currentOrgId || !token.orgIds.includes(token.currentOrgId as string)) {
-                token.currentOrgId = userOrgMemberships[0].orgId
-                token.orgRole = userOrgMemberships[0].role as OrgRole
-              } else {
-                const currentMembership = userOrgMemberships.find(m => m.orgId === token.currentOrgId)
-                if (currentMembership) {
-                  token.orgRole = currentMembership.role as OrgRole
-                }
-              }
+          const userOrgMemberships = await db
+            .select({
+              orgId: orgMemberships.orgId,
+              role: orgMemberships.role,
+            })
+            .from(orgMemberships)
+            .where(eq(orgMemberships.userId, dbUser.id))
+
+          if (userOrgMemberships.length === 0) {
+            return null
+          }
+
+          token.orgIds = userOrgMemberships.map(m => m.orgId)
+          if (!token.currentOrgId || !token.orgIds.includes(token.currentOrgId as string)) {
+            token.currentOrgId = userOrgMemberships[0].orgId
+            token.orgRole = userOrgMemberships[0].role as OrgRole
+          } else {
+            const currentMembership = userOrgMemberships.find(m => m.orgId === token.currentOrgId)
+            if (currentMembership) {
+              token.orgRole = currentMembership.role as OrgRole
             }
           }
         }

@@ -10,6 +10,7 @@ import { db, users, organizations, orgMemberships } from '@gpters/db'
 import { eq, sql, and } from 'drizzle-orm'
 import { createLogger } from './logger'
 import type { UserRole, OrgRole } from '../security/rbac'
+import { isGptersEmail } from '../account-access'
 
 const log = createLogger('auth')
 
@@ -27,11 +28,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      const email = user.email
-      if (!email) return false
+      if (!isGptersEmail(user.email)) {
+        log.warn('Login denied: account is outside the GPTers domain')
+        return false
+      }
 
-      const domain = email.split('@')[1]
-      if (!domain) return false
+      const email = user.email.trim().toLowerCase()
+      user.email = email
+      const domain = email.trim().toLowerCase().split('@')[1]
 
       try {
         const matchingOrgs = await db
@@ -131,12 +135,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session
     },
     async jwt({ token, user }) {
+      if (!isGptersEmail(token.email)) {
+        return null
+      }
+
       if (user) {
         token.id = user.id
       }
 
       try {
-        const email = token.email as string
+        const email = token.email.trim().toLowerCase()
         if (email) {
           const [dbUser] = await db
             .select({ 
@@ -146,28 +154,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .from(users)
             .where(eq(users.email, email))
 
-          if (dbUser) {
-            token.role = dbUser.role as UserRole
+          if (!dbUser) {
+            return null
+          }
 
-            const userOrgMemberships = await db
-              .select({
-                orgId: orgMemberships.orgId,
-                role: orgMemberships.role,
-              })
-              .from(orgMemberships)
-              .where(eq(orgMemberships.userId, dbUser.id))
+          token.role = dbUser.role as UserRole
 
-            if (userOrgMemberships.length > 0) {
-              token.orgIds = userOrgMemberships.map(m => m.orgId)
-              if (!token.currentOrgId || !token.orgIds.includes(token.currentOrgId as string)) {
-                token.currentOrgId = userOrgMemberships[0].orgId
-                token.orgRole = userOrgMemberships[0].role as OrgRole
-              } else {
-                const currentMembership = userOrgMemberships.find(m => m.orgId === token.currentOrgId)
-                if (currentMembership) {
-                  token.orgRole = currentMembership.role as OrgRole
-                }
-              }
+          const userOrgMemberships = await db
+            .select({
+              orgId: orgMemberships.orgId,
+              role: orgMemberships.role,
+            })
+            .from(orgMemberships)
+            .where(eq(orgMemberships.userId, dbUser.id))
+
+          if (userOrgMemberships.length === 0) {
+            return null
+          }
+
+          token.orgIds = userOrgMemberships.map(m => m.orgId)
+          if (!token.currentOrgId || !token.orgIds.includes(token.currentOrgId as string)) {
+            token.currentOrgId = userOrgMemberships[0].orgId
+            token.orgRole = userOrgMemberships[0].role as OrgRole
+          } else {
+            const currentMembership = userOrgMemberships.find(m => m.orgId === token.currentOrgId)
+            if (currentMembership) {
+              token.orgRole = currentMembership.role as OrgRole
             }
           }
         }
