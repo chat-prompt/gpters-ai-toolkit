@@ -11,8 +11,7 @@ import { ApiErrors, requirePermissionAsync } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import { Permissions } from '@/lib/security/rbac'
-import { auth } from '@/lib/core/auth'
-import { eq, or, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 const log = createLogger('api:stats')
 
@@ -47,12 +46,7 @@ export async function GET(request: NextRequest) {
     const period = (searchParams.get('period') || '30d') as Period
     const periodStart = getPeriodDate(period)
 
-    // Build visibility filter based on current user's org
-    const session = await auth()
-    const currentOrgId = session?.user?.currentOrgId
-
     // Get all catalog items for type distribution (with author names)
-    // Only return public items + same-org items + legacy items (no orgId)
     const items = await db
       .select({
         id: catalogItems.id,
@@ -65,13 +59,6 @@ export async function GET(request: NextRequest) {
       })
       .from(catalogItems)
       .leftJoin(users, eq(catalogItems.authorId, users.id))
-      .where(
-        or(
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId),
-          ...(currentOrgId ? [eq(catalogItems.orgId, currentOrgId)] : [])
-        )
-      )
     const publishedItems = items.filter(i => i.status === 'published')
 
     // Get type distribution for published items

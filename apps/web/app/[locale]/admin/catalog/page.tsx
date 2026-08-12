@@ -10,8 +10,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from '@/i18n/navigation'
 import { useSession } from 'next-auth/react'
 import type { UserRole } from '@/lib/security/rbac'
-import { OrgBadge } from '@/components/ui/OrgBadge'
-import { VisibilityBadge } from '@/components/ui/VisibilityBadge'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 
@@ -38,16 +36,8 @@ interface CatalogItem {
   tags: string[]
   status: 'draft' | 'published' | null
   version: string | null
-  orgId: string | null
-  visibility: 'private' | 'public' | null
   createdAt: string
   updatedAt: string
-}
-
-interface Organization {
-  id: string
-  name: string
-  slug: string
 }
 
 /** 상태 배지 — 알약 배경 대신 점 하나와 글자 */
@@ -67,12 +57,9 @@ export default function CatalogList() {
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
-  const [orgFilter, setOrgFilter] = useState<string>('all')
-  const [organizations, setOrganizations] = useState<Organization[]>([])
 
   // Get user role from session
   const userRole = session?.user?.role as UserRole | undefined
-  const isSuperAdmin = userRole === 'super_admin'
 
   const fetchItems = useCallback(async () => {
     try {
@@ -87,24 +74,9 @@ export default function CatalogList() {
     }
   }, [filter])
 
-  const fetchOrganizations = useCallback(async () => {
-    if (!isSuperAdmin) return
-    try {
-      const res = await fetch('/api/organizations')
-      const data = await res.json()
-      setOrganizations(data.organizations || [])
-    } catch (error) {
-      console.error('Failed to fetch organizations:', error)
-    }
-  }, [isSuperAdmin])
-
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
-
-  useEffect(() => {
-    fetchOrganizations()
-  }, [fetchOrganizations])
 
   async function handleDelete(id: string) {
     if (!canDelete(userRole)) {
@@ -140,19 +112,7 @@ export default function CatalogList() {
 
   const filters = ['all', 'skill', 'agent', 'command', 'guide']
 
-  // Create org lookup map
-  const orgMap = new Map(organizations.map(org => [org.id, org.name]))
-
-  // Filter items by org (client-side)
-  let filteredItems = items
-
-  if (orgFilter !== 'all') {
-    if (orgFilter === 'legacy') {
-      filteredItems = filteredItems.filter(item => item.orgId === null)
-    } else {
-      filteredItems = filteredItems.filter(item => item.orgId === orgFilter)
-    }
-  }
+  const filteredItems = items
 
   return (
     <div>
@@ -173,7 +133,6 @@ export default function CatalogList() {
 
       {/* Filters */}
       <div className="flex flex-col gap-3 mb-6">
-        {/* Type Filters */}
         <div className="flex gap-2">
           {filters.map((f) => (
             <button
@@ -189,45 +148,6 @@ export default function CatalogList() {
             </button>
           ))}
         </div>
-        {/* Org Filters (super_admin only) */}
-        {isSuperAdmin && organizations.length > 0 && (
-          <div className="flex gap-2 flex-wrap items-center">
-            <span className="eyebrow mr-1">Org</span>
-            <button
-              onClick={() => setOrgFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                orgFilter === 'all'
-                  ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
-                  : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setOrgFilter('legacy')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                orgFilter === 'legacy'
-                  ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
-                  : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Legacy
-            </button>
-            {organizations.map((org) => (
-              <button
-                key={org.id}
-                onClick={() => setOrgFilter(org.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                  orgFilter === org.id
-                    ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
-                    : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {org.name}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {loading ? (
@@ -264,8 +184,6 @@ export default function CatalogList() {
                 <th className="eyebrow text-left px-3 py-2 font-normal">ID</th>
                 <th className="eyebrow text-left px-3 py-2 font-normal">Name</th>
                 <th className="eyebrow text-left px-3 py-2 font-normal">Status</th>
-                <th className="eyebrow text-left px-3 py-2 font-normal">Organization</th>
-                <th className="eyebrow text-left px-3 py-2 font-normal">Visibility</th>
                 <th className="eyebrow text-left px-3 py-2 font-normal">Author</th>
                 <th className="eyebrow text-right px-3 py-2 font-normal">Actions</th>
               </tr>
@@ -298,12 +216,6 @@ export default function CatalogList() {
                         </span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <OrgBadge orgName={item.orgId ? (orgMap.get(item.orgId) || item.orgId) : null} size="sm" />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <VisibilityBadge visibility={item.visibility ?? null} size="sm" />
                   </td>
                   <td className="px-3 py-2.5">
                     <span className="text-xs text-[var(--text-muted)]">

@@ -111,7 +111,7 @@ async function handlePromptsGet(params: GetPromptInput): Promise<McpPromptResult
  * @param request - MCP JSON-RPC request
  * @param userId - Authenticated user ID (for ownership-based operations)
  * @param userRole - Authenticated user's role (for admin override)
- * @param orgId - User's current organization ID (for org-based filtering)
+ * @param orgId - User's organization ID (for ownership-based mutations)
  */
 export async function processRequest(
   request: McpRequest,
@@ -250,7 +250,7 @@ export async function processRequest(
  * @param body - JSON-RPC request body
  * @param userId - Authenticated user ID (for ownership-based operations)
  * @param userRole - Authenticated user's role (for admin override)
- * @param orgId - User's current organization ID (for org-based filtering)
+ * @param orgId - User's organization ID (for ownership-based mutations)
  */
 export async function handleHttpRequest(
   body: unknown,
@@ -281,7 +281,7 @@ export async function handleHttpRequest(
  * @param params - Action parameters
  * @param userId - Authenticated user ID (for ownership-based operations)
  * @param userRole - Authenticated user's role (for admin override)
- * @param orgId - User's current organization ID (for org-based filtering)
+ * @param orgId - User's organization ID (for ownership-based mutations)
  */
 export async function handleSimpleRequest(
   action: string,

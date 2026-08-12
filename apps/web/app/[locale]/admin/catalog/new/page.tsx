@@ -10,12 +10,10 @@ import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { Link } from '@/i18n/navigation'
-import { useSession } from 'next-auth/react'
 import { TypeSpecificFields } from '@/components/admin/TypeSpecificFields'
 import { TypeGuidePanel } from '@/components/admin/TypeGuidePanel'
 import { TYPE_CONFIG, getContentTemplate } from '@/lib/data/type-config'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
-import { useOrgContext } from '@/lib/hooks/useOrgContext'
 import type { ItemType, Difficulty, AgentModel, AgentPermissionMode, HookEvent } from '@/lib/core/types'
 
 const ITEM_TYPES: ItemType[] = ['skill', 'agent', 'command', 'guide', 'hook']
@@ -31,8 +29,6 @@ export default function NewCatalogItem() {
   const t = useTranslations('admin.newItem')
   const router = useRouter()
   useAdminAuth() // For layout protection
-  const { data: session } = useSession()
-  const { currentOrgId } = useOrgContext()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -46,11 +42,6 @@ export default function NewCatalogItem() {
   const [pluginId, setPluginId] = useState('')
   const [content, setContent] = useState('')
   const [readme, setReadme] = useState('')
-
-  // Organization & Visibility state
-  const [orgId, setOrgId] = useState<string>('')
-  const [visibility, setVisibility] = useState<'private' | 'public'>('private')
-  const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
 
   // Marketplace state
   const [mcpEnabled, setMarketplaceEnabled] = useState(false)
@@ -72,22 +63,6 @@ export default function NewCatalogItem() {
   const [hookCommand, setHookCommand] = useState('')
   const [hookTimeout, setHookTimeout] = useState<number | ''>('')
   const [hookBlocking, setHookBlocking] = useState(true)
-
-  // Fetch organizations on mount
-  useEffect(() => {
-    async function fetchOrgs() {
-      try {
-        const res = await fetch('/api/organizations')
-        if (res.ok) {
-          const data = await res.json()
-          setOrgs(data.organizations || [])
-        }
-      } catch (error) {
-        console.error('Failed to fetch organizations:', error)
-      }
-    }
-    fetchOrgs()
-  }, [])
 
   // Auto-apply content template when type or name changes
   useEffect(() => {
@@ -196,8 +171,6 @@ export default function NewCatalogItem() {
         hookCommand: hookCommand || null,
         hookTimeout: hookTimeout || null,
         hookBlocking,
-        // Organization & Visibility
-        visibility,
       }
 
       const res = await fetch('/api/catalog', {
@@ -325,53 +298,6 @@ export default function NewCatalogItem() {
                     placeholder={config.suggestedTags.join(', ')}
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>Organization</label>
-                {session?.user?.role === 'super_admin' ? (
-                  <select
-                    value={orgId}
-                    onChange={(e) => setOrgId(e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">Select organization...</option>
-                    {orgs.map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="px-4 py-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-sm">
-                    {orgs.find((o) => o.id === currentOrgId)?.name || 'Your organization'}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className={labelClass}>Visibility</label>
-                <div className="flex gap-2">
-                  {(['private', 'public'] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setVisibility(v)}
-                      className={`px-4 py-2 rounded-lg text-sm border transition-colors capitalize ${
-                        visibility === v
-                          ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
-                          : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-[var(--text-muted)] mt-2">
-                  {visibility === 'private'
-                    ? 'Only visible to your organization members'
-                    : 'Visible to all authenticated users'}
-                </p>
               </div>
 
               {type === 'skill' && (

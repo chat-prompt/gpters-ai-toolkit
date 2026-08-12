@@ -150,14 +150,12 @@ Options:
   --description <d>       Item description (required for new skills)
   --tags <t1,t2>          Comma-separated tags (required for new skills)
   --platforms <p1,p2>     Comma-separated platforms (claude_code,opencode,codex,cursor)
-  --visibility <v>        Scope: public (all users) or private (same org only)
   --changelog <text>      Change summary (required when updating an existing skill)
 
 Examples:
   aitk deploy --id my-skill --type skill --name "My Skill" --content @skill.md
   aitk deploy --id helper --type agent --name Helper --content "..." --tags "util,dev"
-  aitk deploy --id codex-tool --type skill --name "Codex Tool" --content @skill.md --platforms codex
-  aitk deploy --id internal-tool --type skill --name "Internal" --content @skill.md --visibility private`,
+  aitk deploy --id codex-tool --type skill --name "Codex Tool" --content @skill.md --platforms codex`,
 
   upgrade: `aitk upgrade - Upgrade all GPTers plugins
 
@@ -360,7 +358,6 @@ async function main(): Promise<void> {
         description: flags['description'],
         tags: flags['tags'],
         platforms: flags['platforms'],
-        visibility: flags['visibility'],
         changelog: flags['changelog'],
       })
       break

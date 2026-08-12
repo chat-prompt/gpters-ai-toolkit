@@ -14,7 +14,7 @@ import { isSuperAdmin, type UserRole } from '../security/rbac'
 import { notifySlackDeploy } from '../notifications/slack'
 
 const log = createLogger('mcp-handler')
-import { ilike, or, eq, and, sql, inArray, desc, type SQL } from 'drizzle-orm'
+import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
   GetPluginContentInput,
@@ -61,33 +61,6 @@ async function updateItemEmbedding(id: string, item: { name: string; description
   } catch (error) {
     log.error(`Failed to generate embedding for ${id}`, error)
   }
-}
-
-/**
- * Build org-based visibility filter condition for catalog queries.
- * Returns undefined if no filtering is needed (super_admin sees all).
- */
-function buildVisibilityCondition(
-  userId?: string,
-  userRole?: string,
-  orgId?: string
-): SQL | undefined {
-  if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
-    // Regular users: own org + public + legacy
-    return or(
-      eq(catalogItems.orgId, orgId),
-      eq(catalogItems.visibility, 'public'),
-      sql`${catalogItems.orgId} IS NULL`
-    )
-  } else if (!userId) {
-    // Unauthenticated: public + legacy only
-    return or(
-      eq(catalogItems.visibility, 'public'),
-      sql`${catalogItems.orgId} IS NULL`
-    )
-  }
-  // super_admin: no filter
-  return undefined
 }
 
 type PluginFileWithType = { name: string; content: string; type?: string }
@@ -168,14 +141,13 @@ function generateFilesUsageHint(files: PluginFileWithType[]): string {
 }
 
 /**
- * Search plugins by keyword with organization-based filtering
+ * Search plugins by keyword in the single GPTers catalog
  * Searches across name, description, and tags
- * Respects org visibility: private (own org), public (all), legacy (orgId=null)
  * 
  * @param input - Search parameters
- * @param userId - Authenticated user ID (optional)
- * @param userRole - User's role (optional)
- * @param orgId - User's current organization ID (optional)
+ * @param userId - Authenticated user ID (retained for API compatibility)
+ * @param userRole - User's role (retained for API compatibility)
+ * @param orgId - User's organization ID (retained for API compatibility)
  */
 export async function searchPlugins(
   input: SearchPluginsInput,
@@ -205,9 +177,6 @@ export async function searchPlugins(
 
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
-
-  const visibilityFilter = buildVisibilityCondition(userId, userRole, orgId)
-  if (visibilityFilter) conditions.push(visibilityFilter)
 
   const whereClause = and(...conditions)
 
@@ -244,13 +213,13 @@ export async function searchPlugins(
 }
 
 /**
- * Get full content of a specific plugin with organization-based access control
- * Returns null if plugin not found or user doesn't have access
+ * Get full content of a specific plugin from the single GPTers catalog
+ * Returns null if the plugin is not found
  * 
  * @param input - Plugin content request
- * @param userId - Authenticated user ID (optional)
- * @param userRole - User's role (optional)
- * @param orgId - User's current organization ID (optional)
+ * @param userId - Authenticated user ID (retained for API compatibility)
+ * @param userRole - User's role (retained for API compatibility)
+ * @param orgId - User's organization ID (retained for API compatibility)
  */
 export async function getPluginContent(
   input: GetPluginContentInput,
@@ -283,8 +252,6 @@ export async function getPluginContent(
       version: catalogItems.version,
       status: catalogItems.status,
       changelog: catalogItems.changelog,
-      orgId: catalogItems.orgId,
-      visibility: catalogItems.visibility,
     })
     .from(catalogItems)
     .leftJoin(users, eq(catalogItems.authorId, users.id))
@@ -296,20 +263,6 @@ export async function getPluginContent(
   }
 
   const item = results[0]
-
-  // Check org-based access control
-  if (!isSuperAdmin(userRole as any)) {
-    // Legacy items (orgId=null) are accessible to all
-    if (item.orgId !== null) {
-      // Public items are accessible to all
-      if (item.visibility !== 'public') {
-        // Private items require matching orgId
-        if (!orgId || item.orgId !== orgId) {
-          return null
-        }
-      }
-    }
-  }
 
   // Resolve agent dependencies if this is a skill with agent dependencies
   let resolvedAgents: Awaited<ReturnType<typeof resolveAgentsAsConfig>> | undefined
@@ -361,7 +314,7 @@ export async function getPluginContent(
 }
 
 /**
- * List all plugins with optional filters and organization-based visibility
+ * List all plugins with optional filters
  * 
  * @param input - List parameters
  * @param userId - Authenticated user ID (optional)
@@ -384,9 +337,6 @@ export async function listPlugins(
 
   // Only include marketplace-enabled items
   conditions.push(eq(catalogItems.mcpEnabled, true))
-
-  const visibilityFilter = buildVisibilityCondition(userId, userRole, orgId)
-  if (visibilityFilter) conditions.push(visibilityFilter)
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -436,9 +386,6 @@ export async function getPluginsByCategory(
     eq(catalogItems.type, category),
     eq(catalogItems.mcpEnabled, true),
   ]
-
-  const visibilityFilter = buildVisibilityCondition(userId, userRole, orgId)
-  if (visibilityFilter) conditions.push(visibilityFilter)
 
   const results = await db
     .select({
@@ -622,7 +569,6 @@ export async function deploySkill(
     agentPermissionMode,
     agentSkills,
     status = 'published',
-    visibility: explicitVisibility,
     changelog: explicitChangelog,
     files,
     dependencies,
@@ -789,7 +735,7 @@ export async function deploySkill(
         dependencies: dependencies || [],
         platforms: platforms || null,
         mcpEnabled: status === 'published',
-        ...(explicitVisibility ? { visibility: explicitVisibility } : {}),
+        visibility: 'public',
         updatedAt: now,
       })
       .where(eq(catalogItems.id, id))
@@ -836,7 +782,7 @@ export async function deploySkill(
       platforms: platforms || null,
       authorId: authorId || null,
       orgId: orgId || null,
-      visibility: explicitVisibility || (orgId ? 'public' : 'private'),
+      visibility: 'public',
       forkCount: 0,
       createdAt: now,
       updatedAt: now,

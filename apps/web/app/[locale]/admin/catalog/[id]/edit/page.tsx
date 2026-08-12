@@ -12,11 +12,9 @@ import { useState, useEffect, use, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/i18n/navigation'
 import { Link } from '@/i18n/navigation'
-import { useSession } from 'next-auth/react'
 import { SecurityAuditPanel, SecurityAuditBadge } from '@/components/admin/SecurityAuditPanel'
 import type { SecurityAuditResult } from '@/lib/security/security-audit'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
-import { useOrgContext } from '@/lib/hooks/useOrgContext'
 
 const ITEM_TYPES = ['skill', 'agent', 'command', 'guide'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
@@ -39,14 +37,11 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   const searchParams = useSearchParams()
   const returnUrl = searchParams.get('returnUrl')
   useAdminAuth() // For layout protection
-  const { data: session } = useSession()
-  const { currentOrgId } = useOrgContext()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [securityAuditResult, setSecurityAuditResult] = useState<SecurityAuditResult | null>(null)
   const [showSecurityPanel, setShowSecurityPanel] = useState(false)
-  const [orgs, setOrgs] = useState<{id: string, name: string}[]>([])
   /** The content value loaded from the server, used to detect dirty state. */
   const [initialContent, setInitialContent] = useState('')
 
@@ -66,8 +61,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
     version: '1.0.0',
     status: 'published' as typeof STATUSES[number],
     changelog: '',
-    orgId: '',
-    visibility: 'private' as 'private' | 'public',
   })
 
   const fetchItem = useCallback(async () => {
@@ -92,8 +85,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
           version: item.version || '1.0.0',
           status: item.status || 'published',
           changelog: item.changelog || '',
-          orgId: item.orgId || '',
-          visibility: item.visibility || 'private',
         })
         setInitialContent(item.content)
       } else {
@@ -109,21 +100,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
   useEffect(() => {
     fetchItem()
   }, [fetchItem])
-
-  useEffect(() => {
-    async function fetchOrgs() {
-      try {
-        const res = await fetch('/api/organizations')
-        if (res.ok) {
-          const data = await res.json()
-          setOrgs(data.organizations || [])
-        }
-      } catch (error) {
-        console.error('Failed to fetch organizations:', error)
-      }
-    }
-    fetchOrgs()
-  }, [])
 
   /** True when the content textarea value differs from the server-loaded value. */
   const isContentDirty = formData.content !== initialContent
@@ -154,7 +130,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
         version: formData.version || '1.0.0',
         status: formData.status,
         changelog: formData.changelog || null,
-        visibility: formData.visibility,
       }
 
       const res = await fetch(`/api/catalog/${id}`, {
@@ -292,53 +267,6 @@ export default function EditCatalogItem({ params }: EditPageProps) {
                 className={inputClass}
               />
             </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Organization</label>
-            {session?.user?.role === 'super_admin' ? (
-              <select
-                value={formData.orgId}
-                onChange={(e) => setFormData({ ...formData, orgId: e.target.value })}
-                className={inputClass}
-              >
-                <option value="">Select organization...</option>
-                {orgs.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="px-4 py-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
-                {orgs.find((o) => o.id === currentOrgId)?.name || 'Your organization'}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className={labelClass}>Visibility</label>
-            <div className="flex gap-2">
-              {(['private', 'public'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, visibility: v })}
-                  className={`px-4 py-2 rounded-lg text-sm border transition-colors capitalize ${
-                    formData.visibility === v
-                      ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
-                      : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mt-2">
-              {formData.visibility === 'private'
-                ? 'Only visible to your organization members'
-                : 'Visible to all authenticated users'}
-            </p>
           </div>
 
           <div className="grid grid-cols-3 gap-6">

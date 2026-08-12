@@ -71,7 +71,8 @@ export interface DeploySkillInput {
   agentPermissionMode?: string
   agentSkills?: string
   status?: 'draft' | 'published'
-  visibility?: 'public' | 'private'  // public: 모든 사용자, private: 같은 조직만 (기본: public)
+  /** @deprecated Accepted for older clients but ignored; AITK uses one GPTers catalog. */
+  visibility?: 'public' | 'private'
   changelog?: string             // What changed in this version
   files?: PluginFile[]
   dependencies?: string[]        // Agent dependencies with agent: prefix
@@ -360,4 +361,3 @@ export interface ReportSkillOutcomeInput {
   applied: boolean
   summary: string
 }
-

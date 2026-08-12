@@ -1,17 +1,17 @@
 /**
  * Catalog API route
  *
- * GET: List all catalog items with optional type filtering and org-based access control
+ * GET: List all catalog items with optional type filtering
  * POST: Create a new catalog item (requires authentication)
  */
 import { NextRequest } from 'next/server'
-import { eq, and, or, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { db, catalogItems, users, organizations } from '@/lib/db'
 import type { ItemType, Difficulty, AgentModel, AgentPermissionMode, HookEvent, PluginFile } from '@/lib/core/types'
 import { ApiErrors, validateRequired, apiSuccess, requirePermissionAsync, getCurrentUser } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
-import { Permissions, isSuperAdmin, type UserRole } from '@/lib/security/rbac'
+import { Permissions } from '@/lib/security/rbac'
 import { cachedJsonResponse, addSurrogateKey } from '@/lib/utils/api-cache'
 import { auth } from '@/lib/core/auth'
 
@@ -33,10 +33,6 @@ export async function GET(request: NextRequest) {
     }
 
     const type = typeParam as ItemType | null
-    const session = await auth()
-    const currentOrgId = session?.user?.currentOrgId
-    const userRole = session?.user?.role
-
     const baseQuery = db
       .select({
         id: catalogItems.id,
@@ -81,36 +77,9 @@ export async function GET(request: NextRequest) {
       .leftJoin(users, eq(catalogItems.authorId, users.id))
       .leftJoin(organizations, eq(catalogItems.orgId, organizations.id))
 
-    const whereConditions = []
-    
-    if (type) {
-      whereConditions.push(eq(catalogItems.type, type))
-    }
-
-    if (userRole && isSuperAdmin(userRole as UserRole)) {
-      const items = whereConditions.length > 0 
-        ? await baseQuery.where(and(...whereConditions))
-        : await baseQuery
-      
-      const response = cachedJsonResponse(items, 'catalogList', request)
-      addSurrogateKey(response, 'catalog', type ? `catalog-${type}` : 'catalog-all')
-      return response
-    }
-
-    const orgAccessConditions = currentOrgId
-      ? or(
-          eq(catalogItems.orgId, currentOrgId),
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-      : or(
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-
-    whereConditions.push(orgAccessConditions)
-
-    const items = await baseQuery.where(and(...whereConditions))
+    const items = type
+      ? await baseQuery.where(eq(catalogItems.type, type))
+      : await baseQuery
 
     const response = cachedJsonResponse(items, 'catalogList', request)
     addSurrogateKey(response, 'catalog', type ? `catalog-${type}` : 'catalog-all')
@@ -161,7 +130,6 @@ export async function POST(request: NextRequest) {
     hookCommand,
     hookTimeout,
     hookBlocking,
-    visibility,
   } = body
 
     const validation = validateRequired(body, ['id', 'type', 'name', 'content'])
@@ -198,7 +166,7 @@ export async function POST(request: NextRequest) {
     hookTimeout: hookTimeout || null,
     hookBlocking: hookBlocking ?? true,
     orgId: currentOrgId || null,
-    visibility: visibility || (currentOrgId ? 'public' : 'private'),
+    visibility: 'public' as const,
     forkCount: 0,
   }
 

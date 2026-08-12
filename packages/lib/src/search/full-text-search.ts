@@ -7,7 +7,7 @@
  */
 
 import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
-import { sql, eq, and, or, desc, asc, isNull } from 'drizzle-orm'
+import { sql, eq, and, or, desc, asc } from 'drizzle-orm'
 import type { ItemType } from '../core/types'
 
 /**
@@ -54,8 +54,6 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
     offset = 0,
     sortBy = 'relevance',
     tags,
-    currentOrgId,
-    userRole,
   } = options
 
   // Sanitize query
@@ -87,24 +85,6 @@ export async function searchCatalogItems(options: SearchOptions): Promise<FTSSea
     conditions.push(
       sql`${catalogItems.tags} && ARRAY[${sql.join(tags.map(t => sql`${t}`), sql`, `)}]::text[]`
     )
-  }
-
-  // Organization access control filtering
-  // Super admins see everything; regular users get org-scoped results
-  if (userRole && userRole === 'super_admin') {
-    // Super admin bypass - no org filter
-  } else {
-    const orgAccessConditions = currentOrgId
-      ? or(
-          eq(catalogItems.orgId, currentOrgId),
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-      : or(
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-    conditions.push(orgAccessConditions)
   }
 
   // Search condition - hybrid FTS + trigram (searches name, description, readme, content, tags)
@@ -203,8 +183,6 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
     offset = 0,
     sortBy = 'newest',
     tags,
-    currentOrgId,
-    userRole,
   } = options
 
   const conditions = []
@@ -221,23 +199,6 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
     conditions.push(
       sql`${catalogItems.tags} && ARRAY[${sql.join(tags.map(t => sql`${t}`), sql`, `)}]::text[]`
     )
-  }
-
-  // Organization access control filtering
-  if (userRole && userRole === 'super_admin') {
-    // Super admin bypass - no org filter
-  } else {
-    const orgAccessConditions = currentOrgId
-      ? or(
-          eq(catalogItems.orgId, currentOrgId),
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-      : or(
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-    conditions.push(orgAccessConditions)
   }
 
   let orderByClause
@@ -287,8 +248,8 @@ async function getAllItems(options: Omit<SearchOptions, 'query'>): Promise<FTSSe
  *
  * @param query - Partial search query
  * @param limit - Maximum number of suggestions (default: 5)
- * @param currentOrgId - Current organization ID for access control filtering
- * @param userRole - User role for super admin bypass
+ * @param currentOrgId - Retained for API compatibility; catalog scope is global
+ * @param userRole - Retained for API compatibility; catalog scope is global
  * @returns Array of suggestion objects with name, type, and id
  */
 export async function getFTSSearchSuggestions(
@@ -313,23 +274,6 @@ export async function getFTSSearchSuggestions(
   }
 
   const conditions = [condition, eq(catalogItems.status, 'published')]
-
-  // Organization access control filtering
-  if (userRole && userRole === 'super_admin') {
-    // Super admin bypass - no org filter
-  } else {
-    const orgAccessConditions = currentOrgId
-      ? or(
-          eq(catalogItems.orgId, currentOrgId),
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-      : or(
-          eq(catalogItems.visibility, 'public'),
-          isNull(catalogItems.orgId)
-        )
-    conditions.push(orgAccessConditions)
-  }
 
   const results = await db
     .select({

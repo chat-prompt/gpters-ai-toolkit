@@ -1,5 +1,5 @@
 /**
- * Catalog item visibility and multi-tenancy field tests
+ * Legacy catalog scope field compatibility tests
  */
 import { describe, it, expect } from 'vitest'
 import {
@@ -9,7 +9,7 @@ import {
   type NewCatalogItemRecord,
 } from '@gpters/db/schema'
 
-describe('Catalog Items Multi-Tenancy Fields', () => {
+describe('Catalog Scope Compatibility Fields', () => {
   describe('visibilityEnum', () => {
     it('has correct enum values', () => {
       expect(visibilityEnum.enumValues).toEqual(['private', 'public'])
@@ -37,7 +37,7 @@ describe('Catalog Items Multi-Tenancy Fields', () => {
   })
 
   describe('visibility field', () => {
-    it('has default value of private', () => {
+    it('keeps the legacy column while the application enforces public', () => {
       const visibilityColumn = catalogItems.visibility
       expect(visibilityColumn).toBeDefined()
     })
@@ -129,33 +129,24 @@ describe('Catalog Items Multi-Tenancy Fields', () => {
     })
   })
 
-  describe('Integration scenarios', () => {
-    it('supports private org item', () => {
+  describe('Compatibility scenarios', () => {
+    it('represents the enforced GPTers public catalog state', () => {
       const item: Partial<CatalogItemRecord> = {
-        orgId: 'org-123',
-        visibility: 'private',
-      }
-      expect(item.orgId).toBe('org-123')
-      expect(item.visibility).toBe('private')
-    })
-
-    it('supports public item', () => {
-      const item: Partial<CatalogItemRecord> = {
-        orgId: null,
+        orgId: 'gpters-org',
         visibility: 'public',
       }
-      expect(item.orgId).toBeNull()
+      expect(item.orgId).toBe('gpters-org')
       expect(item.visibility).toBe('public')
     })
 
     it('supports forked item', () => {
       const item: Partial<CatalogItemRecord> = {
         forkedFrom: 'original-item-123',
-        orgId: 'org-456',
-        visibility: 'private',
+        orgId: 'gpters-org',
+        visibility: 'public',
       }
       expect(item.forkedFrom).toBe('original-item-123')
-      expect(item.orgId).toBe('org-456')
+      expect(item.orgId).toBe('gpters-org')
     })
 
     it('tracks fork count on original item', () => {

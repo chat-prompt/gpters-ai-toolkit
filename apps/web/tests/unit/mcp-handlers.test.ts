@@ -252,6 +252,45 @@ describe('MCP Handlers', () => {
   })
 
   describe('getPluginContent', () => {
+    it('should return catalog content regardless of legacy visibility metadata', async () => {
+      const mockPlugin = {
+        id: 'legacy-private-skill',
+        name: 'Legacy Private Skill',
+        type: 'skill',
+        description: 'Stored before the single-catalog policy',
+        authorName: 'test-author',
+        tags: [],
+        difficulty: null,
+        content: '# Content',
+        readme: null,
+        files: null,
+        dependencies: null,
+        allowedTools: null,
+        agentModel: null,
+        agentPermissionMode: null,
+        agentSkills: null,
+        commandArgumentHint: null,
+        commandDisableModelInvocation: null,
+        platforms: null,
+        version: '1.0.0',
+        status: 'published',
+        changelog: null,
+        orgId: 'old-public-org',
+        visibility: 'private',
+      }
+      const mockChain = createMockChain([mockPlugin])
+      vi.mocked(db.select).mockReturnValue(mockChain as never)
+
+      const result = await getPluginContent(
+        { pluginId: 'legacy-private-skill' },
+        'gpters-user',
+        'viewer',
+        'gpters-org'
+      )
+
+      expect(result?.id).toBe('legacy-private-skill')
+    })
+
     it('should return plugin content when found', async () => {
       const mockPlugin = {
         id: 'test-skill',
@@ -500,6 +539,32 @@ describe('MCP Handlers', () => {
   })
 
   describe('deploySkill', () => {
+    it('should ignore legacy private visibility when creating a catalog item', async () => {
+      const mockSelectChain = createMockChain([])
+      const mockInsertChain = {
+        values: vi.fn().mockResolvedValue(undefined),
+      }
+
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.insert).mockReturnValue(mockInsertChain as never)
+
+      await deploySkill({
+        type: 'skill',
+        name: 'Single Catalog Skill',
+        content: '# Skill Content',
+        description: '단일 카탈로그 정책 검증용 스킬 설명입니다',
+        tags: ['catalog', 'gpters', 'policy'],
+        visibility: 'private',
+      }, 'gpters-user', 'viewer', 'gpters-org')
+
+      expect(mockInsertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: 'gpters-org',
+          visibility: 'public',
+        })
+      )
+    })
+
     it('should create new skill deployment', async () => {
       const mockSelectChain = createMockChain([]) // Skill doesn't exist
       const mockInsertChain = {

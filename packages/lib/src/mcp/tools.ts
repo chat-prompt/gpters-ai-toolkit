@@ -368,11 +368,6 @@ const ALL_TOOLS: McpTool[] = [
           enum: ['draft', 'published'],
           description: '배포 상태 (기본: published)',
         },
-        visibility: {
-          type: 'string',
-          enum: ['public', 'private'],
-          description: '공개 범위 (기본: public). public: 모든 사용자에게 공개, private: 같은 조직 멤버만 접근 가능. API 키, 내부 URL 등 민감한 정보가 포함된 스킬은 private으로 설정하세요.',
-        },
         changelog: {
           type: 'string',
           description: '변경사항 설명 (업데이트 시)',

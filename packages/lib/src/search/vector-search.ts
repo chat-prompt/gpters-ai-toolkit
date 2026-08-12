@@ -3,7 +3,6 @@ import { sql, eq, and, or, gt, desc } from 'drizzle-orm'
 import { cosineDistance } from 'drizzle-orm'
 import { generateEmbedding } from './embedding'
 import { createLogger } from '../core/logger'
-import { isSuperAdmin } from '../security/rbac'
 import type { ItemType } from '../core/types'
 
 const log = createLogger('vector-search')
@@ -44,9 +43,6 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     type = 'all',
     limit = 10,
     minSimilarity = 0.15,
-    userId,
-    userRole,
-    orgId,
     userContext,
     clientType,
     queryEmbedding: providedEmbedding,
@@ -93,24 +89,6 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
       or(
         sql`${catalogItems.platforms} IS NULL`,
         sql`${catalogItems.platforms} @> ARRAY[${clientType}]::text[]`
-      )!
-    )
-  }
-
-  // Org-based visibility filtering
-  if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
-    conditions.push(
-      or(
-        eq(catalogItems.orgId, orgId),
-        eq(catalogItems.visibility, 'public'),
-        sql`${catalogItems.orgId} IS NULL`
-      )!
-    )
-  } else if (!userId) {
-    conditions.push(
-      or(
-        eq(catalogItems.visibility, 'public'),
-        sql`${catalogItems.orgId} IS NULL`
       )!
     )
   }
@@ -181,24 +159,6 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
         or(
           sql`${catalogItems.platforms} IS NULL`,
           sql`${catalogItems.platforms} @> ARRAY[${clientType}]::text[]`
-        )!
-      )
-    }
-
-    // Apply same visibility filtering
-    if (userId && orgId && !isSuperAdmin(userRole as Parameters<typeof isSuperAdmin>[0])) {
-      keywordConditions.push(
-        or(
-          eq(catalogItems.orgId, orgId),
-          eq(catalogItems.visibility, 'public'),
-          sql`${catalogItems.orgId} IS NULL`
-        )!
-      )
-    } else if (!userId) {
-      keywordConditions.push(
-        or(
-          eq(catalogItems.visibility, 'public'),
-          sql`${catalogItems.orgId} IS NULL`
         )!
       )
     }

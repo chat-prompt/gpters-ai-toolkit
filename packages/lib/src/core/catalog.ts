@@ -7,41 +7,6 @@
 import { eq, ne, and, or, isNull, asc, sql, desc } from 'drizzle-orm'
 import { db, catalogItems, catalogItemTranslations, packageItems, users, organizations, isDatabaseAvailable } from '@gpters/db'
 import { CatalogItem, CatalogItemSummary, CatalogItemWithPackageContents, ItemType } from './types'
-import { auth } from './auth'
-import { isSuperAdmin, type UserRole } from '../security/rbac'
-
-/**
- * Safely get the current session. Returns null when called outside
- * a request scope (e.g., during generateStaticParams at build time).
- */
-async function safeAuth() {
-  try {
-    return await auth()
-  } catch {
-    return null
-  }
-}
-
-/**
- * Build org-based visibility filter conditions.
- * Super admins see everything; others see only public items + their own org's items.
- */
-function buildVisibilityFilter(userRole?: string | null, currentOrgId?: string | null) {
-  if (userRole && isSuperAdmin(userRole as UserRole)) {
-    return undefined
-  }
-
-  return currentOrgId
-    ? or(
-        eq(catalogItems.orgId, currentOrgId),
-        eq(catalogItems.visibility, 'public'),
-        isNull(catalogItems.orgId)
-      )
-    : or(
-        eq(catalogItems.visibility, 'public'),
-        isNull(catalogItems.orgId)
-      )
-}
 
 // ============================================================================
 // Field Selection for Query Optimization
@@ -220,13 +185,10 @@ export async function getCatalog(locale?: string): Promise<CatalogItemSummary[]>
   }
 
   const useTranslation = locale && locale !== 'ko'
-  const session = await safeAuth()
-  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
 
   const whereConditions = [
     ne(catalogItems.type, 'guide'),
     or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-    ...(visFilter ? [visFilter] : []),
   ]
 
   if (useTranslation) {
@@ -296,17 +258,6 @@ export async function getItemById(id: string, locale?: string): Promise<CatalogI
 
     if (!result) return undefined
 
-    const session = await safeAuth()
-    const currentOrgId = session?.user?.currentOrgId
-    const userRole = session?.user?.role
-
-    if (!userRole || !isSuperAdmin(userRole as UserRole)) {
-      const raw = result.item
-      if (raw.visibility === 'private' && raw.orgId !== currentOrgId) {
-        return undefined
-      }
-    }
-
     const item = toPlainObject(result.item)
     return {
       ...item,
@@ -329,18 +280,6 @@ export async function getItemById(id: string, locale?: string): Promise<CatalogI
 
   if (!result) return undefined
 
-  // Enforce visibility: non-super-admins cannot access private items from other orgs
-  const session = await safeAuth()
-  const currentOrgId = session?.user?.currentOrgId
-  const userRole = session?.user?.role
-
-  if (!userRole || !isSuperAdmin(userRole as UserRole)) {
-    const item = result.item
-    if (item.visibility === 'private' && item.orgId !== currentOrgId) {
-      return undefined
-    }
-  }
-
   const item = toPlainObject(result.item)
   return {
     ...item,
@@ -349,17 +288,13 @@ export async function getItemById(id: string, locale?: string): Promise<CatalogI
 }
 
 /**
- * Get published items of a specific type with org-based visibility filtering.
+ * Get published items of a specific type.
  * Uses composite index: catalog_items_type_status_idx
  */
 export async function getItemsByType(type: ItemType): Promise<CatalogItemSummary[]> {
-  const session = await safeAuth()
-  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
-
   const whereConditions = [
     eq(catalogItems.type, type),
     or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-    ...(visFilter ? [visFilter] : []),
   ]
 
   const records = await db
@@ -381,13 +316,10 @@ export async function getGuides(locale?: string): Promise<CatalogItemSummary[]> 
   }
 
   const useTranslation = locale && locale !== 'ko'
-  const session = await safeAuth()
-  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
 
   const whereConditions = [
     eq(catalogItems.type, 'guide'),
     or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-    ...(visFilter ? [visFilter] : []),
   ]
 
   if (useTranslation) {
@@ -456,17 +388,6 @@ export async function getGuideById(idOrPluginId: string, locale?: string): Promi
 
     if (!result) return undefined
 
-    const session = await safeAuth()
-    const currentOrgId = session?.user?.currentOrgId
-    const userRole = session?.user?.role
-
-    if (!userRole || !isSuperAdmin(userRole as UserRole)) {
-      const raw = result.item
-      if (raw.visibility === 'private' && raw.orgId !== currentOrgId) {
-        return undefined
-      }
-    }
-
     const item = toPlainObject(result.item)
     return {
       ...item,
@@ -489,17 +410,6 @@ export async function getGuideById(idOrPluginId: string, locale?: string): Promi
 
   if (!result) return undefined
 
-  const session = await safeAuth()
-  const currentOrgId = session?.user?.currentOrgId
-  const userRole = session?.user?.role
-
-  if (!userRole || !isSuperAdmin(userRole as UserRole)) {
-    const raw = result.item
-    if (raw.visibility === 'private' && raw.orgId !== currentOrgId) {
-      return undefined
-    }
-  }
-
   const item = toPlainObject(result.item)
   return {
     ...item,
@@ -511,12 +421,8 @@ export async function getGuideById(idOrPluginId: string, locale?: string): Promi
  * Get published items suitable for beginners (easy difficulty or beginner tag).
  */
 export async function getBeginnerItems(): Promise<CatalogItemSummary[]> {
-  const session = await safeAuth()
-  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
-
   const whereConditions = [
     or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-    ...(visFilter ? [visFilter] : []),
   ]
 
   const records = await db
@@ -569,9 +475,6 @@ export async function getRelatedItems(
   authorId: string | null,
   limit: number = 6
 ): Promise<CatalogItemSummary[]> {
-  const session = await safeAuth()
-  const visFilter = buildVisibilityFilter(session?.user?.role, session?.user?.currentOrgId)
-
   // Build tag array literal for SQL
   const tagArrayLiteral = tags.length > 0
     ? sql.raw(`ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`)
@@ -595,7 +498,6 @@ export async function getRelatedItems(
         : sql`false`,
       authorId ? eq(catalogItems.authorId, authorId) : sql`false`
     ),
-    ...(visFilter ? [visFilter] : []),
   ]
 
   // Filter at DB level: only items with at least one matching tag or same author

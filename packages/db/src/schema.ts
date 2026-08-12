@@ -89,7 +89,7 @@ export const catalogItems = pgTable('catalog_items', {
   /** Organization owner (nullable for migration compatibility) */
   orgId: text('org_id').references(() => organizations.id),
   /** Visibility level (private or public) */
-  visibility: visibilityEnum('visibility').default('private'),
+  visibility: visibilityEnum('visibility').default('public'),
   /** Self-reference to original item if this is a fork (stored as text to avoid circular type dependency) */
   forkedFrom: text('forked_from'),
   /** Count of times this item has been forked */

@@ -2,7 +2,7 @@
  * AX 대시보드 — 스킬 사용량 패널 테스트
  *
  * db는 모킹하고, 패널이 쿼리 결과를 어떻게 피벗·정렬·환산하는지와
- * 카탈로그 가시성 필터가 실제 where 조건에 걸리는지를 검증한다.
+ * 모든 집계가 단일 GPTers 카탈로그를 같은 모집단으로 사용하는지 검증한다.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -45,7 +45,7 @@ const { db } = await import('@gpters/db')
 let whereConditions: unknown[] = []
 /** innerJoin 호출 인자 */
 let innerJoinCalls: unknown[][] = []
-/** leftJoin 호출 인자 — 가시성 우회 회귀를 잡기 위해 함께 기록한다 */
+/** leftJoin 호출 인자 — 카탈로그 밖 이벤트가 섞이는 회귀를 잡기 위해 함께 기록한다 */
 let leftJoinCalls: unknown[][] = []
 
 /** 어떤 체이닝(from/where/groupBy…)에도 자신을 돌려주고, await 하면 결과를 내는 쿼리 빌더 */
@@ -277,8 +277,7 @@ describe('skillUsagePanel', () => {
     expect(data.skills[0].lastUsedAt).toBeNull()
   })
 
-  // 회귀 가드: 다른 조직의 비공개 스킬 이름이 대시보드로 새면 안 된다
-  describe('카탈로그 가시성 필터', () => {
+  describe('단일 GPTers 카탈로그 집계', () => {
     /** where 조건 순서: 0=요약 1=스킬피벗 2=일자별 3=미사용스킬 */
     const TOTALS_WHERE = 0
     const SKILL_PIVOT_WHERE = 1
@@ -301,19 +300,16 @@ describe('skillUsagePanel', () => {
       expect(innerJoinCalls).toHaveLength(3)
     })
 
-    it('카탈로그를 읽는 모든 쿼리에 가시성 조건이 걸린다', async () => {
+    it('카탈로그를 읽는 모든 쿼리가 legacy scope 필드를 무시한다', async () => {
       await loadWithOrg('org-42')
 
       // 요약 타일과 표가 서로 다른 모집단이면 화면의 숫자가 어긋난다
       for (const index of [TOTALS_WHERE, SKILL_PIVOT_WHERE, DAILY_WHERE, UNUSED_SKILLS_WHERE]) {
         const values = collectValues(whereConditions[index])
 
-        // 자기 조직 소유
-        expect(values).toContain('catalog_items.org_id')
-        expect(values).toContain('org-42')
-        // 또는 공개 항목
-        expect(values).toContain('catalog_items.visibility')
-        expect(values).toContain('public')
+        expect(values).not.toContain('catalog_items.org_id')
+        expect(values).not.toContain('catalog_items.visibility')
+        expect(values).not.toContain('org-42')
       }
     })
 
@@ -323,20 +319,17 @@ describe('skillUsagePanel', () => {
       // 세션을 mcp_sessions에서 따로 세면 조직 범위·익명 세션 취급이 달라져
       // 옆 타일과 모집단이 어긋난다. 요약 쿼리 안에서 함께 센다.
       expect(whereConditions).toHaveLength(4)
-      const values = collectValues(whereConditions[TOTALS_WHERE])
-      expect(values).toContain('catalog_items.org_id')
+      expect(innerJoinCalls).toHaveLength(3)
     })
 
-    it('orgId가 없으면 조직 한정 조건 없이 공개 항목만 남긴다', async () => {
+    it('orgId가 없어도 같은 단일 카탈로그 모집단을 사용한다', async () => {
       await loadWithOrg(null)
 
-      for (const index of [SKILL_PIVOT_WHERE, UNUSED_SKILLS_WHERE]) {
+      for (const index of [TOTALS_WHERE, SKILL_PIVOT_WHERE, DAILY_WHERE, UNUSED_SKILLS_WHERE]) {
         const values = collectValues(whereConditions[index])
 
-        expect(values).toContain('catalog_items.visibility')
-        expect(values).toContain('public')
-        // 조직 id가 없으므로 특정 org로 좁히는 값이 섞여선 안 된다
-        expect(values).not.toContain('org-42')
+        expect(values).not.toContain('catalog_items.org_id')
+        expect(values).not.toContain('catalog_items.visibility')
       }
     })
   })

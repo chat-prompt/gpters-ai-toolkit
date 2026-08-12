@@ -81,26 +81,6 @@ function toIso(value: Date | string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
-/**
- * 요청자가 볼 수 있는 카탈로그 항목 조건
- *
- * 이 플랫폼의 카탈로그는 조직별로 격리돼 있고 기본 가시성이 private다.
- * 대시보드가 다른 조직의 비공개 스킬 이름을 흘리지 않도록, 카탈로그 읽기 관례
- * (`core/catalog.ts`의 가시성 필터)와 같은 조건을 적용한다.
- *
- * 그쪽 함수를 그대로 쓰지 않는 이유는 super_admin에게 필터를 아예 걷어내기 때문이다.
- * 사내 현황 대시보드는 역할과 무관하게 자기 조직 범위로만 본다.
- */
-function visibleCatalogFilter(orgId: string | null) {
-  return orgId
-    ? or(
-        eq(catalogItems.orgId, orgId),
-        eq(catalogItems.visibility, 'public'),
-        isNull(catalogItems.orgId)
-      )
-    : or(eq(catalogItems.visibility, 'public'), isNull(catalogItems.orgId))
-}
-
 /** count 계열 컬럼을 숫자로 (bigint가 문자열로 오는 드라이버 대비) */
 function num(value: unknown): number {
   const n = Number(value)
@@ -116,17 +96,15 @@ function num(value: unknown): number {
 export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
   meta,
 
-  async load({ days, orgId }) {
+  async load({ days }) {
     const span = Number.isFinite(days) && days > 0 ? Math.floor(days) : 30
     const now = new Date()
     // 하루 경계로 내려 구간을 잡는다 — 그래야 추이의 첫 막대가 온전한 하루를 담는다.
     // 오늘을 포함해 정확히 span일이 되도록 span-1일 전부터 센다 ("30일" → 막대 30개)
     const since = startOfUtcDay(new Date(now.getTime() - (span - 1) * 24 * 60 * 60 * 1000))
-    const visible = visibleCatalogFilter(orgId)
 
     try {
-      // 1. 요약 지표 — 아래 표와 같은 모집단이어야 하므로 같은 조건을 건다
-      //    (요약 타일이 전 조직 합산이고 표는 우리 조직만이면 두 숫자가 어긋난다)
+      // 1. 요약 지표 — 아래 표와 같은 단일 GPTers 카탈로그 모집단을 쓴다
       //    세션 수도 같은 집합에서 센다 — 별도로 mcp_sessions를 세면 조직 범위와
       //    익명 세션 취급이 달라져 옆 타일과 모집단이 어긋난다
       const [totals] = await db
@@ -137,10 +115,9 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS), visible))
+        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
 
-      // 2. 스킬별 action 피벗 — 요청자가 볼 수 있는 카탈로그 항목만 대상으로 한다
-      //    (카탈로그에 없거나 다른 조직의 비공개 스킬은 표에 올리지 않는다)
+      // 2. 스킬별 action 피벗 — 카탈로그에 존재하는 항목만 대상으로 한다
       const skillRows = await db
         .select({
           skillId: skillEvents.skillId,
@@ -155,19 +132,19 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS), visible))
+        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
         .groupBy(skillEvents.skillId, catalogItems.name)
 
-      // 4. 일자별 추이 — 요약·표와 같은 모집단
+      // 3. 일자별 추이 — 요약·표와 같은 모집단
       const dailyRows = await db
         .select({ date: dayExpr, events: sql<number>`count(*)::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS), visible))
+        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
         .groupBy(dayExpr)
         .orderBy(dayExpr)
 
-      // 3. 기간 내 이벤트가 하나도 없는 카탈로그 스킬
+      // 4. 기간 내 이벤트가 하나도 없는 카탈로그 스킬
       //    빈 배열 notInArray는 Drizzle에서 깨지므로 서브쿼리로 처리한다
       //    서브쿼리도 위와 같은 action 조건을 써야 한다 — 아니면 기계 트래픽만 있는 스킬이
       //    표에서도 빠지고 미사용 목록에서도 빠져 어디에도 안 보인다
@@ -179,7 +156,6 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             eq(catalogItems.type, 'skill'),
             // 발행된 적 없는 초안은 "안 쓰인 스킬"이 아니다
             or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-            visible,
             sql`${catalogItems.id} not in (
               select distinct ${skillEvents.skillId} from ${skillEvents}
               where ${skillEvents.createdAt} >= ${since}

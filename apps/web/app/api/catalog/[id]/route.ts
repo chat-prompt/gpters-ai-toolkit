@@ -1,7 +1,7 @@
 /**
- * Single catalog item API route with org-based access control
+ * Single catalog item API route
  *
- * GET: Retrieve a catalog item by ID (with org access validation)
+ * GET: Retrieve a catalog item by ID
  * PUT: Update a catalog item (requires authentication and org ownership)
  * DELETE: Delete a catalog item (requires authentication and org ownership)
  */
@@ -35,38 +35,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return ApiErrors.notFound('Catalog item')
     }
 
-    const session = await auth()
-    const currentOrgId = session?.user?.currentOrgId
-    const userRole = session?.user?.role
-
-    if (userRole && isSuperAdmin(userRole as UserRole)) {
-      const response = cachedJsonResponse(item, 'catalogItem', request)
-      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
-      return response
-    }
-
-    const itemOrgId = item.orgId
-    const itemVisibility = item.visibility
-
-    if (!itemOrgId) {
-      const response = cachedJsonResponse(item, 'catalogItem', request)
-      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
-      return response
-    }
-
-    if (itemVisibility === 'public') {
-      const response = cachedJsonResponse(item, 'catalogItem', request)
-      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
-      return response
-    }
-
-    if (itemOrgId === currentOrgId) {
-      const response = cachedJsonResponse(item, 'catalogItem', request)
-      addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
-      return response
-    }
-
-    return ApiErrors.notFound('Catalog item')
+    const response = cachedJsonResponse(item, 'catalogItem', request)
+    addSurrogateKey(response, 'catalog', `catalog-item-${id}`, `catalog-${item.type}`)
+    return response
   } catch (error) {
     log.error('Failed to fetch catalog item', error)
     return ApiErrors.internalError('Failed to fetch catalog item')
@@ -121,6 +92,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // V2: Status and changelog
     if (body.status !== undefined) updateData.status = body.status
     if (body.changelog !== undefined) updateData.changelog = body.changelog
+    updateData.visibility = 'public'
     // Type-specific fields
     if (body.allowedTools !== undefined) updateData.allowedTools = body.allowedTools
     if (body.agentModel !== undefined) updateData.agentModel = body.agentModel
