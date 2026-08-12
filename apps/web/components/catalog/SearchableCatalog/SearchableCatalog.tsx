@@ -90,7 +90,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
   return (
     <>
       {/* 검색 — 히어로 바로 아래에 붙여 가장 먼저 눈에 걸리게 한다 */}
-      <div className="reveal mt-8 max-w-3xl" style={{ '--ax-delay': '80ms' } as React.CSSProperties}>
+      <div className="relative z-10 reveal mt-8 max-w-3xl" style={{ '--ax-delay': '80ms' } as React.CSSProperties}>
         <SearchAutocomplete
           value={searchQuery}
           onChange={setSearchQuery}
