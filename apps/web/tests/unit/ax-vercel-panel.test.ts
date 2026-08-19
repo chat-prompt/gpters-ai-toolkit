@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __resetVercelCache, vercelDeploymentsPanel } from '../../../../packages/lib/src/features/ax/vercel'
 
-const CTX = { days: 7, isAdmin: false, orgId: null }
+const CTX = { days: 7, isAdmin: false }
 
 /** Vercel /v9/projects 응답 형태의 최소 목업 */
 function mockProjectsResponse(projects: unknown[], next: number | null = null) {

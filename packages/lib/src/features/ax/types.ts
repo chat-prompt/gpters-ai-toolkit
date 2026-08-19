@@ -43,11 +43,6 @@ export interface AxPanelContext {
    * 개인 식별 데이터(팀원별 구독 등)를 내려줄지 가르는 유일한 기준.
    */
   isAdmin: boolean
-  /**
-   * 요청자의 현재 조직 id.
-   * 조직별로 격리된 자료(카탈로그 등)를 읽는 패널은 이 값으로 범위를 좁혀야 한다.
-   */
-  orgId: string | null
 }
 
 /**
@@ -87,6 +82,52 @@ export interface AxPanel<T = unknown> {
 // ============================================
 // 패널별 데이터 타입
 // ============================================
+
+/** 성과 요약 패널 — 실제로 계측되는 지표만 담는다 */
+export interface AxOverviewData {
+  /**
+   * 최근 7일 활성 인원 (기간 선택과 무관하게 항상 7일).
+   * 계정이 식별된 사용자만 센다 — 익명 세션은 "인원"에 넣지 않는다.
+   */
+  weeklyActiveUsers: number
+  /** 누적 참여 인원 — 스킬 이벤트를 한 번이라도 남긴 계정 수 */
+  totalParticipants: number
+  /** 일자별 활성 인원 추이 (조회 기간) */
+  dailyActiveUsers: Array<{ date: string; users: number }>
+  /** 활용 유형(action)별 이벤트 수 (조회 기간) */
+  actionDistribution: Array<{ action: string; count: number }>
+  /** 시간대별 활동 밀도 — KST 기준 0~23시 (조회 기간) */
+  hourlyDensity: Array<{ hour: number; events: number }>
+  /**
+   * 아직 계측하지 않는 지표와 그 이유.
+   * 0이나 추정값으로 꾸미는 대신 미계측 상태를 화면에 그대로 밝힌다.
+   */
+  unmeasured: Array<{ label: string; reason: string }>
+}
+
+/** 공유 스킬 저장소의 스킬 한 개 */
+export interface AxSharedSkillRow {
+  /** 디렉터리 이름 = 스킬 id */
+  id: string
+  /** 저장소 내 경로 */
+  path: string
+  /** SKILL.md 문서가 있는지 — 없으면 스킬 규격 미준수 후보 */
+  hasSkillDoc: boolean
+}
+
+/** 공유 스킬 패널이 내려주는 인벤토리 */
+export interface AxSharedSkillsData {
+  /** 조회한 저장소 (owner/repo) */
+  repo: string
+  skills: AxSharedSkillRow[]
+  /**
+   * 실행 이벤트 수집 연결 여부.
+   * 아직 인벤토리만 있고 사용량은 미연결이므로 화면이 이 사실을 명시해야 한다.
+   */
+  eventsConnected: boolean
+  /** GitHub tree 응답이 잘렸는지 — true면 목록이 일부일 수 있다 */
+  truncated: boolean
+}
 
 /** 스킬 사용량 패널 */
 export interface AxSkillUsageRow {
@@ -210,9 +251,22 @@ export interface AxClientUsageMemberRow {
 export interface AxClientUsageData {
   /** 수집기가 마지막으로 보낸 시각 (ISO 8601) */
   syncedAt: string | null
-  /** 집계 구간 (ISO 8601) */
+  /**
+   * 집계 구간 (ISO 8601). 사람마다 보고일이 달라 구간이 조금씩 다르므로
+   * 포함된 보고 전체를 덮는 범위(min~max)다
+   */
   periodStart: string | null
   periodEnd: string | null
+  /**
+   * 최근 창 안에 사용량을 보고한 인원 수 — 참여율의 분자.
+   * 수집기 표시명(memberName) 기준이라 계정 수 기반 분모와는 근사 비교다
+   */
+  reportingMembers: number
+  /**
+   * 내부 도메인 계정 수 — 참여율의 분모.
+   * `INTERNAL_ORGANIZATION_DOMAIN`이 설정되지 않았으면 null (분모를 꾸며내지 않는다)
+   */
+  internalMembers: number | null
   totalTokens: number
   byClient: AxClientUsageClientRow[]
   /** 모델별 토큰 사용량 (내림차순) */

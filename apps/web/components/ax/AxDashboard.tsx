@@ -188,7 +188,8 @@ function HighlightBand({
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
-        {[0, 1, 2, 3].map((slot) => (
+        {/* 실제 밴드는 두 줄(8칸)로 실린다 — 한 줄만 그리면 데이터 도착 때 화면이 튄다 */}
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((slot) => (
           <div key={slot} className="bg-[var(--bg-primary)] px-6 py-7">
             <div className="ax-shimmer h-3 w-16 rounded" />
             <div className="ax-shimmer mt-3 h-9 w-24 rounded" />
@@ -200,10 +201,12 @@ function HighlightBand({
 
   if (highlights.length === 0) return null
 
+  // 패널이 늘어도 수치를 자르지 않는다 — 4개 넘으면 다음 줄로 흐른다
   return (
     <div className="ax-reveal grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
-      {highlights.slice(0, 4).map((highlight) => (
-        <div key={highlight.label} className="bg-[var(--bg-primary)] px-6 py-7">
+      {highlights.map((highlight, index) => (
+        // 서로 다른 패널이 같은 라벨을 올릴 수 있으므로 라벨만으로 키를 만들지 않는다
+        <div key={`${highlight.label}-${index}`} className="bg-[var(--bg-primary)] px-6 py-7">
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {highlight.label}
           </p>
@@ -216,6 +219,13 @@ function HighlightBand({
             )}
           </p>
         </div>
+      ))}
+      {/* 줄이 다 안 차면 빈 칸을 채워 경계색이 구멍처럼 비치지 않게 한다 */}
+      {Array.from({ length: (2 - (highlights.length % 2)) % 2 }, (_, slot) => (
+        <div key={`fill-sm-${slot}`} className="md:hidden bg-[var(--bg-primary)]" />
+      ))}
+      {Array.from({ length: (4 - (highlights.length % 4)) % 4 }, (_, slot) => (
+        <div key={`fill-md-${slot}`} className="hidden md:block bg-[var(--bg-primary)]" />
       ))}
     </div>
   )

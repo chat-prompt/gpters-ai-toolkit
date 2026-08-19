@@ -71,7 +71,6 @@ export async function GET(
     const result = await panel.load({
       days,
       isAdmin: viewer.isAdmin,
-      orgId: session?.user?.currentOrgId ?? null,
     })
     return NextResponse.json(result)
   } catch (error) {

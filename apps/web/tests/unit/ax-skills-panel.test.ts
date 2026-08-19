@@ -167,7 +167,7 @@ describe('skillUsagePanel', () => {
       [{ id: 'dusty-skill', name: '안 쓰는 스킬' }],
     ])
 
-    const result = await skillUsagePanel.load({ days: 30, isAdmin: false, orgId: 'org-42' })
+    const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('ok')
     expect(result.data).not.toBeNull()
@@ -223,7 +223,7 @@ describe('skillUsagePanel', () => {
       [],
     ])
 
-    const data = (await skillUsagePanel.load({ days: 7, isAdmin: false, orgId: null })).data!
+    const data = (await skillUsagePanel.load({ days: 7, isAdmin: false })).data!
 
     expect(data.totalEvents).toBe(11)
     expect(data.activeUsers).toBe(2)
@@ -241,7 +241,7 @@ describe('skillUsagePanel', () => {
       [{ id: 'never-used', name: '한 번도 안 쓴 스킬' }],
     ])
 
-    const result = await skillUsagePanel.load({ days: 30, isAdmin: false, orgId: null })
+    const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('ok')
     const data = result.data!
@@ -270,7 +270,7 @@ describe('skillUsagePanel', () => {
 
     queueQueries([[{ totalEvents: 60, activeUsers: 1, sessions: 1 }], rows, [], []])
 
-    const data = (await skillUsagePanel.load({ days: 30, isAdmin: false, orgId: 'org-42' })).data!
+    const data = (await skillUsagePanel.load({ days: 30, isAdmin: false })).data!
 
     expect(data.skills).toHaveLength(50)
     expect(data.skills[0].skillId).toBe('skill-59')
@@ -284,15 +284,15 @@ describe('skillUsagePanel', () => {
     const DAILY_WHERE = 2
     const UNUSED_SKILLS_WHERE = 3
 
-    async function loadWithOrg(orgId: string | null) {
+    async function loadPanel() {
       queueQueries([[{ totalEvents: 1, activeUsers: 1, sessions: 1 }], [], [], []])
-      const result = await skillUsagePanel.load({ days: 30, isAdmin: false, orgId })
+      const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
       expect(result.status).toBe('ok')
       return result
     }
 
     it('스킬 이벤트를 읽는 쿼리는 모두 카탈로그를 innerJoin한다', async () => {
-      await loadWithOrg('org-42')
+      await loadPanel()
 
       // leftJoin이면 카탈로그에 없는(= 가시성 판정 불가) skill_id가 집계에 섞인다
       expect(leftJoinCalls).toHaveLength(0)
@@ -301,7 +301,7 @@ describe('skillUsagePanel', () => {
     })
 
     it('카탈로그를 읽는 모든 쿼리가 legacy scope 필드를 무시한다', async () => {
-      await loadWithOrg('org-42')
+      await loadPanel()
 
       // 요약 타일과 표가 서로 다른 모집단이면 화면의 숫자가 어긋난다
       for (const index of [TOTALS_WHERE, SKILL_PIVOT_WHERE, DAILY_WHERE, UNUSED_SKILLS_WHERE]) {
@@ -309,28 +309,16 @@ describe('skillUsagePanel', () => {
 
         expect(values).not.toContain('catalog_items.org_id')
         expect(values).not.toContain('catalog_items.visibility')
-        expect(values).not.toContain('org-42')
       }
     })
 
     it('세션 수를 별도 쿼리로 세지 않는다', async () => {
-      await loadWithOrg('org-42')
+      await loadPanel()
 
       // 세션을 mcp_sessions에서 따로 세면 조직 범위·익명 세션 취급이 달라져
       // 옆 타일과 모집단이 어긋난다. 요약 쿼리 안에서 함께 센다.
       expect(whereConditions).toHaveLength(4)
       expect(innerJoinCalls).toHaveLength(3)
-    })
-
-    it('orgId가 없어도 같은 단일 카탈로그 모집단을 사용한다', async () => {
-      await loadWithOrg(null)
-
-      for (const index of [TOTALS_WHERE, SKILL_PIVOT_WHERE, DAILY_WHERE, UNUSED_SKILLS_WHERE]) {
-        const values = collectValues(whereConditions[index])
-
-        expect(values).not.toContain('catalog_items.org_id')
-        expect(values).not.toContain('catalog_items.visibility')
-      }
     })
   })
 
@@ -340,7 +328,7 @@ describe('skillUsagePanel', () => {
       throw new Error('connection refused')
     })
 
-    const result = await skillUsagePanel.load({ days: 30, isAdmin: false, orgId: 'org-42' })
+    const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('error')
     expect(result.data).toBeNull()
@@ -352,7 +340,7 @@ describe('skillUsagePanel', () => {
     vi.mocked(db.select).mockReset()
     vi.mocked(db.select).mockReturnValue(builder(Promise.reject(new Error('timeout'))) as never)
 
-    const result = await skillUsagePanel.load({ days: 30, isAdmin: false, orgId: null })
+    const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('error')
     expect(result.data).toBeNull()
