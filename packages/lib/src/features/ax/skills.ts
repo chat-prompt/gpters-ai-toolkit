@@ -202,8 +202,9 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           unusedSkills: unusedRows.map((row) => ({ id: row.id, name: row.name })),
         },
         [
-          { label: '스킬 사용', value: totalEvents.toLocaleString('ko-KR'), hint: `${span}일` },
-          { label: '쓴 사람', value: activeUsers.toLocaleString('ko-KR'), hint: '명' },
+          // 기간 라벨은 붙이지 않는다 — 화면의 기간 선택이 이 두 타일 바로 옆에 있다
+          { label: '스킬 사용', value: totalEvents.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
+          { label: '쓴 사람', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
         ]
       )
     } catch (error) {

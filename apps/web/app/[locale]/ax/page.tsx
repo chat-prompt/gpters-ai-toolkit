@@ -46,14 +46,9 @@ export default async function AxPage({ params }: { params: Promise<{ locale: str
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-6 md:px-10 pt-10 pb-24">
         {/* 왼쪽 정렬 — 가운데 정렬 히어로를 쓰지 않는다 */}
         <header className="mb-8 flex items-end justify-between gap-6 flex-wrap">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-medium tracking-tight text-[var(--text-primary)]">
-              AX 대시보드
-            </h1>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              사내에서 AI를 얼마나, 어떻게 쓰고 있는지 한 화면에서 확인합니다.
-            </p>
-          </div>
+          <h1 className="text-2xl md:text-3xl font-medium tracking-tight text-[var(--text-primary)]">
+            AX 대시보드
+          </h1>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {viewer.isAdmin ? 'Admin view' : 'Member view'}
           </p>

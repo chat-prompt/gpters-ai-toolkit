@@ -13,7 +13,7 @@
 
 import type { AxOverviewData } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
-import { formatCount } from '../format'
+import { formatCount, formatDate } from '../format'
 
 /** action 코드 → 화면 표기 */
 const ACTION_LABELS: Record<string, string> = {
@@ -42,7 +42,78 @@ export function OverviewPanel({ data, days }: AxPanelViewProps<AxOverviewData>) 
       <DailyActiveTrend daily={data.dailyActiveUsers} days={days} />
       <ActionDistribution rows={data.actionDistribution} />
       <HourlyDensity rows={data.hourlyDensity} />
+      {/* 사용자별 사용량 — 관리자에게만 데이터가 내려온다 */}
+      {data.memberUsage !== null && <MemberUsageTable rows={data.memberUsage} days={days} />}
       <UnmeasuredList items={data.unmeasured} />
+    </div>
+  )
+}
+
+/**
+ * 사용자별 사용량 표 (관리자 전용)
+ *
+ * 이름 칸에 사용량 비례 막대를 깔아 순위 차이가 표를 읽지 않고도 보이게 한다.
+ * 에이전트별 사용량은 실행 이벤트 수집이 붙기 전까지 미계측 목록에 명시된다.
+ *
+ * @param rows - 사용자별 집계 (사용량 내림차순)
+ * @param days - 조회 기간(일)
+ */
+function MemberUsageTable({
+  rows,
+  days,
+}: {
+  rows: NonNullable<AxOverviewData['memberUsage']>
+  days: number
+}) {
+  if (rows.length === 0) {
+    return (
+      <div>
+        <p className={SECTION_LABEL}>사용자별 사용량</p>
+        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 활동한 사용자가 없습니다.</p>
+      </div>
+    )
+  }
+
+  const max = Math.max(1, ...rows.map((row) => row.events))
+
+  return (
+    <div>
+      <p className={SECTION_LABEL}>사용자별 사용량</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[520px] text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-subtle)]">
+              <th className="py-2.5 px-3 text-left font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)] w-[36%]">사용자</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">사용</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">적용</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">마지막 활동</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-subtle)]">
+            {rows.map((row) => (
+              <tr key={row.name} className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]">
+                <td className="relative py-2.5 px-3">
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-[var(--brand-primary)]/[0.07]"
+                    style={{ width: `${(row.events / max) * 100}%` }}
+                  />
+                  <span className="relative text-[var(--text-primary)]">{row.name}</span>
+                </td>
+                <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-primary)]">
+                  {formatCount(row.events)}건
+                </td>
+                <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-secondary)]">
+                  {formatCount(row.applied)}
+                </td>
+                <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-muted)]">
+                  {formatDate(row.lastActiveAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

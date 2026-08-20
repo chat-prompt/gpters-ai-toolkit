@@ -16,6 +16,7 @@ import { canViewPanel } from './access'
 import { overviewPanel } from './overview'
 import { skillUsagePanel } from './skills'
 import { sharedSkillsPanel } from './shared-skills'
+import { skillDiffPanel } from './skill-diff'
 import { vercelDeploymentsPanel } from './vercel'
 import { subscriptionsPanel } from './subscriptions'
 import { clientUsagePanel } from './usage'
@@ -25,6 +26,7 @@ export const AX_PANELS: AxPanel[] = [
   overviewPanel,
   skillUsagePanel,
   sharedSkillsPanel,
+  skillDiffPanel,
   clientUsagePanel,
   subscriptionsPanel,
   vercelDeploymentsPanel,

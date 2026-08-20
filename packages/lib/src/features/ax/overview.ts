@@ -9,12 +9,12 @@
  * 두 패널이 다른 숫자를 말하면 대시보드 전체의 신뢰가 무너진다.
  */
 
-import { db, skillEvents, catalogItems } from '@gpters/db'
-import { and, eq, gte, inArray, sql } from 'drizzle-orm'
+import { db, skillEvents, catalogItems, users } from '@gpters/db'
+import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
 import { CORE_ACTIONS } from './skills'
-import type { AxOverviewData, AxPanel, AxPanelMeta } from './types'
+import type { AxOverviewData, AxOverviewMemberRow, AxPanel, AxPanelMeta } from './types'
 
 const log = createLogger('ax-overview')
 
@@ -27,9 +27,6 @@ const meta: AxPanelMeta = {
   usesPeriod: true,
 }
 
-/** 주간 활성 인원의 고정 구간(일) — 상단 기간 선택과 무관하다 */
-const WEEKLY_WINDOW_DAYS = 7
-
 /**
  * 목업에는 있으나 아직 계측 근거가 없는 지표
  *
@@ -37,10 +34,22 @@ const WEEKLY_WINDOW_DAYS = 7
  * 값 대신 미계측 사유를 내려보낸다. 계측이 붙으면 여기서 지우고 데이터 필드로 옮긴다.
  */
 const UNMEASURED: AxOverviewData['unmeasured'] = [
+  { label: '에이전트별 사용량', reason: '사내 에이전트의 실행 이벤트 수집이 아직 미연결입니다 (DEV-4221)' },
   { label: '완료 세션 · 완주율', reason: '세션의 시작·완료를 판정할 이벤트 계약이 아직 없습니다' },
   { label: '절감 시간', reason: '작업당 절감 시간을 산정할 실측 근거가 없습니다' },
   { label: '부서별 참여', reason: '구성원-부서 매핑 데이터가 없습니다' },
 ]
+
+/**
+ * 잔디밭 고정 윈도우 — 52주(364일)
+ *
+ * 잔디밭은 기간 선택과 무관한 "장기 습관" 그림이라 조회 기간을 따라가지 않는다.
+ * 날짜가 지나면 창이 최신 쪽으로 하루씩 굴러간다.
+ */
+const GRASS_WINDOW_DAYS = 52 * 7
+
+/** 사용자별 사용량 표 상한 */
+const MEMBER_LIMIT = 20
 
 /** action 코드 → 화면 표기 순서. 분포 그래프가 항상 같은 순서로 그려지게 한다 */
 const ACTION_ORDER: readonly string[] = CORE_ACTIONS
@@ -85,25 +94,31 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** timestamp 컬럼 값을 ISO 8601 문자열로. 드라이버가 string을 주는 경우도 함께 처리 */
+function toIso(value: Date | string | null): string | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 /**
- * 활동이 없는 날을 0으로 채워 연속된 축을 만든다 (KST 날짜 기준)
+ * 활동이 없는 날을 0으로 채워 연속된 일별 축을 만든다 (KST 날짜 기준)
  *
- * @param rows - 일자별 활성 인원 (있는 날만, KST 날짜 키)
+ * @param counts - KST 날짜 → 값
  * @param from - 구간 시작 (KST 자정에 해당하는 UTC 시각)
  * @param to - 구간 끝
- * @returns 구간 내 모든 KST 날짜가 채워진 배열
+ * @returns 구간 내 모든 KST 날짜가 채워진 [날짜, 값] 배열
  */
-function fillMissingDays(
-  rows: Array<{ date: string; users: number }>,
+function fillDailySeries(
+  counts: Map<string, number>,
   from: Date,
   to: Date
-): Array<{ date: string; users: number }> {
-  const counts = new Map(rows.map((row) => [row.date, row.users]))
-  const filled: Array<{ date: string; users: number }> = []
+): Array<{ date: string; value: number }> {
+  const filled: Array<{ date: string; value: number }> = []
 
   for (let time = startOfKstDay(from).getTime(); time <= to.getTime(); time += 24 * 60 * 60 * 1000) {
     const key = kstDateKey(new Date(time))
-    filled.push({ date: key, users: counts.get(key) ?? 0 })
+    filled.push({ date: key, value: counts.get(key) ?? 0 })
   }
 
   return filled
@@ -125,20 +140,20 @@ function fillMissingHours(rows: Array<{ hour: number; events: number }>): Array<
 /**
  * 성과 요약 패널
  *
- * 조회 기간(`days`)은 추이·분포·밀도에만 적용된다.
- * 주간 활성 인원은 항상 최근 7일, 누적 참여 인원은 전 기간 기준이다.
+ * 조회 기간(`days`)은 추이·분포·밀도에 적용된다. 누적 참여 인원만 전 기간 기준이다.
+ * 기간별 활성 인원은 스킬 사용량 패널이 같은 모집단으로 집계하므로 여기서 되풀이하지 않는다.
  */
 export const overviewPanel: AxPanel<AxOverviewData> = {
   meta,
 
-  async load({ days }) {
+  async load({ days, isAdmin }) {
     const span = Number.isFinite(days) && days > 0 ? Math.floor(days) : 30
     const now = new Date()
     // KST 하루 경계로 내려 온전한 하루 단위 구간을 잡는다 — 그래야 일별·시간대 차트의
     // 첫 하루가 반쪽(00~09시 누락)이 되지 않는다
     const since = startOfKstDay(new Date(now.getTime() - (span - 1) * 24 * 60 * 60 * 1000))
-    const weekAgo = startOfKstDay(
-      new Date(now.getTime() - (WEEKLY_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000)
+    const grassSince = startOfKstDay(
+      new Date(now.getTime() - (GRASS_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000)
     )
 
     /** 모든 쿼리가 공유하는 모집단 조건 — 카탈로그에 있는 스킬 × 사람 행위 */
@@ -148,19 +163,32 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         : inArray(skillEvents.action, CORE_ACTIONS)
 
     try {
-      // 1. 주간 활성 인원 — 기간 선택과 무관하게 항상 최근 7일
-      const [weekly] = await db
-        .select({ users: sql<number>`count(distinct ${skillEvents.userId})::int` })
-        .from(skillEvents)
-        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(corePopulation(weekAgo))
-
-      // 2. 누적 참여 인원 — 전 기간
+      // 1. 누적 참여 인원 — 전 기간
       const [cumulative] = await db
         .select({ users: sql<number>`count(distinct ${skillEvents.userId})::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
         .where(corePopulation())
+
+      // 2. 팀 스킬(aitk 카탈로그) 수 — 현재 시점 인벤토리. 미사용 스킬 쿼리와 같은 발행 기준
+      const [catalog] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(catalogItems)
+        .where(
+          and(
+            eq(catalogItems.type, 'skill'),
+            or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+          )
+        )
+
+      // 3. 잔디밭 일별 활동량 — 조회 기간과 무관한 52주 고정 윈도우
+      const grassRows = await db
+        .select({ date: kstDayExpr, events: sql<number>`count(*)::int` })
+        .from(skillEvents)
+        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+        .where(corePopulation(grassSince))
+        .groupBy(kstDayExpr)
+        .orderBy(kstDayExpr)
 
       // 3. 일자별 활성 인원 추이 (조회 기간, KST 날짜)
       const dailyRows = await db
@@ -188,6 +216,24 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .groupBy(kstHourExpr)
         .orderBy(kstHourExpr)
 
+      // 6. 사용자별 사용량 (조회 기간) — 개인 식별 데이터라 관리자에게만 조회한다
+      const memberRows = isAdmin
+        ? await db
+            .select({
+              name: users.name,
+              events: sql<number>`count(*)::int`,
+              applied: sql<number>`count(*) filter (where ${skillEvents.action} = 'apply')::int`,
+              lastActiveAt: sql<Date | null>`max(${skillEvents.createdAt})`,
+            })
+            .from(skillEvents)
+            .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+            .innerJoin(users, eq(users.id, skillEvents.userId))
+            .where(corePopulation(since))
+            .groupBy(users.id, users.name)
+            .orderBy(sql`count(*) desc`)
+            .limit(MEMBER_LIMIT)
+        : null
+
       const actionCounts = new Map(actionRows.map((row) => [String(row.action), num(row.count)]))
       // 고정 순서로 정렬하고, 목록에 없는 action이 오면 뒤에 붙인다 (버리면 합계가 안 맞는다)
       const actionDistribution = [
@@ -197,28 +243,44 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           .map((row) => ({ action: String(row.action), count: num(row.count) })),
       ]
 
-      const weeklyActiveUsers = num(weekly?.users)
       const totalParticipants = num(cumulative?.users)
+      const catalogSkills = num(catalog?.count)
+
+      const memberUsage: AxOverviewMemberRow[] | null = memberRows
+        ? memberRows.map((row) => ({
+            name: (row.name ?? '').trim() || '이름 미설정',
+            events: num(row.events),
+            applied: num(row.applied),
+            lastActiveAt: toIso(row.lastActiveAt),
+          }))
+        : null
 
       return panelOk(
         meta,
         {
-          weeklyActiveUsers,
           totalParticipants,
-          dailyActiveUsers: fillMissingDays(
-            dailyRows.map((row) => ({ date: row.date, users: num(row.users) })),
+          catalogSkills,
+          grassDaily: fillDailySeries(
+            new Map(grassRows.map((row) => [row.date, num(row.events)])),
+            grassSince,
+            now
+          ).map((point) => ({ date: point.date, events: point.value })),
+          dailyActiveUsers: fillDailySeries(
+            new Map(dailyRows.map((row) => [row.date, num(row.users)])),
             since,
             now
-          ),
+          ).map((point) => ({ date: point.date, users: point.value })),
           actionDistribution,
           hourlyDensity: fillMissingHours(
             hourlyRows.map((row) => ({ hour: num(row.hour), events: num(row.events) }))
           ),
+          memberUsage,
           unmeasured: UNMEASURED,
         },
         [
-          { label: '주간 활성', value: weeklyActiveUsers.toLocaleString('ko-KR'), hint: '명 · 7일' },
           { label: '누적 참여', value: totalParticipants.toLocaleString('ko-KR'), hint: '명' },
+          // aitk = 사람이 쓰는 팀 스킬, bbopters-shared = 에이전트 스킬 — 출처를 라벨로 가른다
+          { label: '팀 스킬', value: catalogSkills.toLocaleString('ko-KR'), hint: '개 · 사람' },
         ]
       )
     } catch (error) {

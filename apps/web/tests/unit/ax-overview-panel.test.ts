@@ -2,7 +2,7 @@
  * AX 대시보드 — 성과 요약 패널 테스트
  *
  * db는 모킹하고, 다음을 검증한다:
- * 1. 실측 지표(주간 활성·누적 참여·추이·분포·밀도)가 쿼리 결과에서 올바르게 조립되는지
+ * 1. 실측 지표(누적 참여·추이·분포·밀도)가 쿼리 결과에서 올바르게 조립되는지
  * 2. 미계측 지표가 값 대신 사유와 함께 내려가는지
  * 3. 빈 구간·문자열 count·쿼리 실패 같은 경계가 안전한지
  */
@@ -23,6 +23,7 @@ vi.mock('@gpters/db', () => ({
     type: 'catalog_items.type',
     status: 'catalog_items.status',
   },
+  users: { id: 'users.id', name: 'users.name' },
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -40,7 +41,7 @@ const { db } = await import('@gpters/db')
 /** innerJoin 호출 횟수 — 모든 쿼리가 카탈로그 모집단을 쓰는지 확인용 */
 let innerJoinCalls = 0
 
-/** 각 쿼리에 넘어간 where 조건 (실행 순서: 주간·누적·일별·유형·시간대) */
+/** 각 쿼리에 넘어간 where 조건 (실행 순서: 누적·카탈로그·잔디·일별·유형·시간대) */
 let whereConditions: unknown[] = []
 
 /** 어떤 체이닝에도 자신을 돌려주고, await 하면 결과를 내는 쿼리 빌더 */
@@ -95,7 +96,7 @@ function collectValues(node: unknown, out: unknown[] = []): unknown[] {
   return out
 }
 
-/** 패널이 실행하는 5개 쿼리 결과를 순서대로 큐에 넣는다: 주간·누적·일별·유형·시간대 */
+/** 쿼리 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·잔디·일별·유형·시간대(·관리자면 사용자별) */
 function queueQueries(results: unknown[]) {
   const select = vi.mocked(db.select)
   select.mockReset()
@@ -127,8 +128,9 @@ describe('overviewPanel', () => {
 
   it('실측 지표를 조립하고 미계측 지표를 사유와 함께 내려준다', async () => {
     queueQueries([
-      [{ users: 6 }],
       [{ users: 21 }],
+      [{ count: 504 }],
+      [{ date: '2026-08-18', events: 12 }],
       [
         { date: '2026-08-17', users: 4 },
         { date: '2026-08-18', users: 6 },
@@ -149,8 +151,18 @@ describe('overviewPanel', () => {
     expect(result.status).toBe('ok')
     const data = result.data!
 
-    expect(data.weeklyActiveUsers).toBe(6)
     expect(data.totalParticipants).toBe(21)
+    expect(data.catalogSkills).toBe(504)
+
+    // 잔디밭은 기간 선택과 무관한 52주(364일) 고정 윈도우다
+    expect(data.grassDaily).toHaveLength(364)
+    expect(data.grassDaily.find((d) => d.date === '2026-08-18')).toEqual({
+      date: '2026-08-18',
+      events: 12,
+    })
+
+    // 관리자가 아니면 사용자별 사용량은 내려가지 않는다
+    expect(data.memberUsage).toBeNull()
 
     // 활동 없는 날도 0으로 채워 연속된 축을 만든다
     expect(data.dailyActiveUsers).toHaveLength(30)
@@ -184,37 +196,46 @@ describe('overviewPanel', () => {
 
     // 요약 밴드 수치
     expect(result.highlights).toEqual([
-      { label: '주간 활성', value: '6', hint: '명 · 7일' },
       { label: '누적 참여', value: '21', hint: '명' },
+      { label: '팀 스킬', value: '504', hint: '개 · 사람' },
     ])
   })
 
   it('모든 쿼리가 카탈로그 모집단(innerJoin)을 쓴다', async () => {
-    queueQueries([[{ users: 0 }], [{ users: 0 }], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    // 주간 · 누적 · 일별 · 유형 · 시간대 = 5개 쿼리 전부
+    // 스킬 이벤트를 읽는 5개 쿼리(누적·잔디·일별·유형·시간대) 전부.
+    // 카탈로그 count 쿼리는 이벤트를 읽지 않으므로 조인하지 않는다
     expect(innerJoinCalls).toBe(5)
   })
 
   it('모든 쿼리가 CORE_ACTIONS 필터를 쓰고, 누적 쿼리만 날짜 필터가 없다', async () => {
-    queueQueries([[{ users: 0 }], [{ users: 0 }], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    expect(whereConditions).toHaveLength(5)
+    expect(whereConditions).toHaveLength(6)
 
     for (const [index, condition] of whereConditions.entries()) {
       const values = collectValues(condition)
+      const hasDateFilter = values.some((value) => value instanceof Date)
+
+      if (index === 1) {
+        // 카탈로그 count 쿼리 — 발행 스킬 인벤토리라 이벤트 필터가 없다
+        expect(values, '카탈로그 쿼리는 type=skill 조건').toContain('skill')
+        expect(hasDateFilter, '카탈로그 쿼리는 날짜 필터가 없어야 한다').toBe(false)
+        continue
+      }
+
       // 기계 트래픽(exercise_*)이 섞이면 스킬 사용량 패널과 숫자가 어긋난다
       expect(values, `쿼리 ${index} CORE_ACTIONS`).toEqual(
         expect.arrayContaining(['search', 'load', 'apply', 'skip', 'deploy'])
       )
       expect(values, `쿼리 ${index} exercise 제외`).not.toContain('exercise_apply')
 
-      const hasDateFilter = values.some((value) => value instanceof Date)
-      if (index === 1) {
+      if (index === 0) {
         // 누적 참여 인원은 전 기간 — 날짜로 자르면 "누적"이 아니다
         expect(hasDateFilter, '누적 쿼리는 날짜 필터가 없어야 한다').toBe(false)
       } else {
@@ -225,8 +246,9 @@ describe('overviewPanel', () => {
 
   it('count가 문자열로 와도 숫자로 환산한다', async () => {
     queueQueries([
-      [{ users: '3' }],
       [{ users: '9' }],
+      [{ count: '11' }],
+      [{ date: '2026-08-18', events: '3' }],
       [{ date: '2026-08-18', users: '2' }],
       [{ action: 'load', count: '7' }],
       [{ hour: '9', events: '5' }],
@@ -234,21 +256,21 @@ describe('overviewPanel', () => {
 
     const data = (await overviewPanel.load({ days: 7, isAdmin: false })).data!
 
-    expect(data.weeklyActiveUsers).toBe(3)
     expect(data.totalParticipants).toBe(9)
+    expect(data.catalogSkills).toBe(11)
+    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.events).toBe(3)
     expect(data.dailyActiveUsers.find((d) => d.date === '2026-08-18')?.users).toBe(2)
     expect(data.actionDistribution.find((row) => row.action === 'load')?.count).toBe(7)
     expect(data.hourlyDensity[9].events).toBe(5)
   })
 
   it('활동이 전혀 없으면 error가 아니라 0으로 채운 정상 응답을 준다', async () => {
-    queueQueries([[{ users: 0 }], [{ users: 0 }], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], [], []])
 
     const result = await overviewPanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('ok')
     const data = result.data!
-    expect(data.weeklyActiveUsers).toBe(0)
     expect(data.totalParticipants).toBe(0)
     expect(data.dailyActiveUsers).toHaveLength(30)
     expect(data.dailyActiveUsers.every((day) => day.users === 0)).toBe(true)
@@ -260,7 +282,8 @@ describe('overviewPanel', () => {
     // CORE_ACTIONS와 표시 순서(ACTION_ORDER)가 어긋나게 수정되는 회귀에 대한 방어를 검증한다.
     queueQueries([
       [{ users: 1 }],
-      [{ users: 1 }],
+      [{ count: 0 }],
+      [],
       [],
       [
         { action: 'load', count: 3 },
@@ -276,6 +299,28 @@ describe('overviewPanel', () => {
     // 합계가 보존된다 — 목록 밖 action을 조용히 버리면 합계가 어긋난다
     const total = data.actionDistribution.reduce((sum, row) => sum + row.count, 0)
     expect(total).toBe(5)
+  })
+
+  it('관리자면 사용자별 사용량을 내려주고, 이름이 없으면 대체 표기한다', async () => {
+    queueQueries([
+      [{ users: 5 }],
+      [{ count: 0 }],
+      [],
+      [],
+      [],
+      [],
+      [
+        { name: '하영', events: 40, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
+        { name: null, events: 3, applied: 0, lastActiveAt: null },
+      ],
+    ])
+
+    const data = (await overviewPanel.load({ days: 30, isAdmin: true })).data!
+
+    expect(data.memberUsage).toEqual([
+      { name: '하영', events: 40, applied: 9, lastActiveAt: '2026-08-18T02:00:00.000Z' },
+      { name: '이름 미설정', events: 3, applied: 0, lastActiveAt: null },
+    ])
   })
 
   it('쿼리가 실패하면 throw하지 않고 error 상태를 반환한다', async () => {

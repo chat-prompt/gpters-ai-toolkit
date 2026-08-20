@@ -58,6 +58,12 @@ export interface AxPanelHighlight {
   value: string
   /** 값 옆에 붙는 짧은 보조 설명 (예: "17건") */
   hint?: string
+  /**
+   * 상단 기간 선택(7/30/90일)에 따라 값이 변하는 지표인지.
+   * 화면은 이 값으로 밴드를 "기간 연동"과 "현재 시점 스냅샷" 두 층으로 나눈다.
+   * 생략하면 스냅샷으로 취급한다.
+   */
+  periodLinked?: boolean
 }
 
 /** 패널 로딩 결과 */
@@ -83,15 +89,33 @@ export interface AxPanel<T = unknown> {
 // 패널별 데이터 타입
 // ============================================
 
+/** 사용자별 사용량 한 줄 (관리자에게만 내려간다) */
+export interface AxOverviewMemberRow {
+  /** 계정 표시 이름. 프로필에 이름이 없으면 "이름 미설정" */
+  name: string
+  /** 기간 내 스킬 이벤트 수 */
+  events: number
+  /** 그중 실제 적용(apply) 수 */
+  applied: number
+  /** 마지막 활동 시각 (ISO 8601) */
+  lastActiveAt: string | null
+}
+
 /** 성과 요약 패널 — 실제로 계측되는 지표만 담는다 */
 export interface AxOverviewData {
   /**
-   * 최근 7일 활성 인원 (기간 선택과 무관하게 항상 7일).
+   * 누적 참여 인원 — 스킬 이벤트를 한 번이라도 남긴 계정 수.
    * 계정이 식별된 사용자만 센다 — 익명 세션은 "인원"에 넣지 않는다.
+   * (기간별 활성 인원은 스킬 사용량 패널의 activeUsers가 담당한다)
    */
-  weeklyActiveUsers: number
-  /** 누적 참여 인원 — 스킬 이벤트를 한 번이라도 남긴 계정 수 */
   totalParticipants: number
+  /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
+  catalogSkills: number
+  /**
+   * 잔디밭용 일별 활동량 — 조회 기간과 무관하게 **최근 52주 고정 윈도우**.
+   * 날짜가 지나면 창이 최신 쪽으로 굴러간다.
+   */
+  grassDaily: Array<{ date: string; events: number }>
   /** 일자별 활성 인원 추이 (조회 기간) */
   dailyActiveUsers: Array<{ date: string; users: number }>
   /** 활용 유형(action)별 이벤트 수 (조회 기간) */
@@ -99,13 +123,18 @@ export interface AxOverviewData {
   /** 시간대별 활동 밀도 — KST 기준 0~23시 (조회 기간) */
   hourlyDensity: Array<{ hour: number; events: number }>
   /**
+   * 사용자별 사용량 (조회 기간, 사용량 내림차순).
+   * 개인 식별 데이터이므로 관리자에게만 채워지고 그 외에는 null.
+   */
+  memberUsage: AxOverviewMemberRow[] | null
+  /**
    * 아직 계측하지 않는 지표와 그 이유.
    * 0이나 추정값으로 꾸미는 대신 미계측 상태를 화면에 그대로 밝힌다.
    */
   unmeasured: Array<{ label: string; reason: string }>
 }
 
-/** 공유 스킬 저장소의 스킬 한 개 */
+/** 에이전트 스킬 저장소의 스킬 한 개 */
 export interface AxSharedSkillRow {
   /** 디렉터리 이름 = 스킬 id */
   id: string
@@ -113,13 +142,31 @@ export interface AxSharedSkillRow {
   path: string
   /** SKILL.md 문서가 있는지 — 없으면 스킬 규격 미준수 후보 */
   hasSkillDoc: boolean
+  /**
+   * 같은 id의 스킬이 aitk 카탈로그(팀 스킬)에도 등록돼 있는지.
+   * 표시용 마킹일 뿐, 두 소스의 수치를 합산하는 근거로 쓰지 않는다.
+   */
+  inAitk: boolean
 }
 
-/** 공유 스킬 패널이 내려주는 인벤토리 */
+/** 에이전트 스킬 패널이 내려주는 인벤토리 */
 export interface AxSharedSkillsData {
   /** 조회한 저장소 (owner/repo) */
   repo: string
   skills: AxSharedSkillRow[]
+  /**
+   * aitk 카탈로그와 id가 겹치는 스킬 수.
+   * 카탈로그 조회에 실패해 겹침을 판정하지 못했으면 null (0으로 꾸미지 않는다)
+   */
+  aitkOverlap: number | null
+  /**
+   * 저장소 일별 커밋 수 — 최근 52주 (GitHub 통계 API).
+   *
+   * 에이전트 활동의 **프록시**다: 에이전트들이 워크로그·산출물을 이 저장소에
+   * 커밋하므로 활동 리듬은 보이지만, "스킬 실행 횟수"는 아니다(그건 DEV-4221).
+   * 통계가 아직 계산 중(202)이거나 조회 실패면 null — 0으로 꾸미지 않는다.
+   */
+  commitDaily: Array<{ date: string; events: number }> | null
   /**
    * 실행 이벤트 수집 연결 여부.
    * 아직 인벤토리만 있고 사용량은 미연결이므로 화면이 이 사실을 명시해야 한다.
@@ -127,6 +174,37 @@ export interface AxSharedSkillsData {
   eventsConnected: boolean
   /** GitHub tree 응답이 잘렸는지 — true면 목록이 일부일 수 있다 */
   truncated: boolean
+}
+
+/** 스킬 비교 패널 — 이름 같은 쌍의 내용 판정 한 줄 */
+export interface AxSkillDiffRow {
+  /** 양쪽에서 같은 스킬 id */
+  id: string
+  /**
+   * 정규화된 내용의 문자 3-그램 자카드 유사도 (0~1).
+   * 내용 동일이면 1. 비교 문서를 못 가져왔으면 null
+   */
+  similarity: number | null
+  /** aitk 쪽 정규화 본문 길이 */
+  aitkLength: number
+  /** 에이전트 쪽 정규화 본문 길이 */
+  agentLength: number
+}
+
+/** 스킬 비교 패널이 내려주는 대조 결과 */
+export interface AxSkillDiffData {
+  /** 비교 기준 — 팀 스킬 수 / 에이전트 스킬 수 / 실제 문서 비교 수 */
+  basis: { aitkSkills: number; agentSkills: number; comparedDocs: number }
+  /** 이름 같고 내용도 동일 (정규화 후 완전 일치) */
+  identical: AxSkillDiffRow[]
+  /** 이름 같고 내용 유사 — 드리프트된 같은 스킬로 추정 */
+  similar: AxSkillDiffRow[]
+  /** 이름은 같지만 내용이 실질적으로 다름 — 동명이인 스킬 */
+  different: AxSkillDiffRow[]
+  /** 이름은 다른데 정규화 내용이 완전히 같은 쌍 */
+  crossMatches: Array<{ aitkId: string; agentId: string }>
+  /** SKILL.md를 가져오지 못해 판정 불가였던 스킬 수 */
+  fetchFailures: number
 }
 
 /** 스킬 사용량 패널 */

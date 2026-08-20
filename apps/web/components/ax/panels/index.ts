@@ -11,6 +11,7 @@ import type { AxPanelViewProps } from './types'
 import { OverviewPanel } from './OverviewPanel'
 import { SkillUsagePanel } from './SkillUsagePanel'
 import { SharedSkillsPanel } from './SharedSkillsPanel'
+import { SkillDiffPanel } from './SkillDiffPanel'
 import { VercelProjectsPanel } from './VercelProjectsPanel'
 import { SubscriptionsPanel } from './SubscriptionsPanel'
 import { ClientUsagePanel } from './ClientUsagePanel'
@@ -29,6 +30,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   overview: OverviewPanel,
   'skill-usage': SkillUsagePanel,
   'shared-skills': SharedSkillsPanel,
+  'skill-diff': SkillDiffPanel,
   'vercel-deployments': VercelProjectsPanel,
   subscriptions: SubscriptionsPanel,
   'client-usage': ClientUsagePanel,
@@ -48,6 +50,7 @@ export {
   OverviewPanel,
   SkillUsagePanel,
   SharedSkillsPanel,
+  SkillDiffPanel,
   VercelProjectsPanel,
   SubscriptionsPanel,
   ClientUsagePanel,

@@ -8,11 +8,19 @@
  * 하나가 실패해도 나머지는 그대로 보이게 하기 위함이다.
  */
 
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
-import type { AxPanelHighlight, AxPanelMeta, AxPanelResult } from '@/lib/features/ax'
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
+import type { AxOverviewData, AxPanelHighlight, AxPanelMeta, AxPanelResult, AxSharedSkillsData } from '@/lib/features/ax'
 import { getAxPanelView } from './panels'
 import { AxPanelBoundary } from './AxPanelBoundary'
-import { formatUpdatedAt } from './format'
+import { formatCount, formatUpdatedAt } from './format'
 
 /** 조회 기간(일) — API가 허용하는 값과 같아야 한다 */
 const DAY_OPTIONS = [7, 30, 90] as const
@@ -112,15 +120,55 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     return <p className="mt-16 text-[var(--text-secondary)]">아직 볼 수 있는 항목이 없습니다.</p>
   }
 
-  // 각 항목이 스스로 올린 핵심 수치를 모아 맨 위 밴드를 만든다
+  // 각 항목이 올린 핵심 수치를 기간 연동 여부로 나눈다.
+  // 스냅샷 수치는 맨 위 고정 타일로, 기간 연동 수치는 기간 선택 옆 인라인으로 간다.
   const highlights = panels.flatMap((panel) => states[panel.id]?.result?.highlights ?? [])
+  const periodHighlights = highlights.filter((highlight) => highlight.periodLinked)
+  const snapshotHighlights = highlights.filter((highlight) => !highlight.periodLinked)
   const anyLoading = panels.some((panel) => !states[panel.id] || states[panel.id]?.loading)
+
+  // 잔디밭 두 장 — 사람(aitk 스킬 사용)과 에이전트(bbopters-shared 커밋).
+  // 둘 다 기간 선택과 무관한 52주 고정 창이다
+  const grassDaily =
+    (states['overview']?.result?.data as AxOverviewData | null)?.grassDaily ?? null
+  const sharedResult = states['shared-skills']?.result
+  const agentGrassDaily =
+    (sharedResult?.data as AxSharedSkillsData | null)?.commitDaily ?? null
+  // 패널은 정상인데 커밋 통계만 아직 없는 상태 — 잔디가 말없이 사라지면 안 된다
+  const agentGrassPending = sharedResult?.status === 'ok' && agentGrassDaily === null
 
   const active = panels.find((panel) => panel.id === activeId) ?? panels[0]
 
   return (
     <>
-      <HighlightBand highlights={highlights} loading={anyLoading && highlights.length === 0} />
+      <SnapshotTiles
+        highlights={snapshotHighlights}
+        loading={anyLoading && snapshotHighlights.length === 0}
+      />
+
+      <GrassCard
+        daily={grassDaily}
+        label="일별 팀 스킬(aitk) 사용 — 사람"
+        loading={anyLoading && grassDaily === null}
+      />
+      {/* 에이전트 활동은 실행 이벤트가 붙기 전까지 저장소 커밋을 프록시로 쓴다 — 라벨이 그 사실을 밝힌다 */}
+      {agentGrassPending ? (
+        <div className="mt-3 rounded-2xl border border-dashed border-[var(--border-hover)] px-6 py-5">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            일별 에이전트 활동(bbopters-shared 커밋)
+          </p>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            GitHub이 커밋 통계를 계산하는 중입니다. 잠시 후 새로고침하면 표시됩니다.
+          </p>
+        </div>
+      ) : (
+        <GrassCard
+          daily={agentGrassDaily}
+          label="일별 에이전트 활동(bbopters-shared 커밋)"
+          info="실제 스킬 실행 집계가 아닙니다. 에이전트들이 워크로그·산출물을 커밋하는 저장소의 커밋 수로 활동 리듬을 간접 추정한 값입니다. 실행 이벤트 수집(DEV-4221)이 붙으면 실측으로 교체됩니다."
+          loading={false}
+        />
+      )}
 
       <div className="mt-10 flex items-end justify-between gap-4 flex-wrap border-b border-[var(--border-subtle)]">
         <nav className="flex items-center gap-1 -mb-px" role="tablist" aria-label="지표 항목">
@@ -150,7 +198,17 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
           })}
         </nav>
 
-        {active.usesPeriod && <PeriodControl value={days} onChange={setDays} />}
+        <div className="flex items-center gap-4 pb-1.5 flex-wrap">
+          {/* 기간을 바꾸면 변하는 수치는 기간 선택 바로 옆에서 말한다 */}
+          {periodHighlights.length > 0 && (
+            <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+              {periodHighlights
+                .map((highlight) => `${highlight.label} ${highlight.value}${highlight.hint ?? ''}`)
+                .join(' · ')}
+            </p>
+          )}
+          {active.usesPeriod && <PeriodControl value={days} onChange={setDays} />}
+        </div>
       </div>
 
       {!isAdmin && (
@@ -173,12 +231,12 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
 }
 
 /**
- * 핵심 수치 밴드 — 각 항목이 올린 숫자를 한 줄로 모은다
+ * 고정 스냅샷 타일 — 기간 선택과 무관한 핵심 수치를 맨 위에 크게 둔다
  *
- * @param highlights - 패널들이 올린 수치 목록
+ * @param highlights - periodLinked가 아닌 수치 목록
  * @param loading - 아직 아무 수치도 도착하지 않았는지
  */
-function HighlightBand({
+function SnapshotTiles({
   highlights,
   loading,
 }: {
@@ -187,12 +245,11 @@ function HighlightBand({
 }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
-        {/* 실제 밴드는 두 줄(8칸)로 실린다 — 한 줄만 그리면 데이터 도착 때 화면이 튄다 */}
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((slot) => (
-          <div key={slot} className="bg-[var(--bg-primary)] px-6 py-7">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
+        {[0, 1, 2, 3, 4, 5].map((slot) => (
+          <div key={slot} className="bg-[var(--bg-primary)] px-5 py-6">
             <div className="ax-shimmer h-3 w-16 rounded" />
-            <div className="ax-shimmer mt-3 h-9 w-24 rounded" />
+            <div className="ax-shimmer mt-3 h-8 w-20 rounded" />
           </div>
         ))}
       </div>
@@ -201,17 +258,16 @@ function HighlightBand({
 
   if (highlights.length === 0) return null
 
-  // 패널이 늘어도 수치를 자르지 않는다 — 4개 넘으면 다음 줄로 흐른다
   return (
-    <div className="ax-reveal grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
+    <div className="ax-reveal grid grid-cols-2 md:grid-cols-6 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
       {highlights.map((highlight, index) => (
         // 서로 다른 패널이 같은 라벨을 올릴 수 있으므로 라벨만으로 키를 만들지 않는다
-        <div key={`${highlight.label}-${index}`} className="bg-[var(--bg-primary)] px-6 py-7">
+        <div key={`${highlight.label}-${index}`} className="bg-[var(--bg-primary)] px-5 py-6">
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {highlight.label}
           </p>
           <p className="mt-2.5 flex items-baseline gap-1.5">
-            <span className="font-mono text-3xl md:text-[2.5rem] leading-none tabular-nums tracking-tight text-[var(--text-primary)]">
+            <span className="font-mono text-[1.75rem] md:text-[2rem] leading-none tabular-nums tracking-tight text-[var(--text-primary)]">
               {highlight.value}
             </span>
             {highlight.hint && (
@@ -224,9 +280,198 @@ function HighlightBand({
       {Array.from({ length: (2 - (highlights.length % 2)) % 2 }, (_, slot) => (
         <div key={`fill-sm-${slot}`} className="md:hidden bg-[var(--bg-primary)]" />
       ))}
-      {Array.from({ length: (4 - (highlights.length % 4)) % 4 }, (_, slot) => (
+      {Array.from({ length: (6 - (highlights.length % 6)) % 6 }, (_, slot) => (
         <div key={`fill-md-${slot}`} className="hidden md:block bg-[var(--bg-primary)]" />
       ))}
+    </div>
+  )
+}
+
+/**
+ * 잔디밭 카드 — 최근 52주 일별 활동을 전체 폭으로 펼친다
+ *
+ * 기간 선택과 무관한 고정 윈도우다. 날짜가 지나면 창이 최신 쪽으로 굴러간다.
+ *
+ * @param daily - 성과 요약 패널의 52주 고정 일별 시리즈
+ * @param loading - 아직 데이터가 도착하지 않았는지
+ */
+function GrassCard({
+  daily,
+  label,
+  info,
+  loading,
+}: {
+  daily: AxOverviewData['grassDaily'] | null
+  label: string
+  /** 라벨 옆 ? 아이콘에 띄울 주석 — 프록시 지표처럼 해석 주의가 필요할 때 */
+  info?: string
+  loading: boolean
+}) {
+  if (loading) {
+    return (
+      <div className="mt-3 rounded-2xl border border-[var(--border-subtle)] px-6 py-6">
+        <div className="ax-shimmer h-3 w-24 rounded" />
+        <div className="ax-shimmer mt-3 h-[95px] rounded" />
+      </div>
+    )
+  }
+
+  if (!daily || daily.length === 0) return null
+
+  return (
+    <div className="ax-reveal mt-3 rounded-2xl border border-[var(--border-subtle)] px-6 py-6">
+      <ActivityGrass daily={daily} label={label} info={info} />
+    </div>
+  )
+}
+
+/** 잔디밭 색 농도 단계 수 */
+const GRASS_LEVELS = 4
+
+/** 잔디 툴팁의 요일 표기 */
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const
+
+/**
+ * YYYY-MM-DD(KST 날짜 키)의 요일 인덱스 (0=일)
+ *
+ * 날짜 문자열 자체가 이미 KST 달력 날짜이므로, 시간대 개입 없이
+ * 그 날짜의 요일만 구하면 된다 — UTC로 파싱하면 그렇게 된다.
+ *
+ * @param date - YYYY-MM-DD
+ * @returns 0(일)~6(토)
+ */
+function weekdayOf(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay()
+}
+
+/**
+ * 일별 스킬 사용 잔디밭 — 깃허브 잔디 문법으로 매일의 활동량을 한눈에
+ *
+ * 열 하나가 실제 달력 한 주다: 위가 일요일, 아래가 토요일.
+ * 첫 주·마지막 주의 창 밖 날짜는 빈 자리로 두어 요일이 어긋나지 않게 한다.
+ * 농도는 창 내 최댓값 대비 상대값이라, 조용한 팀에서도 패턴이 보인다.
+ *
+ * @param daily - 일별 이벤트 수 (빈 날은 0으로 채워져 내려온다)
+ */
+function ActivityGrass({
+  daily,
+  label,
+  info,
+}: {
+  daily: AxOverviewData['grassDaily']
+  label: string
+  info?: string
+}) {
+  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const max = Math.max(1, ...daily.map((point) => point.events))
+  const total = daily.reduce((sum, point) => sum + point.events, 0)
+  const first = daily[0]
+  const last = daily[daily.length - 1]
+
+  // 요일 정렬: 창 시작일의 요일만큼 앞을 비우고, 마지막 주의 남은 요일도 비운다
+  const leading = first ? weekdayOf(first.date) : 0
+  const cells: Array<(typeof daily)[number] | null> = [
+    ...Array.from({ length: leading }, () => null),
+    ...daily,
+  ]
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weekCount = cells.length / 7
+
+  /** 이벤트 수 → 0(없음)~4(최대) 농도 */
+  const level = (events: number): number => {
+    if (events === 0) return 0
+    return Math.min(GRASS_LEVELS, Math.max(1, Math.ceil((events / max) * GRASS_LEVELS)))
+  }
+
+  /** 농도 → 칸 스타일. 0은 빈 칸 톤, 1~4는 브랜드색 불투명도 */
+  const cellStyle = (events: number): CSSProperties => {
+    const grade = level(events)
+    if (grade === 0) return { background: 'var(--bg-tertiary)' }
+    return { background: 'var(--brand-primary)', opacity: 0.25 + (grade / GRASS_LEVELS) * 0.75 }
+  }
+
+  /** 칸에 마우스가 올라오면 카드 기준 좌표로 툴팁을 띄운다 */
+  const showTip = (event: ReactMouseEvent<HTMLElement>, point: { date: string; events: number }) => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    const cell = event.currentTarget.getBoundingClientRect()
+    const base = wrap.getBoundingClientRect()
+    setTip({
+      left: cell.left - base.left + cell.width / 2,
+      top: cell.top - base.top,
+      text: `${point.date} (${WEEKDAY_LABELS[weekdayOf(point.date)]}) · ${formatCount(point.events)}건`,
+    })
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <p className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+          {label} · 최근 {Math.round(daily.length / 7)}주
+          {info && (
+            <span className="group relative inline-flex">
+              <span
+                className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px] leading-none text-[var(--text-muted)]"
+                aria-label={info}
+                role="img"
+              >
+                ?
+              </span>
+              <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-1.5 hidden w-72 -translate-x-1/2 whitespace-normal rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-3 py-2 text-[11px] normal-case leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-md group-hover:block">
+                {info}
+              </span>
+            </span>
+          )}
+        </p>
+        <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+          {formatCount(total)}건 · 최대 {formatCount(max)}건/일
+        </p>
+      </div>
+
+      <div className="mt-3 overflow-x-auto pb-1">
+        {/* 카드 폭을 꽉 채우는 유동 격자 — 세로로 일(위)~토(아래) 채운 뒤 다음 주 열로 넘어간다 */}
+        <div
+          className="grid min-w-[560px] gap-[3px]"
+          style={{
+            gridTemplateColumns: `repeat(${weekCount}, minmax(0, 1fr))`,
+            gridTemplateRows: 'repeat(7, auto)',
+            gridAutoFlow: 'column',
+          }}
+          onMouseLeave={() => setTip(null)}
+        >
+          {cells.map((point, index) =>
+            point === null ? (
+              // 창 밖 날짜(첫 주 앞·마지막 주 뒤) — 자리만 지킨다
+              <span key={`pad-${index}`} className="w-full rounded-[2px]" style={{ aspectRatio: '1' }} />
+            ) : (
+              <span
+                key={point.date}
+                className="w-full rounded-[2px]"
+                style={{ aspectRatio: '1', ...cellStyle(point.events) }}
+                onMouseEnter={(event) => showTip(event, point)}
+              />
+            )
+          )}
+        </div>
+        <div className="mt-2 flex items-center justify-between font-mono text-[10px] tabular-nums text-[var(--text-muted)]">
+          <span>{first?.date}</span>
+          <span>세로줄 = 한 주 (위 일요일 → 아래 토요일)</span>
+          <span>{last?.date}</span>
+        </div>
+      </div>
+
+      {/* 커스텀 툴팁 — 브라우저 기본 title은 뜨기까지 1초쯤 걸려 없는 것처럼 보인다 */}
+      {tip && (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-md"
+          style={{ left: tip.left, top: tip.top - 6 }}
+          role="status"
+        >
+          {tip.text}
+        </div>
+      )}
     </div>
   )
 }
