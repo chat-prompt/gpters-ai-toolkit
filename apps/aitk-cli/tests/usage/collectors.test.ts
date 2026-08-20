@@ -37,6 +37,8 @@ function assistantLine(opts: {
   cacheCreation?: number
   cacheRead?: number
   output?: number
+  /** 없으면 스트리밍 도중 기록된 미완성 줄이다 */
+  stopReason?: string | null
 }): string {
   return JSON.stringify({
     type: 'assistant',
@@ -45,6 +47,7 @@ function assistantLine(opts: {
     message: {
       id: opts.id,
       model: opts.model ?? 'claude-opus-5',
+      stop_reason: opts.stopReason ?? null,
       usage: {
         input_tokens: opts.input ?? 0,
         cache_creation_input_tokens: opts.cacheCreation ?? 0,
@@ -160,13 +163,81 @@ describe('collectClaudeCode', () => {
   })
 
   it('컴팩션으로 복제된 같은 message.id는 한 번만 센다', async () => {
-    const duplicated = assistantLine({ id: 'dup', sessionId: 's1', timestamp: IN_WINDOW, input: 100, output: 10 })
+    const duplicated = assistantLine({ id: 'dup', sessionId: 's1', timestamp: IN_WINDOW, input: 100, output: 10, stopReason: 'end_turn' })
     write('.claude/projects/proj-a/original.jsonl', duplicated)
     write('.claude/projects/proj-a/compacted.jsonl', duplicated)
 
     const record = await collectClaudeCode(WINDOW)
 
     expect(record!.inputTokens).toBe(100)
+    expect(record!.outputTokens).toBe(10)
+  })
+
+  // 실제 트랜스크립트의 중복은 값이 똑같지 않다. 스트리밍 중인 응답이 같은 message.id로
+  // 여러 번 기록되고 뒤로 갈수록 값이 커진다. 첫 줄만 채택하면 미완성 값을 세게 된다.
+  // (260820 Deletion Test에서 출력 토큰 32.5% 과소집계로 드러난 케이스)
+  it('스트리밍으로 같은 id가 여러 번 기록되면 완성된 값을 센다', async () => {
+    write(
+      '.claude/projects/proj-a/streaming.jsonl',
+      [
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 59, output: 2 }),
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 59, output: 676, stopReason: 'end_turn' }),
+      ].join('\n')
+    )
+
+    const record = await collectClaudeCode(WINDOW)
+
+    // 미완성 줄의 2가 아니라 완성된 676. 입력은 늘지 않았으므로 59 그대로 (두 번 세지 않는다)
+    expect(record!.outputTokens).toBe(676)
+    expect(record!.inputTokens).toBe(59)
+    expect(record!.models).toEqual({ 'claude-opus-5': 59 + 676 })
+  })
+
+  // 완료된 줄이 미완성 줄보다 작은 값을 들고 올 수도 있다. 이때 필드별로 최댓값을 따로
+  // 취하면 어느 줄에도 없던 조합이 만들어진다 — 완료된 줄을 통째로 채택해야 한다.
+  it('완료된 줄의 값이 더 작아도 줄 단위로 통째 채택한다', async () => {
+    write(
+      '.claude/projects/proj-a/shrink.jsonl',
+      [
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 100, cacheRead: 0, output: 50 }),
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 80, cacheRead: 10, output: 40, stopReason: 'end_turn' }),
+      ].join('\n')
+    )
+
+    const record = await collectClaudeCode(WINDOW)
+
+    // 필드별 최댓값을 섞으면 100/10/50이 되지만, 그런 줄은 존재한 적이 없다
+    expect(record!.inputTokens).toBe(80)
+    expect(record!.cachedTokens).toBe(10)
+    expect(record!.outputTokens).toBe(40)
+  })
+
+  // 미완성 줄과 완료 줄의 모델명이 다르면, 한 응답의 토큰이 두 모델로 쪼개져선 안 된다.
+  it('같은 응답의 토큰을 두 모델로 쪼개지 않는다', async () => {
+    write(
+      '.claude/projects/proj-a/model-switch.jsonl',
+      [
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, model: 'partial-model', input: 100, output: 2 }),
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, model: 'final-model', input: 100, output: 50, stopReason: 'end_turn' }),
+      ].join('\n')
+    )
+
+    const record = await collectClaudeCode(WINDOW)
+
+    expect(record!.models).toEqual({ 'final-model': 150 })
+  })
+
+  // 복제본이 다른 세션에 실려 오더라도 세션 수는 응답을 처음 본 곳에서만 센다.
+  // 토큰 집계를 고치면서 세션 계산까지 같이 바뀌지 않도록 고정해 둔다.
+  it('다른 세션에 복제된 사본은 세션 수를 늘리지 않는다', async () => {
+    const line = (sessionId: string) =>
+      assistantLine({ id: 'dup', sessionId, timestamp: IN_WINDOW, input: 100, output: 10, stopReason: 'end_turn' })
+    write('.claude/projects/proj-a/original.jsonl', line('s1'))
+    write('.claude/projects/proj-a/compacted.jsonl', line('s2'))
+
+    const record = await collectClaudeCode(WINDOW)
+
+    expect(record!.sessions).toBe(1)
     expect(record!.outputTokens).toBe(10)
   })
 

@@ -22,8 +22,37 @@ interface AssistantEntry {
   message?: {
     id?: unknown
     model?: unknown
+    /** 값이 있으면 완료된 응답, 없으면 스트리밍 도중 기록된 미완성 줄이다 */
+    stop_reason?: unknown
     usage?: Record<string, unknown>
   }
+}
+
+/** 같은 message.id의 여러 줄 중 채택한 한 줄 */
+interface Snapshot {
+  input: number
+  cached: number
+  output: number
+  model: string
+  /** stop_reason이 있는 완료된 줄인가 */
+  complete: boolean
+}
+
+/**
+ * 두 스냅샷 중 어느 쪽을 채택할지 정한다
+ *
+ * 완료된 줄이 미완성 줄을 이기고, 같은 상태면 토큰 합이 큰 쪽을 쓴다.
+ * 필드별로 따로 최댓값을 취하면 어느 줄에도 없던 조합이 만들어지므로 줄 단위로 고른다.
+ *
+ * @param candidate - 새로 만난 줄
+ * @param current - 지금까지 채택해 둔 줄
+ * @returns candidate로 갈아끼워야 하면 true
+ */
+function isBetterSnapshot(candidate: Snapshot, current: Snapshot): boolean {
+  if (candidate.complete !== current.complete) return candidate.complete
+  const candidateTotal = candidate.input + candidate.cached + candidate.output
+  const currentTotal = current.input + current.cached + current.output
+  return candidateTotal > currentTotal
 }
 
 /**
@@ -80,8 +109,16 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
   let cachedTokens = 0
   const models: Record<string, number> = {}
   const sessions = new Set<string>()
-  // 컴팩션이 같은 응답을 여러 트랜스크립트에 복제한다. message.id로 걸러야 총량이 부풀지 않는다.
-  const seenMessages = new Set<string>()
+  // 같은 message.id가 여러 줄로 나타나는 경우가 둘 있다.
+  // (1) 컴팩션이 같은 응답을 여러 트랜스크립트에 복제한다 — 그대로 더하면 총량이 부푼다.
+  // (2) 응답이 스트리밍되는 동안 같은 id로 여러 번 기록된다. 먼저 쓰인 줄은 stop_reason이 없는
+  //     미완성 상태다 — 첫 줄만 채택하면 완성본을 놓친다.
+  // 그래서 id마다 채택한 줄 하나를 들고 있다가, 더 나은 줄이 오면 이전 기여분을 빼고 갈아끼운다.
+  // 줄 단위로 통째 채택해야 모델 귀속도 한 줄로 유지되고, 필드가 행끼리 섞이지 않는다.
+  // (260820: 첫 줄 채택으로 출력 토큰 32.5% 과소집계 중이던 것을 Deletion Test로 발견)
+  const adopted = new Map<string, Snapshot>()
+  // 모델명 문자열을 재사용해 id가 많을 때 같은 이름의 사본이 쌓이지 않게 한다
+  const modelNames = new Map<string, string>()
 
   for (const file of files) {
     await scanJsonl(
@@ -96,8 +133,7 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
 
         const message = entry.message
         const messageId = message?.id
-        if (typeof messageId !== 'string' || seenMessages.has(messageId)) return
-        seenMessages.add(messageId)
+        if (typeof messageId !== 'string') return
 
         const usage = message?.usage ?? {}
         // 캐시 생성분은 실제로 새로 읽힌 입력이라 입력 쪽에, 캐시 적중분만 캐시로 센다.
@@ -105,24 +141,51 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
         const cached = toCount(usage.cache_read_input_tokens)
         const output = toCount(usage.output_tokens)
 
-        inputTokens += input
-        cachedTokens += cached
-        outputTokens += output
+        const rawModel = typeof message?.model === 'string' ? message.model : 'unknown'
+        const model = modelNames.get(rawModel) ?? (modelNames.set(rawModel, rawModel), rawModel)
+        const stopReason = message?.stop_reason
+        const candidate: Snapshot = {
+          input,
+          cached,
+          output,
+          model,
+          complete: typeof stopReason === 'string' && stopReason.length > 0,
+        }
 
-        if (typeof entry.sessionId === 'string') sessions.add(entry.sessionId)
+        const previous = adopted.get(messageId)
+        if (previous && !isBetterSnapshot(candidate, previous)) return
 
         // 토큰을 하나도 안 쓴 응답(<synthetic> 등)까지 모델별 집계에 넣으면
         // 계약의 모델 종류 상한만 갉아먹고 대시보드에는 0짜리 줄이 늘어난다.
-        const total = input + cached + output
-        if (total === 0) return
+        const addModelTokens = (name: string, amount: number) => {
+          if (amount === 0) return
+          const next = (models[name] ?? 0) + amount
+          if (next > 0) models[name] = next
+          else delete models[name]
+        }
 
-        const model = typeof message?.model === 'string' ? message.model : 'unknown'
-        models[model] = (models[model] ?? 0) + total
+        if (previous) {
+          // 이전에 채택한 줄의 기여분을 되돌린 뒤 새 줄로 갈아끼운다
+          inputTokens -= previous.input
+          cachedTokens -= previous.cached
+          outputTokens -= previous.output
+          addModelTokens(previous.model, -(previous.input + previous.cached + previous.output))
+        } else {
+          // 세션은 응답을 처음 본 곳에서만 센다. 컴팩션 사본이 다른 세션에 복제돼도
+          // 세션 수가 늘지 않는다 — 토큰 집계만 고치고 세션 계산은 그대로 두려는 것.
+          if (typeof entry.sessionId === 'string') sessions.add(entry.sessionId)
+        }
+
+        adopted.set(messageId, candidate)
+        inputTokens += input
+        cachedTokens += cached
+        outputTokens += output
+        addModelTokens(model, input + cached + output)
       }
     )
   }
 
-  if (seenMessages.size === 0) return null
+  if (adopted.size === 0) return null
 
   const planRaw = readPlanRaw(home)
   return {
