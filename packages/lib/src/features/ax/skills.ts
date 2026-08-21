@@ -22,8 +22,11 @@ const SKILL_LIMIT = 50
  * `exercise_search`·`exercise_apply`는 실습 생성 엔진이 남기는 기계 트래픽이라
  * 사용자 없이 건수만 올린다. 요약 타일과 표가 같은 숫자를 말하도록 모든 쿼리에서 함께 제외한다.
  * `suggest`는 기능 자체가 제거돼(2026-05-18) 새 행이 쌓이지 않으므로 포함하지 않는다.
+ *
+ * 성과 요약 패널(overview)도 이 상수를 그대로 가져다 쓴다 —
+ * 두 패널이 서로 다른 모집단을 세면 화면의 숫자가 어긋난다.
  */
-const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as const
+export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as const
 
 const meta: AxPanelMeta = {
   id: 'skill-usage',
@@ -199,8 +202,9 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           unusedSkills: unusedRows.map((row) => ({ id: row.id, name: row.name })),
         },
         [
-          { label: '스킬 사용', value: totalEvents.toLocaleString('ko-KR'), hint: `${span}일` },
-          { label: '쓴 사람', value: activeUsers.toLocaleString('ko-KR'), hint: '명' },
+          // 기간 라벨은 붙이지 않는다 — 화면의 기간 선택이 이 두 타일 바로 옆에 있다
+          { label: '스킬 사용', value: totalEvents.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
+          { label: '쓴 사람', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
         ]
       )
     } catch (error) {

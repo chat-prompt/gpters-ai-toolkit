@@ -8,11 +8,12 @@
  * 4. 여러 수집 구간이 섞여 있을 때 가장 최근 구간만 집계해 이중 계상을 막는지
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@gpters/db', () => ({
   db: { select: vi.fn() },
   axClientUsage: { name: 'ax_client_usage', periodStart: 'period_start' },
+  users: { email: 'users.email' },
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -64,11 +65,22 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const ADMIN = { days: 30, isAdmin: true, orgId: null }
-const MEMBER = { days: 30, isAdmin: false, orgId: null }
+const ADMIN = { days: 30, isAdmin: true }
+const MEMBER = { days: 30, isAdmin: false }
 
 describe('clientUsagePanel', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // 참여율 분모는 도메인이 설정된 경우에만 붙는다 — 기본 테스트는 분모 없이 돈다
+    delete process.env.INTERNAL_ORGANIZATION_DOMAIN
+    // 최근성 컷오프가 실제 시계를 보므로 고정한다 — 아니면 달력이 지나며 테스트가 깨진다
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-10T00:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('수집 데이터가 없으면 오류가 아니라 not_configured로 응답한다', async () => {
     queueRows([])
@@ -135,7 +147,7 @@ describe('clientUsagePanel', () => {
     expect(JSON.stringify(result.data)).not.toContain('진우')
   })
 
-  it('구간이 섞여 있으면 최근 구간만 집계해 이중 계상을 막는다', async () => {
+  it('같은 사람의 보고가 여러 건이면 최신 한 건만 집계해 이중 계상을 막는다', async () => {
     queueRows([
       row({ periodStart: THIS_WEEK, cachedTokens: 850 }),
       row({ memberName: '진우', periodStart: LAST_WEEK, cachedTokens: 9999 }),
@@ -147,6 +159,88 @@ describe('clientUsagePanel', () => {
     expect(result.data!.totalTokens).toBe(1000)
     expect(result.data!.members).toHaveLength(1)
     expect(result.data!.periodStart).toBe(THIS_WEEK.toISOString())
+  })
+
+  it('보고일이 달라 구간이 어긋나도 두 사람 모두 집계된다', async () => {
+    // 수집기는 실행일 기준 롤링 윈도우라 사람마다 periodStart가 다르다.
+    // 전역 최신 구간으로 자르면 어제 보고한 사람이 통째로 사라진다.
+    queueRows([
+      row({ memberName: '진우', periodStart: THIS_WEEK, cachedTokens: 850 }),
+      row({
+        memberName: '다혜',
+        periodStart: LAST_WEEK,
+        periodEnd: new Date('2026-08-01T00:00:00Z'),
+        inputTokens: 100,
+        outputTokens: 50,
+        cachedTokens: 350,
+      }),
+    ])
+
+    const result = await clientUsagePanel.load(ADMIN)
+
+    expect(result.data!.reportingMembers).toBe(2)
+    expect(result.data!.totalTokens).toBe(1500)
+    expect(result.data!.members).toHaveLength(2)
+    // 화면 구간은 포함된 보고 전체를 덮는 범위다
+    expect(result.data!.periodStart).toBe(LAST_WEEK.toISOString())
+    expect(result.data!.periodEnd).toBe('2026-08-08T00:00:00.000Z')
+  })
+
+  it('최근 창을 벗어난 보고만 있으면 not_configured로 응답한다', async () => {
+    queueRows([
+      row({
+        periodStart: new Date('2026-06-01T00:00:00Z'),
+        periodEnd: new Date('2026-06-08T00:00:00Z'),
+      }),
+    ])
+
+    const result = await clientUsagePanel.load(ADMIN)
+
+    // 두 달 전 숫자를 "현재 사용량"으로 보여주면 안 된다
+    expect(result.status).toBe('not_configured')
+    expect(result.data).toBeNull()
+  })
+
+  it('도메인이 없으면 참여율 분모 없이 보고 인원만 내려준다', async () => {
+    queueRows([row(), row({ memberName: '다혜' })])
+
+    const result = await clientUsagePanel.load(MEMBER)
+
+    expect(result.data!.reportingMembers).toBe(2)
+    // 분모를 추정해 채우면 안 된다 — 도메인 미설정이면 null
+    expect(result.data!.internalMembers).toBeNull()
+  })
+
+  it('도메인이 설정되면 사내 계정 수를 참여율 분모로 내려준다', async () => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
+
+    vi.mocked(db.select).mockReset()
+    vi.mocked(db.select)
+      .mockReturnValueOnce(builder([row(), row({ memberName: '다혜' })]) as never)
+      .mockReturnValueOnce(builder([{ count: 12 }]) as never)
+
+    const result = await clientUsagePanel.load(MEMBER)
+
+    expect(result.data!.reportingMembers).toBe(2)
+    expect(result.data!.internalMembers).toBe(12)
+    // 요약 밴드 힌트에도 참여율이 실린다
+    expect(result.highlights?.[0]?.hint).toBe('2/12명')
+  })
+
+  it('분모 조회가 실패해도 패널은 정상 응답한다', async () => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
+
+    vi.mocked(db.select).mockReset()
+    vi.mocked(db.select)
+      .mockReturnValueOnce(builder([row()]) as never)
+      .mockImplementationOnce(() => {
+        throw new Error('연결 끊김')
+      })
+
+    const result = await clientUsagePanel.load(MEMBER)
+
+    expect(result.status).toBe('ok')
+    expect(result.data!.internalMembers).toBeNull()
   })
 
   it('모델별 사용량을 내림차순으로 합산한다', async () => {

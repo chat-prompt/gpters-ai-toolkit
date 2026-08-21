@@ -105,6 +105,17 @@ describe('resolveAxViewer', () => {
     delete process.env.INTERNAL_ORGANIZATION_DOMAIN
     expect(resolveAxViewer({ email: null, role: 'viewer' }).reason).toBe('unauthenticated')
   })
+
+  it('DEV_BYPASS_AUTH는 개발 모드가 아니면 무시된다', () => {
+    // NODE_ENV가 test인 지금 환경에서 그대로 검증한다 — 프로덕션에서도 같은 이유로 무시된다
+    process.env.DEV_BYPASS_AUTH = 'true'
+    try {
+      expect(resolveAxViewer(null).canAccess).toBe(false)
+      expect(resolveAxViewer({ email: 'outsider@example.com', role: 'admin' }).canAccess).toBe(false)
+    } finally {
+      delete process.env.DEV_BYPASS_AUTH
+    }
+  })
 })
 
 describe('isInternalEmail', () => {

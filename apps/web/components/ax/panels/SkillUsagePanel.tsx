@@ -68,7 +68,9 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
  * @param days - 조회 기간(일). 데이터가 없을 때 안내 문구에만 쓴다
  */
 function DailyTrend({ daily, days }: { daily: AxSkillUsageData['daily']; days: number }) {
-  if (daily.length === 0) {
+  // 서버가 빈 날을 0으로 채워 내려주므로 길이가 아니라 합으로 판정한다 —
+  // 전부 0인데 막대를 그리면 "최대 1건"이 활동처럼 읽힌다
+  if (daily.length === 0 || daily.every((point) => point.events === 0)) {
     return <p className={EMPTY_NOTE}>최근 {days}일 동안 기록된 이벤트가 없습니다.</p>
   }
 

@@ -60,6 +60,8 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
           periodStart={data.periodStart}
           periodEnd={data.periodEnd}
           syncedAt={data.syncedAt}
+          reportingMembers={data.reportingMembers}
+          internalMembers={data.internalMembers}
         />
         {data.byClient.length > 0 ? (
           <div className="mt-3">
@@ -347,32 +349,45 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
 }
 
 /**
- * 집계 구간 안내
+ * 집계 구간·참여율 안내
  *
  * 이 패널의 숫자는 조회 시각이 아니라 수집기가 돌던 시점의 구간을 담는다.
- * 상단 기간 선택과 무관하다는 것도 함께 밝힌다.
+ * 보고 인원만 쓰면 "전원이 참여 중"으로 오독되므로, 분모(사내 계정 수)를 알 수
+ * 있을 때는 참여율 형태로 보여준다.
  *
  * @param periodStart - 구간 시작 (ISO 8601)
  * @param periodEnd - 구간 끝 (ISO 8601)
  * @param syncedAt - 마지막 수집 시각 (ISO 8601)
+ * @param reportingMembers - 최근 구간에 보고한 인원 수
+ * @param internalMembers - 사내 계정 수. 도메인 미설정이면 null
  */
 function PeriodNotice({
   periodStart,
   periodEnd,
   syncedAt,
+  reportingMembers,
+  internalMembers,
 }: {
   periodStart: string | null
   periodEnd: string | null
   syncedAt: string | null
+  reportingMembers: number
+  internalMembers: number | null
 }) {
   const range =
     periodStart !== null && periodEnd !== null
       ? `${formatDate(periodStart)} ~ ${formatDate(periodEnd)}`
       : '구간 미상'
 
+  const participation =
+    internalMembers !== null && internalMembers > 0
+      ? `보고 ${formatCount(reportingMembers)}/${formatCount(internalMembers)}명`
+      : `보고 ${formatCount(reportingMembers)}명`
+
   return (
     <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
       {range}
+      {` · ${participation}`}
       {syncedAt !== null && ` · 수집 ${formatDate(syncedAt)}`}
     </p>
   )

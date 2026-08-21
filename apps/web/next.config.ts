@@ -94,6 +94,17 @@ const nextConfig: NextConfig = {
         },
       ],
     },
+    {
+      // AX 응답은 뷰어 권한(관리자 여부)에 따라 내용이 달라진다 — 같은 URL의
+      // 관리자 응답이 공유 캐시를 타고 일반 구성원에게 재사용되면 안 된다
+      source: '/api/ax/:path*',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'private, no-store',
+        },
+      ],
+    },
   ],
 };
 

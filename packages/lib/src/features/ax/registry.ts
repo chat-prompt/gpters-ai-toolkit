@@ -13,14 +13,20 @@
 import type { AxPanel, AxPanelMeta } from './types'
 import type { AxViewer } from './access'
 import { canViewPanel } from './access'
+import { overviewPanel } from './overview'
 import { skillUsagePanel } from './skills'
+import { sharedSkillsPanel } from './shared-skills'
+import { skillDiffPanel } from './skill-diff'
 import { vercelDeploymentsPanel } from './vercel'
 import { subscriptionsPanel } from './subscriptions'
 import { clientUsagePanel } from './usage'
 
 /** 등록된 패널 — 배열 순서가 화면 표시 순서다 */
 export const AX_PANELS: AxPanel[] = [
+  overviewPanel,
   skillUsagePanel,
+  sharedSkillsPanel,
+  skillDiffPanel,
   clientUsagePanel,
   subscriptionsPanel,
   vercelDeploymentsPanel,

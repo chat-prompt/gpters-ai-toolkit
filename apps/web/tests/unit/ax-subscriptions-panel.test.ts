@@ -69,7 +69,7 @@ describe('subscriptionsPanel', () => {
       memberRow({ vendor: 'ChatGPT Pro', plan: 'Pro', ownerName: '혜민', amount: 20, currency: 'USD' }),
     ])
 
-    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false, orgId: null })
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('ok')
     expect(result.data!.members).toBeNull()
@@ -82,7 +82,7 @@ describe('subscriptionsPanel', () => {
   it('isAdmin=true면 members가 팀원별 상세로 채워진다', async () => {
     queueRows([memberRow()])
 
-    const result = await subscriptionsPanel.load({ days: 30, isAdmin: true, orgId: null })
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: true })
 
     expect(result.data!.members).toEqual([
       {
@@ -103,7 +103,7 @@ describe('subscriptionsPanel', () => {
   it('yearly 구독은 12로 나눠 월 환산한다', async () => {
     queueRows([memberRow({ amount: 2400000, billingCycle: 'yearly' })])
 
-    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false, orgId: null })
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false })
 
     expect(result.data!.monthlyByCurrency).toEqual({ KRW: 200000 })
     expect(result.data!.byVendor[0].monthlyByCurrency).toEqual({ KRW: 200000 })
@@ -115,7 +115,7 @@ describe('subscriptionsPanel', () => {
       memberRow({ vendor: 'ChatGPT Pro', plan: 'Pro', amount: 20, currency: 'USD' }),
     ])
 
-    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false, orgId: null })
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false })
 
     expect(result.data!.activeSeats).toBe(2)
     expect(result.data!.monthlyByCurrency).toEqual({ KRW: 200000, USD: 20 })
@@ -128,7 +128,7 @@ describe('subscriptionsPanel', () => {
   it('0건이면 status는 ok이고 빈 집계를 돌려준다', async () => {
     queueRows([])
 
-    const result = await subscriptionsPanel.load({ days: 30, isAdmin: true, orgId: null })
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: true })
 
     expect(result.status).toBe('ok')
     expect(result.data).toEqual({
@@ -146,7 +146,7 @@ describe('subscriptionsPanel', () => {
       throw new Error('connection refused')
     })
 
-    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false, orgId: null })
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('error')
     expect(result.data).toBeNull()

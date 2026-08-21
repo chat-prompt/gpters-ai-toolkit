@@ -16,6 +16,16 @@ import type { UserRole } from '@/lib/security/rbac'
 
 const log = createLogger('api:ax:panel')
 
+/**
+ * 스킬 비교 패널의 콜드 로드는 GitHub 문서 ~120건을 내려받는다(1시간 캐시).
+ * 플랫폼 기본 타임아웃(10~15초)에 걸리면 캐시가 안 남아 다음 요청이 전부 반복하므로
+ * 여유를 명시한다.
+ */
+export const maxDuration = 60
+
+/** 권한별로 내용이 달라지는 응답 — 어떤 캐시에도 저장되면 안 된다 */
+const NO_STORE = { 'Cache-Control': 'private, no-store' }
+
 /** 허용 조회 기간(일) */
 const ALLOWED_DAYS = [7, 30, 90] as const
 const DEFAULT_DAYS = 30
@@ -71,9 +81,8 @@ export async function GET(
     const result = await panel.load({
       days,
       isAdmin: viewer.isAdmin,
-      orgId: session?.user?.currentOrgId ?? null,
     })
-    return NextResponse.json(result)
+    return NextResponse.json(result, { headers: NO_STORE })
   } catch (error) {
     log.error('패널 로딩 실패', error, { panelId })
     return ApiErrors.internalError('패널 데이터를 불러오지 못했습니다')

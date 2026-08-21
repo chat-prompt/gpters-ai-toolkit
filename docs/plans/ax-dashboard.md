@@ -26,7 +26,11 @@ packages/lib/src/features/ax/
   panel.ts          결과 헬퍼 (panelOk / panelNotConfigured / panelError)
   access.ts         접근 판정 (resolveAxViewer / canViewPanel)
   registry.ts       패널 등록부  ← 여기에 한 줄 추가하면 화면에 뜬다
+  overview.ts       성과 요약 (실측 지표 + 미계측 지표 명시)
   skills.ts         스킬 사용량
+  shared-skills.ts  공유 스킬(bbopters-shared) 인벤토리
+  usage.ts          클라이언트 사용량 (Claude Code · Codex)
+  usage-report.ts   수집기 ↔ 서버 보고 계약 (aitk usage report → MCP report_usage)
   vercel.ts         배포 사이트
   subscriptions.ts  구독 현황
 ```
@@ -57,7 +61,7 @@ API는 라우트 하나가 레지스트리를 타고 처리한다.
 
 `users.role`은 조직과 무관한 전역 값이다. 그래서 관리자 역할만으로 도메인 검사를 건너뛰지 않는다 — 다른 조직 운영자에게 사내 데이터가 열리는 경로가 된다.
 
-스킬 사용량 패널은 카탈로그를 읽으므로 조직 격리를 따른다. 요청자의 현재 조직 + 공개 항목만 집계에 들어간다.
+스킬 집계는 단일 GPTers 카탈로그 전체를 모집단으로 쓴다. 조직별 격리는 카탈로그 통합(2026-08)과 함께 제거됐고, 패널 컨텍스트에서도 orgId를 걷어냈다.
 
 패널마다 `visibility: 'org' | 'admin'` 을 갖는다. 구독 패널은 `org`이지만 **팀원별 상세 행은 관리자에게만** 내려간다 — 일반 구성원에게는 벤더별 집계와 총액만 간다. 이름·이메일이 응답에 실리지 않는지는 테스트로 막아 두었다.
 
@@ -65,9 +69,16 @@ API는 라우트 하나가 레지스트리를 타고 처리한다.
 
 | 패널 | 출처 | 상태 |
 | -- | -- | -- |
+| 성과 요약 | aitk DB (`skill_events` · `catalog_items`) — 스킬 사용량과 동일 모집단 | 자동 수집 |
 | 스킬 사용량 | aitk DB (`skill_events` · `mcp_sessions` · `catalog_items`) | 자동 수집 |
+| 공유 스킬 | GitHub git trees API (`BBOPTERS_SHARED_REPO` + `GH_TOKEN`) | 인벤토리만 · 5분 캐시. 실행 이벤트는 미연결 ([계약 설계](./ax-shared-skills.md)) |
+| 클라이언트 사용량 | `ax_client_usage` 테이블 ← `aitk usage report` CLI → MCP `report_usage` | 팀원 머신에서 하루 1회 자동 보고 |
 | 배포 사이트 | Vercel REST API (`VERCEL_API_TOKEN`, 선택 `VERCEL_TEAM_ID`) | 자동 조회 + 5분 캐시 |
 | 구독 현황 | `ax_subscriptions` 테이블 ← 결제내역 트래커 시트에서 CSV import | 수동 갱신 |
+
+성과 요약 패널은 목업의 지표 중 **실측 가능한 것만** 계산한다(주간 활성·누적 참여·일별 추이·활용 유형 분포·KST 시간대 밀도). 완료 세션·완주율·절감 시간·부서별 참여는 계측 근거가 없어 값 대신 "미계측 + 사유"로 내려간다 — 0이나 추정값으로 꾸미지 않는다는 완료 기준을 그대로 따른 것이다.
+
+클라이언트 사용량 패널은 사람·클라이언트별 **최신 보고 한 건씩**을 집계한다(수집기 구간이 실행일 기준 롤링 윈도우라 전역 최신 구간으로 자르면 어제 보고한 사람이 사라진다). 마지막 보고가 14일을 넘긴 사람은 "현재 사용량"에서 뺀다. 참여율(보고 인원 / 내부 도메인 계정 수)도 함께 표시하는데, 분자는 수집기 표시명, 분모는 계정 수라 **근사치**다. `INTERNAL_ORGANIZATION_DOMAIN`이 없으면 분모를 추정하지 않고 보고 인원만 보여준다.
 
 ### 구독 테이블 생성
 
@@ -94,9 +105,12 @@ CSV 헤더: `vendor,plan,owner_name,renewal_day,payer,amount,currency,billing_cy
 
 | 변수 | 필수 | 용도 |
 | -- | -- | -- |
-| `INTERNAL_ORGANIZATION_DOMAIN` | 권장 | 내부 구성원 판정. 비어 있으면 도메인 조건을 적용하지 않는다 |
+| `INTERNAL_ORGANIZATION_DOMAIN` | 권장 | 내부 구성원 판정 + 사용량 참여율의 분모. 비어 있으면 대시보드 접근이 전면 차단된다 |
 | `VERCEL_API_TOKEN` | 배포 사이트 패널에 필요 | Vercel REST API 토큰. 없으면 해당 패널만 "미설정" 안내 |
 | `VERCEL_TEAM_ID` | 선택 | 팀 계정 조회 시 |
+| `BBOPTERS_SHARED_REPO` | 공유 스킬 패널에 필요 | 공유 스킬 저장소 (`owner/repo`). 없으면 해당 패널만 "미설정" 안내 |
+| `BBOPTERS_SHARED_SKILLS_PATH` | 선택 | 저장소 내 스킬 상위 경로 (기본 `skills`) |
+| `GH_TOKEN` | 공유 스킬 패널에 필요 | GitHub API 토큰 (플러그인 동기화와 공용) |
 
 토큰이 없어도 대시보드는 뜬다. 해당 패널만 안내 카드로 바뀐다.
 
@@ -113,3 +127,5 @@ CSV 헤더: `vendor,plan,owner_name,renewal_day,payer,amount,currency,billing_cy
 - **스킬별 Eval 구현 여부·품질 점수** — 평가 플랫폼 도입 게이트가 아직 안 열렸다. 트레이스·평가 결과 규격이 확정되면 패널 하나로 추가한다.
 - **팀원별 AI 구독 실사용량** — Claude·ChatGPT 개인 구독은 벤더가 좌석별 사용량 API를 열어주지 않는다. 플랜과 비용까지만 다룬다.
 - **OpenClaw 등 공유 계정 사용량** — 한 계정을 여러 명이 쓰는 형태라 사용자 귀속이 안 된다.
+- **공유 스킬(bbopters-shared) 실행 이벤트** — 인벤토리만 연결했다. 실행 이벤트 수집·매핑 계약은 [ax-shared-skills.md](./ax-shared-skills.md)에 설계해 두었고, 사내 에이전트 쪽 구현이 붙으면 패널에 사용량이 실린다.
+- **완료 세션·완주율·절감 시간·부서별 참여** — 성과 요약 패널이 "미계측 + 사유"로 명시한다. 계측 계약이 정해지면 실측 필드로 옮긴다.

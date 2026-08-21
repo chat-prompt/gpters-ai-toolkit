@@ -48,8 +48,16 @@ export function isInternalEmail(email?: string | null): boolean {
  * 관리자 역할이라도 내부 도메인 계정이 아니면 접근할 수 없다.
  * `users.role`은 조직과 무관한 전역 컬럼이라, 역할만으로 도메인 검사를 건너뛰면
  * 다른 조직 운영자에게 사내 데이터가 열린다.
+ *
+ * 개발 모드에서 `DEV_BYPASS_AUTH=true`면 관리자 뷰어로 통과시킨다 —
+ * 로컬에는 OAuth 자격증명이 없어 세션을 만들 수 없기 때문이다.
+ * 미들웨어의 같은 이름 바이패스와 동일하게 `NODE_ENV=development`로 이중 게이트한다.
  */
 export function resolveAxViewer(input: AxViewerInput | null | undefined): AxViewer {
+  if (process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true') {
+    return { canAccess: true, isAdmin: true }
+  }
+
   if (!input?.email) {
     return { canAccess: false, isAdmin: false, reason: 'unauthenticated' }
   }
