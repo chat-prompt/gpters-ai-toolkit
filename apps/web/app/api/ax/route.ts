@@ -34,8 +34,12 @@ export async function GET(request: NextRequest) {
       : ApiErrors.forbidden('사내 구성원만 접근할 수 있습니다')
   }
 
-  return NextResponse.json({
-    panels: listAxPanels(viewer),
-    isAdmin: viewer.isAdmin,
-  })
+  // 뷰어 권한에 따라 내용이 달라지는 응답 — 캐시에 저장되면 안 된다
+  return NextResponse.json(
+    {
+      panels: listAxPanels(viewer),
+      isAdmin: viewer.isAdmin,
+    },
+    { headers: { 'Cache-Control': 'private, no-store' } }
+  )
 }

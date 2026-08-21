@@ -164,6 +164,10 @@ export const skillDiffPanel: AxPanel<AxSkillDiffData> = {
     try {
       // 1. 양쪽 인벤토리
       const tree = await fetchRepoTree(config.repo, config.token)
+      if (tree.truncated === true) {
+        // 목록이 잘렸는데 비교를 내면 "빠진 스킬 = 차이 없음"으로 읽힌다 — 닫는 쪽이 정직하다
+        return panelError(META, '저장소 트리가 잘려 비교가 불완전합니다. 잠시 후 다시 시도해 주세요')
+      }
       const agentSkills = extractSkills(tree.tree ?? [], config.skillsPath).filter(
         (skill) => skill.hasSkillDoc
       )

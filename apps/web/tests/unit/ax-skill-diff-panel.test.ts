@@ -54,14 +54,14 @@ function mockAitk(rows: Array<{ id: string; content: string }>) {
  *
  * @param agentDocs - 에이전트 스킬 id → SKILL.md 원문. 값이 null이면 404
  */
-function mockGitHub(agentDocs: Record<string, string | null>) {
+function mockGitHub(agentDocs: Record<string, string | null>, truncated = false) {
   const tree = Object.keys(agentDocs).map((id) => ({ path: `skills/${id}/SKILL.md`, type: 'blob' }))
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
       const u = String(url)
       if (u.includes('/git/trees/')) {
-        return { ok: true, status: 200, json: async () => ({ tree, truncated: false }) }
+        return { ok: true, status: 200, json: async () => ({ tree, truncated }) }
       }
       const match = u.match(/contents\/skills\/([^/]+)\/SKILL\.md/)
       const doc = match ? agentDocs[match[1]] : null
@@ -164,6 +164,16 @@ describe('skillDiffPanel', () => {
     const second = await skillDiffPanel.load(CTX)
 
     expect(second.generatedAt).toBe(first.generatedAt)
+  })
+
+  it('트리가 잘렸으면 불완전 비교를 내지 않고 error로 닫는다', async () => {
+    mockAitk([{ id: 'one', content: '본문' }])
+    mockGitHub({ one: '본문' }, true)
+
+    const result = await skillDiffPanel.load(CTX)
+
+    expect(result.status).toBe('error')
+    expect(result.message).toContain('잘려')
   })
 
   it('GitHub 조회가 실패하면 throw하지 않고 error 상태를 반환한다', async () => {

@@ -90,8 +90,9 @@ function MemberUsageTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
-            {rows.map((row) => (
-              <tr key={row.name} className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]">
+            {rows.map((row, index) => (
+              // 이름은 유일키가 아니다 — "이름 미설정"이 둘이면 충돌한다
+              <tr key={`${row.name}-${index}`} className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]">
                 <td className="relative py-2.5 px-3">
                   <span
                     aria-hidden

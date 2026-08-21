@@ -158,7 +158,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
             일별 에이전트 활동(bbopters-shared 커밋)
           </p>
           <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            GitHub이 커밋 통계를 계산하는 중입니다. 잠시 후 새로고침하면 표시됩니다.
+            커밋 활동 데이터를 지금은 가져오지 못했습니다. 잠시 후 자동으로 다시 시도합니다.
           </p>
         </div>
       ) : (
@@ -199,8 +199,9 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
         </nav>
 
         <div className="flex items-center gap-4 pb-1.5 flex-wrap">
-          {/* 기간을 바꾸면 변하는 수치는 기간 선택 바로 옆에서 말한다 */}
-          {periodHighlights.length > 0 && (
+          {/* 기간을 바꾸면 변하는 수치는 기간 선택 옆에서만 말한다 —
+              선택 UI가 없는 탭에서 보여주면 어느 기간의 값인지 알 수 없다 */}
+          {active.usesPeriod && periodHighlights.length > 0 && (
             <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
               {periodHighlights
                 .map((highlight) => `${highlight.label} ${highlight.value}${highlight.hint ?? ''}`)

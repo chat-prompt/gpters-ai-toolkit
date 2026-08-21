@@ -252,6 +252,19 @@ describe('sharedSkillsPanel', () => {
     expect(result.data!.commitDaily).toBeNull()
   })
 
+  it('커밋 시리즈 실패도 캐시된다 — 분당 재시도 루프를 만들지 않는다', async () => {
+    // 통계 202 + 폴백도 실패(라우터가 커밋 목록에 트리 객체를 줘 배열 파싱 실패)
+    mockGitHub([{ path: 'skills/one/SKILL.md', type: 'blob' }], false, 'pending')
+
+    await sharedSkillsPanel.load(CTX)
+    const callsAfterFirst = vi.mocked(fetch).mock.calls.length
+
+    // 실패했어도 같은 인스턴스의 후속 로드는 부정 캐시에 맞아 재요청하지 않는다
+    await sharedSkillsPanel.load(CTX)
+
+    expect(vi.mocked(fetch).mock.calls.length).toBe(callsAfterFirst)
+  })
+
   it('경로 끝의 슬래시를 정규화한다 — "skills/"가 빈 목록이 되면 안 된다', async () => {
     process.env.BBOPTERS_SHARED_SKILLS_PATH = 'skills/'
     mockTree([{ path: 'skills/one/SKILL.md', type: 'blob' }])

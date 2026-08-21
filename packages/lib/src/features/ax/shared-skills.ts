@@ -31,14 +31,6 @@ const META: AxPanelMeta = {
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 /**
- * 커밋 통계가 아직 없을 때의 짧은 캐시 TTL — 1분
- *
- * GitHub 통계는 한동안 조회가 없으면 202(계산 중)로 응답한다. 그 null을 5분 내내
- * 캐시하면 잔디가 그 동안 말없이 사라진다 — 짧게 잡아 금방 자기 치유되게 한다.
- */
-const CACHE_TTL_PENDING_MS = 60 * 1000
-
-/**
  * 커밋 일별 시리즈의 별도 캐시 TTL — 1시간
  *
  * 이 저장소는 에이전트들이 상시 커밋해서(주 100건 이상) 푸시마다 GitHub 통계
@@ -47,13 +39,17 @@ const CACHE_TTL_PENDING_MS = 60 * 1000
  */
 const COMMIT_SERIES_TTL_MS = 60 * 60 * 1000
 
-/** 커밋 목록 폴백의 페이지 상한 — 100건/페이지 × 40 = 연 4,000커밋까지 */
-const COMMIT_PAGES_MAX = 40
+/** 커밋 목록 폴백의 페이지 상한 — 100건/페이지 × 60 = 연 6,000커밋까지 (현재 연 ~5,200 페이스) */
+const COMMIT_PAGES_MAX = 60
 
-/** 커밋 시리즈 캐시 — 인벤토리 캐시(5분)와 수명이 달라 분리한다 */
+/**
+ * 커밋 시리즈 캐시 — 인벤토리 캐시(5분)와 수명이 달라 분리한다.
+ * 실패(null)도 캐시한다 — 안 하면 통계 202 + 폴백 실패 조합에서 워밍된 인스턴스가
+ * 1분마다 수십 건의 GitHub 요청을 반복한다.
+ */
 let commitSeriesCache: {
   key: string
-  daily: Array<{ date: string; events: number }>
+  daily: Array<{ date: string; events: number }> | null
   expiresAt: number
 } | null = null
 
@@ -182,6 +178,10 @@ async function fetchCommitActivity(
   if (commitSeriesCache && commitSeriesCache.key === repo && commitSeriesCache.expiresAt > Date.now()) {
     return commitSeriesCache.daily
   }
+  const remember = (daily: Array<{ date: string; events: number }> | null) => {
+    commitSeriesCache = { key: repo, daily, expiresAt: Date.now() + COMMIT_SERIES_TTL_MS }
+    return daily
+  }
 
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -204,13 +204,10 @@ async function fetchCommitActivity(
       daily = await countCommitsDaily(repo, headers)
     }
 
-    if (daily !== null) {
-      commitSeriesCache = { key: repo, daily, expiresAt: Date.now() + COMMIT_SERIES_TTL_MS }
-    }
-    return daily
+    return remember(daily)
   } catch (error) {
     log.warn('커밋 통계 조회 실패 — 에이전트 활동 잔디 없이 계속한다', { error })
-    return null
+    return remember(null)
   }
 }
 
@@ -366,12 +363,8 @@ export const sharedSkillsPanel: AxPanel<AxSharedSkillsData> = {
         { repo, skills, aitkOverlap, commitDaily, eventsConnected: false, truncated },
         [{ label: '에이전트 스킬', value: skills.length.toLocaleString('ko-KR'), hint: '개' }]
       )
-      cache = {
-        key: cacheKey,
-        result,
-        // 커밋 통계가 아직 없으면 짧게 캐시해 금방 다시 시도한다
-        expiresAt: Date.now() + (commitDaily === null ? CACHE_TTL_PENDING_MS : CACHE_TTL_MS),
-      }
+      // 커밋 시리즈 실패는 시리즈 캐시가 1시간 부정 캐시로 관리한다 — 패널 캐시는 단순하게 둔다
+      cache = { key: cacheKey, result, expiresAt: Date.now() + CACHE_TTL_MS }
 
       return result
     } catch (error) {
