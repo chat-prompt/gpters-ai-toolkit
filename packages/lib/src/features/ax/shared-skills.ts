@@ -42,6 +42,22 @@ const COMMIT_SERIES_TTL_MS = 60 * 60 * 1000
 /** 커밋 목록 폴백의 페이지 상한 — 100건/페이지 × 60 = 연 6,000커밋까지 (현재 연 ~5,200 페이스) */
 const COMMIT_PAGES_MAX = 60
 
+/** 잔디 고정 창 — 오늘을 포함한 52주(364일), UTC 날짜 기준 */
+const COMMIT_WINDOW_DAYS = 52 * 7
+
+/** 하루의 밀리초 */
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** 통계 API와 커밋 목록 폴백이 공유하는 반열린 날짜 창 */
+interface CommitWindow {
+  /** UTC 자정, 포함 */
+  startMs: number
+  /** UTC 자정, 미포함 */
+  endExclusiveMs: number
+  startDate: string
+  endDate: string
+}
+
 /**
  * 커밋 시리즈 캐시 — 인벤토리 캐시(5분)와 수명이 달라 분리한다.
  * 실패(null)도 캐시한다 — 안 하면 통계 202 + 폴백 실패 조합에서 워밍된 인스턴스가
@@ -162,6 +178,43 @@ interface CommitActivityWeek {
 }
 
 /**
+ * 기준 시각에서 오늘을 포함한 364일짜리 UTC 날짜 창을 만든다
+ *
+ * @param now - 기준 시각
+ * @returns `[start, endExclusive)` 고정 창
+ */
+function commitWindow(now: Date): CommitWindow {
+  const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const startMs = todayMs - (COMMIT_WINDOW_DAYS - 1) * DAY_MS
+  const endExclusiveMs = todayMs + DAY_MS
+  return {
+    startMs,
+    endExclusiveMs,
+    startDate: new Date(startMs).toISOString().slice(0, 10),
+    endDate: new Date(todayMs).toISOString().slice(0, 10),
+  }
+}
+
+/**
+ * 경로별 원시 집계를 같은 364일 축으로 자르고 빈 날을 0으로 채운다
+ *
+ * @param counts - UTC 날짜별 커밋 수
+ * @param window - 정규화할 날짜 창
+ * @returns 정확히 364칸인 일별 시리즈
+ */
+function fillCommitWindow(
+  counts: Map<string, number>,
+  window: CommitWindow
+): Array<{ date: string; events: number }> {
+  const daily: Array<{ date: string; events: number }> = []
+  for (let time = window.startMs; time < window.endExclusiveMs; time += DAY_MS) {
+    const date = new Date(time).toISOString().slice(0, 10)
+    daily.push({ date, events: counts.get(date) ?? 0 })
+  }
+  return daily
+}
+
+/**
  * 저장소의 최근 52주 일별 커밋 수 — 에이전트 활동 잔디밭용
  *
  * GitHub 통계 API는 첫 호출에 202(계산 중)를 줄 수 있다. 그때는 null을 돌려주고
@@ -187,6 +240,8 @@ async function fetchCommitActivity(
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
   }
+  // 두 조회 경로가 네트워크 대기 중 날짜 경계를 넘더라도 같은 창을 쓰게 한 번만 고정한다.
+  const window = commitWindow(new Date())
 
   try {
     // 1차: 통계 API — 데워져 있으면 요청 한 번으로 끝난다
@@ -196,12 +251,12 @@ async function fetchCommitActivity(
     })
     let daily: Array<{ date: string; events: number }> | null = null
     if (res.ok && res.status !== 202) {
-      daily = parseCommitWeeks((await res.json()) as CommitActivityWeek[])
+      daily = parseCommitWeeks((await res.json()) as CommitActivityWeek[], window)
     }
 
     // 2차: 커밋 목록 직접 집계 — 이 저장소는 푸시가 잦아 통계가 202(계산 중)인 일이 흔하다
     if (daily === null) {
-      daily = await countCommitsDaily(repo, headers)
+      daily = await countCommitsDaily(repo, headers, window)
     }
 
     return remember(daily)
@@ -220,14 +275,16 @@ async function fetchCommitActivity(
  */
 async function countCommitsDaily(
   repo: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  window: CommitWindow
 ): Promise<Array<{ date: string; events: number }> | null> {
-  const since = new Date(Date.now() - 52 * 7 * 24 * 60 * 60 * 1000)
   const counts = new Map<string, number>()
+  const since = new Date(window.startMs).toISOString()
+  const until = new Date(window.endExclusiveMs - 1).toISOString()
 
   for (let page = 1; page <= COMMIT_PAGES_MAX; page++) {
     const res = await fetch(
-      `https://api.github.com/repos/${repo}/commits?since=${since.toISOString()}&per_page=100&page=${page}`,
+      `https://api.github.com/repos/${repo}/commits?since=${since}&until=${until}&per_page=100&page=${page}`,
       { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
     )
     if (!res.ok) return null
@@ -237,7 +294,10 @@ async function countCommitsDaily(
 
     for (const item of commits) {
       const date = item.commit?.committer?.date?.slice(0, 10)
-      if (date) counts.set(date, (counts.get(date) ?? 0) + 1)
+      // GitHub의 since/until 경계 해석에 기대지 않고 같은 반열린 창으로 한 번 더 자른다.
+      if (date && date >= window.startDate && date <= window.endDate) {
+        counts.set(date, (counts.get(date) ?? 0) + 1)
+      }
     }
     if (commits.length < 100) break
     if (page === COMMIT_PAGES_MAX) {
@@ -249,15 +309,7 @@ async function countCommitsDaily(
 
   if (counts.size === 0) return null
 
-  // 활동 없는 날을 0으로 채워 52주 연속 축을 만든다 (UTC 날짜)
-  const daily: Array<{ date: string; events: number }> = []
-  const today = new Date().toISOString().slice(0, 10)
-  for (let time = since.getTime(); ; time += 24 * 60 * 60 * 1000) {
-    const date = new Date(time).toISOString().slice(0, 10)
-    if (date > today) break
-    daily.push({ date, events: counts.get(date) ?? 0 })
-  }
-  return daily
+  return fillCommitWindow(counts, window)
 }
 
 /**
@@ -267,21 +319,23 @@ async function countCommitsDaily(
  * @returns 일별 커밋 시리즈. 비어 있으면 null
  */
 function parseCommitWeeks(
-  weeks: CommitActivityWeek[]
+  weeks: CommitActivityWeek[],
+  window: CommitWindow
 ): Array<{ date: string; events: number }> | null {
   if (!Array.isArray(weeks) || weeks.length === 0) return null
 
-  const today = new Date().toISOString().slice(0, 10)
-  const daily: Array<{ date: string; events: number }> = []
+  const counts = new Map<string, number>()
+  let hasDateInWindow = false
   for (const entry of weeks) {
     if (typeof entry.week !== 'number' || !Array.isArray(entry.days)) continue
     for (let day = 0; day < entry.days.length; day++) {
       const date = new Date((entry.week + day * 86_400) * 1000).toISOString().slice(0, 10)
-      if (date > today) continue
-      daily.push({ date, events: Number(entry.days[day]) || 0 })
+      if (date < window.startDate || date > window.endDate) continue
+      hasDateInWindow = true
+      counts.set(date, Number(entry.days[day]) || 0)
     }
   }
-  return daily.length > 0 ? daily : null
+  return hasDateInWindow ? fillCommitWindow(counts, window) : null
 }
 
 /**

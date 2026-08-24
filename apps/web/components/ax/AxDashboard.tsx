@@ -4,7 +4,7 @@
  * 사내 AX 대시보드 화면
  *
  * 맨 위에 핵심 수치 밴드를 두고, 아래를 벤토 그리드로 채운다.
- * 기간 탭 하나로 모든 항목을 함께 갱신하되 조회는 항목별로 따로 한다 —
+ * 기간 탭은 기간 연동 항목만 갱신하고, 조회는 항목별로 따로 한다 —
  * 하나가 실패해도 나머지는 그대로 보이게 하기 위함이다.
  */
 
@@ -99,22 +99,60 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     }
   }, [])
 
-  // panels 배열은 렌더마다 새 객체라 id 목록을 문자열로 굳혀 의존성으로 쓴다
-  const panelIdKey = panels.map((panel) => panel.id).join('|')
+  // panels 배열은 렌더마다 새 객체라 요청에 필요한 메타만 문자열로 굳혀 의존성으로 쓴다.
+  // usesPeriod까지 포함해야 패널의 기간 계약이 바뀌었을 때 초기 조회를 다시 잡는다.
+  const panelRequestKey = JSON.stringify(
+    panels.map((panel) => ({ id: panel.id, usesPeriod: panel.usesPeriod }))
+  )
+  // 패널 구성 변경 효과는 days 변경만으로 재실행되면 안 되므로 최신 값은 ref에서 읽는다.
+  const selectedDaysRef = useRef<AxDays>(days)
+  const previousPeriodContextRef = useRef({ panelRequestKey, days })
 
+  // 아래 패널 구성 효과보다 먼저 선언해, 두 값이 한 렌더에서 함께 바뀌어도 최신 기간을 쓴다.
+  useEffect(() => {
+    selectedDaysRef.current = days
+  }, [days])
+
+  // 최초 진입이나 볼 수 있는 패널 구성이 바뀌면 전체를 한 번 조회한다.
+  useEffect(() => {
+    const panelConfigs = JSON.parse(panelRequestKey) as Array<{
+      id: string
+      usesPeriod: boolean
+    }>
+
+    for (const panel of panelConfigs) {
+      // 패널마다 독립 요청 — 하나가 느리거나 실패해도 나머지를 막지 않는다
+      void loadPanel(panel.id, selectedDaysRef.current)
+    }
+  }, [panelRequestKey, loadPanel])
+
+  // 기간만 바뀌면 usesPeriod=true 패널만 갱신한다.
+  // 고정 스냅샷을 재요청하면 기간과 무관한 값이 토글 직후 달라질 수 있고,
+  // 무거운 외부 API 호출도 불필요하게 반복된다.
+  useEffect(() => {
+    const previous = previousPeriodContextRef.current
+    previousPeriodContextRef.current = { panelRequestKey, days }
+
+    // 첫 렌더와 패널 구성 변경은 위 효과가 전체를 조회한다.
+    if (previous.panelRequestKey !== panelRequestKey || previous.days === days) return
+
+    const panelConfigs = JSON.parse(panelRequestKey) as Array<{
+      id: string
+      usesPeriod: boolean
+    }>
+    for (const panel of panelConfigs) {
+      if (panel.usesPeriod) void loadPanel(panel.id, days)
+    }
+  }, [panelRequestKey, days, loadPanel])
+
+  // 의존성 변경 때마다 전체 요청을 끊으면, 기간 전환 중인 고정 패널 요청이
+  // 재시작되지 않은 채 사라진다. 실제로 화면을 떠날 때만 정리한다.
   useEffect(() => {
     const requests = requestsRef.current
-
-    for (const panelId of panelIdKey.split('|').filter(Boolean)) {
-      // 패널마다 독립 요청 — 하나가 느리거나 실패해도 나머지를 막지 않는다
-      void loadPanel(panelId, days)
-    }
-
-    // 화면을 떠나면 남은 요청을 끊는다
     return () => {
       for (const request of requests.values()) request.abort()
     }
-  }, [panelIdKey, days, loadPanel])
+  }, [])
 
   if (panels.length === 0) {
     return <p className="mt-16 text-[var(--text-secondary)]">아직 볼 수 있는 항목이 없습니다.</p>

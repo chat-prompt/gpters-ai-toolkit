@@ -58,11 +58,13 @@ function mockCatalog(ids: string[]) {
  * @param tree - git trees 응답
  * @param truncated - tree 잘림 여부
  * @param commits - 커밋 통계 응답. 'pending'이면 202(계산 중)
+ * @param commitList - 통계 폴백에 쓸 커밋 시각 목록
  */
 function mockGitHub(
   tree: Array<{ path: string; type: string }>,
   truncated = false,
-  commits: Array<{ week: number; days: number[] }> | 'pending' = []
+  commits: Array<{ week: number; days: number[] }> | 'pending' = [],
+  commitList?: string[]
 ) {
   vi.stubGlobal(
     'fetch',
@@ -70,6 +72,14 @@ function mockGitHub(
       if (String(url).includes('/stats/commit_activity')) {
         if (commits === 'pending') return { ok: false, status: 202, json: async () => ({}) }
         return { ok: true, status: 200, json: async () => commits }
+      }
+      if (String(url).includes('/commits?') && commitList) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            commitList.map((date) => ({ commit: { committer: { date } } })),
+        }
       }
       return { ok: true, status: 200, json: async () => ({ tree, truncated }) }
     })
@@ -89,6 +99,7 @@ describe('sharedSkillsPanel', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     delete process.env.BBOPTERS_SHARED_REPO
     delete process.env.GH_TOKEN
@@ -228,19 +239,51 @@ describe('sharedSkillsPanel', () => {
   })
 
   it('커밋 통계를 일별 시리즈로 펼친다 (오늘 이후 날짜 제외)', async () => {
-    // 2026-08-16(일) 시작 주 — 테스트 실행일과 무관하게 과거 주만 쓴다
-    mockGitHub(
-      [{ path: 'skills/one/SKILL.md', type: 'blob' }],
-      false,
-      [{ week: Math.floor(new Date('2026-08-09T00:00:00Z').getTime() / 1000), days: [0, 5, 2, 0, 0, 1, 0] }]
-    )
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-24T12:00:00Z'))
+    mockGitHub([{ path: 'skills/one/SKILL.md', type: 'blob' }], false, [
+      {
+        week: Math.floor(new Date('2026-08-09T00:00:00Z').getTime() / 1000),
+        days: [0, 5, 2, 0, 0, 1, 0],
+      },
+    ])
 
     const result = await sharedSkillsPanel.load(CTX)
     const daily = result.data!.commitDaily!
 
     expect(daily.find((d) => d.date === '2026-08-10')?.events).toBe(5)
     expect(daily.find((d) => d.date === '2026-08-11')?.events).toBe(2)
-    expect(daily).toHaveLength(7)
+    expect(daily).toHaveLength(364)
+    expect(daily[0].date).toBe('2025-08-26')
+    expect(daily.at(-1)?.date).toBe('2026-08-24')
+    vi.useRealTimers()
+  })
+
+  it('통계 API와 커밋 목록 폴백을 같은 52주 날짜 축으로 정규화한다', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-24T12:00:00Z'))
+    const tree = [{ path: 'skills/one/SKILL.md', type: 'blob' }]
+    const week = Math.floor(new Date('2026-08-16T00:00:00Z').getTime() / 1000)
+
+    mockGitHub(tree, false, [{ week, days: [1, 2, 0, 1, 0, 0, 0] }])
+    const fromStats = (await sharedSkillsPanel.load(CTX)).data!.commitDaily
+
+    __resetSharedSkillsCache()
+    mockCatalog([])
+    mockGitHub(tree, false, 'pending', [
+      '2026-08-16T01:00:00Z',
+      '2026-08-17T01:00:00Z',
+      '2026-08-17T02:00:00Z',
+      '2026-08-19T01:00:00Z',
+      // 같은 API 응답에 섞여도 고정 창 밖 데이터는 버린다.
+      '2025-08-25T23:59:59Z',
+      '2026-08-25T00:00:00Z',
+    ])
+    const fromList = (await sharedSkillsPanel.load(CTX)).data!.commitDaily
+
+    expect(fromList).toEqual(fromStats)
+    expect(fromList).toHaveLength(364)
+    vi.useRealTimers()
   })
 
   it('커밋 통계가 계산 중(202)이면 잔디를 0으로 꾸미지 않고 null로 둔다', async () => {
