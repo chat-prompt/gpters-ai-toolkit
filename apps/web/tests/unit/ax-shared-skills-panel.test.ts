@@ -253,13 +253,13 @@ describe('sharedSkillsPanel', () => {
 
     expect(daily.find((d) => d.date === '2026-08-10')?.events).toBe(5)
     expect(daily.find((d) => d.date === '2026-08-11')?.events).toBe(2)
-    expect(daily).toHaveLength(364)
-    expect(daily[0].date).toBe('2025-08-26')
+    expect(daily).toHaveLength(365)
+    expect(daily[0].date).toBe('2025-08-25')
     expect(daily.at(-1)?.date).toBe('2026-08-24')
     vi.useRealTimers()
   })
 
-  it('통계 API와 커밋 목록 폴백을 같은 52주 날짜 축으로 정규화한다', async () => {
+  it('통계 API와 커밋 목록 폴백을 같은 365일 날짜 축으로 정규화한다', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-24T12:00:00Z'))
     const tree = [{ path: 'skills/one/SKILL.md', type: 'blob' }]
@@ -276,13 +276,13 @@ describe('sharedSkillsPanel', () => {
       '2026-08-17T02:00:00Z',
       '2026-08-19T01:00:00Z',
       // 같은 API 응답에 섞여도 고정 창 밖 데이터는 버린다.
-      '2025-08-25T23:59:59Z',
+      '2025-08-24T23:59:59Z',
       '2026-08-25T00:00:00Z',
     ])
     const fromList = (await sharedSkillsPanel.load(CTX)).data!.commitDaily
 
     expect(fromList).toEqual(fromStats)
-    expect(fromList).toHaveLength(364)
+    expect(fromList).toHaveLength(365)
     vi.useRealTimers()
   })
 

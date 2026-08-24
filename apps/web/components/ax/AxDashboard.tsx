@@ -166,7 +166,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   const anyLoading = panels.some((panel) => !states[panel.id] || states[panel.id]?.loading)
 
   // 잔디밭 두 장 — 사람(aitk 스킬 사용)과 에이전트(bbopters-shared 커밋).
-  // 둘 다 기간 선택과 무관한 52주 고정 창이다
+  // 둘 다 기간 선택과 무관한 365일 고정 창이다
   const grassDaily =
     (states['overview']?.result?.data as AxOverviewData | null)?.grassDaily ?? null
   const sharedResult = states['shared-skills']?.result
@@ -327,11 +327,11 @@ function SnapshotTiles({
 }
 
 /**
- * 잔디밭 카드 — 최근 52주 일별 활동을 전체 폭으로 펼친다
+ * 잔디밭 카드 — 최근 365일의 일별 활동을 전체 폭으로 펼친다
  *
  * 기간 선택과 무관한 고정 윈도우다. 날짜가 지나면 창이 최신 쪽으로 굴러간다.
  *
- * @param daily - 성과 요약 패널의 52주 고정 일별 시리즈
+ * @param daily - 성과 요약 패널의 365일 고정 일별 시리즈
  * @param loading - 아직 데이터가 도착하지 않았는지
  */
 function GrassCard({
@@ -448,7 +448,7 @@ function ActivityGrass({
     <div ref={wrapRef} className="relative">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <p className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-          {label} · 최근 {Math.round(daily.length / 7)}주
+          {label} · 최근 {daily.length}일
           {info && (
             <span className="group relative inline-flex">
               <span

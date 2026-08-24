@@ -42,8 +42,8 @@ const COMMIT_SERIES_TTL_MS = 60 * 60 * 1000
 /** 커밋 목록 폴백의 페이지 상한 — 100건/페이지 × 60 = 연 6,000커밋까지 (현재 연 ~5,200 페이스) */
 const COMMIT_PAGES_MAX = 60
 
-/** 잔디 고정 창 — 오늘을 포함한 52주(364일), UTC 날짜 기준 */
-const COMMIT_WINDOW_DAYS = 52 * 7
+/** 잔디 고정 창 — 오늘을 포함한 최근 365일, UTC 날짜 기준 */
+const COMMIT_WINDOW_DAYS = 365
 
 /** 하루의 밀리초 */
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -178,7 +178,7 @@ interface CommitActivityWeek {
 }
 
 /**
- * 기준 시각에서 오늘을 포함한 364일짜리 UTC 날짜 창을 만든다
+ * 기준 시각에서 오늘을 포함한 365일짜리 UTC 날짜 창을 만든다
  *
  * @param now - 기준 시각
  * @returns `[start, endExclusive)` 고정 창
@@ -196,11 +196,11 @@ function commitWindow(now: Date): CommitWindow {
 }
 
 /**
- * 경로별 원시 집계를 같은 364일 축으로 자르고 빈 날을 0으로 채운다
+ * 경로별 원시 집계를 같은 365일 축으로 자르고 빈 날을 0으로 채운다
  *
  * @param counts - UTC 날짜별 커밋 수
  * @param window - 정규화할 날짜 창
- * @returns 정확히 364칸인 일별 시리즈
+ * @returns 정확히 365칸인 일별 시리즈
  */
 function fillCommitWindow(
   counts: Map<string, number>,
@@ -215,7 +215,7 @@ function fillCommitWindow(
 }
 
 /**
- * 저장소의 최근 52주 일별 커밋 수 — 에이전트 활동 잔디밭용
+ * 저장소의 최근 365일 일별 커밋 수 — 에이전트 활동 잔디밭용
  *
  * GitHub 통계 API는 첫 호출에 202(계산 중)를 줄 수 있다. 그때는 null을 돌려주고
  * 다음 캐시 갱신 때 채워진다 — 잔디를 0으로 꾸미지 않는다.
@@ -271,7 +271,7 @@ async function fetchCommitActivity(
  *
  * @param repo - "owner/repo"
  * @param headers - 인증 헤더
- * @returns 최근 52주 일별 커밋 시리즈. 실패·초과면 null
+ * @returns 최근 365일 일별 커밋 시리즈. 실패·초과면 null
  */
 async function countCommitsDaily(
   repo: string,

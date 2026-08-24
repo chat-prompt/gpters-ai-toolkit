@@ -112,7 +112,7 @@ export interface AxOverviewData {
   /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
   catalogSkills: number
   /**
-   * 잔디밭용 일별 활동량 — 조회 기간과 무관하게 **최근 52주 고정 윈도우**.
+   * 잔디밭용 일별 활동량 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
    * 날짜가 지나면 창이 최신 쪽으로 굴러간다.
    */
   grassDaily: Array<{ date: string; events: number }>
@@ -160,7 +160,7 @@ export interface AxSharedSkillsData {
    */
   aitkOverlap: number | null
   /**
-   * 저장소 일별 커밋 수 — 최근 52주 (GitHub 통계 API).
+   * 저장소 일별 커밋 수 — 오늘 포함 최근 365일 (GitHub 통계 API).
    *
    * 에이전트 활동의 **프록시**다: 에이전트들이 워크로그·산출물을 이 저장소에
    * 커밋하므로 활동 리듬은 보이지만, "스킬 실행 횟수"는 아니다(그건 DEV-4221).

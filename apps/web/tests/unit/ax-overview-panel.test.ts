@@ -154,8 +154,10 @@ describe('overviewPanel', () => {
     expect(data.totalParticipants).toBe(21)
     expect(data.catalogSkills).toBe(504)
 
-    // 잔디밭은 기간 선택과 무관한 52주(364일) 고정 윈도우다
-    expect(data.grassDaily).toHaveLength(364)
+    // 잔디밭은 기간 선택과 무관한 오늘 포함 365일 고정 윈도우다
+    expect(data.grassDaily).toHaveLength(365)
+    expect(data.grassDaily[0]?.date).toBe('2025-08-20')
+    expect(data.grassDaily.at(-1)?.date).toBe('2026-08-19')
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')).toEqual({
       date: '2026-08-18',
       events: 12,

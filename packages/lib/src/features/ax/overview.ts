@@ -41,12 +41,12 @@ const UNMEASURED: AxOverviewData['unmeasured'] = [
 ]
 
 /**
- * 잔디밭 고정 윈도우 — 52주(364일)
+ * 잔디밭 고정 윈도우 — 오늘을 포함한 최근 365일
  *
  * 잔디밭은 기간 선택과 무관한 "장기 습관" 그림이라 조회 기간을 따라가지 않는다.
  * 날짜가 지나면 창이 최신 쪽으로 하루씩 굴러간다.
  */
-const GRASS_WINDOW_DAYS = 52 * 7
+const GRASS_WINDOW_DAYS = 365
 
 /** 사용자별 사용량 표 상한 */
 const MEMBER_LIMIT = 20
@@ -181,7 +181,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           )
         )
 
-      // 3. 잔디밭 일별 활동량 — 조회 기간과 무관한 52주 고정 윈도우
+      // 3. 잔디밭 일별 활동량 — 조회 기간과 무관한 365일 고정 윈도우
       const grassRows = await db
         .select({ date: kstDayExpr, events: sql<number>`count(*)::int` })
         .from(skillEvents)
