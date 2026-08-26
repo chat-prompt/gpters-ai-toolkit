@@ -20,6 +20,17 @@ const SEEN_RETENTION_MS = 90 * 86_400_000
 const MAX_SEEN_MESSAGES = 100_000
 const MIN_HEALTH_SAMPLE_RECORDS = 20
 const MAX_UNSUPPORTED_RATIO = 0.5
+const CLAUDE_CODE_METADATA_TYPES = new Set([
+  'attachment',
+  'system',
+  'file-history-delta',
+  'file-history-snapshot',
+  'last-prompt',
+  'atis-latch',
+  'mode',
+  'permission-mode',
+  'ai-title',
+])
 const SAFE_LABEL = /^[a-zA-Z0-9][a-zA-Z0-9._:/+<> -]{0,119}$/
 const SAFE_ID = /^[a-z0-9][a-z0-9._:-]{0,99}$/
 const FORBIDDEN_LABELS = [
@@ -30,6 +41,7 @@ const FORBIDDEN_LABELS = [
 ]
 
 interface OpenClawMessage {
+  id?: unknown
   role?: unknown
   provider?: unknown
   model?: unknown
@@ -80,6 +92,8 @@ export interface OpenClawCollection {
   executions: []
   collection: {
     source: AgentTelemetrySource
+    filesDiscovered: number
+    filesExcludedByScope: number
     filesRead: number
     filesReset: number
     recordsRead: number
@@ -107,6 +121,7 @@ export interface CollectOpenClawOptions {
   committed: AgentTelemetryCommittedState
   category: AgentTaskCategory
   source: AgentTelemetrySource
+  projectSlugs?: string[]
 }
 
 function toCount(value: unknown): number {
@@ -217,7 +232,10 @@ function skillFromCall(name: string, args: Record<string, unknown>): string | nu
   return null
 }
 
-async function listSessionFiles(root: string): Promise<string[]> {
+async function listSessionFiles(
+  root: string,
+  projectSlugs: string[] | undefined
+): Promise<{ files: string[]; discovered: number; excludedByScope: number }> {
   let entries: string[]
   try {
     entries = await readdir(root, { recursive: true })
@@ -227,7 +245,16 @@ async function listSessionFiles(root: string): Promise<string[]> {
     }
     throw cause
   }
-  return entries.filter((entry) => entry.endsWith('.jsonl')).map((entry) => resolve(root, entry)).sort()
+  const jsonlEntries = entries.filter((entry) => entry.endsWith('.jsonl'))
+  const allowed = projectSlugs ? new Set(projectSlugs) : null
+  const included = allowed
+    ? jsonlEntries.filter((entry) => allowed.has(entry.replaceAll('\\', '/').split('/')[0]))
+    : jsonlEntries
+  return {
+    files: included.map((entry) => resolve(root, entry)).sort(),
+    discovered: jsonlEntries.length,
+    excludedByScope: jsonlEntries.length - included.length,
+  }
 }
 
 async function scanCompleteLines(
@@ -277,7 +304,8 @@ function resultInfo(entry: OpenClawEntry): { id: string | null; failed: boolean 
 
 export async function collectOpenClawAgent(options: CollectOpenClawOptions): Promise<OpenClawCollection> {
   const root = resolve(options.sessionsDir)
-  const files = await listSessionFiles(root)
+  const listed = await listSessionFiles(root, options.projectSlugs)
+  const files = listed.files
   const startMs = options.window.start.getTime()
   const endMs = options.window.end.getTime()
   const totalUsage = emptyAgentUsage()
@@ -295,6 +323,8 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   const nextFiles: Record<string, AgentTelemetryFileCheckpoint> = { ...options.committed.files }
   const collection = {
     source: options.source,
+    filesDiscovered: listed.discovered,
+    filesExcludedByScope: listed.excludedByScope,
     filesRead: 0,
     filesReset: 0,
     recordsRead: 0,
@@ -355,6 +385,11 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
           sessionIdentity = explicitSessionId
         }
 
+        if (options.source === 'claude-code' && CLAUDE_CODE_METADATA_TYPES.has(String(entry.type ?? ''))) {
+          collection.metadataSkipped++
+          return
+        }
+
         const at = entryTimestamp(entry)
         if (at === null) {
           collection.malformedSkipped++
@@ -367,6 +402,16 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
 
         const result = resultInfo(entry)
         if (result) {
+          const resultIdentity = result.id ?? entry.message?.id ?? entry.id ?? entry.uuid
+          if (typeof resultIdentity === 'string' && resultIdentity.length > 0) {
+            const resultHash = hashIdentity(`${sessionIdentity}\u0000tool-result\u0000${resultIdentity}`)
+            if (retainedSeen.has(resultHash) || batchSeen.has(resultHash)) {
+              collection.duplicatesSkipped++
+              return
+            }
+            batchSeen.add(resultHash)
+            retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
+          }
           const call = result.id ? toolCalls.get(result.id) : undefined
           if (!call) {
             collection.orphanToolResultsSkipped++
@@ -395,12 +440,14 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
           return
         }
 
-        const messageId = entry.id ?? entry.uuid
+        const messageId = options.source === 'claude-code'
+          ? message.id ?? entry.id ?? entry.uuid
+          : entry.id ?? entry.uuid ?? message.id
         if (typeof messageId !== 'string' || messageId.length === 0) {
           collection.missingIdentitySkipped++
           return
         }
-        const messageHash = hashIdentity(`${sessionIdentity}\u0000${messageId}`)
+        const messageHash = hashIdentity(`${sessionIdentity}\u0000assistant\u0000${messageId}`)
         if (retainedSeen.has(messageHash) || batchSeen.has(messageHash)) {
           collection.duplicatesSkipped++
           return
@@ -446,6 +493,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     : 0
 
   const healthWarnings: AgentTelemetryHealthWarning[] = []
+  if (options.projectSlugs && files.length === 0) healthWarnings.push('no-files-in-scope')
   if (collection.recordsRead > 0 && turns === 0) healthWarnings.push('no-turns-from-records')
   if (
     collection.recordsRead >= MIN_HEALTH_SAMPLE_RECORDS &&

@@ -280,6 +280,7 @@ Required:
 Options:
   --source <source>            openclaw|claude-code (default: openclaw)
   --sessions-dir <path>        Transcript directory (required for claude-code)
+  --project-slugs <a,b>        Allowed Claude project directory names (required for claude-code)
   --checkpoint-dir <path>      Per-agent checkpoint directory
   --collector-id <id>          Stable collector identity (generated if omitted)
   --days <N>                   First-run backfill window (default: 7, max: 90)
@@ -554,6 +555,7 @@ async function main(): Promise<void> {
         dryRun: flags['dry-run'] === 'true',
         collectorVersion: VERSION,
         sessionsDir: flags['sessions-dir'],
+        projectSlugs: flags['project-slugs'],
         checkpointDir: flags['checkpoint-dir'],
         collectorInstanceId: flags['collector-id'],
         category: flags['category'],

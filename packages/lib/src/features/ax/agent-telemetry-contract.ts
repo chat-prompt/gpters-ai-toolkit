@@ -53,6 +53,7 @@ const healthWarningSchema = z.enum([
   'no-turns-from-records',
   'high-unsupported-rate',
   'claude-code-tools-missing',
+  'no-files-in-scope',
 ])
 
 export const axAgentTelemetryBatchSchema = z.object({
@@ -77,6 +78,8 @@ export const axAgentTelemetryBatchSchema = z.object({
   executions: z.array(executionSchema).max(20),
   collection: z.object({
     source: sourceSchema,
+    filesDiscovered: nonNegativeInt,
+    filesExcludedByScope: nonNegativeInt,
     filesRead: nonNegativeInt,
     filesReset: nonNegativeInt,
     recordsRead: nonNegativeInt,
@@ -93,7 +96,7 @@ export const axAgentTelemetryBatchSchema = z.object({
     parseFailures: nonNegativeInt,
     lagMinutes: z.number().nonnegative().max(60 * 24 * 30),
     healthStatus: z.enum(['healthy', 'blocked']),
-    healthWarnings: z.array(healthWarningSchema).max(3),
+    healthWarnings: z.array(healthWarningSchema).max(4),
   }).strict(),
 }).strict().superRefine((batch, ctx) => {
   const start = new Date(batch.window.startUtc).getTime()
@@ -129,6 +132,12 @@ export const axAgentTelemetryBatchSchema = z.object({
     ctx.addIssue({
       code: 'custom', path: ['collection', 'healthStatus'],
       message: 'blocked collection cannot be ingested',
+    })
+  }
+  if (batch.collection.filesExcludedByScope > batch.collection.filesDiscovered) {
+    ctx.addIssue({
+      code: 'custom', path: ['collection', 'filesExcludedByScope'],
+      message: 'scope exclusions cannot exceed discovered files',
     })
   }
 })

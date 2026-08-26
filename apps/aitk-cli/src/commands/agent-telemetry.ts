@@ -1,6 +1,6 @@
 /** OpenClaw 에이전트 delta telemetry 수집·전송 명령 */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { readConfig } from '../config.js'
@@ -32,6 +32,7 @@ export interface AgentTelemetryOptions {
   dryRun: boolean
   collectorVersion: string
   sessionsDir?: string
+  projectSlugs?: string
   checkpointDir?: string
   collectorInstanceId?: string
   category?: string
@@ -86,6 +87,28 @@ function resolveSource(value: string | undefined): AgentTelemetrySource {
     error('--source must be one of: openclaw, claude-code')
   }
   return source as AgentTelemetrySource
+}
+
+function resolveProjectSlugs(source: AgentTelemetrySource, value: string | undefined): string[] | undefined {
+  if (source === 'openclaw') {
+    if (value) error('--project-slugs is only supported with --source claude-code')
+    return undefined
+  }
+  if (!value) error('--project-slugs is required when --source claude-code is used')
+  const slugs = [...new Set(value!.split(',').map((item) => item.trim()))].sort()
+  if (
+    slugs.length === 0 || slugs.length > 50 ||
+    slugs.some((slug) => slug.length === 0 || slug.length > 255 || slug === '.' || slug === '..' || /[\\/\0]/.test(slug))
+  ) {
+    error('--project-slugs must contain 1-50 comma-separated directory names')
+  }
+  return slugs
+}
+
+function checkpointName(agentId: string, source: AgentTelemetrySource, projectSlugs: string[] | undefined): string {
+  if (!projectSlugs) return `${agentId}-${source}.json`
+  const scopeHash = createHash('sha256').update(projectSlugs.join('\u0000')).digest('hex').slice(0, 12)
+  return `${agentId}-${source}-${scopeHash}.json`
 }
 
 function resolveServerUrl(value?: string): string {
@@ -146,9 +169,10 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   if (source === 'claude-code' && !options.sessionsDir) {
     error('--sessions-dir is required when --source claude-code is used')
   }
+  const projectSlugs = resolveProjectSlugs(source, options.projectSlugs)
   const sessionsDir = resolve(options.sessionsDir ?? join(homedir(), '.openclaw', 'agents', agentId, 'sessions'))
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
-  const checkpointPath = join(checkpointDir, `${agentId}-${source}.json`)
+  const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs))
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
 
   if (state.agentId !== agentId) error('Checkpoint belongs to a different agent')
@@ -173,6 +197,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       committed: state.committed,
       category,
       source,
+      projectSlugs,
     })
     const batch: AgentTelemetryBatch = {
       schemaVersion: '1.0.0',

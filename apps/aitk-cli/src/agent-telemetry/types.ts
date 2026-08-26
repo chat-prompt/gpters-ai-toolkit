@@ -15,6 +15,7 @@ export type AgentTelemetryHealthWarning =
   | 'no-turns-from-records'
   | 'high-unsupported-rate'
   | 'claude-code-tools-missing'
+  | 'no-files-in-scope'
 
 export interface AgentTokenUsage {
   inputTokens: number
@@ -56,6 +57,8 @@ export interface AgentTelemetryBatch {
   }>
   collection: {
     source: AgentTelemetrySource
+    filesDiscovered: number
+    filesExcludedByScope: number
     filesRead: number
     filesReset: number
     recordsRead: number

@@ -120,6 +120,11 @@ describe('aitk agent-telemetry collect', () => {
       source: 'claude-code',
       sessionsDir: undefined,
     })).rejects.toThrow('--sessions-dir is required')
+
+    await expect(runAgentTelemetryCollect({
+      ...options(true),
+      source: 'claude-code',
+    })).rejects.toThrow('--project-slugs is required')
   })
 
   it('건강도가 blocked인 빈 집계를 실제 서버로 전송하지 않는다', async () => {
@@ -131,10 +136,9 @@ describe('aitk agent-telemetry collect', () => {
 
     await expect(runAgentTelemetryCollect({
       ...options(false),
-      source: 'claude-code',
     })).rejects.toThrow('collection health is blocked')
 
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(() => readFileSync(join(checkpointDir, 'bbodoong-claude-code.json'))).toThrow()
+    expect(() => readFileSync(join(checkpointDir, 'bbodoong-openclaw.json'))).toThrow()
   })
 })

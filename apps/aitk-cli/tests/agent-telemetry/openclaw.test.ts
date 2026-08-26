@@ -227,6 +227,7 @@ describe('collectOpenClawAgent', () => {
       sessionId: 'claude-session-secret',
       timestamp: IN_WINDOW,
       message: {
+        id: id ? 'response-1' : undefined,
         role: 'assistant',
         model: 'claude-opus-5',
         content,
@@ -238,6 +239,7 @@ describe('collectOpenClawAgent', () => {
         type: 'tool_use', id: 'call-1', name: 'Read',
         input: { file_path: '/Users/person/.claude/skills/qa-verify/SKILL.md' },
       }]),
+      claudeAssistant('assistant-duplicate', [{ type: 'text', text: 'duplicate response copy' }]),
       entry({
         type: 'user', uuid: 'result-1', sessionId: 'claude-session-secret', timestamp: IN_WINDOW,
         message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call-1', is_error: false }] },
@@ -251,6 +253,8 @@ describe('collectOpenClawAgent', () => {
         message: { role: 'user', content: [{ type: 'text', text: 'private' }] },
       }),
       entry({ type: 'progress', uuid: 'unsupported', timestamp: IN_WINDOW }),
+      entry({ type: 'attachment', uuid: 'attachment-metadata' }),
+      entry({ type: 'last-prompt', uuid: 'prompt-metadata' }),
       claudeAssistant(undefined, [{ type: 'text', text: 'missing identity' }]),
     ])
 
@@ -267,7 +271,8 @@ describe('collectOpenClawAgent', () => {
     expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
     expect(result.skillLoads).toEqual([{ skillId: 'qa-verify', loaded: 1, failed: 0, interrupted: 0 }])
     expect(result.collection).toMatchObject({
-      source: 'claude-code', includedRecords: 2, nonAssistantSkipped: 1,
+      source: 'claude-code', includedRecords: 2, metadataSkipped: 2, nonAssistantSkipped: 1,
+      duplicatesSkipped: 1,
       unsupportedRecordsSkipped: 1, missingIdentitySkipped: 1, orphanToolResultsSkipped: 1,
       healthStatus: 'healthy',
     })
@@ -301,5 +306,33 @@ describe('collectOpenClawAgent', () => {
       'high-unsupported-rate',
       'claude-code-tools-missing',
     ])
+  })
+
+  it('Claude Code 루트에서 허용한 프로젝트 디렉터리만 읽는다', async () => {
+    writeSession('project-a/a.jsonl', [assistant({ id: 'a' })])
+    writeSession('project-b/b.jsonl', [assistant({ id: 'b' })])
+
+    const result = await collectOpenClawAgent({
+      sessionsDir: root,
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'openclaw',
+      projectSlugs: ['project-a'],
+    })
+
+    expect(result.turns).toBe(1)
+    expect(result.collection).toMatchObject({ filesDiscovered: 2, filesExcludedByScope: 1, filesRead: 1 })
+
+    const emptyScope = await collectOpenClawAgent({
+      sessionsDir: root,
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'claude-code',
+      projectSlugs: ['missing-project'],
+    })
+    expect(emptyScope.collection.healthStatus).toBe('blocked')
+    expect(emptyScope.collection.healthWarnings).toContain('no-files-in-scope')
   })
 })
