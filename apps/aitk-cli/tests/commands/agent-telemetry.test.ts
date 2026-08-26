@@ -70,7 +70,7 @@ describe('aitk agent-telemetry collect', () => {
     expect(output.batch).toMatchObject({ agentId: 'bbodoong', sessions: 1, turns: 1 })
     expect(JSON.stringify(output)).not.toContain('session-secret')
     expect(JSON.stringify(output)).not.toContain('private prompt')
-    expect(() => readFileSync(join(checkpointDir, 'bbodoong.json'))).toThrow()
+    expect(() => readFileSync(join(checkpointDir, 'bbodoong-openclaw.json'))).toThrow()
   })
 
   it('실패 전에 pending batch를 보존하고 재시도할 때 같은 batchId를 보낸다', async () => {
@@ -83,7 +83,7 @@ describe('aitk agent-telemetry collect', () => {
 
     await expect(runAgentTelemetryCollect(options(false))).rejects.toThrow('Pending batch was preserved')
     const stateAfterFailure = JSON.parse(
-      readFileSync(join(checkpointDir, 'bbodoong.json'), 'utf8')
+      readFileSync(join(checkpointDir, 'bbodoong-openclaw.json'), 'utf8')
     ) as AgentTelemetryCheckpoint
     expect(stateAfterFailure.pending?.batch.batchId).toBe(sent[0].batchId)
     expect(stateAfterFailure.committed.lastWindowEndUtc).toBeNull()
@@ -91,7 +91,7 @@ describe('aitk agent-telemetry collect', () => {
     await runAgentTelemetryCollect(options(false))
     expect(sent[1].batchId).toBe(sent[0].batchId)
     const stateAfterSuccess = JSON.parse(
-      readFileSync(join(checkpointDir, 'bbodoong.json'), 'utf8')
+      readFileSync(join(checkpointDir, 'bbodoong-openclaw.json'), 'utf8')
     ) as AgentTelemetryCheckpoint
     expect(stateAfterSuccess.pending).toBeUndefined()
     expect(stateAfterSuccess.committed.lastWindowEndUtc).toBe(NOW.toISOString())
@@ -112,5 +112,29 @@ describe('aitk agent-telemetry collect', () => {
       ...options(true),
       openclawVersion: '/Users/person/private',
     })).rejects.toThrow('sensitive characters')
+  })
+
+  it('claude-code 소스는 명시적인 transcript 경로를 요구한다', async () => {
+    await expect(runAgentTelemetryCollect({
+      ...options(true),
+      source: 'claude-code',
+      sessionsDir: undefined,
+    })).rejects.toThrow('--sessions-dir is required')
+  })
+
+  it('건강도가 blocked인 빈 집계를 실제 서버로 전송하지 않는다', async () => {
+    writeFileSync(join(sessionsDir, 'session.jsonl'), Array.from({ length: 20 }, (_, index) => JSON.stringify({
+      type: 'progress', uuid: `unsupported-${index}`, timestamp: '2026-08-26T10:00:00Z',
+    })).join('\n') + '\n')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(runAgentTelemetryCollect({
+      ...options(false),
+      source: 'claude-code',
+    })).rejects.toThrow('collection health is blocked')
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(() => readFileSync(join(checkpointDir, 'bbodoong-claude-code.json'))).toThrow()
   })
 })

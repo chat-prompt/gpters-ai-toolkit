@@ -8,7 +8,9 @@ import type {
   AgentTaskCategory,
   AgentTelemetryCommittedState,
   AgentTelemetryFileCheckpoint,
+  AgentTelemetryHealthWarning,
   AgentTelemetrySeenMessage,
+  AgentTelemetrySource,
   AgentTokenUsage,
   ThinkingTokensRelation,
 } from './types.js'
@@ -16,6 +18,8 @@ import { emptyAgentUsage } from './types.js'
 
 const SEEN_RETENTION_MS = 90 * 86_400_000
 const MAX_SEEN_MESSAGES = 100_000
+const MIN_HEALTH_SAMPLE_RECORDS = 20
+const MAX_UNSUPPORTED_RATIO = 0.5
 const SAFE_LABEL = /^[a-zA-Z0-9][a-zA-Z0-9._:/+<> -]{0,119}$/
 const SAFE_ID = /^[a-z0-9][a-z0-9._:-]{0,99}$/
 const FORBIDDEN_LABELS = [
@@ -75,15 +79,24 @@ export interface OpenClawCollection {
   }>
   executions: []
   collection: {
+    source: AgentTelemetrySource
     filesRead: number
     filesReset: number
     recordsRead: number
+    includedRecords: number
+    metadataSkipped: number
+    nonAssistantSkipped: number
     duplicatesSkipped: number
     syntheticSkipped: number
     malformedSkipped: number
     outsideWindowSkipped: number
+    unsupportedRecordsSkipped: number
+    missingIdentitySkipped: number
+    orphanToolResultsSkipped: number
     parseFailures: number
     lagMinutes: number
+    healthStatus: 'healthy' | 'blocked'
+    healthWarnings: AgentTelemetryHealthWarning[]
   }
   nextCommitted: AgentTelemetryCommittedState
 }
@@ -93,6 +106,7 @@ export interface CollectOpenClawOptions {
   window: { start: Date; end: Date }
   committed: AgentTelemetryCommittedState
   category: AgentTaskCategory
+  source: AgentTelemetrySource
 }
 
 function toCount(value: unknown): number {
@@ -280,15 +294,24 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   }
   const nextFiles: Record<string, AgentTelemetryFileCheckpoint> = { ...options.committed.files }
   const collection = {
+    source: options.source,
     filesRead: 0,
     filesReset: 0,
     recordsRead: 0,
+    includedRecords: 0,
+    metadataSkipped: 0,
+    nonAssistantSkipped: 0,
     duplicatesSkipped: 0,
     syntheticSkipped: 0,
     malformedSkipped: 0,
     outsideWindowSkipped: 0,
+    unsupportedRecordsSkipped: 0,
+    missingIdentitySkipped: 0,
+    orphanToolResultsSkipped: 0,
     parseFailures: 0,
     lagMinutes: 0,
+    healthStatus: 'healthy' as 'healthy' | 'blocked',
+    healthWarnings: [] as AgentTelemetryHealthWarning[],
   }
   let turns = 0
   let latestIncludedAt = 0
@@ -313,6 +336,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     let sessionIdentity = fileKey
     try {
       const nextOffset = await scanCompleteLines(filePath, offset, (line) => {
+        collection.recordsRead++
         let entry: OpenClawEntry
         try {
           entry = JSON.parse(line) as OpenClawEntry
@@ -320,42 +344,62 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
           collection.malformedSkipped++
           return
         }
-        collection.recordsRead++
         if (entry.type === 'session' && typeof entry.id === 'string') {
           sessionIdentity = entry.id
+          collection.metadataSkipped++
           return
         }
 
+        const explicitSessionId = entry.sessionId ?? entry.session_id
+        if (typeof explicitSessionId === 'string' && explicitSessionId.length > 0) {
+          sessionIdentity = explicitSessionId
+        }
+
         const at = entryTimestamp(entry)
-        if (at === null || at < startMs || at >= endMs) {
+        if (at === null) {
+          collection.malformedSkipped++
+          return
+        }
+        if (at < startMs || at >= endMs) {
           collection.outsideWindowSkipped++
           return
         }
 
         const result = resultInfo(entry)
-        if (result?.id) {
-          const call = toolCalls.get(result.id)
-          if (call) {
-            if (result.failed) toolMetrics.get(call.name)!.failures++
-            if (call.skillId) {
-              const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
-              if (result.failed) skill.failed++
-              else skill.loaded++
-              skillMetrics.set(call.skillId, skill)
-            }
+        if (result) {
+          const call = result.id ? toolCalls.get(result.id) : undefined
+          if (!call) {
+            collection.orphanToolResultsSkipped++
+            return
           }
+          if (result.failed) toolMetrics.get(call.name)!.failures++
+          if (call.skillId) {
+            const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+            if (result.failed) skill.failed++
+            else skill.loaded++
+            skillMetrics.set(call.skillId, skill)
+          }
+          collection.includedRecords++
           return
         }
 
         const message = entry.message
-        if (entry.type !== 'message' || message?.role !== 'assistant') return
+        const expectedAssistantType = options.source === 'claude-code' ? 'assistant' : 'message'
+        if (entry.type !== expectedAssistantType || message?.role !== 'assistant') {
+          if (entry.type === 'user' || message?.role === 'user') collection.nonAssistantSkipped++
+          else collection.unsupportedRecordsSkipped++
+          return
+        }
         if (isSynthetic(message)) {
           collection.syntheticSkipped++
           return
         }
 
         const messageId = entry.id ?? entry.uuid
-        if (typeof messageId !== 'string' || messageId.length === 0) return
+        if (typeof messageId !== 'string' || messageId.length === 0) {
+          collection.missingIdentitySkipped++
+          return
+        }
         const messageHash = hashIdentity(`${sessionIdentity}\u0000${messageId}`)
         if (retainedSeen.has(messageHash) || batchSeen.has(messageHash)) {
           collection.duplicatesSkipped++
@@ -373,6 +417,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         modelMetrics.set(model, modelMetric)
         sessions.add(hashIdentity(sessionIdentity))
         turns++
+        collection.includedRecords++
         latestIncludedAt = Math.max(latestIncludedAt, at)
 
         for (const block of contentBlocks(message.content)) {
@@ -399,6 +444,22 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   collection.lagMinutes = latestIncludedAt > 0
     ? Math.min(60 * 24 * 30, Math.max(0, Math.round((endMs - latestIncludedAt) / 6000) / 10))
     : 0
+
+  const healthWarnings: AgentTelemetryHealthWarning[] = []
+  if (collection.recordsRead > 0 && turns === 0) healthWarnings.push('no-turns-from-records')
+  if (
+    collection.recordsRead >= MIN_HEALTH_SAMPLE_RECORDS &&
+    collection.unsupportedRecordsSkipped / collection.recordsRead >= MAX_UNSUPPORTED_RATIO
+  ) {
+    healthWarnings.push('high-unsupported-rate')
+  }
+  const suspiciousClaudeSkips = collection.unsupportedRecordsSkipped +
+    collection.missingIdentitySkipped + collection.orphanToolResultsSkipped
+  if (options.source === 'claude-code' && toolMetrics.size === 0 && suspiciousClaudeSkips >= MIN_HEALTH_SAMPLE_RECORDS) {
+    healthWarnings.push('claude-code-tools-missing')
+  }
+  collection.healthWarnings = healthWarnings
+  collection.healthStatus = healthWarnings.length > 0 ? 'blocked' : 'healthy'
 
   const seenMessages = [...retainedSeen.values()]
     .sort((a, b) => Date.parse(a.atUtc) - Date.parse(b.atUtc))

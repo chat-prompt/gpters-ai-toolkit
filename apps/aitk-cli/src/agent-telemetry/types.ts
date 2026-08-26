@@ -10,6 +10,11 @@ export const AGENT_TASK_CATEGORIES = [
 
 export type AgentTaskCategory = typeof AGENT_TASK_CATEGORIES[number]
 export type ThinkingTokensRelation = 'included-in-output' | 'separate-from-output' | 'unknown'
+export type AgentTelemetrySource = 'openclaw' | 'claude-code'
+export type AgentTelemetryHealthWarning =
+  | 'no-turns-from-records'
+  | 'high-unsupported-rate'
+  | 'claude-code-tools-missing'
 
 export interface AgentTokenUsage {
   inputTokens: number
@@ -50,15 +55,24 @@ export interface AgentTelemetryBatch {
     count: number
   }>
   collection: {
+    source: AgentTelemetrySource
     filesRead: number
     filesReset: number
     recordsRead: number
+    includedRecords: number
+    metadataSkipped: number
+    nonAssistantSkipped: number
     duplicatesSkipped: number
     syntheticSkipped: number
     malformedSkipped: number
     outsideWindowSkipped: number
+    unsupportedRecordsSkipped: number
+    missingIdentitySkipped: number
+    orphanToolResultsSkipped: number
     parseFailures: number
     lagMinutes: number
+    healthStatus: 'healthy' | 'blocked'
+    healthWarnings: AgentTelemetryHealthWarning[]
   }
 }
 

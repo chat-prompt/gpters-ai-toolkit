@@ -270,7 +270,7 @@ Examples:
   aitk usage report
   aitk usage report --days 30 --dry-run`,
 
-  'agent-telemetry': `aitk agent-telemetry - Collect PII-free OpenClaw agent usage
+  'agent-telemetry': `aitk agent-telemetry - Collect PII-free agent usage
 
 Usage: aitk agent-telemetry collect --agent <id> [options]
 
@@ -278,7 +278,8 @@ Required:
   --agent <id>                 Stable agent ID (for example bbodoong)
 
 Options:
-  --sessions-dir <path>        OpenClaw sessions directory
+  --source <source>            openclaw|claude-code (default: openclaw)
+  --sessions-dir <path>        Transcript directory (required for claude-code)
   --checkpoint-dir <path>      Per-agent checkpoint directory
   --collector-id <id>          Stable collector identity (generated if omitted)
   --days <N>                   First-run backfill window (default: 7, max: 90)
@@ -548,6 +549,7 @@ async function main(): Promise<void> {
       if (!flags['agent']) error('--agent required: aitk agent-telemetry collect --agent <id>')
       await runAgentTelemetryCollect({
         agentId: flags['agent'],
+        source: flags['source'],
         days: flags['days'] ? parseInt(flags['days'], 10) : 7,
         dryRun: flags['dry-run'] === 'true',
         collectorVersion: VERSION,

@@ -13,6 +13,7 @@ import {
   type AgentTelemetryBatch,
   type AgentTelemetryCheckpoint,
   type AgentTelemetryCommittedState,
+  type AgentTelemetrySource,
 } from '../agent-telemetry/types.js'
 
 const MAX_DAYS = 90
@@ -26,6 +27,7 @@ const FORBIDDEN_LABELS = [
 
 export interface AgentTelemetryOptions {
   agentId: string
+  source?: string
   days: number
   dryRun: boolean
   collectorVersion: string
@@ -78,6 +80,14 @@ function resolveCategory(value: string | undefined): AgentTaskCategory {
   return category as AgentTaskCategory
 }
 
+function resolveSource(value: string | undefined): AgentTelemetrySource {
+  const source = value ?? 'openclaw'
+  if (source !== 'openclaw' && source !== 'claude-code') {
+    error('--source must be one of: openclaw, claude-code')
+  }
+  return source as AgentTelemetrySource
+}
+
 function resolveServerUrl(value?: string): string {
   return (value ?? process.env.AITK_SERVER_URL ?? readConfig().serverUrl).replace(/\/+$/, '')
 }
@@ -127,14 +137,18 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
 
 export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): Promise<void> {
   const agentId = safeId(options.agentId, '--agent')
+  const source = resolveSource(options.source)
   if (!Number.isFinite(options.days) || options.days < 1 || options.days > MAX_DAYS) {
     error(`--days must be between 1 and ${MAX_DAYS}`)
   }
   if (options.collectorInstanceId) safeId(options.collectorInstanceId, '--collector-id')
   const category = resolveCategory(options.category)
+  if (source === 'claude-code' && !options.sessionsDir) {
+    error('--sessions-dir is required when --source claude-code is used')
+  }
   const sessionsDir = resolve(options.sessionsDir ?? join(homedir(), '.openclaw', 'agents', agentId, 'sessions'))
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
-  const checkpointPath = join(checkpointDir, `${agentId}.json`)
+  const checkpointPath = join(checkpointDir, `${agentId}-${source}.json`)
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
 
   if (state.agentId !== agentId) error('Checkpoint belongs to a different agent')
@@ -158,6 +172,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       window: { start, end: now },
       committed: state.committed,
       category,
+      source,
     })
     const batch: AgentTelemetryBatch = {
       schemaVersion: '1.0.0',
@@ -197,6 +212,10 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       },
     })
     return
+  }
+
+  if (pending.batch.collection.healthStatus === 'blocked') {
+    error(`Agent telemetry collection health is blocked: ${pending.batch.collection.healthWarnings.join(', ')}`)
   }
 
   // 전송 전에 pending batch를 먼저 원자적으로 기록한다. 요청이 성공하고 프로세스가 죽어도

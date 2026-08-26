@@ -48,6 +48,13 @@ const executionSchema = z.object({
   count: nonNegativeInt,
 }).strict()
 
+const sourceSchema = z.enum(['openclaw', 'claude-code'])
+const healthWarningSchema = z.enum([
+  'no-turns-from-records',
+  'high-unsupported-rate',
+  'claude-code-tools-missing',
+])
+
 export const axAgentTelemetryBatchSchema = z.object({
   schemaVersion: z.literal('1.0.0'),
   batchId: z.string().uuid(),
@@ -69,15 +76,24 @@ export const axAgentTelemetryBatchSchema = z.object({
   taskCategories: z.array(taskCategorySchema).max(100),
   executions: z.array(executionSchema).max(20),
   collection: z.object({
+    source: sourceSchema,
     filesRead: nonNegativeInt,
     filesReset: nonNegativeInt,
     recordsRead: nonNegativeInt,
+    includedRecords: nonNegativeInt,
+    metadataSkipped: nonNegativeInt,
+    nonAssistantSkipped: nonNegativeInt,
     duplicatesSkipped: nonNegativeInt,
     syntheticSkipped: nonNegativeInt,
     malformedSkipped: nonNegativeInt,
     outsideWindowSkipped: nonNegativeInt,
+    unsupportedRecordsSkipped: nonNegativeInt,
+    missingIdentitySkipped: nonNegativeInt,
+    orphanToolResultsSkipped: nonNegativeInt,
     parseFailures: nonNegativeInt,
     lagMinutes: z.number().nonnegative().max(60 * 24 * 30),
+    healthStatus: z.enum(['healthy', 'blocked']),
+    healthWarnings: z.array(healthWarningSchema).max(3),
   }).strict(),
 }).strict().superRefine((batch, ctx) => {
   const start = new Date(batch.window.startUtc).getTime()
@@ -90,6 +106,30 @@ export const axAgentTelemetryBatchSchema = z.object({
   }
   if (batch.models.reduce((sum, row) => sum + row.turns, 0) > batch.turns) {
     ctx.addIssue({ code: 'custom', path: ['models'], message: 'model turns cannot exceed total turns' })
+  }
+  const accountedRecords = batch.collection.includedRecords + batch.collection.metadataSkipped +
+    batch.collection.nonAssistantSkipped + batch.collection.duplicatesSkipped +
+    batch.collection.syntheticSkipped + batch.collection.malformedSkipped +
+    batch.collection.outsideWindowSkipped + batch.collection.unsupportedRecordsSkipped +
+    batch.collection.missingIdentitySkipped + batch.collection.orphanToolResultsSkipped
+  if (accountedRecords !== batch.collection.recordsRead) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['collection', 'recordsRead'],
+      message: 'recordsRead must equal included and skipped record counts',
+    })
+  }
+  if (batch.collection.healthStatus === 'healthy' && batch.collection.healthWarnings.length > 0) {
+    ctx.addIssue({
+      code: 'custom', path: ['collection', 'healthWarnings'],
+      message: 'healthy collection cannot contain health warnings',
+    })
+  }
+  if (batch.collection.healthStatus === 'blocked') {
+    ctx.addIssue({
+      code: 'custom', path: ['collection', 'healthStatus'],
+      message: 'blocked collection cannot be ingested',
+    })
   }
 })
 
