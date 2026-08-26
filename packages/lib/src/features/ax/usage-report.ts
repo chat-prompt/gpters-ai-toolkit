@@ -26,8 +26,8 @@ const MAX_PERIOD_DAYS = 90
  * 클라이언트 하나의 집계 한 건
  *
  * `limitUsedPercent`·`limitResetsAt`이 nullable인 게 이 계약의 핵심이다.
- * Claude Code는 남은 한도를 로컬에 남기지 않으므로 값이 존재하지 않는다.
- * 0으로 채우면 "한도를 안 쓴 사람"과 구분되지 않으므로 반드시 null로 보낸다.
+ * Claude Code는 최신 로컬 usage cache가 있을 때만 계정 한도를 보고한다.
+ * 수집하지 못한 값을 0으로 채우면 "한도를 안 쓴 사람"과 구분되지 않으므로 null로 보낸다.
  */
 export interface AxUsageReportRecord {
   client: AxUsageClient
@@ -58,6 +58,7 @@ export interface AxUsageReportRecord {
  * 유도한다. 클라이언트가 이름을 실어 보내면 남의 이름으로 기록을 남길 수 있다.
  */
 export interface AxUsageReportPayload {
+  /** 비어 있어도 유효하다. 빈 배열은 수집기는 정상 실행됐지만 사용량이 없다는 점검 신호다 */
   records: AxUsageReportRecord[]
 }
 
@@ -167,9 +168,6 @@ export function validateUsageReport(input: unknown): AxUsageReportValidation {
   const records = (input as Record<string, unknown>).records
   if (!Array.isArray(records)) {
     return { ok: false, errors: ['records: 배열이어야 합니다'] }
-  }
-  if (records.length === 0) {
-    return { ok: false, errors: ['records: 최소 1건이 필요합니다'] }
   }
   if (records.length > MAX_RECORDS) {
     return { ok: false, errors: [`records: ${MAX_RECORDS}건을 넘을 수 없습니다`] }

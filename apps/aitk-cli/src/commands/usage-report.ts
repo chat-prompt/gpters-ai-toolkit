@@ -63,11 +63,6 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
     return
   }
 
-  if (records.length === 0) {
-    info('No local usage found for the period.')
-    process.exit(0)
-  }
-
   const token = resolveToken()
   if (!token) {
     // 훅에서 돌 수 있어 미인증은 실패가 아니다 (report-session과 같은 처리)
@@ -78,6 +73,10 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
 
   if (!result.ok) {
     error(result.error!)
+  }
+
+  if (records.length === 0) {
+    info('No local usage found for the period. Collector status reported.')
   }
 
   jsonOut(result.data)

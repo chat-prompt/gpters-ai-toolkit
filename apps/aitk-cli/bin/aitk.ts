@@ -11,7 +11,9 @@ import { runUpdates } from '../src/commands/updates.js'
 import { runReportSession } from '../src/commands/report-session.js'
 import { runReportSkip } from '../src/commands/report-skip.js'
 import { runReportOutcome } from '../src/commands/report-outcome.js'
+import { runReportExecution, runReportExecutionStart } from '../src/commands/report-execution.js'
 import { runUsageReport } from '../src/commands/usage-report.js'
+import { runAgentTelemetryCollect } from '../src/commands/agent-telemetry.js'
 import { runLogin } from '../src/commands/login.js'
 import { runDeviceLogin } from '../src/commands/device-login.js'
 import { runConfig } from '../src/commands/config.js'
@@ -73,7 +75,10 @@ Usage:
   aitk report-session --count <N> [--version <ver>]
   aitk report-skip --query <query> --reason <reason> [--result-ids id1,id2]
   aitk report-outcome --skill-id <id> --applied true|false --summary <text>
+  aitk report-execution-start --skill-id <id> --agent <runtime> --agent-id <id> [options]
+  aitk report-execution --skill-id <id> --status <status> --agent <runtime> --agent-id <id> [options]
   aitk usage report [--days 7] [--dry-run]
+  aitk agent-telemetry collect --agent <id> [--days 7] [--dry-run]
   aitk undeploy <id>
   aitk add-files --id <id> <file1> [file2...] [--type script|reference|template|config]
   aitk remove-files --id <id> --files <name1,name2>
@@ -94,7 +99,10 @@ Commands:
   report-session  Report session event (for hooks)
   report-skip     Report skill search skip reason
   report-outcome  Report skill application outcome
+  report-execution-start Report actual skill application start
+  report-execution Report validated skill execution outcome
   usage           Report local Claude Code / Codex token usage
+  agent-telemetry Collect PII-free OpenClaw agent delta usage
   login           Save auth token (browser, --device, or --token)
   whoami          Show current authenticated user
 
@@ -219,6 +227,31 @@ Required:
   --skill-id <id>    Skill ID that was loaded
   --applied <bool>   Whether the skill was actually applied (true/false)
   --summary <text>   One-line outcome summary`,
+  'report-execution-start': `aitk report-execution-start - Report actual skill application start
+
+Usage: aitk report-execution-start --skill-id <id> --agent <runtime> --agent-id <stable-id> [options]
+
+Options:
+  --source <source>             aitk|bbopters-shared (default: aitk)
+  --attempt-id <uuid>           Stable attempt identifier (generated if omitted)
+  --event-id <uuid>             Idempotency identifier (generated if omitted)
+  --skill-version <version>     SKILL.md version or commit SHA`,
+  'report-execution': `aitk report-execution - Report validated skill execution
+
+Usage: aitk report-execution --skill-id <id> --status success|partial|failed|abandoned --agent claude-code|codex|openclaw|test-agent --agent-id <stable-id> [options]
+
+Options:
+  --source <source>             aitk|bbopters-shared (default: aitk)
+  --agent-id <stable-id>        Stable bot identifier shared with the start report
+  --attempt-id <uuid>          Stable attempt identifier (generated if omitted)
+  --event-id <uuid>            Idempotency identifier (generated if omitted)
+  --skill-version <version>    SKILL.md version or commit SHA
+  --failure-stage <stage>      load|instruction|dependency|execution|validation
+  --error-code <code>          Short machine-readable error code
+  --validation-method <method> test|command|artifact|user_confirmation|none
+  --validation-passed <bool>   true|false when validation method is not none
+  --validation-summary <text>  Short redacted summary; never send raw output
+  --user-accepted <bool>       true|false when observable`,
 
   usage: `aitk usage - Report local Claude Code / Codex token usage
 
@@ -236,6 +269,31 @@ Options:
 Examples:
   aitk usage report
   aitk usage report --days 30 --dry-run`,
+
+  'agent-telemetry': `aitk agent-telemetry - Collect PII-free OpenClaw agent usage
+
+Usage: aitk agent-telemetry collect --agent <id> [options]
+
+Required:
+  --agent <id>                 Stable agent ID (for example bbodoong)
+
+Options:
+  --sessions-dir <path>        OpenClaw sessions directory
+  --checkpoint-dir <path>      Per-agent checkpoint directory
+  --collector-id <id>          Stable collector identity (generated if omitted)
+  --days <N>                   First-run backfill window (default: 7, max: 90)
+  --category <category>        Allowlisted task category (default: unclassified)
+  --server-url <url>           AI Toolkit server URL
+  --openclaw-version <version> Runtime version label (default: unknown)
+  --claude-cli-version <ver>   Claude CLI version label (default: unknown)
+  --dry-run                    Print only aggregate data; never write checkpoint or send
+
+Authentication:
+  Set AX_AGENT_TELEMETRY_TOKEN in the environment. Tokens are not accepted as CLI flags.
+
+Examples:
+  aitk agent-telemetry collect --agent bbodoong --days 7 --dry-run
+  aitk agent-telemetry collect --agent bbodoong --category qa-verify`,
 
   login: `aitk login - Authenticate with AI Toolkit
 
@@ -409,6 +467,67 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'report-execution-start': {
+      const skillId = flags['skill-id']
+      const agent = flags['agent']
+      const agentId = flags['agent-id']
+      if (!skillId) error('--skill-id required')
+      if (!agentId) error('--agent-id required')
+      if (!['claude-code', 'codex', 'openclaw', 'test-agent'].includes(agent ?? '')) {
+        error('--agent must be claude-code|codex|openclaw|test-agent')
+      }
+      const source = flags['source'] ?? 'aitk'
+      if (!['aitk', 'bbopters-shared'].includes(source)) error('--source must be aitk|bbopters-shared')
+      await runReportExecutionStart({
+        skillId,
+        agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'test-agent',
+        agentId,
+        source: source as 'aitk' | 'bbopters-shared',
+        attemptId: flags['attempt-id'],
+        eventId: flags['event-id'],
+        skillVersion: flags['skill-version'],
+      })
+      break
+    }
+
+    case 'report-execution': {
+      const skillId = flags['skill-id']
+      const status = flags['status']
+      const agent = flags['agent']
+      const agentId = flags['agent-id']
+      if (!skillId) error('--skill-id required')
+      if (!agentId) error('--agent-id required')
+      if (!['success', 'partial', 'failed', 'abandoned'].includes(status ?? '')) {
+        error('--status must be success|partial|failed|abandoned')
+      }
+      if (!['claude-code', 'codex', 'openclaw', 'test-agent'].includes(agent ?? '')) {
+        error('--agent must be claude-code|codex|openclaw|test-agent')
+      }
+      const source = flags['source'] ?? 'aitk'
+      if (!['aitk', 'bbopters-shared'].includes(source)) {
+        error('--source must be aitk|bbopters-shared')
+      }
+      const bool = (value: string | undefined): boolean | undefined =>
+        value === undefined ? undefined : value === 'true' ? true : value === 'false' ? false : undefined
+      await runReportExecution({
+        skillId,
+        status: status as 'success' | 'partial' | 'failed' | 'abandoned',
+        agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'test-agent',
+        agentId,
+        source: source as 'aitk' | 'bbopters-shared',
+        attemptId: flags['attempt-id'],
+        eventId: flags['event-id'],
+        skillVersion: flags['skill-version'],
+        failureStage: flags['failure-stage'] as 'load' | 'instruction' | 'dependency' | 'execution' | 'validation' | undefined,
+        errorCode: flags['error-code'],
+        validationMethod: flags['validation-method'] as 'test' | 'command' | 'artifact' | 'user_confirmation' | 'none' | undefined,
+        validationPassed: bool(flags['validation-passed']),
+        validationSummary: flags['validation-summary'],
+        userAccepted: bool(flags['user-accepted']),
+      })
+      break
+    }
+
     case 'usage': {
       const sub = positional[0]
       if (sub !== 'report') {
@@ -417,6 +536,28 @@ async function main(): Promise<void> {
       await runUsageReport({
         days: flags['days'] ? parseInt(flags['days'], 10) : 7,
         dryRun: flags['dry-run'] === 'true',
+      })
+      break
+    }
+
+    case 'agent-telemetry': {
+      const sub = positional[0]
+      if (sub !== 'collect') {
+        error(`Unknown subcommand: aitk agent-telemetry ${sub ?? ''}\nUsage: aitk agent-telemetry collect --agent <id> [--dry-run]`)
+      }
+      if (!flags['agent']) error('--agent required: aitk agent-telemetry collect --agent <id>')
+      await runAgentTelemetryCollect({
+        agentId: flags['agent'],
+        days: flags['days'] ? parseInt(flags['days'], 10) : 7,
+        dryRun: flags['dry-run'] === 'true',
+        collectorVersion: VERSION,
+        sessionsDir: flags['sessions-dir'],
+        checkpointDir: flags['checkpoint-dir'],
+        collectorInstanceId: flags['collector-id'],
+        category: flags['category'],
+        serverUrl: flags['server-url'],
+        openclawVersion: flags['openclaw-version'],
+        claudeCliVersion: flags['claude-cli-version'],
       })
       break
     }

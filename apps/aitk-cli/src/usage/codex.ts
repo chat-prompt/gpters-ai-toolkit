@@ -146,7 +146,7 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
         if (payload.type !== 'token_count') return
 
         const at = Date.parse(String(entry.timestamp))
-        if (!Number.isFinite(at) || at < startMs || at > endMs) return
+        if (!Number.isFinite(at) || at < startMs || at >= endMs) return
 
         // total_token_usage는 세션 누적이라 더하면 수십 배로 부푼다. 증분만 더한다.
         const usage = payload.info?.last_token_usage

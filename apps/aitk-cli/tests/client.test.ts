@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 let apiCall: typeof import('../src/client.js').apiCall
 let jsonRpcCall: typeof import('../src/client.js').jsonRpcCall
+let jsonRpcSessionCall: typeof import('../src/client.js').jsonRpcSessionCall
 
 describe('client', () => {
   const originalFetch = globalThis.fetch
@@ -18,6 +19,7 @@ describe('client', () => {
     const mod = await import('../src/client.js')
     apiCall = mod.apiCall
     jsonRpcCall = mod.jsonRpcCall
+    jsonRpcSessionCall = mod.jsonRpcSessionCall
   })
 
   afterEach(() => {
@@ -137,6 +139,49 @@ describe('client', () => {
       const result = await jsonRpcCall('tools/call', { name: 'invalid' })
       expect(result.ok).toBe(false)
       expect(result.error).toBe('method not found')
+    })
+  })
+
+  describe('jsonRpcSessionCall', () => {
+    it('initialize에서 받은 세션 ID를 실제 도구 호출에 전달한다', async () => {
+      const requests: Array<{ body: Record<string, unknown>; headers: Record<string, string> }> = []
+      globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(init?.body as string) as Record<string, unknown>
+        const headers = init?.headers as Record<string, string>
+        requests.push({ body, headers })
+        if (body.method === 'initialize') {
+          return new Response(JSON.stringify({ result: { protocolVersion: '2025-03-26' } }), {
+            status: 200,
+            headers: { 'Mcp-Session-Id': 'mcp_test_session' },
+          })
+        }
+        return new Response(JSON.stringify({ result: { status: 'recorded' } }), { status: 200 })
+      }) as typeof fetch
+
+      const result = await jsonRpcSessionCall(
+        'tools/call',
+        { name: 'report_skill_execution', arguments: {} },
+        'local-token',
+        { name: 'test-agent', version: '1.0.0' }
+      )
+
+      expect(requests).toHaveLength(2)
+      expect(requests[0].body.method).toBe('initialize')
+      expect(requests[1].headers['Mcp-Session-Id']).toBe('mcp_test_session')
+      expect(requests[1].headers.Authorization).toBe('Bearer local-token')
+      expect(result).toEqual({ ok: true, data: { status: 'recorded' }, status: 200 })
+    })
+
+    it('initialize 응답에 세션 ID가 없으면 보고하지 않는다', async () => {
+      globalThis.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({ result: {} }), { status: 200 })
+      ) as typeof fetch
+
+      const result = await jsonRpcSessionCall('tools/call', { name: 'report_skill_execution' })
+
+      expect(result.ok).toBe(false)
+      expect(result.error).toContain('session ID')
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
     })
   })
 })

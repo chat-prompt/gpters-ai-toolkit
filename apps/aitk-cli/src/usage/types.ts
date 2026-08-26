@@ -28,7 +28,7 @@ export interface UsageRecord {
   sessions: number
   /** 모델명 → 토큰 수 */
   models: Record<string, number>
-  /** 주간 한도 사용률 (0~100). 클라이언트가 한도를 남기지 않으면 null */
+  /** 주간 한도 사용률 (0~100). 최신 한도 스냅샷을 수집하지 못하면 null */
   limitUsedPercent: number | null
   /** 한도 리셋 시각 (ISO 8601). 없으면 null */
   limitResetsAt: string | null
@@ -36,8 +36,8 @@ export interface UsageRecord {
 
 /** 집계 구간 */
 export interface UsageWindow {
-  /** 구간 시작 */
+  /** 포함되는 구간 시작 */
   start: Date
-  /** 구간 끝 */
+  /** 포함되지 않는 구간 끝. 인접 구간은 [start, end)로 이어 붙인다 */
   end: Date
 }

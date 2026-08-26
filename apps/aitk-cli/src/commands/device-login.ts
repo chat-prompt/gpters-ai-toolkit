@@ -58,7 +58,7 @@ export async function runDeviceLogin(): Promise<void> {
     error(`Server error (${deviceResp!.status}): ${text}`)
   }
 
-  const data: DeviceCodeResponse = await deviceResp!.json()
+  const data = await deviceResp!.json() as DeviceCodeResponse
 
   // Step 2: 사용자에게 안내
   info('')
@@ -92,7 +92,7 @@ export async function runDeviceLogin(): Promise<void> {
       continue
     }
 
-    const result: TokenResponse = await pollResp.json().catch(() => ({}))
+    const result = await pollResp.json().catch(() => ({})) as TokenResponse
 
     if (pollResp.ok && result.access_token) {
       // 성공: 토큰 저장
