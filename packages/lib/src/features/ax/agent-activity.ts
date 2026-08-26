@@ -297,6 +297,15 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         detail: '반복 실패의 입력 검증·재시도 정책·권한 설정을 먼저 점검할 만합니다.',
       })
     }
+    const dominantModel = models[0]
+    const dominantModelShare = dominantModel && total > 0 ? dominantModel.processedTokens / total : 0
+    if (models.length > 1 && dominantModel && dominantModelShare >= 0.8) {
+      insights.push({
+        severity: 'opportunity',
+        title: `${dominantModel.model} 처리 토큰 ${Math.round(dominantModelShare * 100)}%`,
+        detail: '반복·정형 작업을 더 가벼운 모델로 분기하고 품질을 대조하면 모델 라우팅 최적화 여지를 확인할 수 있습니다.',
+      })
+    }
     const contextPerTurn = turns > 0
       ? Math.round((totalUsage.inputTokens + totalUsage.cacheCreationInputTokens + totalUsage.cacheReadInputTokens) / turns)
       : 0

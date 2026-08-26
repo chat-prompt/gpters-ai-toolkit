@@ -59,3 +59,17 @@ again to total processed tokens.
   period.
 - A failed upload keeps the pending batch and retries the same `batchId`; server
   idempotency prevents double counting.
+
+## Review cadence
+
+- Automatic: collect every 6 hours and treat a reporter as stale after 12
+  hours. A quiet interval may legitimately contain a healthy zero-delta batch.
+- Daily: check reporter freshness, source coverage, parse failures, and pending
+  checkpoints. Fix collection health before interpreting usage trends.
+- Weekly: review the 7-day dashboard for context tokens per turn, reasoning
+  share, model mix, and tool failure hotspots. The dashboard calls out context
+  above 100k tokens/turn, reasoning above 30% of output, and tools with at least
+  10 calls and a 5% failure rate.
+- Rollout: add one `(agentId, source)` stream at a time, independently compare
+  its first backfill with the source of truth, then keep the same checkpoint.
+  Never reset a valid checkpoint to make a graph look cleaner.

@@ -97,6 +97,7 @@ describe('agentActivityPanel', () => {
     expect(result.data!.sourceCoverage.find((item) => item.source === 'openclaw')?.status).toBe('alternate')
     expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')?.status).toBe('missing')
     expect(result.data!.insights.some((item) => item.title.includes('실패율'))).toBe(true)
+    expect(result.data!.insights.some((item) => item.title.includes('claude-opus-5 처리 토큰'))).toBe(true)
   })
 
   it('12시간 넘은 reporter를 stale로 표시한다', async () => {
