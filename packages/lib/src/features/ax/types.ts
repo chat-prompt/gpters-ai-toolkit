@@ -353,7 +353,7 @@ export interface AxClientUsageData {
   members: AxClientUsageMemberRow[] | null
 }
 
-/** 에이전트 텔레메트리 소스. Hermes는 연결 상태를 숨기지 않기 위해 미지원 상태도 표기한다. */
+/** 에이전트 텔레메트리 소스. */
 export type AxAgentTelemetrySource = 'openclaw' | 'claude-code' | 'codex' | 'hermes'
 
 /** thinking은 output의 부분집합일 수 있으므로 합산 시 관계 필드를 반드시 확인한다. */
@@ -368,7 +368,7 @@ export interface AxAgentTokenUsage {
 
 export interface AxAgentReporterRow {
   agentId: string
-  source: Exclude<AxAgentTelemetrySource, 'hermes'>
+  source: AxAgentTelemetrySource
   lastCollectedAt: string
   freshnessHours: number
   freshness: 'fresh' | 'stale'

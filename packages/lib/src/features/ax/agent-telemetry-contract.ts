@@ -48,12 +48,13 @@ const executionSchema = z.object({
   count: nonNegativeInt,
 }).strict()
 
-const sourceSchema = z.enum(['openclaw', 'claude-code', 'codex'])
+const sourceSchema = z.enum(['openclaw', 'claude-code', 'codex', 'hermes'])
 const healthWarningSchema = z.enum([
   'no-turns-from-records',
   'high-unsupported-rate',
   'claude-code-tools-missing',
   'codex-tools-missing',
+  'hermes-tools-missing',
   'no-files-in-scope',
 ])
 

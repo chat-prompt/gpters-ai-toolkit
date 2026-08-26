@@ -95,7 +95,7 @@ describe('agentActivityPanel', () => {
     expect(result.data!.sourceCoverage.find((item) => item.source === 'claude-code')?.status).toBe('reporting')
     expect(result.data!.sourceCoverage.find((item) => item.source === 'codex')?.status).toBe('reporting')
     expect(result.data!.sourceCoverage.find((item) => item.source === 'openclaw')?.status).toBe('alternate')
-    expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')?.status).toBe('unsupported')
+    expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')?.status).toBe('missing')
     expect(result.data!.insights.some((item) => item.title.includes('실패율'))).toBe(true)
   })
 
@@ -104,6 +104,25 @@ describe('agentActivityPanel', () => {
     const result = await agentActivityPanel.load({ days: 7, isAdmin: true })
     expect(result.data!.reporters[0]).toMatchObject({ freshness: 'stale', freshnessHours: 24 })
     expect(result.data!.insights.some((item) => item.title === '수집 지연')).toBe(true)
+  })
+
+  it('Hermes batch를 reporter와 source coverage에 포함한다', async () => {
+    queueRows([row({
+      agentId: 'bbokeoter',
+      thinkingTokensRelation: 'unknown',
+      models: [{ model: 'hermes-3', turns: 4, usage: {
+        ...usage(10, 20, 30, 40, 8), thinkingTokensRelation: 'unknown',
+      } }],
+      tools: [{ name: 'shell', calls: 3, failures: 1 }],
+      skillLoads: [],
+      collection: { source: 'hermes', recordsRead: 100, parseFailures: 0, unsupportedRecordsSkipped: 0, healthWarnings: [] },
+    })])
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+    expect(result.data!.reporters[0]).toMatchObject({ agentId: 'bbokeoter', source: 'hermes' })
+    expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')).toMatchObject({
+      status: 'reporting', capabilities: { usage: true, tools: true, skills: false },
+    })
+    expect(result.data!.totalProcessedTokens).toBe(100)
   })
 
   it('데이터가 없으면 not_configured, 조회 실패면 error다', async () => {

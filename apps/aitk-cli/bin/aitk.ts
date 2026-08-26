@@ -278,8 +278,8 @@ Required:
   --agent <id>                 Stable agent ID (for example bbodoong)
 
 Options:
-  --source <source>            openclaw|claude-code|codex (default: openclaw)
-  --sessions-dir <path>        Transcript directory (always required)
+  --source <source>            openclaw|claude-code|codex|hermes (default: openclaw)
+  --sessions-dir <path>        Transcript directory, or Hermes SQLite file (always required)
   --project-slugs <a,b>        Allowed project directory names (required for claude-code/codex)
   --checkpoint-dir <path>      Per-agent checkpoint directory
   --collector-id <id>          Stable collector identity (generated if omitted)
@@ -294,8 +294,8 @@ Authentication:
   Set AX_AGENT_TELEMETRY_TOKEN in the environment. Tokens are not accepted as CLI flags.
 
 Examples:
-  aitk agent-telemetry collect --agent bbodoong --days 7 --dry-run
-  aitk agent-telemetry collect --agent bbodoong --category qa-verify`,
+  aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/session/directory --days 7 --dry-run
+  aitk agent-telemetry collect --agent hermes --source hermes --sessions-dir /explicit/hermes.sqlite --category qa-verify --dry-run`,
 
   login: `aitk login - Authenticate with AI Toolkit
 

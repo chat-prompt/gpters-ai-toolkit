@@ -44,6 +44,9 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
         <p className="font-mono text-[11px] text-[var(--text-muted)]">
           최근 {days}일 · 마지막 수집 {formatDateTime(data.syncedAt)} · {formatCount(data.collection.batches)} batches
         </p>
+        <p className="mt-1 font-mono text-[10px] text-[var(--text-muted)]">
+          실제 집계 {formatDateTime(data.windowStart)} – {formatDateTime(data.windowEnd)}
+        </p>
         <div className="mt-3 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
           <Metric label="처리 토큰" value={formatTokens(data.totalProcessedTokens)} hint="thinking 중복 제외" />
           <Metric label="턴 / 세션" value={`${formatCount(data.turns)} / ${formatCount(data.sessions)}`} />

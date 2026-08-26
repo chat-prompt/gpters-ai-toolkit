@@ -43,8 +43,8 @@ const SOURCE_INFO: Record<AxAgentTelemetrySource, Omit<AxAgentSourceCoverageRow,
     note: 'usage·turn·tool·execution을 수집하며 skill load는 아직 별도 신호가 없습니다',
   },
   hermes: {
-    capabilities: { usage: false, tools: false, skills: false },
-    note: '로그 구조 확인과 전용 어댑터 연결이 필요합니다',
+    capabilities: { usage: true, tools: true, skills: false },
+    note: 'SQLite 누적 usage의 delta·user turn·tool call을 수집하며 reasoning 포함 관계와 skill 신호는 아직 미확정입니다',
   },
 }
 
@@ -137,8 +137,9 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     for (const row of rows) {
       const collection = row.collection ?? {}
       const sourceValue = collection.source
-      if (sourceValue !== 'openclaw' && sourceValue !== 'claude-code' && sourceValue !== 'codex') continue
-      const source = sourceValue as Exclude<AxAgentTelemetrySource, 'hermes'>
+      if (sourceValue !== 'openclaw' && sourceValue !== 'claude-code' &&
+        sourceValue !== 'codex' && sourceValue !== 'hermes') continue
+      const source = sourceValue as AxAgentTelemetrySource
       const usage: AxAgentTokenUsage = {
         inputTokens: number(row.inputTokens),
         outputTokens: number(row.outputTokens),
@@ -230,8 +231,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const sourceCoverage = ALL_SOURCES.map((source): AxAgentSourceCoverageRow => {
       const last = sourceLatest.get(source)
       let status: AxAgentSourceCoverageRow['status']
-      if (source === 'hermes') status = 'unsupported'
-      else if (source === 'openclaw' && !last && sourceLatest.has('claude-code')) status = 'alternate'
+      if (source === 'openclaw' && !last && sourceLatest.has('claude-code')) status = 'alternate'
       else if (!last) status = 'missing'
       else status = (now - last) / 3_600_000 <= FRESH_HOURS ? 'reporting' : 'stale'
       return {
@@ -259,6 +259,15 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20)
     const total = processedTokens(totalUsage)
     const insights: AxAgentActivityData['insights'] = []
+
+    const coveredHours = (windowEnd - windowStart) / 3_600_000
+    if (coveredHours > ctx.days * 24 + 1) {
+      insights.push({
+        severity: 'warning',
+        title: `실제 집계 범위 ${Math.round((coveredHours / 24) * 10) / 10}일`,
+        detail: '초기 backfill batch가 선택 기간과 일부 겹쳐 있습니다. 화면은 이를 숨기지 않고 실제 집계 시작·종료 시각을 함께 표시합니다.',
+      })
+    }
 
     const unavailable = sourceCoverage.filter((row) => row.status === 'missing' || row.status === 'unsupported')
     if (unavailable.length > 0) {

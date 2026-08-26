@@ -8,6 +8,7 @@ import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
 import { collectOpenClawAgent } from '../agent-telemetry/openclaw.js'
 import { collectCodexAgent } from '../agent-telemetry/codex.js'
+import { collectHermesAgent } from '../agent-telemetry/hermes.js'
 import {
   AGENT_TASK_CATEGORIES,
   type AgentTaskCategory,
@@ -84,14 +85,14 @@ function resolveCategory(value: string | undefined): AgentTaskCategory {
 
 function resolveSource(value: string | undefined): AgentTelemetrySource {
   const source = value ?? 'openclaw'
-  if (source !== 'openclaw' && source !== 'claude-code' && source !== 'codex') {
-    error('--source must be one of: openclaw, claude-code, codex')
+  if (source !== 'openclaw' && source !== 'claude-code' && source !== 'codex' && source !== 'hermes') {
+    error('--source must be one of: openclaw, claude-code, codex, hermes')
   }
   return source as AgentTelemetrySource
 }
 
 function resolveProjectSlugs(source: AgentTelemetrySource, value: string | undefined): string[] | undefined {
-  if (source === 'openclaw') {
+  if (source === 'openclaw' || source === 'hermes') {
     if (value) error('--project-slugs is only supported with --source claude-code or codex')
     return undefined
   }
@@ -200,7 +201,9 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
     }
     const collected = source === 'codex'
       ? await collectCodexAgent({ ...collectOptions, source: 'codex', projectSlugs: projectSlugs! })
-      : await collectOpenClawAgent(collectOptions)
+      : source === 'hermes'
+        ? await collectHermesAgent({ ...collectOptions, source: 'hermes' })
+        : await collectOpenClawAgent(collectOptions)
     const batch: AgentTelemetryBatch = {
       schemaVersion: '1.0.0',
       batchId: randomUUID(),

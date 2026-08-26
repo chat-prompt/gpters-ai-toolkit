@@ -10,12 +10,13 @@ export const AGENT_TASK_CATEGORIES = [
 
 export type AgentTaskCategory = typeof AGENT_TASK_CATEGORIES[number]
 export type ThinkingTokensRelation = 'included-in-output' | 'separate-from-output' | 'unknown'
-export type AgentTelemetrySource = 'openclaw' | 'claude-code' | 'codex'
+export type AgentTelemetrySource = 'openclaw' | 'claude-code' | 'codex' | 'hermes'
 export type AgentTelemetryHealthWarning =
   | 'no-turns-from-records'
   | 'high-unsupported-rate'
   | 'claude-code-tools-missing'
   | 'codex-tools-missing'
+  | 'hermes-tools-missing'
   | 'no-files-in-scope'
 
 export interface AgentTokenUsage {
@@ -95,6 +96,11 @@ export interface AgentTelemetryCommittedState {
   lastWindowEndUtc: string | null
   files: Record<string, AgentTelemetryFileCheckpoint>
   seenMessages: AgentTelemetrySeenMessage[]
+  /** Hermes SQLite의 세션 누적 usage를 delta로 바꾸기 위한 PII-free snapshot. */
+  hermesSessions?: Record<string, {
+    model: string
+    usage: AgentTokenUsage
+  }>
 }
 
 export interface AgentTelemetryCheckpoint {

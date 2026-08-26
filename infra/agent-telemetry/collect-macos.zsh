@@ -10,11 +10,11 @@ umask 077
 : "${AITK_CLI_JS:?AITK_CLI_JS is required}"
 
 case "$AITK_TELEMETRY_SOURCE" in
-  openclaw|claude-code|codex) ;;
+  openclaw|claude-code|codex|hermes) ;;
   *) print -u2 "unsupported telemetry source"; exit 64 ;;
 esac
 
-if [[ "$AITK_TELEMETRY_SOURCE" != "openclaw" && -z "${AITK_PROJECT_SLUGS:-}" ]]; then
+if [[ "$AITK_TELEMETRY_SOURCE" != "openclaw" && "$AITK_TELEMETRY_SOURCE" != "hermes" && -z "${AITK_PROJECT_SLUGS:-}" ]]; then
   print -u2 "AITK_PROJECT_SLUGS is required for this telemetry source"
   exit 64
 fi

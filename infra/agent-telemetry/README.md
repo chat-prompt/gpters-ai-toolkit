@@ -36,11 +36,20 @@ reporter stale after twelve hours without a successful batch.
    launchctl kickstart -k "gui/$(id -u)/com.gpters.agent-telemetry.AGENT.SOURCE"
    ```
 
-Use a separate plist for Claude Code, Codex, or any future Hermes adapter. Do
+Use a separate plist for Claude Code, Codex, or Hermes. Do
 not point OpenClaw and Claude Code collectors at overlapping source logs: that
 would double-count the same work. OpenClaw gateway summaries also do not expose
 reliable tool or skill activity, so prefer the underlying runtime transcript
 when it exists.
+
+For Hermes, `AITK_SESSIONS_DIR` is the explicit SQLite database file rather
+than a directory. The collector opens it read-only and selects only structural
+columns. Session usage is converted from cumulative counters to checkpointed
+deltas; turns come from user-role messages and tools from stable call IDs.
+Message content, reasoning text, tool arguments, paths, and raw IDs are never
+written to the checkpoint or batch. Hermes reasoning/output inclusion is not
+yet proven, so its relation remains `unknown` and the dashboard does not add it
+again to total processed tokens.
 
 ## Operational checks
 
@@ -48,6 +57,5 @@ when it exists.
 - `stale`: check the launchd job, Keychain access, and pending checkpoint.
 - `missing`: collector exists but that source has not reported in the selected
   period.
-- `unsupported`: a source such as Hermes still needs a validated adapter.
 - A failed upload keeps the pending batch and retries the same `batchId`; server
   idempotency prevents double counting.
