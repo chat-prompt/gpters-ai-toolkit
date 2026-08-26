@@ -45,7 +45,7 @@ const intlMiddleware = createMiddleware(routing)
  * Check if a pathname is a public route (no auth required)
  * Handles both prefixed (/en/welcome) and non-prefixed (/welcome) paths
  */
-function isPublicRoute(pathname: string): boolean {
+export function isPublicRoute(pathname: string): boolean {
   // Strip locale prefix for route matching
   const strippedPath = pathname.replace(/^\/(en|ko)/, '') || '/'
 
@@ -63,6 +63,7 @@ function isPublicRoute(pathname: string): boolean {
     strippedPath.startsWith('/api/sdk-docs') ||
     strippedPath.startsWith('/api/tool-docs') ||
     strippedPath.startsWith('/api/cron') ||
+    strippedPath === '/api/ax/agent-telemetry' ||
     strippedPath.startsWith('/oauth') ||
     strippedPath.startsWith('/.well-known') ||
     strippedPath === '/robots.txt' ||
