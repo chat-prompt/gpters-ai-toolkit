@@ -231,7 +231,12 @@ describe('collectOpenClawAgent', () => {
         role: 'assistant',
         model: 'claude-opus-5',
         content,
-        usage: { input_tokens: 20, output_tokens: 10, cache_read_input_tokens: 30 },
+        usage: {
+          input_tokens: 20,
+          output_tokens: 10,
+          cache_read_input_tokens: 30,
+          output_tokens_details: { thinking_tokens: 7 },
+        },
       },
     })
     writeSession('claude.jsonl', [
@@ -268,6 +273,8 @@ describe('collectOpenClawAgent', () => {
 
     expect(result.turns).toBe(1)
     expect(result.usage.inputTokens).toBe(20)
+    expect(result.usage.thinkingTokens).toBe(7)
+    expect(result.usage.thinkingTokensRelation).toBe('included-in-output')
     expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
     expect(result.skillLoads).toEqual([{ skillId: 'qa-verify', loaded: 1, failed: 0, interrupted: 0 }])
     expect(result.collection).toMatchObject({

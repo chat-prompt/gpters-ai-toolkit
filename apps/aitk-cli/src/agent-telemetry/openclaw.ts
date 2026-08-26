@@ -136,9 +136,24 @@ function firstCount(usage: Record<string, unknown>, keys: string[]): number {
   return 0
 }
 
+function firstRecord(value: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  for (const key of keys) {
+    const candidate = value[key]
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      return candidate as Record<string, unknown>
+    }
+  }
+  return {}
+}
+
 function usageFromMessage(message: OpenClawMessage): AgentTokenUsage {
   const usage = message.usage ?? {}
-  const thinkingTokens = firstCount(usage, ['thinkingTokens', 'thinking_tokens', 'thinking'])
+  const outputDetails = firstRecord(usage, ['outputTokensDetails', 'output_tokens_details', 'outputDetails'])
+  // 일부 런타임은 같은 값을 최상위에도 복제하므로 합산하지 않고 큰 값을 택한다.
+  const thinkingTokens = Math.max(
+    firstCount(usage, ['thinkingTokens', 'thinking_tokens', 'thinking']),
+    firstCount(outputDetails, ['thinkingTokens', 'thinking_tokens', 'thinking'])
+  )
   return {
     inputTokens: firstCount(usage, ['input', 'inputTokens', 'input_tokens']),
     outputTokens: firstCount(usage, ['output', 'outputTokens', 'output_tokens']),
