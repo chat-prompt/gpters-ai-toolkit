@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,10 +20,15 @@ function request(body: unknown, token = 'local-token') {
   })
 }
 
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
 describe('POST /api/ax/agent-telemetry', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.AX_AGENT_TELEMETRY_TOKEN = 'local-token'
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES
     recordAgentTelemetryBatch.mockResolvedValue({ inserted: true })
   })
 
@@ -42,6 +48,34 @@ describe('POST /api/ax/agent-telemetry', () => {
   it('토큰 누락·불일치와 설정 누락을 구분한다', async () => {
     expect((await POST(request(fixture, 'wrong'))).status).toBe(401)
     delete process.env.AX_AGENT_TELEMETRY_TOKEN
+    expect((await POST(request(fixture))).status).toBe(503)
+  })
+
+  it('에이전트별 해시 토큰은 지정된 agentId에만 쓸 수 있다', async () => {
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES = JSON.stringify({
+      bbodoong: sha256('bbodoong-token'),
+      hermes: sha256('hermes-token'),
+    })
+
+    expect((await POST(request(fixture, 'bbodoong-token'))).status).toBe(200)
+    expect((await POST(request({ ...fixture, agentId: 'hermes' }, 'bbodoong-token'))).status).toBe(403)
+    expect((await POST(request(fixture, 'wrong'))).status).toBe(401)
+  })
+
+  it('scoped 설정이 존재하면 기존 공용 토큰은 비활성화된다', async () => {
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES = JSON.stringify({
+      bbodoong: sha256('bbodoong-token'),
+    })
+
+    expect((await POST(request(fixture, 'local-token'))).status).toBe(401)
+    expect((await POST(request(fixture, 'bbodoong-token'))).status).toBe(200)
+  })
+
+  it('잘못된 scoped token 설정은 fail-closed로 막는다', async () => {
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES = '{invalid-json'
+
     expect((await POST(request(fixture))).status).toBe(503)
   })
 

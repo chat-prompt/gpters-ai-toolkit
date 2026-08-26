@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gpters.agent-telemetry.AGENT.SOURCE</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/ABSOLUTE/REPO/PATH/infra/agent-telemetry/collect-macos.zsh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>AITK_AGENT_ID</key>
+    <string>REPLACE_AGENT</string>
+    <key>AITK_TELEMETRY_SOURCE</key>
+    <string>REPLACE_SOURCE</string>
+    <key>AITK_SESSIONS_DIR</key>
+    <string>/ABSOLUTE/SESSIONS/PATH</string>
+    <key>AITK_PROJECT_SLUGS</key>
+    <string>REPLACE_COMMA_SEPARATED_SLUGS</string>
+    <key>AITK_CLI_JS</key>
+    <string>/ABSOLUTE/REPO/PATH/apps/aitk-cli/dist/bin/aitk.js</string>
+    <key>AITK_KEYCHAIN_ACCOUNT</key>
+    <string>REPLACE_MAC_ACCOUNT</string>
+    <key>AITK_KEYCHAIN_SERVICE</key>
+    <string>gpters-agent-telemetry-prod</string>
+    <key>AITK_TASK_CATEGORY</key>
+    <string>unclassified</string>
+    <key>AITK_SERVER_URL</key>
+    <string>https://ai-toolkit.gpters.org</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>21600</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+  <key>StandardOutPath</key>
+  <string>/ABSOLUTE/CACHE/PATH/agent-telemetry.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/ABSOLUTE/CACHE/PATH/agent-telemetry.err.log</string>
+</dict>
+</plist>

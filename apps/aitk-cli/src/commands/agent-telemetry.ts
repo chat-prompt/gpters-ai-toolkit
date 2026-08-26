@@ -1,4 +1,4 @@
-/** OpenClaw 에이전트 delta telemetry 수집·전송 명령 */
+/** 에이전트 delta telemetry 수집·전송 명령 */
 
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -7,6 +7,7 @@ import { readConfig } from '../config.js'
 import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
 import { collectOpenClawAgent } from '../agent-telemetry/openclaw.js'
+import { collectCodexAgent } from '../agent-telemetry/codex.js'
 import {
   AGENT_TASK_CATEGORIES,
   type AgentTaskCategory,
@@ -83,18 +84,18 @@ function resolveCategory(value: string | undefined): AgentTaskCategory {
 
 function resolveSource(value: string | undefined): AgentTelemetrySource {
   const source = value ?? 'openclaw'
-  if (source !== 'openclaw' && source !== 'claude-code') {
-    error('--source must be one of: openclaw, claude-code')
+  if (source !== 'openclaw' && source !== 'claude-code' && source !== 'codex') {
+    error('--source must be one of: openclaw, claude-code, codex')
   }
   return source as AgentTelemetrySource
 }
 
 function resolveProjectSlugs(source: AgentTelemetrySource, value: string | undefined): string[] | undefined {
   if (source === 'openclaw') {
-    if (value) error('--project-slugs is only supported with --source claude-code')
+    if (value) error('--project-slugs is only supported with --source claude-code or codex')
     return undefined
   }
-  if (!value) error('--project-slugs is required when --source claude-code is used')
+  if (!value) error(`--project-slugs is required when --source ${source} is used`)
   const slugs = [...new Set(value!.split(',').map((item) => item.trim()))].sort()
   if (
     slugs.length === 0 || slugs.length > 50 ||
@@ -166,11 +167,9 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   }
   if (options.collectorInstanceId) safeId(options.collectorInstanceId, '--collector-id')
   const category = resolveCategory(options.category)
-  if (source === 'claude-code' && !options.sessionsDir) {
-    error('--sessions-dir is required when --source claude-code is used')
-  }
+  if (!options.sessionsDir) error('--sessions-dir is required for every telemetry source')
   const projectSlugs = resolveProjectSlugs(source, options.projectSlugs)
-  const sessionsDir = resolve(options.sessionsDir ?? join(homedir(), '.openclaw', 'agents', agentId, 'sessions'))
+  const sessionsDir = resolve(options.sessionsDir!)
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
   const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs))
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
@@ -191,14 +190,17 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
     if (!Number.isFinite(start.getTime()) || start.getTime() >= now.getTime()) {
       error('Checkpoint window must end before the current collection time')
     }
-    const collected = await collectOpenClawAgent({
+    const collectOptions = {
       sessionsDir,
       window: { start, end: now },
       committed: state.committed,
       category,
       source,
       projectSlugs,
-    })
+    }
+    const collected = source === 'codex'
+      ? await collectCodexAgent({ ...collectOptions, source: 'codex', projectSlugs: projectSlugs! })
+      : await collectOpenClawAgent(collectOptions)
     const batch: AgentTelemetryBatch = {
       schemaVersion: '1.0.0',
       batchId: randomUUID(),

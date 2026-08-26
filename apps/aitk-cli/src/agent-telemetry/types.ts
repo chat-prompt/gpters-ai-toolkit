@@ -10,11 +10,12 @@ export const AGENT_TASK_CATEGORIES = [
 
 export type AgentTaskCategory = typeof AGENT_TASK_CATEGORIES[number]
 export type ThinkingTokensRelation = 'included-in-output' | 'separate-from-output' | 'unknown'
-export type AgentTelemetrySource = 'openclaw' | 'claude-code'
+export type AgentTelemetrySource = 'openclaw' | 'claude-code' | 'codex'
 export type AgentTelemetryHealthWarning =
   | 'no-turns-from-records'
   | 'high-unsupported-rate'
   | 'claude-code-tools-missing'
+  | 'codex-tools-missing'
   | 'no-files-in-scope'
 
 export interface AgentTokenUsage {

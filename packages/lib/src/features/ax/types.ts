@@ -353,6 +353,71 @@ export interface AxClientUsageData {
   members: AxClientUsageMemberRow[] | null
 }
 
+/** 에이전트 텔레메트리 소스. Hermes는 연결 상태를 숨기지 않기 위해 미지원 상태도 표기한다. */
+export type AxAgentTelemetrySource = 'openclaw' | 'claude-code' | 'codex' | 'hermes'
+
+/** thinking은 output의 부분집합일 수 있으므로 합산 시 관계 필드를 반드시 확인한다. */
+export interface AxAgentTokenUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheCreationInputTokens: number
+  cacheReadInputTokens: number
+  thinkingTokens: number
+  thinkingTokensRelation: 'included-in-output' | 'separate-from-output' | 'unknown'
+}
+
+export interface AxAgentReporterRow {
+  agentId: string
+  source: Exclude<AxAgentTelemetrySource, 'hermes'>
+  lastCollectedAt: string
+  freshnessHours: number
+  freshness: 'fresh' | 'stale'
+  sessions: number
+  turns: number
+  usage: AxAgentTokenUsage
+  toolCalls: number
+  toolFailures: number
+  healthWarnings: string[]
+}
+
+export interface AxAgentSourceCoverageRow {
+  source: AxAgentTelemetrySource
+  status: 'reporting' | 'stale' | 'missing' | 'unsupported' | 'alternate'
+  lastCollectedAt: string | null
+  capabilities: { usage: boolean; tools: boolean; skills: boolean }
+  note: string
+}
+
+/** 에이전트 활동 패널 — 원문·세션 ID·경로 없이 집계값만 담는다. */
+export interface AxAgentActivityData {
+  syncedAt: string
+  windowStart: string
+  windowEnd: string
+  totalUsage: AxAgentTokenUsage
+  /** thinking 포함 관계를 반영한 총 처리 토큰. included-in-output이면 다시 더하지 않는다. */
+  totalProcessedTokens: number
+  sessions: number
+  turns: number
+  toolCalls: number
+  toolFailures: number
+  reporters: AxAgentReporterRow[]
+  sourceCoverage: AxAgentSourceCoverageRow[]
+  models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
+  tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
+  skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  collection: {
+    batches: number
+    recordsRead: number
+    parseFailures: number
+    unsupportedRecordsSkipped: number
+  }
+  insights: Array<{
+    severity: 'warning' | 'opportunity' | 'info'
+    title: string
+    detail: string
+  }>
+}
+
 /** 구독 패널이 내려주는 집계. 팀원별 상세는 관리자에게만 채워진다 */
 export interface AxSubscriptionData {
   /**

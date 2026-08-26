@@ -60,6 +60,17 @@ describe('validateAgentTelemetryBatch', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('검증된 codex source를 허용하고 아직 미구현인 hermes source는 거부한다', () => {
+    expect(validateAgentTelemetryBatch({
+      ...fixture,
+      collection: { ...fixture.collection, source: 'codex' },
+    }).ok).toBe(true)
+    expect(validateAgentTelemetryBatch({
+      ...fixture,
+      collection: { ...fixture.collection, source: 'hermes' },
+    }).ok).toBe(false)
+  })
+
   it('카운터 합계가 맞지 않거나 건강도가 blocked인 batch를 거부한다', () => {
     const mismatched = validateAgentTelemetryBatch({
       ...fixture,

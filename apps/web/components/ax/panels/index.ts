@@ -15,6 +15,7 @@ import { SkillDiffPanel } from './SkillDiffPanel'
 import { VercelProjectsPanel } from './VercelProjectsPanel'
 import { SubscriptionsPanel } from './SubscriptionsPanel'
 import { ClientUsagePanel } from './ClientUsagePanel'
+import { AgentActivityPanel } from './AgentActivityPanel'
 import { FallbackPanel } from './FallbackPanel'
 
 /**
@@ -34,6 +35,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   'vercel-deployments': VercelProjectsPanel,
   subscriptions: SubscriptionsPanel,
   'client-usage': ClientUsagePanel,
+  'agent-activity': AgentActivityPanel,
 }
 
 /**
@@ -54,6 +56,7 @@ export {
   VercelProjectsPanel,
   SubscriptionsPanel,
   ClientUsagePanel,
+  AgentActivityPanel,
   FallbackPanel,
 }
 export type { AxPanelViewProps }

@@ -102,7 +102,7 @@ Commands:
   report-execution-start Report actual skill application start
   report-execution Report validated skill execution outcome
   usage           Report local Claude Code / Codex token usage
-  agent-telemetry Collect PII-free OpenClaw agent delta usage
+  agent-telemetry Collect PII-free agent delta usage
   login           Save auth token (browser, --device, or --token)
   whoami          Show current authenticated user
 
@@ -278,9 +278,9 @@ Required:
   --agent <id>                 Stable agent ID (for example bbodoong)
 
 Options:
-  --source <source>            openclaw|claude-code (default: openclaw)
-  --sessions-dir <path>        Transcript directory (required for claude-code)
-  --project-slugs <a,b>        Allowed Claude project directory names (required for claude-code)
+  --source <source>            openclaw|claude-code|codex (default: openclaw)
+  --sessions-dir <path>        Transcript directory (always required)
+  --project-slugs <a,b>        Allowed project directory names (required for claude-code/codex)
   --checkpoint-dir <path>      Per-agent checkpoint directory
   --collector-id <id>          Stable collector identity (generated if omitted)
   --days <N>                   First-run backfill window (default: 7, max: 90)

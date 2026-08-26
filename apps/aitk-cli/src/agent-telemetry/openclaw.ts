@@ -94,7 +94,11 @@ export interface OpenClawCollection {
     turns: number
     usage: AgentTokenUsage
   }>
-  executions: []
+  executions: Array<{
+    status: 'success' | 'partial' | 'failed' | 'abandoned' | 'running'
+    evidence: 'verified' | 'self-reported' | 'none'
+    count: number
+  }>
   collection: {
     source: AgentTelemetrySource
     filesDiscovered: number
@@ -285,7 +289,7 @@ async function listSessionFiles(
     entries = await readdir(root, { recursive: true })
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error('OpenClaw sessions directory does not exist')
+      throw new Error('sessions directory does not exist')
     }
     throw cause
   }
