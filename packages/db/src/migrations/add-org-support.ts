@@ -128,16 +128,6 @@ async function migrate() {
 
     console.log(`  ✓ Set visibility for ${visibilityUpdateResult.rowCount ?? 0} catalog items`)
 
-    // Initialize shared_with_orgs for items without it
-    const sharedUpdateResult = await db
-      .update(catalogItems)
-      .set({ sharedWithOrgs: [] })
-      .where(
-        sql`${catalogItems.sharedWithOrgs} IS NULL`
-      )
-
-    console.log(`  ✓ Initialized sharedWithOrgs for ${sharedUpdateResult.rowCount ?? 0} catalog items`)
-
     // Initialize fork_count for items without it
     const forkCountUpdateResult = await db
       .update(catalogItems)
