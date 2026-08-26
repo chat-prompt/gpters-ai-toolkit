@@ -412,7 +412,10 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
             batchSeen.add(resultHash)
             retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
           }
-          const call = result.id ? toolCalls.get(result.id) : undefined
+          const resultCallHash = result.id
+            ? hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${result.id}`)
+            : null
+          const call = resultCallHash ? toolCalls.get(resultCallHash) : undefined
           if (!call) {
             collection.orphanToolResultsSkipped++
             return
@@ -447,6 +450,25 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
           collection.missingIdentitySkipped++
           return
         }
+
+        // Claude Code는 하나의 assistant message를 여러 JSONL 레코드로 나눌 수 있다.
+        // 토큰/turn은 message.id 단위로 한 번만 세되, 각 조각의 고유 tool call은 모두 보존한다.
+        for (const block of contentBlocks(message.content)) {
+          if (!['toolCall', 'tool_call', 'tool_use', 'toolUse'].includes(String(block.type ?? ''))) continue
+          const name = safeLabel(block.name, 'unknown-tool')
+          const id = callId(block)
+          if (id) {
+            const toolCallHash = hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${id}`)
+            if (retainedSeen.has(toolCallHash) || batchSeen.has(toolCallHash)) continue
+            batchSeen.add(toolCallHash)
+            retainedSeen.set(toolCallHash, { hash: toolCallHash, atUtc: new Date(at).toISOString() })
+            toolCalls.set(toolCallHash, { name, skillId: skillFromCall(name, callArguments(block)) })
+          }
+          const metric = toolMetrics.get(name) ?? { calls: 0, failures: 0 }
+          metric.calls++
+          toolMetrics.set(name, metric)
+        }
+
         const messageHash = hashIdentity(`${sessionIdentity}\u0000assistant\u0000${messageId}`)
         if (retainedSeen.has(messageHash) || batchSeen.has(messageHash)) {
           collection.duplicatesSkipped++
@@ -466,16 +488,6 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         turns++
         collection.includedRecords++
         latestIncludedAt = Math.max(latestIncludedAt, at)
-
-        for (const block of contentBlocks(message.content)) {
-          if (!['toolCall', 'tool_call', 'tool_use', 'toolUse'].includes(String(block.type ?? ''))) continue
-          const name = safeLabel(block.name, 'unknown-tool')
-          const metric = toolMetrics.get(name) ?? { calls: 0, failures: 0 }
-          metric.calls++
-          toolMetrics.set(name, metric)
-          const id = callId(block)
-          if (id) toolCalls.set(id, { name, skillId: skillFromCall(name, callArguments(block)) })
-        }
       })
       nextFiles[fileKey] = { dev: String(info.dev), ino: String(info.ino), offset: nextOffset }
     } catch {

@@ -235,11 +235,11 @@ describe('collectOpenClawAgent', () => {
       },
     })
     writeSession('claude.jsonl', [
-      claudeAssistant('assistant-1', [{
+      claudeAssistant('assistant-1', [{ type: 'text', text: 'first response fragment' }]),
+      claudeAssistant('assistant-duplicate', [{
         type: 'tool_use', id: 'call-1', name: 'Read',
         input: { file_path: '/Users/person/.claude/skills/qa-verify/SKILL.md' },
       }]),
-      claudeAssistant('assistant-duplicate', [{ type: 'text', text: 'duplicate response copy' }]),
       entry({
         type: 'user', uuid: 'result-1', sessionId: 'claude-session-secret', timestamp: IN_WINDOW,
         message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call-1', is_error: false }] },
