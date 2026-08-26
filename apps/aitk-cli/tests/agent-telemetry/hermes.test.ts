@@ -179,5 +179,37 @@ describe('collectHermesAgent', () => {
     })
     expect(second.models).toEqual([{ model: 'hermes-3', turns: 1, usage: second.usage }])
     expect(second.tools).toEqual([])
+
+    const unchanged = await collectHermesAgent({
+      sessionsDir: databasePath,
+      window: {
+        start: new Date('2026-08-28T00:00:00.000Z'),
+        end: new Date('2026-08-29T00:00:00.000Z'),
+      },
+      committed: second.nextCommitted,
+      category: 'qa-verify',
+      source: 'hermes',
+    })
+    expect(unchanged).toMatchObject({
+      sessions: 0,
+      turns: 0,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        thinkingTokens: 0,
+        thinkingTokensRelation: 'unknown',
+      },
+      collection: {
+        recordsRead: 8,
+        includedRecords: 0,
+        outsideWindowSkipped: 8,
+        healthStatus: 'healthy',
+        healthWarnings: [],
+      },
+    })
+    expect(unchanged.models).toEqual([])
+    expect(unchanged.tools).toEqual([])
   })
 })
