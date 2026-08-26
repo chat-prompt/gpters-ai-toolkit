@@ -18,7 +18,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push --force",
     "db:studio": "drizzle-kit studio",
-    "db:migrate": "npx tsx src/migrate.ts"
+    "db:migrate": "npx tsx src/migrate.ts",
+    "db:preflight:agent-telemetry": "tsx scripts/preflight-agent-telemetry.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

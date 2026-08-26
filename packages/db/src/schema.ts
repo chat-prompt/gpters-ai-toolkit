@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, halfvec, real, numeric } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, uniqueIndex, halfvec, real, numeric } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -1188,3 +1188,52 @@ export const axClientUsage = pgTable('ax_client_usage', {
 
 export type AxClientUsageRecord = typeof axClientUsage.$inferSelect
 export type NewAxClientUsageRecord = typeof axClientUsage.$inferInsert
+
+/**
+ * 에이전트 로컬 트랜스크립트에서 생성한 개인정보 비포함 delta batch.
+ *
+ * 원문·세션 ID·message ID·cwd·branch·cron 이름은 저장하지 않는다. 이 테이블의
+ * executions는 수집기가 명시 보고 이벤트를 몇 건 관측했는지 대조하는 집계값이며,
+ * 스킬 실행 성공/실패의 정본을 대신하지 않는다.
+ */
+export const axAgentTelemetryBatches = pgTable('ax_agent_telemetry_batches', {
+  batchId: text('batch_id').primaryKey(),
+  schemaVersion: text('schema_version').notNull(),
+  agentId: text('agent_id').notNull(),
+  collectorInstanceId: text('collector_instance_id').notNull(),
+  runtime: jsonb('runtime').$type<{
+    openclawVersion: string
+    claudeCliVersion: string
+    collectorVersion: string
+  }>().notNull(),
+  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+  windowEnd: timestamp('window_end', { withTimezone: true }).notNull(),
+  collectedAt: timestamp('collected_at', { withTimezone: true }).notNull(),
+  inputTokens: bigint('input_tokens', { mode: 'number' }).notNull().default(0),
+  outputTokens: bigint('output_tokens', { mode: 'number' }).notNull().default(0),
+  cacheCreationInputTokens: bigint('cache_creation_input_tokens', { mode: 'number' }).notNull().default(0),
+  cacheReadInputTokens: bigint('cache_read_input_tokens', { mode: 'number' }).notNull().default(0),
+  thinkingTokens: bigint('thinking_tokens', { mode: 'number' }).notNull().default(0),
+  thinkingTokensRelation: text('thinking_tokens_relation').notNull(),
+  sessions: integer('sessions').notNull().default(0),
+  turns: integer('turns').notNull().default(0),
+  models: jsonb('models').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  tools: jsonb('tools').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  skillLoads: jsonb('skill_loads').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  taskCategories: jsonb('task_categories').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  executions: jsonb('executions').$type<Array<Record<string, unknown>>>().notNull().default([]),
+  collection: jsonb('collection').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('ax_agent_telemetry_agent_window_idx').on(table.agentId, table.windowEnd),
+  index('ax_agent_telemetry_collected_idx').on(table.collectedAt),
+  uniqueIndex('ax_agent_telemetry_collector_window_uidx').on(
+    table.agentId,
+    table.collectorInstanceId,
+    table.windowStart,
+    table.windowEnd,
+  ),
+])
+
+export type AxAgentTelemetryBatchRecord = typeof axAgentTelemetryBatches.$inferSelect
+export type NewAxAgentTelemetryBatchRecord = typeof axAgentTelemetryBatches.$inferInsert
