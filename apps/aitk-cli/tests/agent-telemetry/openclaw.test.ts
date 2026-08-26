@@ -221,7 +221,7 @@ describe('collectOpenClawAgent', () => {
   })
 
   it('Claude Code assistant와 tool_result를 집계하고 조용한 탈락을 건강도에 반영한다', async () => {
-    const claudeAssistant = (id: string | undefined, content: unknown[]) => entry({
+    const claudeAssistant = (id: string | undefined, content: unknown[], thinkingTokens = 0) => entry({
       type: 'assistant',
       uuid: id,
       sessionId: 'claude-session-secret',
@@ -235,7 +235,7 @@ describe('collectOpenClawAgent', () => {
           input_tokens: 20,
           output_tokens: 10,
           cache_read_input_tokens: 30,
-          output_tokens_details: { thinking_tokens: 7 },
+          output_tokens_details: { thinking_tokens: thinkingTokens },
         },
       },
     })
@@ -244,7 +244,7 @@ describe('collectOpenClawAgent', () => {
       claudeAssistant('assistant-duplicate', [{
         type: 'tool_use', id: 'call-1', name: 'Read',
         input: { file_path: '/Users/person/.claude/skills/qa-verify/SKILL.md' },
-      }]),
+      }], 7),
       entry({
         type: 'user', uuid: 'result-1', sessionId: 'claude-session-secret', timestamp: IN_WINDOW,
         message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call-1', is_error: false }] },
@@ -275,6 +275,9 @@ describe('collectOpenClawAgent', () => {
     expect(result.usage.inputTokens).toBe(20)
     expect(result.usage.thinkingTokens).toBe(7)
     expect(result.usage.thinkingTokensRelation).toBe('included-in-output')
+    expect(result.models).toEqual([{
+      model: 'claude-opus-5', turns: 1, usage: result.usage,
+    }])
     expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
     expect(result.skillLoads).toEqual([{ skillId: 'qa-verify', loaded: 1, failed: 0, interrupted: 0 }])
     expect(result.collection).toMatchObject({

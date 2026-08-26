@@ -76,6 +76,11 @@ interface ToolCallMetric {
   skillId: string | null
 }
 
+interface MessageUsageMetric {
+  model: string
+  usage: AgentTokenUsage
+}
+
 export interface OpenClawCollection {
   usage: AgentTokenUsage
   sessions: number
@@ -177,6 +182,30 @@ function addUsage(target: AgentTokenUsage, source: AgentTokenUsage): void {
 
 function cloneUsage(source: AgentTokenUsage): AgentTokenUsage {
   return { ...source }
+}
+
+function maxUsage(current: AgentTokenUsage, candidate: AgentTokenUsage): AgentTokenUsage {
+  const thinkingTokens = Math.max(current.thinkingTokens, candidate.thinkingTokens)
+  return {
+    inputTokens: Math.max(current.inputTokens, candidate.inputTokens),
+    outputTokens: Math.max(current.outputTokens, candidate.outputTokens),
+    cacheCreationInputTokens: Math.max(current.cacheCreationInputTokens, candidate.cacheCreationInputTokens),
+    cacheReadInputTokens: Math.max(current.cacheReadInputTokens, candidate.cacheReadInputTokens),
+    thinkingTokens,
+    thinkingTokensRelation: thinkingTokens > 0 ? 'included-in-output' : 'unknown',
+  }
+}
+
+function usageIncrease(previous: AgentTokenUsage, next: AgentTokenUsage): AgentTokenUsage {
+  const thinkingTokens = next.thinkingTokens - previous.thinkingTokens
+  return {
+    inputTokens: next.inputTokens - previous.inputTokens,
+    outputTokens: next.outputTokens - previous.outputTokens,
+    cacheCreationInputTokens: next.cacheCreationInputTokens - previous.cacheCreationInputTokens,
+    cacheReadInputTokens: next.cacheReadInputTokens - previous.cacheReadInputTokens,
+    thinkingTokens,
+    thinkingTokensRelation: thinkingTokens > 0 ? next.thinkingTokensRelation : 'unknown',
+  }
 }
 
 function safeLabel(value: unknown, fallback: string): string {
@@ -328,6 +357,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   const toolMetrics = new Map<string, { calls: number; failures: number }>()
   const skillMetrics = new Map<string, { loaded: number; failed: number; interrupted: number }>()
   const toolCalls = new Map<string, ToolCallMetric>()
+  const messageUsageMetrics = new Map<string, MessageUsageMetric>()
   const sessions = new Set<string>()
   const batchSeen = new Set<string>()
   const retainedSeen = new Map<string, AgentTelemetrySeenMessage>()
@@ -487,6 +517,16 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         const messageHash = hashIdentity(`${sessionIdentity}\u0000assistant\u0000${messageId}`)
         if (retainedSeen.has(messageHash) || batchSeen.has(messageHash)) {
           collection.duplicatesSkipped++
+          const previous = messageUsageMetrics.get(messageHash)
+          if (previous) {
+            const merged = maxUsage(previous.usage, usageFromMessage(message))
+            const increase = usageIncrease(previous.usage, merged)
+            addUsage(totalUsage, increase)
+            const modelMetric = modelMetrics.get(previous.model)
+            if (modelMetric) addUsage(modelMetric.usage, increase)
+            previous.usage = merged
+            latestIncludedAt = Math.max(latestIncludedAt, at)
+          }
           return
         }
         batchSeen.add(messageHash)
@@ -499,6 +539,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         modelMetric.turns++
         addUsage(modelMetric.usage, usage)
         modelMetrics.set(model, modelMetric)
+        messageUsageMetrics.set(messageHash, { model, usage: cloneUsage(usage) })
         sessions.add(hashIdentity(sessionIdentity))
         turns++
         collection.includedRecords++
