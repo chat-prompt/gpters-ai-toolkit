@@ -261,7 +261,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const insights: AxAgentActivityData['insights'] = []
 
     const coveredHours = (windowEnd - windowStart) / 3_600_000
-    if (coveredHours > ctx.days * 24 + 1) {
+    // 6시간 수집 주기의 경계 겹침은 정상 오차로 보고, 그보다 긴 초기 backfill만 경고한다.
+    if (coveredHours > ctx.days * 24 + 6) {
       insights.push({
         severity: 'warning',
         title: `실제 집계 범위 ${Math.round((coveredHours / 24) * 10) / 10}일`,
