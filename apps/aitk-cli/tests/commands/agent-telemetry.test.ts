@@ -134,6 +134,18 @@ describe('aitk agent-telemetry collect', () => {
     })).rejects.toThrow('--sessions-dir is required for every telemetry source')
   })
 
+  it('hermes는 명시적인 profile scope를 요구하고 다른 source에서는 받지 않는다', async () => {
+    await expect(runAgentTelemetryCollect({
+      ...options(true),
+      source: 'hermes',
+    })).rejects.toThrow('--hermes-profile is required')
+
+    await expect(runAgentTelemetryCollect({
+      ...options(true),
+      hermesProfile: 'private-profile',
+    })).rejects.toThrow('--hermes-profile is only supported with --source hermes')
+  })
+
   it('건강도가 blocked인 빈 집계를 실제 서버로 전송하지 않는다', async () => {
     writeFileSync(join(sessionsDir, 'session.jsonl'), Array.from({ length: 20 }, (_, index) => JSON.stringify({
       type: 'progress', uuid: `unsupported-${index}`, timestamp: '2026-08-26T10:00:00Z',

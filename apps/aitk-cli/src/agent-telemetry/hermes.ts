@@ -30,7 +30,7 @@ const FAILED_MARKERS = new Set([
 
 const REQUIRED_SESSION_COLUMNS = [
   'id', 'model', 'last_activity_at', 'input_tokens', 'output_tokens',
-  'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
+  'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens', 'profile_name',
 ] as const
 const REQUIRED_MESSAGE_COLUMNS = [
   'id', 'session_id', 'role', 'tool_call_id', 'tool_calls', 'tool_name',
@@ -83,6 +83,7 @@ interface DatabaseConnection {
 
 export interface CollectHermesOptions {
   sessionsDir: string
+  profileName: string
   window: { start: Date; end: Date }
   committed: AgentTelemetryCommittedState
   category: AgentTaskCategory
@@ -274,14 +275,21 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       SELECT id, model, last_activity_at, input_tokens, output_tokens,
              cache_read_tokens, cache_write_tokens, reasoning_tokens
       FROM sessions
+      WHERE profile_name = ?
       ORDER BY last_activity_at, id
-    `).all() as HermesSessionRow[]
+    `).all(options.profileName) as HermesSessionRow[]
+    if (sessionRows.length === 0) throw new Error('Hermes profile scope does not match any sessions')
     const messageRows = database.prepare(`
-      SELECT id, session_id, role, tool_call_id, tool_calls, tool_name,
-             effect_disposition, timestamp, finish_reason, display_kind
-      FROM messages
-      ORDER BY timestamp, id
-    `).all() as HermesMessageRow[]
+      SELECT m.id AS id, m.session_id AS session_id, m.role AS role,
+             m.tool_call_id AS tool_call_id, m.tool_calls AS tool_calls,
+             m.tool_name AS tool_name, m.effect_disposition AS effect_disposition,
+             m.timestamp AS timestamp, m.finish_reason AS finish_reason,
+             m.display_kind AS display_kind
+      FROM messages AS m
+      INNER JOIN sessions AS s ON s.id = m.session_id
+      WHERE s.profile_name = ?
+      ORDER BY m.timestamp, m.id
+    `).all(options.profileName) as HermesMessageRow[]
 
     const parsedCalls = new Map<string, ParsedToolCall[] | null>()
     const callDirectory = new Map<string, string>()
@@ -452,6 +460,7 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
     }
     if (cause instanceof Error && (
       cause.message === 'Hermes SQLite schema is not supported' ||
+      cause.message === 'Hermes profile scope does not match any sessions' ||
       cause.message.includes('node:sqlite support')
     )) throw cause
     throw new Error('Hermes SQLite source could not be read safely')

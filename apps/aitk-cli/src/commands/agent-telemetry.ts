@@ -35,6 +35,7 @@ export interface AgentTelemetryOptions {
   collectorVersion: string
   sessionsDir?: string
   projectSlugs?: string
+  hermesProfile?: string
   checkpointDir?: string
   collectorInstanceId?: string
   category?: string
@@ -107,9 +108,27 @@ function resolveProjectSlugs(source: AgentTelemetrySource, value: string | undef
   return slugs
 }
 
-function checkpointName(agentId: string, source: AgentTelemetrySource, projectSlugs: string[] | undefined): string {
-  if (!projectSlugs) return `${agentId}-${source}.json`
-  const scopeHash = createHash('sha256').update(projectSlugs.join('\u0000')).digest('hex').slice(0, 12)
+function resolveHermesProfile(source: AgentTelemetrySource, value: string | undefined): string | undefined {
+  if (source !== 'hermes') {
+    if (value) error('--hermes-profile is only supported with --source hermes')
+    return undefined
+  }
+  if (!value) error('--hermes-profile is required when --source hermes is used')
+  if (value!.length > 255 || value!.trim().length === 0 || value!.includes('\0')) {
+    error('--hermes-profile must contain a non-empty profile name of at most 255 characters')
+  }
+  return value
+}
+
+function checkpointName(
+  agentId: string,
+  source: AgentTelemetrySource,
+  projectSlugs: string[] | undefined,
+  hermesProfile: string | undefined
+): string {
+  const scope = projectSlugs?.join('\u0000') ?? hermesProfile
+  if (!scope) return `${agentId}-${source}.json`
+  const scopeHash = createHash('sha256').update(scope).digest('hex').slice(0, 12)
   return `${agentId}-${source}-${scopeHash}.json`
 }
 
@@ -170,9 +189,10 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   const category = resolveCategory(options.category)
   if (!options.sessionsDir) error('--sessions-dir is required for every telemetry source')
   const projectSlugs = resolveProjectSlugs(source, options.projectSlugs)
+  const hermesProfile = resolveHermesProfile(source, options.hermesProfile)
   const sessionsDir = resolve(options.sessionsDir!)
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
-  const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs))
+  const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs, hermesProfile))
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
 
   if (state.agentId !== agentId) error('Checkpoint belongs to a different agent')
@@ -202,7 +222,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
     const collected = source === 'codex'
       ? await collectCodexAgent({ ...collectOptions, source: 'codex', projectSlugs: projectSlugs! })
       : source === 'hermes'
-        ? await collectHermesAgent({ ...collectOptions, source: 'hermes' })
+        ? await collectHermesAgent({ ...collectOptions, source: 'hermes', profileName: hermesProfile! })
         : await collectOpenClawAgent(collectOptions)
     const batch: AgentTelemetryBatch = {
       schemaVersion: '1.0.0',

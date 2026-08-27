@@ -31,6 +31,7 @@ function createFixture(): void {
       cache_read_tokens INTEGER,
       cache_write_tokens INTEGER,
       reasoning_tokens INTEGER,
+      profile_name TEXT NOT NULL,
       private_cwd TEXT
     );
     CREATE TABLE messages (
@@ -48,8 +49,9 @@ function createFixture(): void {
     );
   `)
   database.prepare(`
-    INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run('session-secret', 'hermes-3', epoch('2026-08-26T06:00:00Z'), 100, 20, 40, 10, 5, '/Users/person/private')
+    INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('session-secret', 'hermes-3', epoch('2026-08-26T06:00:00Z'), 100, 20, 40, 10, 5,
+    'bbokeoter-private-profile', '/Users/person/private')
   const insert = database.prepare(`
     INSERT INTO messages (
       id, session_id, role, content, tool_call_id, tool_calls, tool_name,
@@ -85,6 +87,7 @@ describe('collectHermesAgent', () => {
   it('SQLite의 누적 usage·user turn·tool call을 원문 없이 집계한다', async () => {
     const result = await collectHermesAgent({
       sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
       window: { start: START, end: END },
       committed: committed(),
       category: 'qa-verify',
@@ -123,6 +126,7 @@ describe('collectHermesAgent', () => {
     const serialized = JSON.stringify(result)
     expect(serialized).not.toContain('session-secret')
     expect(serialized).not.toContain('call-secret')
+    expect(serialized).not.toContain('bbokeoter-private-profile')
     expect(serialized).not.toContain('private prompt')
     expect(serialized).not.toContain('/Users/person')
 
@@ -134,9 +138,61 @@ describe('collectHermesAgent', () => {
     expect(accounted).toBe(result.collection.recordsRead)
   })
 
+  it('같은 DB의 다른 Hermes 프로필 세션과 메시지를 집계에서 제외한다', async () => {
+    const database = new DatabaseSync(databasePath)
+    database.prepare(`
+      INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('other-session-secret', 'other-model', epoch('2026-08-26T07:00:00Z'), 900, 800, 700, 600, 500,
+      'other-private-profile', '/Users/other/private')
+    database.prepare(`
+      INSERT INTO messages (
+        id, session_id, role, content, tool_call_id, tool_calls, tool_name,
+        effect_disposition, timestamp, finish_reason, display_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(100, 'other-session-secret', 'user', 'other private prompt', null, null, null, null,
+      epoch('2026-08-26T02:00:00Z'), null, null)
+    database.close()
+
+    const result = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'qa-verify',
+      source: 'hermes',
+    })
+
+    expect(result).toMatchObject({
+      sessions: 1,
+      turns: 1,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheCreationInputTokens: 10,
+        cacheReadInputTokens: 40,
+        thinkingTokens: 5,
+      },
+      collection: { recordsRead: 7 },
+    })
+    expect(JSON.stringify(result)).not.toContain('other-private-profile')
+    expect(JSON.stringify(result)).not.toContain('other-session-secret')
+  })
+
+  it('지정한 Hermes 프로필에 세션이 없으면 오타로 보고 실패한다', async () => {
+    await expect(collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'missing-profile',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'qa-verify',
+      source: 'hermes',
+    })).rejects.toThrow('Hermes profile scope does not match any sessions')
+  })
+
   it('다음 실행에서는 세션 누적값의 증가분만 집계한다', async () => {
     const first = await collectHermesAgent({
       sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
       window: { start: START, end: END },
       committed: committed(),
       category: 'qa-verify',
@@ -158,6 +214,7 @@ describe('collectHermesAgent', () => {
 
     const second = await collectHermesAgent({
       sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
       window: { start: END, end: new Date('2026-08-28T00:00:00.000Z') },
       committed: first.nextCommitted,
       category: 'qa-verify',
@@ -182,6 +239,7 @@ describe('collectHermesAgent', () => {
 
     const unchanged = await collectHermesAgent({
       sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
       window: {
         start: new Date('2026-08-28T00:00:00.000Z'),
         end: new Date('2026-08-29T00:00:00.000Z'),
