@@ -11,7 +11,9 @@ export const dynamic = 'force-dynamic'
 const MAX_BODY_BYTES = 512 * 1024
 const NO_STORE = { 'Cache-Control': 'private, no-store' }
 const SAFE_AGENT_ID = /^[a-z0-9][a-z0-9._:-]{0,99}$/
+const SAFE_ENV_AGENT_ID = /^[a-z0-9][a-z0-9-]{0,99}$/
 const MAX_SCOPED_TOKENS = 100
+const SCOPED_TOKEN_PREFIX = 'AX_AGENT_TELEMETRY_TOKEN_HASH_'
 
 interface TelemetryCredential {
   configured: boolean
@@ -25,32 +27,68 @@ function constantTimeEqual(actual: string, expected: string): boolean {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
 }
 
+function scopedTelemetryTokens(scopedJson: string | undefined): {
+  configured: boolean
+  valid: boolean
+  entries: Array<[string, string]>
+} {
+  const individualEntries = Object.entries(process.env)
+    .filter(([name]) => name.startsWith(SCOPED_TOKEN_PREFIX) && name !== 'AX_AGENT_TELEMETRY_TOKEN_HASHES')
+  if (!scopedJson && individualEntries.length === 0) {
+    return { configured: false, valid: true, entries: [] }
+  }
+
+  const tokens = new Map<string, string>()
+  if (scopedJson) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(scopedJson)
+    } catch {
+      return { configured: true, valid: false, entries: [] }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { configured: true, valid: false, entries: [] }
+    }
+    for (const [agentId, hash] of Object.entries(parsed)) {
+      if (!SAFE_AGENT_ID.test(agentId) || typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)) {
+        return { configured: true, valid: false, entries: [] }
+      }
+      tokens.set(agentId, hash)
+    }
+  }
+
+  for (const [name, hash] of individualEntries) {
+    const suffix = name.slice(SCOPED_TOKEN_PREFIX.length)
+    const agentId = suffix.toLowerCase().replaceAll('_', '-')
+    if (!SAFE_ENV_AGENT_ID.test(agentId) || typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)) {
+      return { configured: true, valid: false, entries: [] }
+    }
+    const existing = tokens.get(agentId)
+    if (existing && existing !== hash) {
+      return { configured: true, valid: false, entries: [] }
+    }
+    tokens.set(agentId, hash)
+  }
+
+  const entries = [...tokens.entries()]
+  if (entries.length === 0 || entries.length > MAX_SCOPED_TOKENS) {
+    return { configured: true, valid: false, entries: [] }
+  }
+  return { configured: true, valid: true, entries }
+}
+
 function authenticateTelemetryToken(authorization: string | null): TelemetryCredential {
   const legacyToken = process.env.AX_AGENT_TELEMETRY_TOKEN
   const scopedJson = process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES
-  if (!legacyToken && !scopedJson) return { configured: false, valid: false, agentId: null }
+  const scopedTokens = scopedTelemetryTokens(scopedJson)
+  if (!legacyToken && !scopedTokens.configured) return { configured: false, valid: false, agentId: null }
+  if (!scopedTokens.valid) return { configured: false, valid: false, agentId: null }
   if (!authorization?.startsWith('Bearer ')) return { configured: true, valid: false, agentId: null }
 
   const token = authorization.slice('Bearer '.length)
-  if (scopedJson) {
-    let scopedTokens: unknown
-    try {
-      scopedTokens = JSON.parse(scopedJson)
-    } catch {
-      return { configured: false, valid: false, agentId: null }
-    }
-    if (!scopedTokens || typeof scopedTokens !== 'object' || Array.isArray(scopedTokens)) {
-      return { configured: false, valid: false, agentId: null }
-    }
-    const entries = Object.entries(scopedTokens)
-    if (entries.length === 0 || entries.length > MAX_SCOPED_TOKENS) {
-      return { configured: false, valid: false, agentId: null }
-    }
+  if (scopedTokens.configured) {
     const actualHash = createHash('sha256').update(token).digest('hex')
-    for (const [agentId, expectedHash] of entries) {
-      if (!SAFE_AGENT_ID.test(agentId) || typeof expectedHash !== 'string' || !/^[a-f0-9]{64}$/.test(expectedHash)) {
-        return { configured: false, valid: false, agentId: null }
-      }
+    for (const [agentId, expectedHash] of scopedTokens.entries) {
       if (constantTimeEqual(actualHash, expectedHash)) {
         return { configured: true, valid: true, agentId }
       }

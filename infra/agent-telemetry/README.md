@@ -7,7 +7,11 @@ reporter stale after twelve hours without a successful batch.
 ## Security model
 
 - Put the raw agent-scoped credential only in the Mac login Keychain.
-- Put only its SHA-256 hash in `AX_AGENT_TELEMETRY_TOKEN_HASHES` on the server.
+- Put only its SHA-256 hash on the server. Keep the initial JSON map in
+  `AX_AGENT_TELEMETRY_TOKEN_HASHES`; add later reporters independently as
+  `AX_AGENT_TELEMETRY_TOKEN_HASH_<AGENT_ID>` (for example,
+  `AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX`). Uppercase underscores in the variable
+  suffix map to lowercase hyphens in `agentId`.
 - When scoped hashes are configured, the legacy shared token is disabled.
 - The server rejects a scoped credential if the payload `agentId` differs.
 - Transcript text, prompts, responses, commands, paths, IDs, and credentials

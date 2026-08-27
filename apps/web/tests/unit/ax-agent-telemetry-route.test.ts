@@ -29,6 +29,8 @@ describe('POST /api/ax/agent-telemetry', () => {
     vi.clearAllMocks()
     process.env.AX_AGENT_TELEMETRY_TOKEN = 'local-token'
     delete process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_HERMES
     recordAgentTelemetryBatch.mockResolvedValue({ inserted: true })
   })
 
@@ -72,11 +74,41 @@ describe('POST /api/ax/agent-telemetry', () => {
     expect((await POST(request(fixture, 'bbodoong-token'))).status).toBe(200)
   })
 
+  it('기존 JSON을 읽거나 덮어쓰지 않고 agent별 hash를 추가한다', async () => {
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES = JSON.stringify({
+      bbodoong: sha256('bbodoong-token'),
+    })
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX = sha256('codex-token')
+
+    expect((await POST(request(fixture, 'bbodoong-token'))).status).toBe(200)
+    expect((await POST(request({ ...fixture, agentId: 'codex' }, 'codex-token'))).status).toBe(200)
+    expect((await POST(request(fixture, 'codex-token'))).status).toBe(403)
+  })
+
+  it('agent별 hash가 기존 JSON과 충돌하면 fail-closed로 막는다', async () => {
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES = JSON.stringify({
+      codex: sha256('first-token'),
+    })
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX = sha256('second-token')
+
+    expect((await POST(request({ ...fixture, agentId: 'codex' }, 'first-token'))).status).toBe(503)
+    expect((await POST(request({ ...fixture, agentId: 'codex' }, 'second-token'))).status).toBe(503)
+  })
+
   it('잘못된 scoped token 설정은 fail-closed로 막는다', async () => {
     delete process.env.AX_AGENT_TELEMETRY_TOKEN
     process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES = '{invalid-json'
 
     expect((await POST(request(fixture))).status).toBe(503)
+  })
+
+  it('잘못된 agent별 hash도 fail-closed로 막는다', async () => {
+    delete process.env.AX_AGENT_TELEMETRY_TOKEN
+    process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX = 'not-a-sha256'
+
+    expect((await POST(request({ ...fixture, agentId: 'codex' }, 'any-token'))).status).toBe(503)
   })
 
   it('PII가 포함된 payload는 저장하지 않는다', async () => {
