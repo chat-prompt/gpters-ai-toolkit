@@ -561,8 +561,9 @@ aitk CLI가 각 팀원 머신의 로컬 트랜스크립트를 집계해 호출�
 누구의 사용량인지는 서버가 인증 세션에서 정합니다. 이름을 인자로 보낼 수 없습니다.
 (클라이언트, periodStart)가 같으면 덮어씁니다 — 같은 구간을 다시 보내도 총량이 부풀지 않습니다.
 
-한도 필드는 없을 수 있습니다. Claude Code는 남은 한도를 로컬에 남기지 않으므로
-limitUsedPercent·limitResetsAt을 null로 보냅니다. 0으로 채우면 "한도를 안 쓴 사람"과 구분되지 않습니다.`,
+한도 필드는 없을 수 있습니다. Claude Code는 최신 statusline usage cache가 있을 때만,
+Codex는 최신 rollout 스냅샷이 있을 때만 보고합니다. 수집하지 못한 값을 0으로 채우면
+"한도를 안 쓴 사람"과 구분되지 않으므로 null로 보냅니다.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -715,6 +716,84 @@ get_plugin_content로 스킬을 로드한 후, 실제로 적용했는지와 결�
         },
       },
       required: ['skillId', 'applied', 'summary'],
+    },
+  },
+  {
+    name: 'report_skill_execution_started',
+    description: `스킬을 실제 작업에 적용하기 시작한 시점을 보고합니다.
+
+콘텐츠를 단순 조회한 시점이 아니라 실제 적용을 결정한 직후 호출합니다. 같은 attemptId를
+완료 보고에도 사용해야 결과 미보고와 실행 시간을 측정할 수 있습니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        eventId: { type: 'string', description: '시작 이벤트 재전송 멱등성을 위한 UUID' },
+        attemptId: { type: 'string', description: '시작과 완료를 연결하는 UUID' },
+        source: { type: 'string', enum: ['aitk', 'bbopters-shared'] },
+        skillId: { type: 'string' },
+        skillVersion: { type: ['string', 'null'] },
+        agent: { type: 'string', enum: ['claude-code', 'codex', 'openclaw', 'test-agent'] },
+        agentId: { type: 'string', description: '봇을 구분하는 안정적인 소문자 식별자' },
+        occurredAt: { type: 'string', description: 'ISO 8601 시작 시각' },
+      },
+      required: ['eventId', 'attemptId', 'source', 'skillId', 'skillVersion', 'agent', 'agentId', 'occurredAt'],
+    },
+  },
+  {
+    name: 'report_skill_execution',
+    description: `스킬을 실제 작업에 적용한 한 번의 시도와 검증 결과를 보고합니다.
+
+report_skill_outcome의 적용 여부보다 강한 실행 결과 계약입니다. 대화 원문, 파일 내용,
+명령 출력 전문이나 인증정보는 보내지 말고 짧은 검증 요약만 보냅니다.
+
+status는 success/partial/failed/abandoned, validation.method는
+test/command/artifact/user_confirmation/none 중 하나입니다.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        eventId: { type: 'string', description: '재전송 멱등성을 위한 UUID' },
+        attemptId: { type: 'string', description: '한 번의 실제 적용 시도를 식별하는 UUID' },
+        source: { type: 'string', enum: ['aitk', 'bbopters-shared'] },
+        skillId: { type: 'string' },
+        skillVersion: { type: ['string', 'null'] },
+        agent: { type: 'string', enum: ['claude-code', 'codex', 'openclaw', 'test-agent'] },
+        agentId: { type: 'string', description: '봇을 구분하는 안정적인 소문자 식별자' },
+        status: { type: 'string', enum: ['success', 'partial', 'failed', 'abandoned'] },
+        failureStage: {
+          type: ['string', 'null'],
+          enum: ['load', 'instruction', 'dependency', 'execution', 'validation', null],
+        },
+        errorCode: { type: ['string', 'null'] },
+        validation: {
+          type: 'object',
+          properties: {
+            method: {
+              type: 'string',
+              enum: ['test', 'command', 'artifact', 'user_confirmation', 'none'],
+            },
+            passed: { type: ['boolean', 'null'] },
+            summary: { type: ['string', 'null'] },
+          },
+          required: ['method', 'passed', 'summary'],
+        },
+        userAccepted: { type: ['boolean', 'null'] },
+        occurredAt: { type: 'string', description: 'ISO 8601 시각' },
+      },
+      required: [
+        'eventId',
+        'attemptId',
+        'source',
+        'skillId',
+        'skillVersion',
+        'agent',
+        'agentId',
+        'status',
+        'failureStage',
+        'errorCode',
+        'validation',
+        'userAccepted',
+        'occurredAt',
+      ],
     },
   },
 ]

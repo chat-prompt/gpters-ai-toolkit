@@ -15,6 +15,7 @@ import type { AxViewer } from './access'
 import { canViewPanel } from './access'
 import { overviewPanel } from './overview'
 import { skillUsagePanel } from './skills'
+import { journeyInsightsPanel } from './journey-insights'
 import { sharedSkillsPanel } from './shared-skills'
 import { skillDiffPanel } from './skill-diff'
 import { vercelDeploymentsPanel } from './vercel'
@@ -26,6 +27,7 @@ import { agentActivityPanel } from './agent-activity'
 export const AX_PANELS: AxPanel[] = [
   overviewPanel,
   skillUsagePanel,
+  journeyInsightsPanel,
   agentActivityPanel,
   sharedSkillsPanel,
   skillDiffPanel,

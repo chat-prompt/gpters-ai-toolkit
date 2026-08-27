@@ -1441,6 +1441,65 @@ describe('MCP Handlers', () => {
       expect(result.content[0].text).toContain('Missing required fields')
     })
 
+    it('should validate and return metadata for report_skill_execution', async () => {
+      const payload = {
+        eventId: '22222222-2222-4222-8222-222222222222',
+        attemptId: '11111111-1111-4111-8111-111111111111',
+        source: 'aitk',
+        skillId: 'test-skill',
+        skillVersion: '1.0.0',
+        agent: 'codex',
+        agentId: 'codex-reviewer',
+        status: 'success',
+        failureStage: null,
+        errorCode: null,
+        validation: { method: 'test', passed: true, summary: 'tests passed' },
+        userAccepted: null,
+        occurredAt: '2026-08-25T00:00:00.000Z',
+      }
+      const result = await executeTool('report_skill_execution', payload)
+
+      expect(result.isError).toBeUndefined()
+      expect(result._meta?.skillExecution).toEqual(payload)
+    })
+
+    it('should reject unsafe report_skill_execution summaries', async () => {
+      const result = await executeTool('report_skill_execution', {
+        eventId: '22222222-2222-4222-8222-222222222222',
+        attemptId: '11111111-1111-4111-8111-111111111111',
+        source: 'aitk',
+        skillId: 'test-skill',
+        skillVersion: null,
+        agent: 'codex',
+        agentId: 'codex-reviewer',
+        status: 'success',
+        failureStage: null,
+        errorCode: null,
+        validation: { method: 'command', passed: true, summary: 'token=secret-value' },
+        userAccepted: null,
+        occurredAt: '2026-08-25T00:00:00.000Z',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('must not contain credentials')
+    })
+
+    it('should validate and return metadata for report_skill_execution_started', async () => {
+      const payload = {
+        eventId: '33333333-3333-4333-8333-333333333333',
+        attemptId: '11111111-1111-4111-8111-111111111111',
+        source: 'aitk',
+        skillId: 'test-skill',
+        skillVersion: '1.0.0',
+        agent: 'codex',
+        agentId: 'codex-reviewer',
+        occurredAt: '2026-08-25T00:00:00.000Z',
+      }
+      const result = await executeTool('report_skill_execution_started', payload)
+      expect(result.isError).toBeUndefined()
+      expect(result._meta?.skillExecutionStart).toEqual(payload)
+    })
+
     // --- EDU-6411: get_plugin_content outcome hint injection ---
 
     it('should inject outcome hint into get_plugin_content response', async () => {

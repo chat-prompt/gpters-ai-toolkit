@@ -3,7 +3,7 @@
  *
  * db는 모킹하고, 다음 네 가지를 검증한다:
  * 1. 클라이언트별·모델별 집계가 맞는지
- * 2. 한도를 안 주는 클라이언트(Claude Code)가 0이 아니라 null로 남는지
+ * 2. Claude Code의 신규 한도 스냅샷과 기존 null 보고를 구분하는지
  * 3. isAdmin이 아닐 때 팀원별 상세(members)가 노출되지 않는지
  * 4. 여러 수집 구간이 섞여 있을 때 가장 최근 구간만 집계해 이중 계상을 막는지
  */
@@ -12,8 +12,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@gpters/db', () => ({
   db: { select: vi.fn() },
-  axClientUsage: { name: 'ax_client_usage', periodStart: 'period_start' },
-  users: { email: 'users.email' },
+  axClientUsage: { name: 'ax_client_usage', userId: 'user_id', periodStart: 'period_start' },
+  axUsageCollectorState: { name: 'ax_usage_collector_state' },
+  oauthAccessTokens: {
+    userId: 'oauth_access_tokens.user_id',
+    isActive: 'oauth_access_tokens.is_active',
+    expiresAt: 'oauth_access_tokens.expires_at',
+  },
+  oauthRefreshTokens: {
+    userId: 'oauth_refresh_tokens.user_id',
+    isActive: 'oauth_refresh_tokens.is_active',
+    expiresAt: 'oauth_refresh_tokens.expires_at',
+  },
+  users: {
+    id: 'users.id',
+    email: 'users.email',
+    name: 'users.name',
+    accountStatus: 'users.account_status',
+    lastLoginAt: 'users.last_login_at',
+  },
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -48,6 +65,7 @@ const THIS_WEEK = new Date('2026-08-01T00:00:00Z')
 const LAST_WEEK = new Date('2026-07-25T00:00:00Z')
 
 const row = (overrides: Record<string, unknown> = {}) => ({
+  userId: null,
   memberName: '진우',
   client: 'codex',
   planRaw: 'prolite',
@@ -115,7 +133,7 @@ describe('clientUsagePanel', () => {
     expect(codex.avgLimitUsedPercent).toBe(42)
   })
 
-  it('Claude Code는 한도를 보고하지 않으므로 null로 남고 reportsLimit이 false다', async () => {
+  it('기존 Claude 보고에 한도 스냅샷이 없으면 null로 남고 reportsLimit이 false다', async () => {
     queueRows([
       row({
         client: 'claude-code',
@@ -134,6 +152,25 @@ describe('clientUsagePanel', () => {
     expect(claude.avgLimitUsedPercent).toBeNull()
     expect(claude.avgLimitUsedPercent).not.toBe(0)
     expect(result.data!.members![0].limitUsedPercent).toBeNull()
+  })
+
+  it('새 Claude 보고에 주간 한도가 있으면 사용률과 리셋 시각을 집계한다', async () => {
+    queueRows([
+      row({
+        client: 'claude-code',
+        plan: 'Claude Max 20x',
+        limitUsedPercent: '63.00',
+        limitResetsAt: new Date('2026-08-13T20:00:00Z'),
+        models: { 'claude-opus-5': 1000 },
+      }),
+    ])
+
+    const result = await clientUsagePanel.load(ADMIN)
+    const claude = result.data!.byClient.find((c) => c.client === 'claude-code')!
+
+    expect(claude.reportsLimit).toBe(true)
+    expect(claude.avgLimitUsedPercent).toBe(63)
+    expect(result.data!.members![0].limitResetsAt).toBe('2026-08-13T20:00:00.000Z')
   })
 
   it('관리자가 아니면 팀원별 상세를 내려주지 않는다', async () => {
@@ -191,6 +228,7 @@ describe('clientUsagePanel', () => {
       row({
         periodStart: new Date('2026-06-01T00:00:00Z'),
         periodEnd: new Date('2026-06-08T00:00:00Z'),
+        syncedAt: new Date('2026-06-08T09:00:00Z'),
       }),
     ])
 
@@ -217,14 +255,55 @@ describe('clientUsagePanel', () => {
     vi.mocked(db.select).mockReset()
     vi.mocked(db.select)
       .mockReturnValueOnce(builder([row(), row({ memberName: '다혜' })]) as never)
-      .mockReturnValueOnce(builder([{ count: 12 }]) as never)
+      .mockReturnValueOnce(
+        builder(
+          Array.from({ length: 12 }, (_, index) => ({
+            id: `user-${index}`,
+            email: `user-${index}@gpters.org`,
+            name: `사용자 ${index}`,
+            lastLoginAt: null,
+          }))
+        ) as never
+      )
 
     const result = await clientUsagePanel.load(MEMBER)
 
     expect(result.data!.reportingMembers).toBe(2)
     expect(result.data!.internalMembers).toBe(12)
-    // 요약 밴드 힌트에도 참여율이 실린다
-    expect(result.highlights?.[0]?.hint).toBe('2/12명')
+    // 주간 사용량과 현재 수집 참여 상태는 서로 다른 지표로 분리한다
+    expect(result.highlights).toEqual([
+      { label: '전체 구성원', value: '12', hint: '명' },
+      { label: '주간 토큰 소비량', value: '2K', hint: 'tokens' },
+      { label: '주간 활성', value: '2', hint: '명' },
+    ])
+  })
+
+  it('user_id가 연결된 상세 행은 수집 당시 별칭 대신 현재 계정 이름을 쓴다', async () => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
+
+    vi.mocked(db.select).mockReset()
+    vi.mocked(db.select)
+      .mockReturnValueOnce(
+        builder([row({ userId: 'user-1', memberName: 'member01' })]) as never
+      )
+      .mockReturnValueOnce(
+        builder([
+          {
+            id: 'user-1',
+            email: 'member01@gpters.org',
+            name: '구성원 01',
+            lastLoginAt: null,
+          },
+        ]) as never
+      )
+      // collector heartbeat → access token → refresh token
+      .mockReturnValueOnce(builder([]) as never)
+      .mockReturnValueOnce(builder([]) as never)
+      .mockReturnValueOnce(builder([]) as never)
+
+    const result = await clientUsagePanel.load(ADMIN)
+
+    expect(result.data!.members![0].memberName).toBe('구성원 01')
   })
 
   it('분모 조회가 실패해도 패널은 정상 응답한다', async () => {
@@ -241,6 +320,84 @@ describe('clientUsagePanel', () => {
 
     expect(result.status).toBe('ok')
     expect(result.data!.internalMembers).toBeNull()
+  })
+
+  it('관리자는 전 계정을 다섯 가지 수집 참여 상태로 구분해 본다', async () => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
+    const internalUsers = [
+      ['u-reporting', '정상'],
+      ['u-unused', '미사용'],
+      ['u-stale', '장기미보고'],
+      ['u-uninstalled', '미설치'],
+      ['u-unapproved', '미승인'],
+      ['u-legacy', '레거시'],
+    ].map(([id, name]) => ({
+      id,
+      name,
+      email: `${id}@gpters.org`,
+      lastLoginAt: new Date('2026-08-09T00:00:00Z'),
+    }))
+
+    vi.mocked(db.select).mockReset()
+    vi.mocked(db.select)
+      // 기존 사용량 → 내부 계정 → collector heartbeat → access token → refresh token
+      .mockReturnValueOnce(builder([row({ memberName: '레거시' })]) as never)
+      .mockReturnValueOnce(builder(internalUsers) as never)
+      .mockReturnValueOnce(
+        builder([
+          {
+            userId: 'u-reporting',
+            memberName: '정상',
+            clients: ['codex'],
+            recordCount: 1,
+            lastReportedAt: new Date('2026-08-09T00:00:00Z'),
+          },
+          {
+            userId: 'u-unused',
+            memberName: '미사용',
+            clients: [],
+            recordCount: 0,
+            lastReportedAt: new Date('2026-08-09T00:00:00Z'),
+          },
+          {
+            userId: 'u-stale',
+            memberName: '장기미보고',
+            clients: ['claude-code'],
+            recordCount: 1,
+            lastReportedAt: new Date('2026-07-01T00:00:00Z'),
+          },
+        ]) as never
+      )
+      .mockReturnValueOnce(
+        builder([
+          {
+            userId: 'u-uninstalled',
+            isActive: true,
+            expiresAt: new Date('2026-09-01T00:00:00Z'),
+          },
+        ]) as never
+      )
+      .mockReturnValueOnce(builder([]) as never)
+
+    const result = await clientUsagePanel.load(ADMIN)
+    const byId = new Map(result.data!.participation!.map((item) => [item.userId, item]))
+
+    expect(byId.get('u-reporting')?.status).toBe('reporting')
+    expect(byId.get('u-unused')?.status).toBe('not_using')
+    expect(byId.get('u-stale')?.status).toBe('stale')
+    expect(byId.get('u-uninstalled')?.status).toBe('not_installed')
+    expect(byId.get('u-unapproved')?.status).toBe('not_approved')
+    expect(byId.get('u-legacy')).toMatchObject({
+      status: 'reporting',
+      source: 'legacy_usage',
+    })
+    // 사용량 0 heartbeat는 수집 정상 상태지만 실제 주간 활성에는 포함하지 않는다.
+    expect(result.data!.reportingMembers).toBe(2)
+    expect(result.highlights?.[2]).toEqual({
+      label: '주간 활성',
+      value: '2',
+      hint: '명',
+    })
   })
 
   it('모델별 사용량을 내림차순으로 합산한다', async () => {

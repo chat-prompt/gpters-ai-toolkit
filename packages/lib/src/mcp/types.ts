@@ -305,6 +305,10 @@ export interface ToolExecutionMeta {
     applied: boolean
     summary: string
   }
+  /** 검증 가능한 스킬 실행 결과. 기존 applied 자기보고와 별도 저장한다 */
+  skillExecution?: import('../features/ax/execution-report').AxSkillExecutionReport
+  /** 실제 적용 시작. 완료 보고 누락과 실행 시간을 측정한다 */
+  skillExecutionStart?: import('../features/ax/execution-report').AxSkillExecutionStartReport
 }
 
 export interface SemanticSearchResult {
@@ -361,3 +365,6 @@ export interface ReportSkillOutcomeInput {
   applied: boolean
   summary: string
 }
+
+/** Input for reporting a validated skill execution attempt */
+export type ReportSkillExecutionInput = import('../features/ax/execution-report').AxSkillExecutionReport

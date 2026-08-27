@@ -60,8 +60,11 @@ function mockGitHub(agentDocs: Record<string, string | null>, truncated = false)
     'fetch',
     vi.fn(async (url: string) => {
       const u = String(url)
+      if (u.includes('/commits/HEAD')) {
+        return { ok: true, status: 200, json: async () => ({ sha: 'commit-sha-1234567890' }) }
+      }
       if (u.includes('/git/trees/')) {
-        return { ok: true, status: 200, json: async () => ({ tree, truncated }) }
+        return { ok: true, status: 200, json: async () => ({ sha: 'tree-sha', tree, truncated }) }
       }
       const match = u.match(/contents\/skills\/([^/]+)\/SKILL\.md/)
       const doc = match ? agentDocs[match[1]] : null
@@ -105,6 +108,7 @@ describe('skillDiffPanel', () => {
   it('meta가 레지스트리 계약과 일치한다', () => {
     expect(skillDiffPanel.meta.id).toBe('skill-diff')
     expect(skillDiffPanel.meta.visibility).toBe('org')
+    expect(skillDiffPanel.meta.parentId).toBe('skill-usage')
     expect(skillDiffPanel.meta.usesPeriod).toBe(false)
   })
 
@@ -144,6 +148,9 @@ describe('skillDiffPanel', () => {
     expect(data.crossMatches).toEqual([{ aitkId: 'renamed-here', agentId: 'agent-alias' }])
     expect(data.basis.comparedDocs).toBe(3)
     expect(data.fetchFailures).toBe(0)
+    expect(data.freshness.agentCommitSha).toBe('commit-sha-1234567890')
+    expect(data.freshness.aitkFingerprint).toMatch(/^[a-f0-9]{64}$/)
+    expect(new Date(data.freshness.comparedAt).toString()).not.toBe('Invalid Date')
   })
 
   it('문서를 못 가져온 스킬은 판정하지 않고 실패로 센다', async () => {
@@ -164,6 +171,17 @@ describe('skillDiffPanel', () => {
     const second = await skillDiffPanel.load(CTX)
 
     expect(second.generatedAt).toBe(first.generatedAt)
+  })
+
+  it('관리자 강제 갱신은 같은 버전이어도 캐시를 우회한다', async () => {
+    mockAitk([{ id: 'one', content: '본문' }])
+    mockGitHub({ one: '본문' })
+
+    const first = await skillDiffPanel.load(CTX)
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    const refreshed = await skillDiffPanel.load({ ...CTX, forceRefresh: true })
+
+    expect(refreshed.generatedAt).not.toBe(first.generatedAt)
   })
 
   it('트리가 잘렸으면 불완전 비교를 내지 않고 error로 닫는다', async () => {

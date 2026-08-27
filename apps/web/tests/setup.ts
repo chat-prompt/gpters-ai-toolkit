@@ -5,14 +5,12 @@ expect.extend(matchers)
 
 // Note: NODE_ENV is automatically set to 'test' by vitest
 
-// Database isolation:
-// Set TEST_DATABASE_URL in .env.local to use a separate test database
-// This prevents test data from appearing in production
-// Example: TEST_DATABASE_URL="postgresql://user:password@test-host.neon.tech/testdb"
-if (!process.env.TEST_DATABASE_URL) {
+// DB 정리가 필요한 통합 테스트만 명시적으로 opt-in한다. 일반 단위 테스트에서
+// DATABASE_URL을 암묵적으로 사용하거나, 모킹된 DB를 전역 cleanup이 건드리지 않는다.
+const runDatabaseCleanup = process.env.RUN_DB_TEST_CLEANUP === 'true'
+if (runDatabaseCleanup && !process.env.TEST_DATABASE_URL) {
   console.warn(
-    '⚠️  TEST_DATABASE_URL not set. Tests will use DATABASE_URL.\n' +
-    '   Consider setting TEST_DATABASE_URL for proper test isolation.'
+    '⚠️  RUN_DB_TEST_CLEANUP=true requires an isolated TEST_DATABASE_URL. Cleanup is disabled.'
   )
 }
 
@@ -63,13 +61,11 @@ async function cleanupTestItems(): Promise<void> {
 
 // Global test setup
 beforeAll(async () => {
-  // Clean up any leftover test items from previous runs
-  await cleanupTestItems()
+  if (runDatabaseCleanup && process.env.TEST_DATABASE_URL) await cleanupTestItems()
 })
 
 afterAll(async () => {
-  // Clean up test items created during this test run
-  await cleanupTestItems()
+  if (runDatabaseCleanup && process.env.TEST_DATABASE_URL) await cleanupTestItems()
 })
 
 afterEach(() => {

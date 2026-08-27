@@ -28,6 +28,9 @@ const SKILL_LIMIT = 50
  */
 export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as const
 
+/** 미사용 관리에서 실제 사용으로 보는 행위 — 검색 노출·스킵은 사용으로 세지 않는다 */
+const MEANINGFUL_USAGE_ACTIONS = ['load', 'apply'] as const
+
 const meta: AxPanelMeta = {
   id: 'skill-usage',
   title: '스킬',
@@ -113,8 +116,13 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
       const [totals] = await db
         .select({
           totalEvents: sql<number>`count(*)::int`,
-          activeUsers: sql<number>`count(distinct ${skillEvents.userId})::int`,
-          sessions: sql<number>`count(distinct ${skillEvents.sessionId})::int`,
+          searched: actionCount('search'),
+          loaded: actionCount('load'),
+          applied: actionCount('apply'),
+          skipped: actionCount('skip'),
+          deployed: actionCount('deploy'),
+          activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)})::int`,
+          sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)})::int`,
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
@@ -147,12 +155,28 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         .groupBy(dayExpr)
         .orderBy(dayExpr)
 
-      // 4. 기간 내 이벤트가 하나도 없는 카탈로그 스킬
+      // 4. 기간 내 실제 사용(load/apply)이 없는 카탈로그 스킬
       //    빈 배열 notInArray는 Drizzle에서 깨지므로 서브쿼리로 처리한다
-      //    서브쿼리도 위와 같은 action 조건을 써야 한다 — 아니면 기계 트래픽만 있는 스킬이
-      //    표에서도 빠지고 미사용 목록에서도 빠져 어디에도 안 보인다
+      //    검색 노출·스킵만 있는 스킬도 관리 관점에서는 미사용이다. 정리 우선순위는
+      //    전 기간의 마지막 실제 사용일이 오래된 순, 같은 시각이면 누적 사용 세션이 적은 순이다.
+      const allTimeLastUsedAt = sql<Date | null>`(
+        select max("skill_events"."created_at") from "skill_events"
+        where "skill_events"."skill_id" = "catalog_items"."id"
+          and ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)}
+      )`
+      const allTimeUsageSessions = sql<number>`(
+        select count(distinct "skill_events"."session_id")::int from "skill_events"
+        where "skill_events"."skill_id" = "catalog_items"."id"
+          and ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)}
+      )`
       const unusedRows = await db
-        .select({ id: catalogItems.id, name: catalogItems.name })
+        .select({
+          id: catalogItems.id,
+          name: catalogItems.name,
+          lastUsedAt: allTimeLastUsedAt,
+          usageSessions: allTimeUsageSessions,
+          totalUnused: sql<number>`count(*) over()::int`,
+        })
         .from(catalogItems)
         .where(
           and(
@@ -161,12 +185,17 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
             sql`${catalogItems.id} not in (
               select distinct ${skillEvents.skillId} from ${skillEvents}
-              where ${skillEvents.createdAt} >= ${since}
-                and ${inArray(skillEvents.action, CORE_ACTIONS)}
+              where ${skillEvents.createdAt} >= ${since.toISOString()}
+                and ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)}
             )`
           )
         )
-        .orderBy(catalogItems.name)
+        // NULLS FIRST = 한 번도 실제 사용된 적 없는 스킬이 정리 후보의 맨 앞이다.
+        .orderBy(
+          sql`${allTimeLastUsedAt} asc nulls first`,
+          allTimeUsageSessions,
+          catalogItems.name
+        )
         .limit(SKILL_LIMIT)
 
       const skills: AxSkillUsageRow[] = skillRows
@@ -185,26 +214,43 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         .slice(0, SKILL_LIMIT)
 
       const totalEvents = num(totals?.totalEvents)
+      const loaded = num(totals?.loaded)
+      const applied = num(totals?.applied)
+      const meaningfulUses = loaded + applied
       const activeUsers = num(totals?.activeUsers)
 
       return panelOk(
         meta,
         {
           totalEvents,
+          meaningfulUses,
           activeUsers,
           sessions: num(totals?.sessions),
+          actionTotals: {
+            search: num(totals?.searched),
+            load: loaded,
+            apply: applied,
+            skip: num(totals?.skipped),
+            deploy: num(totals?.deployed),
+          },
           skills,
           daily: fillMissingDays(
             dailyRows.map((row) => ({ date: row.date, events: num(row.events) })),
             since,
             now
           ),
-          unusedSkills: unusedRows.map((row) => ({ id: row.id, name: row.name })),
+          totalUnusedSkills: num(unusedRows[0]?.totalUnused),
+          unusedSkills: unusedRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            lastUsedAt: toIso(row.lastUsedAt),
+            usageSessions: num(row.usageSessions),
+          })),
         },
         [
           // 기간 라벨은 붙이지 않는다 — 화면의 기간 선택이 이 두 타일 바로 옆에 있다
-          { label: '스킬 사용', value: totalEvents.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
-          { label: '쓴 사람', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
+          { label: '실제 스킬 사용', value: meaningfulUses.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
+          { label: '실제 사용자', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
         ]
       )
     } catch (error) {

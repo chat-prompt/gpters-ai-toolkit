@@ -51,7 +51,12 @@ const nextConfig: NextConfig = {
       headers: [
         {
           key: 'Cache-Control',
-          value: 'public, max-age=31536000, immutable',
+          // Turbopack reuses stable development chunk names across HMR updates.
+          // Marking them immutable makes browsers retain deleted module factories.
+          value:
+            process.env.NODE_ENV === 'production'
+              ? 'public, max-age=31536000, immutable'
+              : 'no-store',
         },
       ],
     },

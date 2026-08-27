@@ -66,6 +66,8 @@ import {
   recordAutoSkipEvents,
   recordSearchSkipEvent,
   recordDeployEvent,
+  recordSkillExecutionAttempt,
+  recordSkillExecutionStart,
   finalizeSession,
 } from '@/lib/analytics'
 import {
@@ -74,7 +76,7 @@ import {
   type ClientType,
 } from '@/lib/security/client-type'
 import { db, orgMemberships, mcpSessions, users as usersTable, organizations } from '@gpters/db'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 // Force dynamic rendering - never cache this route
 export const dynamic = 'force-dynamic'
@@ -233,11 +235,11 @@ async function getUserOrgId(userId: string): Promise<string | undefined> {
     const [membership] = await db
       .select({ orgId: orgMemberships.orgId })
       .from(orgMemberships)
-      .where(eq(orgMemberships.userId, userId))
+      .where(and(eq(orgMemberships.userId, userId), eq(orgMemberships.status, 'active')))
       .limit(1)
     
     return membership?.orgId
-  } catch (error) {
+  } catch (_error) {
     return undefined
   }
 }
@@ -630,6 +632,22 @@ export async function POST(request: NextRequest) {
             action: meta.skillOutcome.applied ? 'deploy' : 'other',
             responseStatus: 'success',
             skillId: meta.skillOutcome.skillId,
+          }).catch(() => {})
+        }
+
+        if (meta?.skillExecutionStart) {
+          await recordSkillExecutionStart({
+            sessionId: sid,
+            userId: auth?.userId,
+            report: meta.skillExecutionStart,
+          }).catch(() => {})
+        }
+
+        if (meta?.skillExecution) {
+          await recordSkillExecutionAttempt({
+            sessionId: sid,
+            userId: auth?.userId,
+            report: meta.skillExecution,
           }).catch(() => {})
         }
 

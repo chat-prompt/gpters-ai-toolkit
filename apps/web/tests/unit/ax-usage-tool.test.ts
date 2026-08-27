@@ -3,12 +3,12 @@
  *
  * 이 도구가 지켜야 하는 두 가지를 검증한다.
  * 1. 팀원 이름은 인증 세션에서만 나온다 — 클라이언트가 실어 보낸 이름은 무시된다.
- * 2. (팀원, 클라이언트, 구간)이 같으면 덮어쓴다 — 재실행해도 행이 늘지 않는다.
+ * 2. (인증 사용자, 클라이언트, 구간)이 같으면 덮어쓴다 — 재실행해도 행이 늘지 않는다.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockDb, mockUsers, mockAxClientUsage } = vi.hoisted(() => ({
+const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -18,10 +18,12 @@ const { mockDb, mockUsers, mockAxClientUsage } = vi.hoisted(() => ({
   mockUsers: { id: 'id', name: 'name', email: 'email' },
   mockAxClientUsage: {
     id: 'id',
+    userId: 'userId',
     memberName: 'memberName',
     client: 'client',
     periodStart: 'periodStart',
   },
+  mockAxUsageCollectorState: { userId: 'collector.userId' },
 }))
 
 vi.mock('@gpters/db', () => ({
@@ -30,6 +32,7 @@ vi.mock('@gpters/db', () => ({
   users: mockUsers,
   suggestions: {},
   axClientUsage: mockAxClientUsage,
+  axUsageCollectorState: mockAxUsageCollectorState,
 }))
 
 vi.mock('drizzle-orm', () => ({
@@ -113,10 +116,16 @@ function stubSelect(user: unknown[], existingRows: unknown[][]) {
 function stubWrites() {
   const insertedValues: Record<string, unknown>[] = []
   const updatedValues: Record<string, unknown>[] = []
+  const collectorValues: Record<string, unknown>[] = []
 
-  mockDb.insert.mockImplementation(() => ({
-    values: vi.fn().mockImplementation(async (values: Record<string, unknown>) => {
+  mockDb.insert.mockImplementation((table: unknown) => ({
+    values: vi.fn().mockImplementation((values: Record<string, unknown>) => {
+      if (table === mockAxUsageCollectorState) {
+        collectorValues.push(values)
+        return { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) }
+      }
       insertedValues.push(values)
+      return Promise.resolve(undefined)
     }),
   }))
   mockDb.update.mockImplementation(() => ({
@@ -126,7 +135,7 @@ function stubWrites() {
     }),
   }))
 
-  return { insertedValues, updatedValues }
+  return { insertedValues, updatedValues, collectorValues }
 }
 
 describe('report_usage', () => {
@@ -165,6 +174,7 @@ describe('report_usage', () => {
 
       expect(result.success).toBe(true)
       expect(result.memberName).toBe('현진우')
+      expect(writes.insertedValues[0].userId).toBe('user-1')
       expect(writes.insertedValues[0].memberName).toBe('현진우')
     })
 
@@ -195,7 +205,7 @@ describe('report_usage', () => {
     it('검증은 사용자 조회보다 먼저 한다 — 잘못된 본문으로 DB를 건드리지 않는다', async () => {
       stubWrites()
 
-      await reportUsage({ records: [] }, 'user-1')
+      await reportUsage({ records: 'invalid' }, 'user-1')
 
       expect(mockDb.select).not.toHaveBeenCalled()
     })
@@ -211,9 +221,26 @@ describe('report_usage', () => {
       expect(result).toMatchObject({ success: true, inserted: 1, updated: 0 })
       expect(writes.insertedValues).toHaveLength(1)
       expect(writes.updatedValues).toHaveLength(0)
+      expect(writes.collectorValues).toHaveLength(1)
     })
 
-    it('같은 (팀원, 클라이언트, 구간)이 있으면 update 한다 — 행이 늘지 않는다', async () => {
+    it('사용량이 없어도 사용자별 수집기 점검 상태를 upsert 한다', async () => {
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [])
+      const writes = stubWrites()
+
+      const result = await reportUsage({ records: [] }, 'user-1')
+
+      expect(result).toMatchObject({ success: true, inserted: 0, updated: 0 })
+      expect(writes.insertedValues).toHaveLength(0)
+      expect(writes.collectorValues[0]).toMatchObject({
+        userId: 'user-1',
+        memberName: '현진우',
+        clients: [],
+        recordCount: 0,
+      })
+    })
+
+    it('같은 (인증 사용자, 클라이언트, 구간)이 있으면 update 한다 — 행이 늘지 않는다', async () => {
       stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[{ id: 'row-1' }]])
       const writes = stubWrites()
 
@@ -278,7 +305,11 @@ describe('report_usage', () => {
     it('실패는 isError로 표시된다', async () => {
       stubWrites()
 
-      const response = await executeTool('report_usage', { records: [] }, 'user-1')
+      const response = await executeTool(
+        'report_usage',
+        { records: [record({ client: 'cursor' })] },
+        'user-1'
+      )
 
       expect(response.isError).toBe(true)
       expect(JSON.parse(response.content[0].text).success).toBe(false)

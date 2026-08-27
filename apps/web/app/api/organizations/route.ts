@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { organizations, orgMemberships } from '@/lib/db/schema'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { ApiErrors, apiSuccess, validateRequired } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       const memberships = await db
         .select({ orgId: orgMemberships.orgId, role: orgMemberships.role })
         .from(orgMemberships)
-        .where(eq(orgMemberships.userId, userId))
+        .where(and(eq(orgMemberships.userId, userId), eq(orgMemberships.status, 'active')))
 
       const membershipMap = new Map(memberships.map(m => [m.orgId, m.role]))
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
           role: orgMemberships.role,
         })
         .from(orgMemberships)
-        .where(eq(orgMemberships.userId, userId))
+        .where(and(eq(orgMemberships.userId, userId), eq(orgMemberships.status, 'active')))
 
       const orgIds = memberships.map(m => m.orgId)
 

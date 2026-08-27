@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@gpters/db', () => ({
   db: { select: vi.fn() },
   axAgentTelemetryBatches: { windowEnd: 'window_end' },
+  axSkillExecutionAttempts: {
+    status: 'status',
+    validationMethod: 'validation_method',
+    validationPassed: 'validation_passed',
+    startedAt: 'started_at',
+  },
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -20,9 +26,10 @@ function builder(result: unknown) {
   return stub
 }
 
-function queueRows(rows: unknown[]) {
+function queueRows(rows: unknown[], executionRows: unknown[] = []) {
   vi.mocked(db.select).mockReset()
   vi.mocked(db.select).mockReturnValueOnce(builder(rows) as never)
+  vi.mocked(db.select).mockReturnValueOnce(builder(executionRows) as never)
 }
 
 function usage(inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, thinkingTokens: number) {
@@ -81,6 +88,9 @@ describe('agentActivityPanel', () => {
         skillLoads: [],
         collection: { source: 'codex', recordsRead: 50, parseFailures: 1, unsupportedRecordsSkipped: 3, healthWarnings: [] },
       }),
+    ], [
+      { status: 'success', validationMethod: 'test', validationPassed: true },
+      { status: 'failed', validationMethod: 'none', validationPassed: null },
     ])
 
     const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
@@ -95,6 +105,12 @@ describe('agentActivityPanel', () => {
       collection: { batches: 2, recordsRead: 150, parseFailures: 1, unsupportedRecordsSkipped: 5 },
     })
     expect(result.data!.totalUsage.thinkingTokens).toBe(9)
+    expect(result.data!.verifiedExecutions).toMatchObject({
+      attempts: 2,
+      success: 1,
+      failed: 1,
+      withEvidence: 1,
+    })
     expect(result.data!.reporters).toHaveLength(2)
     expect(result.data!.sourceCoverage.find((item) => item.source === 'claude-code')?.status).toBe('reporting')
     expect(result.data!.sourceCoverage.find((item) => item.source === 'codex')?.status).toBe('reporting')

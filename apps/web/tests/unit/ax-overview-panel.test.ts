@@ -2,7 +2,7 @@
  * AX 대시보드 — 성과 요약 패널 테스트
  *
  * db는 모킹하고, 다음을 검증한다:
- * 1. 실측 지표(누적 참여·추이·분포·밀도)가 쿼리 결과에서 올바르게 조립되는지
+ * 1. 실측 지표(누적 참여·일별·시간대별 활성 인원)가 쿼리 결과에서 올바르게 조립되는지
  * 2. 미계측 지표가 값 대신 사유와 함께 내려가는지
  * 3. 빈 구간·문자열 count·쿼리 실패 같은 경계가 안전한지
  */
@@ -41,7 +41,7 @@ const { db } = await import('@gpters/db')
 /** innerJoin 호출 횟수 — 모든 쿼리가 카탈로그 모집단을 쓰는지 확인용 */
 let innerJoinCalls = 0
 
-/** 각 쿼리에 넘어간 where 조건 (실행 순서: 누적·카탈로그·잔디·일별·유형·시간대) */
+/** 각 쿼리에 넘어간 where 조건 (실행 순서: 누적·카탈로그·잔디·일별·시간대) */
 let whereConditions: unknown[] = []
 
 /** 어떤 체이닝에도 자신을 돌려주고, await 하면 결과를 내는 쿼리 빌더 */
@@ -96,7 +96,7 @@ function collectValues(node: unknown, out: unknown[] = []): unknown[] {
   return out
 }
 
-/** 쿼리 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·잔디·일별·유형·시간대(·관리자면 사용자별) */
+/** 쿼리 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·잔디·일별·시간대(·관리자면 사용자별) */
 function queueQueries(results: unknown[]) {
   const select = vi.mocked(db.select)
   select.mockReset()
@@ -136,13 +136,8 @@ describe('overviewPanel', () => {
         { date: '2026-08-18', users: 6 },
       ],
       [
-        { action: 'load', count: 30 },
-        { action: 'search', count: 50 },
-        { action: 'apply', count: 12 },
-      ],
-      [
-        { hour: 10, events: 40 },
-        { hour: 15, events: 25 },
+        { hour: 10, users: 4 },
+        { hour: 15, users: 2 },
       ],
     ])
 
@@ -173,21 +168,10 @@ describe('overviewPanel', () => {
       users: 6,
     })
 
-    // 분포는 CORE_ACTIONS 고정 순서 — 값이 없는 action은 0으로 채운다
-    expect(data.actionDistribution.map((row) => row.action)).toEqual([
-      'search',
-      'load',
-      'apply',
-      'skip',
-      'deploy',
-    ])
-    expect(data.actionDistribution[0]).toEqual({ action: 'search', count: 50 })
-    expect(data.actionDistribution.find((row) => row.action === 'skip')?.count).toBe(0)
-
-    // 시간대 밀도는 KST 0~23시가 모두 채워진다
+    // 시간대 활성 인원은 KST 0~23시가 모두 채워진다
     expect(data.hourlyDensity).toHaveLength(24)
-    expect(data.hourlyDensity[10]).toEqual({ hour: 10, events: 40 })
-    expect(data.hourlyDensity[0]).toEqual({ hour: 0, events: 0 })
+    expect(data.hourlyDensity[10]).toEqual({ hour: 10, users: 4 })
+    expect(data.hourlyDensity[0]).toEqual({ hour: 0, users: 0 })
 
     // 미계측 지표는 값 없이 사유만 내려간다
     expect(data.unmeasured.length).toBeGreaterThan(0)
@@ -198,27 +182,26 @@ describe('overviewPanel', () => {
 
     // 요약 밴드 수치
     expect(result.highlights).toEqual([
-      { label: '누적 참여', value: '21', hint: '명' },
-      { label: '팀 스킬', value: '504', hint: '개 · 사람' },
+      { label: '팀 스킬', value: '504', hint: '개' },
     ])
   })
 
   it('모든 쿼리가 카탈로그 모집단(innerJoin)을 쓴다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    // 스킬 이벤트를 읽는 5개 쿼리(누적·잔디·일별·유형·시간대) 전부.
+    // 스킬 이벤트를 읽는 4개 쿼리(누적·잔디·일별·시간대) 전부.
     // 카탈로그 count 쿼리는 이벤트를 읽지 않으므로 조인하지 않는다
-    expect(innerJoinCalls).toBe(5)
+    expect(innerJoinCalls).toBe(4)
   })
 
   it('모든 쿼리가 CORE_ACTIONS 필터를 쓰고, 누적 쿼리만 날짜 필터가 없다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    expect(whereConditions).toHaveLength(6)
+    expect(whereConditions).toHaveLength(5)
 
     for (const [index, condition] of whereConditions.entries()) {
       const values = collectValues(condition)
@@ -252,8 +235,7 @@ describe('overviewPanel', () => {
       [{ count: '11' }],
       [{ date: '2026-08-18', events: '3' }],
       [{ date: '2026-08-18', users: '2' }],
-      [{ action: 'load', count: '7' }],
-      [{ hour: '9', events: '5' }],
+      [{ hour: '9', users: '5' }],
     ])
 
     const data = (await overviewPanel.load({ days: 7, isAdmin: false })).data!
@@ -262,12 +244,11 @@ describe('overviewPanel', () => {
     expect(data.catalogSkills).toBe(11)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.events).toBe(3)
     expect(data.dailyActiveUsers.find((d) => d.date === '2026-08-18')?.users).toBe(2)
-    expect(data.actionDistribution.find((row) => row.action === 'load')?.count).toBe(7)
-    expect(data.hourlyDensity[9].events).toBe(5)
+    expect(data.hourlyDensity[9].users).toBe(5)
   })
 
   it('활동이 전혀 없으면 error가 아니라 0으로 채운 정상 응답을 준다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     const result = await overviewPanel.load({ days: 30, isAdmin: false })
 
@@ -276,38 +257,13 @@ describe('overviewPanel', () => {
     expect(data.totalParticipants).toBe(0)
     expect(data.dailyActiveUsers).toHaveLength(30)
     expect(data.dailyActiveUsers.every((day) => day.users === 0)).toBe(true)
-    expect(data.hourlyDensity.every((slot) => slot.events === 0)).toBe(true)
-  })
-
-  it('예상 밖 action이 와도 조립을 깨뜨리지 않고 뒤에 붙인다 (방어적 처리)', async () => {
-    // 운영 SQL은 CORE_ACTIONS로 필터하므로 이 입력은 실제로는 오지 않는다.
-    // CORE_ACTIONS와 표시 순서(ACTION_ORDER)가 어긋나게 수정되는 회귀에 대한 방어를 검증한다.
-    queueQueries([
-      [{ users: 1 }],
-      [{ count: 0 }],
-      [],
-      [],
-      [
-        { action: 'load', count: 3 },
-        { action: 'future-action', count: 2 },
-      ],
-      [],
-    ])
-
-    const data = (await overviewPanel.load({ days: 7, isAdmin: false })).data!
-
-    const tail = data.actionDistribution[data.actionDistribution.length - 1]
-    expect(tail).toEqual({ action: 'future-action', count: 2 })
-    // 합계가 보존된다 — 목록 밖 action을 조용히 버리면 합계가 어긋난다
-    const total = data.actionDistribution.reduce((sum, row) => sum + row.count, 0)
-    expect(total).toBe(5)
+    expect(data.hourlyDensity.every((slot) => slot.users === 0)).toBe(true)
   })
 
   it('관리자면 사용자별 사용량을 내려주고, 이름이 없으면 대체 표기한다', async () => {
     queueQueries([
       [{ users: 5 }],
       [{ count: 0 }],
-      [],
       [],
       [],
       [],

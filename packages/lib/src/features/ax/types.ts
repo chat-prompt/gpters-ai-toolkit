@@ -45,6 +45,8 @@ export interface AxPanelContext {
    * 개인 식별 데이터(팀원별 구독 등)를 내려줄지 가르는 유일한 기준.
    */
   isAdmin: boolean
+  /** 관리자가 외부 소스 캐시를 우회해 다시 계산하도록 요청했는지 */
+  forceRefresh?: boolean
 }
 
 /**
@@ -120,10 +122,8 @@ export interface AxOverviewData {
   grassDaily: Array<{ date: string; events: number }>
   /** 일자별 활성 인원 추이 (조회 기간) */
   dailyActiveUsers: Array<{ date: string; users: number }>
-  /** 활용 유형(action)별 이벤트 수 (조회 기간) */
-  actionDistribution: Array<{ action: string; count: number }>
-  /** 시간대별 활동 밀도 — KST 기준 0~23시 (조회 기간) */
-  hourlyDensity: Array<{ hour: number; events: number }>
+  /** 시간대별 활성 인원 — KST 기준 0~23시 (조회 기간) */
+  hourlyDensity: Array<{ hour: number; users: number }>
   /**
    * 사용자별 사용량 (조회 기간, 사용량 내림차순).
    * 개인 식별 데이터이므로 관리자에게만 채워지고 그 외에는 null.
@@ -195,6 +195,12 @@ export interface AxSkillDiffRow {
 
 /** 스킬 비교 패널이 내려주는 대조 결과 */
 export interface AxSkillDiffData {
+  /** 비교 결과의 재현 가능한 기준과 계산 시각 */
+  freshness: {
+    comparedAt: string
+    agentCommitSha: string
+    aitkFingerprint: string
+  }
   /** 비교 기준 — 팀 스킬 수 / 에이전트 스킬 수 / 실제 문서 비교 수 */
   basis: { aitkSkills: number; agentSkills: number; comparedDocs: number }
   /** 이름 같고 내용도 동일 (정규화 후 완전 일치) */
@@ -229,16 +235,109 @@ export interface AxSkillUsageRow {
 export interface AxSkillUsageData {
   /** 기간 내 전체 스킬 이벤트 수 */
   totalEvents: number
-  /** 기간 내 이벤트를 남긴 고유 사용자 수 */
+  /** 기간 내 실제 사용(load/apply) 이벤트 수 */
+  meaningfulUses: number
+  /** 기간 내 실제 사용(load/apply)을 남긴 고유 사용자 수 */
   activeUsers: number
-  /** 스킬이 쓰인 세션 수 (위 이벤트와 같은 집합에서 센다) */
+  /** 실제 사용(load/apply)이 발생한 세션 수 */
   sessions: number
+  /** 검색·로드·적용 등 행동별 이벤트 수 */
+  actionTotals: Record<'search' | 'load' | 'apply' | 'skip' | 'deploy', number>
   /** 사용량 상위 스킬 (loaded+applied 기준 내림차순) */
   skills: AxSkillUsageRow[]
   /** 일자별 이벤트 추이 */
   daily: Array<{ date: string; events: number }>
-  /** 카탈로그에는 있으나 기간 내 이벤트가 0인 스킬 */
-  unusedSkills: Array<{ id: string; name: string }>
+  /** 카탈로그에는 있으나 기간 내 load/apply가 0인 스킬의 전체 수 */
+  totalUnusedSkills: number
+  /** 정리 우선순위 상위 미사용 스킬 */
+  unusedSkills: Array<{
+    id: string
+    name: string
+    lastUsedAt: string | null
+    usageSessions: number
+  }>
+}
+
+/** 개선 인사이트 — 검색어 또는 자유 입력 사유의 동일 문구 묶음 */
+export interface AxInsightPhraseRow {
+  text: string
+  count: number
+}
+
+/** 로드 이후 결과 보고 상태를 스킬별로 집계한 한 줄 */
+export interface AxSkillOutcomeRow {
+  skillId: string
+  name: string
+  loadedPairs: number
+  appliedPairs: number
+  notAppliedPairs: number
+  unreportedPairs: number
+  outcomeCoverageRate: number | null
+}
+
+/** 검색 후보가 상세 확인과 적용 판단 기록으로 이어지는 흐름 및 실행 건강도. */
+export interface AxJourneyInsightsData {
+  exploration: {
+    observedSearches: number
+    unobservedSearches: number
+    zeroResultSearches: number
+    zeroResultRate: number | null
+    totalExposures: number
+    exposedPairs: number
+    loadedFromSearchPairs: number
+    appliedFromSearchPairs: number
+    notAppliedFromSearchPairs: number
+    unreportedFromSearchPairs: number
+    searchToLoadRate: number | null
+    loadToDecisionRate: number | null
+    sampleIsSignificant: boolean
+  }
+  zeroResultQueries: Array<AxInsightPhraseRow & { lastSeenAt: string | null }>
+  execution: {
+    attempts: number
+    startedAttempts: number
+    completedAttempts: number
+    inProgressAttempts: number
+    unreportedAttempts: number
+    completionWithoutStart: number
+    missingVersion: number
+    unvalidatedCompleted: number
+    averageDurationSeconds: number | null
+    success: number
+    partial: number
+    failed: number
+    abandoned: number
+    verifiedAttempts: number
+    verifiedSuccesses: number
+    verifiedSuccessRate: number | null
+    selfReportedSuccessRate: number | null
+    agents: Array<{
+      agentId: string
+      runtime: string
+      attempts: number
+      completed: number
+      success: number
+      partial: number
+      failed: number
+      abandoned: number
+      inProgress: number
+      unreported: number
+      verifiedAttempts: number
+      verifiedSuccessRate: number | null
+      lastReportedAt: string | null
+    }>
+  } | null
+  outcomes: {
+    loadedPairs: number
+    appliedPairs: number
+    notAppliedPairs: number
+    unreportedPairs: number
+    outcomeCoverageRate: number | null
+    confirmedApplyRate: number | null
+  }
+  skillOutcomes: AxSkillOutcomeRow[]
+  searchSkipReasons: AxInsightPhraseRow[]
+  notAppliedReasons: AxInsightPhraseRow[]
 }
 
 /** Vercel 배포 사이트 패널 */
@@ -316,6 +415,8 @@ export interface AxClientUsageClientRow {
  * 구독 패널과 같은 이유로 이메일은 담지 않는다.
  */
 export interface AxClientUsageMemberRow {
+  /** 인증 사용자 ID. 마이그레이션 전 행은 null일 수 있다 */
+  userId: string | null
   memberName: string
   client: AxUsageClient
   plan: string | null
@@ -325,6 +426,27 @@ export interface AxClientUsageMemberRow {
   limitUsedPercent: number | null
   /** 한도 리셋 시각 (ISO 8601) */
   limitResetsAt: string | null
+  /** 이 레코드가 서버에 마지막으로 보고된 시각 (ISO 8601) */
+  lastReportedAt: string | null
+}
+
+/** 관리자용 사용자별 수집 참여 상태 */
+export type AxUsageParticipationStatus =
+  | 'not_using'
+  | 'not_installed'
+  | 'not_approved'
+  | 'stale'
+  | 'reporting'
+
+/** 내부 계정 한 명의 수집 참여 상태. 이메일은 포함하지 않는다. */
+export interface AxUsageParticipationRow {
+  userId: string
+  memberName: string
+  status: AxUsageParticipationStatus
+  lastReportedAt: string | null
+  lastLoginAt: string | null
+  clients: AxUsageClient[]
+  source: 'collector' | 'usage_report' | 'legacy_usage' | 'authorization' | 'none'
 }
 
 /** 클라이언트 사용량 패널이 내려주는 집계 */
@@ -353,6 +475,8 @@ export interface AxClientUsageData {
   byModel: Array<{ model: string; tokens: number }>
   /** 팀원별 상세. 관리자에게만 채워지고 그 외에는 null */
   members: AxClientUsageMemberRow[] | null
+  /** 내부 계정 전원의 수집 참여 상태. 관리자에게만 채워지고 그 외에는 null */
+  participation: AxUsageParticipationRow[] | null
 }
 
 /** 에이전트 텔레메트리 소스. */
@@ -407,6 +531,18 @@ export interface AxAgentActivityData {
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
   tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
   skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  /** batch에서 관측한 명시 보고 이벤트 수. 검증 정본과 합산하지 않는다. */
+  observedExecutionReports: Array<{ status: string; evidence: string; count: number }>
+  /** 명시적으로 보고되고 서버 DB에 저장된 실행 결과 정본. */
+  verifiedExecutions: {
+    attempts: number
+    success: number
+    partial: number
+    failed: number
+    abandoned: number
+    running: number
+    withEvidence: number
+  }
   collection: {
     batches: number
     recordsRead: number

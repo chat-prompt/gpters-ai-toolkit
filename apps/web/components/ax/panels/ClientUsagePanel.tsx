@@ -3,19 +3,20 @@
  *
  * 위는 클라이언트별 요약, 가운데는 모델별 사용량, 아래는 팀원별 상세다.
  *
- * 이 패널의 핵심 설계는 **두 클라이언트가 주는 정보가 다르다는 걸 숨기지 않는 것**이다.
- * Codex는 주간 한도 소진율을 직접 주지만 Claude Code는 그 값을 로컬에 남기지 않는다.
- * 빈 칸을 그냥 "—"로 두면 수집 실패로 읽히므로, 왜 비었는지를 화면에서 밝힌다.
+ * Codex는 롤아웃, Claude Code는 statusline usage cache에서 주간 한도 스냅샷을 수집한다.
+ * 아직 새 수집기로 보고되지 않은 값은 0%가 아니라 "미수집"으로 명확히 밝힌다.
  */
 
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
   AxClientUsageMemberRow,
+  AxUsageParticipationRow,
+  AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate } from '../format'
+import { formatCount, formatDate, formatDateTime } from '../format'
 
 /** 클라이언트 표시명 */
 const CLIENT_LABELS: Record<AxUsageClient, string> = {
@@ -76,8 +77,103 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
 
       {data.byModel.length > 0 && <ModelTable rows={data.byModel} total={data.totalTokens} />}
 
+      {/* 내부 계정 전수 수집 상태 — 관리자에게만 데이터가 내려온다 */}
+      {data.participation !== null && <ParticipationTable rows={data.participation} />}
+
       {/* 팀원별 상세 — 관리자에게만 데이터가 내려온다 */}
       {data.members !== null && <MemberTable members={data.members} />}
+    </div>
+  )
+}
+
+const PARTICIPATION_STATUS: Record<
+  AxUsageParticipationStatus,
+  { label: string; tone: string }
+> = {
+  reporting: { label: '정상 보고', tone: 'text-[var(--accent-green)]' },
+  stale: { label: '7일 초과 미보고', tone: 'text-[var(--accent-orange)]' },
+  not_using: { label: '최근 사용 기록 없음', tone: 'text-[var(--text-secondary)]' },
+  not_installed: { label: '승인 후 수집 미확인', tone: 'text-[var(--accent-orange)]' },
+  not_approved: { label: '활성 승인 없음', tone: 'text-[var(--accent-orange)]' },
+}
+
+const PARTICIPATION_SOURCE: Record<AxUsageParticipationRow['source'], string> = {
+  collector: '수집기 점검 신호',
+  usage_report: '인증 사용자 사용량',
+  legacy_usage: '기존 사용량 보고',
+  authorization: '승인 있음 · 점검 없음',
+  none: '활성 승인 기록 없음',
+}
+
+/** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
+function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
+  const active = rows.filter((row) => row.status === 'reporting').length
+  const statusCounts = (Object.keys(PARTICIPATION_STATUS) as AxUsageParticipationStatus[])
+    .map((status) => ({ status, count: rows.filter((row) => row.status === status).length }))
+    .filter((item) => item.count > 0)
+
+  return (
+    <div>
+      <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        수집 참여 상태 · 주간 활성 {formatCount(active)}/{formatCount(rows.length)}명
+      </p>
+      <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+        상태는 수집기 점검 신호, 기존 보고, OAuth 승인 기록을 순서대로 대조한 결과입니다. 승인됐지만
+        점검 신호가 없는 계정은 승인 후 수집 미확인으로 분류합니다. 최근 사용 기록 없음은 수집기가
+        정상 응답했지만 해당 기간의 사용량이 0건이라는 뜻입니다.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {statusCounts.map(({ status, count }) => (
+          <span
+            key={status}
+            className="rounded-full border border-[var(--border-subtle)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)]"
+          >
+            {PARTICIPATION_STATUS[status].label} {formatCount(count)}명
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-subtle)]">
+              <th className={`text-left ${TD} ${TH} w-[18%]`}>사용자</th>
+              <th className={`text-left ${TD} ${TH} w-[20%]`}>상태</th>
+              <th className={`text-left ${TD} ${TH} w-[17%]`}>클라이언트</th>
+              <th className={`text-right ${TD} ${TH}`}>마지막 보고</th>
+              <th className={`text-right ${TD} ${TH}`}>마지막 로그인</th>
+              <th className={`text-left ${TD} ${TH} w-[18%]`}>판정 근거</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-subtle)]">
+            {rows.map((row) => {
+              const status = PARTICIPATION_STATUS[row.status]
+              return (
+                <tr
+                  key={row.userId}
+                  className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
+                >
+                  <td className={`${TD} text-[var(--text-primary)]`}>{row.memberName}</td>
+                  <td className={`${TD} ${status.tone}`}>{status.label}</td>
+                  <td className={`${TD} text-[var(--text-secondary)]`}>
+                    {row.clients.length > 0
+                      ? row.clients.map((client) => CLIENT_LABELS[client]).join(', ')
+                      : EMPTY}
+                  </td>
+                  <td className={`text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
+                    {row.lastReportedAt ? formatDate(row.lastReportedAt) : EMPTY}
+                  </td>
+                  <td className={`text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
+                    {row.lastLoginAt ? formatDate(row.lastLoginAt) : EMPTY}
+                  </td>
+                  <td className={`${TD} text-xs text-[var(--text-secondary)]`}>
+                    {PARTICIPATION_SOURCE[row.source]}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -85,8 +181,7 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
 /**
  * 클라이언트별 요약 표
  *
- * 한도 칸은 세 가지 상태를 구분해서 보여준다 —
- * 값이 있으면 퍼센트, 클라이언트가 한도를 안 주면 "미제공", 아직 안 들어왔으면 "—".
+ * 한도 값이 있으면 퍼센트를, 최신 스냅샷이 없으면 "미수집"을 보여준다.
  *
  * @param rows - 클라이언트별 집계
  * @param total - 전체 토큰 합계 (비율 계산용)
@@ -158,10 +253,10 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
         색이 text-muted가 아니라 text-secondary인 이유: 이 문장은 타임스탬프 같은 곁가지가 아니라
         표의 빈 칸을 해석하는 데 필요한 설명이라 대비 4.5:1을 넘겨야 한다.
       */}
-      {rows.some((row) => !row.reportsLimit) && (
+      {rows.some((row) => row.client === 'claude-code' && !row.reportsLimit) && (
         <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
-          Claude Code는 남은 한도를 로컬에 기록하지 않습니다. 수집 실패가 아니라 그 도구가 주지 않는
-          값이며, 대신 토큰 사용량으로 비교합니다.
+          Claude Code의 주간 한도와 리셋 시각은 로컬 statusline usage cache에서 수집합니다.
+          기존 보고는 미수집으로 남으며, 새 수집기가 보고한 뒤부터 표시됩니다.
         </p>
       )}
     </div>
@@ -175,7 +270,7 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
  */
 function LimitCell({ row }: { row: AxClientUsageClientRow }) {
   if (!row.reportsLimit) {
-    return <span className="text-[11px] text-[var(--text-muted)]">미제공</span>
+    return <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
   }
   if (row.avgLimitUsedPercent === null) {
     return <span className="font-mono text-[var(--text-muted)]">{EMPTY}</span>
@@ -260,7 +355,7 @@ function ModelTable({
 }
 
 /**
- * 팀원별 사용량 상세 표 (관리자 전용)
+ * 팀원별 사용량 상세 표 (관리자 전용) — 최신 한도 스냅샷이 없으면 미수집으로 밝힌다
  *
  * @param members - 팀원별 사용량
  */
@@ -284,7 +379,7 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
         팀원별 상세 {formatCount(sorted.length)}건
       </p>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH} w-[16%]`}>사용자</th>
@@ -294,6 +389,7 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
               <th className={`text-right ${TD} ${TH}`}>토큰</th>
               <th className={`text-right ${TD} ${TH}`}>주간 한도</th>
               <th className={`text-right ${TD} ${TH}`}>리셋</th>
+              <th className={`text-right ${TD} ${TH}`}>마지막 보고</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -304,7 +400,7 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
 
               return (
                 <tr
-                  key={`${member.memberName}-${member.client}`}
+                  key={`${member.userId ?? `legacy:${member.memberName}`}-${member.client}`}
                   className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
                 >
                   <td className={`${TD} text-[var(--text-primary)]`}>
@@ -331,12 +427,21 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
                         : 'text-[var(--text-secondary)]'
                     }`}
                   >
-                    {member.limitUsedPercent !== null ? `${member.limitUsedPercent}%` : EMPTY}
+                    {member.limitUsedPercent !== null
+                      ? `${member.limitUsedPercent}%`
+                      : '미수집'}
                   </td>
                   <td
                     className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-muted)]`}
                   >
-                    {member.limitResetsAt !== null ? formatDate(member.limitResetsAt) : EMPTY}
+                    {member.limitResetsAt !== null
+                      ? formatDateTime(member.limitResetsAt)
+                      : '미수집'}
+                  </td>
+                  <td
+                    className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-muted)]`}
+                  >
+                    {member.lastReportedAt !== null ? formatDate(member.lastReportedAt) : EMPTY}
                   </td>
                 </tr>
               )
@@ -358,7 +463,7 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
  * @param periodStart - 구간 시작 (ISO 8601)
  * @param periodEnd - 구간 끝 (ISO 8601)
  * @param syncedAt - 마지막 수집 시각 (ISO 8601)
- * @param reportingMembers - 최근 구간에 보고한 인원 수
+ * @param reportingMembers - 최근 구간에 실제 사용 기록을 보고한 인원 수
  * @param internalMembers - 사내 계정 수. 도메인 미설정이면 null
  */
 function PeriodNotice({
@@ -381,8 +486,8 @@ function PeriodNotice({
 
   const participation =
     internalMembers !== null && internalMembers > 0
-      ? `보고 ${formatCount(reportingMembers)}/${formatCount(internalMembers)}명`
-      : `보고 ${formatCount(reportingMembers)}명`
+      ? `활성 보고 ${formatCount(reportingMembers)}/${formatCount(internalMembers)}명`
+      : `활성 보고 ${formatCount(reportingMembers)}명`
 
   return (
     <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">

@@ -140,7 +140,30 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
           rows={data.skills.map((row) => ({ name: row.skillId, value: formatCount(row.loaded), hint: `실패 ${formatCount(row.failed)} · 중단 ${formatCount(row.interrupted)}` }))}
         />
       )}
+
+      <ExecutionSection data={data} />
     </div>
+  )
+}
+
+/** 수집 batch의 관측치와 서버의 검증된 실행 결과를 분리해 보여준다. */
+function ExecutionSection({ data }: { data: AxAgentActivityData }) {
+  const execution = data.verifiedExecutions
+  const observed = data.observedExecutionReports.reduce((sum, row) => sum + row.count, 0)
+  return (
+    <section>
+      <SectionTitle title="검증된 실행 결과" hint="자동 사용량과 명시 실행 결과를 합산하지 않습니다" />
+      <p className="mt-3 text-xs leading-relaxed text-[var(--text-muted)]">
+        batch에서 관측한 실행 보고 {formatCount(observed)}건은 수집 완전성 대조용입니다.
+        아래 수치는 서버에 명시적으로 보고된 실행 결과만 셉니다.
+      </p>
+      <div className="mt-3 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="전체 시도" value={formatCount(execution.attempts)} hint={`검증 근거 ${formatCount(execution.withEvidence)}`} />
+        <Metric label="성공" value={formatCount(execution.success)} />
+        <Metric label="부분 / 실패" value={`${formatCount(execution.partial)} / ${formatCount(execution.failed)}`} />
+        <Metric label="진행 / 중단" value={`${formatCount(execution.running)} / ${formatCount(execution.abandoned)}`} />
+      </div>
+    </section>
   )
 }
 

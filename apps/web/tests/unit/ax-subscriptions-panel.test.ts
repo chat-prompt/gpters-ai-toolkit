@@ -119,6 +119,10 @@ describe('subscriptionsPanel', () => {
 
     expect(result.data!.activeSeats).toBe(2)
     expect(result.data!.monthlyByCurrency).toEqual({ KRW: 200000, USD: 20 })
+    expect(result.highlights).toEqual([
+      { label: '월 구독 비용', value: '₩200,000 + $20' },
+      { label: '활성 구독', value: '2', hint: '개' },
+    ])
 
     const byVendor = result.data!.byVendor
     expect(byVendor.find((v) => v.vendor === 'Claude Max')!.monthlyByCurrency).toEqual({ KRW: 200000 })

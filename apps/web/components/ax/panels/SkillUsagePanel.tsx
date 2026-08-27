@@ -6,9 +6,8 @@
  * 화면 전체 폭을 쓰는 본문만 그린다. 제목·설명·출처는 껍데기가 그린다.
  * 전체 이벤트 수·사용자 수는 맨 위 핵심 지표 밴드가 이미 말하므로 여기서 되풀이하지 않는다.
  *
- * 조판은 두 층이다.
- * 1) 일자별 추이 막대 — 기간 전체의 모양을 먼저 보여준다
- * 2) 스킬 표 하나 — 순위·집계·마지막 사용까지 한 표에서 끝낸다
+ * 검색·로드·적용 단계와 스킬별 실제 사용 순위, 미사용 정리 후보를 보여준다.
+ * 날짜별 활동량은 상단 365일 잔디와 겹치므로 이 패널에서 반복하지 않는다.
  */
 
 import type { AxSkillUsageData, AxSkillUsageRow } from '@/lib/features/ax'
@@ -42,10 +41,11 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
     <div className="space-y-10">
       {/* 이벤트 수·사용자 수는 상단 밴드에 이미 나가므로, 밴드에 없는 세션만 짚는다 */}
       <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        {formatCount(data.sessions)}개 세션에서 사용
+        실제 사용(load/apply)이 기록된 {formatCount(data.sessions)}개 세션 · 독립 행동 이벤트{' '}
+        {formatCount(data.totalEvents)}건
       </p>
 
-      <DailyTrend daily={data.daily} days={days} />
+      <ActionEventSummary totals={data.actionTotals} />
 
       {data.skills.length > 0 ? (
         // 기간을 바꾸면 표를 통째로 다시 태워 첫 장으로 돌린다
@@ -54,49 +54,41 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
         <p className={EMPTY_NOTE}>이 기간에 사용된 스킬이 없습니다.</p>
       )}
 
-      {data.unusedSkills.length > 0 && <UnusedSkillsDetails skills={data.unusedSkills} />}
+      {data.unusedSkills.length > 0 && (
+        <UnusedSkillsDetails skills={data.unusedSkills} total={data.totalUnusedSkills} />
+      )}
     </div>
   )
 }
 
-/**
- * 일자별 이벤트 추이 막대
- *
- * 최댓값 막대만 완전히 채우고 나머지는 옅게 깔아, 봉우리가 먼저 읽히게 한다.
- *
- * @param daily - 일자별 이벤트 수
- * @param days - 조회 기간(일). 데이터가 없을 때 안내 문구에만 쓴다
- */
-function DailyTrend({ daily, days }: { daily: AxSkillUsageData['daily']; days: number }) {
-  // 서버가 빈 날을 0으로 채워 내려주므로 길이가 아니라 합으로 판정한다 —
-  // 전부 0인데 막대를 그리면 "최대 1건"이 활동처럼 읽힌다
-  if (daily.length === 0 || daily.every((point) => point.events === 0)) {
-    return <p className={EMPTY_NOTE}>최근 {days}일 동안 기록된 이벤트가 없습니다.</p>
-  }
-
-  const max = Math.max(1, ...daily.map((point) => point.events))
-  const first = daily[0]
-  const last = daily[daily.length - 1]
+/** 검색 노출·로드·적용 보고를 독립 이벤트로 보여준다 */
+function ActionEventSummary({ totals }: { totals: AxSkillUsageData['actionTotals'] }) {
+  const steps = [
+    { label: '검색 노출', value: totals.search },
+    { label: '로드', value: totals.load },
+    { label: '적용 보고', value: totals.apply },
+  ]
 
   return (
     <div>
-      <div className="flex h-44 items-end gap-[2px]">
-        {daily.map((point) => (
-          <div
-            key={point.date}
-            className={`min-w-[2px] flex-1 rounded-t-[3px] bg-[var(--brand-primary)] transition-opacity duration-200 ${
-              point.events === max ? 'opacity-100' : 'opacity-25 hover:opacity-60'
-            }`}
-            style={{ height: `${Math.max(2, (point.events / max) * 100)}%` }}
-            title={`${formatDayLabel(point.date)} · ${formatCount(point.events)}건`}
-          />
+      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        행동별 이벤트 · 독립 집계
+      </p>
+      <div className="mt-3 grid max-w-2xl grid-cols-3 divide-x divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
+        {steps.map((step) => (
+          <div key={step.label} className="px-4 py-3 first:pl-0">
+            <p className="text-xs text-[var(--text-secondary)]">{step.label}</p>
+            <p className="mt-1 font-mono text-xl tabular-nums text-[var(--text-primary)]">
+              {formatCount(step.value)}
+            </p>
+          </div>
         ))}
       </div>
-      <div className="mt-3 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        <span>{first ? formatDayLabel(first.date) : ''}</span>
-        <span>최대 {formatCount(max)}건</span>
-        <span>{last ? formatDayLabel(last.date) : ''}</span>
-      </div>
+      <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--text-muted)]">
+        검색 노출은 검색 결과에 스킬이 나타날 때마다, 로드는 콘텐츠를 조회할 때마다, 적용은
+        결과를 보고할 때마다 따로 기록됩니다. 같은 세션의 순차 전환율이 아니므로 앞 단계보다
+        뒤 단계가 클 수 있습니다.
+      </p>
     </div>
   )
 }
@@ -116,16 +108,19 @@ function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
 
   return (
     <div>
+      <p className="mb-3 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        스킬별 독립 이벤트 · 순위는 로드+적용 기준 · 주황색 바는 선택 기간 상대값(1위=100%)
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-right ${TD} ${TH} w-12`}>순위</th>
               <th className={`text-left ${TD} ${TH} w-[30%]`}>스킬</th>
-              <th className={`text-right ${TD} ${TH}`}>검색</th>
+              <th className={`text-right ${TD} ${TH}`}>검색 노출</th>
               <th className={`text-right ${TD} ${TH}`}>로드</th>
-              <th className={`text-right ${TD} ${TH}`}>적용</th>
-              <th className={`text-right ${TD} ${TH}`}>스킵</th>
+              <th className={`text-right ${TD} ${TH}`}>적용 보고</th>
+              <th className={`text-right ${TD} ${TH}`}>스킵 보고</th>
               <th className={`text-right ${TD} ${TH}`}>사용자</th>
               <th className={`text-right ${TD} ${TH}`}>마지막 사용</th>
             </tr>
@@ -140,7 +135,10 @@ function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
                   {/* 순위는 장이 넘어가도 이어진다 */}
                   {pager.from + index}
                 </td>
-                <td className={`relative ${TD}`}>
+                <td
+                  className={`relative ${TD}`}
+                  title={`선택 기간 로드+적용 ${formatCount(activity(skill))}건 · 1위 대비 ${Math.round((activity(skill) / max) * 100)}%`}
+                >
                   {/* 사용량 비례 막대 — 이름 칸 안에서만 찬다 */}
                   <span
                     aria-hidden
@@ -175,32 +173,54 @@ function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
 }
 
 /**
- * 기간 내 미사용 스킬 (접힘)
+ * 기간 내 미사용 스킬 정리 우선순위 (접힘)
  *
  * 이름을 한 줄로 이어 붙이면 줄바꿈이 아무 데서나 일어나 읽히지 않는다.
  * 격자로 세워 한 칸에 한 이름씩 두고, 긴 이름은 잘라 칸을 지킨다.
  *
  * @param skills - 이벤트가 0인 스킬 목록
  */
-function UnusedSkillsDetails({ skills }: { skills: AxSkillUsageData['unusedSkills'] }) {
+function UnusedSkillsDetails({
+  skills,
+  total,
+}: {
+  skills: AxSkillUsageData['unusedSkills']
+  total: number
+}) {
   return (
     <details className="border-t border-[var(--border-subtle)] pt-5">
       <summary className="cursor-pointer list-none font-mono text-[11px] tabular-nums text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--text-primary)]">
-        기간 내 미사용 스킬 {formatCount(skills.length)}개
-        {/* 목록도 상한에서 잘리므로, 가득 찼을 때는 더 있을 수 있음을 밝힌다 */}
-        {skills.length >= SKILL_ROW_LIMIT && ` · 최대 ${SKILL_ROW_LIMIT}개 표시`}
+        기간 내 미사용 스킬 {formatCount(total)}개
+        {total > skills.length && ` · 정리 우선순위 상위 ${formatCount(skills.length)}개 표시`}
       </summary>
-      <ul className="mt-3 grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3 xl:grid-cols-4">
-        {skills.map((skill) => (
-          <li
-            key={skill.id}
-            title={skill.name}
-            className="truncate text-sm text-[var(--text-secondary)]"
-          >
-            {skill.name}
-          </li>
-        ))}
-      </ul>
+      <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+        한 번도 실제 사용되지 않은 스킬부터, 마지막 load/apply가 오래되고 누적 사용 세션이 적은
+        순서입니다. 검색 노출과 스킵은 사용으로 세지 않습니다.
+      </p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-subtle)]">
+              <th className={`text-left ${TD} ${TH}`}>스킬</th>
+              <th className={`text-right ${TD} ${TH}`}>마지막 실제 사용</th>
+              <th className={`text-right ${TD} ${TH}`}>누적 사용 세션</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-subtle)]">
+            {skills.map((skill) => (
+              <tr key={skill.id} className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]">
+                <td className={`${TD} text-[var(--text-primary)]`}>{skill.name}</td>
+                <td className={`text-right ${TD} font-mono tabular-nums text-[var(--text-muted)]`}>
+                  {skill.lastUsedAt === null ? '사용 기록 없음' : formatDate(skill.lastUsedAt)}
+                </td>
+                <td className={`text-right ${TD} font-mono tabular-nums text-[var(--text-secondary)]`}>
+                  {formatCount(skill.usageSessions)}회
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </details>
   )
 }
@@ -230,18 +250,4 @@ function NumberCell({ value, emphasized = false }: { value: number; emphasized?:
  */
 function activity(skill: AxSkillUsageRow): number {
   return skill.loaded + skill.applied
-}
-
-/**
- * 일자 라벨 (YYYY-MM-DD → "8월 3일")
- *
- * Date로 파싱하면 시간대에 따라 하루가 밀리므로 문자열을 그대로 쪼갠다.
- *
- * @param date - YYYY-MM-DD 형식 날짜
- * @returns "8월 3일". 형식이 다르면 입력을 그대로 돌려준다
- */
-function formatDayLabel(date: string): string {
-  const parts = date.split('-')
-  if (parts.length !== 3) return date
-  return `${Number(parts[1])}월 ${Number(parts[2])}일`
 }

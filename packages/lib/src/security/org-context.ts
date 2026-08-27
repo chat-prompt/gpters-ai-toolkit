@@ -119,7 +119,13 @@ export async function getOrgMembership(
       role: orgMemberships.role,
     })
     .from(orgMemberships)
-    .where(and(eq(orgMemberships.userId, userId), eq(orgMemberships.orgId, orgId)))
+    .where(
+      and(
+        eq(orgMemberships.userId, userId),
+        eq(orgMemberships.orgId, orgId),
+        eq(orgMemberships.status, 'active')
+      )
+    )
     .limit(1)
 
   if (!membership) {
