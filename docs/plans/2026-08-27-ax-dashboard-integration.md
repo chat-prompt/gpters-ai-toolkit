@@ -11,7 +11,8 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 - 기반 커밋: PR #33 병합 커밋 `d25d1cbd`
 - PR #33은 뽀둥이 timer-triggered 수집 2회 성공 후 2026-08-27 `main`에 병합했다.
 - 운영 Vercel 배포와 텔레메트리 API 인증 smoke test를 확인한 뒤 이 브랜치를 새 `main` 위로 재정렬했다.
-- PR #34 Preview에는 브랜치 한정 `DATABASE_URL`을 등록해 Production과 DB를 분리했다.
+- PR #34 Preview에는 검증 동안 브랜치 한정 `DATABASE_URL`을 등록해 Production과 DB를 분리했다.
+- PR #34는 2026-08-27 `main`에 병합했고 Vercel Production 배포까지 완료했다.
 
 ## 통합한 기능
 
@@ -38,7 +39,8 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 | 0029 실행 lifecycle | 0030 |
 | 0030 에이전트 telemetry | 운영 0025 사용 |
 
-운영에는 후속 `0026–0030`을 아직 적용하지 않는다. 자세한 절차는
+후속 `0026–0030`은 운영 스냅샷 기반 Neon 복구 브랜치를 만든 뒤,
+운영 전용 guard의 사전 검사를 통과한 상태에서 2026-08-27 적용했다. 자세한 절차는
 [마이그레이션 실행 가이드](./2026-08-25-ax-migration-runbook.md)를 따른다.
 
 ## 의도적으로 제외한 로컬 변경
@@ -70,21 +72,28 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 - PR #34 브랜치 한정 Vercel Preview `DATABASE_URL` 등록 및 재배포 `Ready` 확인
 - Child DB 실조회: overview·skill-usage·journey-insights·agent-activity·client-usage·subscriptions 6개 패널 모두 `ok`
 - 에이전트 활동 실조회: reporter 1, source coverage 4, model 2, tool 19, skill load 4종 확인
+- 운영 전용 guard 적용: migration 15행 → 20행, 사용량 48행 유지,
+  ambiguous·unmatched·duplicate·삭제 모두 0 확인
+- PR #34 병합 커밋 `407338dc`, main CI 4개 job 및 Vercel Production 배포 `Ready` 확인
+- 운영 DB 패널 로더 6개와 운영 AITK MCP 검색 smoke test 통과
+- 운영 AX 브라우저 검증: 새 레이아웃, 에이전트 활동 1 reporter,
+  source coverage 4, model 2, tool 19, skill load 4종 표시 확인
+- 배포 직후 운영 error log 0건 확인
 - 저장소 전체 web/lib typecheck에는 기존 테스트 fixture와 `rbac.ts` 경로 별칭 부채가 남아 있다.
 
-## 현재 Preview 상태
+## 운영 반영 상태
 
-- Neon child ID: `br-cold-smoke-a1jh3bmc` (부모: production)
-- 자동 삭제: 2026-08-28 12:10 KST
-- 연결 문자열은 macOS Keychain과 Vercel Sensitive 환경변수에만 저장하며 문서·로그에는 남기지 않는다.
-- 브랜치 한정 환경변수가 전역 Preview/Production 값보다 PR #34에서만 우선한다.
-- Vercel Preview는 `Ready`지만 공용 `AUTH_URL`이 운영 도메인을 가리켜 브라우저 로그인 시 운영으로 이동한다.
-  따라서 현재 검증은 child DB 대상 패널 로더 실조회까지 완료했고, Preview UI 로그인 동선은 별도 설정이 필요하다.
-- 운영 DB에는 `0026–0030`을 적용하지 않았다.
+- 운영 Neon에는 migration `0000–0030` 총 20행이 적용되어 있다.
+- migration 직전 생성한 복구 브랜치는 7일간 유지하고 자동 삭제한다.
+- 검증용 Neon child는 2026-08-28 자동 삭제한다.
+- 병합된 기능 브랜치의 Vercel Preview `DATABASE_URL` override와 로컬 Keychain 연결 문자열은 삭제했다.
+- 전역 Preview/Production `DATABASE_URL`과 운영 텔레메트리 토큰은 변경하지 않았다.
+- `https://ai-toolkit.gpters.org/ax`가 새 대시보드 레이아웃과 에이전트 활동 패널을 제공한다.
 
-## 다음 게이트
+## 후속 작업
 
-1. Preview 전용 인증 URL/Google OAuth callback을 준비하거나, 승인된 다른 방법으로 PR 화면을 시각 검증
-2. 실행 결과·구성원 lifecycle·사용량 backfill을 child 데이터와 합성 데이터로 최종 비교
-3. PR #34 리뷰와 운영 반영 계획 승인
-4. 승인된 migration을 운영 DB에 먼저 적용한 뒤 웹을 배포
+1. 뽀둥이 `(bbodoong, claude-code)` 수집 freshness와 집계 이상을 7일간 관찰
+2. Codex와 Hermes source parser·checkpoint·reporter를 각각 추가
+3. 스킬 load와 분리된 명시적 실행 시작·완료·검증 결과 보고를 연결
+4. 에이전트 활동 요약 문장의 값·보조 문구 구분과 한국어 라벨을 다듬기
+5. 7일 관찰 뒤 이상이 없으면 운영 복구 브랜치 자동 삭제를 확인
