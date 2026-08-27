@@ -20,10 +20,11 @@ const log = createLogger('ax-skill-diff')
 
 const META: AxPanelMeta = {
   id: 'skill-diff',
-  title: '스킬 비교',
+  title: '팀 스킬과 비교',
   description: '팀 스킬(aitk)과 에이전트 스킬(bbopters-shared)의 이름·내용 대조',
   source: 'aitk DB + GitHub (bbopters-shared)',
   visibility: 'org',
+  parentId: 'skill-usage',
   usesPeriod: false,
 }
 

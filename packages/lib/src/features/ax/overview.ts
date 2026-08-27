@@ -20,7 +20,7 @@ const log = createLogger('ax-overview')
 
 const meta: AxPanelMeta = {
   id: 'overview',
-  title: '성과 요약',
+  title: '요약',
   description: '지니파이 구성원의 AX 활동을 실측 데이터로 요약 — 계측되지 않는 지표는 그 사실을 그대로 표시',
   source: 'aitk DB (skill_events)',
   visibility: 'org',

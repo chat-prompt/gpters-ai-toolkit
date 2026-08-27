@@ -30,7 +30,7 @@ export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as con
 
 const meta: AxPanelMeta = {
   id: 'skill-usage',
-  title: '스킬 사용량',
+  title: '스킬',
   description: 'aitk에서 검색·로드·적용된 스킬 사용 현황',
   source: 'aitk DB (skill_events · mcp_sessions)',
   visibility: 'org',

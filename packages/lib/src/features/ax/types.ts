@@ -20,6 +20,8 @@ export type AxPanelStatus = 'ok' | 'not_configured' | 'error'
 export interface AxPanelMeta {
   /** URL·레지스트리 키. kebab-case */
   id: string
+  /** 화면에서는 이 최상위 패널 아래의 보조 보기로 묶는다 */
+  parentId?: string
   /** 화면에 보이는 제목 */
   title: string
   /** 한 줄 설명 */

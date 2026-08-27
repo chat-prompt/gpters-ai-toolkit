@@ -23,6 +23,29 @@ describe('AX 패널 레지스트리', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('보조 보기의 parentId는 등록된 최상위 패널을 가리킨다', () => {
+    const byId = new Map(AX_PANELS.map((panel) => [panel.meta.id, panel.meta]))
+    for (const panel of AX_PANELS) {
+      if (!panel.meta.parentId) continue
+      const parent = byId.get(panel.meta.parentId)
+      expect(parent, `${panel.meta.id} parent`).toBeDefined()
+      expect(parent?.parentId, `${panel.meta.id} parent nesting`).toBeUndefined()
+    }
+  })
+
+  it('화면 정보 구조를 네 업무 영역으로 유지한다', () => {
+    const metas = AX_PANELS.map((panel) => panel.meta)
+    expect(metas.filter((meta) => !meta.parentId).map((meta) => meta.title)).toEqual([
+      '요약', '스킬', '클라이언트', '배포 사이트',
+    ])
+    expect(metas.filter((meta) => meta.parentId === 'skill-usage').map((meta) => meta.id)).toEqual([
+      'agent-activity', 'shared-skills', 'skill-diff',
+    ])
+    expect(metas.filter((meta) => meta.parentId === 'client-usage').map((meta) => meta.id)).toEqual([
+      'subscriptions',
+    ])
+  })
+
   it('모든 패널이 메타데이터를 빠짐없이 채운다', () => {
     for (const panel of AX_PANELS) {
       expect(panel.meta.id, '패널 id').toMatch(/^[a-z][a-z0-9-]*$/)

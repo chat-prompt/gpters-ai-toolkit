@@ -60,6 +60,10 @@ describe('agentActivityPanel', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('스킬 업무 영역의 보조 보기로 등록된다', () => {
+    expect(agentActivityPanel.meta.parentId).toBe('skill-usage')
+  })
+
   it('source별 batch를 합치되 included thinking을 총 토큰에 중복 합산하지 않는다', async () => {
     queueRows([
       row(),

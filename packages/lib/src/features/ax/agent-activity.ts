@@ -26,6 +26,7 @@ const meta: AxPanelMeta = {
   description: '에이전트별 토큰·도구·스킬 사용과 수집 누락·실패를 함께 점검합니다',
   source: '에이전트 로컬 PII-free 텔레메트리',
   visibility: 'org',
+  parentId: 'skill-usage',
   usesPeriod: true,
 }
 

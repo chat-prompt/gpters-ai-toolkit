@@ -15,6 +15,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import type { AxOverviewData, AxPanelHighlight, AxPanelMeta, AxPanelResult, AxSharedSkillsData } from '@/lib/features/ax'
@@ -31,7 +32,21 @@ type AxDays = (typeof DAY_OPTIONS)[number]
 /** 기본 조회 기간 */
 const DEFAULT_DAYS: AxDays = 30
 
-/** 탭 하나 = 항목 하나. 여러 표를 한 화면에 겹쳐 놓지 않는다 */
+/** 상단 스냅샷을 사람·사용·비용과 운영 자산 순서로 고정한다 */
+const SNAPSHOT_HIGHLIGHT_ORDER = [
+  '전체 구성원',
+  '누적 참여',
+  '주간 활성',
+  '주간 토큰 소비량',
+  '토큰 사용',
+  '월 구독 비용',
+  '팀 스킬',
+  '에이전트 스킬',
+  '운영 사이트',
+  '활성 구독',
+] as const
+
+/** 최상위 탭은 업무 영역, 실제 데이터 패널은 그 안의 보조 보기로 묶는다 */
 
 /** 패널 하나의 조회 상태 */
 interface PanelState {
@@ -60,10 +75,13 @@ export interface AxDashboardProps {
  * @param isAdmin - 관리자 여부
  */
 export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
+  const topLevelPanels = panels.filter((panel) => !panel.parentId)
+  const firstTopLevelId = topLevelPanels[0]?.id ?? ''
   const [days, setDays] = useState<AxDays>(DEFAULT_DAYS)
   const [states, setStates] = useState<Record<string, PanelState>>({})
-  // 화면에 띄울 항목. 조회는 전부 하되(맨 위 밴드가 모든 수치를 쓴다) 표는 하나만 보인다
-  const [activeId, setActiveId] = useState<string>(panels[0]?.id ?? '')
+  // 최상위 업무 영역과 그 안의 보조 보기를 따로 기억한다.
+  const [activeRootId, setActiveRootId] = useState<string>(firstTopLevelId)
+  const [activePanelId, setActivePanelId] = useState<string>(firstTopLevelId)
   // 패널별 진행 중인 요청. 새 요청이 뜨면 이전 것을 끊어, 늦게 온 응답이
   // 이미 바뀐 기간의 화면에 얹히는 일을 막는다
   const requestsRef = useRef(new Map<string, AbortController>())
@@ -154,7 +172,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     }
   }, [])
 
-  if (panels.length === 0) {
+  if (topLevelPanels.length === 0) {
     return <p className="mt-16 text-[var(--text-secondary)]">아직 볼 수 있는 항목이 없습니다.</p>
   }
 
@@ -162,7 +180,18 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // 스냅샷 수치는 맨 위 고정 타일로, 기간 연동 수치는 기간 선택 옆 인라인으로 간다.
   const highlights = panels.flatMap((panel) => states[panel.id]?.result?.highlights ?? [])
   const periodHighlights = highlights.filter((highlight) => highlight.periodLinked)
-  const snapshotHighlights = highlights.filter((highlight) => !highlight.periodLinked)
+  const snapshotHighlights = highlights
+    .filter((highlight) => !highlight.periodLinked)
+    .sort((a, b) => {
+      const aIndex = SNAPSHOT_HIGHLIGHT_ORDER.indexOf(
+        a.label as (typeof SNAPSHOT_HIGHLIGHT_ORDER)[number]
+      )
+      const bIndex = SNAPSHOT_HIGHLIGHT_ORDER.indexOf(
+        b.label as (typeof SNAPSHOT_HIGHLIGHT_ORDER)[number]
+      )
+      return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+        (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex)
+    })
   const anyLoading = panels.some((panel) => !states[panel.id] || states[panel.id]?.loading)
 
   // 잔디밭 두 장 — 사람(aitk 스킬 사용)과 에이전트(bbopters-shared 커밋).
@@ -175,7 +204,12 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // 패널은 정상인데 커밋 통계만 아직 없는 상태 — 잔디가 말없이 사라지면 안 된다
   const agentGrassPending = sharedResult?.status === 'ok' && agentGrassDaily === null
 
-  const active = panels.find((panel) => panel.id === activeId) ?? panels[0]
+  const activeRoot = topLevelPanels.find((panel) => panel.id === activeRootId) ?? topLevelPanels[0]
+  const nestedPanels = [
+    activeRoot,
+    ...panels.filter((panel) => panel.parentId === activeRoot.id),
+  ]
+  const active = nestedPanels.find((panel) => panel.id === activePanelId) ?? activeRoot
 
   return (
     <>
@@ -209,16 +243,31 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
       )}
 
       <div className="mt-10 flex items-end justify-between gap-4 flex-wrap border-b border-[var(--border-subtle)]">
-        <nav className="flex items-center gap-1 -mb-px" role="tablist" aria-label="지표 항목">
-          {panels.map((panel) => {
-            const selected = panel.id === active.id
+        <nav className="flex items-center gap-1 -mb-px" role="tablist" aria-label="대시보드 영역">
+          {topLevelPanels.map((panel) => {
+            const selected = panel.id === activeRoot.id
             return (
               <button
                 key={panel.id}
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                onClick={() => setActiveId(panel.id)}
+                aria-controls={`ax-panel-${panel.id}`}
+                id={`ax-root-tab-${panel.id}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => {
+                  setActiveRootId(panel.id)
+                  setActivePanelId(panel.id)
+                }}
+                onKeyDown={(event) => handleTabKey(
+                  event,
+                  topLevelPanels.map((item) => item.id),
+                  panel.id,
+                  (panelId) => {
+                    setActiveRootId(panelId)
+                    setActivePanelId(panelId)
+                  }
+                )}
                 className={`relative px-4 py-2.5 text-sm transition-colors duration-200 ${
                   selected
                     ? 'text-[var(--text-primary)] font-medium'
@@ -256,7 +305,23 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
         </p>
       )}
 
-      <div className="mt-8">
+      {nestedPanels.length > 1 && (
+        <NestedPanelNav
+          parentId={activeRoot.id}
+          panels={nestedPanels}
+          activeId={active.id}
+          onChange={setActivePanelId}
+        />
+      )}
+
+      <div
+        className="mt-8"
+        id={`ax-panel-${active.id}`}
+        role="tabpanel"
+        aria-labelledby={nestedPanels.length > 1
+          ? `ax-view-tab-${active.id}`
+          : `ax-root-tab-${active.id}`}
+      >
         <AxPanelView
           key={active.id}
           meta={active}
@@ -284,8 +349,8 @@ function SnapshotTiles({
 }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
-        {[0, 1, 2, 3, 4, 5].map((slot) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((slot) => (
           <div key={slot} className="bg-[var(--bg-primary)] px-5 py-6">
             <div className="ax-shimmer h-3 w-16 rounded" />
             <div className="ax-shimmer mt-3 h-8 w-20 rounded" />
@@ -298,7 +363,7 @@ function SnapshotTiles({
   if (highlights.length === 0) return null
 
   return (
-    <div className="ax-reveal grid grid-cols-2 md:grid-cols-6 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
+    <div className="ax-reveal grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-subtle)] rounded-2xl overflow-hidden">
       {highlights.map((highlight, index) => (
         // 서로 다른 패널이 같은 라벨을 올릴 수 있으므로 라벨만으로 키를 만들지 않는다
         <div key={`${highlight.label}-${index}`} className="bg-[var(--bg-primary)] px-5 py-6">
@@ -319,7 +384,7 @@ function SnapshotTiles({
       {Array.from({ length: (2 - (highlights.length % 2)) % 2 }, (_, slot) => (
         <div key={`fill-sm-${slot}`} className="md:hidden bg-[var(--bg-primary)]" />
       ))}
-      {Array.from({ length: (6 - (highlights.length % 6)) % 6 }, (_, slot) => (
+      {Array.from({ length: (4 - (highlights.length % 4)) % 4 }, (_, slot) => (
         <div key={`fill-md-${slot}`} className="hidden md:block bg-[var(--bg-primary)]" />
       ))}
     </div>
@@ -513,6 +578,88 @@ function ActivityGrass({
       )}
     </div>
   )
+}
+
+/** 부모 패널 안에서만 보이는 루트 보기 이름 */
+const ROOT_VIEW_LABELS: Record<string, string> = {
+  'skill-usage': '구성원 사용',
+  'client-usage': '구성원별 사용량',
+}
+
+/** 같은 업무 영역의 독립 데이터 패널을 작은 세그먼트 컨트롤로 묶는다 */
+function NestedPanelNav({
+  parentId,
+  panels,
+  activeId,
+  onChange,
+}: {
+  parentId: string
+  panels: AxPanelMeta[]
+  activeId: string
+  onChange: (panelId: string) => void
+}) {
+  return (
+    <div
+      className="mt-5 inline-flex items-center gap-0.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-1"
+      role="tablist"
+      aria-label={`${panels[0]?.title ?? '항목'} 세부 보기`}
+    >
+      {panels.map((panel) => {
+        const selected = panel.id === activeId
+        const label = panel.id === parentId
+          ? (ROOT_VIEW_LABELS[parentId] ?? panel.title)
+          : panel.title
+        return (
+          <button
+            key={panel.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`ax-panel-${panel.id}`}
+            id={`ax-view-tab-${panel.id}`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(panel.id)}
+            onKeyDown={(event) => handleTabKey(
+              event,
+              panels.map((item) => item.id),
+              panel.id,
+              onChange
+            )}
+            className={`rounded-full px-4 py-1.5 text-xs transition-colors ${
+              selected
+                ? 'bg-[var(--text-primary)] font-medium text-[var(--bg-primary)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** WAI-ARIA 탭 패턴: 방향키·Home·End로 선택과 초점을 함께 옮긴다 */
+function handleTabKey(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  ids: string[],
+  activeId: string,
+  onChange: (panelId: string) => void
+) {
+  const currentIndex = ids.indexOf(activeId)
+  if (currentIndex < 0) return
+
+  let targetIndex: number | null = null
+  if (event.key === 'ArrowRight') targetIndex = (currentIndex + 1) % ids.length
+  if (event.key === 'ArrowLeft') targetIndex = (currentIndex - 1 + ids.length) % ids.length
+  if (event.key === 'Home') targetIndex = 0
+  if (event.key === 'End') targetIndex = ids.length - 1
+  if (targetIndex === null) return
+
+  event.preventDefault()
+  onChange(ids[targetIndex])
+  const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  tabs?.[targetIndex]?.focus()
 }
 
 /**

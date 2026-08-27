@@ -26,10 +26,10 @@ import { agentActivityPanel } from './agent-activity'
 export const AX_PANELS: AxPanel[] = [
   overviewPanel,
   skillUsagePanel,
+  agentActivityPanel,
   sharedSkillsPanel,
   skillDiffPanel,
   clientUsagePanel,
-  agentActivityPanel,
   subscriptionsPanel,
   vercelDeploymentsPanel,
 ]
