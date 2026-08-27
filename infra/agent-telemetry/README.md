@@ -1,95 +1,139 @@
 # Agent telemetry continuous collection
 
-Each launchd job owns exactly one `(agentId, source)` stream and therefore one
-checkpoint namespace. The job runs every six hours; the dashboard marks a
-reporter stale after twelve hours without a successful batch.
+`aitk agent-telemetry install` is the canonical setup path. One installation
+owns exactly one `(agentId, source)` stream, collector credential, checkpoint,
+and scheduler. The default launchd interval is six hours.
 
-## Security model
+This telemetry is different from `aitk usage report`:
 
-- Put the raw agent-scoped credential only in the Mac login Keychain.
-- Put only its SHA-256 hash on the server. Keep the initial JSON map in
-  `AX_AGENT_TELEMETRY_TOKEN_HASHES`; add later reporters independently as
-  `AX_AGENT_TELEMETRY_TOKEN_HASH_<AGENT_ID>` (for example,
-  `AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX`). Uppercase underscores in the variable
-  suffix map to lowercase hyphens in `agentId`.
-- When scoped hashes are configured, the legacy shared token is disabled.
-- The server rejects a scoped credential if the payload `agentId` differs.
-- Transcript text, prompts, responses, commands, paths, IDs, and credentials
-  are never sent.
+- `usage report` records a person's coarse Claude Code/Codex totals and plan
+  information.
+- `agent-telemetry` records scoped, checkpointed agent/runtime usage plus tool,
+  skill, collection-health, and explicit execution aggregates when the source
+  exposes them.
 
-## One-time setup on an agent Mac
+Neither path uploads transcript text, prompts, responses, commands, raw IDs, or
+local paths.
 
-1. Build the CLI and run one `--dry-run` with explicit `--sessions-dir` and
-   source scope. Confirm `healthStatus=healthy` and the record counters sum to
-   `recordsRead`.
-2. Add the scoped credential to Keychain without placing it on the command
-   line:
+## Requirements
 
-   ```sh
-   security add-generic-password -a "$USER" -s gpters-agent-telemetry-prod -w -U
-   ```
+- macOS. Other schedulers are not installed automatically yet.
+- Packaged `@gpters/aitk` 0.7.0 or newer in a stable global path. Do not install
+  from an ephemeral `npx` cache path because launchd keeps the resolved CLI
+  path.
+- AITK user authentication (`aitk login --device` when needed).
+- An explicit source scope. Do not infer a path or profile when multiple users
+  or agents may share it.
+- The server migration that creates `ax_agent_telemetry_collectors` and the
+  matching enrollment endpoint must be deployed first.
 
-3. Copy `com.gpters.agent-telemetry.example.plist` into
-   `~/Library/LaunchAgents`, replace every placeholder, and create the log
-   directory first. Do not put a token in the plist.
-4. Validate and load it:
+## One-time install
 
-   ```sh
-   plutil -lint ~/Library/LaunchAgents/com.gpters.agent-telemetry.AGENT.SOURCE.plist
-   launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.gpters.agent-telemetry.AGENT.SOURCE.plist
-   launchctl kickstart -k "gui/$(id -u)/com.gpters.agent-telemetry.AGENT.SOURCE"
-   ```
-
-Use a separate plist for Claude Code, Codex, or Hermes. Do
-not point OpenClaw and Claude Code collectors at overlapping source logs: that
-would double-count the same work. OpenClaw gateway summaries also do not expose
-reliable tool or skill activity, so prefer the underlying runtime transcript
-when it exists.
-
-For Hermes, `AITK_SESSIONS_DIR` is the explicit SQLite database file rather
-than a directory. The default profile uses `~/.hermes/state.db`; a named Hermes
-profile has its own home and must point at that profile's `state.db`. Prefer a
-dedicated agent profile so a bot batch cannot include a person's unrelated
-Hermes sessions. Verify the exact profile on the Hermes machine before the
-first upload:
+The user must approve the install command. It runs a PII-free dry run first and
+stops if collection health is blocked. It then exchanges the existing user
+login for a collector-only credential, stores that credential in macOS
+Keychain, writes a token-free local config, and registers launchd.
 
 ```sh
-aitk agent-telemetry collect \
+aitk whoami
+
+aitk agent-telemetry install \
+  --agent <stable-agent-id> \
+  --source claude-code \
+  --sessions-dir "$HOME/.claude/projects" \
+  --project-slugs <allowed-project-directory> \
+  --days 7
+```
+
+Codex uses the same form with its sessions directory and allowed workspace
+names. OpenClaw omits `--project-slugs` and must point at the explicit agent
+session directory. Do not install OpenClaw and Claude Code collectors for
+overlapping work; prefer the runtime transcript because gateway summaries lack
+reliable tool and skill activity.
+
+The stable `agentId` should make ownership clear across the organization, for
+example a bot name or a user-and-runtime combination. The server refuses a
+second active collector for the same `(agentId, source)` so two schedulers
+cannot silently double-count one stream.
+
+If a matching legacy pilot checkpoint already exists, `install` adopts its
+`collectorInstanceId` automatically. It does not reset or delete the checkpoint,
+so the first enrolled upload continues from the last committed window.
+
+Use `--no-schedule` only for an intentional staged install. It enrolls and
+stores configuration without sending; `run` remains an explicit action.
+
+## Hermes scope
+
+Hermes uses an explicit SQLite database file and a non-empty profile identity:
+
+```sh
+aitk agent-telemetry install \
   --agent <stable-agent-id> \
   --source hermes \
   --sessions-dir "$HOME/.hermes/state.db" \
-  --days 7 \
-  --category unclassified \
-  --dry-run
+  --hermes-profile <dedicated-profile-name> \
+  --days 7
 ```
 
-The collector opens it read-only and selects only structural
-columns. Session usage is converted from cumulative counters to checkpointed
-deltas; turns come from user-role messages and tools from stable call IDs.
-Message content, reasoning text, tool arguments, paths, and raw IDs are never
-written to the checkpoint or batch. Hermes reasoning/output inclusion is not
-yet proven, so its relation remains `unknown` and the dashboard does not add it
-again to total processed tokens.
+The collector opens the database read-only and queries only structural and
+usage columns. If a shared Gateway database has null or mixed profile identity,
+do not install against it. Create a dedicated Hermes profile/DB or add a stable
+agent identity in the Gateway first; historical shared sessions are not safe to
+backfill into a bot identity.
 
-## Operational checks
+## Verify and operate
 
-- `reporting`: latest successful batch is at most 12 hours old.
-- `stale`: check the launchd job, Keychain access, and pending checkpoint.
-- `missing`: collector exists but that source has not reported in the selected
-  period.
-- A failed upload keeps the pending batch and retries the same `batchId`; server
-  idempotency prevents double counting.
+```sh
+aitk agent-telemetry status --agent <id> --source <source>
+aitk agent-telemetry doctor --agent <id> --source <source>
+aitk agent-telemetry run --agent <id> --source <source>
+```
+
+- `status` checks local configuration, Keychain presence, and scheduler state.
+- `doctor` performs a dry run without uploading or advancing the checkpoint.
+- `run` performs one immediate upload using the Keychain credential.
+- Success is the JSON response body with `ok: true`, not exit code alone.
+
+After a CLI or runtime upgrade, run `doctor`. The dashboard differentiates a
+registered collector waiting for its first batch, a healthy reporter, a stale
+reporter, and a health-blocked reporter.
+
+To remove a stream:
+
+```sh
+aitk agent-telemetry uninstall --agent <id> --source <source>
+```
+
+Uninstall revokes the server credential and removes launchd, the Keychain item,
+and the local installation record. It preserves the checkpoint for audit and
+recovery.
+
+## Security model
+
+- The raw collector credential exists only in macOS Keychain and is returned by
+  the enrollment API once. The server stores a SHA-256 hash.
+- The credential is bound to `agentId`, `collectorInstanceId`, and `source`.
+  Changing any of the three causes the ingestion request to be rejected.
+- Local configuration is mode `0600` and contains no credential.
+- A failed upload preserves the pending batch. Retry uses the same `batchId`,
+  and server idempotency prevents double counting.
+- Legacy environment tokens remain accepted during migration, but new installs
+  must use enrollment credentials.
 
 ## Review cadence
 
-- Automatic: collect every 6 hours and treat a reporter as stale after 12
-  hours. A quiet interval may legitimately contain a healthy zero-delta batch.
+- Automatic: launchd runs every six hours; the normal stale threshold is two
+  missed runs (at least twelve hours).
 - Daily: check reporter freshness, source coverage, parse failures, and pending
-  checkpoints. Fix collection health before interpreting usage trends.
-- Weekly: review the 7-day dashboard for context tokens per turn, reasoning
-  share, model mix, and tool failure hotspots. The dashboard calls out context
-  above 100k tokens/turn, reasoning above 30% of output, and tools with at least
-  10 calls and a 5% failure rate.
-- Rollout: add one `(agentId, source)` stream at a time, independently compare
-  its first backfill with the source of truth, then keep the same checkpoint.
-  Never reset a valid checkpoint to make a graph look cleaner.
+  checkpoints before interpreting usage trends.
+- Weekly: review context tokens per turn, reasoning share, model mix, tool
+  failure hotspots, and verified skill execution outcomes.
+- Rollout: add one scoped stream at a time, independently compare its first
+  backfill with the source of truth, and keep the same checkpoint.
+
+## Legacy manual setup
+
+`collect-macos.zsh` and `com.gpters.agent-telemetry.example.plist` remain only
+for existing pilot installations until they are migrated. New agents should not
+copy the plist or share `AX_AGENT_TELEMETRY_TOKEN`; use `install` instead.

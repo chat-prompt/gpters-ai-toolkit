@@ -3,6 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@gpters/db', () => ({
   db: { select: vi.fn() },
   axAgentTelemetryBatches: { windowEnd: 'window_end' },
+  axAgentTelemetryCollectors: {
+    collectorId: 'collector_id',
+    agentId: 'agent_id',
+    source: 'source',
+    intervalSeconds: 'interval_seconds',
+    lastSuccessAt: 'last_success_at',
+    lastHealthStatus: 'last_health_status',
+    lastHealthWarnings: 'last_health_warnings',
+    createdAt: 'created_at',
+    isActive: 'is_active',
+  },
   axSkillExecutionAttempts: {
     status: 'status',
     validationMethod: 'validation_method',
@@ -26,10 +37,11 @@ function builder(result: unknown) {
   return stub
 }
 
-function queueRows(rows: unknown[], executionRows: unknown[] = []) {
+function queueRows(rows: unknown[], executionRows: unknown[] = [], collectorRows: unknown[] = []) {
   vi.mocked(db.select).mockReset()
   vi.mocked(db.select).mockReturnValueOnce(builder(rows) as never)
   vi.mocked(db.select).mockReturnValueOnce(builder(executionRows) as never)
+  vi.mocked(db.select).mockReturnValueOnce(builder(collectorRows) as never)
 }
 
 function usage(inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, thinkingTokens: number) {
@@ -148,6 +160,53 @@ describe('agentActivityPanel', () => {
       status: 'reporting', capabilities: { usage: true, tools: true, skills: false },
     })
     expect(result.data!.totalProcessedTokens).toBe(100)
+  })
+
+  it('설치 후 첫 batch 전인 수집기를 대기 상태로 보여준다', async () => {
+    queueRows([], [], [{
+      collectorId: 'col-1',
+      agentId: 'my-codex',
+      source: 'codex',
+      intervalSeconds: 21_600,
+      lastSuccessAt: null,
+      lastHealthStatus: null,
+      lastHealthWarnings: [],
+      createdAt: new Date('2026-08-26T23:30:00Z'),
+    }])
+
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+
+    expect(result.status).toBe('ok')
+    expect(result.data!.reporters).toEqual([
+      expect.objectContaining({
+        agentId: 'my-codex',
+        source: 'codex',
+        managed: true,
+        freshness: 'waiting',
+        freshnessHours: null,
+        lastCollectedAt: null,
+      }),
+    ])
+    expect(result.data!.sourceCoverage.find((item) => item.source === 'codex')?.status).toBe('installed')
+    expect(result.data!.insights).toContainEqual(expect.objectContaining({ title: '첫 수집 대기' }))
+  })
+
+  it('사용자 지정 interval의 두 배까지 reporter와 source를 정상으로 본다', async () => {
+    queueRows([row({ collectedAt: new Date('2026-08-26T00:00:00Z') })], [], [{
+      collectorId: 'col-1',
+      agentId: 'bbodoong',
+      source: 'claude-code',
+      intervalSeconds: 86_400,
+      lastSuccessAt: new Date('2026-08-26T00:00:00Z'),
+      lastHealthStatus: 'healthy',
+      lastHealthWarnings: [],
+      createdAt: new Date('2026-08-20T00:00:00Z'),
+    }])
+
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+
+    expect(result.data!.reporters[0]).toMatchObject({ freshness: 'fresh', freshnessHours: 24 })
+    expect(result.data!.sourceCoverage.find((item) => item.source === 'claude-code')?.status).toBe('reporting')
   })
 
   it('데이터가 없으면 not_configured, 조회 실패면 error다', async () => {

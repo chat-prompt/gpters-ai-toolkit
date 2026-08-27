@@ -1,7 +1,7 @@
 /** AX Dashboard — 에이전트 활동·수집 건강도 패널 */
 
-import { axAgentTelemetryBatches, axSkillExecutionAttempts, db } from '@gpters/db'
-import { gte } from 'drizzle-orm'
+import { axAgentTelemetryBatches, axAgentTelemetryCollectors, axSkillExecutionAttempts, db } from '@gpters/db'
+import { eq, gte } from 'drizzle-orm'
 import type {
   AxAgentActivityData,
   AxAgentReporterRow,
@@ -139,14 +139,50 @@ async function loadVerifiedExecutions(cutoff: Date): Promise<{
   }
 }
 
+/** 0031 이전 DB에서도 기존 batch 패널은 계속 동작한다. */
+async function loadCollectors(): Promise<{
+  available: boolean
+  rows: Array<{
+    collectorId: string
+    agentId: string
+    source: string
+    intervalSeconds: number
+    lastSuccessAt: Date | null
+    lastHealthStatus: string | null
+    lastHealthWarnings: string[]
+    createdAt: Date
+  }>
+}> {
+  try {
+    const rows = await db.select({
+      collectorId: axAgentTelemetryCollectors.collectorId,
+      agentId: axAgentTelemetryCollectors.agentId,
+      source: axAgentTelemetryCollectors.source,
+      intervalSeconds: axAgentTelemetryCollectors.intervalSeconds,
+      lastSuccessAt: axAgentTelemetryCollectors.lastSuccessAt,
+      lastHealthStatus: axAgentTelemetryCollectors.lastHealthStatus,
+      lastHealthWarnings: axAgentTelemetryCollectors.lastHealthWarnings,
+      createdAt: axAgentTelemetryCollectors.createdAt,
+    }).from(axAgentTelemetryCollectors).where(eq(axAgentTelemetryCollectors.isActive, true))
+    return { available: true, rows }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('ax_agent_telemetry_collectors') && message.includes('does not exist')) {
+      return { available: false, rows: [] }
+    }
+    throw error
+  }
+}
+
 async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityData>> {
   try {
     const cutoff = new Date(Date.now() - ctx.days * 86_400_000)
-    const [rows, executionResult] = await Promise.all([
+    const [rows, executionResult, collectorResult] = await Promise.all([
       db.select().from(axAgentTelemetryBatches).where(gte(axAgentTelemetryBatches.windowEnd, cutoff)),
       loadVerifiedExecutions(cutoff),
+      loadCollectors(),
     ])
-    if (rows.length === 0) {
+    if (rows.length === 0 && collectorResult.rows.length === 0) {
       return panelNotConfigured(meta, '선택한 기간에 수집된 에이전트 텔레메트리가 없습니다')
     }
 
@@ -157,6 +193,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const skillMap = new Map<string, { loaded: number; failed: number; interrupted: number }>()
     const observedExecutionMap = new Map<string, { status: string; evidence: string; count: number }>()
     const sourceLatest = new Map<AxAgentTelemetrySource, number>()
+    const sourceStaleAfterHours = new Map<AxAgentTelemetrySource, number>()
     let sessions = 0
     let turns = 0
     let recordsRead = 0
@@ -200,9 +237,13 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       const reporter = reporterMap.get(reporterKey) ?? {
         agentId: row.agentId,
         source,
+        collectorId: null,
+        managed: false,
+        intervalSeconds: null,
         lastCollectedAt: new Date(collectedAt).toISOString(),
         freshnessHours: 0,
         freshness: 'fresh',
+        healthStatus: 'unknown',
         sessions: 0,
         turns: 0,
         usage: emptyUsage(),
@@ -213,11 +254,16 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       reporter.sessions += number(row.sessions)
       reporter.turns += number(row.turns)
       addUsage(reporter.usage, usage)
-      if (collectedAt > new Date(reporter.lastCollectedAt).getTime()) reporter.lastCollectedAt = new Date(collectedAt).toISOString()
+      if (!reporter.lastCollectedAt || collectedAt > new Date(reporter.lastCollectedAt).getTime()) {
+        reporter.lastCollectedAt = new Date(collectedAt).toISOString()
+      }
       const warnings = Array.isArray(collection.healthWarnings)
         ? collection.healthWarnings.filter((item): item is string => typeof item === 'string')
         : []
       reporter.healthWarnings = [...new Set([...reporter.healthWarnings, ...warnings])]
+      if (collection.healthStatus === 'healthy' || collection.healthStatus === 'blocked') {
+        reporter.healthStatus = collection.healthStatus
+      }
 
       for (const raw of row.models ?? []) {
         if (!raw || typeof raw !== 'object') continue
@@ -267,18 +313,77 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       reporterMap.set(reporterKey, reporter)
     }
 
+    const installedSources = new Set<AxAgentTelemetrySource>()
+    for (const collector of collectorResult.rows) {
+      if (collector.source !== 'openclaw' && collector.source !== 'claude-code' &&
+        collector.source !== 'codex' && collector.source !== 'hermes') continue
+      const collectorSource = collector.source as AxAgentTelemetrySource
+      installedSources.add(collectorSource)
+      sourceStaleAfterHours.set(
+        collectorSource,
+        Math.max(
+          sourceStaleAfterHours.get(collectorSource) ?? FRESH_HOURS,
+          FRESH_HOURS,
+          collector.intervalSeconds * 2 / 3600,
+        ),
+      )
+      const reporterKey = `${collector.agentId}\u0000${collectorSource}`
+      const reporter = reporterMap.get(reporterKey) ?? {
+        agentId: collector.agentId,
+        source: collectorSource,
+        collectorId: collector.collectorId,
+        managed: true,
+        intervalSeconds: collector.intervalSeconds,
+        lastCollectedAt: null,
+        freshnessHours: null,
+        freshness: 'waiting' as const,
+        healthStatus: 'unknown' as const,
+        sessions: 0,
+        turns: 0,
+        usage: emptyUsage(),
+        toolCalls: 0,
+        toolFailures: 0,
+        healthWarnings: [],
+      }
+      reporter.collectorId = collector.collectorId
+      reporter.managed = true
+      reporter.intervalSeconds = collector.intervalSeconds
+      if (collector.lastSuccessAt) {
+        const lastSuccess = new Date(collector.lastSuccessAt).getTime()
+        if (!reporter.lastCollectedAt || lastSuccess > new Date(reporter.lastCollectedAt).getTime()) {
+          reporter.lastCollectedAt = new Date(lastSuccess).toISOString()
+        }
+        sourceLatest.set(collectorSource, Math.max(sourceLatest.get(collectorSource) ?? 0, lastSuccess))
+        syncedAt = Math.max(syncedAt, lastSuccess)
+      }
+      if (collector.lastHealthStatus === 'healthy' || collector.lastHealthStatus === 'blocked') {
+        reporter.healthStatus = collector.lastHealthStatus
+      }
+      reporter.healthWarnings = [...new Set([
+        ...reporter.healthWarnings,
+        ...(Array.isArray(collector.lastHealthWarnings) ? collector.lastHealthWarnings : []),
+      ])]
+      reporterMap.set(reporterKey, reporter)
+      syncedAt = Math.max(syncedAt, new Date(collector.createdAt).getTime())
+    }
+
     const now = Date.now()
     const reporters = [...reporterMap.values()].map((reporter) => {
+      if (!reporter.lastCollectedAt) return { ...reporter, freshnessHours: null, freshness: 'waiting' as const }
       const freshnessHours = Math.max(0, Math.round(((now - new Date(reporter.lastCollectedAt).getTime()) / 3_600_000) * 10) / 10)
-      return { ...reporter, freshnessHours, freshness: freshnessHours <= FRESH_HOURS ? 'fresh' as const : 'stale' as const }
+      const staleAfterHours = reporter.intervalSeconds ? Math.max(FRESH_HOURS, reporter.intervalSeconds * 2 / 3600) : FRESH_HOURS
+      return { ...reporter, freshnessHours, freshness: freshnessHours <= staleAfterHours ? 'fresh' as const : 'stale' as const }
     }).sort((a, b) => a.agentId.localeCompare(b.agentId) || a.source.localeCompare(b.source))
 
     const sourceCoverage = ALL_SOURCES.map((source): AxAgentSourceCoverageRow => {
       const last = sourceLatest.get(source)
       let status: AxAgentSourceCoverageRow['status']
       if (source === 'openclaw' && !last && sourceLatest.has('claude-code')) status = 'alternate'
+      else if (!last && installedSources.has(source)) status = 'installed'
       else if (!last) status = 'missing'
-      else status = (now - last) / 3_600_000 <= FRESH_HOURS ? 'reporting' : 'stale'
+      else status = (now - last) / 3_600_000 <= (sourceStaleAfterHours.get(source) ?? FRESH_HOURS)
+        ? 'reporting'
+        : 'stale'
       return {
         source,
         status,
@@ -324,7 +429,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const total = processedTokens(totalUsage)
     const insights: AxAgentActivityData['insights'] = []
 
-    const coveredHours = (windowEnd - windowStart) / 3_600_000
+    const coveredHours = rows.length > 0 ? (windowEnd - windowStart) / 3_600_000 : 0
     // 6시간 수집 주기의 경계 겹침은 정상 오차로 보고, 그보다 긴 초기 backfill만 경고한다.
     if (coveredHours > ctx.days * 24 + 6) {
       insights.push({
@@ -351,7 +456,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     }
     const stale = reporters.filter((row) => row.freshness === 'stale')
     if (stale.length > 0) {
-      insights.push({ severity: 'warning', title: '수집 지연', detail: `${stale.length}개 수집기가 ${FRESH_HOURS}시간 넘게 새 배치를 보내지 않았습니다.` })
+      insights.push({ severity: 'warning', title: '수집 지연', detail: `${stale.length}개 수집기가 허용된 두 번의 수집 주기 안에 새 배치를 보내지 않았습니다.` })
+    }
+    const waiting = reporters.filter((row) => row.freshness === 'waiting')
+    if (waiting.length > 0) {
+      insights.push({ severity: 'info', title: '첫 수집 대기', detail: `${waiting.length}개 수집기가 설치됐지만 아직 첫 정상 배치를 보내지 않았습니다.` })
     }
     const failureHotspot = tools.find((row) => row.calls >= 10 && row.failureRate >= 5)
     if (failureHotspot) {
@@ -397,9 +506,9 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     }
 
     return panelOk(meta, {
-      syncedAt: new Date(syncedAt).toISOString(),
-      windowStart: new Date(windowStart).toISOString(),
-      windowEnd: new Date(windowEnd).toISOString(),
+      syncedAt: new Date(syncedAt || now).toISOString(),
+      windowStart: new Date(rows.length > 0 ? windowStart : cutoff.getTime()).toISOString(),
+      windowEnd: new Date(rows.length > 0 ? windowEnd : now).toISOString(),
       totalUsage,
       totalProcessedTokens: total,
       sessions,

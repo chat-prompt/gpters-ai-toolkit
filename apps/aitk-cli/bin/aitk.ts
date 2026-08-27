@@ -14,6 +14,13 @@ import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runReportExecution, runReportExecutionStart } from '../src/commands/report-execution.js'
 import { runUsageReport } from '../src/commands/usage-report.js'
 import { runAgentTelemetryCollect } from '../src/commands/agent-telemetry.js'
+import {
+  runAgentTelemetryDoctor,
+  runAgentTelemetryInstall,
+  runAgentTelemetryRun,
+  runAgentTelemetryStatus,
+  runAgentTelemetryUninstall,
+} from '../src/commands/agent-telemetry-lifecycle.js'
 import { runLogin } from '../src/commands/login.js'
 import { runDeviceLogin } from '../src/commands/device-login.js'
 import { runConfig } from '../src/commands/config.js'
@@ -79,6 +86,7 @@ Usage:
   aitk report-execution --skill-id <id> --status <status> --agent <runtime> [--agent-id <id>] [options]
   aitk usage report [--days 7] [--dry-run]
   aitk agent-telemetry collect --agent <id> [--days 7] [--dry-run]
+  aitk agent-telemetry install|doctor|status|run|uninstall --agent <id> --source <source>
   aitk undeploy <id>
   aitk add-files --id <id> <file1> [file2...] [--type script|reference|template|config]
   aitk remove-files --id <id> --files <name1,name2>
@@ -273,7 +281,10 @@ Examples:
 
   'agent-telemetry': `aitk agent-telemetry - Collect PII-free agent usage
 
-Usage: aitk agent-telemetry collect --agent <id> [options]
+Usage:
+  aitk agent-telemetry collect --agent <id> [options]
+  aitk agent-telemetry install --agent <id> --source <source> --sessions-dir <path> [options]
+  aitk agent-telemetry doctor|status|run|uninstall --agent <id> --source <source>
 
 Required:
   --agent <id>                 Stable agent ID (for example bbodoong)
@@ -292,11 +303,18 @@ Options:
   --claude-cli-version <ver>   Claude CLI version label (default: unknown)
   --dry-run                    Print only aggregate data; never write checkpoint or send
 
+Install options:
+  --interval <seconds>         launchd interval (default: 21600, min: 600)
+  --no-schedule                Save the collector without registering launchd
+  --cli-path <path>            Built aitk.js path (normally inferred)
+
 Authentication:
-  Set AX_AGENT_TELEMETRY_TOKEN in the environment. Tokens are not accepted as CLI flags.
+  install uses the existing AITK OAuth login and stores a collector-only token in Keychain.
+  collect is the legacy/manual path and reads AX_AGENT_TELEMETRY_TOKEN from the environment.
 
 Examples:
   aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/session/directory --days 7 --dry-run
+  aitk agent-telemetry install --agent my-codex --source codex --sessions-dir /explicit/codex/sessions --project-slugs my-workspace
   aitk agent-telemetry collect --agent hermes --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile <name> --category qa-verify --dry-run`,
 
   login: `aitk login - Authenticate with AI Toolkit
@@ -544,26 +562,52 @@ async function main(): Promise<void> {
 
     case 'agent-telemetry': {
       const sub = positional[0]
-      if (sub !== 'collect') {
-        error(`Unknown subcommand: aitk agent-telemetry ${sub ?? ''}\nUsage: aitk agent-telemetry collect --agent <id> [--dry-run]`)
+      if (!flags['agent']) error(`--agent required: aitk agent-telemetry ${sub ?? ''} --agent <id>`)
+      if (sub === 'collect') {
+        await runAgentTelemetryCollect({
+          agentId: flags['agent'],
+          source: flags['source'],
+          days: flags['days'] ? parseInt(flags['days'], 10) : 7,
+          dryRun: flags['dry-run'] === 'true',
+          collectorVersion: VERSION,
+          sessionsDir: flags['sessions-dir'],
+          projectSlugs: flags['project-slugs'],
+          hermesProfile: flags['hermes-profile'],
+          checkpointDir: flags['checkpoint-dir'],
+          collectorInstanceId: flags['collector-id'],
+          category: flags['category'],
+          serverUrl: flags['server-url'],
+          openclawVersion: flags['openclaw-version'],
+          claudeCliVersion: flags['claude-cli-version'],
+        })
+      } else if (sub === 'install') {
+        if (!flags['source']) error('--source required: aitk agent-telemetry install --source <source>')
+        await runAgentTelemetryInstall({
+          agentId: flags['agent'],
+          source: flags['source'],
+          sessionsDir: flags['sessions-dir'],
+          projectSlugs: flags['project-slugs'],
+          hermesProfile: flags['hermes-profile'],
+          checkpointDir: flags['checkpoint-dir'],
+          category: flags['category'],
+          serverUrl: flags['server-url'],
+          days: flags['days'] ? parseInt(flags['days'], 10) : 7,
+          intervalSeconds: flags['interval'] ? parseInt(flags['interval'], 10) : undefined,
+          collectorVersion: VERSION,
+          collectorId: flags['collector-id'],
+          cliScriptPath: flags['cli-path'],
+          noSchedule: flags['no-schedule'] === 'true',
+        })
+      } else if (sub === 'doctor' || sub === 'status' || sub === 'run' || sub === 'uninstall') {
+        if (!flags['source']) error(`--source required: aitk agent-telemetry ${sub} --source <source>`)
+        const lifecycleOptions = { agentId: flags['agent'], source: flags['source'] }
+        if (sub === 'doctor') await runAgentTelemetryDoctor(lifecycleOptions)
+        else if (sub === 'status') runAgentTelemetryStatus(lifecycleOptions)
+        else if (sub === 'run') await runAgentTelemetryRun(lifecycleOptions)
+        else await runAgentTelemetryUninstall(lifecycleOptions)
+      } else {
+        error(`Unknown subcommand: aitk agent-telemetry ${sub ?? ''}\nUsage: aitk agent-telemetry collect|install|doctor|status|run|uninstall`)
       }
-      if (!flags['agent']) error('--agent required: aitk agent-telemetry collect --agent <id>')
-      await runAgentTelemetryCollect({
-        agentId: flags['agent'],
-        source: flags['source'],
-        days: flags['days'] ? parseInt(flags['days'], 10) : 7,
-        dryRun: flags['dry-run'] === 'true',
-        collectorVersion: VERSION,
-        sessionsDir: flags['sessions-dir'],
-        projectSlugs: flags['project-slugs'],
-        hermesProfile: flags['hermes-profile'],
-        checkpointDir: flags['checkpoint-dir'],
-        collectorInstanceId: flags['collector-id'],
-        category: flags['category'],
-        serverUrl: flags['server-url'],
-        openclawVersion: flags['openclaw-version'],
-        claudeCliVersion: flags['claude-cli-version'],
-      })
       break
     }
 

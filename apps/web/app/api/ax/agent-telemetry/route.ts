@@ -2,7 +2,12 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
-import { recordAgentTelemetryBatch } from '@/lib/analytics'
+import {
+  authenticateAgentTelemetryCollector,
+  isAgentTelemetryCollectorToken,
+  recordAgentTelemetryBatch,
+  recordAgentTelemetryCollectorSuccess,
+} from '@/lib/analytics'
 import { validateAgentTelemetryBatch } from '@/lib/features/ax'
 
 export const runtime = 'nodejs'
@@ -19,6 +24,9 @@ interface TelemetryCredential {
   configured: boolean
   valid: boolean
   agentId: string | null
+  collectorId: string | null
+  source: string | null
+  userId: string | null
 }
 
 function constantTimeEqual(actual: string, expected: string): boolean {
@@ -77,34 +85,64 @@ function scopedTelemetryTokens(scopedJson: string | undefined): {
   return { configured: true, valid: true, entries }
 }
 
-function authenticateTelemetryToken(authorization: string | null): TelemetryCredential {
+async function authenticateTelemetryToken(authorization: string | null): Promise<TelemetryCredential> {
+  const bearer = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : null
+  if (bearer && isAgentTelemetryCollectorToken(bearer)) {
+    try {
+      const collector = await authenticateAgentTelemetryCollector(bearer)
+      return collector
+        ? {
+            configured: true,
+            valid: true,
+            agentId: collector.agentId,
+            collectorId: collector.collectorId,
+            source: collector.source,
+            userId: collector.userId,
+          }
+        : { configured: true, valid: false, agentId: null, collectorId: null, source: null, userId: null }
+    } catch {
+      return { configured: false, valid: false, agentId: null, collectorId: null, source: null, userId: null }
+    }
+  }
+
   const legacyToken = process.env.AX_AGENT_TELEMETRY_TOKEN
   const scopedJson = process.env.AX_AGENT_TELEMETRY_TOKEN_HASHES
   const scopedTokens = scopedTelemetryTokens(scopedJson)
-  if (!legacyToken && !scopedTokens.configured) return { configured: false, valid: false, agentId: null }
-  if (!scopedTokens.valid) return { configured: false, valid: false, agentId: null }
-  if (!authorization?.startsWith('Bearer ')) return { configured: true, valid: false, agentId: null }
+  if (!legacyToken && !scopedTokens.configured) {
+    return { configured: false, valid: false, agentId: null, collectorId: null, source: null, userId: null }
+  }
+  if (!scopedTokens.valid) {
+    return { configured: false, valid: false, agentId: null, collectorId: null, source: null, userId: null }
+  }
+  if (!bearer) {
+    return { configured: true, valid: false, agentId: null, collectorId: null, source: null, userId: null }
+  }
 
-  const token = authorization.slice('Bearer '.length)
+  const token = bearer
   if (scopedTokens.configured) {
     const actualHash = createHash('sha256').update(token).digest('hex')
     for (const [agentId, expectedHash] of scopedTokens.entries) {
       if (constantTimeEqual(actualHash, expectedHash)) {
-        return { configured: true, valid: true, agentId }
+        return { configured: true, valid: true, agentId, collectorId: null, source: null, userId: null }
       }
     }
-    return { configured: true, valid: false, agentId: null }
+    return { configured: true, valid: false, agentId: null, collectorId: null, source: null, userId: null }
   }
 
   return {
     configured: true,
     valid: Boolean(legacyToken && constantTimeEqual(token, legacyToken)),
     agentId: null,
+    collectorId: null,
+    source: null,
+    userId: null,
   }
 }
 
 export async function POST(request: NextRequest) {
-  const credential = authenticateTelemetryToken(request.headers.get('authorization'))
+  const credential = await authenticateTelemetryToken(request.headers.get('authorization'))
   if (!credential.configured) {
     return NextResponse.json({ error: 'Agent telemetry ingestion is not configured' }, { status: 503, headers: NO_STORE })
   }
@@ -137,9 +175,23 @@ export async function POST(request: NextRequest) {
   if (credential.agentId && validation.data.agentId !== credential.agentId) {
     return NextResponse.json({ error: 'Token is not authorized for this agent' }, { status: 403, headers: NO_STORE })
   }
+  if (credential.collectorId && validation.data.collectorInstanceId !== credential.collectorId) {
+    return NextResponse.json({ error: 'Token is not authorized for this collector' }, { status: 403, headers: NO_STORE })
+  }
+  if (credential.source && validation.data.collection.source !== credential.source) {
+    return NextResponse.json({ error: 'Token is not authorized for this source' }, { status: 403, headers: NO_STORE })
+  }
 
   try {
     const result = await recordAgentTelemetryBatch(validation.data)
+    if (credential.collectorId && credential.agentId && credential.source && credential.userId) {
+      await recordAgentTelemetryCollectorSuccess({
+        collectorId: credential.collectorId,
+        agentId: credential.agentId,
+        source: credential.source,
+        userId: credential.userId,
+      }, validation.data)
+    }
     return NextResponse.json({ ok: true, inserted: result.inserted }, { headers: NO_STORE })
   } catch {
     return NextResponse.json({ error: 'Failed to store agent telemetry batch' }, { status: 500, headers: NO_STORE })

@@ -79,7 +79,8 @@ for migration in \
   0027_member_lifecycle.sql \
   0028_ax_client_usage_user_id.sql \
   0029_ax_skill_execution_attempts.sql \
-  0030_ax_execution_lifecycle.sql
+  0030_ax_execution_lifecycle.sql \
+  0031_ax_agent_telemetry_collectors.sql
 do
   run_sql_file "$REBUILD_DATABASE" "$MIGRATIONS_DIR/$migration"
 done
@@ -104,6 +105,7 @@ DECLARE
   journey_sessions integer;
   execution_attempts integer;
   telemetry_batches integer;
+  telemetry_collectors integer;
 BEGIN
   SELECT count(*) INTO active_members
   FROM org_memberships
@@ -127,6 +129,9 @@ BEGIN
   SELECT count(*) INTO telemetry_batches
   FROM ax_agent_telemetry_batches;
 
+  SELECT count(*) INTO telemetry_collectors
+  FROM ax_agent_telemetry_collectors;
+
   IF active_members <> 20 THEN
     RAISE EXCEPTION 'Expected 20 active members, found %', active_members;
   END IF;
@@ -145,6 +150,9 @@ BEGIN
   IF telemetry_batches <> 5 THEN
     RAISE EXCEPTION 'Expected 5 telemetry batches, found %', telemetry_batches;
   END IF;
+  IF telemetry_collectors <> 0 THEN
+    RAISE EXCEPTION 'Expected empty collector registry, found %', telemetry_collectors;
+  END IF;
 END \$\$;
 
 SELECT
@@ -155,7 +163,8 @@ SELECT
   (SELECT count(*) FROM skill_events) AS skill_events,
   (SELECT count(*) FROM ax_client_usage) AS usage_rows,
   (SELECT count(*) FROM ax_skill_execution_attempts) AS execution_attempts,
-  (SELECT count(*) FROM ax_agent_telemetry_batches) AS telemetry_batches;
+  (SELECT count(*) FROM ax_agent_telemetry_batches) AS telemetry_batches,
+  (SELECT count(*) FROM ax_agent_telemetry_collectors) AS telemetry_collectors;
 "
 
 printf '%s\n' "Clean isolated rebuild verified: $REBUILD_DATABASE"

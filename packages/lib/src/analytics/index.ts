@@ -32,6 +32,16 @@ export {
 export { recordSkillExecutionAttempt, recordSkillExecutionStart } from './skill-execution'
 export { recordAgentTelemetryBatch } from './agent-telemetry'
 export {
+  AgentTelemetryCollectorConflictError,
+  authenticateAgentTelemetryCollector,
+  enrollAgentTelemetryCollector,
+  isAgentTelemetryCollectorToken,
+  recordAgentTelemetryCollectorSuccess,
+  revokeAgentTelemetryCollector,
+  type AgentTelemetryCollectorCredential,
+  type EnrollAgentTelemetryCollectorInput,
+} from './agent-telemetry-collectors'
+export {
   getSkillFunnelStats,
   invalidateSkillStatsCache,
   type SkillFunnelStats,

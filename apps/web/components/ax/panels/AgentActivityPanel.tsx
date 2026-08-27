@@ -18,6 +18,7 @@ const SOURCE_LABELS: Record<AxAgentTelemetrySource, string> = {
 const STATUS_LABELS: Record<AxAgentSourceCoverageRow['status'], string> = {
   reporting: '수집 중',
   stale: '지연',
+  installed: '설치됨·대기',
   missing: '미보고',
   unsupported: '어댑터 필요',
   alternate: 'Claude로 대체',
@@ -42,7 +43,9 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
     <div className="space-y-10">
       <div>
         <p className="font-mono text-[11px] text-[var(--text-muted)]">
-          최근 {days}일 · 마지막 수집 {formatDateTime(data.syncedAt)} · {formatCount(data.collection.batches)}개 배치
+          최근 {days}일 · {data.collection.batches > 0
+            ? `마지막 수집 ${formatDateTime(data.syncedAt)}`
+            : '설치됨 · 첫 수집 대기'} · {formatCount(data.collection.batches)}개 배치
         </p>
         <p className="mt-1 font-mono text-[10px] text-[var(--text-muted)]">
           실제 집계 {formatDateTime(data.windowStart)} – {formatDateTime(data.windowEnd)}
@@ -93,10 +96,11 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
       <section>
         <SectionTitle title="수집기 상태" hint="에이전트 ID와 소스마다 별도 체크포인트를 사용합니다" />
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[900px]">
             <thead><tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TH}`}>에이전트</th>
               <th className={`text-left ${TH}`}>소스</th>
+              <th className={`text-left ${TH}`}>상태</th>
               <th className={`text-right ${TH}`}>수집 경과</th>
               <th className={`text-right ${TH}`}>턴</th>
               <th className={`text-right ${TH}`}>처리 토큰</th>
@@ -106,9 +110,17 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
               {data.reporters.map((row) => (
                 <tr key={`${row.agentId}-${row.source}`}>
                   <td className={`${TD} font-mono text-[var(--text-primary)]`}>{row.agentId}</td>
-                  <td className={`${TD} text-[var(--text-secondary)]`}>{SOURCE_LABELS[row.source]}</td>
-                  <td className={`${TD} text-right font-mono ${row.freshness === 'stale' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
-                    {row.freshnessHours}시간
+                  <td className={`${TD} text-[var(--text-secondary)]`}>
+                    {SOURCE_LABELS[row.source]}
+                    <span className="ml-2 font-mono text-[10px] text-[var(--text-muted)]">
+                      {row.managed ? '자동' : '기존 방식'}
+                    </span>
+                  </td>
+                  <td className={TD}>
+                    <CollectorStatus freshness={row.freshness} health={row.healthStatus} warnings={row.healthWarnings.length} />
+                  </td>
+                  <td className={`${TD} text-right font-mono ${row.freshness === 'stale' || row.healthStatus === 'blocked' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
+                    {row.freshnessHours === null ? '첫 수집 대기' : `${row.freshnessHours}시간`}
                   </td>
                   <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(row.turns)}</td>
                   <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-primary)]`}>{formatTokens(
@@ -191,6 +203,32 @@ function Status({ status }: { status: AxAgentSourceCoverageRow['status'] }) {
   return (
     <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] ${active ? 'bg-[var(--bg-tertiary)] text-[var(--brand-primary)]' : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'}`}>
       {STATUS_LABELS[status]}
+    </span>
+  )
+}
+
+function CollectorStatus({
+  freshness,
+  health,
+  warnings,
+}: {
+  freshness: 'fresh' | 'stale' | 'waiting'
+  health: 'healthy' | 'blocked' | 'unknown'
+  warnings: number
+}) {
+  const label = health === 'blocked'
+    ? '수집 차단'
+    : freshness === 'waiting'
+      ? '첫 수집 대기'
+      : freshness === 'stale'
+        ? '수집 지연'
+        : health === 'healthy'
+          ? '정상'
+          : '수집 중'
+  const warning = health === 'blocked' || freshness === 'stale'
+  return (
+    <span className={`rounded-full bg-[var(--bg-tertiary)] px-2.5 py-1 font-mono text-[10px] ${warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>
+      {label}{warnings > 0 ? ` · 경고 ${warnings}` : ''}
     </span>
   )
 }

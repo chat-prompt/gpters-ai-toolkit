@@ -7,6 +7,7 @@ GPTers AI Toolkit MCP 서버와 연동하여, 작업 시작 시 관련 팀 스�
 - **skill-suggest**: 사용자의 요청을 분석하여 GPTers AI Toolkit에서 관련 스킬을 자동 검색합니다. 검색된 스킬의 가이드라인과 체크리스트를 현재 작업에 적용하여, 팀의 베스트 프랙티스를 일관되게 활용할 수 있습니다.
 - **MCP 서버 자동 연결**: 플러그인 설치 시 GPTers AI Toolkit MCP 서버(`https://ai-toolkit.gpters.org/api/mcp`)가 자동으로 등록됩니다. 별도의 `claude mcp add` 명령이 필요하지 않습니다.
 - **사용량 자동 보고**: 하루 한 번, 세션 시작 시 Claude Code와 Codex 사용량을 집계해 [AX 대시보드](https://ai-toolkit.gpters.org/ko/ax)로 보냅니다. `aitk` CLI가 설치돼 있어야 동작합니다.
+- **에이전트 텔레메트리 설정 지침**: 사용자가 요청하면 `agent-telemetry-setup` 스킬이 범위를 확인하고 macOS Keychain·launchd 기반 수집기를 안전하게 설치·진단·해제합니다. 자동 설치되지는 않습니다.
 
 ### 사용량 보고가 보내는 것
 
@@ -24,6 +25,16 @@ export AITK_USAGE_REPORT=0
 aitk usage report --dry-run   # 무엇을 보낼지 출력만
 aitk usage report             # 지금 보내기
 ```
+
+### 에이전트/런타임 상세 수집
+
+위 사용량 보고와 별도로, 특정 에이전트나 작업 범위의 도구·스킬·수집 건강도를
+보려면 `@gpters/aitk` 0.7.0 이상의 `agent-telemetry` 설치형 수집기를 사용합니다.
+사용자 승인 후 한 번 설치하면 주기 실행은 에이전트 프롬프트가 아니라 macOS
+launchd가 담당합니다. collector token을 채팅으로 전달할 필요가 없습니다.
+
+자세한 범위·Hermes 제한·운영 명령은
+[수집기 운영 가이드](../../infra/agent-telemetry/README.md)를 참고하세요.
 
 ## 사전 요구사항
 
@@ -100,8 +111,10 @@ apps/claude-code-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # 플러그인 메타데이터 및 MCP 서버 설정
 ├── skills/
-│   └── skill-suggest/
-│       └── SKILL.md         # skill-suggest 스킬 정의
+│   ├── skill-suggest/
+│   │   └── SKILL.md         # skill-suggest 스킬 정의
+│   └── agent-telemetry-setup/
+│       └── SKILL.md         # 승인 기반 수집기 설치·진단
 └── README.md                # 이 파일
 ```
 
