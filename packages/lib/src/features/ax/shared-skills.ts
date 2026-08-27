@@ -24,6 +24,7 @@ const META: AxPanelMeta = {
   description: '사내 에이전트가 공용으로 쓰는 저장소(bbopters-shared)의 스킬 인벤토리',
   source: 'GitHub (bbopters-shared)',
   visibility: 'org',
+  parentId: 'skill-usage',
   usesPeriod: false,
 }
 

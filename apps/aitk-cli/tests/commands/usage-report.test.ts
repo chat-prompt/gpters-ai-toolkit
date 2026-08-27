@@ -79,4 +79,17 @@ describe('aitk usage report', () => {
 
     expect(jsonOut).toHaveBeenCalledWith({ records: [{ ...RECORD, client: 'codex' }] })
   })
+
+  it('사용량이 0건이어도 수집기 상태를 알 수 있도록 빈 records를 보낸다', async () => {
+    collected.claude = null
+    collected.codex = null
+
+    await runUsageReport({ days: 7, dryRun: false })
+
+    expect(jsonRpcCall).toHaveBeenCalledWith(
+      'tools/call',
+      { name: 'report_usage', arguments: { records: [] } },
+      'tok'
+    )
+  })
 })

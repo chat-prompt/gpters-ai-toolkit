@@ -29,6 +29,7 @@ export {
   recordExerciseSearchEvents,
   recordExerciseApplyEvent,
 } from './skill-events'
+export { recordAgentTelemetryBatch } from './agent-telemetry'
 export {
   getSkillFunnelStats,
   invalidateSkillStatsCache,

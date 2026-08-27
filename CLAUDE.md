@@ -181,6 +181,15 @@ See `docs/AUTO_PLUGIN_DISCOVERY.md` for detailed documentation.
 See `docs/TEAM_ONBOARDING.md` for team member setup guide.
 See `docs/ARCHITECTURE_V2.md` for V2 deploy architecture.
 
+## Slack Agent Workroom Rules
+
+이 저장소의 작업을 Slack 에이전트 업무방에서 요청하거나 조율하기 전에
+`docs/AGENT_SLACK_CHANNEL_RULES.md`를 반드시 읽고 따른다.
+
+- 채널 원문은 대상 에이전트 멘션과 짧은 한 줄 제목만 사용한다.
+- 배경·지시·검증·후속 대화·결과는 모두 해당 원문의 스레드에 쓴다.
+- 처음 사용하는 방이거나 규칙이 불명확하면 최하영님(`<@U0BP4R0CUSD>`)을 먼저 호출한다.
+
 ## Development Guidelines
 
 ### Test Requirements

@@ -5,7 +5,7 @@
  * 대화 내용·파일 경로는 읽되 어디에도 담지 않는다 — 나가는 건 집계 수치와 플랜 문자열뿐이다.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { findJsonlFiles, scanJsonl, toCount } from './jsonl.js'
@@ -13,6 +13,77 @@ import type { UsageRecord, UsageWindow } from './types.js'
 
 /** 토큰이 붙는 줄은 assistant 줄뿐이다 — 이 문자열이 없으면 파싱할 이유가 없다 */
 const ASSISTANT_HINT = '"assistant"'
+
+/** statusline usage cache는 5분마다 갱신된다. 이보다 오래된 스냅샷은 현재 한도로 보고하지 않는다. */
+const USAGE_CACHE_MAX_AGE_MS = 15 * 60 * 1000
+
+interface ClaudeWeeklyLimit {
+  usedPercent: number
+  resetsAt: string | null
+}
+
+/** 알 수 없는 값을 0~100 범위의 사용률로 바꾼다 */
+function toPercent(value: unknown): number | null {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 && number <= 100 ? number : null
+}
+
+/** Claude usage 응답의 문자열 또는 epoch 초 리셋 시각을 ISO 8601로 바꾼다 */
+function toResetIso(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  const date = typeof value === 'number' ? new Date(value * 1000) : new Date(String(value))
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+/**
+ * Claude Code statusline이 캐시한 계정 주간 한도 스냅샷을 읽는다.
+ *
+ * Claude Code의 `/usage` 화면과 statusline은 계정 단위 rate-limit 데이터를 보여준다.
+ * 대화 트랜스크립트에는 이 값이 없으므로, 수집기는 원시 OAuth 토큰 대신 로컬에 이미
+ * 만들어진 usage cache의 주간 전체 한도만 읽는다. 캐시가 없거나 오래됐으면 추정하지 않는다.
+ *
+ * @param home - 홈 디렉터리
+ * @param nowMs - 현재 시각(epoch ms). 테스트에서 최신성 경계를 고정할 수 있게 받는다
+ */
+export function readClaudeWeeklyLimit(home: string, nowMs = Date.now()): ClaudeWeeklyLimit | null {
+  const path = join(home, '.claude', 'statusline-usage-cache.json')
+
+  try {
+    const age = nowMs - statSync(path).mtimeMs
+    if (age < -USAGE_CACHE_MAX_AGE_MS || age > USAGE_CACHE_MAX_AGE_MS) return null
+
+    const cache = JSON.parse(readFileSync(path, 'utf-8')) as {
+      seven_day?: { utilization?: unknown; resets_at?: unknown } | null
+      limits?: Array<{
+        kind?: unknown
+        group?: unknown
+        percent?: unknown
+        resets_at?: unknown
+        scope?: unknown
+      }>
+    }
+
+    let usedPercent = toPercent(cache.seven_day?.utilization)
+    let resetsAt = toResetIso(cache.seven_day?.resets_at)
+
+    if (usedPercent === null && Array.isArray(cache.limits)) {
+      const weekly = cache.limits.find(
+        (limit) =>
+          limit.kind === 'weekly_all' ||
+          (limit.group === 'weekly' && (limit.scope === null || limit.scope === undefined))
+      )
+      usedPercent = toPercent(weekly?.percent)
+      resetsAt = toResetIso(weekly?.resets_at)
+    }
+
+    if (usedPercent === null) return null
+    if (resetsAt !== null && new Date(resetsAt).getTime() <= nowMs) return null
+
+    return { usedPercent, resetsAt }
+  } catch {
+    return null
+  }
+}
 
 /** 트랜스크립트 한 줄에서 실제로 쓰는 부분 */
 interface AssistantEntry {
@@ -98,6 +169,7 @@ export function toClaudePlanName(planRaw: string | null): string | null {
  */
 export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecord | null> {
   const home = homedir()
+  const weeklyLimit = readClaudeWeeklyLimit(home)
   const files = await findJsonlFiles(join(home, '.claude', 'projects'), window.start)
   if (files.length === 0) return null
 
@@ -129,7 +201,7 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
         if (entry.type !== 'assistant') return
 
         const at = Date.parse(String(entry.timestamp))
-        if (!Number.isFinite(at) || at < startMs || at > endMs) return
+        if (!Number.isFinite(at) || at < startMs || at >= endMs) return
 
         const message = entry.message
         const messageId = message?.id
@@ -151,6 +223,10 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
           model,
           complete: typeof stopReason === 'string' && stopReason.length > 0,
         }
+
+        // 미완성 스트리밍 줄은 다음 구간에서 완성본과 다시 잡혀 이중 계상될 수 있다.
+        // 완료 시점의 한 구간에만 귀속하도록 stop_reason이 생긴 응답만 집계한다.
+        if (!candidate.complete) return
 
         const previous = adopted.get(messageId)
         if (previous && !isBetterSnapshot(candidate, previous)) return
@@ -199,9 +275,9 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
     cachedTokens,
     sessions: sessions.size,
     models,
-    // Claude Code는 남은 한도를 로컬에 남기지 않는다. 0으로 채우면 "한도를 안 쓴 사람"과
-    // 구분되지 않으므로 null로 보낸다.
-    limitUsedPercent: null,
-    limitResetsAt: null,
+    // 트랜스크립트가 아니라 Claude statusline의 최신 계정 한도 스냅샷에서 가져온다.
+    // 캐시가 없거나 오래됐으면 0으로 추정하지 않고 null을 유지한다.
+    limitUsedPercent: weeklyLimit?.usedPercent ?? null,
+    limitResetsAt: weeklyLimit?.resetsAt ?? null,
   }
 }

@@ -20,6 +20,8 @@ export type AxPanelStatus = 'ok' | 'not_configured' | 'error'
 export interface AxPanelMeta {
   /** URL·레지스트리 키. kebab-case */
   id: string
+  /** 화면에서는 이 최상위 패널 아래의 보조 보기로 묶는다 */
+  parentId?: string
   /** 화면에 보이는 제목 */
   title: string
   /** 한 줄 설명 */
@@ -351,6 +353,71 @@ export interface AxClientUsageData {
   byModel: Array<{ model: string; tokens: number }>
   /** 팀원별 상세. 관리자에게만 채워지고 그 외에는 null */
   members: AxClientUsageMemberRow[] | null
+}
+
+/** 에이전트 텔레메트리 소스. */
+export type AxAgentTelemetrySource = 'openclaw' | 'claude-code' | 'codex' | 'hermes'
+
+/** thinking은 output의 부분집합일 수 있으므로 합산 시 관계 필드를 반드시 확인한다. */
+export interface AxAgentTokenUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheCreationInputTokens: number
+  cacheReadInputTokens: number
+  thinkingTokens: number
+  thinkingTokensRelation: 'included-in-output' | 'separate-from-output' | 'unknown'
+}
+
+export interface AxAgentReporterRow {
+  agentId: string
+  source: AxAgentTelemetrySource
+  lastCollectedAt: string
+  freshnessHours: number
+  freshness: 'fresh' | 'stale'
+  sessions: number
+  turns: number
+  usage: AxAgentTokenUsage
+  toolCalls: number
+  toolFailures: number
+  healthWarnings: string[]
+}
+
+export interface AxAgentSourceCoverageRow {
+  source: AxAgentTelemetrySource
+  status: 'reporting' | 'stale' | 'missing' | 'unsupported' | 'alternate'
+  lastCollectedAt: string | null
+  capabilities: { usage: boolean; tools: boolean; skills: boolean }
+  note: string
+}
+
+/** 에이전트 활동 패널 — 원문·세션 ID·경로 없이 집계값만 담는다. */
+export interface AxAgentActivityData {
+  syncedAt: string
+  windowStart: string
+  windowEnd: string
+  totalUsage: AxAgentTokenUsage
+  /** thinking 포함 관계를 반영한 총 처리 토큰. included-in-output이면 다시 더하지 않는다. */
+  totalProcessedTokens: number
+  sessions: number
+  turns: number
+  toolCalls: number
+  toolFailures: number
+  reporters: AxAgentReporterRow[]
+  sourceCoverage: AxAgentSourceCoverageRow[]
+  models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
+  tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
+  skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  collection: {
+    batches: number
+    recordsRead: number
+    parseFailures: number
+    unsupportedRecordsSkipped: number
+  }
+  insights: Array<{
+    severity: 'warning' | 'opportunity' | 'info'
+    title: string
+    detail: string
+  }>
 }
 
 /** 구독 패널이 내려주는 집계. 팀원별 상세는 관리자에게만 채워진다 */

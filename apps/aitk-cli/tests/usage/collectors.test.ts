@@ -47,7 +47,7 @@ function assistantLine(opts: {
     message: {
       id: opts.id,
       model: opts.model ?? 'claude-opus-5',
-      stop_reason: opts.stopReason ?? null,
+      stop_reason: opts.stopReason === undefined ? 'end_turn' : opts.stopReason,
       usage: {
         input_tokens: opts.input ?? 0,
         cache_creation_input_tokens: opts.cacheCreation ?? 0,
@@ -134,6 +134,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   rmSync(state.home, { recursive: true, force: true })
 })
 
@@ -180,7 +181,7 @@ describe('collectClaudeCode', () => {
     write(
       '.claude/projects/proj-a/streaming.jsonl',
       [
-        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 59, output: 2 }),
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 59, output: 2, stopReason: null }),
         assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 59, output: 676, stopReason: 'end_turn' }),
       ].join('\n')
     )
@@ -199,7 +200,7 @@ describe('collectClaudeCode', () => {
     write(
       '.claude/projects/proj-a/shrink.jsonl',
       [
-        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 100, cacheRead: 0, output: 50 }),
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 100, cacheRead: 0, output: 50, stopReason: null }),
         assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, input: 80, cacheRead: 10, output: 40, stopReason: 'end_turn' }),
       ].join('\n')
     )
@@ -217,7 +218,7 @@ describe('collectClaudeCode', () => {
     write(
       '.claude/projects/proj-a/model-switch.jsonl',
       [
-        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, model: 'partial-model', input: 100, output: 2 }),
+        assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, model: 'partial-model', input: 100, output: 2, stopReason: null }),
         assistantLine({ id: 'm1', sessionId: 's1', timestamp: IN_WINDOW, model: 'final-model', input: 100, output: 50, stopReason: 'end_turn' }),
       ].join('\n')
     )
@@ -296,7 +297,50 @@ describe('collectClaudeCode', () => {
     expect(record!.models).toEqual({ 'claude-opus-5': 15 })
   })
 
-  it('한도 정보가 없으므로 0이 아니라 null을 보낸다', async () => {
+  it('최신 statusline usage cache에서 Claude 주간 한도와 리셋 시각을 읽는다', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    write('.claude/projects/p/s.jsonl', assistantLine({ id: 'a', sessionId: 's1', timestamp: IN_WINDOW, input: 1, output: 1 }))
+    const cache = write(
+      '.claude/statusline-usage-cache.json',
+      JSON.stringify({
+        seven_day: {
+          utilization: 63,
+          resets_at: '2026-08-10T12:00:00.000Z',
+        },
+      })
+    )
+    utimesSync(cache, NOW, NOW)
+
+    const record = await collectClaudeCode(WINDOW)
+
+    expect(record!.limitUsedPercent).toBe(63)
+    expect(record!.limitResetsAt).toBe('2026-08-10T12:00:00.000Z')
+  })
+
+  it('오래된 Claude usage cache는 현재 한도로 보고하지 않는다', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    write('.claude/projects/p/s.jsonl', assistantLine({ id: 'a', sessionId: 's1', timestamp: IN_WINDOW, input: 1, output: 1 }))
+    const cache = write(
+      '.claude/statusline-usage-cache.json',
+      JSON.stringify({
+        seven_day: {
+          utilization: 63,
+          resets_at: '2026-08-10T12:00:00.000Z',
+        },
+      })
+    )
+    const stale = new Date(NOW.getTime() - 60 * 60 * 1000)
+    utimesSync(cache, stale, stale)
+
+    const record = await collectClaudeCode(WINDOW)
+
+    expect(record!.limitUsedPercent).toBeNull()
+    expect(record!.limitResetsAt).toBeNull()
+  })
+
+  it('한도 스냅샷이 없으면 0이 아니라 null을 보낸다', async () => {
     write('.claude/projects/p/s.jsonl', assistantLine({ id: 'a', sessionId: 's1', timestamp: IN_WINDOW, input: 1, output: 1 }))
 
     const record = await collectClaudeCode(WINDOW)
@@ -307,6 +351,36 @@ describe('collectClaudeCode', () => {
 
   it('트랜스크립트가 없으면 null을 돌려준다', async () => {
     expect(await collectClaudeCode(WINDOW)).toBeNull()
+  })
+
+  it('미완성 스트리밍 응답은 다음 구간의 완성본과 중복되지 않도록 세지 않는다', async () => {
+    write(
+      '.claude/projects/p/s.jsonl',
+      assistantLine({
+        id: 'streaming',
+        sessionId: 's1',
+        timestamp: IN_WINDOW,
+        input: 10,
+        output: 2,
+        stopReason: null,
+      })
+    )
+
+    expect(await collectClaudeCode(WINDOW)).toBeNull()
+  })
+
+  it('구간 끝과 정확히 같은 Claude 응답은 다음 구간에만 포함한다', async () => {
+    write(
+      '.claude/projects/p/s.jsonl',
+      assistantLine({ id: 'at-end', sessionId: 's1', timestamp: NOW.toISOString(), input: 10, output: 2 })
+    )
+
+    expect(await collectClaudeCode(WINDOW)).toBeNull()
+    const next = await collectClaudeCode({
+      start: NOW,
+      end: new Date(NOW.getTime() + 86_400_000),
+    })
+    expect(next?.inputTokens).toBe(10)
   })
 })
 
@@ -404,6 +478,20 @@ describe('collectCodex', () => {
 
   it('롤아웃이 없으면 null을 돌려준다', async () => {
     expect(await collectCodex(WINDOW)).toBeNull()
+  })
+
+  it('구간 끝과 정확히 같은 Codex 이벤트는 다음 구간에만 포함한다', async () => {
+    write(
+      '.codex/sessions/2026/08/07/rollout-boundary.jsonl',
+      tokenCountLine({ timestamp: NOW.toISOString(), input: 10, cached: 0, output: 2 })
+    )
+
+    expect(await collectCodex(WINDOW)).toBeNull()
+    const next = await collectCodex({
+      start: NOW,
+      end: new Date(NOW.getTime() + 86_400_000),
+    })
+    expect(next?.inputTokens).toBe(10)
   })
 })
 

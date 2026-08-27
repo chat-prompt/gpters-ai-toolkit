@@ -51,7 +51,7 @@ function setConfig(key: string, value: string): void {
   }
 
   const config = readConfig()
-  ;(config as Record<string, unknown>)[key] = value
+  ;(config as unknown as Record<string, unknown>)[key] = value
   writeConfig(config)
 
   info(`${key} = ${value}`)

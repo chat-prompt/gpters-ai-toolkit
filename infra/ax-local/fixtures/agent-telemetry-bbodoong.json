@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "1.0.0",
+  "batchId": "33333333-3333-4333-8333-333333333333",
+  "agentId": "bbodoong",
+  "collectorInstanceId": "collector-bbodoong-01",
+  "runtime": {
+    "openclawVersion": "2026.7.1-2",
+    "claudeCliVersion": "2.1.246",
+    "collectorVersion": "0.1.0"
+  },
+  "window": {
+    "startUtc": "2026-08-26T00:00:00.000Z",
+    "endUtc": "2026-08-26T01:30:00.000Z"
+  },
+  "collectedAtUtc": "2026-08-26T01:32:42.000Z",
+  "usage": {
+    "inputTokens": 3774,
+    "outputTokens": 1748352,
+    "cacheCreationInputTokens": 19432023,
+    "cacheReadInputTokens": 356973357,
+    "thinkingTokens": 665675,
+    "thinkingTokensRelation": "included-in-output"
+  },
+  "sessions": 61,
+  "turns": 1904,
+  "models": [
+    {
+      "model": "claude-opus-5",
+      "turns": 1894,
+      "usage": {
+        "inputTokens": 3700,
+        "outputTokens": 1739000,
+        "cacheCreationInputTokens": 19400000,
+        "cacheReadInputTokens": 356000000,
+        "thinkingTokens": 660000,
+        "thinkingTokensRelation": "included-in-output"
+      }
+    },
+    {
+      "model": "claude-sonnet-5",
+      "turns": 10,
+      "usage": {
+        "inputTokens": 74,
+        "outputTokens": 9352,
+        "cacheCreationInputTokens": 32023,
+        "cacheReadInputTokens": 973357,
+        "thinkingTokens": 5675,
+        "thinkingTokensRelation": "included-in-output"
+      }
+    }
+  ],
+  "tools": [
+    { "name": "Bash", "calls": 1723, "failures": 8 },
+    { "name": "Read", "calls": 65, "failures": 0 },
+    { "name": "Skill", "calls": 10, "failures": 1 }
+  ],
+  "skillLoads": [
+    { "skillId": "browse", "loaded": 5, "failed": 0, "interrupted": 0 },
+    { "skillId": "openclaw-skills:session-cleanup", "loaded": 4, "failed": 0, "interrupted": 1 }
+  ],
+  "taskCategories": [
+    {
+      "category": "infra-ops",
+      "sessions": 40,
+      "turns": 1400,
+      "usage": {
+        "inputTokens": 2500,
+        "outputTokens": 1200000,
+        "cacheCreationInputTokens": 15000000,
+        "cacheReadInputTokens": 280000000,
+        "thinkingTokens": 480000,
+        "thinkingTokensRelation": "included-in-output"
+      }
+    },
+    {
+      "category": "unclassified",
+      "sessions": 21,
+      "turns": 504,
+      "usage": {
+        "inputTokens": 1274,
+        "outputTokens": 548352,
+        "cacheCreationInputTokens": 4432023,
+        "cacheReadInputTokens": 76973357,
+        "thinkingTokens": 185675,
+        "thinkingTokensRelation": "included-in-output"
+      }
+    }
+  ],
+  "executions": [
+    { "status": "success", "evidence": "verified", "count": 2 },
+    { "status": "running", "evidence": "none", "count": 1 }
+  ],
+  "collection": {
+    "source": "claude-code",
+    "filesDiscovered": 61,
+    "filesExcludedByScope": 0,
+    "filesRead": 61,
+    "filesReset": 1,
+    "recordsRead": 26275,
+    "includedRecords": 1904,
+    "metadataSkipped": 22289,
+    "nonAssistantSkipped": 0,
+    "duplicatesSkipped": 2065,
+    "syntheticSkipped": 17,
+    "malformedSkipped": 0,
+    "outsideWindowSkipped": 0,
+    "unsupportedRecordsSkipped": 0,
+    "missingIdentitySkipped": 0,
+    "orphanToolResultsSkipped": 0,
+    "parseFailures": 0,
+    "lagMinutes": 2.7,
+    "healthStatus": "healthy",
+    "healthWarnings": []
+  }
+}

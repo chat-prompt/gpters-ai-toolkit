@@ -60,7 +60,6 @@ async function rollback() {
       .set({
         orgId: null,
         visibility: null,
-        sharedWithOrgs: null,
       })
       .where(eq(catalogItems.orgId, gptersOrgId))
 

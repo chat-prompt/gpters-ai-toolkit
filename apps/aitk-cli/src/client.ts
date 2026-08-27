@@ -150,3 +150,79 @@ export async function jsonRpcCall<T = unknown>(
     return { ok: false, error: message }
   }
 }
+
+/**
+ * MCP 세션을 먼저 초기화한 뒤 JSON-RPC 도구를 호출한다.
+ *
+ * 분석 이벤트는 MCP 세션 ID를 외래키로 사용하므로, 실행 결과처럼 반드시
+ * 저장되어야 하는 보고 명령은 세션 없는 jsonRpcCall 대신 이 함수를 사용한다.
+ */
+export async function jsonRpcSessionCall<T = unknown>(
+  method: string,
+  params: Record<string, unknown>,
+  token?: string,
+  clientInfo: { name: string; version: string } = { name: 'aitk-cli', version: 'local' }
+): Promise<ApiResult<T>> {
+  const url = `${getServerUrl()}/api/mcp`
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  try {
+    const initializeResponse = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo,
+        },
+      }),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (initializeResponse.status === 401) {
+      return { ok: false, error: 'Auth required. Run "aitk login" first.', status: 401 }
+    }
+    if (!initializeResponse.ok) {
+      return { ok: false, error: `MCP initialize failed: HTTP ${initializeResponse.status}`, status: initializeResponse.status }
+    }
+
+    const initializeBody = (await initializeResponse.json()) as { error?: { message?: string } }
+    if (initializeBody.error) {
+      return { ok: false, error: initializeBody.error.message ?? 'MCP initialize failed' }
+    }
+
+    const sessionId = initializeResponse.headers.get('mcp-session-id')
+    if (!sessionId) {
+      return { ok: false, error: 'MCP initialize did not return a session ID' }
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { ...headers, 'Mcp-Session-Id': sessionId },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method, params }),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (response.status === 401) {
+      return { ok: false, error: 'Auth required. Run "aitk login" first.', status: 401 }
+    }
+    if (!response.ok) {
+      return { ok: false, error: `HTTP ${response.status}`, status: response.status }
+    }
+
+    const body = (await response.json()) as { result?: T; error?: { message?: string } }
+    if (body.error) return { ok: false, error: body.error.message ?? 'JSON-RPC error' }
+    return { ok: true, data: body.result as T, status: response.status }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('TimeoutError') || message.includes('abort')) {
+      return { ok: false, error: 'Request timeout (30s)' }
+    }
+    return { ok: false, error: message }
+  }
+}

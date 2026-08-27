@@ -28,7 +28,7 @@ const log = createLogger('ax-usage')
 
 const meta: AxPanelMeta = {
   id: 'client-usage',
-  title: '클라이언트 사용량',
+  title: '클라이언트',
   description: '팀원별 AI 코딩 도구 사용량과 주간 한도 소진율',
   source: '각 팀원 로컬 수집기',
   visibility: 'org',

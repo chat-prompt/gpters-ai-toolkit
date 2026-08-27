@@ -27,6 +27,7 @@ const meta: AxPanelMeta = {
   description: '팀에서 쓰는 AI·SaaS 구독 플랜과 월 비용',
   source: '결제내역 트래커 시트 (수동 import)',
   visibility: 'org',
+  parentId: 'client-usage',
   usesPeriod: false,
 }
 
