@@ -93,7 +93,8 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 ## 후속 작업
 
 1. 뽀둥이 `(bbodoong, claude-code)` 수집 freshness와 집계 이상을 7일간 관찰
-2. Codex와 Hermes source parser·checkpoint·reporter를 각각 추가
+2. 운영 시범 수집이 끝난 Codex를 관찰하고, Hermes는
+   [프로필 범위 규칙](./2026-08-27-hermes-telemetry-scope.md)에 따라 실제 DB 대조를 완료
 3. 스킬 load와 분리된 명시적 실행 시작·완료·검증 결과 보고를 연결
 4. 에이전트 활동 요약 문장의 값·보조 문구 구분과 한국어 라벨을 다듬기
 5. 7일 관찰 뒤 이상이 없으면 운영 복구 브랜치 자동 삭제를 확인
