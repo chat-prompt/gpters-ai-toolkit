@@ -9,7 +9,7 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSetup, printSummary } from '../src/setup.js'
-import type { Scope } from '../src/paths.js'
+import { resolvePackageRoot, type Scope } from '../src/paths.js'
 
 const args = process.argv.slice(2)
 
@@ -17,7 +17,7 @@ const command = args[0]
 
 if (command === '--version' || command === '-v' || command === '-V') {
   const binDir = fileURLToPath(new URL('.', import.meta.url))
-  const pkgPath = join(binDir, '..', '..', 'package.json')
+  const pkgPath = join(resolvePackageRoot(binDir), 'package.json')
   const { readFileSync } = await import('node:fs')
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
   console.log(`@gpters/codex-plugin v${pkg.version}`)
@@ -32,7 +32,7 @@ if (command === '--version' || command === '-v' || command === '-V') {
   const force = args.includes('--force')
 
   const binDir = fileURLToPath(new URL('.', import.meta.url))
-  const packageRoot = join(binDir, '..')
+  const packageRoot = resolvePackageRoot(binDir)
   const skillsSourceDir = join(packageRoot, 'skills')
   const templatesDir = join(packageRoot, 'templates')
 
