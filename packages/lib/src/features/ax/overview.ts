@@ -34,7 +34,6 @@ const meta: AxPanelMeta = {
  * 값 대신 미계측 사유를 내려보낸다. 계측이 붙으면 여기서 지우고 데이터 필드로 옮긴다.
  */
 const UNMEASURED: AxOverviewData['unmeasured'] = [
-  { label: '에이전트별 사용량', reason: '수신 계약과 로컬 화면은 준비됐지만 사내 에이전트의 실제 보고가 아직 미연결입니다 (DEV-4221)' },
   { label: '완료 세션 · 완주율', reason: '스킬 실행 시작·완료는 계측하지만 사용자 작업 세션 전체의 완주 기준은 아직 없습니다' },
   { label: '절감 시간', reason: '작업당 절감 시간을 산정할 실측 근거가 없습니다' },
   { label: '부서별 참여', reason: '구성원-부서 매핑 데이터가 없습니다' },

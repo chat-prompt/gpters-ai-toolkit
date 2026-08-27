@@ -179,6 +179,7 @@ describe('overviewPanel', () => {
       expect(item.label.trim()).not.toBe('')
       expect(item.reason.trim()).not.toBe('')
     }
+    expect(data.unmeasured.map((item) => item.label)).not.toContain('에이전트별 사용량')
 
     // 요약 밴드 수치
     expect(result.highlights).toEqual([

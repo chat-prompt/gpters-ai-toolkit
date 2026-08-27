@@ -11,7 +11,7 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 - 기반 커밋: PR #33 병합 커밋 `d25d1cbd`
 - PR #33은 뽀둥이 timer-triggered 수집 2회 성공 후 2026-08-27 `main`에 병합했다.
 - 운영 Vercel 배포와 텔레메트리 API 인증 smoke test를 확인한 뒤 이 브랜치를 새 `main` 위로 재정렬했다.
-- Vercel Preview와 Production이 동일한 `DATABASE_URL`을 공유하므로 child branch 연결 전 Preview 쓰기 검증을 금지한다.
+- PR #34 Preview에는 브랜치 한정 `DATABASE_URL`을 등록해 Production과 DB를 분리했다.
 
 ## 통합한 기능
 
@@ -65,20 +65,26 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 - 운영 DB 확인: 뽀둥이 timer 배치 2개가 `healthy`, `gap=0`, 15턴·31턴으로 저장됨
 - 운영 AX preflight: 사용량 48행 유일 매칭, ambiguous·unmatched·duplicate·삭제 모두 0
 - Child migration guard: 5개 단위 테스트 통과, 실제 운영 branch 무변경 거부 확인
+- Neon child `ax-dashboard-pr34-20260827`를 production의 시점 복제로 생성하고 `0026–0030` 적용 완료
+- Child 적용 후 migration 20행, 사용량 48행 유지, ambiguous·unmatched·삭제 0 확인
+- PR #34 브랜치 한정 Vercel Preview `DATABASE_URL` 등록 및 재배포 `Ready` 확인
+- Child DB 실조회: overview·skill-usage·journey-insights·agent-activity·client-usage·subscriptions 6개 패널 모두 `ok`
+- 에이전트 활동 실조회: reporter 1, source coverage 4, model 2, tool 19, skill load 4종 확인
 - 저장소 전체 web/lib typecheck에는 기존 테스트 fixture와 `rbac.ts` 경로 별칭 부채가 남아 있다.
 
-## 현재 외부 접근 게이트
+## 현재 Preview 상태
 
-- 로컬에는 Neon CLI/API 자격증명이 없다.
-- 연결 가능한 브라우저 세션도 없어 Neon child branch를 아직 생성하지 못했다.
-- Child branch URL이 준비되기 전에는 운영 DB에 `0026–0030`을 적용하지 않는다.
-- 준비된 `db:migrate:ax-child` runner는 project/child/production branch ID, 15행 기준선,
-  `0028` 무손실 조건을 모두 확인하고 `--apply` 없이는 변경하지 않는다.
+- Neon child ID: `br-cold-smoke-a1jh3bmc` (부모: production)
+- 자동 삭제: 2026-08-28 12:10 KST
+- 연결 문자열은 macOS Keychain과 Vercel Sensitive 환경변수에만 저장하며 문서·로그에는 남기지 않는다.
+- 브랜치 한정 환경변수가 전역 Preview/Production 값보다 PR #34에서만 우선한다.
+- Vercel Preview는 `Ready`지만 공용 `AUTH_URL`이 운영 도메인을 가리켜 브라우저 로그인 시 운영으로 이동한다.
+  따라서 현재 검증은 child DB 대상 패널 로더 실조회까지 완료했고, Preview UI 로그인 동선은 별도 설정이 필요하다.
+- 운영 DB에는 `0026–0030`을 적용하지 않았다.
 
 ## 다음 게이트
 
-1. PR #34 Preview를 운영 DB가 아닌 Neon child branch에 연결
-2. `0026–0030` child branch 적용 및 화면 검증
-3. 실행 결과·구성원 lifecycle·사용량 backfill을 합성 데이터와 비교
-4. PR #34 리뷰와 운영 반영 계획 승인
-5. 승인된 migration을 운영 DB에 먼저 적용한 뒤 웹을 배포
+1. Preview 전용 인증 URL/Google OAuth callback을 준비하거나, 승인된 다른 방법으로 PR 화면을 시각 검증
+2. 실행 결과·구성원 lifecycle·사용량 backfill을 child 데이터와 합성 데이터로 최종 비교
+3. PR #34 리뷰와 운영 반영 계획 승인
+4. 승인된 migration을 운영 DB에 먼저 적용한 뒤 웹을 배포

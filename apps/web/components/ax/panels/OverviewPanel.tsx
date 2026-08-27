@@ -44,7 +44,7 @@ export function OverviewPanel({ data, days }: AxPanelViewProps<AxOverviewData>) 
  * 사용자별 사용량 표 (관리자 전용)
  *
  * 이름 칸에 사용량 비례 막대를 깔아 순위 차이가 표를 읽지 않고도 보이게 한다.
- * 에이전트별 사용량은 실행 이벤트 수집이 붙기 전까지 미계측 목록에 명시된다.
+ * 에이전트별 사용량은 별도 에이전트 활동 패널에서 토큰·도구·스킬 신호로 보여준다.
  *
  * @param rows - 사용자별 집계 (사용량 내림차순)
  * @param days - 조회 기간(일)
