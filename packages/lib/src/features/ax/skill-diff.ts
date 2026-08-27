@@ -116,6 +116,7 @@ function contentHash(normalized: string): string {
 async function fetchSkillDocs(
   repo: string,
   token: string,
+  ref: string,
   paths: Array<{ id: string; path: string }>
 ): Promise<Map<string, string>> {
   const contents = new Map<string, string>()
@@ -125,7 +126,7 @@ async function fetchSkillDocs(
     for (let item = queue.shift(); item; item = queue.shift()) {
       try {
         const res = await fetch(
-          `https://api.github.com/repos/${repo}/contents/${item.path}/SKILL.md`,
+          `https://api.github.com/repos/${repo}/contents/${item.path}/SKILL.md?ref=${encodeURIComponent(ref)}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -148,23 +149,63 @@ async function fetchSkillDocs(
   return contents
 }
 
+/** 비교할 에이전트 저장소의 HEAD 커밋 SHA를 고정한다 */
+async function fetchHeadCommit(repo: string, token: string): Promise<string> {
+  const res = await fetch(`https://api.github.com/repos/${repo}/commits/HEAD`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+    },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`GitHub HEAD 조회 실패 (status ${res.status})`)
+  const body = (await res.json()) as { sha?: unknown }
+  if (typeof body.sha !== 'string' || body.sha.length === 0) {
+    throw new Error('GitHub HEAD 응답에 commit SHA가 없습니다')
+  }
+  return body.sha
+}
+
+/** aitk 비교 대상의 id·본문으로 내용 지문을 만든다 */
+function catalogFingerprint(rows: Array<{ id: string; content: string }>): string {
+  const hash = createHash('sha256')
+  for (const row of [...rows].sort((a, b) => a.id.localeCompare(b.id))) {
+    hash.update(row.id).update('\0').update(row.content ?? '').update('\0')
+  }
+  return hash.digest('hex')
+}
+
 /** 스킬 비교 패널 */
 export const skillDiffPanel: AxPanel<AxSkillDiffData> = {
   meta: META,
-  async load(): Promise<AxPanelResult<AxSkillDiffData>> {
+  async load({ forceRefresh = false }): Promise<AxPanelResult<AxSkillDiffData>> {
     const config = resolveSharedRepoConfig()
     if (!config.ok) {
       return panelNotConfigured(META, `${config.missing} 환경변수가 설정되지 않았습니다`)
     }
 
-    const cacheKey = `${config.repo}|${config.skillsPath}`
-    if (cache && cache.key === cacheKey && cache.expiresAt > Date.now()) {
-      return cache.result
-    }
-
     try {
-      // 1. 양쪽 인벤토리
-      const tree = await fetchRepoTree(config.repo, config.token)
+      // 먼저 양쪽 버전을 고정한다. 내용이 바뀌면 TTL이 남아 있어도 캐시 키가 달라진다.
+      const [agentCommitSha, aitkRows] = await Promise.all([
+        fetchHeadCommit(config.repo, config.token),
+        db
+          .select({ id: catalogItems.id, content: catalogItems.content })
+          .from(catalogItems)
+          .where(
+            and(
+              eq(catalogItems.type, 'skill'),
+              or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+            )
+          ),
+      ])
+      const aitkFingerprint = catalogFingerprint(aitkRows)
+      const cacheKey = `${config.repo}|${config.skillsPath}|${agentCommitSha}|${aitkFingerprint}`
+      if (!forceRefresh && cache && cache.key === cacheKey && cache.expiresAt > Date.now()) {
+        return cache.result
+      }
+
+      // 1. 양쪽 인벤토리 — HEAD가 움직여도 위에서 고정한 커밋을 읽는다.
+      const tree = await fetchRepoTree(config.repo, config.token, agentCommitSha)
       if (tree.truncated === true) {
         // 목록이 잘렸는데 비교를 내면 "빠진 스킬 = 차이 없음"으로 읽힌다 — 닫는 쪽이 정직하다
         return panelError(META, '저장소 트리가 잘려 비교가 불완전합니다. 잠시 후 다시 시도해 주세요')
@@ -173,19 +214,10 @@ export const skillDiffPanel: AxPanel<AxSkillDiffData> = {
         (skill) => skill.hasSkillDoc
       )
 
-      const aitkRows = await db
-        .select({ id: catalogItems.id, content: catalogItems.content })
-        .from(catalogItems)
-        .where(
-          and(
-            eq(catalogItems.type, 'skill'),
-            or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
-          )
-        )
       const aitkById = new Map(aitkRows.map((row) => [row.id, normalizeSkillDoc(row.content)]))
 
       // 2. 에이전트 SKILL.md 원문 (무거운 구간 — 1시간 캐시의 이유)
-      const agentDocs = await fetchSkillDocs(config.repo, config.token, agentSkills)
+      const agentDocs = await fetchSkillDocs(config.repo, config.token, agentCommitSha, agentSkills)
       const agentNormalized = new Map(
         Array.from(agentDocs.entries()).map(([id, text]) => [id, normalizeSkillDoc(text)])
       )
@@ -237,6 +269,11 @@ export const skillDiffPanel: AxPanel<AxSkillDiffData> = {
       crossMatches.sort((a, b) => a.agentId.localeCompare(b.agentId))
 
       const result = panelOk(META, {
+        freshness: {
+          comparedAt: new Date().toISOString(),
+          agentCommitSha,
+          aitkFingerprint,
+        },
         basis: {
           aitkSkills: aitkRows.length,
           agentSkills: agentSkills.length,

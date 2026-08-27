@@ -38,6 +38,10 @@ pnpm db:push
 
 이 명령은 Drizzle ORM을 통해 테이블을 생성하고, Public 조직 등 초기 데이터 마이그레이션을 실행합니다.
 
+> 기존 운영 DB에는 `db:push --force`를 사용하지 마세요. AX 0026–0030처럼 데이터 백필이나
+> 중복 정리가 포함된 변경은 [전용 실행 가이드](./plans/2026-08-25-ax-migration-runbook.md)에 따라
+> 격리 DB 프리플라이트 → 백업 → 순차 SQL → 사후 검증으로 반영합니다.
+
 ## 3. Google OAuth 설정
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials)에 접속

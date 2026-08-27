@@ -4,6 +4,16 @@
 -- Enable pg_trgm extension for trigram-based similarity search (supports Korean)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
 
+-- PostgreSQL marks the polymorphic array_to_string(anyarray, text) function as
+-- stable. The catalog tags column is always text[], so expose that narrower
+-- contract as immutable for use in a stored generated column.
+CREATE OR REPLACE FUNCTION immutable_text_array_to_string(text[], text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS 'SELECT array_to_string($1, $2)';--> statement-breakpoint
+
 -- Add search_vector column as a generated column
 -- Combines name (weight A), description (weight B), and content (weight C)
 ALTER TABLE "catalog_items" ADD COLUMN "search_vector" tsvector
@@ -29,7 +39,7 @@ ALTER TABLE "catalog_items" ADD COLUMN "search_text" text
     coalesce(name, '') || ' ' ||
     coalesce(description, '') || ' ' ||
     coalesce(author, '') || ' ' ||
-    coalesce(array_to_string(tags, ' '), '')
+    coalesce(immutable_text_array_to_string(tags, ' '), '')
   ) STORED;--> statement-breakpoint
 
 -- Create GIN index for trigram on combined search text

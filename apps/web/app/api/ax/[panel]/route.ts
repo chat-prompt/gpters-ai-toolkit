@@ -70,7 +70,9 @@ export async function GET(
     return ApiErrors.forbidden('관리자만 볼 수 있는 패널입니다')
   }
 
-  const days = parseDays(new URL(request.url).searchParams.get('days'))
+  const searchParams = new URL(request.url).searchParams
+  const days = parseDays(searchParams.get('days'))
+  const forceRefresh = viewer.isAdmin && panelId === 'skill-diff' && searchParams.get('refresh') === '1'
 
   // 관리자에게는 개인 식별 데이터가 포함될 수 있으므로 조회 사실을 남긴다
   if (viewer.isAdmin) {
@@ -81,6 +83,7 @@ export async function GET(
     const result = await panel.load({
       days,
       isAdmin: viewer.isAdmin,
+      forceRefresh,
     })
     return NextResponse.json(result, { headers: NO_STORE })
   } catch (error) {

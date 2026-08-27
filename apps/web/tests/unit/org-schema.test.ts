@@ -7,6 +7,7 @@ import {
   orgMemberships,
   orgInvitations,
   orgRoleEnum,
+  orgMembershipStatusEnum,
   orgInvitationStatusEnum,
   type OrganizationRecord,
   type NewOrganizationRecord,
@@ -26,6 +27,12 @@ describe('Organization Schema', () => {
   describe('orgInvitationStatusEnum', () => {
     it('has correct enum values', () => {
       expect(orgInvitationStatusEnum.enumValues).toEqual(['pending', 'accepted', 'rejected', 'expired'])
+    })
+  })
+
+  describe('orgMembershipStatusEnum', () => {
+    it('has lifecycle enum values', () => {
+      expect(orgMembershipStatusEnum.enumValues).toEqual(['active', 'offboarded'])
     })
   })
 
@@ -68,7 +75,11 @@ describe('Organization Schema', () => {
         userId: 'user-id',
         orgId: 'org-id',
         role: 'org_viewer',
+        status: 'active',
         joinedAt: new Date(),
+        endedAt: null,
+        deactivatedBy: null,
+        deactivationReason: null,
         invitedBy: 'inviter-id',
       }
       expect(record).toBeDefined()
@@ -87,6 +98,8 @@ describe('Organization Schema', () => {
       expect(orgMemberships.userId).toBeDefined()
       expect(orgMemberships.orgId).toBeDefined()
       expect(orgMemberships.role).toBeDefined()
+      expect(orgMemberships.status).toBeDefined()
+      expect(orgMemberships.endedAt).toBeDefined()
     })
 
     it('has default role value', () => {

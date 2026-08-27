@@ -20,7 +20,7 @@ const log = createLogger('ax-shared-skills')
 
 const META: AxPanelMeta = {
   id: 'shared-skills',
-  title: '에이전트 스킬',
+  title: '보유 스킬',
   description: '사내 에이전트가 공용으로 쓰는 저장소(bbopters-shared)의 스킬 인벤토리',
   source: 'GitHub (bbopters-shared)',
   visibility: 'org',
@@ -80,6 +80,7 @@ let cache: { key: string; result: AxPanelResult<AxSharedSkillsData>; expiresAt: 
 
 /** GitHub git trees API 응답 (필요한 필드만) */
 export interface GitTreeResponse {
+  sha?: string
   tree?: Array<{ path?: string; type?: string }>
   truncated?: boolean
 }
@@ -349,8 +350,8 @@ function parseCommitWeeks(
  * @param token - GitHub 토큰
  * @returns tree 배열과 잘림 여부
  */
-export async function fetchRepoTree(repo: string, token: string): Promise<GitTreeResponse> {
-  const res = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, {
+export async function fetchRepoTree(repo: string, token: string, ref = 'HEAD'): Promise<GitTreeResponse> {
+  const res = await fetch(`https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',

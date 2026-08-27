@@ -5,7 +5,7 @@
  * catalog items, users, tags, MCP servers, and related entities.
  */
 import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, uniqueIndex, halfvec, real, numeric } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 
 export const itemTypeEnum = pgEnum('item_type', [
   'skill',
@@ -21,10 +21,16 @@ export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
 // User roles for RBAC
 export const userRoleEnum = pgEnum('user_role', ['super_admin', 'admin', 'editor', 'viewer'])
 
+/** 로그인 계정 상태 — 개인정보 삭제와 접근 차단을 구분한다 */
+export const userAccountStatusEnum = pgEnum('user_account_status', ['active', 'suspended'])
+
 /**
  * Organization role enum for organization memberships
  */
 export const orgRoleEnum = pgEnum('org_role', ['org_admin', 'org_editor', 'org_viewer'])
+
+/** 조직 소속 상태 — 퇴사 이력을 지우지 않고 현재 구성원 여부를 표현한다 */
+export const orgMembershipStatusEnum = pgEnum('org_membership_status', ['active', 'offboarded'])
 
 /**
  * Visibility enum for catalog items
@@ -166,6 +172,10 @@ export const users = pgTable('users', {
   name: text('name'),
   image: text('image'),
   role: userRoleEnum('role').notNull().default('viewer'),
+  /** 서비스 전체 로그인 가능 여부. 퇴사·보안 차단은 suspended로 남긴다 */
+  accountStatus: userAccountStatusEnum('account_status').notNull().default('active'),
+  deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+  deactivationReason: text('deactivation_reason'),
   ronaUserId: text('rona_user_id'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -209,14 +219,22 @@ export const orgMemberships = pgTable('org_memberships', {
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   /** Member role within organization */
   role: orgRoleEnum('role').notNull().default('org_viewer'),
+  /** 현재 소속 여부. offboarded 행도 감사·과거 집계를 위해 보존한다 */
+  status: orgMembershipStatusEnum('status').notNull().default('active'),
   /** When user joined organization */
   joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow(),
+  /** 조직 소속 종료 시각 */
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+  /** 소속 종료를 처리한 사용자 */
+  deactivatedBy: text('deactivated_by').references(() => users.id, { onDelete: 'set null' }),
+  deactivationReason: text('deactivation_reason'),
   /** User who invited this member */
   invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => [
   primaryKey({ columns: [table.userId, table.orgId] }),
   index('org_memberships_user_id_idx').on(table.userId),
   index('org_memberships_org_id_idx').on(table.orgId),
+  index('org_memberships_org_status_idx').on(table.orgId, table.status),
 ])
 
 export type OrgMembershipRecord = typeof orgMemberships.$inferSelect
@@ -1149,6 +1167,8 @@ export const axUsageClientEnum = pgEnum('ax_usage_client', ['claude-code', 'code
  */
 export const axClientUsage = pgTable('ax_client_usage', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** 인증 사용자 식별자. memberName은 표시용 스냅샷으로만 유지한다 */
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   /** 팀원 이름. ax_subscriptions.owner_name과 같은 표기를 쓴다 */
   memberName: text('member_name').notNull(),
   client: axUsageClientEnum('client').notNull(),
@@ -1182,12 +1202,119 @@ export const axClientUsage = pgTable('ax_client_usage', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
   index('ax_client_usage_member_idx').on(table.memberName),
+  index('ax_client_usage_user_idx').on(table.userId),
   index('ax_client_usage_client_idx').on(table.client),
   index('ax_client_usage_period_idx').on(table.periodStart),
+  uniqueIndex('ax_client_usage_user_client_period_uidx')
+    .on(table.userId, table.client, table.periodStart)
+    .where(sql`${table.userId} is not null`),
 ])
 
 export type AxClientUsageRecord = typeof axClientUsage.$inferSelect
 export type NewAxClientUsageRecord = typeof axClientUsage.$inferInsert
+
+/**
+ * 사용자별 사용량 수집기 마지막 점검 상태
+ *
+ * 사용량 레코드가 0건이어도 이 행은 갱신된다. 따라서 "도구를 쓰지 않음"과
+ * "수집기가 설치되지 않았거나 보고하지 못함"을 서버에서 구분할 수 있다.
+ */
+export const axUsageCollectorState = pgTable('ax_usage_collector_state', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** 보고 시점의 표시명. 사용자 목록 렌더링과 감사 로그에만 사용한다 */
+  memberName: text('member_name').notNull(),
+  /** 이번 점검에서 실제 사용량 레코드가 발견된 클라이언트 */
+  clients: jsonb('clients').$type<Array<'claude-code' | 'codex'>>().notNull().default([]),
+  /** 이번 점검에서 받은 레코드 수. 0이면 수집기는 정상이나 최근 사용량이 없다는 뜻 */
+  recordCount: integer('record_count').notNull().default(0),
+  lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('ax_usage_collector_state_last_reported_idx').on(table.lastReportedAt),
+])
+
+export type AxUsageCollectorStateRecord = typeof axUsageCollectorState.$inferSelect
+export type NewAxUsageCollectorStateRecord = typeof axUsageCollectorState.$inferInsert
+
+/** 검증 가능한 스킬 실행 결과 — 기존 apply/skip 자기보고와 분리한다 */
+export const axExecutionSourceEnum = pgEnum('ax_execution_source', ['aitk', 'bbopters-shared'])
+export const axExecutionStatusEnum = pgEnum('ax_execution_status', [
+  'running',
+  'success',
+  'partial',
+  'failed',
+  'abandoned',
+])
+export const axExecutionFailureStageEnum = pgEnum('ax_execution_failure_stage', [
+  'load',
+  'instruction',
+  'dependency',
+  'execution',
+  'validation',
+])
+export const axExecutionValidationMethodEnum = pgEnum('ax_execution_validation_method', [
+  'test',
+  'command',
+  'artifact',
+  'user_confirmation',
+  'none',
+])
+export const axExecutionEventPhaseEnum = pgEnum('ax_execution_event_phase', ['started', 'completed'])
+
+export const axSkillExecutionAttempts = pgTable('ax_skill_execution_attempts', {
+  attemptId: text('attempt_id').primaryKey(),
+  eventId: text('event_id').notNull().unique(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  source: axExecutionSourceEnum('source').notNull(),
+  skillId: text('skill_id').notNull(),
+  skillVersion: text('skill_version'),
+  agent: text('agent').notNull(),
+  agentId: text('agent_id').notNull(),
+  status: axExecutionStatusEnum('status').notNull(),
+  failureStage: axExecutionFailureStageEnum('failure_stage'),
+  errorCode: text('error_code'),
+  validationMethod: axExecutionValidationMethodEnum('validation_method').notNull().default('none'),
+  validationPassed: boolean('validation_passed'),
+  validationSummary: text('validation_summary'),
+  userAccepted: boolean('user_accepted'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  startObserved: boolean('start_observed').notNull().default(false),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('ax_skill_execution_attempts_skill_idx').on(table.skillId),
+  index('ax_skill_execution_attempts_user_idx').on(table.userId),
+  index('ax_skill_execution_attempts_occurred_idx').on(table.occurredAt),
+  index('ax_skill_execution_attempts_status_idx').on(table.status),
+  index('ax_skill_execution_attempts_agent_id_idx').on(table.agentId),
+  index('ax_skill_execution_attempts_started_at_idx').on(table.startedAt),
+  index('ax_skill_execution_attempts_completed_at_idx').on(table.completedAt),
+])
+
+export const axSkillExecutionEvents = pgTable('ax_skill_execution_events', {
+  eventId: text('event_id').primaryKey(),
+  attemptId: text('attempt_id')
+    .notNull()
+    .references(() => axSkillExecutionAttempts.attemptId, { onDelete: 'cascade' }),
+  phase: axExecutionEventPhaseEnum('phase').notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('ax_skill_execution_events_attempt_idx').on(table.attemptId),
+])
+
+export type AxSkillExecutionAttemptRecord = typeof axSkillExecutionAttempts.$inferSelect
+export type NewAxSkillExecutionAttemptRecord = typeof axSkillExecutionAttempts.$inferInsert
+export type AxSkillExecutionEventRecord = typeof axSkillExecutionEvents.$inferSelect
+export type NewAxSkillExecutionEventRecord = typeof axSkillExecutionEvents.$inferInsert
 
 /**
  * 에이전트 로컬 트랜스크립트에서 생성한 개인정보 비포함 delta batch.

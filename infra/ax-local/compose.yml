@@ -1,0 +1,45 @@
+name: gpters-ax-local
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: gpters_ax_local
+      POSTGRES_USER: gpters
+      POSTGRES_PASSWORD: gpters_local_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../../packages/db/drizzle:/migrations:ro
+      - ./:/ax-local:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gpters -d gpters_ax_local"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    stop_grace_period: 10s
+    restart: unless-stopped
+
+  test-agent:
+    image: node:22-alpine
+    profiles: ["test-agent"]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./test-agent.mjs:/opt/ax-test-agent/test-agent.mjs:ro
+    environment:
+      AITK_SERVER_URL: http://host.docker.internal:3002
+      TEST_SKILL_ID: local-skill-60
+    command: ["node", "/opt/ax-test-agent/test-agent.mjs"]
+
+volumes:
+  postgres-data:

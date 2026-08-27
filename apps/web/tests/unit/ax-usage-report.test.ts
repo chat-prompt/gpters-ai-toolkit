@@ -40,7 +40,7 @@ describe('validateUsageReport', () => {
   })
 
   it('한도를 보고하지 않는 클라이언트는 null을 허용한다', () => {
-    // Claude Code는 남은 한도를 로컬에 남기지 않는다. 0이 아니라 null이어야 한다.
+    // 최신 한도 스냅샷을 얻지 못했으면 0이 아니라 null이어야 한다.
     const result = validateUsageReport({
       records: [record({ client: 'claude-code', limitUsedPercent: null, limitResetsAt: null })],
     })
@@ -90,8 +90,8 @@ describe('validateUsageReport', () => {
     expect(expectErrors({ records: [record(), record()] }).join()).toContain('중복')
   })
 
-  it('빈 배열과 과도한 건수를 거부한다', () => {
-    expect(expectErrors({ records: [] }).join()).toContain('최소 1건')
+  it('빈 배열은 수집기 점검 신호로 허용하고 과도한 건수는 거부한다', () => {
+    expect(validateUsageReport({ records: [] })).toEqual({ ok: true, payload: { records: [] } })
     const many = Array.from({ length: 21 }, (_, i) =>
       record({ periodStart: `2026-07-${String(i + 1).padStart(2, '0')}T00:00:00.000Z` })
     )

@@ -90,9 +90,9 @@ vi.mock('@gpters/db', () => ({
       }),
     }),
   },
-  users: { email: 'users.email', id: 'users.id', role: 'users.role' },
+  users: { email: 'users.email', id: 'users.id', role: 'users.role', accountStatus: 'users.accountStatus' },
   organizations: { allowedDomains: 'organizations.allowedDomains', isActive: 'organizations.isActive' },
-  orgMemberships: { userId: 'orgMemberships.userId', orgId: 'orgMemberships.orgId', role: 'orgMemberships.role' },
+  orgMemberships: { userId: 'orgMemberships.userId', orgId: 'orgMemberships.orgId', role: 'orgMemberships.role', status: 'orgMemberships.status' },
 }))
 
 vi.mock('drizzle-orm', async (importOriginal) => {
@@ -260,9 +260,9 @@ describe('Auth Module', () => {
       // organizations query
       pushSelectResult([MOCK_ORG])
       // users query (found)
-      pushSelectResult([{ id: 'existing-id', email: 'existing@gpters.org', role: 'admin' }])
+      pushSelectResult([{ id: 'existing-id', email: 'existing@gpters.org', role: 'admin', accountStatus: 'active' }])
       // orgMemberships query (already exists)
-      pushSelectResult([{ userId: 'existing-id', orgId: 'org-1', role: 'org_viewer' }])
+      pushSelectResult([{ userId: 'existing-id', orgId: 'org-1', role: 'org_viewer', status: 'active' }])
 
       await mockSignInCallback({
         user: { id: 'user-1', email: 'existing@gpters.org', name: 'Updated Name', image: 'https://example.com/new-avatar.jpg' },
@@ -279,9 +279,9 @@ describe('Auth Module', () => {
       // organizations query
       pushSelectResult([MOCK_ORG])
       // users query (found with admin role)
-      pushSelectResult([{ id: 'existing-id', email: 'admin@gpters.org', role: 'admin' }])
+      pushSelectResult([{ id: 'existing-id', email: 'admin@gpters.org', role: 'admin', accountStatus: 'active' }])
       // orgMemberships query (already exists)
-      pushSelectResult([{ userId: 'existing-id', orgId: 'org-1', role: 'org_viewer' }])
+      pushSelectResult([{ userId: 'existing-id', orgId: 'org-1', role: 'org_viewer', status: 'active' }])
 
       const user: { email: string; name: string; role?: string } = { email: 'admin@gpters.org', name: 'Admin' }
       await mockSignInCallback({
@@ -419,11 +419,22 @@ describe('Auth Module', () => {
 
     it('should preserve token on subsequent requests without user', async () => {
       const token = { id: 'existing-id', email: 'member@gpters.org', role: 'viewer', tokenRefreshedAt: Date.now() }
+      pushSelectResult([{ id: 'existing-id', role: 'viewer', accountStatus: 'active' }])
+      pushSelectResult([{ orgId: 'org-1', role: 'org_viewer', status: 'active' }])
 
       const result = await mockJwtCallback({ token, user: undefined })
 
       expect(result.id).toBe('existing-id')
       expect(result.role).toBe('viewer')
+    })
+
+    it('should invalidate a suspended account on the next request', async () => {
+      const token = { id: 'suspended-id', email: 'former@gpters.org', role: 'viewer' }
+      pushSelectResult([{ id: 'suspended-id', role: 'viewer', accountStatus: 'suspended' }])
+
+      const result = await mockJwtCallback({ token, user: undefined })
+
+      expect(result).toBeNull()
     })
 
     it('should invalidate an existing session for an external email immediately', async () => {

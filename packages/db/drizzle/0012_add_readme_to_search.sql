@@ -22,7 +22,7 @@ ALTER TABLE "catalog_items" ADD COLUMN "search_text" text
     coalesce(description, '') || ' ' ||
     coalesce(readme, '') || ' ' ||
     coalesce(author, '') || ' ' ||
-    coalesce(array_to_string(tags, ' '), '')
+    coalesce(immutable_text_array_to_string(tags, ' '), '')
   ) STORED;--> statement-breakpoint
 
 -- Recreate GIN indexes

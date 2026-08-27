@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { organizations, orgMemberships } from '@/lib/db/schema'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { ApiErrors, apiSuccess } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const [memberCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(orgMemberships)
-      .where(eq(orgMemberships.orgId, orgId))
+      .where(and(eq(orgMemberships.orgId, orgId), eq(orgMemberships.status, 'active')))
 
     return NextResponse.json({
       ...org,

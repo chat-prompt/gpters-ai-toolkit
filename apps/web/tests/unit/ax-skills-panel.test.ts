@@ -124,7 +124,16 @@ describe('skillUsagePanel', () => {
 
   it('스킬별 action을 피벗하고 loaded+applied 내림차순으로 정렬한다', async () => {
     queueQueries([
-      [{ totalEvents: 42, activeUsers: 5, sessions: 7 }],
+      [{
+        totalEvents: 42,
+        searched: 16,
+        loaded: 10,
+        applied: 6,
+        skipped: 5,
+        deployed: 5,
+        activeUsers: 5,
+        sessions: 7,
+      }],
       [
         {
           skillId: 'low-usage',
@@ -164,7 +173,15 @@ describe('skillUsagePanel', () => {
         { date: '2026-08-04', events: 20 },
         { date: '2026-08-05', events: 22 },
       ],
-      [{ id: 'dusty-skill', name: '안 쓰는 스킬' }],
+      [
+        {
+          id: 'dusty-skill',
+          name: '안 쓰는 스킬',
+          lastUsedAt: new Date('2026-01-10T00:00:00.000Z'),
+          usageSessions: 2,
+          totalUnused: 73,
+        },
+      ],
     ])
 
     const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
@@ -174,8 +191,10 @@ describe('skillUsagePanel', () => {
 
     const data = result.data!
     expect(data.totalEvents).toBe(42)
+    expect(data.meaningfulUses).toBe(16)
     expect(data.activeUsers).toBe(5)
     expect(data.sessions).toBe(7)
+    expect(data.actionTotals).toEqual({ search: 16, load: 10, apply: 6, skip: 5, deploy: 5 })
 
     // loaded+applied: top-skill 10 > unnamed-skill 5 > low-usage 1
     expect(data.skills.map((s) => s.skillId)).toEqual(['top-skill', 'unnamed-skill', 'low-usage'])
@@ -200,12 +219,29 @@ describe('skillUsagePanel', () => {
     expect(data.daily.find((day) => day.date === '2026-08-04')).toEqual({ date: '2026-08-04', events: 20 })
     expect(data.daily.find((day) => day.date === '2026-08-05')).toEqual({ date: '2026-08-05', events: 22 })
     expect(data.daily.every((day) => Number.isInteger(day.events))).toBe(true)
-    expect(data.unusedSkills).toEqual([{ id: 'dusty-skill', name: '안 쓰는 스킬' }])
+    expect(data.totalUnusedSkills).toBe(73)
+    expect(data.unusedSkills).toEqual([
+      {
+        id: 'dusty-skill',
+        name: '안 쓰는 스킬',
+        lastUsedAt: '2026-01-10T00:00:00.000Z',
+        usageSessions: 2,
+      },
+    ])
   })
 
   it('count가 문자열로 와도 숫자로 환산한다', async () => {
     queueQueries([
-      [{ totalEvents: '11', activeUsers: '2', sessions: '3' }],
+      [{
+        totalEvents: '11',
+        searched: '4',
+        loaded: '3',
+        applied: '2',
+        skipped: '1',
+        deployed: '1',
+        activeUsers: '2',
+        sessions: '3',
+      }],
       [
         {
           skillId: 'string-counts',
@@ -226,6 +262,7 @@ describe('skillUsagePanel', () => {
     const data = (await skillUsagePanel.load({ days: 7, isAdmin: false })).data!
 
     expect(data.totalEvents).toBe(11)
+    expect(data.meaningfulUses).toBe(5)
     expect(data.activeUsers).toBe(2)
     expect(data.sessions).toBe(3)
     expect(data.skills[0].loaded).toBe(3)
@@ -235,10 +272,18 @@ describe('skillUsagePanel', () => {
 
   it('이벤트가 0건이면 error가 아니라 빈 데이터로 응답한다', async () => {
     queueQueries([
-      [{ totalEvents: 0, activeUsers: 0, sessions: 0 }],
+      [{ totalEvents: 0, searched: 0, loaded: 0, applied: 0, skipped: 0, deployed: 0, activeUsers: 0, sessions: 0 }],
       [],
       [],
-      [{ id: 'never-used', name: '한 번도 안 쓴 스킬' }],
+      [
+        {
+          id: 'never-used',
+          name: '한 번도 안 쓴 스킬',
+          lastUsedAt: null,
+          usageSessions: 0,
+          totalUnused: 1,
+        },
+      ],
     ])
 
     const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
@@ -246,10 +291,19 @@ describe('skillUsagePanel', () => {
     expect(result.status).toBe('ok')
     const data = result.data!
     expect(data.totalEvents).toBe(0)
+    expect(data.meaningfulUses).toBe(0)
     expect(data.activeUsers).toBe(0)
     expect(data.sessions).toBe(0)
     expect(data.skills).toEqual([])
-    expect(data.unusedSkills).toEqual([{ id: 'never-used', name: '한 번도 안 쓴 스킬' }])
+    expect(data.totalUnusedSkills).toBe(1)
+    expect(data.unusedSkills).toEqual([
+      {
+        id: 'never-used',
+        name: '한 번도 안 쓴 스킬',
+        lastUsedAt: null,
+        usageSessions: 0,
+      },
+    ])
     // 활동이 없어도 축은 유지된다 — 전 구간이 0으로 채워진다
     expect(data.daily).toHaveLength(30)
     expect(data.daily.every((day) => day.events === 0)).toBe(true)

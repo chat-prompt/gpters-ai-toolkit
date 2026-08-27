@@ -15,6 +15,13 @@
     "db:generate": "turbo db:generate",
     "db:push": "turbo db:push",
     "db:studio": "turbo db:studio",
+    "ax:local:up": "docker-compose --context colima-gpters-ax -f infra/ax-local/compose.yml up -d",
+    "ax:local:status": "docker-compose --context colima-gpters-ax -f infra/ax-local/compose.yml ps",
+    "ax:local:preflight": "pnpm --filter @gpters/db db:preflight:ax -- --env-file ../../apps/web/.env.ax-local",
+    "ax:local:verify-rebuild": "sh infra/ax-local/verify-clean-rebuild.sh",
+    "ax:local:test-agent": "sh infra/ax-local/run-test-agent.sh",
+    "ax:local:dev": "pnpm --filter @gpters/web exec dotenv -e .env.ax-local -e .env.local -- next dev -p 3002",
+    "ax:local:down": "docker-compose --context colima-gpters-ax -f infra/ax-local/compose.yml down",
     "clean": "turbo clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {

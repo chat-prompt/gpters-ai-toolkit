@@ -74,6 +74,10 @@ describe('AxDashboard 패널 요청', () => {
         visibility: 'org', usesPeriod: true,
       },
       {
+        id: 'journey-insights', title: '탐색·결과 분석', description: '탐색 설명', source: 'test',
+        visibility: 'org', parentId: 'skill-usage', usesPeriod: true,
+      },
+      {
         id: 'agent-activity', title: '에이전트 활동', description: '활동 설명', source: 'test',
         visibility: 'org', parentId: 'skill-usage', usesPeriod: true,
       },
@@ -116,7 +120,7 @@ describe('AxDashboard 패널 요청', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<AxDashboard panels={nestedPanels} isAdmin />)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(8))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(9))
 
     const topTabs = within(screen.getByRole('tablist', { name: '대시보드 영역' }))
     expect(topTabs.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
@@ -126,14 +130,14 @@ describe('AxDashboard 패널 요청', () => {
     fireEvent.click(topTabs.getByRole('tab', { name: '스킬' }))
     const skillViews = within(screen.getByRole('tablist', { name: '스킬 세부 보기' }))
     expect(skillViews.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
-      '구성원 사용', '에이전트 활동', '에이전트 스킬', '팀 스킬과 비교',
+      '구성원 사용', '탐색·결과 분석', '에이전트 활동', '에이전트 스킬', '팀 스킬과 비교',
     ])
 
     const agentTab = skillViews.getByRole('tab', { name: '에이전트 활동' })
     agentTab.focus()
     fireEvent.keyDown(agentTab, { key: 'ArrowLeft' })
-    expect(skillViews.getByRole('tab', { name: '구성원 사용' }).getAttribute('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(skillViews.getByRole('tab', { name: '구성원 사용' }))
+    expect(skillViews.getByRole('tab', { name: '탐색·결과 분석' }).getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(skillViews.getByRole('tab', { name: '탐색·결과 분석' }))
 
     const topLevelSkills = topTabs.getByRole('tab', { name: '스킬' })
     topLevelSkills.focus()

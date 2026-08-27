@@ -4,11 +4,18 @@
  * GET: List organization members
  * POST: Invite/add member
  * PATCH: Update member role
- * DELETE: Remove member
+ * DELETE: Offboard member while preserving history
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { orgMemberships, orgInvitations, users } from '@/lib/db/schema'
+import {
+  oauthAccessTokens,
+  oauthCodes,
+  oauthRefreshTokens,
+  orgMemberships,
+  orgInvitations,
+  users,
+} from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { ApiErrors, apiSuccess, validateRequired } from '@/lib/utils/api-utils'
 import { createLogger } from '@/lib/core/logger'
@@ -54,7 +61,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
         name: users.name,
         email: users.email,
         role: orgMemberships.role,
+        status: orgMemberships.status,
         joinedAt: orgMemberships.joinedAt,
+        endedAt: orgMemberships.endedAt,
+        accountStatus: users.accountStatus,
       })
       .from(orgMemberships)
       .leftJoin(users, eq(orgMemberships.userId, users.id))
@@ -127,13 +137,40 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .limit(1)
 
       if (existingMembership) {
-        return ApiErrors.conflict('User is already a member of this organization')
+        if (existingMembership.status === 'active') {
+          return ApiErrors.conflict('User is already a member of this organization')
+        }
+
+        const now = new Date()
+        await db.update(orgMemberships)
+          .set({
+            role: role as OrgRole,
+            status: 'active',
+            joinedAt: now,
+            endedAt: null,
+            deactivatedBy: null,
+            deactivationReason: null,
+          })
+          .where(and(eq(orgMemberships.userId, targetUser.id), eq(orgMemberships.orgId, orgId)))
+
+        await db.update(users)
+          .set({
+            accountStatus: 'active',
+            deactivatedAt: null,
+            deactivationReason: null,
+            updatedAt: now,
+          })
+          .where(eq(users.id, targetUser.id))
+
+        log.info('Member reactivated in organization', { orgId, targetUserId: targetUser.id, role })
+        return apiSuccess({ userId: targetUser.id, email, role, status: 'active' }, 200)
       }
 
       await db.insert(orgMemberships).values({
         userId: targetUser.id,
         orgId,
         role: role as OrgRole,
+        status: 'active',
         invitedBy: userId,
       })
 
@@ -212,7 +249,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const [currentAdminCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(orgMemberships)
-      .where(and(eq(orgMemberships.orgId, orgId), eq(orgMemberships.role, 'org_admin')))
+      .where(
+        and(
+          eq(orgMemberships.orgId, orgId),
+          eq(orgMemberships.role, 'org_admin'),
+          eq(orgMemberships.status, 'active')
+        )
+      )
 
     if (currentAdminCount.count === 1) {
       const [targetMembership] = await db
@@ -229,7 +272,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const [updatedMembership] = await db
       .update(orgMemberships)
       .set({ role: role as OrgRole })
-      .where(and(eq(orgMemberships.userId, targetUserId), eq(orgMemberships.orgId, orgId)))
+      .where(
+        and(
+          eq(orgMemberships.userId, targetUserId),
+          eq(orgMemberships.orgId, orgId),
+          eq(orgMemberships.status, 'active')
+        )
+      )
       .returning()
 
     if (!updatedMembership) {
@@ -247,7 +296,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/organizations/[orgId]/members
- * Remove a member from the organization
+ * Offboard a member from the organization
  *
  * Access: org_admin OR super_admin
  * Body or query: { userId }
@@ -279,6 +328,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const { searchParams } = new URL(request.url)
     const targetUserId = searchParams.get('userId')
+    const reason = searchParams.get('reason')?.trim() || 'organization offboarding'
 
     if (!targetUserId) {
       return ApiErrors.badRequest('userId is required')
@@ -287,7 +337,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const [currentAdminCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(orgMemberships)
-      .where(and(eq(orgMemberships.orgId, orgId), eq(orgMemberships.role, 'org_admin')))
+      .where(
+        and(
+          eq(orgMemberships.orgId, orgId),
+          eq(orgMemberships.role, 'org_admin'),
+          eq(orgMemberships.status, 'active')
+        )
+      )
 
     if (currentAdminCount.count === 1) {
       const [targetMembership] = await db
@@ -301,18 +357,69 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const result = await db
-      .delete(orgMemberships)
-      .where(and(eq(orgMemberships.userId, targetUserId), eq(orgMemberships.orgId, orgId)))
+    const now = new Date()
+    const [offboarded] = await db
+      .update(orgMemberships)
+      .set({
+        status: 'offboarded',
+        endedAt: now,
+        deactivatedBy: currentUserId,
+        deactivationReason: reason,
+      })
+      .where(
+        and(
+          eq(orgMemberships.userId, targetUserId),
+          eq(orgMemberships.orgId, orgId),
+          eq(orgMemberships.status, 'active')
+        )
+      )
       .returning()
 
-    if (result.length === 0) {
+    if (!offboarded) {
       return ApiErrors.notFound('Member not found in this organization')
     }
 
-    log.info('Member removed from organization', { orgId, targetUserId })
+    const [remaining] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orgMemberships)
+      .where(and(eq(orgMemberships.userId, targetUserId), eq(orgMemberships.status, 'active')))
 
-    return NextResponse.json({ success: true })
+    // 마지막 활성 소속까지 종료된 경우에만 계정 전체와 개인 OAuth 자격을 막는다.
+    if ((remaining?.count ?? 0) === 0) {
+      await Promise.all([
+        db.update(users)
+          .set({
+            accountStatus: 'suspended',
+            deactivatedAt: now,
+            deactivationReason: reason,
+            updatedAt: now,
+          })
+          .where(eq(users.id, targetUserId)),
+        db.update(oauthAccessTokens)
+          .set({ isActive: false })
+          .where(eq(oauthAccessTokens.userId, targetUserId)),
+        db.update(oauthRefreshTokens)
+          .set({
+            isActive: false,
+            revokedAt: now,
+            revokeReason: 'offboarded',
+          })
+          .where(eq(oauthRefreshTokens.userId, targetUserId)),
+        db.delete(oauthCodes).where(eq(oauthCodes.userId, targetUserId)),
+      ])
+    }
+
+    log.info('Member offboarded from organization', {
+      orgId,
+      targetUserId,
+      accountSuspended: (remaining?.count ?? 0) === 0,
+    })
+
+    return NextResponse.json({
+      success: true,
+      status: 'offboarded',
+      accountSuspended: (remaining?.count ?? 0) === 0,
+    })
   } catch (error) {
     log.error('Failed to remove member', error)
     return ApiErrors.internalError('Failed to remove member')

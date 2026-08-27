@@ -38,9 +38,9 @@ const mockSet = {
 
 vi.mock('@gpters/db', () => ({
   db: mockDb,
-  users: { id: 'id', email: 'email', role: 'role', name: 'name', image: 'image', lastLoginAt: 'lastLoginAt', updatedAt: 'updatedAt' },
+  users: { id: 'id', email: 'email', role: 'role', accountStatus: 'accountStatus', name: 'name', image: 'image', lastLoginAt: 'lastLoginAt', updatedAt: 'updatedAt' },
   organizations: { id: 'id', allowedDomains: 'allowedDomains', isActive: 'isActive' },
-  orgMemberships: { userId: 'userId', orgId: 'orgId', role: 'role' },
+  orgMemberships: { userId: 'userId', orgId: 'orgId', role: 'role', status: 'status' },
 }))
 
 vi.mock('drizzle-orm', () => ({

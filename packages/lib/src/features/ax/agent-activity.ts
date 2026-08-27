@@ -1,6 +1,6 @@
 /** AX Dashboard — 에이전트 활동·수집 건강도 패널 */
 
-import { axAgentTelemetryBatches, db } from '@gpters/db'
+import { axAgentTelemetryBatches, axSkillExecutionAttempts, db } from '@gpters/db'
 import { gte } from 'drizzle-orm'
 import type {
   AxAgentActivityData,
@@ -112,10 +112,40 @@ function formatTokens(value: number): string {
   return String(value)
 }
 
+/** 실행 결과 마이그레이션이 아직 없는 환경에서도 텔레메트리 본체는 계속 보여준다. */
+async function loadVerifiedExecutions(cutoff: Date): Promise<{
+  available: boolean
+  rows: Array<{
+    status: string
+    validationMethod: string
+    validationPassed: boolean | null
+  }>
+}> {
+  try {
+    const rows = await db.select({
+      status: axSkillExecutionAttempts.status,
+      validationMethod: axSkillExecutionAttempts.validationMethod,
+      validationPassed: axSkillExecutionAttempts.validationPassed,
+    })
+      .from(axSkillExecutionAttempts)
+      .where(gte(axSkillExecutionAttempts.startedAt, cutoff))
+    return { available: true, rows }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('ax_skill_execution_attempts') && message.includes('does not exist')) {
+      return { available: false, rows: [] }
+    }
+    throw error
+  }
+}
+
 async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityData>> {
   try {
     const cutoff = new Date(Date.now() - ctx.days * 86_400_000)
-    const rows = await db.select().from(axAgentTelemetryBatches).where(gte(axAgentTelemetryBatches.windowEnd, cutoff))
+    const [rows, executionResult] = await Promise.all([
+      db.select().from(axAgentTelemetryBatches).where(gte(axAgentTelemetryBatches.windowEnd, cutoff)),
+      loadVerifiedExecutions(cutoff),
+    ])
     if (rows.length === 0) {
       return panelNotConfigured(meta, '선택한 기간에 수집된 에이전트 텔레메트리가 없습니다')
     }
@@ -125,6 +155,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const modelMap = new Map<string, { turns: number; usage: AxAgentTokenUsage }>()
     const toolMap = new Map<string, { calls: number; failures: number }>()
     const skillMap = new Map<string, { loaded: number; failed: number; interrupted: number }>()
+    const observedExecutionMap = new Map<string, { status: string; evidence: string; count: number }>()
     const sourceLatest = new Map<AxAgentTelemetrySource, number>()
     let sessions = 0
     let turns = 0
@@ -220,6 +251,19 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         metric.interrupted += number(item.interrupted)
         skillMap.set(item.skillId, metric)
       }
+      for (const raw of row.executions ?? []) {
+        if (!raw || typeof raw !== 'object') continue
+        const item = raw as Record<string, unknown>
+        if (typeof item.status !== 'string' || typeof item.evidence !== 'string') continue
+        const key = `${item.status}\u0000${item.evidence}`
+        const metric = observedExecutionMap.get(key) ?? {
+          status: item.status,
+          evidence: item.evidence,
+          count: 0,
+        }
+        metric.count += number(item.count)
+        observedExecutionMap.set(key, metric)
+      }
       reporterMap.set(reporterKey, reporter)
     }
 
@@ -258,6 +302,25 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     })).sort((a, b) => b.processedTokens - a.processedTokens).slice(0, 12)
     const skills = [...skillMap.entries()].map(([skillId, metric]) => ({ skillId, ...metric }))
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20)
+    const observedExecutionReports = [...observedExecutionMap.values()]
+      .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status))
+    const verifiedExecutions: AxAgentActivityData['verifiedExecutions'] = {
+      attempts: executionResult.rows.length,
+      success: 0,
+      partial: 0,
+      failed: 0,
+      abandoned: 0,
+      running: 0,
+      withEvidence: 0,
+    }
+    for (const execution of executionResult.rows) {
+      if (execution.status in verifiedExecutions && execution.status !== 'attempts' && execution.status !== 'withEvidence') {
+        verifiedExecutions[execution.status as 'success' | 'partial' | 'failed' | 'abandoned' | 'running'] += 1
+      }
+      if (execution.validationMethod !== 'none' && execution.validationPassed !== null) {
+        verifiedExecutions.withEvidence += 1
+      }
+    }
     const total = processedTokens(totalUsage)
     const insights: AxAgentActivityData['insights'] = []
 
@@ -325,6 +388,13 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         detail: 'thinking은 output에 포함된 값이므로 총 토큰에 다시 더하지 않았습니다.',
       })
     }
+    if (!executionResult.available) {
+      insights.push({
+        severity: 'info',
+        title: '실행 결과 계측 준비 중',
+        detail: '사용량 텔레메트리는 정상이며, 검증된 실행 결과는 후속 DB 마이그레이션 적용 뒤 표시됩니다.',
+      })
+    }
 
     return panelOk(meta, {
       syncedAt: new Date(syncedAt).toISOString(),
@@ -341,6 +411,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       models,
       tools,
       skills,
+      observedExecutionReports,
+      verifiedExecutions,
       collection: { batches: rows.length, recordsRead, parseFailures, unsupportedRecordsSkipped },
       insights,
     }, [

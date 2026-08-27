@@ -32,13 +32,11 @@ type AxDays = (typeof DAY_OPTIONS)[number]
 /** 기본 조회 기간 */
 const DEFAULT_DAYS: AxDays = 30
 
-/** 상단 스냅샷을 사람·사용·비용과 운영 자산 순서로 고정한다 */
+/** 상단 8개 수치를 사람·사용·비용 4개와 운영 자산 4개로 나누는 고정 순서 */
 const SNAPSHOT_HIGHLIGHT_ORDER = [
   '전체 구성원',
-  '누적 참여',
   '주간 활성',
   '주간 토큰 소비량',
-  '토큰 사용',
   '월 구독 비용',
   '팀 스킬',
   '에이전트 스킬',
@@ -46,7 +44,10 @@ const SNAPSHOT_HIGHLIGHT_ORDER = [
   '활성 구독',
 ] as const
 
-/** 최상위 탭은 업무 영역, 실제 데이터 패널은 그 안의 보조 보기로 묶는다 */
+/**
+ * 최상위 탭은 업무 영역(요약·스킬·클라이언트·배포 사이트),
+ * 실제 데이터 패널은 그 안의 보조 보기로 묶는다.
+ */
 
 /** 패널 하나의 조회 상태 */
 interface PanelState {
@@ -75,6 +76,7 @@ export interface AxDashboardProps {
  * @param isAdmin - 관리자 여부
  */
 export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
+  // parentId가 있는 패널은 독립 데이터 소스지만, 화면에서는 부모 패널 안의 보조 보기다.
   const topLevelPanels = panels.filter((panel) => !panel.parentId)
   const firstTopLevelId = topLevelPanels[0]?.id ?? ''
   const [days, setDays] = useState<AxDays>(DEFAULT_DAYS)
@@ -86,7 +88,11 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // 이미 바뀐 기간의 화면에 얹히는 일을 막는다
   const requestsRef = useRef(new Map<string, AbortController>())
 
-  const loadPanel = useCallback(async (panelId: string, targetDays: number) => {
+  const loadPanel = useCallback(async (
+    panelId: string,
+    targetDays: number,
+    forceRefresh = false
+  ) => {
     requestsRef.current.get(panelId)?.abort()
     const request = new AbortController()
     requestsRef.current.set(panelId, request)
@@ -97,7 +103,9 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     }))
 
     try {
-      const response = await fetch(`/api/ax/${panelId}?days=${targetDays}`, {
+      const query = new URLSearchParams({ days: String(targetDays) })
+      if (forceRefresh) query.set('refresh', '1')
+      const response = await fetch(`/api/ax/${panelId}?${query.toString()}`, {
         signal: request.signal,
       })
       if (!response.ok) {
@@ -328,6 +336,9 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
           state={states[active.id]}
           days={days}
           onRetry={() => loadPanel(active.id, days)}
+          onRefresh={isAdmin && active.id === 'skill-diff'
+            ? () => loadPanel(active.id, days, true)
+            : undefined}
         />
       </div>
     </>
@@ -580,13 +591,16 @@ function ActivityGrass({
   )
 }
 
-/** 부모 패널 안에서만 보이는 루트 보기 이름 */
+/** 부모 패널 안에서만 보이는 두 번째 깊이의 보기 이름 */
 const ROOT_VIEW_LABELS: Record<string, string> = {
   'skill-usage': '구성원 사용',
   'client-usage': '구성원별 사용량',
 }
 
-/** 같은 업무 영역의 독립 데이터 패널을 작은 세그먼트 컨트롤로 묶는다 */
+/**
+ * 같은 업무 영역의 독립 데이터 패널을 작은 세그먼트 컨트롤로 묶는다.
+ * API·권한·오류 격리는 유지하되 최상위 탭 수만 줄이는 정보 구조다.
+ */
 function NestedPanelNav({
   parentId,
   panels,
@@ -639,7 +653,7 @@ function NestedPanelNav({
   )
 }
 
-/** WAI-ARIA 탭 패턴: 방향키·Home·End로 선택과 초점을 함께 옮긴다 */
+/** WAI-ARIA 탭 패턴: 방향키·Home·End로 선택과 초점을 함께 옮긴다. */
 function handleTabKey(
   event: ReactKeyboardEvent<HTMLButtonElement>,
   ids: string[],
@@ -706,17 +720,20 @@ function PeriodControl({ value, onChange }: { value: AxDays; onChange: (days: Ax
  * @param state - 조회 상태 (아직 시작 전이면 undefined)
  * @param days - 현재 조회 기간(일)
  * @param onRetry - 재시도 핸들러
+ * @param onRefresh - 캐시를 우회한 관리자 수동 갱신 핸들러
  */
 function AxPanelView({
   meta,
   state,
   days,
   onRetry,
+  onRefresh,
 }: {
   meta: AxPanelMeta
   state: PanelState | undefined
   days: number
   onRetry: () => void
+  onRefresh?: () => void
 }) {
   const result = state?.result ?? null
   // 자체 갱신 시각을 들고 있는 패널은 조회 시각("방금")을 쓰면 신선도를 속이게 된다
@@ -733,11 +750,23 @@ function AxPanelView({
         <p className="text-sm leading-relaxed text-[var(--text-secondary)] max-w-[70ch]">
           {meta.description}
         </p>
-        {marks.length > 0 && (
-          <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] pt-0.5">
-            {marks.join(' · ')}
-          </p>
-        )}
+        <div className="flex shrink-0 items-center gap-3 pt-0.5">
+          {marks.length > 0 && (
+            <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              {marks.join(' · ')}
+            </p>
+          )}
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={state?.loading}
+              className="rounded-full border border-[var(--border-subtle)] px-3 py-1 font-mono text-[10px] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-hover)] hover:text-[var(--text-primary)] disabled:opacity-50"
+            >
+              {state?.loading ? '비교 중' : '최신 비교'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 렌더 도중 터지는 예외는 이 카드 안에 가둔다 — 다른 항목은 그대로 남는다 */}
@@ -773,9 +802,16 @@ function AxPanelView({
  * @returns 자체 갱신 시각을 가진 패널이면 true
  */
 function hasOwnSyncTime(data: unknown): boolean {
-  if (data === null || typeof data !== 'object' || !('syncedAt' in data)) return false
-  const value = (data as { syncedAt: unknown }).syncedAt
-  return typeof value === 'string' || value === null
+  if (data === null || typeof data !== 'object') return false
+  if ('syncedAt' in data) {
+    const value = (data as { syncedAt: unknown }).syncedAt
+    if (typeof value === 'string' || value === null) return true
+  }
+  if ('freshness' in data) {
+    const freshness = (data as { freshness?: { comparedAt?: unknown } }).freshness
+    return typeof freshness?.comparedAt === 'string'
+  }
+  return false
 }
 
 /**

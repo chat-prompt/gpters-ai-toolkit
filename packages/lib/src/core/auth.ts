@@ -57,6 +57,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         let userId: string
         if (existingUser.length > 0) {
+          if (existingUser[0].accountStatus === 'suspended') {
+            log.warn('Login denied: account is suspended', { userId: existingUser[0].id })
+            return false
+          }
           userId = existingUser[0].id
           await db.update(users)
             .set({
@@ -82,8 +86,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const orgIds: string[] = []
         for (const org of matchingOrgs) {
-          orgIds.push(org.id)
-
           const existingMembership = await db
             .select()
             .from(orgMemberships)
@@ -100,9 +102,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               userId,
               orgId: org.id,
               role: DEFAULT_ORG_ROLE,
+              status: 'active',
             })
+            orgIds.push(org.id)
             log.info('Created org membership', { userId, orgId: org.id, role: DEFAULT_ORG_ROLE })
+          } else if (existingMembership[0].status === 'active') {
+            orgIds.push(org.id)
+          } else {
+            log.warn('Skipped offboarded organization membership during login', {
+              userId,
+              orgId: org.id,
+            })
           }
+        }
+
+        if (orgIds.length === 0) {
+          log.warn('Login denied: no active organization memberships', { userId })
+          return false
         }
 
         user.orgIds = orgIds
@@ -149,12 +165,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const [dbUser] = await db
             .select({ 
               id: users.id,
-              role: users.role 
+              role: users.role,
+              accountStatus: users.accountStatus,
             })
             .from(users)
             .where(eq(users.email, email))
 
-          if (!dbUser) {
+          if (!dbUser || dbUser.accountStatus !== 'active') {
             return null
           }
 
@@ -166,7 +183,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               role: orgMemberships.role,
             })
             .from(orgMemberships)
-            .where(eq(orgMemberships.userId, dbUser.id))
+            .where(
+              and(
+                eq(orgMemberships.userId, dbUser.id),
+                eq(orgMemberships.status, 'active')
+              )
+            )
 
           if (userOrgMemberships.length === 0) {
             return null

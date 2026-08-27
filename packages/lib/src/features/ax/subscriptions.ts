@@ -52,16 +52,21 @@ function toMonthlyAmount(amount: number, billingCycle: 'monthly' | 'yearly'): nu
  * 통화가 섞여 있으면 환율로 합치지 않고 그대로 이어 붙인다.
  *
  * @param byCurrency - 통화별 월 환산 합계
- * @returns "US$2,220" 형태. 통화가 여럿이면 " + "로 잇는다
+ * @returns "$2,220" 형태. 통화가 여럿이면 " + "로 잇는다
  */
 function formatMonthlyTotal(byCurrency: Record<string, number>): string {
-  const parts = Object.entries(byCurrency).map(([currency, amount]) =>
-    new Intl.NumberFormat('ko-KR', {
+  const parts = Object.entries(byCurrency).map(([currency, amount]) => {
+    const formatted = new Intl.NumberFormat('ko-KR', {
       style: 'currency',
       currency,
+      currencyDisplay: 'narrowSymbol',
       maximumFractionDigits: 0,
     }).format(amount)
-  )
+
+    // ko-KR의 USD 표기는 기본적으로 "US$"다. 대시보드의 결제 통화가 명확한
+    // 맥락에서는 국가 접두사를 덜어 숫자와 통화 기호만 빠르게 읽히게 한다.
+    return currency === 'USD' ? formatted.replace(/^US\$/, '$') : formatted
+  })
   return parts.length > 0 ? parts.join(' + ') : '—'
 }
 
@@ -142,7 +147,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxSubscriptionDa
         byVendor,
         members,
       },
-      [{ label: '월 구독 비용', value: formatMonthlyTotal(rounded), hint: `${rows.length}건` }]
+      [
+        { label: '월 구독 비용', value: formatMonthlyTotal(rounded) },
+        { label: '활성 구독', value: rows.length.toLocaleString('ko-KR'), hint: '개' },
+      ]
     )
   } catch (err) {
     log.error('구독 패널 조회 실패', err)

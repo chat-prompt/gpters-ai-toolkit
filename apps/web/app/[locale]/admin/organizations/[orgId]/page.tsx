@@ -31,7 +31,10 @@ interface Member {
   name: string | null
   email: string
   role: OrgRole
+  status: 'active' | 'offboarded'
   joinedAt: string
+  endedAt: string | null
+  accountStatus: 'active' | 'suspended'
 }
 
 /** 조직 내 역할별 표시 이름과 점 색 */
@@ -92,8 +95,9 @@ export default function OrganizationDetailPage() {
 
   const isSuperAdmin = session?.user?.role === 'super_admin'
   const currentUserMembership = members.find(m => m.userId === session?.user?.id)
-  const isOrgAdmin = currentUserMembership?.role === 'org_admin'
+  const isOrgAdmin = currentUserMembership?.status === 'active' && currentUserMembership.role === 'org_admin'
   const canEdit = isSuperAdmin || isOrgAdmin
+  const activeMembers = members.filter(member => member.status === 'active')
 
   const fetchOrganization = useCallback(async () => {
     try {
@@ -259,10 +263,10 @@ export default function OrganizationDetailPage() {
     if (!canEdit) return
 
     const confirmed = await confirmDialog({
-      title: '멤버 제거',
-      description: '이 멤버를 정말 제거하시겠습니까?',
+      title: '퇴사 처리',
+      description: '현재 구성원에서 제외하고 로그인을 차단합니다. 과거 활동 기록은 보존됩니다.',
       variant: 'danger',
-      confirmLabel: '제거',
+      confirmLabel: '퇴사 처리',
     })
     if (!confirmed) return
 
@@ -484,7 +488,7 @@ export default function OrganizationDetailPage() {
 
         <div className="surface-card rounded-2xl p-6">
           <h2 className="text-xl font-medium text-[var(--text-primary)] mb-4">
-            Members ({members.length})
+            Members ({activeMembers.length} active · {members.length} total)
           </h2>
 
           {canEdit && (
@@ -522,11 +526,12 @@ export default function OrganizationDetailPage() {
           <div className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
             {members.map(member => {
               const isCurrentUser = session?.user?.id === member.userId
+              const isActiveMember = member.status === 'active'
 
               return (
                 <div
                   key={member.userId}
-                  className="flex items-center justify-between py-3"
+                  className={`flex items-center justify-between py-3 ${isActiveMember ? '' : 'opacity-60'}`}
                 >
                   <div className="flex-1">
                     <div className="text-[var(--text-primary)] font-medium">
@@ -534,14 +539,18 @@ export default function OrganizationDetailPage() {
                       {isCurrentUser && (
                         <span className="ml-2 text-xs text-[var(--text-muted)]">(you)</span>
                       )}
+                      {!isActiveMember && (
+                        <span className="ml-2 text-xs text-[var(--accent-orange)]">Offboarded</span>
+                      )}
                     </div>
                     <div className="text-sm text-[var(--text-secondary)]">{member.email}</div>
                     <div className="text-xs text-[var(--text-muted)] mt-1 font-mono">
                       Joined {formatDate(member.joinedAt)}
+                      {member.endedAt ? ` · Ended ${formatDate(member.endedAt)}` : ''}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {canEdit && !isCurrentUser ? (
+                    {canEdit && !isCurrentUser && isActiveMember ? (
                       <select
                         value={member.role}
                         onChange={e => handleChangeRole(member.userId, e.target.value as OrgRole)}
@@ -557,13 +566,13 @@ export default function OrganizationDetailPage() {
                     ) : (
                       <OrgRoleBadge role={member.role} />
                     )}
-                    {canEdit && !isCurrentUser && (
+                    {canEdit && !isCurrentUser && isActiveMember && (
                       <button
                         onClick={() => handleRemoveMember(member.userId)}
                         disabled={removingMemberId === member.userId}
                         className="text-sm text-[var(--accent-orange)] hover:opacity-80 disabled:opacity-50"
                       >
-                        {removingMemberId === member.userId ? 'Removing...' : 'Remove'}
+                        {removingMemberId === member.userId ? 'Offboarding...' : 'Offboard'}
                       </button>
                     )}
                   </div>

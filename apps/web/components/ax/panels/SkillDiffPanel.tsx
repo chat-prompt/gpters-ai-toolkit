@@ -12,7 +12,7 @@
 
 import type { AxSkillDiffData, AxSkillDiffRow } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
-import { formatCount } from '../format'
+import { formatCount, formatDate } from '../format'
 
 /** 섹션 라벨 공통 스타일 */
 const SECTION_LABEL = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]'
@@ -33,6 +33,11 @@ export function SkillDiffPanel({ data }: AxPanelViewProps<AxSkillDiffData>) {
         {formatCount(data.basis.agentSkills)}개 · 이름 겹침 중 문서 비교{' '}
         {formatCount(data.basis.comparedDocs)}건
         {data.fetchFailures > 0 && ` · 문서 조회 실패 ${formatCount(data.fetchFailures)}건`}
+      </p>
+      <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        비교 {formatDate(data.freshness.comparedAt)} · agent commit{' '}
+        {data.freshness.agentCommitSha.slice(0, 8)} · aitk{' '}
+        {data.freshness.aitkFingerprint.slice(0, 8)}
       </p>
 
       <DiffSection

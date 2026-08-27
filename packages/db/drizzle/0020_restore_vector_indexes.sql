@@ -10,6 +10,13 @@
 -- Index build is instant on this scale; read latency drops from full scan to
 -- sub-millisecond ANN lookup.
 
+-- These two columns existed in the deployed schema but their creation was not
+-- present in the checked-in migration history. Keep the repair idempotent so
+-- both deployed and clean databases converge before indexes are created.
+ALTER TABLE mcp_servers ADD COLUMN IF NOT EXISTS embedding halfvec(3072);
+ALTER TABLE cli_tools ADD COLUMN IF NOT EXISTS embedding halfvec(3072);
+--> statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS idx_catalog_embedding_hnsw
   ON catalog_items USING hnsw (embedding halfvec_cosine_ops)
   WITH (m = 16, ef_construction = 64);

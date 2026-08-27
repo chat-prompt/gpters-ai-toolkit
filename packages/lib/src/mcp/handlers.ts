@@ -5,9 +5,10 @@
  */
 
 import { createLogger } from '../core/logger'
-import { db, catalogItems, users, axClientUsage } from '@gpters/db'
+import { db, catalogItems, users, axClientUsage, axUsageCollectorState } from '@gpters/db'
 import { validateUsageReport } from '../features/ax/usage-report'
 import type { AxUsageReportRecord } from '../features/ax/usage-report'
+import { validateSkillExecutionReport, validateSkillExecutionStart } from '../features/ax/execution-report'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { checkMetadataQuality } from '../plugin/skill-validator'
 import { isSuperAdmin, type UserRole } from '../security/rbac'
@@ -1264,7 +1265,7 @@ async function resolveMemberName(userId: string): Promise<string | null> {
 /**
  * CLI가 보낸 사용량 집계를 `ax_client_usage`에 반영한다
  *
- * (memberName, client, periodStart)를 키로 upsert 한다. 같은 사람이 같은 구간을
+ * (userId, client, periodStart)를 키로 upsert 한다. 같은 사람이 같은 구간을
  * 다시 보내면 덮어쓰므로, CLI를 몇 번 돌려도 대시보드 총량이 부풀지 않는다.
  *
  * @param args - MCP 도구 인자 (`{ records: [...] }`)
@@ -1293,14 +1294,14 @@ export async function reportUsage(
   let updated = 0
 
   for (const record of validation.payload.records) {
-    const values = toUsageRow(record, memberName)
+    const values = toUsageRow(record, userId, memberName)
 
     const [existing] = await db
       .select({ id: axClientUsage.id })
       .from(axClientUsage)
       .where(
         and(
-          eq(axClientUsage.memberName, memberName),
+          eq(axClientUsage.userId, userId),
           eq(axClientUsage.client, values.client),
           eq(axClientUsage.periodStart, values.periodStart)
         )
@@ -1316,7 +1317,31 @@ export async function reportUsage(
     }
   }
 
-  log.info('AX usage reported', { memberName, inserted, updated })
+  // 사용량이 0건이어도 수집기가 설치·승인된 상태로 정상 실행됐다는 사실은 남긴다.
+  // 이 heartbeat가 없으면 관리자 화면은 "미사용"과 "미설치"를 구분할 수 없다.
+  const now = new Date()
+  const collectorState = {
+    userId,
+    memberName,
+    clients: validation.payload.records.map((record) => record.client),
+    recordCount: validation.payload.records.length,
+    lastReportedAt: now,
+    updatedAt: now,
+  }
+  await db
+    .insert(axUsageCollectorState)
+    .values(collectorState)
+    .onConflictDoUpdate({
+      target: axUsageCollectorState.userId,
+      set: collectorState,
+    })
+
+  log.info('AX usage reported', {
+    memberName,
+    inserted,
+    updated,
+    records: validation.payload.records.length,
+  })
   return { success: true, memberName, inserted, updated }
 }
 
@@ -1324,12 +1349,14 @@ export async function reportUsage(
  * 검증을 통과한 레코드를 `ax_client_usage` 행으로 옮긴다
  *
  * @param record - 검증된 레코드
- * @param memberName - 서버가 유도한 팀원 이름
+ * @param userId - 인증 사용자 ID
+ * @param memberName - 서버가 유도한 팀원 표시명 스냅샷
  * @returns insert·update 양쪽에 그대로 쓰는 값
  */
-function toUsageRow(record: AxUsageReportRecord, memberName: string) {
+function toUsageRow(record: AxUsageReportRecord, userId: string, memberName: string) {
   const now = new Date()
   return {
+    userId,
     memberName,
     client: record.client,
     planRaw: record.planRaw,
@@ -1808,6 +1835,51 @@ export async function executeTool(
           _meta: {
             skillOutcome: { skillId, applied, summary },
           },
+        }
+      }
+
+      case 'report_skill_execution_started': {
+        const validation = validateSkillExecutionStart(args)
+        if (!validation.ok) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ error: 'Invalid execution start report', details: validation.errors }),
+            }],
+            isError: true,
+          }
+        }
+        log.info('Skill execution start reported', {
+          attemptId: validation.data.attemptId,
+          skillId: validation.data.skillId,
+          agentId: validation.data.agentId,
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Execution start recorded' }) }],
+          _meta: { skillExecutionStart: validation.data },
+        }
+      }
+
+      case 'report_skill_execution': {
+        const validation = validateSkillExecutionReport(args)
+        if (!validation.ok) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ error: 'Invalid execution report', details: validation.errors }),
+            }],
+            isError: true,
+          }
+        }
+        log.info('Skill execution reported', {
+          attemptId: validation.data.attemptId,
+          skillId: validation.data.skillId,
+          status: validation.data.status,
+          validationMethod: validation.data.validation.method,
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Execution recorded' }) }],
+          _meta: { skillExecution: validation.data },
         }
       }
 

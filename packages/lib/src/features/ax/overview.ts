@@ -2,7 +2,7 @@
  * AX Dashboard — 성과 요약 패널
  *
  * 목업이 제안한 성과 지표 가운데 **지금 실측 가능한 것만** 계산한다.
- * 활성 인원·일별 추이·활용 유형 분포·시간대별 밀도는 skill_events에서 나오고,
+ * 활성 인원·일별 추이·시간대별 활성 인원은 skill_events에서 나오고,
  * 완료 세션·완주율·절감 시간·부서별 참여는 계측 근거가 없어 `unmeasured`로 밝힌다.
  *
  * 모집단은 스킬 사용량 패널과 동일하다(단일 GPTers 카탈로그 × CORE_ACTIONS).
@@ -21,7 +21,7 @@ const log = createLogger('ax-overview')
 const meta: AxPanelMeta = {
   id: 'overview',
   title: '요약',
-  description: '지니파이 구성원의 AX 활동을 실측 데이터로 요약 — 계측되지 않는 지표는 그 사실을 그대로 표시',
+  description: '구성원의 AX 활동',
   source: 'aitk DB (skill_events)',
   visibility: 'org',
   usesPeriod: true,
@@ -34,8 +34,7 @@ const meta: AxPanelMeta = {
  * 값 대신 미계측 사유를 내려보낸다. 계측이 붙으면 여기서 지우고 데이터 필드로 옮긴다.
  */
 const UNMEASURED: AxOverviewData['unmeasured'] = [
-  { label: '에이전트별 사용량', reason: '사내 에이전트의 실행 이벤트 수집이 아직 미연결입니다 (DEV-4221)' },
-  { label: '완료 세션 · 완주율', reason: '세션의 시작·완료를 판정할 이벤트 계약이 아직 없습니다' },
+  { label: '완료 세션 · 완주율', reason: '스킬 실행 시작·완료는 계측하지만 사용자 작업 세션 전체의 완주 기준은 아직 없습니다' },
   { label: '절감 시간', reason: '작업당 절감 시간을 산정할 실측 근거가 없습니다' },
   { label: '부서별 참여', reason: '구성원-부서 매핑 데이터가 없습니다' },
 ]
@@ -50,9 +49,6 @@ const GRASS_WINDOW_DAYS = 365
 
 /** 사용자별 사용량 표 상한 */
 const MEMBER_LIMIT = 20
-
-/** action 코드 → 화면 표기 순서. 분포 그래프가 항상 같은 순서로 그려지게 한다 */
-const ACTION_ORDER: readonly string[] = CORE_ACTIONS
 
 /**
  * 이 패널의 하루 경계는 전부 KST다
@@ -132,9 +128,9 @@ function fillDailySeries(
  * @param rows - 시간대별 이벤트 수 (있는 시간만)
  * @returns 24칸이 모두 채워진 배열
  */
-function fillMissingHours(rows: Array<{ hour: number; events: number }>): Array<{ hour: number; events: number }> {
-  const counts = new Map(rows.map((row) => [row.hour, row.events]))
-  return Array.from({ length: 24 }, (_, hour) => ({ hour, events: counts.get(hour) ?? 0 }))
+function fillMissingHours(rows: Array<{ hour: number; users: number }>): Array<{ hour: number; users: number }> {
+  const counts = new Map(rows.map((row) => [row.hour, row.users]))
+  return Array.from({ length: 24 }, (_, hour) => ({ hour, users: counts.get(hour) ?? 0 }))
 }
 
 /**
@@ -199,24 +195,19 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .groupBy(kstDayExpr)
         .orderBy(kstDayExpr)
 
-      // 4. 활용 유형 분포 (조회 기간)
-      const actionRows = await db
-        .select({ action: skillEvents.action, count: sql<number>`count(*)::int` })
-        .from(skillEvents)
-        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(corePopulation(since))
-        .groupBy(skillEvents.action)
-
-      // 5. 시간대별 활동 밀도 — KST (조회 기간)
+      // 4. 시간대별 활성 인원 — KST (조회 기간)
       const hourlyRows = await db
-        .select({ hour: kstHourExpr, events: sql<number>`count(*)::int` })
+        .select({
+          hour: kstHourExpr,
+          users: sql<number>`count(distinct ${skillEvents.userId})::int`,
+        })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
         .where(corePopulation(since))
         .groupBy(kstHourExpr)
         .orderBy(kstHourExpr)
 
-      // 6. 사용자별 사용량 (조회 기간) — 개인 식별 데이터라 관리자에게만 조회한다
+      // 5. 사용자별 사용량 (조회 기간) — 개인 식별 데이터라 관리자에게만 조회한다
       const memberRows = isAdmin
         ? await db
             .select({
@@ -233,15 +224,6 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             .orderBy(sql`count(*) desc`)
             .limit(MEMBER_LIMIT)
         : null
-
-      const actionCounts = new Map(actionRows.map((row) => [String(row.action), num(row.count)]))
-      // 고정 순서로 정렬하고, 목록에 없는 action이 오면 뒤에 붙인다 (버리면 합계가 안 맞는다)
-      const actionDistribution = [
-        ...ACTION_ORDER.map((action) => ({ action, count: actionCounts.get(action) ?? 0 })),
-        ...actionRows
-          .filter((row) => !ACTION_ORDER.includes(String(row.action)))
-          .map((row) => ({ action: String(row.action), count: num(row.count) })),
-      ]
 
       const totalParticipants = num(cumulative?.users)
       const catalogSkills = num(catalog?.count)
@@ -270,17 +252,15 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             since,
             now
           ).map((point) => ({ date: point.date, users: point.value })),
-          actionDistribution,
           hourlyDensity: fillMissingHours(
-            hourlyRows.map((row) => ({ hour: num(row.hour), events: num(row.events) }))
+            hourlyRows.map((row) => ({ hour: num(row.hour), users: num(row.users) }))
           ),
           memberUsage,
           unmeasured: UNMEASURED,
         },
         [
-          { label: '누적 참여', value: totalParticipants.toLocaleString('ko-KR'), hint: '명' },
           // aitk = 사람이 쓰는 팀 스킬, bbopters-shared = 에이전트 스킬 — 출처를 라벨로 가른다
-          { label: '팀 스킬', value: catalogSkills.toLocaleString('ko-KR'), hint: '개 · 사람' },
+          { label: '팀 스킬', value: catalogSkills.toLocaleString('ko-KR'), hint: '개' },
         ]
       )
     } catch (error) {

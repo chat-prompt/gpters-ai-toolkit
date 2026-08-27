@@ -18,6 +18,8 @@ interface User {
   name: string | null
   image: string | null
   role: UserRole
+  accountStatus: 'active' | 'suspended'
+  deactivatedAt: string | null
   lastLoginAt: string | null
   createdAt: string
   updatedAt: string
@@ -132,7 +134,7 @@ export default function UsersPage() {
       <div className="mb-6">
         <h1 className="page-title">Users</h1>
         <p className="page-subtitle">
-          {users.length} registered users
+          {users.filter(user => user.accountStatus === 'active').length} active · {users.length} registered users
           {!canManageUsers && (
             <span className="ml-2 text-[var(--accent-orange)]">
               (View only - Admin role required to manage roles)
@@ -148,6 +150,7 @@ export default function UsersPage() {
               <th className="eyebrow text-left px-3 py-2 font-normal">User</th>
               <th className="eyebrow text-left px-3 py-2 font-normal">Email</th>
               <th className="eyebrow text-left px-3 py-2 font-normal">Role</th>
+              <th className="eyebrow text-left px-3 py-2 font-normal">Status</th>
               <th className="eyebrow text-left px-3 py-2 font-normal">Last Login</th>
               <th className="eyebrow text-left px-3 py-2 font-normal">Joined</th>
             </tr>
@@ -159,7 +162,7 @@ export default function UsersPage() {
               return (
                 <tr
                   key={user.id}
-                  className="hover:bg-[var(--bg-secondary)] transition-colors"
+                  className={`hover:bg-[var(--bg-secondary)] transition-colors ${user.accountStatus === 'active' ? '' : 'opacity-60'}`}
                 >
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-3">
@@ -209,6 +212,11 @@ export default function UsersPage() {
                     {updatingUserId === user.id && (
                       <span className="ml-2 text-xs text-[var(--text-muted)]">Updating...</span>
                     )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={user.accountStatus === 'active' ? 'text-[var(--accent-green)]' : 'text-[var(--accent-orange)]'}>
+                      {user.accountStatus === 'active' ? 'Active' : 'Suspended'}
+                    </span>
                   </td>
                   <td className="px-3 py-2.5">
                     <span className="text-xs font-mono text-[var(--text-muted)]">
