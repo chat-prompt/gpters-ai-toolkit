@@ -51,6 +51,16 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('report_usage')
     })
 
+    it('keeps execution reporting minimal and supports Hermes', () => {
+      const started = MCP_TOOLS.find((tool) => tool.name === 'report_skill_execution_started')!
+      const completed = MCP_TOOLS.find((tool) => tool.name === 'report_skill_execution')!
+
+      expect(started.inputSchema.required).toEqual(['skillId', 'agent'])
+      expect((started.inputSchema.properties.agent as { enum: string[] }).enum).toContain('hermes')
+      expect(completed.inputSchema.required).toEqual(['attemptId', 'skillId', 'agent', 'status'])
+      expect((completed.inputSchema.properties.agent as { enum: string[] }).enum).toContain('hermes')
+    })
+
     it('should have 13 public tools', () => {
       expect(MCP_TOOLS).toHaveLength(13)
     })

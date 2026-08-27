@@ -52,6 +52,11 @@ describe('validateSkillExecutionReport', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('Hermes 런타임의 실행 결과를 별도 소스로 받는다', () => {
+    const result = validateSkillExecutionReport({ ...VALID, agent: 'hermes', agentId: 'bbokeoter' })
+    expect(result.ok).toBe(true)
+  })
+
   it('실행 시작 payload를 완료와 같은 attemptId 계약으로 검증한다', async () => {
     const { validateSkillExecutionStart } = await import(
       '../../../../packages/lib/src/features/ax/execution-report'

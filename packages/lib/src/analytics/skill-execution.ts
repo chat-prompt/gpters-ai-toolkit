@@ -82,7 +82,7 @@ export async function recordSkillExecutionAttempt(params: {
   sessionId: string
   userId?: string
   report: AxSkillExecutionReport
-}): Promise<void> {
+}): Promise<boolean> {
   const { report } = params
   const completedAt = new Date(report.occurredAt)
   try {
@@ -140,10 +140,10 @@ export async function recordSkillExecutionAttempt(params: {
 
     if (updatedAttempts.length === 0) {
       log.warn('Execution completion identity did not match existing attempt', { attemptId: report.attemptId })
-      return
+      return false
     }
 
-    await db
+    const insertedEvents = await db
       .insert(axSkillExecutionEvents)
       .values({
         eventId: report.eventId,
@@ -152,11 +152,14 @@ export async function recordSkillExecutionAttempt(params: {
         occurredAt: completedAt,
       })
       .onConflictDoNothing({ target: axSkillExecutionEvents.eventId })
+      .returning({ eventId: axSkillExecutionEvents.eventId })
+    return insertedEvents.length > 0
   } catch (error) {
     log.warn('Failed to record skill execution attempt', {
       error,
       eventId: report.eventId,
       attemptId: report.attemptId,
     })
+    return false
   }
 }

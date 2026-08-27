@@ -1500,6 +1500,49 @@ describe('MCP Handlers', () => {
       expect(result._meta?.skillExecutionStart).toEqual(payload)
     })
 
+    it('generates safe execution IDs and defaults for a minimal Hermes report', async () => {
+      const started = await executeTool('report_skill_execution_started', {
+        skillId: 'test-skill',
+        agent: 'hermes',
+      })
+      const start = started._meta?.skillExecutionStart
+      expect(started.isError).toBeUndefined()
+      expect(start).toMatchObject({
+        source: 'aitk',
+        skillId: 'test-skill',
+        skillVersion: null,
+        agent: 'hermes',
+        agentId: 'hermes',
+      })
+      expect(start?.attemptId).toMatch(/^[0-9a-f-]{36}$/)
+      expect(start?.eventId).toMatch(/^[0-9a-f-]{36}$/)
+      expect(JSON.parse(started.content[0].text)).toMatchObject({
+        success: true,
+        attemptId: start?.attemptId,
+      })
+
+      const completed = await executeTool('report_skill_execution', {
+        attemptId: start?.attemptId,
+        skillId: 'test-skill',
+        agent: 'hermes',
+        status: 'success',
+        validation: { method: 'artifact', passed: true, summary: '산출물 확인' },
+      })
+      expect(completed.isError).toBeUndefined()
+      expect(completed._meta?.skillExecution).toMatchObject({
+        attemptId: start?.attemptId,
+        source: 'aitk',
+        skillVersion: null,
+        agent: 'hermes',
+        agentId: 'hermes',
+        status: 'success',
+        failureStage: null,
+        errorCode: null,
+        validation: { method: 'artifact', passed: true, summary: '산출물 확인' },
+        userAccepted: null,
+      })
+    })
+
     // --- EDU-6411: get_plugin_content outcome hint injection ---
 
     it('should inject outcome hint into get_plugin_content response', async () => {

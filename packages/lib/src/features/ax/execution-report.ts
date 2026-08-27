@@ -1,7 +1,7 @@
 /** 검증 가능한 스킬 실행 결과의 수신 계약과 개인정보 최소화 검증 */
 
 export const EXECUTION_SOURCES = ['aitk', 'bbopters-shared'] as const
-export const EXECUTION_AGENTS = ['claude-code', 'codex', 'openclaw', 'test-agent'] as const
+export const EXECUTION_AGENTS = ['claude-code', 'codex', 'openclaw', 'hermes', 'test-agent'] as const
 export const EXECUTION_STATUSES = ['success', 'partial', 'failed', 'abandoned'] as const
 export const EXECUTION_FAILURE_STAGES = [
   'load',

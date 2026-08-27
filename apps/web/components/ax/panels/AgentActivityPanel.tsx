@@ -42,16 +42,16 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
     <div className="space-y-10">
       <div>
         <p className="font-mono text-[11px] text-[var(--text-muted)]">
-          최근 {days}일 · 마지막 수집 {formatDateTime(data.syncedAt)} · {formatCount(data.collection.batches)} batches
+          최근 {days}일 · 마지막 수집 {formatDateTime(data.syncedAt)} · {formatCount(data.collection.batches)}개 배치
         </p>
         <p className="mt-1 font-mono text-[10px] text-[var(--text-muted)]">
           실제 집계 {formatDateTime(data.windowStart)} – {formatDateTime(data.windowEnd)}
         </p>
         <div className="mt-3 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label="처리 토큰" value={formatTokens(data.totalProcessedTokens)} hint="thinking 중복 제외" />
+          <Metric label="처리 토큰" value={formatTokens(data.totalProcessedTokens)} hint="추론 토큰 중복 제외" />
           <Metric label="턴 / 세션" value={`${formatCount(data.turns)} / ${formatCount(data.sessions)}`} />
           <Metric label="도구 호출" value={formatCount(data.toolCalls)} hint={`실패 ${rate(data.toolFailures, data.toolCalls)}`} />
-          <Metric label="수집 레코드" value={formatCount(data.collection.recordsRead)} hint={`parse 실패 ${formatCount(data.collection.parseFailures)}`} />
+          <Metric label="수집 레코드" value={formatCount(data.collection.recordsRead)} hint={`파싱 실패 ${formatCount(data.collection.parseFailures)}`} />
         </div>
       </div>
 
@@ -66,7 +66,7 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
               </div>
               <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">{row.note}</p>
               <p className="mt-3 font-mono text-[10px] text-[var(--text-muted)]">
-                usage {row.capabilities.usage ? '✓' : '–'} · tools {row.capabilities.tools ? '✓' : '–'} · skills {row.capabilities.skills ? '✓' : '–'}
+                토큰 {row.capabilities.usage ? '✓' : '–'} · 도구 {row.capabilities.tools ? '✓' : '–'} · 스킬 {row.capabilities.skills ? '✓' : '–'}
                 {row.lastCollectedAt ? ` · ${formatDateTime(row.lastCollectedAt)}` : ''}
               </p>
             </div>
@@ -91,13 +91,13 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
       )}
 
       <section>
-        <SectionTitle title="Reporter 상태" hint="agentId × source 단위로 독립 checkpoint를 사용합니다" />
+        <SectionTitle title="수집기 상태" hint="에이전트 ID와 소스마다 별도 체크포인트를 사용합니다" />
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[760px]">
             <thead><tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TH}`}>에이전트</th>
               <th className={`text-left ${TH}`}>소스</th>
-              <th className={`text-right ${TH}`}>신선도</th>
+              <th className={`text-right ${TH}`}>수집 경과</th>
               <th className={`text-right ${TH}`}>턴</th>
               <th className={`text-right ${TH}`}>처리 토큰</th>
               <th className={`text-right ${TH}`}>도구 실패</th>
@@ -108,7 +108,7 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
                   <td className={`${TD} font-mono text-[var(--text-primary)]`}>{row.agentId}</td>
                   <td className={`${TD} text-[var(--text-secondary)]`}>{SOURCE_LABELS[row.source]}</td>
                   <td className={`${TD} text-right font-mono ${row.freshness === 'stale' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
-                    {row.freshnessHours}h
+                    {row.freshnessHours}시간
                   </td>
                   <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(row.turns)}</td>
                   <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-primary)]`}>{formatTokens(
@@ -126,7 +126,7 @@ export function AgentActivityPanel({ data, days }: AxPanelViewProps<AxAgentActiv
       <div className="grid gap-10 lg:grid-cols-2">
         <RankTable
           title="모델별 처리 토큰"
-          rows={data.models.map((row) => ({ name: row.model, value: formatTokens(row.processedTokens), hint: `${formatCount(row.turns)} turns` }))}
+          rows={data.models.map((row) => ({ name: row.model, value: formatTokens(row.processedTokens), hint: `${formatCount(row.turns)}턴` }))}
         />
         <RankTable
           title="도구 호출·실패"
@@ -152,10 +152,10 @@ function ExecutionSection({ data }: { data: AxAgentActivityData }) {
   const observed = data.observedExecutionReports.reduce((sum, row) => sum + row.count, 0)
   return (
     <section>
-      <SectionTitle title="검증된 실행 결과" hint="자동 사용량과 명시 실행 결과를 합산하지 않습니다" />
+      <SectionTitle title="검증된 스킬 실행 결과" hint="자동 사용량과 명시적 스킬 실행 보고를 합산하지 않습니다" />
       <p className="mt-3 text-xs leading-relaxed text-[var(--text-muted)]">
-        batch에서 관측한 실행 보고 {formatCount(observed)}건은 수집 완전성 대조용입니다.
-        아래 수치는 서버에 명시적으로 보고된 실행 결과만 셉니다.
+        수집 로그에서 관측한 작업 종료 {formatCount(observed)}건은 런타임 안정성 대조용입니다.
+        아래 수치는 서버에 명시적으로 보고된 스킬 실행 결과만 셉니다.
       </p>
       <div className="mt-3 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="전체 시도" value={formatCount(execution.attempts)} hint={`검증 근거 ${formatCount(execution.withEvidence)}`} />
