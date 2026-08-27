@@ -47,7 +47,23 @@ reliable tool or skill activity, so prefer the underlying runtime transcript
 when it exists.
 
 For Hermes, `AITK_SESSIONS_DIR` is the explicit SQLite database file rather
-than a directory. The collector opens it read-only and selects only structural
+than a directory. The default profile uses `~/.hermes/state.db`; a named Hermes
+profile has its own home and must point at that profile's `state.db`. Prefer a
+dedicated agent profile so a bot batch cannot include a person's unrelated
+Hermes sessions. Verify the exact profile on the Hermes machine before the
+first upload:
+
+```sh
+aitk agent-telemetry collect \
+  --agent <stable-agent-id> \
+  --source hermes \
+  --sessions-dir "$HOME/.hermes/state.db" \
+  --days 7 \
+  --category unclassified \
+  --dry-run
+```
+
+The collector opens it read-only and selects only structural
 columns. Session usage is converted from cumulative counters to checkpointed
 deltas; turns come from user-role messages and tools from stable call IDs.
 Message content, reasoning text, tool arguments, paths, and raw IDs are never

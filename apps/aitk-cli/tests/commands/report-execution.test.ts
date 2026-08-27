@@ -104,4 +104,23 @@ describe('aitk report-execution', () => {
       agentId: 'ax-isolated-test-agent',
     }))
   })
+
+  it('agent ID를 생략하면 runtime 이름을 안정 식별자로 사용한다', async () => {
+    await runReportExecutionStart({
+      skillId: 'review-helper',
+      agent: 'hermes',
+    })
+
+    const args = vi.mocked(jsonRpcSessionCall).mock.calls[0][1] as {
+      arguments: { agent: string; agentId: string }
+    }
+    expect(args.arguments).toEqual(expect.objectContaining({
+      agent: 'hermes',
+      agentId: 'hermes',
+    }))
+    expect(vi.mocked(jsonRpcSessionCall).mock.calls[0][3]).toEqual({
+      name: 'hermes',
+      version: 'local',
+    })
+  })
 })

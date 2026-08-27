@@ -644,11 +644,27 @@ export async function POST(request: NextRequest) {
         }
 
         if (meta?.skillExecution) {
-          await recordSkillExecutionAttempt({
+          const firstCompletion = await recordSkillExecutionAttempt({
             sessionId: sid,
             userId: auth?.userId,
             report: meta.skillExecution,
-          }).catch(() => {})
+          }).catch(() => false)
+
+          // 새 실행 결과 보고가 기존 스킬 사용 지표에서도 apply로 이어지게 한다.
+          // 실패·부분 성공도 스킬을 실제로 적용한 시도이므로 apply로 기록한다.
+          // 동일 eventId 재전송은 실행 이벤트와 기존 지표 모두 한 번만 반영한다.
+          if (firstCompletion) {
+            await recordOutcomeEvent({
+              sessionId: sid,
+              userId: auth?.userId,
+              skillId: meta.skillExecution.skillId,
+              applied: true,
+              summary: meta.skillExecution.validation.summary ?? `execution:${meta.skillExecution.status}`,
+            }).catch(() => {})
+          }
+
+          const sess = sessions.get(sid)
+          if (sess) sess.reportedSkills.add(meta.skillExecution.skillId)
         }
 
         // ── Normalized skill_events recording ──

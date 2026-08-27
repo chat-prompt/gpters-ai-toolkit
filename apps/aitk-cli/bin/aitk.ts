@@ -75,8 +75,8 @@ Usage:
   aitk report-session --count <N> [--version <ver>]
   aitk report-skip --query <query> --reason <reason> [--result-ids id1,id2]
   aitk report-outcome --skill-id <id> --applied true|false --summary <text>
-  aitk report-execution-start --skill-id <id> --agent <runtime> --agent-id <id> [options]
-  aitk report-execution --skill-id <id> --status <status> --agent <runtime> --agent-id <id> [options]
+  aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id <id>] [options]
+  aitk report-execution --skill-id <id> --status <status> --agent <runtime> [--agent-id <id>] [options]
   aitk usage report [--days 7] [--dry-run]
   aitk agent-telemetry collect --agent <id> [--days 7] [--dry-run]
   aitk undeploy <id>
@@ -229,20 +229,21 @@ Required:
   --summary <text>   One-line outcome summary`,
   'report-execution-start': `aitk report-execution-start - Report actual skill application start
 
-Usage: aitk report-execution-start --skill-id <id> --agent <runtime> --agent-id <stable-id> [options]
+Usage: aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id <stable-id>] [options]
 
 Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
+  --agent-id <stable-id>        Stable bot identifier (default: runtime name)
   --attempt-id <uuid>           Stable attempt identifier (generated if omitted)
   --event-id <uuid>             Idempotency identifier (generated if omitted)
   --skill-version <version>     SKILL.md version or commit SHA`,
   'report-execution': `aitk report-execution - Report validated skill execution
 
-Usage: aitk report-execution --skill-id <id> --status success|partial|failed|abandoned --agent claude-code|codex|openclaw|test-agent --agent-id <stable-id> [options]
+Usage: aitk report-execution --skill-id <id> --status success|partial|failed|abandoned --agent claude-code|codex|openclaw|hermes|test-agent [--agent-id <stable-id>] [options]
 
 Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
-  --agent-id <stable-id>        Stable bot identifier shared with the start report
+  --agent-id <stable-id>        Stable bot identifier shared with the start report (default: runtime name)
   --attempt-id <uuid>          Stable attempt identifier (generated if omitted)
   --event-id <uuid>            Idempotency identifier (generated if omitted)
   --skill-version <version>    SKILL.md version or commit SHA
@@ -474,15 +475,14 @@ async function main(): Promise<void> {
       const agent = flags['agent']
       const agentId = flags['agent-id']
       if (!skillId) error('--skill-id required')
-      if (!agentId) error('--agent-id required')
-      if (!['claude-code', 'codex', 'openclaw', 'test-agent'].includes(agent ?? '')) {
-        error('--agent must be claude-code|codex|openclaw|test-agent')
+      if (!['claude-code', 'codex', 'openclaw', 'hermes', 'test-agent'].includes(agent ?? '')) {
+        error('--agent must be claude-code|codex|openclaw|hermes|test-agent')
       }
       const source = flags['source'] ?? 'aitk'
       if (!['aitk', 'bbopters-shared'].includes(source)) error('--source must be aitk|bbopters-shared')
       await runReportExecutionStart({
         skillId,
-        agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'test-agent',
+        agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent',
         agentId,
         source: source as 'aitk' | 'bbopters-shared',
         attemptId: flags['attempt-id'],
@@ -498,12 +498,11 @@ async function main(): Promise<void> {
       const agent = flags['agent']
       const agentId = flags['agent-id']
       if (!skillId) error('--skill-id required')
-      if (!agentId) error('--agent-id required')
       if (!['success', 'partial', 'failed', 'abandoned'].includes(status ?? '')) {
         error('--status must be success|partial|failed|abandoned')
       }
-      if (!['claude-code', 'codex', 'openclaw', 'test-agent'].includes(agent ?? '')) {
-        error('--agent must be claude-code|codex|openclaw|test-agent')
+      if (!['claude-code', 'codex', 'openclaw', 'hermes', 'test-agent'].includes(agent ?? '')) {
+        error('--agent must be claude-code|codex|openclaw|hermes|test-agent')
       }
       const source = flags['source'] ?? 'aitk'
       if (!['aitk', 'bbopters-shared'].includes(source)) {
@@ -514,7 +513,7 @@ async function main(): Promise<void> {
       await runReportExecution({
         skillId,
         status: status as 'success' | 'partial' | 'failed' | 'abandoned',
-        agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'test-agent',
+        agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent',
         agentId,
         source: source as 'aitk' | 'bbopters-shared',
         attemptId: flags['attempt-id'],

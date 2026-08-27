@@ -37,15 +37,15 @@ const SOURCE_INFO: Record<AxAgentTelemetrySource, Omit<AxAgentSourceCoverageRow,
   },
   'claude-code': {
     capabilities: { usage: true, tools: true, skills: true },
-    note: 'usage·tool·skill 원본 대조를 마친 정밀 수집 소스입니다',
+    note: '토큰·도구·스킬 값을 원본과 대조한 정밀 수집 소스입니다',
   },
   codex: {
     capabilities: { usage: true, tools: true, skills: false },
-    note: 'usage·turn·tool·execution을 수집하며 skill load는 아직 별도 신호가 없습니다',
+    note: '토큰·턴·도구 호출·실행 보고를 수집하며 스킬 로드는 아직 별도 신호가 없습니다',
   },
   hermes: {
     capabilities: { usage: true, tools: true, skills: false },
-    note: 'SQLite 누적 usage의 delta·user turn·tool call을 수집하며 reasoning 포함 관계와 skill 신호는 아직 미확정입니다',
+    note: 'SQLite 누적 사용량의 증분·사용자 턴·도구 호출을 수집하며 추론 토큰 포함 관계와 스킬 신호는 아직 미확정입니다',
   },
 }
 
@@ -351,7 +351,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     }
     const stale = reporters.filter((row) => row.freshness === 'stale')
     if (stale.length > 0) {
-      insights.push({ severity: 'warning', title: '수집 지연', detail: `${stale.length}개 reporter가 ${FRESH_HOURS}시간 넘게 새 배치를 보내지 않았습니다.` })
+      insights.push({ severity: 'warning', title: '수집 지연', detail: `${stale.length}개 수집기가 ${FRESH_HOURS}시간 넘게 새 배치를 보내지 않았습니다.` })
     }
     const failureHotspot = tools.find((row) => row.calls >= 10 && row.failureRate >= 5)
     if (failureHotspot) {
@@ -384,8 +384,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     if (thinkingShare >= 0.3) {
       insights.push({
         severity: 'info',
-        title: `출력 중 reasoning ${Math.round(thinkingShare * 100)}%`,
-        detail: 'thinking은 output에 포함된 값이므로 총 토큰에 다시 더하지 않았습니다.',
+        title: `출력 중 추론 토큰 ${Math.round(thinkingShare * 100)}%`,
+        detail: '추론 토큰은 출력 토큰에 포함된 값이므로 총 토큰에 다시 더하지 않았습니다.',
       })
     }
     if (!executionResult.available) {
@@ -416,8 +416,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       collection: { batches: rows.length, recordsRead, parseFailures, unsupportedRecordsSkipped },
       insights,
     }, [
-      { label: '에이전트 토큰', value: formatTokens(total), hint: `${reporters.length} reporters`, periodLinked: true },
-      { label: '에이전트 턴', value: turns.toLocaleString('ko-KR'), hint: `${sessions} sessions`, periodLinked: true },
+      { label: '에이전트 처리 토큰', value: formatTokens(total), hint: `수집기 ${reporters.length}개`, periodLinked: true },
+      { label: '에이전트 턴', value: turns.toLocaleString('ko-KR'), hint: `세션 ${sessions.toLocaleString('ko-KR')}개`, periodLinked: true },
     ])
   } catch (error) {
     log.error('에이전트 활동 조회 실패', error)

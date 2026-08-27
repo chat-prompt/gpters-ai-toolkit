@@ -12,8 +12,8 @@ export type ValidationMethod = 'test' | 'command' | 'artifact' | 'user_confirmat
 export interface ReportExecutionOptions {
   skillId: string
   status: ExecutionStatus
-  agent: 'claude-code' | 'codex' | 'openclaw' | 'test-agent'
-  agentId: string
+  agent: 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent'
+  agentId?: string
   source?: 'aitk' | 'bbopters-shared'
   attemptId?: string
   eventId?: string
@@ -29,8 +29,8 @@ export interface ReportExecutionOptions {
 
 export interface ReportExecutionStartOptions {
   skillId: string
-  agent: 'claude-code' | 'codex' | 'openclaw' | 'test-agent'
-  agentId: string
+  agent: 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent'
+  agentId?: string
   source?: 'aitk' | 'bbopters-shared'
   attemptId?: string
   eventId?: string
@@ -42,6 +42,7 @@ export async function runReportExecutionStart(opts: ReportExecutionStartOptions)
   const token = resolveToken()
   const attemptId = opts.attemptId ?? randomUUID()
   const eventId = opts.eventId ?? randomUUID()
+  const agentId = opts.agentId ?? opts.agent
   const result = await jsonRpcSessionCall(
     'tools/call',
     {
@@ -53,12 +54,12 @@ export async function runReportExecutionStart(opts: ReportExecutionStartOptions)
         skillId: opts.skillId,
         skillVersion: opts.skillVersion ?? null,
         agent: opts.agent,
-        agentId: opts.agentId,
+        agentId,
         occurredAt: opts.occurredAt ?? new Date().toISOString(),
       },
     },
     token,
-    { name: opts.agentId, version: opts.skillVersion ?? 'local' }
+    { name: agentId, version: opts.skillVersion ?? 'local' }
   )
 
   if (!result.ok) {
@@ -74,6 +75,7 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
   const attemptId = opts.attemptId ?? randomUUID()
   const eventId = opts.eventId ?? randomUUID()
   const validationMethod = opts.validationMethod ?? 'none'
+  const agentId = opts.agentId ?? opts.agent
 
   const result = await jsonRpcSessionCall(
     'tools/call',
@@ -86,7 +88,7 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
         skillId: opts.skillId,
         skillVersion: opts.skillVersion ?? null,
         agent: opts.agent,
-        agentId: opts.agentId,
+        agentId,
         status: opts.status,
         failureStage: opts.failureStage ?? null,
         errorCode: opts.errorCode ?? null,
@@ -100,7 +102,7 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
       },
     },
     token,
-    { name: opts.agentId, version: opts.skillVersion ?? 'local' }
+    { name: agentId, version: opts.skillVersion ?? 'local' }
   )
 
   if (!result.ok) {

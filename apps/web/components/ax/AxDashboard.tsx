@@ -299,7 +299,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
           {active.usesPeriod && periodHighlights.length > 0 && (
             <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
               {periodHighlights
-                .map((highlight) => `${highlight.label} ${highlight.value}${highlight.hint ?? ''}`)
+                .map((highlight) => `${highlight.label} ${highlight.value}${highlight.hint ? ` ${highlight.hint}` : ''}`)
                 .join(' · ')}
             </p>
           )}

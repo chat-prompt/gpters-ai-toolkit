@@ -4,6 +4,7 @@
  * Database query handlers for each MCP tool.
  */
 
+import { randomUUID } from 'node:crypto'
 import { createLogger } from '../core/logger'
 import { db, catalogItems, users, axClientUsage, axUsageCollectorState } from '@gpters/db'
 import { validateUsageReport } from '../features/ax/usage-report'
@@ -1839,7 +1840,17 @@ export async function executeTool(
       }
 
       case 'report_skill_execution_started': {
-        const validation = validateSkillExecutionStart(args)
+        const agent = typeof args.agent === 'string' ? args.agent : ''
+        const normalizedArgs = {
+          ...args,
+          eventId: args.eventId ?? randomUUID(),
+          attemptId: args.attemptId ?? randomUUID(),
+          source: args.source ?? 'aitk',
+          skillVersion: args.skillVersion ?? null,
+          agentId: args.agentId ?? agent,
+          occurredAt: args.occurredAt ?? new Date().toISOString(),
+        }
+        const validation = validateSkillExecutionStart(normalizedArgs)
         if (!validation.ok) {
           return {
             content: [{
@@ -1855,13 +1866,38 @@ export async function executeTool(
           agentId: validation.data.agentId,
         })
         return {
-          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Execution start recorded' }) }],
+          content: [{ type: 'text', text: JSON.stringify({
+            success: true,
+            message: 'Execution start recorded',
+            attemptId: validation.data.attemptId,
+            eventId: validation.data.eventId,
+          }) }],
           _meta: { skillExecutionStart: validation.data },
         }
       }
 
       case 'report_skill_execution': {
-        const validation = validateSkillExecutionReport(args)
+        const agent = typeof args.agent === 'string' ? args.agent : ''
+        const rawValidation = typeof args.validation === 'object' && args.validation !== null
+          ? args.validation as Record<string, unknown>
+          : {}
+        const normalizedArgs = {
+          ...args,
+          eventId: args.eventId ?? randomUUID(),
+          source: args.source ?? 'aitk',
+          skillVersion: args.skillVersion ?? null,
+          agentId: args.agentId ?? agent,
+          failureStage: args.failureStage ?? null,
+          errorCode: args.errorCode ?? null,
+          validation: {
+            method: rawValidation.method ?? 'none',
+            passed: rawValidation.passed ?? null,
+            summary: rawValidation.summary ?? null,
+          },
+          userAccepted: args.userAccepted ?? null,
+          occurredAt: args.occurredAt ?? new Date().toISOString(),
+        }
+        const validation = validateSkillExecutionReport(normalizedArgs)
         if (!validation.ok) {
           return {
             content: [{
@@ -1878,7 +1914,12 @@ export async function executeTool(
           validationMethod: validation.data.validation.method,
         })
         return {
-          content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Execution recorded' }) }],
+          content: [{ type: 'text', text: JSON.stringify({
+            success: true,
+            message: 'Execution recorded',
+            attemptId: validation.data.attemptId,
+            eventId: validation.data.eventId,
+          }) }],
           _meta: { skillExecution: validation.data },
         }
       }

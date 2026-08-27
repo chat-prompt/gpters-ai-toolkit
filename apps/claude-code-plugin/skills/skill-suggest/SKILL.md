@@ -101,19 +101,62 @@ Bash("aitk report-skip --query '검색어' --reason '스킵 사유 한 줄' --re
 
 > 검색 후 아무 행동 없이 넘어가지 마세요. A 또는 B 중 하나는 반드시 실행합니다.
 
-### 4단계: 적용 결과 보고
+### 4단계: 실제 적용 시작 보고
 
-스킬을 로드해서 작업에 적용한 후, 결과를 보고합니다:
+스킬을 단순히 읽은 시점이 아니라, **현재 작업에 적용하기로 결정한 직후** 시작을 보고합니다.
+검색만 했거나 관련성이 낮아 스킵한 스킬에는 실행 보고를 만들지 않습니다.
 
 MCP 모드:
 ```
-mcp__gpters-ai-toolkit__report_skill_outcome(skillId="스킬ID", applied=true/false, summary="결과 한 줄")
+mcp__gpters-ai-toolkit__report_skill_execution_started(skillId="스킬ID", agent="claude-code")
 ```
 
 CLI 모드:
 ```
-Bash("aitk report-outcome --skill-id '스킬ID' --applied true --summary '결과 한 줄'")
+Bash("aitk report-execution-start --skill-id '스킬ID' --agent claude-code")
 ```
+
+응답의 `attemptId`를 기억합니다. 뽀둥이처럼 공유 머신의 봇을 구분해야 하면 시작·완료 모두에
+`agentId="안정적인-봇-id"` 또는 `--agent-id '안정적인-봇-id'`를 추가합니다. 생략하면
+런타임 이름(`claude-code`)이 사용됩니다.
+
+### 5단계: 적용하고 검증
+
+스킬 지침을 작업에 적용한 뒤 가능한 가장 강한 방법으로 결과를 검증합니다.
+
+| validation.method | 사용 시점 |
+|---|---|
+| `test` | 자동화 테스트를 실행함 |
+| `command` | 검사·빌드·조회 명령으로 확인함 |
+| `artifact` | 생성된 문서·파일·화면을 확인함 |
+| `user_confirmation` | 사용자가 결과를 확인함 |
+| `none` | 객관적 검증을 하지 못함 |
+
+### 6단계: 같은 시도의 완료 보고
+
+4단계에서 받은 **같은 `attemptId`**로 완료를 보고합니다. `status`는
+`success | partial | failed | abandoned` 중 하나입니다.
+
+MCP 모드:
+```
+mcp__gpters-ai-toolkit__report_skill_execution(
+  attemptId="시작 응답의 attemptId",
+  skillId="스킬ID",
+  agent="claude-code",
+  status="success",
+  validation={"method":"test","passed":true,"summary":"단위 테스트 통과"}
+)
+```
+
+CLI 모드:
+```
+Bash("aitk report-execution --skill-id '스킬ID' --agent claude-code --attempt-id '시작 응답의 attemptId' --status success --validation-method test --validation-passed true --validation-summary '단위 테스트 통과'")
+```
+
+- 실패하면 `failureStage`(`load | instruction | dependency | execution | validation`)와 짧은
+  `errorCode`를 함께 보냅니다.
+- 요약에는 대화 원문, 파일 내용, 명령 출력 전문, 경로, ID, 인증정보를 넣지 않습니다.
+- 보고 실패가 사용자 작업을 막아서는 안 됩니다. 실패 사실만 짧게 남기고 본 작업을 계속합니다.
 
 ## 검색 모드 설정
 
@@ -145,3 +188,4 @@ vi ~/.config/aitk/config.json
 - 스킬 내용이 사용자 요청과 충돌하면 사용자 요청을 우선합니다
 - MCP 서버 연결 실패 시 스킬 검색을 건너뛰고 작업을 진행합니다
 - 결과가 없으면 검색 없이 바로 진행합니다
+- 시작 보고 없이 완료 보고만 만들지 말고, 한 시도에는 시작·완료가 같은 `attemptId`로 연결되어야 합니다
