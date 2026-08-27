@@ -19,11 +19,13 @@
     "db:push": "drizzle-kit push --force",
     "db:studio": "drizzle-kit studio",
     "db:migrate": "npx tsx src/migrate.ts",
-    "db:preflight:agent-telemetry": "tsx scripts/preflight-agent-telemetry.ts"
+    "db:preflight:agent-telemetry": "tsx scripts/preflight-agent-telemetry.ts",
+    "db:preflight:ax": "tsx scripts/preflight-ax-migrations.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "drizzle-orm": "^0.45.1",
+    "postgres": "^3.4.9",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
