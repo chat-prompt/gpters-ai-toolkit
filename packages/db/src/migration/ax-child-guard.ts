@@ -33,6 +33,11 @@ export interface AxChildMigrationGuardInput {
   impact: AxMigrationImpact
 }
 
+export interface AxProductionMigrationGuardInput
+  extends Omit<AxChildMigrationGuardInput, 'expectedBranchId'> {
+  recoveryBranchId: string
+}
+
 function validateIdentity(input: AxChildMigrationGuardInput): string[] {
   const errors: string[] = []
   if (!input.expectedProjectId) errors.push('expected project ID is required')
@@ -49,6 +54,23 @@ function validateIdentity(input: AxChildMigrationGuardInput): string[] {
   }
   if (input.actualBranchId === input.productionBranchId) {
     errors.push('refusing to run AX follow-up migrations on the production branch')
+  }
+  return errors
+}
+
+function validateProductionIdentity(input: AxProductionMigrationGuardInput): string[] {
+  const errors: string[] = []
+  if (!input.expectedProjectId) errors.push('expected project ID is required')
+  if (!input.productionBranchId) errors.push('production branch ID is required')
+  if (!input.recoveryBranchId) errors.push('recovery branch ID is required')
+  if (input.recoveryBranchId === input.productionBranchId) {
+    errors.push('recovery branch ID must differ from the production branch ID')
+  }
+  if (!input.actualProjectId || input.actualProjectId !== input.expectedProjectId) {
+    errors.push('database project ID does not match the expected project')
+  }
+  if (!input.actualBranchId || input.actualBranchId !== input.productionBranchId) {
+    errors.push('database branch ID does not match the confirmed production branch')
   }
   return errors
 }
@@ -95,6 +117,38 @@ export function validateAxChildBeforeMigration(input: AxChildMigrationGuardInput
 
 export function validateAxChildAfterMigration(input: AxChildMigrationGuardInput): string[] {
   const errors = [...validateIdentity(input), ...validateImpact(input.impact)]
+  if (input.migrationCount !== AX_TARGET_MIGRATION_COUNT) {
+    errors.push(`expected ${AX_TARGET_MIGRATION_COUNT} recorded migrations after apply`)
+  }
+  if (input.latestMigrationTimestamp !== AX_TARGET_LATEST_TIMESTAMP) {
+    errors.push('latest recorded migration is not the AX 0030 target')
+  }
+  if (objectValues(input.objects).some((value) => !value)) {
+    errors.push('one or more AX follow-up objects are missing after apply')
+  }
+  return errors
+}
+
+export function validateAxProductionBeforeMigration(
+  input: AxProductionMigrationGuardInput,
+): string[] {
+  const errors = [...validateProductionIdentity(input), ...validateImpact(input.impact)]
+  if (input.migrationCount !== AX_BASELINE_MIGRATION_COUNT) {
+    errors.push(`expected ${AX_BASELINE_MIGRATION_COUNT} recorded migrations before apply`)
+  }
+  if (input.latestMigrationTimestamp !== AX_BASELINE_LATEST_TIMESTAMP) {
+    errors.push('latest recorded migration is not the production 0025 baseline')
+  }
+  if (objectValues(input.objects).some(Boolean)) {
+    errors.push('one or more AX follow-up objects already exist; refusing a partial apply')
+  }
+  return errors
+}
+
+export function validateAxProductionAfterMigration(
+  input: AxProductionMigrationGuardInput,
+): string[] {
+  const errors = [...validateProductionIdentity(input), ...validateImpact(input.impact)]
   if (input.migrationCount !== AX_TARGET_MIGRATION_COUNT) {
     errors.push(`expected ${AX_TARGET_MIGRATION_COUNT} recorded migrations after apply`)
   }

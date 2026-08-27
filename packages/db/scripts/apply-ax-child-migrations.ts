@@ -1,8 +1,9 @@
 /**
- * Guarded AX 0026-0030 migration runner for a Neon child branch.
+ * Guarded AX 0026-0030 migration runner for a Neon child or production branch.
  *
- * It refuses the production branch, validates the exact 0025 baseline and
- * 0028 data impact, and requires --apply before changing the child branch.
+ * Child mode refuses production. Production mode requires the exact production
+ * identity, a distinct recovery branch ID and an explicit confirmation phrase.
+ * Both modes validate the exact 0025 baseline and zero-loss 0028 impact.
  */
 
 import { readFileSync } from 'node:fs'
@@ -15,9 +16,14 @@ import {
   type AxChildMigrationGuardInput,
   type AxMigrationImpact,
   type AxMigrationObjectState,
+  type AxProductionMigrationGuardInput,
   validateAxChildAfterMigration,
   validateAxChildBeforeMigration,
+  validateAxProductionAfterMigration,
+  validateAxProductionBeforeMigration,
 } from '../src/migration/ax-child-guard'
+
+const PRODUCTION_CONFIRMATION = 'apply-ax-0026-0030'
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name)
@@ -167,17 +173,44 @@ async function main(): Promise<void> {
   }
 
   const expectedProjectId = requiredArgument('--expected-project-id')
-  const expectedBranchId = requiredArgument('--expected-branch-id')
   const productionBranchId = requiredArgument('--production-branch-id')
+  const isProduction = process.argv.includes('--production')
+  const expectedBranchId = isProduction
+    ? productionBranchId
+    : requiredArgument('--expected-branch-id')
+  const recoveryBranchId = isProduction ? requiredArgument('--recovery-branch-id') : undefined
   const shouldApply = process.argv.includes('--apply')
+
+  if (
+    isProduction &&
+    shouldApply &&
+    argument('--confirm-production-migration') !== PRODUCTION_CONFIRMATION
+  ) {
+    throw new Error(
+      `production apply requires --confirm-production-migration ${PRODUCTION_CONFIRMATION}`
+    )
+  }
 
   const db = drizzle(neon(databaseUrl))
   const before = await inspectTarget(db, expectedProjectId, expectedBranchId, productionBranchId)
-  printSafeSummary('AX child preflight', before)
-  assertNoErrors('AX child preflight', validateAxChildBeforeMigration(before))
+  const productionBefore = isProduction
+    ? ({ ...before, recoveryBranchId: recoveryBranchId! } satisfies AxProductionMigrationGuardInput)
+    : null
+  const beforeLabel = isProduction ? 'AX production preflight' : 'AX child preflight'
+  printSafeSummary(beforeLabel, before)
+  assertNoErrors(
+    beforeLabel,
+    productionBefore
+      ? validateAxProductionBeforeMigration(productionBefore)
+      : validateAxChildBeforeMigration(before)
+  )
 
   if (!shouldApply) {
-    console.log('Ready. Re-run the same command with --apply to execute migrations 0026-0030.')
+    console.log(
+      isProduction
+        ? `Ready. Re-run with --apply --confirm-production-migration ${PRODUCTION_CONFIRMATION}.`
+        : 'Ready. Re-run the same command with --apply to execute migrations 0026-0030.'
+    )
     return
   }
 
@@ -185,9 +218,20 @@ async function main(): Promise<void> {
   await migrate(db, { migrationsFolder })
 
   const after = await inspectTarget(db, expectedProjectId, expectedBranchId, productionBranchId)
-  printSafeSummary('AX child verification', after)
-  assertNoErrors('AX child verification', validateAxChildAfterMigration(after))
-  console.log('AX child migrations 0026-0030 applied and verified.')
+  const productionAfter = isProduction
+    ? ({ ...after, recoveryBranchId: recoveryBranchId! } satisfies AxProductionMigrationGuardInput)
+    : null
+  const afterLabel = isProduction ? 'AX production verification' : 'AX child verification'
+  printSafeSummary(afterLabel, after)
+  assertNoErrors(
+    afterLabel,
+    productionAfter
+      ? validateAxProductionAfterMigration(productionAfter)
+      : validateAxChildAfterMigration(after)
+  )
+  console.log(
+    `AX ${isProduction ? 'production' : 'child'} migrations 0026-0030 applied and verified.`
+  )
 }
 
 main().catch((error) => {

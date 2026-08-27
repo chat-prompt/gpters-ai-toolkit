@@ -93,6 +93,28 @@ pnpm --filter @gpters/db db:migrate:ax-child -- \
 적용 뒤 runner는 Drizzle 이력 20행, 최신 `0030`, 여섯 후속 객체 존재를 다시 확인한다.
 중간 상태나 이미 일부 적용된 branch는 자동 진행하지 않고 새 child branch로 다시 시작한다.
 
+운영 적용은 범용 `db:migrate`를 사용하지 않는다. 운영 시점의 data+schema 복구 branch를 먼저
+만든 뒤, production 전용 모드로 대상·복구 지점·무손실 조건을 다시 잠근다.
+
+```bash
+pnpm --filter @gpters/db db:migrate:ax-production -- \
+  --env-file ../../apps/web/.env.production.local \
+  --expected-project-id "$AX_NEON_PROJECT_ID" \
+  --production-branch-id "$AX_NEON_PRODUCTION_BRANCH_ID" \
+  --recovery-branch-id "$AX_NEON_RECOVERY_BRANCH_ID"
+```
+
+첫 실행은 읽기 전용이다. 출력된 branch·migration·usage 영향이 승인된 값과 같을 때만 같은
+명령에 아래 두 인자를 함께 붙인다.
+
+```text
+--apply --confirm-production-migration apply-ax-0026-0030
+```
+
+production 모드는 실제 DB branch가 지정한 production과 정확히 같고, recovery branch ID가
+production과 다르며, 15행 `0025` 기준선과 `0028` 삭제 0을 만족할 때만 적용한다. 적용 뒤에는
+20행 `0030`과 여섯 객체를 즉시 재검증한다.
+
 저널의 후속 항목 timestamp는 운영 `0025`보다 크게 잡혀 있으므로, 감사한 15행 기준선에서는
 후속 다섯 개만 대상이 된다. 그래도 `0028`의 데이터 정리 영향 때문에 운영에서 범용
 `db:migrate`를 바로 실행하지 않고 프리플라이트 결과를 보존한 뒤 승인된 절차로 적용한다.

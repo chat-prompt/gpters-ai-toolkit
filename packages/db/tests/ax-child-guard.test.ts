@@ -4,8 +4,11 @@ import {
   AX_BASELINE_LATEST_TIMESTAMP,
   AX_TARGET_LATEST_TIMESTAMP,
   type AxChildMigrationGuardInput,
+  type AxProductionMigrationGuardInput,
   validateAxChildAfterMigration,
   validateAxChildBeforeMigration,
+  validateAxProductionAfterMigration,
+  validateAxProductionBeforeMigration,
 } from '../src/migration/ax-child-guard'
 
 function safeInput(): AxChildMigrationGuardInput {
@@ -33,6 +36,21 @@ function safeInput(): AxChildMigrationGuardInput {
       duplicateGroups: 0,
       rowsDeletedByDedupe: 0,
     },
+  }
+}
+
+function safeProductionInput(): AxProductionMigrationGuardInput {
+  const child = safeInput()
+  return {
+    actualProjectId: child.actualProjectId,
+    actualBranchId: child.productionBranchId,
+    expectedProjectId: child.expectedProjectId,
+    productionBranchId: child.productionBranchId,
+    recoveryBranchId: 'branch-recovery',
+    migrationCount: child.migrationCount,
+    latestMigrationTimestamp: child.latestMigrationTimestamp,
+    objects: child.objects,
+    impact: child.impact,
   }
 }
 
@@ -87,4 +105,36 @@ test('accepts only the complete 0030 post-migration state', () => {
 
   input.objects.hasExecutionEvents = false
   assert.match(validateAxChildAfterMigration(input).join('\n'), /missing after apply/)
+})
+
+test('accepts an exact production baseline only with a distinct recovery branch', () => {
+  assert.deepEqual(validateAxProductionBeforeMigration(safeProductionInput()), [])
+
+  const missingRecovery = safeProductionInput()
+  missingRecovery.recoveryBranchId = ''
+  assert.match(validateAxProductionBeforeMigration(missingRecovery).join('\n'), /recovery branch/)
+
+  const sameRecovery = safeProductionInput()
+  sameRecovery.recoveryBranchId = sameRecovery.productionBranchId
+  assert.match(validateAxProductionBeforeMigration(sameRecovery).join('\n'), /must differ/)
+})
+
+test('production guard rejects a different target branch or data-loss impact', () => {
+  const wrongTarget = safeProductionInput()
+  wrongTarget.actualBranchId = 'branch-child'
+  assert.match(validateAxProductionBeforeMigration(wrongTarget).join('\n'), /confirmed production/)
+
+  const deleting = safeProductionInput()
+  deleting.impact.rowsDeletedByDedupe = 1
+  assert.match(validateAxProductionBeforeMigration(deleting).join('\n'), /delete usage rows/)
+})
+
+test('production guard accepts only the complete 0030 post-migration state', () => {
+  const input = safeProductionInput()
+  input.migrationCount = 20
+  input.latestMigrationTimestamp = AX_TARGET_LATEST_TIMESTAMP
+  for (const key of Object.keys(input.objects) as Array<keyof typeof input.objects>) {
+    input.objects[key] = true
+  }
+  assert.deepEqual(validateAxProductionAfterMigration(input), [])
 })
