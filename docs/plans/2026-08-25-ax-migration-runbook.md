@@ -55,6 +55,9 @@ pnpm --filter @gpters/db db:preflight:ax -- \
 
 프리플라이트는 조회만 수행하며 연결 문자열이나 비밀번호를 출력하지 않는다.
 
+2026-08-27 운영 프리플라이트 결과는 `0026–0030` 모두 pending, 사용량 48행 모두
+유일 매칭, ambiguous 0, unmatched 0, duplicate 0, dedupe 삭제 0이었다.
+
 ## 3. 적용 순서
 
 ```text
@@ -67,7 +70,28 @@ pnpm --filter @gpters/db db:preflight:ax -- \
 ```
 
 운영에서는 이미 적용된 `0025`를 다시 실행하지 않는다. 후속 적용 순서는
-`0026 → 0027 → 0028 → 0029 → 0030`이다.
+`0026 → 0027 → 0028 → 0029 → 0030`이다. Child branch에서는 범용
+`db:migrate` 대신 production branch 거부 장치가 있는 전용 runner를 사용한다.
+
+```bash
+pnpm --filter @gpters/db db:migrate:ax-child -- \
+  --env-file ../../apps/web/.env.ax-child \
+  --expected-project-id "$AX_NEON_PROJECT_ID" \
+  --expected-branch-id "$AX_NEON_CHILD_BRANCH_ID" \
+  --production-branch-id "$AX_NEON_PRODUCTION_BRANCH_ID"
+```
+
+첫 실행은 조회·검증만 하고 변경하지 않는다. 아래 조건을 모두 통과해야 같은 명령 끝에
+`--apply`를 붙일 수 있다.
+
+- 실제 project/branch ID가 명시한 child branch와 일치
+- 실제 branch가 production branch와 다름
+- Drizzle 이력 15행, 최신 timestamp가 운영 `0025`
+- `0026–0030` 객체가 하나도 없는 깨끗한 적용 전 상태
+- `0028` ambiguous·unmatched·duplicate·삭제가 모두 0
+
+적용 뒤 runner는 Drizzle 이력 20행, 최신 `0030`, 여섯 후속 객체 존재를 다시 확인한다.
+중간 상태나 이미 일부 적용된 branch는 자동 진행하지 않고 새 child branch로 다시 시작한다.
 
 저널의 후속 항목 timestamp는 운영 `0025`보다 크게 잡혀 있으므로, 감사한 15행 기준선에서는
 후속 다섯 개만 대상이 된다. 그래도 `0028`의 데이터 정리 영향 때문에 운영에서 범용
@@ -101,6 +125,10 @@ pnpm ax:local:dev
 6. 별도 승인 후 운영 DB에 같은 순서로 적용한다.
 7. 스키마 사후 검증 후 서버 코드를 배포한다.
 8. 7일 동안 heartbeat·미보고자·수집 오류·실행 결과 누락을 모니터링한다.
+
+현재 Vercel의 `DATABASE_URL`은 Preview와 Production이 같은 전역 항목을 공유한다.
+PR #34 검증 전에 child branch URL을 해당 Git branch 전용 Preview 환경 변수로 등록해야 하며,
+그 전에는 Preview에서 migration runner나 쓰기 검증을 실행하지 않는다.
 
 뽀둥이 등 에이전트의 실제 수집기 설치와 이 DB 마이그레이션은 독립된 작업이다. 에이전트가
 오프라인이어도 격리 검증과 Preview 준비는 진행할 수 있지만, PR #33의 연속 timer 2회 성공

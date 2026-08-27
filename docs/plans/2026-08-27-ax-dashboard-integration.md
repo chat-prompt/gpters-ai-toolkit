@@ -11,6 +11,7 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 - 기반 커밋: PR #33 병합 커밋 `d25d1cbd`
 - PR #33은 뽀둥이 timer-triggered 수집 2회 성공 후 2026-08-27 `main`에 병합했다.
 - 운영 Vercel 배포와 텔레메트리 API 인증 smoke test를 확인한 뒤 이 브랜치를 새 `main` 위로 재정렬했다.
+- Vercel Preview와 Production이 동일한 `DATABASE_URL`을 공유하므로 child branch 연결 전 Preview 쓰기 검증을 금지한다.
 
 ## 통합한 기능
 
@@ -62,7 +63,17 @@ PR #33의 최신 에이전트 텔레메트리 구현 위에 대시보드 고도�
 - Next.js Production build: 73 static pages 및 TypeScript 통과
 - PR #33 운영 배포: main CI 4개 job, Vercel production Ready, 운영 API 무인증 요청 401 통과
 - 운영 DB 확인: 뽀둥이 timer 배치 2개가 `healthy`, `gap=0`, 15턴·31턴으로 저장됨
+- 운영 AX preflight: 사용량 48행 유일 매칭, ambiguous·unmatched·duplicate·삭제 모두 0
+- Child migration guard: 5개 단위 테스트 통과, 실제 운영 branch 무변경 거부 확인
 - 저장소 전체 web/lib typecheck에는 기존 테스트 fixture와 `rbac.ts` 경로 별칭 부채가 남아 있다.
+
+## 현재 외부 접근 게이트
+
+- 로컬에는 Neon CLI/API 자격증명이 없다.
+- 연결 가능한 브라우저 세션도 없어 Neon child branch를 아직 생성하지 못했다.
+- Child branch URL이 준비되기 전에는 운영 DB에 `0026–0030`을 적용하지 않는다.
+- 준비된 `db:migrate:ax-child` runner는 project/child/production branch ID, 15행 기준선,
+  `0028` 무손실 조건을 모두 확인하고 `--apply` 없이는 변경하지 않는다.
 
 ## 다음 게이트
 

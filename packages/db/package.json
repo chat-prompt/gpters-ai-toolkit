@@ -20,7 +20,9 @@
     "db:studio": "drizzle-kit studio",
     "db:migrate": "npx tsx src/migrate.ts",
     "db:preflight:agent-telemetry": "tsx scripts/preflight-agent-telemetry.ts",
-    "db:preflight:ax": "tsx scripts/preflight-ax-migrations.ts"
+    "db:preflight:ax": "tsx scripts/preflight-ax-migrations.ts",
+    "db:migrate:ax-child": "tsx scripts/apply-ax-child-migrations.ts",
+    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
