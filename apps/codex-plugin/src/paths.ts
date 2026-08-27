@@ -4,11 +4,26 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 
 /**
  * 설치 범위
  */
 export type Scope = 'project' | 'user'
+
+/**
+ * 소스 실행(`bin/`)과 npm 배포본 실행(`dist/bin/`)에서 같은 패키지 루트를 찾는다.
+ *
+ * 배포본의 실행 파일은 `dist/bin/setup.js`에 있지만 실제 설치 자산은 npm 패키지의
+ * 최상위 `skills/`, `templates/`, `scripts/`에 있다. `dist/`를 루트로 오인하면
+ * 자동 업데이트와 사용량 훅 스크립트를 찾지 못한 채 설치를 건너뛴다.
+ */
+export function resolvePackageRoot(binDir: string): string {
+  const directParent = join(binDir, '..')
+  return existsSync(join(directParent, 'package.json'))
+    ? directParent
+    : join(directParent, '..')
+}
 
 /**
  * Codex config.toml 경로를 반환한다.

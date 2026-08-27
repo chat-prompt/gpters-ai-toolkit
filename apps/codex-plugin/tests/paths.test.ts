@@ -5,7 +5,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getConfigTomlPath, getSkillsDir, getAgentsMdPath } from '../src/paths.js'
+import { getConfigTomlPath, getSkillsDir, getAgentsMdPath, resolvePackageRoot } from '../src/paths.js'
+
+describe('resolvePackageRoot', () => {
+  const packageRoot = process.cwd()
+
+  it('소스 bin에서 최상위 설치 자산 경로를 찾는다', () => {
+    expect(resolvePackageRoot(join(packageRoot, 'bin'))).toBe(packageRoot)
+  })
+
+  it('npm 배포본 dist/bin에서도 최상위 설치 자산 경로를 찾는다', () => {
+    expect(resolvePackageRoot(join(packageRoot, 'dist', 'bin'))).toBe(packageRoot)
+  })
+})
 
 describe('getConfigTomlPath', () => {
   const originalPlatform = process.platform
