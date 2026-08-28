@@ -96,6 +96,11 @@ export interface AgentTelemetryCommittedState {
   lastWindowEndUtc: string | null
   files: Record<string, AgentTelemetryFileCheckpoint>
   seenMessages: AgentTelemetrySeenMessage[]
+  /** OpenClaw 내부 agent 경계를 원문 ID 없이 고정하고 저장소 전환을 추적한다. */
+  openclawSource?: {
+    agentHash: string
+    backend: 'jsonl' | 'sqlite'
+  }
   /** Hermes SQLite의 세션 누적 usage를 delta로 바꾸기 위한 PII-free snapshot. */
   hermesSessions?: Record<string, {
     model: string

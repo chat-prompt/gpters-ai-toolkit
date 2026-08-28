@@ -36,6 +36,7 @@ function installation(schedule: 'launchd' | 'none' = 'launchd') {
     collectorId: 'collector-test',
     source: 'openclaw',
     sessionsDir,
+    openclawAgent: 'main',
     serverUrl: 'https://ai-toolkit.gpters.org/',
     backfillDays: 7,
     intervalSeconds: 21_600,
@@ -58,6 +59,7 @@ describe('agent telemetry installation', () => {
     expect(statSync(path).mode & 0o777).toBe(0o600)
     expect(serialized).not.toContain('collector-secret-token')
     expect(readAgentTelemetryInstallation('test-agent', 'openclaw', root)).toEqual(value)
+    expect(value.openclawAgent).toBe('main')
   })
 
   it('launchd plist에는 built CLI와 범위만 기록하고 credential은 넣지 않는다', () => {

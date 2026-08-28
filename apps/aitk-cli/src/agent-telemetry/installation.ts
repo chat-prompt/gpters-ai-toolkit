@@ -25,6 +25,7 @@ export interface AgentTelemetryInstallation {
   source: AgentTelemetrySource
   sessionsDir: string
   projectSlugs?: string
+  openclawAgent?: string
   hermesProfile?: string
   checkpointDir: string
   category: string
@@ -114,7 +115,9 @@ function isInstallation(value: unknown): value is AgentTelemetryInstallation {
   if (typeof item.source !== 'string' || !SAFE_SOURCE.has(item.source as AgentTelemetrySource)) return false
   if (typeof item.sessionsDir !== 'string' || typeof item.checkpointDir !== 'string') return false
   if (item.projectSlugs !== undefined && typeof item.projectSlugs !== 'string') return false
+  if (item.openclawAgent !== undefined && typeof item.openclawAgent !== 'string') return false
   if (item.hermesProfile !== undefined && typeof item.hermesProfile !== 'string') return false
+  if (item.openclawAgent !== undefined && item.source !== 'openclaw') return false
   if (typeof item.category !== 'string' || typeof item.serverUrl !== 'string') return false
   if (typeof item.backfillDays !== 'number' || !Number.isInteger(item.backfillDays) ||
     item.backfillDays < 1 || item.backfillDays > 90) return false
@@ -132,6 +135,7 @@ function isInstallation(value: unknown): value is AgentTelemetryInstallation {
   try {
     assertSafeId(item.agentId, 'agentId')
     assertSafeId(item.collectorId, 'collectorId')
+    if (item.openclawAgent) assertSafeId(item.openclawAgent, 'openclawAgent')
     assertAbsolutePath(item.sessionsDir, 'sessionsDir')
     assertAbsolutePath(item.checkpointDir, 'checkpointDir')
     assertAbsolutePath(item.cli.nodePath, 'nodePath')
@@ -372,6 +376,7 @@ export function createInstallation(input: {
   source: AgentTelemetrySource
   sessionsDir: string
   projectSlugs?: string
+  openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
   category?: string
@@ -408,6 +413,7 @@ export function createInstallation(input: {
     source: input.source,
     sessionsDir,
     ...(input.projectSlugs ? { projectSlugs: input.projectSlugs } : {}),
+    ...(input.openclawAgent ? { openclawAgent: input.openclawAgent } : {}),
     ...(input.hermesProfile ? { hermesProfile: input.hermesProfile } : {}),
     checkpointDir,
     category: input.category ?? 'unclassified',

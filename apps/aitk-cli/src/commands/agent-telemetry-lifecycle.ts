@@ -43,6 +43,7 @@ export interface AgentTelemetryInstallOptions {
   source: string
   sessionsDir?: string
   projectSlugs?: string
+  openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
   category?: string
@@ -142,6 +143,7 @@ function collectOptions(installation: AgentTelemetryInstallation, dryRun: boolea
     collectorVersion: installation.cli.collectorVersion,
     sessionsDir: installation.sessionsDir,
     projectSlugs: installation.projectSlugs,
+    openclawAgent: installation.openclawAgent,
     hermesProfile: installation.hermesProfile,
     checkpointDir: installation.checkpointDir,
     collectorInstanceId: installation.collectorId,
@@ -186,6 +188,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     collectorVersion: options.collectorVersion,
     sessionsDir: options.sessionsDir,
     projectSlugs: options.projectSlugs,
+    openclawAgent: options.openclawAgent,
     hermesProfile: options.hermesProfile,
     checkpointDir: options.checkpointDir,
     collectorInstanceId: options.collectorId,
@@ -204,6 +207,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     source: selectedSource,
     sessionsDir: options.sessionsDir,
     projectSlugs: options.projectSlugs,
+    openclawAgent: options.openclawAgent,
     hermesProfile: options.hermesProfile,
     checkpointDir: options.checkpointDir,
     category: options.category,

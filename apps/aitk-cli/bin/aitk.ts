@@ -291,8 +291,9 @@ Required:
 
 Options:
   --source <source>            openclaw|claude-code|codex|hermes (default: openclaw)
-  --sessions-dir <path>        Transcript directory, or Hermes SQLite file (always required)
+  --sessions-dir <path>        Transcript directory, OpenClaw agent root/SQLite, or Hermes SQLite
   --project-slugs <a,b>        Allowed project directory names (required for claude-code/codex)
+  --openclaw-agent <id>        Verify the selected internal OpenClaw agent ID
   --hermes-profile <name>      sessions.profile_name scope; use default for the root profile
   --checkpoint-dir <path>      Per-agent checkpoint directory
   --collector-id <id>          Stable collector identity (generated if omitted)
@@ -313,7 +314,7 @@ Authentication:
   collect is the legacy/manual path and reads AX_AGENT_TELEMETRY_TOKEN from the environment.
 
 Examples:
-  aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/session/directory --days 7 --dry-run
+  aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/openclaw/agent/root --openclaw-agent main --days 7 --dry-run
   aitk agent-telemetry install --agent my-codex --source codex --sessions-dir /explicit/codex/sessions --project-slugs my-workspace
   aitk agent-telemetry collect --agent bbokeoter --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile default --category qa-verify --dry-run
   aitk agent-telemetry collect --agent named-agent --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile named-profile --category qa-verify --dry-run`,
@@ -573,6 +574,7 @@ async function main(): Promise<void> {
           collectorVersion: VERSION,
           sessionsDir: flags['sessions-dir'],
           projectSlugs: flags['project-slugs'],
+          openclawAgent: flags['openclaw-agent'],
           hermesProfile: flags['hermes-profile'],
           checkpointDir: flags['checkpoint-dir'],
           collectorInstanceId: flags['collector-id'],
@@ -588,6 +590,7 @@ async function main(): Promise<void> {
           source: flags['source'],
           sessionsDir: flags['sessions-dir'],
           projectSlugs: flags['project-slugs'],
+          openclawAgent: flags['openclaw-agent'],
           hermesProfile: flags['hermes-profile'],
           checkpointDir: flags['checkpoint-dir'],
           category: flags['category'],
