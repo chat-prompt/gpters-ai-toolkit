@@ -18,14 +18,44 @@ local paths.
 ## Requirements
 
 - macOS. Other schedulers are not installed automatically yet.
-- Packaged `@gpters/aitk` 0.7.0 or newer in a stable global path. Do not install
-  from an ephemeral `npx` cache path because launchd keeps the resolved CLI
-  path.
+- AITK 0.7.0 or newer in a stable user path. Internal agents install the CLI
+  from an approved repository commit with `install-from-repo.sh`; publishing a
+  new npm package is not required.
+- Node.js and Corepack/pnpm. If Bun is not already installed, the repo
+  installer fetches pinned `bun@1.4.0` only as a temporary build tool.
 - AITK user authentication (`aitk login --device` when needed).
 - An explicit source scope. Do not infer a path or profile when multiple users
   or agents may share it.
 - The server migration that creates `ax_agent_telemetry_collectors` and the
   matching enrollment endpoint must be deployed first.
+
+## Install AITK from the repository
+
+Use an approved, pinned `main` commit. The repository is only a build input:
+the installer copies the built CLI to a versioned user directory, so moving or
+deleting the clone later does not break launchd.
+
+```sh
+git fetch origin main
+git checkout <approved-main-commit>
+sh infra/agent-telemetry/install-from-repo.sh
+"$HOME/.local/bin/aitk" --version
+```
+
+The resulting paths are:
+
+```text
+~/.local/share/gpters-aitk/<version>/aitk.js
+~/.local/bin/aitk
+```
+
+The script refuses dirty telemetry build inputs, an unmanaged existing `aitk`
+wrapper, or different contents under the same version. `--allow-dirty` and
+`--force` are recovery/development overrides and require explicit review. Use
+`--skip-build` only when the checkout already contains a verified build.
+
+The npm release workflow remains available for future external distribution,
+but internal collector rollout does not depend on it.
 
 ## One-time install
 
@@ -35,9 +65,9 @@ login for a collector-only credential, stores that credential in macOS
 Keychain, writes a token-free local config, and registers launchd.
 
 ```sh
-aitk whoami
+"$HOME/.local/bin/aitk" whoami
 
-aitk agent-telemetry install \
+"$HOME/.local/bin/aitk" agent-telemetry install \
   --agent <stable-agent-id> \
   --source claude-code \
   --sessions-dir "$HOME/.claude/projects" \
@@ -68,7 +98,7 @@ stores configuration without sending; `run` remains an explicit action.
 Hermes uses an explicit SQLite database file and a non-empty profile identity:
 
 ```sh
-aitk agent-telemetry install \
+"$HOME/.local/bin/aitk" agent-telemetry install \
   --agent <stable-agent-id> \
   --source hermes \
   --sessions-dir "$HOME/.hermes/state.db" \
@@ -85,9 +115,9 @@ backfill into a bot identity.
 ## Verify and operate
 
 ```sh
-aitk agent-telemetry status --agent <id> --source <source>
-aitk agent-telemetry doctor --agent <id> --source <source>
-aitk agent-telemetry run --agent <id> --source <source>
+"$HOME/.local/bin/aitk" agent-telemetry status --agent <id> --source <source>
+"$HOME/.local/bin/aitk" agent-telemetry doctor --agent <id> --source <source>
+"$HOME/.local/bin/aitk" agent-telemetry run --agent <id> --source <source>
 ```
 
 - `status` checks local configuration, Keychain presence, and scheduler state.
@@ -102,7 +132,7 @@ reporter, and a health-blocked reporter.
 To remove a stream:
 
 ```sh
-aitk agent-telemetry uninstall --agent <id> --source <source>
+"$HOME/.local/bin/aitk" agent-telemetry uninstall --agent <id> --source <source>
 ```
 
 Uninstall revokes the server credential and removes launchd, the Keychain item,
@@ -123,8 +153,17 @@ recovery.
 
 ## Review cadence
 
-- Automatic: launchd runs every six hours; the normal stale threshold is two
-  missed runs (at least twelve hours).
+- Automatic: launchd defaults to every six hours. This is a conservative
+  laptop-safe cadence that limits repeated log scans and network/DB requests;
+  checkpointed deltas make the totals independent of the cadence.
+- Always-on internal agents may use `--interval 3600` for hourly dashboard
+  freshness. The allowed range is 600–604800 seconds. Managed collectors are
+  considered stale after two configured intervals, with a twelve-hour floor
+  to avoid false alarms from sleeping laptops.
+- The macOS job is a per-user LaunchAgent. It does not run while the machine is
+  powered off or the GUI user is logged out; `RunAtLoad` catches up from the
+  committed checkpoint at the next login. A shorter interval does not change
+  that operating-system behavior.
 - Daily: check reporter freshness, source coverage, parse failures, and pending
   checkpoints before interpreting usage trends.
 - Weekly: review context tokens per turn, reasoning share, model mix, tool

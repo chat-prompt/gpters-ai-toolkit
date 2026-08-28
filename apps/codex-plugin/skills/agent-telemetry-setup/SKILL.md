@@ -5,13 +5,16 @@ description: Install, diagnose, run, or remove the GPTers agent telemetry collec
 
 # Agent telemetry setup
 
-Use the packaged `aitk` lifecycle commands. The operating-system scheduler owns
-the cadence; do not create a cron job, reminder loop, or agent-memory task.
+Use the repo-built `aitk` lifecycle commands from a stable user path. Publishing
+or downloading a new npm package is not required for internal agents. The
+operating-system scheduler owns the cadence; do not create a cron job, reminder
+loop, or agent-memory task.
 
 ## Boundaries
 
-- Get the user's explicit approval immediately before `install`, `run`, or
-  `uninstall`. Diagnosis with `status` or `doctor` is read-only.
+- Get the user's explicit approval immediately before installing the repo-built
+  CLI or running collector `install`, `run`, or `uninstall`. Diagnosis with
+  `status` or `doctor` is read-only.
 - Never ask for or print a collector token. `install` enrolls with the user's
   existing AITK login and stores the returned credential in macOS Keychain.
 - Never include transcript text, prompts, responses, commands, raw IDs, project
@@ -22,12 +25,16 @@ the cadence; do not create a cron job, reminder loop, or agent-memory task.
 
 ## Install
 
-1. Confirm `aitk --version` is 0.7.0 or newer and `aitk whoami` identifies the
+1. In an approved `gpters-ai-toolkit` checkout, pin the requested commit and
+   run `sh infra/agent-telemetry/install-from-repo.sh`. Do not use `--force` or
+   `--allow-dirty` without separate approval. Confirm
+   `"$HOME/.local/bin/aitk" --version` is 0.7.0 or newer.
+2. Confirm `"$HOME/.local/bin/aitk" whoami` identifies the
    intended user. If authentication is missing, have the user complete
-   `aitk login --device`; do not receive their token in chat.
-2. Select one stable, recognizable `agentId` and exactly one source:
+   `"$HOME/.local/bin/aitk" login --device`; do not receive their token in chat.
+3. Select one stable, recognizable `agentId` and exactly one source:
    `claude-code`, `codex`, `openclaw`, or `hermes`.
-3. Resolve the source scope without reading transcript bodies:
+4. Resolve the source scope without reading transcript bodies:
    - Claude Code: the explicit projects directory plus only the intended
      project directory names in `--project-slugs`.
    - Codex: the explicit sessions directory plus only intended workspace names
@@ -38,11 +45,11 @@ the cadence; do not create a cron job, reminder loop, or agent-memory task.
    - Hermes: an explicit `state.db` and a non-empty `profile_name` dedicated to
      the intended agent. A shared database whose sessions have no stable
      profile identity is not safe to collect.
-4. Show the exact command with paths redacted in chat, explain that the first
+5. Show the exact command with paths redacted in chat, explain that the first
    run backfills seven days, and get approval. Then run:
 
 ```sh
-aitk agent-telemetry install \
+"$HOME/.local/bin/aitk" agent-telemetry install \
   --agent <stable-agent-id> \
   --source <source> \
   --sessions-dir <absolute-source-path> \
@@ -53,14 +60,16 @@ aitk agent-telemetry install \
 Omit `--project-slugs` for OpenClaw. Replace it with
 `--hermes-profile <dedicated-profile>` for Hermes. The installer performs a
 health-gated dry run before enrollment and registers a six-hour launchd job.
+For an always-on agent that needs fresher monitoring, add `--interval 3600`;
+do not shorten the interval without telling the user.
 
 ## Verify and operate
 
 Run both commands after installation or after runtime/CLI upgrades:
 
 ```sh
-aitk agent-telemetry status --agent <id> --source <source>
-aitk agent-telemetry doctor --agent <id> --source <source>
+"$HOME/.local/bin/aitk" agent-telemetry status --agent <id> --source <source>
+"$HOME/.local/bin/aitk" agent-telemetry doctor --agent <id> --source <source>
 ```
 
 `doctor` must report `ok: true`; it must not send data or advance a checkpoint.

@@ -61,7 +61,9 @@ aitk usage report            # 지금 보내기
 ### 에이전트/런타임 상세 수집
 
 위 개인 사용량 보고와 별도로, 특정 Codex 작업 범위나 봇의 도구·스킬·수집
-건강도를 연결하려면 `@gpters/aitk` 0.7.0 이상의 설치형 수집기를 사용합니다.
+건강도를 연결하려면 AITK 0.7.0 이상의 설치형 수집기를 사용합니다. 내부
+에이전트는 npm 공개 없이 repo의 `infra/agent-telemetry/install-from-repo.sh`로
+영속 사용자 경로에 설치합니다.
 `agent-telemetry-setup` 스킬은 사용자가 명시적으로 요청한 경우에만 설치를
 진행하며 collector token은 macOS Keychain에 저장합니다. 주기 실행은 launchd가
 담당하므로 Codex가 일정을 기억하거나 세션 시작 훅으로 매번 보낼 필요가 없습니다.

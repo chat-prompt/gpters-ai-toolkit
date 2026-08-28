@@ -29,7 +29,9 @@ aitk usage report             # 지금 보내기
 ### 에이전트/런타임 상세 수집
 
 위 사용량 보고와 별도로, 특정 에이전트나 작업 범위의 도구·스킬·수집 건강도를
-보려면 `@gpters/aitk` 0.7.0 이상의 `agent-telemetry` 설치형 수집기를 사용합니다.
+보려면 AITK 0.7.0 이상의 `agent-telemetry` 설치형 수집기를 사용합니다. 내부
+에이전트는 npm 공개 없이 repo의 `infra/agent-telemetry/install-from-repo.sh`로
+영속 사용자 경로에 설치합니다.
 사용자 승인 후 한 번 설치하면 주기 실행은 에이전트 프롬프트가 아니라 macOS
 launchd가 담당합니다. collector token을 채팅으로 전달할 필요가 없습니다.
 
