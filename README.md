@@ -294,7 +294,7 @@ pnpm db:studio      # Drizzle Studio
 | 플러그인 | 배포 방식 |
 |----------|-----------|
 | claude-code-plugin | Git push → 마켓플레이스 자동 반영 (새 세션부터) |
-| AITK CLI | 서버 검증 후 GitHub Actions 승인 실행 → npm public (`@gpters/aitk`) |
+| AITK CLI | 내부 에이전트: repo 빌드 → 영속 사용자 경로 / 외부 배포: 승인형 npm public (`@gpters/aitk`) |
 | opencode-plugin | `npm publish` → npm public (`@gpters/opencode`) |
 | codex-plugin | 서버 검증 후 GitHub Actions 승인 실행 → npm public (`@gpters/codex-plugin`) |
 | 웹 (Next.js) | Git push → Vercel 자동 배포 |
@@ -305,6 +305,9 @@ npm의 Trusted Publisher(OIDC)를 사용하므로 장기 `NPM_TOKEN` secret은 �
 `release-public-packages.yml`을 publisher로 한 번 등록해야 하며, 같은 버전이 이미
 레지스트리에 있으면 해당 패키지는 건너뜁니다. DB migration과 웹 배포를 먼저
 검증한 뒤 `workflow_dispatch`로 실행하므로 패키지가 서버보다 먼저 배포되지 않습니다.
+내부 에이전트 텔레메트리는 npm 공개를 기다리지 않고
+`infra/agent-telemetry/install-from-repo.sh`로 설치하며, 공개 패키지가 필요한
+외부 배포 시점까지 이 workflow를 실행하지 않아도 됩니다.
 
 ## 관련 링크
 
