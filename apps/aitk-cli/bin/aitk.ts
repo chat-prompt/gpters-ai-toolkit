@@ -293,7 +293,7 @@ Options:
   --source <source>            openclaw|claude-code|codex|hermes (default: openclaw)
   --sessions-dir <path>        Transcript directory, or Hermes SQLite file (always required)
   --project-slugs <a,b>        Allowed project directory names (required for claude-code/codex)
-  --hermes-profile <name>      sessions.profile_name scope (required for hermes)
+  --hermes-profile <name>      sessions.profile_name scope; use default for the root profile
   --checkpoint-dir <path>      Per-agent checkpoint directory
   --collector-id <id>          Stable collector identity (generated if omitted)
   --days <N>                   First-run backfill window (default: 7, max: 90)
@@ -315,7 +315,8 @@ Authentication:
 Examples:
   aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/session/directory --days 7 --dry-run
   aitk agent-telemetry install --agent my-codex --source codex --sessions-dir /explicit/codex/sessions --project-slugs my-workspace
-  aitk agent-telemetry collect --agent hermes --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile <name> --category qa-verify --dry-run`,
+  aitk agent-telemetry collect --agent bbokeoter --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile default --category qa-verify --dry-run
+  aitk agent-telemetry collect --agent jiggle --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile jiggle --category qa-verify --dry-run`,
 
   login: `aitk login - Authenticate with AI Toolkit
 

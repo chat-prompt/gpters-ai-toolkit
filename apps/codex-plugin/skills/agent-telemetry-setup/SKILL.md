@@ -42,9 +42,11 @@ loop, or agent-memory task.
    - OpenClaw: the explicit agent session directory. Prefer an underlying
      Claude Code source when both represent the same work; never install both
      for overlapping logs.
-   - Hermes: an explicit `state.db` and a non-empty `profile_name` dedicated to
-     the intended agent. A shared database whose sessions have no stable
-     profile identity is not safe to collect.
+   - Hermes: an explicit `state.db` plus one explicit profile scope dedicated
+     to the intended agent. Use `--hermes-profile default` for NULL, empty, or
+     explicit `default` rows; use the exact profile name for a named profile.
+     Treat every profile as a separate agent installation. A default profile
+     shared with unrelated local work is not safe to collect.
 5. Show the exact command with paths redacted in chat, explain that the first
    run backfills seven days, and get approval. Then run:
 
@@ -58,7 +60,7 @@ loop, or agent-memory task.
 ```
 
 Omit `--project-slugs` for OpenClaw. Replace it with
-`--hermes-profile <dedicated-profile>` for Hermes. The installer performs a
+`--hermes-profile <dedicated-profile-or-default>` for Hermes. The installer performs a
 health-gated dry run before enrollment and registers a six-hour launchd job.
 For an always-on agent that needs fresher monitoring, add `--interval 3600`;
 do not shorten the interval without telling the user.

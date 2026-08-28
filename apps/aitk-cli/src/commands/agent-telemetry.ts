@@ -130,10 +130,11 @@ function resolveHermesProfile(source: AgentTelemetrySource, value: string | unde
     return undefined
   }
   if (!value) error('--hermes-profile is required when --source hermes is used')
-  if (value!.length > 255 || value!.trim().length === 0 || value!.includes('\0')) {
+  const profile = value!.trim()
+  if (profile.length > 255 || profile.length === 0 || profile.includes('\0')) {
     error('--hermes-profile must contain a non-empty profile name of at most 255 characters')
   }
-  return value
+  return profile
 }
 
 function checkpointName(

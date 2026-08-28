@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  agentTelemetryInstallPath,
   createInstallation,
   installLaunchdSchedule,
   readAgentTelemetryInstallation,
@@ -104,5 +105,41 @@ describe('agent telemetry installation', () => {
 
     expect(() => readAgentTelemetryInstallation('test-agent', 'openclaw', root))
       .toThrow('paths do not match')
+  })
+
+  it('Hermes 프로필별 agentId는 설치·스케줄·credential을 서로 분리한다', () => {
+    const common = {
+      source: 'hermes' as const,
+      sessionsDir,
+      serverUrl: 'https://ai-toolkit.gpters.org',
+      backfillDays: 7,
+      intervalSeconds: 3_600,
+      nodePath,
+      scriptPath: cliPath,
+      collectorVersion: '0.7.0',
+      account: 'tester',
+      schedule: 'launchd' as const,
+      home: root,
+      now: new Date('2026-08-27T00:00:00Z'),
+    }
+    const bbokeoter = createInstallation({
+      ...common,
+      agentId: 'bbokeoter',
+      collectorId: 'collector-bbokeoter',
+      hermesProfile: 'default',
+    })
+    const jiggle = createInstallation({
+      ...common,
+      agentId: 'jiggle',
+      collectorId: 'collector-jiggle',
+      hermesProfile: 'jiggle',
+    })
+
+    expect(bbokeoter.hermesProfile).toBe('default')
+    expect(jiggle.hermesProfile).toBe('jiggle')
+    expect(agentTelemetryInstallPath('bbokeoter', 'hermes', root))
+      .not.toBe(agentTelemetryInstallPath('jiggle', 'hermes', root))
+    expect(bbokeoter.schedule.label).not.toBe(jiggle.schedule.label)
+    expect(bbokeoter.credential.service).not.toBe(jiggle.credential.service)
   })
 })

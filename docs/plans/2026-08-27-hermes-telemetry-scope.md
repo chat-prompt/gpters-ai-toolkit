@@ -12,11 +12,15 @@ Hermes의 프로필 홈과 `state.db` 파일이 분리돼 있어도, 실제 SQLi
 ## 안전 규칙
 
 - Hermes 수집에는 `--hermes-profile <name>`을 반드시 명시한다.
-- 세션은 `WHERE profile_name = ?`로 제한한다.
+- root/default 프로필은 `--hermes-profile default`로 지정하며 `NULL`, 빈 문자열, 명시적인
+  `default` 값만 같은 범위로 취급한다.
+- 이름 있는 프로필의 세션은 `WHERE profile_name = ?`로 제한하며 default 범위를 포함하지 않는다.
 - 메시지는 제한된 세션과 `messages.session_id = sessions.id`로 조인해 읽는다.
 - 지정한 프로필과 일치하는 세션이 한 건도 없으면 오타 또는 잘못된 범위로 보고 실패한다.
 - 프로필 이름은 전송 payload에 넣지 않으며 체크포인트 파일명에는 SHA-256 축약 해시만 쓴다.
 - 프로필별 체크포인트를 분리해 다른 범위의 누적 usage와 dedup 상태가 섞이지 않게 한다.
+- 여러 프로필을 수집할 때는 프로필마다 별도 `agentId`와 설치를 사용한다. 하나의 배치로 합치거나
+  프로필을 자동 발견해 전송하지 않는다.
 - 원문, 세션·메시지 ID, 경로, 프로필 이름은 검증 보고에 출력하지 않는다.
 
 ## 실행 형태
@@ -34,3 +38,27 @@ aitk agent-telemetry collect \
 
 실제 전송은 dry-run 집계와 SQLite 읽기 전용 독립 집계가 일치하고, checkpoint가 dry-run
 전후 생성·변경되지 않았으며, collection health가 `healthy`인 것을 확인한 뒤 별도로 승인한다.
+
+## 다중 프로필 설치 예시
+
+같은 `state.db`를 사용하더라도 설치·체크포인트·서버 배치는 프로필별로 독립적이다.
+
+```sh
+aitk agent-telemetry install \
+  --agent bbokeoter \
+  --source hermes \
+  --sessions-dir <state.db> \
+  --hermes-profile default \
+  --interval 3600
+
+aitk agent-telemetry install \
+  --agent jiggle \
+  --source hermes \
+  --sessions-dir <state.db> \
+  --hermes-profile jiggle \
+  --interval 3600
+```
+
+default 프로필에서 사람의 로컬 Hermes 작업도 수행한다면 그 세션 역시 같은 default 범위로
+집계된다. 플랫폼 메타데이터로 안정적으로 구분할 수 없는 DB에서는 default 프로필 전체를 해당
+에이전트의 활동으로 볼 수 있을 때만 설치한다.

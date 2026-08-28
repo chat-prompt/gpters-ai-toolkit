@@ -27,6 +27,7 @@ const FORBIDDEN_LABELS = [
 const FAILED_MARKERS = new Set([
   'error', 'failed', 'failure', 'cancelled', 'canceled', 'aborted', 'denied', 'rejected',
 ])
+const DEFAULT_PROFILE_SCOPE = 'default'
 
 const REQUIRED_SESSION_COLUMNS = [
   'id', 'model', 'last_activity_at', 'input_tokens', 'output_tokens',
@@ -271,13 +272,16 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
     requiredColumns(database, 'sessions', REQUIRED_SESSION_COLUMNS)
     requiredColumns(database, 'messages', REQUIRED_MESSAGE_COLUMNS)
 
+    const defaultProfile = options.profileName === DEFAULT_PROFILE_SCOPE
     const sessionRows = database.prepare(`
       SELECT id, model, last_activity_at, input_tokens, output_tokens,
              cache_read_tokens, cache_write_tokens, reasoning_tokens
       FROM sessions
-      WHERE profile_name = ?
+      WHERE ${defaultProfile
+        ? "profile_name IS NULL OR TRIM(profile_name) = '' OR profile_name = 'default'"
+        : 'profile_name = ?'}
       ORDER BY last_activity_at, id
-    `).all(options.profileName) as HermesSessionRow[]
+    `).all(...(defaultProfile ? [] : [options.profileName])) as HermesSessionRow[]
     if (sessionRows.length === 0) throw new Error('Hermes profile scope does not match any sessions')
     const messageRows = database.prepare(`
       SELECT m.id AS id, m.session_id AS session_id, m.role AS role,
@@ -287,9 +291,11 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
              m.display_kind AS display_kind
       FROM messages AS m
       INNER JOIN sessions AS s ON s.id = m.session_id
-      WHERE s.profile_name = ?
+      WHERE ${defaultProfile
+        ? "s.profile_name IS NULL OR TRIM(s.profile_name) = '' OR s.profile_name = 'default'"
+        : 's.profile_name = ?'}
       ORDER BY m.timestamp, m.id
-    `).all(options.profileName) as HermesMessageRow[]
+    `).all(...(defaultProfile ? [] : [options.profileName])) as HermesMessageRow[]
 
     const parsedCalls = new Map<string, ParsedToolCall[] | null>()
     const callDirectory = new Map<string, string>()
