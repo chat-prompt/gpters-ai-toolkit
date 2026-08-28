@@ -52,10 +52,10 @@ aitk agent-telemetry install \
   --interval 3600
 
 aitk agent-telemetry install \
-  --agent jiggle \
+  --agent named-agent \
   --source hermes \
   --sessions-dir <state.db> \
-  --hermes-profile jiggle \
+  --hermes-profile named-profile \
   --interval 3600
 ```
 

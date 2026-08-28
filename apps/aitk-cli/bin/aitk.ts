@@ -316,7 +316,7 @@ Examples:
   aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/session/directory --days 7 --dry-run
   aitk agent-telemetry install --agent my-codex --source codex --sessions-dir /explicit/codex/sessions --project-slugs my-workspace
   aitk agent-telemetry collect --agent bbokeoter --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile default --category qa-verify --dry-run
-  aitk agent-telemetry collect --agent jiggle --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile jiggle --category qa-verify --dry-run`,
+  aitk agent-telemetry collect --agent named-agent --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile named-profile --category qa-verify --dry-run`,
 
   login: `aitk login - Authenticate with AI Toolkit
 

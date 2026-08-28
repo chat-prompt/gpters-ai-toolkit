@@ -128,18 +128,18 @@ describe('agent telemetry installation', () => {
       collectorId: 'collector-bbokeoter',
       hermesProfile: 'default',
     })
-    const jiggle = createInstallation({
+    const namedAgent = createInstallation({
       ...common,
-      agentId: 'jiggle',
-      collectorId: 'collector-jiggle',
-      hermesProfile: 'jiggle',
+      agentId: 'named-agent',
+      collectorId: 'collector-named-agent',
+      hermesProfile: 'named-profile',
     })
 
     expect(bbokeoter.hermesProfile).toBe('default')
-    expect(jiggle.hermesProfile).toBe('jiggle')
+    expect(namedAgent.hermesProfile).toBe('named-profile')
     expect(agentTelemetryInstallPath('bbokeoter', 'hermes', root))
-      .not.toBe(agentTelemetryInstallPath('jiggle', 'hermes', root))
-    expect(bbokeoter.schedule.label).not.toBe(jiggle.schedule.label)
-    expect(bbokeoter.credential.service).not.toBe(jiggle.credential.service)
+      .not.toBe(agentTelemetryInstallPath('named-agent', 'hermes', root))
+    expect(bbokeoter.schedule.label).not.toBe(namedAgent.schedule.label)
+    expect(bbokeoter.credential.service).not.toBe(namedAgent.credential.service)
   })
 })

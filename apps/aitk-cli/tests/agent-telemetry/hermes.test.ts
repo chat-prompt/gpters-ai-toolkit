@@ -189,8 +189,8 @@ describe('collectHermesAgent', () => {
       '', '/Users/default/empty')
     insertSession.run('default-explicit', 'default-model', epoch('2026-08-26T08:02:00Z'), 31, 32, 33, 34, 35,
       'default', '/Users/default/explicit')
-    insertSession.run('jiggle-session', 'jiggle-model', epoch('2026-08-26T08:03:00Z'), 900, 800, 700, 600, 500,
-      'jiggle', '/Users/jiggle/private')
+    insertSession.run('named-session', 'named-model', epoch('2026-08-26T08:03:00Z'), 900, 800, 700, 600, 500,
+      'named-profile', '/Users/named/private')
     const insertMessage = database.prepare(`
       INSERT INTO messages (
         id, session_id, role, content, tool_call_id, tool_calls, tool_name,
@@ -203,7 +203,7 @@ describe('collectHermesAgent', () => {
       epoch('2026-08-26T03:01:00Z'), null, null)
     insertMessage.run(103, 'default-explicit', 'user', 'default explicit prompt', null, null, null, null,
       epoch('2026-08-26T03:02:00Z'), null, null)
-    insertMessage.run(104, 'jiggle-session', 'user', 'jiggle private prompt', null, null, null, null,
+    insertMessage.run(104, 'named-session', 'user', 'named private prompt', null, null, null, null,
       epoch('2026-08-26T03:03:00Z'), null, null)
     database.close()
 
@@ -230,7 +230,7 @@ describe('collectHermesAgent', () => {
     })
     expect(result.models).toEqual([{ model: 'default-model', turns: 3, usage: result.usage }])
     const serialized = JSON.stringify(result)
-    expect(serialized).not.toContain('jiggle')
+    expect(serialized).not.toContain('named-profile')
     expect(serialized).not.toContain('default-null')
   })
 
