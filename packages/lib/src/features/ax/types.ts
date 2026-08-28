@@ -495,9 +495,13 @@ export interface AxAgentTokenUsage {
 export interface AxAgentReporterRow {
   agentId: string
   source: AxAgentTelemetrySource
-  lastCollectedAt: string
-  freshnessHours: number
-  freshness: 'fresh' | 'stale'
+  collectorId: string | null
+  managed: boolean
+  intervalSeconds: number | null
+  lastCollectedAt: string | null
+  freshnessHours: number | null
+  freshness: 'fresh' | 'stale' | 'waiting'
+  healthStatus: 'healthy' | 'blocked' | 'unknown'
   sessions: number
   turns: number
   usage: AxAgentTokenUsage
@@ -508,7 +512,7 @@ export interface AxAgentReporterRow {
 
 export interface AxAgentSourceCoverageRow {
   source: AxAgentTelemetrySource
-  status: 'reporting' | 'stale' | 'missing' | 'unsupported' | 'alternate'
+  status: 'reporting' | 'stale' | 'installed' | 'missing' | 'unsupported' | 'alternate'
   lastCollectedAt: string | null
   capabilities: { usage: boolean; tools: boolean; skills: boolean }
   note: string

@@ -99,7 +99,7 @@ Claude Code 수집기는 `~/.claude/projects` 트랜스크립트에서 최근 7�
 
 ### 사용량 수집 참여 테이블 생성
 
-`packages/db/drizzle/0026_ax_usage_collector_state.sql`부터 0030까지를 순서대로 반영한다. 운영의 0025 에이전트 텔레메트리 migration은 이미 적용됐으므로 다시 실행하지 않는다. 서버 코드를 배포하기 전에 후속 스키마가 먼저 있어야 한다. `@gpters/aitk` 0.6.2부터 로컬 사용량이 0건이어도 빈 `records`를 점검 신호로 전송한다. 운영 기준선과 적용 절차는 [0026–0030 마이그레이션 가이드](./2026-08-25-ax-migration-runbook.md)를 따른다.
+운영에는 0026–0030이 적용되어 있다. 설치형 수집기 등록은 `0031_ax_agent_telemetry_collectors.sql`을 서버 코드보다 먼저 반영하며 [0031 collector registry 가이드](./2026-08-27-agent-telemetry-collector-migration.md)의 분리된 child/production guard를 따른다. `@gpters/aitk` 0.6.2부터 로컬 사용량이 0건이어도 빈 `records`를 점검 신호로 전송하고, 0.7.0부터 OAuth enrollment·Keychain·launchd 기반 agent telemetry 설치를 지원한다.
 
 ### 구독 테이블 생성
 

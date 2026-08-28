@@ -163,6 +163,15 @@ function assertNoErrors(stage: string, errors: string[]): void {
 }
 
 async function main(): Promise<void> {
+  const journal = JSON.parse(readFileSync(
+    fileURLToPath(new URL('../drizzle/meta/_journal.json', import.meta.url)),
+    'utf8',
+  )) as { entries?: Array<{ tag?: string }> }
+  if (journal.entries?.at(-1)?.tag !== '0030_ax_execution_lifecycle') {
+    throw new Error(
+      'the 0026-0030 runner is archived because newer migrations exist; use the dedicated 0031 runner',
+    )
+  }
   loadEnvFile(argument('--env-file'))
   const databaseUrl = process.env.DATABASE_URL
   if (!databaseUrl) throw new Error('DATABASE_URL is not set')

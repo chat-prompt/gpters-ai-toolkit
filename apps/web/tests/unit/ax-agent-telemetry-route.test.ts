@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const recordAgentTelemetryBatch = vi.fn()
-vi.mock('@/lib/analytics', () => ({ recordAgentTelemetryBatch }))
+const authenticateAgentTelemetryCollector = vi.fn()
+const recordAgentTelemetryCollectorSuccess = vi.fn()
+vi.mock('@/lib/analytics', () => ({
+  recordAgentTelemetryBatch,
+  authenticateAgentTelemetryCollector,
+  recordAgentTelemetryCollectorSuccess,
+  isAgentTelemetryCollectorToken: (value: string) => /^agt_[a-f0-9]{64}$/.test(value),
+}))
 
 const { POST } = await import('../../app/api/ax/agent-telemetry/route')
 const fixture = JSON.parse(readFileSync(resolve(
@@ -32,6 +39,8 @@ describe('POST /api/ax/agent-telemetry', () => {
     delete process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_CODEX
     delete process.env.AX_AGENT_TELEMETRY_TOKEN_HASH_HERMES
     recordAgentTelemetryBatch.mockResolvedValue({ inserted: true })
+    authenticateAgentTelemetryCollector.mockResolvedValue(null)
+    recordAgentTelemetryCollectorSuccess.mockResolvedValue(undefined)
   })
 
   it('인증된 유효 batch를 저장한다', async () => {
@@ -84,6 +93,24 @@ describe('POST /api/ax/agent-telemetry', () => {
     expect((await POST(request(fixture, 'bbodoong-token'))).status).toBe(200)
     expect((await POST(request({ ...fixture, agentId: 'codex' }, 'codex-token'))).status).toBe(200)
     expect((await POST(request(fixture, 'codex-token'))).status).toBe(403)
+  })
+
+  it('enrollment credential은 agentId·collectorId·source 세 범위에만 쓸 수 있다', async () => {
+    const token = `agt_${'a'.repeat(64)}`
+    authenticateAgentTelemetryCollector.mockResolvedValue({
+      collectorId: fixture.collectorInstanceId,
+      agentId: fixture.agentId,
+      source: fixture.collection.source,
+      userId: 'user-1',
+    })
+
+    expect((await POST(request(fixture, token))).status).toBe(200)
+    expect(recordAgentTelemetryCollectorSuccess).toHaveBeenCalledTimes(1)
+    expect((await POST(request({ ...fixture, collectorInstanceId: 'collector-other' }, token))).status).toBe(403)
+    expect((await POST(request({
+      ...fixture,
+      collection: { ...fixture.collection, source: 'codex' },
+    }, token))).status).toBe(403)
   })
 
   it('agent별 hash가 기존 JSON과 충돌하면 fail-closed로 막는다', async () => {

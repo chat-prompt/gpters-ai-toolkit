@@ -23,7 +23,9 @@
     "db:preflight:ax": "tsx scripts/preflight-ax-migrations.ts",
     "db:migrate:ax-child": "tsx scripts/apply-ax-child-migrations.ts",
     "db:migrate:ax-production": "tsx scripts/apply-ax-child-migrations.ts --production",
-    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts"
+    "db:migrate:agent-collector-child": "tsx scripts/apply-agent-telemetry-collector-migration.ts",
+    "db:migrate:agent-collector-production": "tsx scripts/apply-agent-telemetry-collector-migration.ts --production",
+    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

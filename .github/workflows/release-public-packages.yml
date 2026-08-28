@@ -1,0 +1,80 @@
+name: Release public packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-public-packages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: '@gpters/aitk'
+            directory: apps/aitk-cli
+          - package: '@gpters/codex-plugin'
+            directory: apps/codex-plugin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm --filter "${{ matrix.package }}" test
+
+      - name: Typecheck
+        run: pnpm --filter "${{ matrix.package }}" typecheck
+
+      - name: Build
+        run: pnpm --filter "${{ matrix.package }}" build
+
+      - name: Read package metadata
+        id: package
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./${{ matrix.directory }}/package.json').version")"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check registry
+        id: registry
+        env:
+          PACKAGE_NAME: ${{ matrix.package }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION already exists; skipping."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.registry.outputs.publish == 'true'
+        working-directory: ${{ matrix.directory }}
+        run: npm publish --access public

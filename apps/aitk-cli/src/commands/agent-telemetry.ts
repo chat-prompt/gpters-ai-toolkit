@@ -43,6 +43,22 @@ export interface AgentTelemetryOptions {
   openclawVersion?: string
   claudeCliVersion?: string
   now?: Date
+  /** 설치형 runner가 Keychain에서 읽어 직접 넘기는 collector 전용 토큰. */
+  telemetryToken?: string
+  /** install/doctor 내부 검증처럼 호출자가 결과를 조합할 때 stdout 출력을 생략한다. */
+  emitOutput?: boolean
+}
+
+export interface AgentTelemetryCollectResult {
+  dryRun: boolean
+  inserted?: boolean
+  batch: AgentTelemetryBatch
+  checkpoint: {
+    pending: boolean
+    wouldAdvanceToUtc: string | null
+    filesTracked: number
+    seenMessageHashes: number
+  }
 }
 
 interface AgentTelemetryResponse {
@@ -179,7 +195,7 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
   }
 }
 
-export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): Promise<void> {
+export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): Promise<AgentTelemetryCollectResult> {
   const agentId = safeId(options.agentId, '--agent')
   const source = resolveSource(options.source)
   if (!Number.isFinite(options.days) || options.days < 1 || options.days > MAX_DAYS) {
@@ -200,7 +216,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
     error('Checkpoint collector ID does not match --collector-id')
   }
 
-  const token = process.env.AX_AGENT_TELEMETRY_TOKEN
+  const token = options.telemetryToken ?? process.env.AX_AGENT_TELEMETRY_TOKEN
   if (!options.dryRun && !token) error('AX_AGENT_TELEMETRY_TOKEN is required unless --dry-run is used')
 
   if (!state.pending) {
@@ -252,7 +268,8 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   if (!pending) error('Agent telemetry batch was not created')
 
   if (options.dryRun) {
-    jsonOut({
+    const result: AgentTelemetryCollectResult = {
+      dryRun: true,
       batch: pending.batch,
       checkpoint: {
         pending: true,
@@ -260,8 +277,9 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
         filesTracked: Object.keys(pending.nextCommitted.files).length,
         seenMessageHashes: pending.nextCommitted.seenMessages.length,
       },
-    })
-    return
+    }
+    if (options.emitOutput !== false) jsonOut(result)
+    return result
   }
 
   if (pending.batch.collection.healthStatus === 'blocked') {
@@ -275,7 +293,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
     const result = await sendAgentTelemetryBatch(pending.batch, resolveServerUrl(options.serverUrl), token!)
     const committed = committedAfterSuccess(state)
     await writeAgentTelemetryCheckpoint(checkpointPath, committed)
-    jsonOut({
+    const output = {
       ok: true,
       inserted: result.inserted,
       batchId: pending.batch.batchId,
@@ -283,7 +301,19 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       window: pending.batch.window,
       sessions: pending.batch.sessions,
       turns: pending.batch.turns,
-    })
+    }
+    if (options.emitOutput !== false) jsonOut(output)
+    return {
+      dryRun: false,
+      inserted: result.inserted,
+      batch: pending.batch,
+      checkpoint: {
+        pending: false,
+        wouldAdvanceToUtc: pending.nextCommitted.lastWindowEndUtc,
+        filesTracked: Object.keys(pending.nextCommitted.files).length,
+        seenMessageHashes: pending.nextCommitted.seenMessages.length,
+      },
+    }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : 'Agent telemetry upload failed'
     error(`${message}. Pending batch was preserved for retry.`)

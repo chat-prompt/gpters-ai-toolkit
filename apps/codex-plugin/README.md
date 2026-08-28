@@ -25,6 +25,7 @@ npx @gpters/codex-plugin setup
 | `skill-suggest` | 새 작업 시 관련 팀 스킬 자동 검색 |
 | `commit` | Semantic Commit 형식의 상세 커밋 메시지 생성 |
 | `prd-review` | PRD 파일 심층 인터뷰 및 스펙 작성 |
+| `agent-telemetry-setup` | 승인 기반 에이전트 수집기 설치·진단·해제 |
 
 ### 2. MCP 서버 설정
 
@@ -56,6 +57,16 @@ export AITK_USAGE_REPORT=0   # 끄기
 aitk usage report --dry-run  # 무엇을 보낼지 확인
 aitk usage report            # 지금 보내기
 ```
+
+### 에이전트/런타임 상세 수집
+
+위 개인 사용량 보고와 별도로, 특정 Codex 작업 범위나 봇의 도구·스킬·수집
+건강도를 연결하려면 `@gpters/aitk` 0.7.0 이상의 설치형 수집기를 사용합니다.
+`agent-telemetry-setup` 스킬은 사용자가 명시적으로 요청한 경우에만 설치를
+진행하며 collector token은 macOS Keychain에 저장합니다. 주기 실행은 launchd가
+담당하므로 Codex가 일정을 기억하거나 세션 시작 훅으로 매번 보낼 필요가 없습니다.
+
+자세한 내용은 [수집기 운영 가이드](../../infra/agent-telemetry/README.md)를 참고하세요.
 
 ## 개발
 

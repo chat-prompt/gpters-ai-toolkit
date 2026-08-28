@@ -1,6 +1,6 @@
 # AX 격리 로컬 환경
 
-AX 대시보드와 0025–0030 마이그레이션을 운영 DB와 분리해 확인하는 환경이다. 컨테이너는
+AX 대시보드와 0025–0031 마이그레이션을 운영 DB와 분리해 확인하는 환경이다. 컨테이너는
 `colima-gpters-ax`라는 전용 Colima 프로필에서 실행되고, PostgreSQL은 `127.0.0.1:55432`에만
 노출된다. 운영 데이터는 복사하지 않았으며 현재 볼륨에는 운영의 **스키마만** 가져온 기준선과
 합성 테스트 데이터가 들어 있다.
@@ -85,8 +85,8 @@ pnpm ax:local:verify-rebuild
 사용하는 `gpters_ax_local` DB와 PostgreSQL 볼륨은 건드리지 않는다. 과거에 journal에서 누락되었던
 `0008_full_text_search.sql`도 명시적으로 포함한다. 조직 기능은 원래 SQL 파일이 아닌 프로그램형
 마이그레이션으로 도입되었으므로 `bootstrap-org-support.sql`로 그 스키마 전제만 재현한다. 이후 0024가
-요구하는 단일 활성 `gpters` 조직을 합성 fixture로 만든 다음 0024–0030을 순서대로 적용한다. 마지막에는
-활성 구성원, 스킬, 사용자 연결 사용량, 여정 fixture, 실행 결과와 에이전트 telemetry batch 수를 SQL
+요구하는 단일 활성 `gpters` 조직을 합성 fixture로 만든 다음 0024–0031을 순서대로 적용한다. 마지막에는
+활성 구성원, 스킬, 사용자 연결 사용량, 여정 fixture, 실행 결과, 에이전트 telemetry batch와 빈 collector registry를 SQL
 assertion으로 검증한다.
 
 ## 에이전트 telemetry 수신 확인

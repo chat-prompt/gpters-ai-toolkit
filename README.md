@@ -294,9 +294,17 @@ pnpm db:studio      # Drizzle Studio
 | 플러그인 | 배포 방식 |
 |----------|-----------|
 | claude-code-plugin | Git push → 마켓플레이스 자동 반영 (새 세션부터) |
+| AITK CLI | 서버 검증 후 GitHub Actions 승인 실행 → npm public (`@gpters/aitk`) |
 | opencode-plugin | `npm publish` → npm public (`@gpters/opencode`) |
-| codex-plugin | `npm publish` → npm public (`@gpters/codex-plugin`) |
+| codex-plugin | 서버 검증 후 GitHub Actions 승인 실행 → npm public (`@gpters/codex-plugin`) |
 | 웹 (Next.js) | Git push → Vercel 자동 배포 |
+
+공개 패키지 릴리스는 `.github/workflows/release-public-packages.yml`이 담당합니다.
+npm의 Trusted Publisher(OIDC)를 사용하므로 장기 `NPM_TOKEN` secret은 두지 않습니다.
+각 npm 패키지 설정에 GitHub 조직 `chat-prompt`, 저장소 `gpters-ai-toolkit`, workflow
+`release-public-packages.yml`을 publisher로 한 번 등록해야 하며, 같은 버전이 이미
+레지스트리에 있으면 해당 패키지는 건너뜁니다. DB migration과 웹 배포를 먼저
+검증한 뒤 `workflow_dispatch`로 실행하므로 패키지가 서버보다 먼저 배포되지 않습니다.
 
 ## 관련 링크
 

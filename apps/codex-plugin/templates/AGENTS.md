@@ -55,3 +55,11 @@ mcp_gpters-ai-toolkit_deploy_skill(type="skill", name="스킬명", content="..."
 | skill-suggest | 새 작업 시 관련 팀 스킬 자동 검색 |
 | commit | 상세한 커밋 메시지 생성 |
 | prd-review | PRD 파일 심층 인터뷰 및 스펙 작성 |
+| agent-telemetry-setup | 승인 기반 에이전트 사용량 수집기 설치·진단·해제 |
+
+### 에이전트 텔레메트리
+
+사용자가 AX 대시보드 수집 연결을 요청하면 `agent-telemetry-setup` 스킬을
+먼저 읽습니다. 설치·즉시 전송·해제는 사용자 승인 후에만 실행하고,
+collector token을 대화나 설정 파일로 받지 않습니다. 반복 실행은 에이전트가
+기억하는 일정이 아니라 설치된 OS 스케줄러가 담당합니다.

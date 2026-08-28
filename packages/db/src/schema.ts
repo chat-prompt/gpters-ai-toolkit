@@ -1364,3 +1364,40 @@ export const axAgentTelemetryBatches = pgTable('ax_agent_telemetry_batches', {
 
 export type AxAgentTelemetryBatchRecord = typeof axAgentTelemetryBatches.$inferSelect
 export type NewAxAgentTelemetryBatchRecord = typeof axAgentTelemetryBatches.$inferInsert
+
+/**
+ * 설치형 telemetry collector의 credential·freshness 상태.
+ *
+ * raw credential과 로컬 경로·profile·project scope는 저장하지 않는다. tokenHash는
+ * collector 전용 credential의 SHA-256이고, 한 agent/source에는 한 collector만 허용해
+ * 겹치는 스케줄러가 같은 사용량을 이중 계상하지 않게 한다.
+ */
+export const axAgentTelemetryCollectors = pgTable('ax_agent_telemetry_collectors', {
+  collectorId: text('collector_id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id').notNull(),
+  source: text('source').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  intervalSeconds: integer('interval_seconds').notNull().default(21_600),
+  isActive: boolean('is_active').notNull().default(true),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+  lastWindowEnd: timestamp('last_window_end', { withTimezone: true }),
+  lastBatchId: text('last_batch_id'),
+  lastHealthStatus: text('last_health_status'),
+  lastHealthWarnings: jsonb('last_health_warnings').$type<string[]>().notNull().default([]),
+  lastRecordsRead: integer('last_records_read').notNull().default(0),
+  lastParseFailures: integer('last_parse_failures').notNull().default(0),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('ax_agent_telemetry_collector_agent_source_uidx')
+    .on(table.agentId, table.source)
+    .where(sql`${table.isActive} = true`),
+  index('ax_agent_telemetry_collector_user_idx').on(table.userId),
+  index('ax_agent_telemetry_collector_freshness_idx').on(table.lastSuccessAt),
+])
+
+export type AxAgentTelemetryCollectorRecord = typeof axAgentTelemetryCollectors.$inferSelect
+export type NewAxAgentTelemetryCollectorRecord = typeof axAgentTelemetryCollectors.$inferInsert

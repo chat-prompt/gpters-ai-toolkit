@@ -64,6 +64,7 @@ export function isPublicRoute(pathname: string): boolean {
     strippedPath.startsWith('/api/tool-docs') ||
     strippedPath.startsWith('/api/cron') ||
     strippedPath === '/api/ax/agent-telemetry' ||
+    strippedPath === '/api/ax/agent-telemetry/enroll' ||
     strippedPath.startsWith('/oauth') ||
     strippedPath.startsWith('/.well-known') ||
     strippedPath === '/robots.txt' ||
