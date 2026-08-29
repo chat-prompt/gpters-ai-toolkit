@@ -18,7 +18,8 @@ local paths.
 ## Requirements
 
 - macOS. Other schedulers are not installed automatically yet.
-- AITK 0.7.0 or newer in a stable user path. Internal agents install the CLI
+- AITK 0.7.0 or newer in a stable user path. OpenClaw SQLite auto-detection and
+  Hermes default-profile compatibility require 0.7.1 or newer. Internal agents install the CLI
   from an approved repository commit with `install-from-repo.sh`; publishing a
   new npm package is not required.
 - Node.js and Corepack/pnpm. If Bun is not already installed, the repo
