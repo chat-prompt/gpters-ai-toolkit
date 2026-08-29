@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import type {
   AgentTaskCategory,
   AgentTelemetryCommittedState,
@@ -131,7 +131,39 @@ export interface CollectOpenClawOptions {
   category: AgentTaskCategory
   source: AgentTelemetrySource
   projectSlugs?: string[]
+  openclawAgent?: string
 }
+
+interface DatabaseStatement {
+  all(...params: unknown[]): unknown[]
+}
+
+interface DatabaseConnection {
+  exec(sql: string): void
+  prepare(sql: string): DatabaseStatement
+  close(): void
+}
+
+interface OpenClawSqliteRow {
+  session_id?: unknown
+  event_json?: unknown
+  created_at?: unknown
+}
+
+type OpenClawInput =
+  | {
+    kind: 'jsonl'
+    root: string
+    files: string[]
+    discovered: number
+    excludedByScope: number
+    internalAgentId?: string
+  }
+  | {
+    kind: 'sqlite'
+    databasePath: string
+    internalAgentId: string
+  }
 
 function toCount(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0
@@ -229,15 +261,23 @@ function hashIdentity(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function entryTimestamp(entry: OpenClawEntry): number | null {
-  const raw = entry.timestamp ?? entry.message?.timestamp
+function timestampMs(raw: unknown): number | null {
+  if (typeof raw === 'bigint') {
+    if (raw <= 0n || raw > BigInt(Number.MAX_SAFE_INTEGER)) return null
+    return timestampMs(Number(raw))
+  }
   if (typeof raw === 'number' && Number.isFinite(raw)) {
     const milliseconds = raw < 10_000_000_000 ? raw * 1000 : raw
-    return milliseconds
+    return Number.isFinite(milliseconds) ? milliseconds : null
   }
   if (typeof raw !== 'string') return null
   const milliseconds = Date.parse(raw)
   return Number.isFinite(milliseconds) ? milliseconds : null
+}
+
+function entryTimestamp(entry: OpenClawEntry, fallback?: unknown): number | null {
+  const raw = entry.timestamp ?? entry.message?.timestamp
+  return timestampMs(raw) ?? timestampMs(fallback)
 }
 
 function isSynthetic(message: OpenClawMessage): boolean {
@@ -305,6 +345,125 @@ async function listSessionFiles(
   }
 }
 
+async function pathKind(path: string): Promise<'file' | 'directory' | null> {
+  try {
+    const info = await stat(path)
+    if (info.isFile()) return 'file'
+    if (info.isDirectory()) return 'directory'
+    return null
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw cause
+  }
+}
+
+function requiredColumns(database: DatabaseConnection, table: string, required: readonly string[]): void {
+  const rows = database.prepare(`PRAGMA table_info('${table}')`).all() as Array<Record<string, unknown>>
+  const available = new Set(rows.map((row) => row.name).filter((name): name is string => typeof name === 'string'))
+  if (required.some((name) => !available.has(name))) {
+    throw new Error('OpenClaw SQLite schema is not supported')
+  }
+}
+
+async function openReadOnlyDatabase(path: string): Promise<DatabaseConnection> {
+  let sqlite: typeof import('node:sqlite')
+  try {
+    sqlite = await import('node:sqlite')
+  } catch {
+    throw new Error('OpenClaw SQLite collection requires a Node.js runtime with node:sqlite support')
+  }
+  return new sqlite.DatabaseSync(path, { readOnly: true }) as unknown as DatabaseConnection
+}
+
+function inspectOpenClawDatabase(database: DatabaseConnection): string {
+  requiredColumns(database, 'schema_meta', ['meta_key', 'role', 'agent_id', 'schema_version'])
+  requiredColumns(database, 'transcript_events', ['session_id', 'seq', 'event_json', 'created_at'])
+  const rows = database.prepare(`
+    SELECT role, agent_id
+    FROM schema_meta
+    WHERE meta_key = 'primary'
+    LIMIT 1
+  `).all() as Array<Record<string, unknown>>
+  const row = rows[0]
+  if (row?.role !== 'agent' || typeof row.agent_id !== 'string' ||
+    row.agent_id.length === 0 || row.agent_id.length > 255 || row.agent_id.includes('\0')) {
+    throw new Error('OpenClaw SQLite agent identity is missing or invalid')
+  }
+  return row.agent_id
+}
+
+async function readOpenClawDatabaseIdentity(path: string): Promise<string> {
+  let database: DatabaseConnection | null = null
+  try {
+    database = await openReadOnlyDatabase(path)
+    database.exec('PRAGMA query_only = ON')
+    database.exec('BEGIN')
+    const agentId = inspectOpenClawDatabase(database)
+    database.exec('ROLLBACK')
+    return agentId
+  } catch (cause) {
+    try { database?.exec('ROLLBACK') } catch { /* transaction이 시작되지 않았을 수 있다. */ }
+    if (cause instanceof Error && (
+      cause.message.startsWith('OpenClaw SQLite') || cause.message.includes('node:sqlite support')
+    )) throw cause
+    throw new Error('OpenClaw SQLite source could not be read safely')
+  } finally {
+    database?.close()
+  }
+}
+
+async function containsOpenClawAgentSources(parent: string): Promise<boolean> {
+  if (await pathKind(parent) !== 'directory') return false
+  const entries = await readdir(parent, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const agentRoot = join(parent, entry.name)
+    if (await pathKind(join(agentRoot, 'agent', 'openclaw-agent.sqlite')) === 'file' ||
+      await pathKind(join(agentRoot, 'sessions')) === 'directory') return true
+  }
+  return false
+}
+
+async function resolveOpenClawInput(path: string, projectSlugs?: string[]): Promise<OpenClawInput> {
+  const root = resolve(path)
+  const kind = await pathKind(root)
+  if (!kind) throw new Error('sessions directory does not exist')
+  if (kind === 'file') {
+    return { kind: 'sqlite', databasePath: root, internalAgentId: await readOpenClawDatabaseIdentity(root) }
+  }
+
+  // 업그레이드 뒤에도 기존 `.../<agent>/sessions` 설정을 그대로 사용할 수 있게
+  // sibling SQLite를 먼저 찾는다. JSONL은 이 시점부터 legacy archive이므로 합치지 않는다.
+  const databaseCandidates = [
+    join(root, 'openclaw-agent.sqlite'),
+    join(root, 'agent', 'openclaw-agent.sqlite'),
+    ...(basename(root) === 'sessions' ? [join(dirname(root), 'agent', 'openclaw-agent.sqlite')] : []),
+  ]
+  for (const databasePath of databaseCandidates) {
+    if (await pathKind(databasePath) !== 'file') continue
+    return {
+      kind: 'sqlite',
+      databasePath,
+      internalAgentId: await readOpenClawDatabaseIdentity(databasePath),
+    }
+  }
+
+  if (
+    (basename(root) === 'agents' && await containsOpenClawAgentSources(root)) ||
+    await containsOpenClawAgentSources(join(root, 'agents'))
+  ) {
+    throw new Error('OpenClaw source contains multiple agents; select one explicit agent directory')
+  }
+
+  const nestedSessions = join(root, 'sessions')
+  const jsonlRoot = await pathKind(nestedSessions) === 'directory' ? nestedSessions : root
+  const listed = await listSessionFiles(jsonlRoot, projectSlugs)
+  const internalAgentId = jsonlRoot === nestedSessions
+    ? basename(root)
+    : basename(jsonlRoot) === 'sessions' ? basename(dirname(jsonlRoot)) : undefined
+  return { kind: 'jsonl', root: jsonlRoot, ...listed, internalAgentId }
+}
+
 async function scanCompleteLines(
   filePath: string,
   offset: number,
@@ -351,9 +510,27 @@ function resultInfo(entry: OpenClawEntry): { id: string | null; failed: boolean 
 }
 
 export async function collectOpenClawAgent(options: CollectOpenClawOptions): Promise<OpenClawCollection> {
-  const root = resolve(options.sessionsDir)
-  const listed = await listSessionFiles(root, options.projectSlugs)
-  const files = listed.files
+  if (options.openclawAgent && options.source !== 'openclaw') {
+    throw new Error('OpenClaw agent scope is only supported with the OpenClaw source')
+  }
+  if (options.openclawAgent && !SAFE_ID.test(options.openclawAgent)) {
+    throw new Error('OpenClaw agent ID is invalid')
+  }
+  const input: OpenClawInput = options.source === 'openclaw'
+    ? await resolveOpenClawInput(options.sessionsDir, options.projectSlugs)
+    : await (async () => {
+      const root = resolve(options.sessionsDir)
+      const listed = await listSessionFiles(root, options.projectSlugs)
+      return { kind: 'jsonl' as const, root, ...listed }
+    })()
+  if (options.openclawAgent && input.internalAgentId !== options.openclawAgent) {
+    throw new Error('OpenClaw source agent does not match --openclaw-agent')
+  }
+  const internalAgentHash = input.internalAgentId ? hashIdentity(input.internalAgentId) : null
+  if (options.source === 'openclaw' && options.committed.openclawSource?.agentHash &&
+    options.committed.openclawSource.agentHash !== internalAgentHash) {
+    throw new Error('OpenClaw source agent does not match the existing checkpoint')
+  }
   const startMs = options.window.start.getTime()
   const endMs = options.window.end.getTime()
   const totalUsage = emptyAgentUsage()
@@ -369,11 +546,13 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   for (const seen of options.committed.seenMessages) {
     if (Date.parse(seen.atUtc) >= retentionCutoff) retainedSeen.set(seen.hash, seen)
   }
-  const nextFiles: Record<string, AgentTelemetryFileCheckpoint> = { ...options.committed.files }
+  const nextFiles: Record<string, AgentTelemetryFileCheckpoint> = input.kind === 'sqlite'
+    ? {}
+    : { ...options.committed.files }
   const collection = {
     source: options.source,
-    filesDiscovered: listed.discovered,
-    filesExcludedByScope: listed.excludedByScope,
+    filesDiscovered: input.kind === 'sqlite' ? 1 : input.discovered,
+    filesExcludedByScope: input.kind === 'sqlite' ? 0 : input.excludedByScope,
     filesRead: 0,
     filesReset: 0,
     recordsRead: 0,
@@ -394,164 +573,226 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   }
   let turns = 0
   let latestIncludedAt = 0
+  let windowRecords = 0
 
-  for (const filePath of files) {
-    let info
-    try {
-      info = await stat(filePath)
-    } catch {
-      collection.parseFailures++
-      continue
+  const processEntry = (
+    entry: OpenClawEntry,
+    initialSessionIdentity: string,
+    fallbackTimestamp?: unknown,
+  ): string => {
+    let sessionIdentity = initialSessionIdentity
+    if (entry.type === 'session' && typeof entry.id === 'string') {
+      collection.metadataSkipped++
+      return entry.id
     }
-    const fileKey = relative(root, filePath).replaceAll('\\', '/')
-    const previous = options.committed.files[fileKey]
-    const sameFile = previous?.dev === String(info.dev) && previous.ino === String(info.ino) && info.size >= previous.offset
-    let offset = sameFile ? previous.offset : 0
-    if (previous && !sameFile) collection.filesReset++
-    if (!previous && info.mtimeMs < startMs) continue
-    if (info.size <= offset) continue
 
-    collection.filesRead++
-    let sessionIdentity = fileKey
-    try {
-      const nextOffset = await scanCompleteLines(filePath, offset, (line) => {
-        collection.recordsRead++
-        let entry: OpenClawEntry
-        try {
-          entry = JSON.parse(line) as OpenClawEntry
-        } catch {
-          collection.malformedSkipped++
-          return
-        }
-        if (entry.type === 'session' && typeof entry.id === 'string') {
-          sessionIdentity = entry.id
-          collection.metadataSkipped++
-          return
-        }
+    const explicitSessionId = entry.sessionId ?? entry.session_id
+    if (typeof explicitSessionId === 'string' && explicitSessionId.length > 0) {
+      sessionIdentity = explicitSessionId
+    }
 
-        const explicitSessionId = entry.sessionId ?? entry.session_id
-        if (typeof explicitSessionId === 'string' && explicitSessionId.length > 0) {
-          sessionIdentity = explicitSessionId
-        }
+    if (options.source === 'claude-code' && CLAUDE_CODE_METADATA_TYPES.has(String(entry.type ?? ''))) {
+      collection.metadataSkipped++
+      return sessionIdentity
+    }
 
-        if (options.source === 'claude-code' && CLAUDE_CODE_METADATA_TYPES.has(String(entry.type ?? ''))) {
-          collection.metadataSkipped++
-          return
-        }
+    const at = entryTimestamp(entry, fallbackTimestamp)
+    if (at === null) {
+      collection.malformedSkipped++
+      return sessionIdentity
+    }
+    if (at < startMs || at >= endMs) {
+      collection.outsideWindowSkipped++
+      return sessionIdentity
+    }
+    windowRecords++
 
-        const at = entryTimestamp(entry)
-        if (at === null) {
-          collection.malformedSkipped++
-          return
+    const result = resultInfo(entry)
+    if (result) {
+      const resultIdentity = result.id ?? entry.message?.id ?? entry.id ?? entry.uuid
+      if (typeof resultIdentity === 'string' && resultIdentity.length > 0) {
+        const resultHash = hashIdentity(`${sessionIdentity}\u0000tool-result\u0000${resultIdentity}`)
+        if (retainedSeen.has(resultHash) || batchSeen.has(resultHash)) {
+          collection.duplicatesSkipped++
+          return sessionIdentity
         }
-        if (at < startMs || at >= endMs) {
-          collection.outsideWindowSkipped++
-          return
-        }
+        batchSeen.add(resultHash)
+        retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
+      }
+      const resultCallHash = result.id
+        ? hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${result.id}`)
+        : null
+      const call = resultCallHash ? toolCalls.get(resultCallHash) : undefined
+      if (!call) {
+        collection.orphanToolResultsSkipped++
+        return sessionIdentity
+      }
+      if (result.failed) toolMetrics.get(call.name)!.failures++
+      if (call.skillId) {
+        const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+        if (result.failed) skill.failed++
+        else skill.loaded++
+        skillMetrics.set(call.skillId, skill)
+      }
+      collection.includedRecords++
+      latestIncludedAt = Math.max(latestIncludedAt, at)
+      return sessionIdentity
+    }
 
-        const result = resultInfo(entry)
-        if (result) {
-          const resultIdentity = result.id ?? entry.message?.id ?? entry.id ?? entry.uuid
-          if (typeof resultIdentity === 'string' && resultIdentity.length > 0) {
-            const resultHash = hashIdentity(`${sessionIdentity}\u0000tool-result\u0000${resultIdentity}`)
-            if (retainedSeen.has(resultHash) || batchSeen.has(resultHash)) {
-              collection.duplicatesSkipped++
-              return
-            }
-            batchSeen.add(resultHash)
-            retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
-          }
-          const resultCallHash = result.id
-            ? hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${result.id}`)
-            : null
-          const call = resultCallHash ? toolCalls.get(resultCallHash) : undefined
-          if (!call) {
-            collection.orphanToolResultsSkipped++
+    const message = entry.message
+    const expectedAssistantType = options.source === 'claude-code' ? 'assistant' : 'message'
+    if (entry.type !== expectedAssistantType || message?.role !== 'assistant') {
+      if (entry.type === 'user' || message?.role === 'user') collection.nonAssistantSkipped++
+      else collection.unsupportedRecordsSkipped++
+      return sessionIdentity
+    }
+    if (isSynthetic(message)) {
+      collection.syntheticSkipped++
+      return sessionIdentity
+    }
+
+    const messageId = options.source === 'claude-code'
+      ? message.id ?? entry.id ?? entry.uuid
+      : entry.id ?? entry.uuid ?? message.id
+    if (typeof messageId !== 'string' || messageId.length === 0) {
+      collection.missingIdentitySkipped++
+      return sessionIdentity
+    }
+
+    // Claude Code/OpenClaw는 한 assistant message를 여러 조각으로 남길 수 있다.
+    // 토큰/turn은 message ID 단위로 합치고 각 조각의 고유 tool call은 모두 보존한다.
+    for (const block of contentBlocks(message.content)) {
+      if (!['toolCall', 'tool_call', 'tool_use', 'toolUse'].includes(String(block.type ?? ''))) continue
+      const name = safeLabel(block.name, 'unknown-tool')
+      const id = callId(block)
+      if (id) {
+        const toolCallHash = hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${id}`)
+        if (retainedSeen.has(toolCallHash) || batchSeen.has(toolCallHash)) continue
+        batchSeen.add(toolCallHash)
+        retainedSeen.set(toolCallHash, { hash: toolCallHash, atUtc: new Date(at).toISOString() })
+        toolCalls.set(toolCallHash, { name, skillId: skillFromCall(name, callArguments(block)) })
+      }
+      const metric = toolMetrics.get(name) ?? { calls: 0, failures: 0 }
+      metric.calls++
+      toolMetrics.set(name, metric)
+    }
+
+    const messageHash = hashIdentity(`${sessionIdentity}\u0000assistant\u0000${messageId}`)
+    if (retainedSeen.has(messageHash) || batchSeen.has(messageHash)) {
+      collection.duplicatesSkipped++
+      const previous = messageUsageMetrics.get(messageHash)
+      if (previous) {
+        const merged = maxUsage(previous.usage, usageFromMessage(message))
+        const increase = usageIncrease(previous.usage, merged)
+        addUsage(totalUsage, increase)
+        const modelMetric = modelMetrics.get(previous.model)
+        if (modelMetric) addUsage(modelMetric.usage, increase)
+        previous.usage = merged
+        latestIncludedAt = Math.max(latestIncludedAt, at)
+      }
+      return sessionIdentity
+    }
+    batchSeen.add(messageHash)
+    retainedSeen.set(messageHash, { hash: messageHash, atUtc: new Date(at).toISOString() })
+
+    const usage = usageFromMessage(message)
+    const model = safeLabel(message.model, 'unknown-model')
+    addUsage(totalUsage, usage)
+    const modelMetric = modelMetrics.get(model) ?? { turns: 0, usage: emptyAgentUsage() }
+    modelMetric.turns++
+    addUsage(modelMetric.usage, usage)
+    modelMetrics.set(model, modelMetric)
+    messageUsageMetrics.set(messageHash, { model, usage: cloneUsage(usage) })
+    sessions.add(hashIdentity(sessionIdentity))
+    turns++
+    collection.includedRecords++
+    latestIncludedAt = Math.max(latestIncludedAt, at)
+    return sessionIdentity
+  }
+
+  if (input.kind === 'jsonl') {
+    for (const filePath of input.files) {
+      let info
+      try {
+        info = await stat(filePath)
+      } catch {
+        collection.parseFailures++
+        continue
+      }
+      const fileKey = relative(input.root, filePath).replaceAll('\\', '/')
+      const previous = options.committed.files[fileKey]
+      const sameFile = previous?.dev === String(info.dev) && previous.ino === String(info.ino) && info.size >= previous.offset
+      const offset = sameFile ? previous.offset : 0
+      if (previous && !sameFile) collection.filesReset++
+      if (!previous && info.mtimeMs < startMs) continue
+      if (info.size <= offset) continue
+
+      collection.filesRead++
+      let sessionIdentity = fileKey
+      try {
+        const nextOffset = await scanCompleteLines(filePath, offset, (line) => {
+          collection.recordsRead++
+          let entry: OpenClawEntry
+          try {
+            entry = JSON.parse(line) as OpenClawEntry
+          } catch {
+            collection.malformedSkipped++
             return
           }
-          if (result.failed) toolMetrics.get(call.name)!.failures++
-          if (call.skillId) {
-            const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
-            if (result.failed) skill.failed++
-            else skill.loaded++
-            skillMetrics.set(call.skillId, skill)
-          }
-          collection.includedRecords++
-          return
-        }
-
-        const message = entry.message
-        const expectedAssistantType = options.source === 'claude-code' ? 'assistant' : 'message'
-        if (entry.type !== expectedAssistantType || message?.role !== 'assistant') {
-          if (entry.type === 'user' || message?.role === 'user') collection.nonAssistantSkipped++
-          else collection.unsupportedRecordsSkipped++
-          return
-        }
-        if (isSynthetic(message)) {
-          collection.syntheticSkipped++
-          return
-        }
-
-        const messageId = options.source === 'claude-code'
-          ? message.id ?? entry.id ?? entry.uuid
-          : entry.id ?? entry.uuid ?? message.id
-        if (typeof messageId !== 'string' || messageId.length === 0) {
+          sessionIdentity = processEntry(entry, sessionIdentity)
+        })
+        nextFiles[fileKey] = { dev: String(info.dev), ino: String(info.ino), offset: nextOffset }
+      } catch {
+        collection.parseFailures++
+      }
+    }
+  } else {
+    let database: DatabaseConnection | null = null
+    try {
+      database = await openReadOnlyDatabase(input.databasePath)
+      database.exec('PRAGMA query_only = ON')
+      database.exec('BEGIN')
+      const databaseAgentId = inspectOpenClawDatabase(database)
+      if (databaseAgentId !== input.internalAgentId) {
+        throw new Error('OpenClaw SQLite agent identity changed during collection')
+      }
+      const rows = database.prepare(`
+        SELECT session_id, event_json, created_at
+        FROM transcript_events
+        ORDER BY created_at, session_id, seq
+      `).all() as OpenClawSqliteRow[]
+      collection.filesRead = 1
+      for (const row of rows) {
+        collection.recordsRead++
+        const sessionIdentity = typeof row.session_id === 'string'
+          ? row.session_id
+          : typeof row.session_id === 'number' || typeof row.session_id === 'bigint'
+            ? String(row.session_id)
+            : null
+        if (!sessionIdentity) {
           collection.missingIdentitySkipped++
-          return
+          continue
         }
-
-        // Claude Code는 하나의 assistant message를 여러 JSONL 레코드로 나눌 수 있다.
-        // 토큰/turn은 message.id 단위로 한 번만 세되, 각 조각의 고유 tool call은 모두 보존한다.
-        for (const block of contentBlocks(message.content)) {
-          if (!['toolCall', 'tool_call', 'tool_use', 'toolUse'].includes(String(block.type ?? ''))) continue
-          const name = safeLabel(block.name, 'unknown-tool')
-          const id = callId(block)
-          if (id) {
-            const toolCallHash = hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${id}`)
-            if (retainedSeen.has(toolCallHash) || batchSeen.has(toolCallHash)) continue
-            batchSeen.add(toolCallHash)
-            retainedSeen.set(toolCallHash, { hash: toolCallHash, atUtc: new Date(at).toISOString() })
-            toolCalls.set(toolCallHash, { name, skillId: skillFromCall(name, callArguments(block)) })
-          }
-          const metric = toolMetrics.get(name) ?? { calls: 0, failures: 0 }
-          metric.calls++
-          toolMetrics.set(name, metric)
+        if (typeof row.event_json !== 'string') {
+          collection.malformedSkipped++
+          continue
         }
-
-        const messageHash = hashIdentity(`${sessionIdentity}\u0000assistant\u0000${messageId}`)
-        if (retainedSeen.has(messageHash) || batchSeen.has(messageHash)) {
-          collection.duplicatesSkipped++
-          const previous = messageUsageMetrics.get(messageHash)
-          if (previous) {
-            const merged = maxUsage(previous.usage, usageFromMessage(message))
-            const increase = usageIncrease(previous.usage, merged)
-            addUsage(totalUsage, increase)
-            const modelMetric = modelMetrics.get(previous.model)
-            if (modelMetric) addUsage(modelMetric.usage, increase)
-            previous.usage = merged
-            latestIncludedAt = Math.max(latestIncludedAt, at)
-          }
-          return
+        let entry: OpenClawEntry
+        try {
+          entry = JSON.parse(row.event_json) as OpenClawEntry
+        } catch {
+          collection.malformedSkipped++
+          continue
         }
-        batchSeen.add(messageHash)
-        retainedSeen.set(messageHash, { hash: messageHash, atUtc: new Date(at).toISOString() })
-
-        const usage = usageFromMessage(message)
-        const model = safeLabel(message.model, 'unknown-model')
-        addUsage(totalUsage, usage)
-        const modelMetric = modelMetrics.get(model) ?? { turns: 0, usage: emptyAgentUsage() }
-        modelMetric.turns++
-        addUsage(modelMetric.usage, usage)
-        modelMetrics.set(model, modelMetric)
-        messageUsageMetrics.set(messageHash, { model, usage: cloneUsage(usage) })
-        sessions.add(hashIdentity(sessionIdentity))
-        turns++
-        collection.includedRecords++
-        latestIncludedAt = Math.max(latestIncludedAt, at)
-      })
-      nextFiles[fileKey] = { dev: String(info.dev), ino: String(info.ino), offset: nextOffset }
-    } catch {
-      collection.parseFailures++
+        processEntry(entry, sessionIdentity, row.created_at)
+      }
+      database.exec('ROLLBACK')
+    } catch (cause) {
+      try { database?.exec('ROLLBACK') } catch { /* transaction이 시작되지 않았을 수 있다. */ }
+      if (cause instanceof Error && cause.message.startsWith('OpenClaw SQLite')) throw cause
+      throw new Error('OpenClaw SQLite source could not be read safely')
+    } finally {
+      database?.close()
     }
   }
 
@@ -565,11 +806,13 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     : 0
 
   const healthWarnings: AgentTelemetryHealthWarning[] = []
-  if (options.projectSlugs && files.length === 0) healthWarnings.push('no-files-in-scope')
-  if (collection.recordsRead > 0 && turns === 0) healthWarnings.push('no-turns-from-records')
+  if (options.projectSlugs && input.kind === 'jsonl' && input.files.length === 0) {
+    healthWarnings.push('no-files-in-scope')
+  }
+  if (windowRecords > 0 && turns === 0) healthWarnings.push('no-turns-from-records')
   if (
-    collection.recordsRead >= MIN_HEALTH_SAMPLE_RECORDS &&
-    collection.unsupportedRecordsSkipped / collection.recordsRead >= MAX_UNSUPPORTED_RATIO
+    windowRecords >= MIN_HEALTH_SAMPLE_RECORDS &&
+    collection.unsupportedRecordsSkipped / windowRecords >= MAX_UNSUPPORTED_RATIO
   ) {
     healthWarnings.push('high-unsupported-rate')
   }
@@ -610,6 +853,9 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
       lastWindowEndUtc: options.window.end.toISOString(),
       files: nextFiles,
       seenMessages,
+      ...(options.source === 'openclaw' && internalAgentHash ? {
+        openclawSource: { agentHash: internalAgentHash, backend: input.kind },
+      } : {}),
     },
   }
 }

@@ -31,7 +31,7 @@ function createFixture(): void {
       cache_read_tokens INTEGER,
       cache_write_tokens INTEGER,
       reasoning_tokens INTEGER,
-      profile_name TEXT NOT NULL,
+      profile_name TEXT,
       private_cwd TEXT
     );
     CREATE TABLE messages (
@@ -176,6 +176,83 @@ describe('collectHermesAgent', () => {
     })
     expect(JSON.stringify(result)).not.toContain('other-private-profile')
     expect(JSON.stringify(result)).not.toContain('other-session-secret')
+  })
+
+  it('default 범위는 NULL·빈 문자열·default 세션만 모아 이름 있는 프로필과 분리한다', async () => {
+    const database = new DatabaseSync(databasePath)
+    const insertSession = database.prepare(`
+      INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    insertSession.run('default-null', 'default-model', epoch('2026-08-26T08:00:00Z'), 11, 12, 13, 14, 15,
+      null, '/Users/default/null')
+    insertSession.run('default-empty', 'default-model', epoch('2026-08-26T08:01:00Z'), 21, 22, 23, 24, 25,
+      '', '/Users/default/empty')
+    insertSession.run('default-explicit', 'default-model', epoch('2026-08-26T08:02:00Z'), 31, 32, 33, 34, 35,
+      'default', '/Users/default/explicit')
+    insertSession.run('named-session', 'named-model', epoch('2026-08-26T08:03:00Z'), 900, 800, 700, 600, 500,
+      'named-profile', '/Users/named/private')
+    const insertMessage = database.prepare(`
+      INSERT INTO messages (
+        id, session_id, role, content, tool_call_id, tool_calls, tool_name,
+        effect_disposition, timestamp, finish_reason, display_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    insertMessage.run(101, 'default-null', 'user', 'default null prompt', null, null, null, null,
+      epoch('2026-08-26T03:00:00Z'), null, null)
+    insertMessage.run(102, 'default-empty', 'user', 'default empty prompt', null, null, null, null,
+      epoch('2026-08-26T03:01:00Z'), null, null)
+    insertMessage.run(103, 'default-explicit', 'user', 'default explicit prompt', null, null, null, null,
+      epoch('2026-08-26T03:02:00Z'), null, null)
+    insertMessage.run(104, 'named-session', 'user', 'named private prompt', null, null, null, null,
+      epoch('2026-08-26T03:03:00Z'), null, null)
+    database.close()
+
+    const result = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'default',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'qa-verify',
+      source: 'hermes',
+    })
+
+    expect(result).toMatchObject({
+      sessions: 3,
+      turns: 3,
+      usage: {
+        inputTokens: 63,
+        outputTokens: 66,
+        cacheCreationInputTokens: 72,
+        cacheReadInputTokens: 69,
+        thinkingTokens: 75,
+      },
+      collection: { recordsRead: 6, includedRecords: 6 },
+    })
+    expect(result.models).toEqual([{ model: 'default-model', turns: 3, usage: result.usage }])
+    const serialized = JSON.stringify(result)
+    expect(serialized).not.toContain('named-profile')
+    expect(serialized).not.toContain('default-null')
+  })
+
+  it('이름 있는 프로필은 default 세션을 포함하지 않는다', async () => {
+    const database = new DatabaseSync(databasePath)
+    database.prepare(`
+      INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('default-null', 'default-model', epoch('2026-08-26T08:00:00Z'), 900, 800, 700, 600, 500,
+      null, '/Users/default/private')
+    database.close()
+
+    const result = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'qa-verify',
+      source: 'hermes',
+    })
+
+    expect(result).toMatchObject({ sessions: 1, turns: 1, collection: { recordsRead: 7 } })
+    expect(result.usage.inputTokens).toBe(100)
   })
 
   it('지정한 Hermes 프로필에 세션이 없으면 오타로 보고 실패한다', async () => {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { appendFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { collectOpenClawAgent } from '../../src/agent-telemetry/openclaw.js'
 import type { AgentTelemetryCommittedState } from '../../src/agent-telemetry/types.js'
 
@@ -57,6 +58,45 @@ function committed(): AgentTelemetryCommittedState {
   return { lastWindowEndUtc: null, files: {}, seenMessages: [] }
 }
 
+function createOpenClawDatabase(
+  path: string,
+  agentId: string,
+  events: Array<{ sessionId: string; event: string; createdAt?: string }>,
+): void {
+  mkdirSync(join(path, '..'), { recursive: true })
+  const database = new DatabaseSync(path)
+  database.exec(`
+    CREATE TABLE schema_meta (
+      meta_key TEXT PRIMARY KEY,
+      role TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      schema_version INTEGER NOT NULL,
+      app_version TEXT
+    );
+    CREATE TABLE transcript_events (
+      session_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      event_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `)
+  database.prepare(`
+    INSERT INTO schema_meta (meta_key, role, agent_id, schema_version, app_version)
+    VALUES ('primary', 'agent', ?, 4, '2026.7.2')
+  `).run(agentId)
+  const insert = database.prepare(`
+    INSERT INTO transcript_events (session_id, seq, event_json, created_at)
+    VALUES (?, ?, ?, ?)
+  `)
+  events.forEach((row, index) => insert.run(
+    row.sessionId,
+    index + 1,
+    row.event,
+    row.createdAt ?? IN_WINDOW,
+  ))
+  database.close()
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'aitk-openclaw-'))
 })
@@ -66,6 +106,128 @@ afterEach(() => {
 })
 
 describe('collectOpenClawAgent', () => {
+  it('최신 agent SQLite를 JSONL과 같은 계약으로 집계한다', async () => {
+    const databasePath = join(root, 'openclaw-agent.sqlite')
+    createOpenClawDatabase(databasePath, 'main', [
+      {
+        sessionId: 'sqlite-session',
+        event: assistant({
+          id: 'sqlite-message',
+          usage: { input: 7, output: 11, cacheRead: 13, cacheWrite: 5, thinking: 3 },
+          content: [{
+            type: 'toolCall', id: 'sqlite-tool', name: 'Read',
+            arguments: { path: '/Users/person/.openclaw/skills/browse/SKILL.md' },
+          }],
+        }),
+      },
+      { sessionId: 'sqlite-session', event: toolResult('sqlite-tool') },
+    ])
+
+    const result = await collectOpenClawAgent({
+      sessionsDir: databasePath,
+      openclawAgent: 'main',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'qa-verify',
+      source: 'openclaw',
+    })
+
+    expect(result).toMatchObject({ sessions: 1, turns: 1 })
+    expect(result.usage).toMatchObject({
+      inputTokens: 7, outputTokens: 11, cacheCreationInputTokens: 5,
+      cacheReadInputTokens: 13, thinkingTokens: 3,
+    })
+    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
+    expect(result.skillLoads).toEqual([{ skillId: 'browse', loaded: 1, failed: 0, interrupted: 0 }])
+    expect(result.collection).toMatchObject({ filesDiscovered: 1, filesRead: 1, recordsRead: 2 })
+    expect(result.nextCommitted.files).toEqual({})
+    expect(result.nextCommitted.openclawSource).toEqual({
+      agentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      backend: 'sqlite',
+    })
+    expect(JSON.stringify(result)).not.toContain('sqlite-session')
+    expect(JSON.stringify(result)).not.toContain('/Users/person')
+  })
+
+  it('agent 루트나 legacy sessions 경로에서 SQLite를 우선해 archive 이중 집계를 막는다', async () => {
+    const agentRoot = join(root, 'main')
+    writeSession('main/sessions/archive.jsonl', [assistant({ id: 'legacy-message' })])
+    createOpenClawDatabase(join(agentRoot, 'agent', 'openclaw-agent.sqlite'), 'main', [{
+      sessionId: 'sqlite-session', event: assistant({ id: 'sqlite-message', usage: { input: 1, output: 2 } }),
+    }])
+
+    for (const sessionsDir of [agentRoot, join(agentRoot, 'sessions')]) {
+      const result = await collectOpenClawAgent({
+        sessionsDir,
+        openclawAgent: 'main',
+        window: { start: START, end: END },
+        committed: committed(),
+        category: 'unclassified',
+        source: 'openclaw',
+      })
+      expect(result.turns).toBe(1)
+      expect(result.usage.inputTokens).toBe(1)
+      expect(result.nextCommitted.openclawSource?.backend).toBe('sqlite')
+    }
+  })
+
+  it('내부 agent 불일치와 여러 agent가 섞인 상위 경로를 fail-closed한다', async () => {
+    const databasePath = join(root, 'agent.sqlite')
+    createOpenClawDatabase(databasePath, 'main', [{
+      sessionId: 'session', event: assistant({ id: 'message' }),
+    }])
+    await expect(collectOpenClawAgent({
+      sessionsDir: databasePath,
+      openclawAgent: 'work',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'openclaw',
+    })).rejects.toThrow('does not match --openclaw-agent')
+
+    writeSession('agents/main/sessions/a.jsonl', [assistant({ id: 'a' })])
+    writeSession('agents/work/sessions/b.jsonl', [assistant({ id: 'b' })])
+    await expect(collectOpenClawAgent({
+      sessionsDir: join(root, 'agents'),
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'openclaw',
+    })).rejects.toThrow('contains multiple agents')
+  })
+
+  it('legacy JSONL에서 SQLite로 전환해도 agent 범위와 seen hash를 이어받는다', async () => {
+    const agentRoot = join(root, 'main')
+    const sessionsDir = join(agentRoot, 'sessions')
+    const event = assistant({ id: 'same-message', usage: { input: 2, output: 4 } })
+    writeSession('main/sessions/session.jsonl', [event])
+    const first = await collectOpenClawAgent({
+      sessionsDir,
+      openclawAgent: 'main',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'openclaw',
+    })
+    expect(first.nextCommitted.openclawSource?.backend).toBe('jsonl')
+
+    createOpenClawDatabase(join(agentRoot, 'agent', 'openclaw-agent.sqlite'), 'main', [{
+      sessionId: 'session.jsonl', event,
+    }])
+    const second = await collectOpenClawAgent({
+      sessionsDir,
+      openclawAgent: 'main',
+      window: { start: START, end: END },
+      committed: first.nextCommitted,
+      category: 'unclassified',
+      source: 'openclaw',
+    })
+    expect(second.turns).toBe(0)
+    expect(second.collection.duplicatesSkipped).toBe(1)
+    expect(second.nextCommitted.files).toEqual({})
+    expect(second.nextCommitted.openclawSource?.backend).toBe('sqlite')
+  })
+
   it('토큰·모델·도구·스킬 로드를 집계하고 원문과 경로를 출력하지 않는다', async () => {
     writeSession('a.jsonl', [
       entry({ type: 'session', id: 'session-a', timestamp: '2026-08-19T00:00:00Z', cwd: '/Users/person/secret-project' }),

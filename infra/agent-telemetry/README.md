@@ -76,10 +76,27 @@ Keychain, writes a token-free local config, and registers launchd.
 ```
 
 Codex uses the same form with its sessions directory and allowed workspace
-names. OpenClaw omits `--project-slugs` and must point at the explicit agent
-session directory. Do not install OpenClaw and Claude Code collectors for
-overlapping work; prefer the runtime transcript because gateway summaries lack
-reliable tool and skill activity.
+names. OpenClaw omits `--project-slugs` and must point at one explicit agent
+root, its legacy `sessions` directory, or its `openclaw-agent.sqlite` file. Add
+`--openclaw-agent <internal-agent-id>` when the internal identity is known. The
+collector verifies SQLite `schema_meta.agent_id`, prefers the current SQLite
+store over archived JSONL, and refuses a multi-agent parent directory. Do not
+install OpenClaw and Claude Code collectors for overlapping work; prefer the
+runtime transcript when gateway summaries lack reliable tool and skill activity.
+
+```sh
+"$HOME/.local/bin/aitk" agent-telemetry install \
+  --agent <dashboard-agent-id> \
+  --source openclaw \
+  --sessions-dir <one-openclaw-agent-root-or-store> \
+  --openclaw-agent <internal-openclaw-agent-id> \
+  --days 7
+```
+
+OpenClaw's outer `--profile` selects a separate state directory, while a Gateway
+may contain multiple internal agents. Install one collector per intended
+internal agent and never point a collector at the shared state root or `agents/`
+parent.
 
 The stable `agentId` should make ownership clear across the organization, for
 example a bot name or a user-and-runtime combination. The server refuses a

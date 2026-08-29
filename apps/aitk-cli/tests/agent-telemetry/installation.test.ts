@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  agentTelemetryInstallPath,
   createInstallation,
   installLaunchdSchedule,
   readAgentTelemetryInstallation,
@@ -35,6 +36,7 @@ function installation(schedule: 'launchd' | 'none' = 'launchd') {
     collectorId: 'collector-test',
     source: 'openclaw',
     sessionsDir,
+    openclawAgent: 'main',
     serverUrl: 'https://ai-toolkit.gpters.org/',
     backfillDays: 7,
     intervalSeconds: 21_600,
@@ -57,6 +59,7 @@ describe('agent telemetry installation', () => {
     expect(statSync(path).mode & 0o777).toBe(0o600)
     expect(serialized).not.toContain('collector-secret-token')
     expect(readAgentTelemetryInstallation('test-agent', 'openclaw', root)).toEqual(value)
+    expect(value.openclawAgent).toBe('main')
   })
 
   it('launchd plist에는 built CLI와 범위만 기록하고 credential은 넣지 않는다', () => {
@@ -104,5 +107,41 @@ describe('agent telemetry installation', () => {
 
     expect(() => readAgentTelemetryInstallation('test-agent', 'openclaw', root))
       .toThrow('paths do not match')
+  })
+
+  it('Hermes 프로필별 agentId는 설치·스케줄·credential을 서로 분리한다', () => {
+    const common = {
+      source: 'hermes' as const,
+      sessionsDir,
+      serverUrl: 'https://ai-toolkit.gpters.org',
+      backfillDays: 7,
+      intervalSeconds: 3_600,
+      nodePath,
+      scriptPath: cliPath,
+      collectorVersion: '0.7.0',
+      account: 'tester',
+      schedule: 'launchd' as const,
+      home: root,
+      now: new Date('2026-08-27T00:00:00Z'),
+    }
+    const bbokeoter = createInstallation({
+      ...common,
+      agentId: 'bbokeoter',
+      collectorId: 'collector-bbokeoter',
+      hermesProfile: 'default',
+    })
+    const namedAgent = createInstallation({
+      ...common,
+      agentId: 'named-agent',
+      collectorId: 'collector-named-agent',
+      hermesProfile: 'named-profile',
+    })
+
+    expect(bbokeoter.hermesProfile).toBe('default')
+    expect(namedAgent.hermesProfile).toBe('named-profile')
+    expect(agentTelemetryInstallPath('bbokeoter', 'hermes', root))
+      .not.toBe(agentTelemetryInstallPath('named-agent', 'hermes', root))
+    expect(bbokeoter.schedule.label).not.toBe(namedAgent.schedule.label)
+    expect(bbokeoter.credential.service).not.toBe(namedAgent.credential.service)
   })
 })

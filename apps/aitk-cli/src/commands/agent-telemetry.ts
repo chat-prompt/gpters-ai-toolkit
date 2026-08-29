@@ -35,6 +35,7 @@ export interface AgentTelemetryOptions {
   collectorVersion: string
   sessionsDir?: string
   projectSlugs?: string
+  openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
   collectorInstanceId?: string
@@ -130,10 +131,19 @@ function resolveHermesProfile(source: AgentTelemetrySource, value: string | unde
     return undefined
   }
   if (!value) error('--hermes-profile is required when --source hermes is used')
-  if (value!.length > 255 || value!.trim().length === 0 || value!.includes('\0')) {
+  const profile = value!.trim()
+  if (profile.length > 255 || profile.length === 0 || profile.includes('\0')) {
     error('--hermes-profile must contain a non-empty profile name of at most 255 characters')
   }
-  return value
+  return profile
+}
+
+function resolveOpenClawAgent(source: AgentTelemetrySource, value: string | undefined): string | undefined {
+  if (source !== 'openclaw') {
+    if (value) error('--openclaw-agent is only supported with --source openclaw')
+    return undefined
+  }
+  return value ? safeId(value.trim(), '--openclaw-agent') : undefined
 }
 
 function checkpointName(
@@ -205,6 +215,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   const category = resolveCategory(options.category)
   if (!options.sessionsDir) error('--sessions-dir is required for every telemetry source')
   const projectSlugs = resolveProjectSlugs(source, options.projectSlugs)
+  const openclawAgent = resolveOpenClawAgent(source, options.openclawAgent)
   const hermesProfile = resolveHermesProfile(source, options.hermesProfile)
   const sessionsDir = resolve(options.sessionsDir!)
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
@@ -234,6 +245,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       category,
       source,
       projectSlugs,
+      openclawAgent,
     }
     const collected = source === 'codex'
       ? await collectCodexAgent({ ...collectOptions, source: 'codex', projectSlugs: projectSlugs! })

@@ -132,6 +132,13 @@ describe('aitk agent-telemetry collect', () => {
       ...options(true),
       sessionsDir: undefined,
     })).rejects.toThrow('--sessions-dir is required for every telemetry source')
+
+    await expect(runAgentTelemetryCollect({
+      ...options(true),
+      source: 'claude-code',
+      projectSlugs: 'project-a',
+      openclawAgent: 'main',
+    })).rejects.toThrow('--openclaw-agent is only supported with --source openclaw')
   })
 
   it('hermes는 명시적인 profile scope를 요구하고 다른 source에서는 받지 않는다', async () => {
