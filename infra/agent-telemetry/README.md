@@ -18,10 +18,11 @@ local paths.
 ## Requirements
 
 - macOS. Other schedulers are not installed automatically yet.
-- AITK 0.7.0 or newer in a stable user path. OpenClaw SQLite auto-detection and
-  Hermes default-profile compatibility require 0.7.1 or newer. Internal agents install the CLI
-  from an approved repository commit with `install-from-repo.sh`; publishing a
-  new npm package is not required.
+- AITK 0.7.0 or newer in a stable user path. Hermes default-profile compatibility
+  requires 0.7.1 or newer. Current OpenClaw auto-detection, including safe JSONL
+  fallback around unrelated sibling SQLite files, requires 0.7.2 or newer.
+  Internal agents install the CLI from an approved repository commit with
+  `install-from-repo.sh`; publishing a new npm package is not required.
 - Node.js and Corepack/pnpm. If Bun is not already installed, the repo
   installer fetches pinned `bun@1.4.0` only as a temporary build tool.
 - AITK user authentication (`aitk login --device` when needed).
@@ -81,7 +82,8 @@ names. OpenClaw omits `--project-slugs` and must point at one explicit agent
 root, its legacy `sessions` directory, or its `openclaw-agent.sqlite` file. Add
 `--openclaw-agent <internal-agent-id>` when the internal identity is known. The
 collector verifies SQLite `schema_meta.agent_id`, prefers the current SQLite
-store over archived JSONL, and refuses a multi-agent parent directory. Do not
+store over archived JSONL, ignores unrelated sibling SQLite files before
+falling back to JSONL, and refuses a multi-agent parent directory. Do not
 install OpenClaw and Claude Code collectors for overlapping work; prefer the
 runtime transcript when gateway summaries lack reliable tool and skill activity.
 

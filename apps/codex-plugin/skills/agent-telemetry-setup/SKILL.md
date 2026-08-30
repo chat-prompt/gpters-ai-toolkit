@@ -28,8 +28,9 @@ loop, or agent-memory task.
 1. In an approved `gpters-ai-toolkit` checkout, pin the requested commit and
    run `sh infra/agent-telemetry/install-from-repo.sh`. Do not use `--force` or
    `--allow-dirty` without separate approval. Confirm
-   `"$HOME/.local/bin/aitk" --version` is 0.7.0 or newer, and 0.7.1 or newer
-   for OpenClaw SQLite or Hermes default-profile collection.
+   `"$HOME/.local/bin/aitk" --version` is 0.7.0 or newer, 0.7.1 or newer
+   for Hermes default-profile collection, and 0.7.2 or newer for current
+   OpenClaw auto-detection and JSONL fallback.
 2. Confirm `"$HOME/.local/bin/aitk" whoami` identifies the
    intended user. If authentication is missing, have the user complete
    `"$HOME/.local/bin/aitk" login --device`; do not receive their token in chat.

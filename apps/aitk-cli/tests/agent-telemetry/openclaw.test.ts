@@ -97,6 +97,18 @@ function createOpenClawDatabase(
   database.close()
 }
 
+function createUnrelatedOpenClawDatabase(path: string): void {
+  mkdirSync(join(path, '..'), { recursive: true })
+  const database = new DatabaseSync(path)
+  database.exec(`
+    CREATE TABLE memory_index (
+      id TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `)
+  database.close()
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'aitk-openclaw-'))
 })
@@ -169,6 +181,66 @@ describe('collectOpenClawAgent', () => {
       expect(result.usage.inputTokens).toBe(1)
       expect(result.nextCommitted.openclawSource?.backend).toBe('sqlite')
     }
+  })
+
+  it('자동 탐지한 비-transcript SQLite를 건너뛰고 legacy JSONL로 폴백한다', async () => {
+    const agentRoot = join(root, 'main')
+    writeSession('main/sessions/current.jsonl', [assistant({
+      id: 'jsonl-message', usage: { input: 3, output: 5 },
+    })])
+    createUnrelatedOpenClawDatabase(join(agentRoot, 'agent', 'openclaw-agent.sqlite'))
+
+    for (const sessionsDir of [agentRoot, join(agentRoot, 'sessions')]) {
+      const result = await collectOpenClawAgent({
+        sessionsDir,
+        openclawAgent: 'main',
+        window: { start: START, end: END },
+        committed: committed(),
+        category: 'unclassified',
+        source: 'openclaw',
+      })
+
+      expect(result.turns).toBe(1)
+      expect(result.usage).toMatchObject({ inputTokens: 3, outputTokens: 5 })
+      expect(result.nextCommitted.openclawSource?.backend).toBe('jsonl')
+    }
+  })
+
+  it('비-transcript 후보 뒤에 지원하는 SQLite가 있으면 JSONL보다 우선한다', async () => {
+    const agentRoot = join(root, 'main')
+    writeSession('main/sessions/archive.jsonl', [assistant({ id: 'legacy-message' })])
+    createUnrelatedOpenClawDatabase(join(agentRoot, 'openclaw-agent.sqlite'))
+    createOpenClawDatabase(join(agentRoot, 'agent', 'openclaw-agent.sqlite'), 'main', [{
+      sessionId: 'sqlite-session',
+      event: assistant({ id: 'sqlite-message', usage: { input: 7, output: 9 } }),
+    }])
+
+    const result = await collectOpenClawAgent({
+      sessionsDir: agentRoot,
+      openclawAgent: 'main',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'openclaw',
+    })
+
+    expect(result.turns).toBe(1)
+    expect(result.usage).toMatchObject({ inputTokens: 7, outputTokens: 9 })
+    expect(result.nextCommitted.openclawSource?.backend).toBe('sqlite')
+  })
+
+  it('비호환 SQLite 파일을 직접 지정하면 JSONL 탐색 없이 fail-closed한다', async () => {
+    const databasePath = join(root, 'openclaw-agent.sqlite')
+    createUnrelatedOpenClawDatabase(databasePath)
+
+    await expect(collectOpenClawAgent({
+      sessionsDir: databasePath,
+      openclawAgent: 'main',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'unclassified',
+      source: 'openclaw',
+    })).rejects.toThrow('OpenClaw SQLite schema is not supported')
   })
 
   it('내부 agent 불일치와 여러 agent가 섞인 상위 경로를 fail-closed한다', async () => {
