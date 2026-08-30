@@ -365,6 +365,10 @@ function requiredColumns(database: DatabaseConnection, table: string, required: 
   }
 }
 
+function isUnsupportedOpenClawSchema(cause: unknown): boolean {
+  return cause instanceof Error && cause.message === 'OpenClaw SQLite schema is not supported'
+}
+
 async function openReadOnlyDatabase(path: string): Promise<DatabaseConnection> {
   let sqlite: typeof import('node:sqlite')
   try {
@@ -433,7 +437,9 @@ async function resolveOpenClawInput(path: string, projectSlugs?: string[]): Prom
   }
 
   // 업그레이드 뒤에도 기존 `.../<agent>/sessions` 설정을 그대로 사용할 수 있게
-  // sibling SQLite를 먼저 찾는다. JSONL은 이 시점부터 legacy archive이므로 합치지 않는다.
+  // 지원하는 sibling SQLite를 먼저 찾는다. OpenClaw가 auth/memory 용도로 만든
+  // 비-transcript SQLite는 건너뛰되, 읽기 실패나 agent identity 오류는 fail-closed한다.
+  // 지원하는 transcript SQLite를 찾은 뒤에만 JSONL을 legacy archive로 취급한다.
   const databaseCandidates = [
     join(root, 'openclaw-agent.sqlite'),
     join(root, 'agent', 'openclaw-agent.sqlite'),
@@ -441,10 +447,17 @@ async function resolveOpenClawInput(path: string, projectSlugs?: string[]): Prom
   ]
   for (const databasePath of databaseCandidates) {
     if (await pathKind(databasePath) !== 'file') continue
+    let internalAgentId: string
+    try {
+      internalAgentId = await readOpenClawDatabaseIdentity(databasePath)
+    } catch (cause) {
+      if (isUnsupportedOpenClawSchema(cause)) continue
+      throw cause
+    }
     return {
       kind: 'sqlite',
       databasePath,
-      internalAgentId: await readOpenClawDatabaseIdentity(databasePath),
+      internalAgentId,
     }
   }
 
