@@ -75,7 +75,7 @@ function MemberUsageTable({
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className="py-2.5 px-3 text-left font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)] w-[36%]">사용자</th>
-              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">사용</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">관측 이벤트</th>
               <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">적용</th>
               <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">마지막 활동</th>
             </tr>
@@ -106,6 +106,11 @@ function MemberUsageTable({
           </tbody>
         </table>
       </div>
+      <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--text-muted)]">
+        관측 이벤트는 검색 결과 노출·스킬 내용 로드·적용 또는 미적용 보고·배포가 서버에
+        기록된 횟수의 합입니다. 적용은 그중 에이전트가 작업에 적용했다고 명시적으로 보고한
+        횟수이며, 성공 여부나 서버 호출 없이 로컬에서 재사용한 횟수는 포함하지 않습니다.
+      </p>
     </div>
   )
 }
