@@ -206,6 +206,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // 둘 다 기간 선택과 무관한 365일 고정 창이다
   const grassDaily =
     (states['overview']?.result?.data as AxOverviewData | null)?.grassDaily ?? null
+  const grassLoadTotal = grassDaily?.reduce((sum, point) => sum + (point.loads ?? 0), 0) ?? 0
   const sharedResult = states['shared-skills']?.result
   const agentGrassDaily =
     (sharedResult?.data as AxSharedSkillsData | null)?.commitDaily ?? null
@@ -228,8 +229,9 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
 
       <GrassCard
         daily={grassDaily}
-        label="일별 팀 스킬 로드·적용 보고 — 건"
-        info="검색 노출은 제외합니다. 로드와 적용 보고는 독립 신호이므로 합계가 실제 작업 횟수와 같지는 않습니다."
+        label="일별 팀 스킬 활동"
+        valueLabel="적용"
+        info={`잔디 농도는 실제 사용인 적용 보고 기준입니다. 같은 최근 365일 동안 스킬 전체 지침을 확인한 로드는 ${formatCount(grassLoadTotal)}건입니다.`}
         loading={anyLoading && grassDaily === null}
       />
       {/* 에이전트 활동은 실행 이벤트가 붙기 전까지 저장소 커밋을 프록시로 쓴다 — 라벨이 그 사실을 밝힌다 */}
@@ -246,6 +248,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
         <GrassCard
           daily={agentGrassDaily}
           label="일별 에이전트 활동(bbopters-shared 커밋)"
+          valueLabel="커밋"
           info="실제 스킬 실행 집계가 아닙니다. 에이전트들이 워크로그·산출물을 커밋하는 저장소의 커밋 수로 활동 리듬을 간접 추정한 값입니다. 실행 이벤트 수집(DEV-4221)이 붙으면 실측으로 교체됩니다."
           loading={false}
         />
@@ -415,12 +418,15 @@ function GrassCard({
   daily,
   label,
   info,
+  valueLabel,
   loading,
 }: {
   daily: AxOverviewData['grassDaily'] | null
   label: string
   /** 라벨 옆 ? 아이콘에 띄울 주석 — 프록시 지표처럼 해석 주의가 필요할 때 */
   info?: string
+  /** 우측 합계와 날짜 툴팁에서 이벤트가 무엇인지 밝히는 짧은 단위 라벨 */
+  valueLabel?: string
   loading: boolean
 }) {
   if (loading) {
@@ -436,7 +442,7 @@ function GrassCard({
 
   return (
     <div className="ax-reveal mt-3 rounded-2xl border border-[var(--border-subtle)] px-6 py-6">
-      <ActivityGrass daily={daily} label={label} info={info} />
+      <ActivityGrass daily={daily} label={label} info={info} valueLabel={valueLabel} />
     </div>
   )
 }
@@ -473,12 +479,15 @@ function ActivityGrass({
   daily,
   label,
   info,
+  valueLabel,
 }: {
   daily: AxOverviewData['grassDaily']
   label: string
   info?: string
+  valueLabel?: string
 }) {
   const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   const max = Math.max(1, ...daily.map((point) => point.events))
@@ -509,7 +518,10 @@ function ActivityGrass({
   }
 
   /** 칸에 마우스가 올라오면 카드 기준 좌표로 툴팁을 띄운다 */
-  const showTip = (event: ReactMouseEvent<HTMLElement>, point: { date: string; events: number }) => {
+  const showTip = (
+    event: ReactMouseEvent<HTMLElement>,
+    point: { date: string; events: number; loads?: number }
+  ) => {
     const wrap = wrapRef.current
     if (!wrap) return
     const cell = event.currentTarget.getBoundingClientRect()
@@ -517,7 +529,7 @@ function ActivityGrass({
     setTip({
       left: cell.left - base.left + cell.width / 2,
       top: cell.top - base.top,
-      text: `${point.date} (${WEEKDAY_LABELS[weekdayOf(point.date)]}) · ${formatCount(point.events)}건`,
+      text: `${point.date} (${WEEKDAY_LABELS[weekdayOf(point.date)]}) · ${valueLabel ? `${valueLabel} ` : ''}${formatCount(point.events)}건${point.loads === undefined ? '' : ` · 로드 ${formatCount(point.loads)}건`}`,
     })
   }
 
@@ -528,21 +540,23 @@ function ActivityGrass({
           {label} · 최근 {daily.length}일
           {info && (
             <span className="group relative inline-flex">
-              <span
+              <button
+                type="button"
                 className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px] leading-none text-[var(--text-muted)]"
                 aria-label={info}
-                role="img"
+                aria-expanded={infoOpen}
+                onClick={() => setInfoOpen((open) => !open)}
               >
                 ?
-              </span>
-              <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-1.5 hidden w-72 -translate-x-1/2 whitespace-normal rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-3 py-2 text-[11px] normal-case leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-md group-hover:block">
+              </button>
+              <span className={`pointer-events-none absolute left-1/2 top-full z-10 mt-1.5 w-72 -translate-x-1/2 whitespace-normal rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-3 py-2 text-[11px] normal-case leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-md ${infoOpen ? 'block' : 'hidden group-hover:block'}`}>
                 {info}
               </span>
             </span>
           )}
         </p>
         <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-          {formatCount(total)}건 · 최대 {formatCount(max)}건/일
+          {valueLabel ? `${valueLabel} ` : ''}{formatCount(total)}건 · 최대 {formatCount(max)}건/일
         </p>
       </div>
 

@@ -5,15 +5,15 @@
  * 활성 인원·일별 추이·시간대별 활성 인원은 skill_events에서 나오고,
  * 완료 세션·완주율·절감 시간·부서별 참여는 계측 근거가 없어 `unmeasured`로 밝힌다.
  *
- * 사용 지표는 스킬 사용량 패널과 동일하게 상세 로드·적용 보고만 센다.
- * 검색 결과 노출은 발견 지표이지 사용이 아니므로 요약 모집단에서 제외한다.
+ * 실제 사용 지표는 스킬 사용량 패널과 동일하게 적용 보고만 센다.
+ * 로드는 적용 전환을 설명하는 보조 신호로만 별도 집계한다.
  */
 
 import { db, skillEvents, catalogItems, users } from '@gpters/db'
 import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
-import { OBSERVED_USAGE_ACTIONS } from './skills'
+import { ACTUAL_USAGE_ACTIONS } from './skills'
 import type { AxOverviewData, AxOverviewMemberRow, AxPanel, AxPanelMeta } from './types'
 
 const log = createLogger('ax-overview')
@@ -120,6 +120,28 @@ function fillDailySeries(
   return filled
 }
 
+/** 로드 코호트·직접 적용이 없는 날도 0으로 채워 선택 기간의 연속 축을 만든다 */
+function fillDailySkillFlow(
+  rows: Array<{
+    date: string
+    directApplied: number
+    loaded: number
+    linkableLoaded: number
+    appliedAfterLoad: number
+  }>,
+  from: Date,
+  to: Date
+): AxOverviewData['dailySkillFlow'] {
+  const counts = new Map(rows.map((row) => [row.date, row]))
+  return fillDailySeries(new Map(), from, to).map(({ date }) => ({
+    date,
+    directApplied: counts.get(date)?.directApplied ?? 0,
+    loaded: counts.get(date)?.loaded ?? 0,
+    linkableLoaded: counts.get(date)?.linkableLoaded ?? 0,
+    appliedAfterLoad: counts.get(date)?.appliedAfterLoad ?? 0,
+  }))
+}
+
 /**
  * 0~23시를 모두 채운 시간대별 밀도
  *
@@ -152,11 +174,17 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
       new Date(now.getTime() - (GRASS_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000)
     )
 
-    /** 모든 사용 쿼리가 공유하는 모집단 — 카탈로그 스킬의 상세 로드·적용 보고 */
-    const usagePopulation = (from?: Date) =>
+    /** 실제 사용 모집단 — 카탈로그 스킬의 명시적인 적용 보고 */
+    const appliedPopulation = (from?: Date) =>
       from
-        ? and(gte(skillEvents.createdAt, from), inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS))
-        : inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)
+        ? and(gte(skillEvents.createdAt, from), inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS))
+        : inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)
+
+    /** 적용 전환 설명에 필요한 로드·적용 이벤트 모집단 */
+    const activityPopulation = (from?: Date) =>
+      from
+        ? and(gte(skillEvents.createdAt, from), inArray(skillEvents.action, ['load', 'apply']))
+        : inArray(skillEvents.action, ['load', 'apply'])
 
     try {
       // 1. 누적 참여 인원 — 전 기간
@@ -164,7 +192,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .select({ users: sql<number>`count(distinct ${skillEvents.userId})::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(usagePopulation())
+        .where(appliedPopulation())
 
       // 2. 팀 스킬(aitk 카탈로그) 수 — 현재 시점 인벤토리. 미사용 스킬 쿼리와 같은 발행 기준
       const [catalog] = await db
@@ -177,25 +205,20 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           )
         )
 
-      // 3. 잔디밭 일별 활동량 — 조회 기간과 무관한 365일 고정 윈도우
+      // 3. 잔디밭 — 농도는 실제 적용 보고, 도움말에는 같은 날의 로드를 함께 제공한다
       const grassRows = await db
-        .select({ date: kstDayExpr, events: sql<number>`count(*)::int` })
+        .select({
+          date: kstDayExpr,
+          events: sql<number>`count(*) filter (where ${skillEvents.action} = 'apply')::int`,
+          loads: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
+        })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(usagePopulation(grassSince))
+        .where(activityPopulation(grassSince))
         .groupBy(kstDayExpr)
         .orderBy(kstDayExpr)
 
-      // 3. 일자별 활성 인원 추이 (조회 기간, KST 날짜)
-      const dailyRows = await db
-        .select({ date: kstDayExpr, users: sql<number>`count(distinct ${skillEvents.userId})::int` })
-        .from(skillEvents)
-        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(usagePopulation(since))
-        .groupBy(kstDayExpr)
-        .orderBy(kstDayExpr)
-
-      // 4. 시간대별 활성 인원 — KST (조회 기간)
+      // 4. 시간대별 실제 사용 인원 — KST (조회 기간)
       const hourlyRows = await db
         .select({
           hour: kstHourExpr,
@@ -203,11 +226,108 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(usagePopulation(since))
+        .where(appliedPopulation(since))
         .groupBy(kstHourExpr)
         .orderBy(kstHourExpr)
 
-      // 5. 사용자별 사용량 (조회 기간) — 개인 식별 데이터라 관리자에게만 조회한다
+      // 5. 로드 코호트 전환 — 세션×스킬을 한 번만 세고, 로드 뒤 적용 여부를 겹쳐 보여준다.
+      //    세션 없는 로드는 연결할 수 없어 전환 분모에서 제외한다. 세션 없는 적용은 직접 적용이다.
+      const flowResult = await db.execute(sql`
+        WITH load_journeys AS (
+          SELECT
+            loaded.session_id,
+            loaded.skill_id,
+            min(loaded.created_at) AS loaded_at
+          FROM skill_events loaded
+          INNER JOIN catalog_items catalog ON catalog.id = loaded.skill_id
+          WHERE loaded.action = 'load'
+            AND loaded.session_id IS NOT NULL
+            AND loaded.created_at >= ${since}
+          GROUP BY loaded.session_id, loaded.skill_id
+        ), classified_loads AS (
+          SELECT
+            load_journeys.loaded_at,
+            EXISTS (
+              SELECT 1
+              FROM skill_events applied
+              WHERE applied.session_id = load_journeys.session_id
+                AND applied.skill_id = load_journeys.skill_id
+                AND applied.action = 'apply'
+                AND applied.created_at >= load_journeys.loaded_at
+            ) AS applied_after_load
+          FROM load_journeys
+        ), apply_journeys AS (
+          SELECT
+            applied.session_id,
+            applied.skill_id,
+            min(applied.created_at) AS applied_at
+          FROM skill_events applied
+          INNER JOIN catalog_items catalog ON catalog.id = applied.skill_id
+          WHERE applied.action = 'apply'
+            AND applied.session_id IS NOT NULL
+            AND applied.created_at >= ${since}
+          GROUP BY applied.session_id, applied.skill_id
+        ), direct_applies AS (
+          SELECT apply_journeys.applied_at
+          FROM apply_journeys
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM skill_events loaded
+            WHERE loaded.session_id = apply_journeys.session_id
+              AND loaded.skill_id = apply_journeys.skill_id
+              AND loaded.action = 'load'
+              AND loaded.created_at <= apply_journeys.applied_at
+          )
+          UNION ALL
+          SELECT applied.created_at AS applied_at
+          FROM skill_events applied
+          INNER JOIN catalog_items catalog ON catalog.id = applied.skill_id
+          WHERE applied.action = 'apply'
+            AND applied.session_id IS NULL
+            AND applied.created_at >= ${since}
+        ), all_load_daily AS (
+          SELECT
+            to_char(date_trunc('day', loaded.created_at at time zone 'Asia/Seoul'), 'YYYY-MM-DD') AS date,
+            count(*)::int AS loaded
+          FROM skill_events loaded
+          INNER JOIN catalog_items catalog ON catalog.id = loaded.skill_id
+          WHERE loaded.action = 'load'
+            AND loaded.created_at >= ${since}
+          GROUP BY 1
+        ), linked_load_daily AS (
+          SELECT
+            to_char(date_trunc('day', loaded_at at time zone 'Asia/Seoul'), 'YYYY-MM-DD') AS date,
+            count(*)::int AS linkable_loaded,
+            count(*) filter (where applied_after_load)::int AS applied_after_load
+          FROM classified_loads
+          GROUP BY 1
+        ), direct_daily AS (
+          SELECT
+            to_char(date_trunc('day', applied_at at time zone 'Asia/Seoul'), 'YYYY-MM-DD') AS date,
+            count(*)::int AS direct_applied
+          FROM direct_applies
+          GROUP BY 1
+        ), all_dates AS (
+          SELECT date FROM all_load_daily
+          UNION
+          SELECT date FROM linked_load_daily
+          UNION
+          SELECT date FROM direct_daily
+        )
+        SELECT
+          all_dates.date,
+          COALESCE(direct_daily.direct_applied, 0)::int AS direct_applied,
+          COALESCE(all_load_daily.loaded, 0)::int AS loaded,
+          COALESCE(linked_load_daily.linkable_loaded, 0)::int AS linkable_loaded,
+          COALESCE(linked_load_daily.applied_after_load, 0)::int AS applied_after_load
+        FROM all_dates
+        LEFT JOIN all_load_daily ON all_load_daily.date = all_dates.date
+        LEFT JOIN linked_load_daily ON linked_load_daily.date = all_dates.date
+        LEFT JOIN direct_daily ON direct_daily.date = all_dates.date
+        ORDER BY 1
+      `)
+
+      // 6. 사용자별 사용량 (조회 기간) — 개인 식별 데이터라 관리자에게만 조회한다
       const memberRows = isAdmin
         ? await db
             .select({
@@ -219,14 +339,18 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             .from(skillEvents)
             .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
             .innerJoin(users, eq(users.id, skillEvents.userId))
-            .where(usagePopulation(since))
+            .where(activityPopulation(since))
             .groupBy(users.id, users.name)
-            .orderBy(sql`count(*) desc`)
+            .orderBy(
+              sql`count(*) filter (where ${skillEvents.action} = 'apply') desc`,
+              sql`count(*) filter (where ${skillEvents.action} = 'load') desc`
+            )
             .limit(MEMBER_LIMIT)
         : null
 
       const totalParticipants = num(cumulative?.users)
       const catalogSkills = num(catalog?.count)
+      const grassLoadCounts = new Map(grassRows.map((row) => [row.date, num(row.loads)]))
 
       const memberUsage: AxOverviewMemberRow[] | null = memberRows
         ? memberRows.map((row) => ({
@@ -246,12 +370,22 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             new Map(grassRows.map((row) => [row.date, num(row.events)])),
             grassSince,
             now
-          ).map((point) => ({ date: point.date, events: point.value })),
-          dailyActiveUsers: fillDailySeries(
-            new Map(dailyRows.map((row) => [row.date, num(row.users)])),
+          ).map((point) => ({
+              date: point.date,
+              events: point.value,
+              loads: grassLoadCounts.get(point.date) ?? 0,
+            })),
+          dailySkillFlow: fillDailySkillFlow(
+            flowResult.rows.map((row) => ({
+              date: String(row.date),
+              directApplied: num(row.direct_applied),
+              loaded: num(row.loaded),
+              linkableLoaded: num(row.linkable_loaded),
+              appliedAfterLoad: num(row.applied_after_load),
+            })),
             since,
             now
-          ).map((point) => ({ date: point.date, users: point.value })),
+          ),
           hourlyDensity: fillMissingHours(
             hourlyRows.map((row) => ({ hour: num(row.hour), users: num(row.users) }))
           ),

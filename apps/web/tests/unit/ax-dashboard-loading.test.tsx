@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AxPanelMeta, AxPanelResult } from '../../../../packages/lib/src/features/ax/types'
+import type {
+  AxOverviewData,
+  AxPanelMeta,
+  AxPanelResult,
+} from '../../../../packages/lib/src/features/ax/types'
 import { AxDashboard } from '../../components/ax/AxDashboard'
 
 const PANELS: AxPanelMeta[] = [
@@ -154,5 +158,43 @@ describe('AxDashboard 패널 요청', () => {
 
     const ids = Array.from(document.querySelectorAll<HTMLElement>('[id]')).map((element) => element.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('팀 스킬 잔디는 적용 기준이고 도움말 클릭 시 로드 합계를 보여준다', async () => {
+    const overview = PANELS[0]
+    const data: AxOverviewData = {
+      totalParticipants: 1,
+      catalogSkills: 1,
+      grassDaily: [
+        { date: '2026-08-30', events: 2, loads: 4 },
+        { date: '2026-08-31', events: 1, loads: 5 },
+      ],
+      dailySkillFlow: [],
+      hourlyDensity: [],
+      memberUsage: null,
+      unmeasured: [],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        meta: overview,
+        status: 'ok',
+        data,
+        highlights: [],
+        generatedAt: '2026-08-31T00:00:00.000Z',
+      } satisfies AxPanelResult<AxOverviewData>),
+    })))
+
+    render(<AxDashboard panels={[overview]} isAdmin />)
+
+    expect(await screen.findByText(/일별 팀 스킬 활동/)).toBeTruthy()
+    expect(screen.getByText(/적용 3건 · 최대 2건\/일/)).toBeTruthy()
+    const help = screen.getByRole('button', { name: /스킬 전체 지침을 확인한 로드는 9건/ })
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(help)
+
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getAllByText(/스킬 전체 지침을 확인한 로드는 9건/).length).toBeGreaterThan(0)
   })
 })
