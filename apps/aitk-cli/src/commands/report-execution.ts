@@ -1,9 +1,15 @@
 /** 검증 가능한 스킬 실행 결과 보고 */
 
 import { randomUUID } from 'node:crypto'
-import { jsonRpcSessionCall } from '../client.js'
+import { jsonRpcCall } from '../client.js'
 import { resolveToken } from '../auth.js'
 import { jsonOut, info, error } from '../output.js'
+import {
+  markJourneyReported,
+  rememberExecutionAttempt,
+  resolveJourneyForAttempt,
+  resolveJourneyForSkill,
+} from '../journey.js'
 
 export type ExecutionStatus = 'success' | 'partial' | 'failed' | 'abandoned'
 export type FailureStage = 'load' | 'instruction' | 'dependency' | 'execution' | 'validation'
@@ -16,6 +22,7 @@ export interface ReportExecutionOptions {
   agentId?: string
   source?: 'aitk' | 'bbopters-shared'
   attemptId?: string
+  journeyId?: string
   eventId?: string
   skillVersion?: string
   failureStage?: FailureStage
@@ -33,9 +40,15 @@ export interface ReportExecutionStartOptions {
   agentId?: string
   source?: 'aitk' | 'bbopters-shared'
   attemptId?: string
+  journeyId?: string
   eventId?: string
   skillVersion?: string
   occurredAt?: string
+}
+
+function assertToolSuccess(data: unknown, fallback: string): void {
+  const result = data as { isError?: boolean; content?: Array<{ text?: string }> } | undefined
+  if (result?.isError) error(result.content?.[0]?.text ?? fallback)
 }
 
 export async function runReportExecutionStart(opts: ReportExecutionStartOptions): Promise<void> {
@@ -43,13 +56,15 @@ export async function runReportExecutionStart(opts: ReportExecutionStartOptions)
   const attemptId = opts.attemptId ?? randomUUID()
   const eventId = opts.eventId ?? randomUUID()
   const agentId = opts.agentId ?? opts.agent
-  const result = await jsonRpcSessionCall(
+  const journeyId = await resolveJourneyForSkill(opts.skillId, opts.journeyId)
+  const result = await jsonRpcCall(
     'tools/call',
     {
       name: 'report_skill_execution_started',
       arguments: {
         eventId,
         attemptId,
+        journeyId,
         source: opts.source ?? 'aitk',
         skillId: opts.skillId,
         skillVersion: opts.skillVersion ?? null,
@@ -58,14 +73,15 @@ export async function runReportExecutionStart(opts: ReportExecutionStartOptions)
         occurredAt: opts.occurredAt ?? new Date().toISOString(),
       },
     },
-    token,
-    { name: agentId, version: opts.skillVersion ?? 'local' }
+    token
   )
 
   if (!result.ok) {
     if (result.status === 401) error(result.error!, 2)
     error(result.error!)
   }
+  assertToolSuccess(result.data, 'Execution start report rejected')
+  await rememberExecutionAttempt(attemptId, journeyId, opts.skillId)
   info(`Execution started · attempt ${attemptId}`)
   jsonOut({ attemptId, eventId, result: result.data })
 }
@@ -76,14 +92,16 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
   const eventId = opts.eventId ?? randomUUID()
   const validationMethod = opts.validationMethod ?? 'none'
   const agentId = opts.agentId ?? opts.agent
+  const journeyId = await resolveJourneyForAttempt(opts.attemptId, opts.skillId, opts.journeyId)
 
-  const result = await jsonRpcSessionCall(
+  const result = await jsonRpcCall(
     'tools/call',
     {
       name: 'report_skill_execution',
       arguments: {
         eventId,
         attemptId,
+        journeyId,
         source: opts.source ?? 'aitk',
         skillId: opts.skillId,
         skillVersion: opts.skillVersion ?? null,
@@ -101,8 +119,7 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
         occurredAt: opts.occurredAt ?? new Date().toISOString(),
       },
     },
-    token,
-    { name: agentId, version: opts.skillVersion ?? 'local' }
+    token
   )
 
   if (!result.ok) {
@@ -110,6 +127,8 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
     error(result.error!)
   }
 
+  assertToolSuccess(result.data, 'Execution report rejected')
+  await markJourneyReported(journeyId)
   info(`Execution reported · attempt ${attemptId}`)
   jsonOut(result.data)
 }

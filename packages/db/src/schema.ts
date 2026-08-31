@@ -896,7 +896,7 @@ export const skillEventActionEnum = pgEnum('skill_event_action', [
  * Normalized skill usage events
  *
  * Replaces JSONB fields (skillInteractions, actionLog) with queryable rows.
- * Each row = one skill interaction within a session.
+ * Each row = one skill interaction. 단발 CLI는 transport session 대신 journeyId로 흐름을 연결한다.
  * Enables: funnel analysis, skill popularity trends, search→load→apply conversion.
  */
 export const skillEvents = pgTable('skill_events', {
@@ -908,6 +908,8 @@ export const skillEvents = pgTable('skill_events', {
   sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
   /** 원천 감사 로그 — 세션 없는 호출과 백필을 멱등하게 연결한다. */
   sourceAuditLogId: text('source_audit_log_id').references(() => mcpAuditLogs.id, { onDelete: 'set null' }),
+  /** 검색→로드→실행을 잇는 개인정보 비포함 UUID. transport session과 독립적이다. */
+  journeyId: text('journey_id'),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   skillId: text('skill_id').notNull(),
 
@@ -935,6 +937,7 @@ export const skillEvents = pgTable('skill_events', {
   index('skill_events_created_at_idx').on(table.createdAt),
   index('skill_events_skill_action_idx').on(table.skillId, table.action),
   index('skill_events_source_audit_idx').on(table.sourceAuditLogId),
+  index('skill_events_journey_idx').on(table.journeyId),
   uniqueIndex('skill_events_source_skill_action_uidx')
     .on(table.sourceAuditLogId, table.skillId, table.action)
     .where(sql`${table.sourceAuditLogId} is not null`),
@@ -1281,9 +1284,10 @@ export const axExecutionEventPhaseEnum = pgEnum('ax_execution_event_phase', ['st
 export const axSkillExecutionAttempts = pgTable('ax_skill_execution_attempts', {
   attemptId: text('attempt_id').primaryKey(),
   eventId: text('event_id').notNull().unique(),
-  sessionId: text('session_id')
-    .notNull()
-    .references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  /** MCP transport session. 단발 CLI 보고는 정식 session이 없으므로 nullable이다. */
+  sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  /** 탐색·로드와 실제 실행 시도를 연결한다. */
+  journeyId: text('journey_id'),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   source: axExecutionSourceEnum('source').notNull(),
   skillId: text('skill_id').notNull(),
@@ -1311,6 +1315,7 @@ export const axSkillExecutionAttempts = pgTable('ax_skill_execution_attempts', {
   index('ax_skill_execution_attempts_agent_id_idx').on(table.agentId),
   index('ax_skill_execution_attempts_started_at_idx').on(table.startedAt),
   index('ax_skill_execution_attempts_completed_at_idx').on(table.completedAt),
+  index('ax_skill_execution_attempts_journey_idx').on(table.journeyId),
 ])
 
 export const axSkillExecutionEvents = pgTable('ax_skill_execution_events', {

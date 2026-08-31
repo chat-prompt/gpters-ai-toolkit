@@ -10,6 +10,7 @@ import { db, catalogItems, users, axClientUsage, axUsageCollectorState } from '@
 import { validateUsageReport } from '../features/ax/usage-report'
 import type { AxUsageReportRecord } from '../features/ax/usage-report'
 import { validateSkillExecutionReport, validateSkillExecutionStart } from '../features/ax/execution-report'
+import { validateOptionalJourneyId } from '../features/ax/journey'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { checkMetadataQuality } from '../plugin/skill-validator'
 import { isSuperAdmin, type UserRole } from '../security/rbac'
@@ -1425,6 +1426,14 @@ export async function executeTool(
             isError: true,
           }
         }
+        const journeyValidation = validateOptionalJourneyId(input._journeyId)
+        if (!journeyValidation.ok) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: journeyValidation.error }) }],
+            isError: true,
+          }
+        }
+        const journeyId = journeyValidation.value ?? randomUUID()
         const searchResult = await semanticSearchImpl({
           query: input.query,
           type: input.category,
@@ -1463,6 +1472,7 @@ export async function executeTool(
           total: searchResult.total,
           query: input.query,
           searchTime: searchResult.searchTime,
+          journeyId,
         }
         return {
           content: [
@@ -1472,6 +1482,7 @@ export async function executeTool(
             },
           ],
           _meta: {
+            journeyId,
             searchResults: searchResult.items.map((item, idx) => ({
               itemId: item.id,
               rank: idx + 1,
@@ -1501,6 +1512,14 @@ export async function executeTool(
 
       case 'get_plugin_content': {
         const input = args as unknown as GetPluginContentInput
+        const journeyValidation = validateOptionalJourneyId(input._journeyId)
+        if (!journeyValidation.ok) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: journeyValidation.error }) }],
+            isError: true,
+          }
+        }
+        const journeyId = journeyValidation.value ?? randomUUID()
         const result = await getPluginContent(input, userId, userRole, orgId)
         if (!result) {
           return {
@@ -1517,8 +1536,8 @@ export async function executeTool(
           }
         }
         // Append outcome reporting instruction to skill content
-        const outcomeHint = `\n\n---\n_스킬 적용 후 결과를 보고해주세요: report_skill_outcome(skillId="${input.pluginId}", applied=true/false, summary="한 줄 결과")_`
-        const resultWithHint = { ...result }
+        const outcomeHint = `\n\n---\n_스킬 적용 후 결과를 보고해주세요: report_skill_outcome(skillId="${input.pluginId}", journeyId="${journeyId}", applied=true/false, summary="한 줄 결과")_`
+        const resultWithHint = { ...result, journeyId }
         if (typeof resultWithHint.content === 'string') {
           resultWithHint.content = resultWithHint.content + outcomeHint
         }
@@ -1529,6 +1548,7 @@ export async function executeTool(
               text: JSON.stringify(resultWithHint, null, 2),
             },
           ],
+          _meta: { journeyId },
         }
       }
 
@@ -1830,11 +1850,24 @@ export async function executeTool(
             isError: true,
           }
         }
+        const journeyValidation = validateOptionalJourneyId(args.journeyId)
+        if (!journeyValidation.ok) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: journeyValidation.error }) }],
+            isError: true,
+          }
+        }
         log.info('Skill outcome reported', { skillId, applied, summary })
         return {
           content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Outcome recorded' }) }],
           _meta: {
-            skillOutcome: { skillId, applied, summary },
+            journeyId: journeyValidation.value ?? undefined,
+            skillOutcome: {
+              skillId,
+              applied,
+              summary,
+              ...(journeyValidation.value && { journeyId: journeyValidation.value }),
+            },
           },
         }
       }
@@ -1846,6 +1879,7 @@ export async function executeTool(
           eventId: args.eventId ?? randomUUID(),
           attemptId: args.attemptId ?? randomUUID(),
           source: args.source ?? 'aitk',
+          journeyId: args.journeyId ?? null,
           skillVersion: args.skillVersion ?? null,
           agentId: args.agentId ?? agent,
           occurredAt: args.occurredAt ?? new Date().toISOString(),
@@ -1885,6 +1919,7 @@ export async function executeTool(
           ...args,
           eventId: args.eventId ?? randomUUID(),
           source: args.source ?? 'aitk',
+          journeyId: args.journeyId ?? null,
           skillVersion: args.skillVersion ?? null,
           agentId: args.agentId ?? agent,
           failureStage: args.failureStage ?? null,

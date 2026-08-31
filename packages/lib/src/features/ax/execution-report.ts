@@ -1,5 +1,7 @@
 /** 검증 가능한 스킬 실행 결과의 수신 계약과 개인정보 최소화 검증 */
 
+import { validateOptionalJourneyId } from './journey'
+
 export const EXECUTION_SOURCES = ['aitk', 'bbopters-shared'] as const
 export const EXECUTION_AGENTS = ['claude-code', 'codex', 'openclaw', 'hermes', 'test-agent'] as const
 export const EXECUTION_STATUSES = ['success', 'partial', 'failed', 'abandoned'] as const
@@ -27,6 +29,7 @@ export type AxExecutionValidationMethod = (typeof EXECUTION_VALIDATION_METHODS)[
 export interface AxSkillExecutionReport {
   eventId: string
   attemptId: string
+  journeyId: string | null
   source: AxExecutionSource
   skillId: string
   skillVersion: string | null
@@ -47,6 +50,7 @@ export interface AxSkillExecutionReport {
 export interface AxSkillExecutionStartReport {
   eventId: string
   attemptId: string
+  journeyId: string | null
   source: AxExecutionSource
   skillId: string
   skillVersion: string | null
@@ -85,6 +89,8 @@ function commonExecutionFields(input: Record<string, unknown>, errors: string[])
   const attemptId = typeof input.attemptId === 'string' ? input.attemptId : ''
   if (!UUID.test(eventId)) errors.push('eventId must be a UUID')
   if (!UUID.test(attemptId)) errors.push('attemptId must be a UUID')
+  const journey = validateOptionalJourneyId(input.journeyId)
+  if (!journey.ok) errors.push(journey.error)
 
   const source = input.source
   const agent = input.agent
@@ -103,6 +109,7 @@ function commonExecutionFields(input: Record<string, unknown>, errors: string[])
   return {
     eventId,
     attemptId,
+    journeyId: journey.ok ? journey.value : null,
     source: source as AxExecutionSource,
     skillId,
     skillVersion,

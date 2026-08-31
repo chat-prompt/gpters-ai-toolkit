@@ -164,8 +164,8 @@ async function loadExecutionSummary(span: number): Promise<{
 /**
  * 개선 인사이트 패널
  *
- * 모든 분석은 선택 기간의 rolling window를 쓴다. 같은 세션에서 같은 스킬을 여러 번
- * 로드한 경우 하나의 `세션×스킬` 조합으로 합쳐, 반복 호출이 결과 보고율을 왜곡하지 않게 한다.
+ * 모든 분석은 선택 기간의 rolling window를 쓴다. 같은 journey(없으면 기존 MCP session)에서
+ * 같은 스킬을 여러 번 로드한 경우 하나의 `흐름×스킬` 조합으로 합쳐 반복 호출을 제거한다.
  */
 export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
   meta,
@@ -200,25 +200,26 @@ export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
         `),
 
         // 검색 결과 한 개가 한 행인 skill_events에서 반복 포함 총 노출을 함께 세되,
-        // 전환 퍼널은 세션×스킬로 중복 제거해 로드·적용 판단과 같은 단위로 연결한다.
+        // 전환 퍼널은 journey 우선, 기존 MCP session fallback의 흐름×스킬로 중복 제거한다.
         db.execute(sql`
           WITH raw_exposed AS (
-            SELECT session_id, skill_id, created_at
+            SELECT COALESCE(journey_id, session_id) AS flow_id, skill_id, created_at
             FROM skill_events
             WHERE action = 'search'
               AND skill_id <> '__zero_result__'
               AND created_at >= NOW() - make_interval(days => ${span})
           ), exposed AS (
-            SELECT session_id, skill_id, min(created_at) AS exposed_at
+            SELECT flow_id, skill_id, min(created_at) AS exposed_at
             FROM raw_exposed
-            GROUP BY session_id, skill_id
+            WHERE flow_id IS NOT NULL
+            GROUP BY flow_id, skill_id
           ), journey AS (
             SELECT
               exposed.*,
               (
                 SELECT min(loaded.created_at)
                 FROM skill_events loaded
-                WHERE loaded.session_id = exposed.session_id
+                WHERE COALESCE(loaded.journey_id, loaded.session_id) = exposed.flow_id
                   AND loaded.skill_id = exposed.skill_id
                   AND loaded.action = 'load'
                   AND loaded.created_at >= exposed.exposed_at
@@ -230,7 +231,7 @@ export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
               CASE WHEN journey.loaded_at IS NULL THEN false ELSE EXISTS (
                 SELECT 1
                 FROM skill_events applied
-                WHERE applied.session_id = journey.session_id
+                WHERE COALESCE(applied.journey_id, applied.session_id) = journey.flow_id
                   AND applied.skill_id = journey.skill_id
                   AND applied.action = 'apply'
                   AND applied.created_at >= journey.loaded_at
@@ -238,7 +239,7 @@ export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
               CASE WHEN journey.loaded_at IS NULL THEN false ELSE EXISTS (
                 SELECT 1
                 FROM skill_events skipped
-                WHERE skipped.session_id = journey.session_id
+                WHERE COALESCE(skipped.journey_id, skipped.session_id) = journey.flow_id
                   AND skipped.skill_id = journey.skill_id
                   AND skipped.action = 'skip'
                   AND skipped.query IS NULL
@@ -289,14 +290,15 @@ export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
         // 있으면 적용으로 우선 분류하고, 그 다음 명시 미적용, 나머지를 미보고로 둔다.
         db.execute(sql`
           WITH loaded AS (
-            SELECT session_id, skill_id, min(created_at) AS loaded_at
+            SELECT COALESCE(journey_id, session_id) AS flow_id, skill_id, min(created_at) AS loaded_at
             FROM skill_events
             WHERE action = 'load'
+              AND COALESCE(journey_id, session_id) IS NOT NULL
               AND created_at >= NOW() - make_interval(days => ${span})
-            GROUP BY session_id, skill_id
+            GROUP BY COALESCE(journey_id, session_id), skill_id
           ), classified AS (
             SELECT
-              loaded.session_id,
+              loaded.flow_id,
               loaded.skill_id,
               COALESCE(bool_or(events.action = 'apply'
                 AND events.created_at >= loaded.loaded_at), false) AS applied,
@@ -306,10 +308,10 @@ export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
                 AND events.created_at >= loaded.loaded_at), false) AS not_applied
             FROM loaded
             LEFT JOIN skill_events events
-              ON events.session_id = loaded.session_id
+              ON COALESCE(events.journey_id, events.session_id) = loaded.flow_id
               AND events.skill_id = loaded.skill_id
               AND events.action IN ('apply', 'skip')
-            GROUP BY loaded.session_id, loaded.skill_id
+            GROUP BY loaded.flow_id, loaded.skill_id
           ), skill_rollup AS (
             SELECT
               classified.skill_id,

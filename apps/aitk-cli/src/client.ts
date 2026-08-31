@@ -154,9 +154,8 @@ export async function jsonRpcCall<T = unknown>(
 /**
  * MCP 세션을 먼저 초기화한 뒤 JSON-RPC 도구를 호출한다.
  *
- * 시작→완료 수명주기와 세션 외래키가 필요한 검증 실행 보고에 사용한다.
- * 검색·로드·간단한 적용 보고는 명령 하나마다 가짜 대화 세션을 만들지 않고
- * 세션 없는 jsonRpcCall을 사용하며, 서버가 감사 로그 ID로 멱등 저장한다.
+ * 실제 대화 transport 호환 검증을 위한 legacy helper다. 단발 CLI 이벤트는
+ * journeyId/attemptId로 연결하므로 이 함수를 사용하지 않는다.
  */
 export async function jsonRpcSessionCall<T = unknown>(
   method: string,

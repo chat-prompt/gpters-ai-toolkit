@@ -4,6 +4,11 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('../../src/journey.js', () => ({
+  createJourneyId: vi.fn(() => '44444444-4444-4444-8444-444444444444'),
+  rememberSearchJourney: vi.fn().mockResolvedValue(undefined),
+}))
+
 describe('search command', () => {
   const originalEnv = process.env
 
@@ -63,6 +68,10 @@ describe('search command', () => {
       const parsed = JSON.parse(stdout)
       expect(parsed).toHaveLength(2)
       expect(parsed[0].id).toBe('code-reviewer')
+
+      const request = vi.mocked(globalThis.fetch).mock.calls[0][1] as RequestInit
+      const body = JSON.parse(String(request.body)) as { params: { arguments: { _journeyId: string } } }
+      expect(body.params.arguments._journeyId).toBe('44444444-4444-4444-8444-444444444444')
 
       const stderr = stderrChunks.join('')
       expect(stderr).toContain('2 results found')

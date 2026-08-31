@@ -1091,6 +1091,17 @@ describe('MCP Handlers', () => {
       )
     })
 
+    it('preserves an explicit journeyId across semantic search metadata and content', async () => {
+      const { semanticSearch: mockSemanticSearch } = await import('../../../../packages/lib/src/search/vector-search')
+      vi.mocked(mockSemanticSearch).mockResolvedValue({ items: [], total: 0, searchTime: 3 })
+      const journeyId = '44444444-4444-4444-8444-444444444444'
+
+      const result = await executeTool('semantic_search', { query: 'database', _journeyId: journeyId })
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.journeyId).toBe(journeyId)
+      expect(result._meta?.journeyId).toBe(journeyId)
+    })
+
     it('should handle semantic_search without userContext (backward compatible)', async () => {
       const { semanticSearch: mockSemanticSearch } = await import('../../../../packages/lib/src/search/vector-search')
       vi.mocked(mockSemanticSearch).mockResolvedValue({
@@ -1411,6 +1422,18 @@ describe('MCP Handlers', () => {
       })
     })
 
+    it('links an outcome to a validated journeyId', async () => {
+      const journeyId = '44444444-4444-4444-8444-444444444444'
+      const result = await executeTool('report_skill_outcome', {
+        skillId: 'refactor-guide',
+        applied: true,
+        summary: 'Applied',
+        journeyId,
+      })
+      expect(result._meta?.journeyId).toBe(journeyId)
+      expect(result._meta?.skillOutcome?.journeyId).toBe(journeyId)
+    })
+
     it('should return error for report_skill_outcome without skillId', async () => {
       const result = await executeTool('report_skill_outcome', {
         applied: true,
@@ -1445,6 +1468,7 @@ describe('MCP Handlers', () => {
       const payload = {
         eventId: '22222222-2222-4222-8222-222222222222',
         attemptId: '11111111-1111-4111-8111-111111111111',
+        journeyId: null,
         source: 'aitk',
         skillId: 'test-skill',
         skillVersion: '1.0.0',
@@ -1488,6 +1512,7 @@ describe('MCP Handlers', () => {
       const payload = {
         eventId: '33333333-3333-4333-8333-333333333333',
         attemptId: '11111111-1111-4111-8111-111111111111',
+        journeyId: null,
         source: 'aitk',
         skillId: 'test-skill',
         skillVersion: '1.0.0',
@@ -1574,7 +1599,8 @@ describe('MCP Handlers', () => {
       const mockChain = createMockChain([mockPlugin])
       vi.mocked(db.select).mockReturnValue(mockChain as never)
 
-      const result = await executeTool('get_plugin_content', { pluginId: 'test-skill' })
+      const journeyId = '44444444-4444-4444-8444-444444444444'
+      const result = await executeTool('get_plugin_content', { pluginId: 'test-skill', _journeyId: journeyId })
 
       expect(result.isError).toBeUndefined()
       const parsed = JSON.parse(result.content[0].text)
@@ -1582,6 +1608,8 @@ describe('MCP Handlers', () => {
       expect(parsed.content).toContain('report_skill_outcome')
       expect(parsed.content).toContain('skillId="test-skill"')
       expect(parsed.content).toContain('applied=true/false')
+      expect(parsed.content).toContain(`journeyId="${journeyId}"`)
+      expect(parsed.journeyId).toBe(journeyId)
     })
   })
 

@@ -4,6 +4,11 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('../../src/journey.js', () => ({
+  resolveJourneyForLoad: vi.fn().mockResolvedValue('44444444-4444-4444-8444-444444444444'),
+  rememberLoadJourney: vi.fn().mockResolvedValue(undefined),
+}))
+
 describe('get command', () => {
   const originalEnv = process.env
 
@@ -23,6 +28,7 @@ describe('get command', () => {
       id: 'code-reviewer',
       name: '코드 리뷰어',
       content: '# Code Reviewer\n...',
+      journeyId: '44444444-4444-4444-8444-444444444444',
     }
 
     globalThis.fetch = vi.fn(async () =>
@@ -44,6 +50,11 @@ describe('get command', () => {
       const parsed = JSON.parse(stdoutChunks.join(''))
       expect(parsed.id).toBe('code-reviewer')
       expect(parsed.content).toContain('Code Reviewer')
+      expect(parsed.journeyId).toBeUndefined()
+
+      const request = vi.mocked(globalThis.fetch).mock.calls[0][1] as RequestInit
+      const body = JSON.parse(String(request.body)) as { _journeyId: string }
+      expect(body._journeyId).toBe('44444444-4444-4444-8444-444444444444')
     } finally {
       process.stdout.write = originalWrite
     }

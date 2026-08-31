@@ -5,6 +5,7 @@
 import { jsonRpcCall } from '../client.js'
 import { resolveToken } from '../auth.js'
 import { jsonOut, info, error } from '../output.js'
+import { createJourneyId, rememberSearchJourney } from '../journey.js'
 
 /** search 명령어 옵션 */
 export interface SearchOptions {
@@ -33,9 +34,11 @@ interface ToolCallResult {
  */
 export async function runSearch(opts: SearchOptions): Promise<void> {
   const token = resolveToken()
+  const journeyId = createJourneyId()
   const args: Record<string, unknown> = {
     query: opts.query,
     _source: 'aitk-cli',
+    _journeyId: journeyId,
   }
   if (opts.type) args.category = opts.type
   if (opts.limit) args.limit = opts.limit
@@ -65,8 +68,17 @@ export async function runSearch(opts: SearchOptions): Promise<void> {
     return
   }
 
-  const parsed = JSON.parse(textContent) as { plugins?: unknown[]; total?: number }
+  const parsed = JSON.parse(textContent) as {
+    plugins?: Array<{ id?: unknown }>
+    total?: number
+    journeyId?: string
+  }
   const items = parsed.plugins ?? []
+  const returnedJourneyId = parsed.journeyId ?? journeyId
+  await rememberSearchJourney(
+    returnedJourneyId,
+    items.flatMap((item) => typeof item.id === 'string' ? [item.id] : [])
+  )
   info(`${items.length} results found`)
   jsonOut(items)
 }

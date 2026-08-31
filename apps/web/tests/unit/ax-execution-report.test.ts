@@ -47,6 +47,18 @@ describe('validateSkillExecutionReport', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('journeyId는 선택값이지만 전달되면 UUID여야 한다', () => {
+    const legacy = validateSkillExecutionReport(VALID)
+    expect(legacy.ok && legacy.data.journeyId).toBeNull()
+
+    const linked = validateSkillExecutionReport({
+      ...VALID,
+      journeyId: '33333333-3333-4333-8333-333333333333',
+    })
+    expect(linked.ok && linked.data.journeyId).toBe('33333333-3333-4333-8333-333333333333')
+    expect(validateSkillExecutionReport({ ...VALID, journeyId: 'not-a-uuid' }).ok).toBe(false)
+  })
+
   it('격리 테스트 에이전트 런타임을 명시적으로 구분한다', () => {
     const result = validateSkillExecutionReport({ ...VALID, agent: 'test-agent' })
     expect(result.ok).toBe(true)

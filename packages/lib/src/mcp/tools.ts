@@ -56,6 +56,10 @@ const ALL_TOOLS: McpTool[] = [
           type: 'string',
           description: '호출 출처 마커 (예: "skill-suggest"). 자동 추천과 수동 검색을 구분하는 데 사용',
         },
+        _journeyId: {
+          type: 'string',
+          description: '탐색→로드→실행을 연결하는 UUID (생략 시 서버 생성, 인증정보 아님)',
+        },
         userContext: {
           type: 'string',
           description: '작업 맥락 (예: "슬랙 멘션 자동 수집 봇 구현, airtable 연동 완료")',
@@ -108,6 +112,10 @@ const ALL_TOOLS: McpTool[] = [
         pluginId: {
           type: 'string',
           description: '플러그인 ID (예: "data-source-reference", "code-reviewer")',
+        },
+        _journeyId: {
+          type: 'string',
+          description: '앞선 검색의 journeyId (생략 시 새 흐름으로 생성)',
         },
       },
       required: ['pluginId'],
@@ -714,6 +722,10 @@ get_plugin_content로 스킬을 로드한 후, 실제로 적용했는지와 결�
           type: 'string',
           description: '결과 요약 (한 줄)',
         },
+        journeyId: {
+          type: ['string', 'null'],
+          description: '앞선 검색·로드와 연결하는 UUID',
+        },
       },
       required: ['skillId', 'applied', 'summary'],
     },
@@ -729,6 +741,7 @@ get_plugin_content로 스킬을 로드한 후, 실제로 적용했는지와 결�
       properties: {
         eventId: { type: 'string', description: '시작 이벤트 재전송 멱등성을 위한 UUID (생략 시 서버 생성)' },
         attemptId: { type: 'string', description: '시작과 완료를 연결하는 UUID (생략 시 서버 생성)' },
+        journeyId: { type: ['string', 'null'], description: '앞선 검색·로드와 연결하는 UUID' },
         source: { type: 'string', enum: ['aitk', 'bbopters-shared'] },
         skillId: { type: 'string' },
         skillVersion: { type: ['string', 'null'] },
@@ -753,6 +766,7 @@ test/command/artifact/user_confirmation/none 중 하나입니다.`,
       properties: {
         eventId: { type: 'string', description: '재전송 멱등성을 위한 UUID (생략 시 서버 생성)' },
         attemptId: { type: 'string', description: '한 번의 실제 적용 시도를 식별하는 UUID' },
+        journeyId: { type: ['string', 'null'], description: '앞선 검색·로드와 연결하는 UUID' },
         source: { type: 'string', enum: ['aitk', 'bbopters-shared'] },
         skillId: { type: 'string' },
         skillVersion: { type: ['string', 'null'] },

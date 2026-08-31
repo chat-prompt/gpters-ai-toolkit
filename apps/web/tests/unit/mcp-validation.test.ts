@@ -140,8 +140,13 @@ describe('MCP Validation', () => {
     it('should validate valid get request', () => {
       const result = validateGetRequest({
         pluginId: 'code-reviewer',
+        _journeyId: '44444444-4444-4444-8444-444444444444',
       })
       expect(result.success).toBe(true)
+    })
+
+    it('should reject a non-UUID journey ID', () => {
+      expect(validateGetRequest({ pluginId: 'code-reviewer', _journeyId: 'session-1' }).success).toBe(false)
     })
 
     it('should reject missing pluginId', () => {

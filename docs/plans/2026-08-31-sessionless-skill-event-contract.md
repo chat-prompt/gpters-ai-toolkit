@@ -51,9 +51,32 @@ AITK CLI의 `search`, `get`, `report-outcome`은 명령 하나를 실행하고 �
 
 - `search`, `get`, `report-outcome`, `report-skip`: 단발성 호출을 유지한다. 서버가 감사
   로그 원천 키로 저장한다.
-- `report-execution-start`, `report-execution`: 시작→완료 수명주기와 실행 시도 테이블의
-  세션 외래키가 필요하므로 MCP initialize를 거친다.
+- `search`가 무작위 `journeyId`를 만들고, CLI가 이를 `get`과 결과·실행 보고에 자동으로
+  전달한다. 검색 없이 바로 `get`하면 새 여정을 만든다.
+- 로컬 연결 상태는 24시간 후 폐기한다. 검색어·프롬프트·응답·파일 경로는 저장하지 않고,
+  UUID·attemptId·스킬 ID의 SHA-256 해시만 `~/.cache/gpters-aitk/skill-journeys`에 보관한다.
+- 상태 파일을 읽거나 쓸 수 없어도 본 명령은 실패하지 않는다. 이 경우 여정 연결만
+  빠지고 개별 사건은 그대로 기록된다.
+- `report-execution-start`, `report-execution`도 세션 없는 단일 JSON-RPC 호출을 사용한다.
+  실행 시도 테이블의 `session_id`는 선택값이고, 시작·완료는 `attemptId`, 탐색 흐름은
+  `journeyId`로 연결한다.
 - 구형 CLI도 서버 호환 계층에서 같은 방식으로 기록되어야 한다.
+
+## 0033 여정 마이그레이션
+
+- `skill_events.journey_id`와 `ax_skill_execution_attempts.journey_id`를 추가한다.
+- `ax_skill_execution_attempts.session_id`의 NOT NULL 제약만 해제한다.
+- 기존 행은 수정·삭제·백필하지 않는다. 기존 행의 `journey_id`는 NULL로 남는다.
+- `journeyId`는 인증 토큰이나 사용자 ID가 아닌 무작위 UUID이며, 서버는 전달값이 UUID인지
+  검증한다.
+- 구형 클라이언트가 식별자를 생략하면 서버는 검색·로드에 새 UUID를 발급하고, 결과·실행
+  보고는 연결 정보 없이도 받아들인다.
+
+배포 순서는 반드시 **0033 DB → 웹/API → repo 설치형 AITK CLI**다. 새 서버는 구형 CLI를
+계속 받지만, 새 CLI의 세션 없는 실행 보고는 구형 서버에서 저장되지 않기 때문이다. DB 적용은
+`db:migrate:skill-journey-child`로 자식 브랜치를 먼저 검증하고, 운영에서는 별도 복구 브랜치와
+`apply-ax-0033` 확인 문구를 요구한다. 마이그레이션 전후 `skill_events`와 실행 시도 행 수가
+달라지면 가드가 적용을 실패로 판정한다.
 
 ## 마이그레이션과 백필 순서
 
