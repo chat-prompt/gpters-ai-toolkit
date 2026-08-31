@@ -21,6 +21,7 @@ local paths.
 - AITK 0.7.0 or newer in a stable user path. Hermes default-profile compatibility
   requires 0.7.1 or newer. Current OpenClaw auto-detection, including safe JSONL
   fallback around unrelated sibling SQLite files, requires 0.7.2 or newer.
+  Sessionless skill journey linking requires 0.7.3 or newer.
   Internal agents install the CLI from an approved repository commit with
   `install-from-repo.sh`; publishing a new npm package is not required.
 - Node.js and Corepack/pnpm. If Bun is not already installed, the repo
