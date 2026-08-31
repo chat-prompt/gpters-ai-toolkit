@@ -30,7 +30,7 @@ const DAY_OPTIONS = [7, 30, 90] as const
 type AxDays = (typeof DAY_OPTIONS)[number]
 
 /** 기본 조회 기간 */
-const DEFAULT_DAYS: AxDays = 30
+const DEFAULT_DAYS: AxDays = 7
 
 /** 상단 8개 수치를 사람·사용·비용 4개와 운영 자산 4개로 나누는 고정 순서 */
 const SNAPSHOT_HIGHLIGHT_ORDER = [
@@ -293,7 +293,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
           })}
         </nav>
 
-        <div className="flex items-center gap-4 pb-1.5 flex-wrap">
+        <div className="ml-auto flex items-center justify-end gap-4 pb-1.5 flex-wrap">
           {/* 기간을 바꾸면 변하는 수치는 기간 선택 옆에서만 말한다 —
               선택 UI가 없는 탭에서 보여주면 어느 기간의 값인지 알 수 없다 */}
           {active.usesPeriod && periodHighlights.length > 0 && (

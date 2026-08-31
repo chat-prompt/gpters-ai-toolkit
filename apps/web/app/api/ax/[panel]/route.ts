@@ -1,7 +1,7 @@
 /**
  * AX Dashboard — 패널 데이터 API
  *
- * GET /api/ax/{panelId}?days=30
+ * GET /api/ax/{panelId}?days=7
  *
  * 패널이 레지스트리에 등록돼 있으면 이 라우트 하나로 처리된다.
  * 새 지표를 붙일 때 라우트를 추가할 필요가 없다.
@@ -28,7 +28,7 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' }
 
 /** 허용 조회 기간(일) */
 const ALLOWED_DAYS = [7, 30, 90] as const
-const DEFAULT_DAYS = 30
+const DEFAULT_DAYS = 7
 
 function parseDays(raw: string | null): number {
   const parsed = Number(raw)
