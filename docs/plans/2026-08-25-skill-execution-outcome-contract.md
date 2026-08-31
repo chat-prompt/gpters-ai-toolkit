@@ -18,10 +18,11 @@
 {
   "eventId": "uuid",
   "attemptId": "uuid",
+  "journeyId": "uuid" | null,
   "source": "aitk" | "bbopters-shared",
   "skillId": "review-helper",
   "skillVersion": "1.2.0" | null,
-  "agent": "claude-code" | "codex" | "openclaw" | "test-agent",
+  "agent": "claude-code" | "codex" | "openclaw" | "hermes" | "test-agent",
   "agentId": "claude-reviewer",
   "occurredAt": "2026-08-26T00:00:00Z"
 }
@@ -32,11 +33,11 @@
 {
   "eventId": "uuid",
   "attemptId": "uuid",
-  "sessionId": "opaque-session-id",
+  "journeyId": "uuid" | null,
   "source": "aitk" | "bbopters-shared",
   "skillId": "review-helper",
   "skillVersion": "1.2.0" | null,
-  "agent": "claude-code" | "codex" | "openclaw" | "test-agent",
+  "agent": "claude-code" | "codex" | "openclaw" | "hermes" | "test-agent",
   "agentId": "claude-reviewer",
   "status": "success" | "partial" | "failed" | "abandoned",
   "failureStage": "load" | "instruction" | "dependency" | "execution" | "validation" | null,
@@ -53,6 +54,10 @@
 
 `agent`는 실행 환경 종류이고 `agentId`는 실제 봇의 안정적인 소문자 slug다. 사람의 주간 활성이나
 토큰 지표에는 합치지 않으며, 에이전트별 실행 현황에서만 사용한다.
+
+`journeyId`는 검색→로드→실행을 잇는 선택 UUID다. MCP transport `sessionId`와 역할이 다르며,
+단발 CLI 실행은 session 없이도 정식 실행 시도로 저장한다. 기존 클라이언트가 journeyId를 보내지
+않아도 보고는 거부하지 않는다.
 
 대화 원문, 파일 내용, 명령 출력 전문, 인증 정보는 보내지 않는다. `summary`는 길이를 제한하고
 민감정보를 제거한 분류·요약만 허용한다.
@@ -103,7 +108,8 @@
 
 ## 로컬 구현 위치와 검증
 
-- DB: `packages/db/drizzle/0029_ax_skill_execution_attempts.sql`, `0030_ax_execution_lifecycle.sql`
+- DB: `packages/db/drizzle/0029_ax_skill_execution_attempts.sql`, `0030_ax_execution_lifecycle.sql`,
+  `0033_ax_skill_journeys.sql`
 - 검증 계약: `packages/lib/src/features/ax/execution-report.ts`
 - 멱등 저장: `event_id` unique + conflict 무시
 - MCP/CLI: `report_skill_execution_started` + `report_skill_execution`,

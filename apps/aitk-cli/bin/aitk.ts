@@ -140,10 +140,13 @@ Examples:
 
   get: `aitk get - Get plugin details by ID
 
-Usage: aitk get <id>
+Usage: aitk get <id> [--journey-id <uuid>]
 
 Arguments:
   id                 Plugin ID to retrieve
+
+Options:
+  --journey-id <uuid>  Explicit search/load journey (normally inferred automatically)
 
 Examples:
   aitk get code-reviewer
@@ -229,12 +232,15 @@ Options:
 
   'report-outcome': `aitk report-outcome - Report skill application outcome
 
-Usage: aitk report-outcome --skill-id <id> --applied true|false --summary <text>
+Usage: aitk report-outcome --skill-id <id> --applied true|false --summary <text> [--journey-id <uuid>]
 
 Required:
   --skill-id <id>    Skill ID that was loaded
   --applied <bool>   Whether the skill was actually applied (true/false)
-  --summary <text>   One-line outcome summary`,
+  --summary <text>   One-line outcome summary
+
+Options:
+  --journey-id <uuid>  Explicit search/load journey (normally inferred automatically)`,
   'report-execution-start': `aitk report-execution-start - Report actual skill application start
 
 Usage: aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id <stable-id>] [options]
@@ -243,6 +249,7 @@ Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
   --agent-id <stable-id>        Stable bot identifier (default: runtime name)
   --attempt-id <uuid>           Stable attempt identifier (generated if omitted)
+  --journey-id <uuid>           Search/load journey (normally inferred automatically)
   --event-id <uuid>             Idempotency identifier (generated if omitted)
   --skill-version <version>     SKILL.md version or commit SHA`,
   'report-execution': `aitk report-execution - Report validated skill execution
@@ -253,6 +260,7 @@ Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
   --agent-id <stable-id>        Stable bot identifier shared with the start report (default: runtime name)
   --attempt-id <uuid>          Stable attempt identifier (generated if omitted)
+  --journey-id <uuid>          Search/load journey (normally inferred automatically)
   --event-id <uuid>            Idempotency identifier (generated if omitted)
   --skill-version <version>    SKILL.md version or commit SHA
   --failure-stage <stage>      load|instruction|dependency|execution|validation
@@ -423,7 +431,7 @@ async function main(): Promise<void> {
     case 'get': {
       const id = positional[0] ?? flags['id']
       if (!id) error('Plugin ID required: aitk get <id>')
-      await runGet(id)
+      await runGet(id, { journeyId: flags['journey-id'] })
       break
     }
 
@@ -487,6 +495,7 @@ async function main(): Promise<void> {
         skillId,
         applied: flags['applied'] === 'true',
         summary,
+        journeyId: flags['journey-id'],
       })
       break
     }
@@ -507,6 +516,7 @@ async function main(): Promise<void> {
         agentId,
         source: source as 'aitk' | 'bbopters-shared',
         attemptId: flags['attempt-id'],
+        journeyId: flags['journey-id'],
         eventId: flags['event-id'],
         skillVersion: flags['skill-version'],
       })
@@ -538,6 +548,7 @@ async function main(): Promise<void> {
         agentId,
         source: source as 'aitk' | 'bbopters-shared',
         attemptId: flags['attempt-id'],
+        journeyId: flags['journey-id'],
         eventId: flags['event-id'],
         skillVersion: flags['skill-version'],
         failureStage: flags['failure-stage'] as 'load' | 'instruction' | 'dependency' | 'execution' | 'validation' | undefined,

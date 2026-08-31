@@ -84,6 +84,7 @@ export const searchRequestSchema = z.object({
 
 export const getRequestSchema = z.object({
   pluginId: pluginIdSchema,
+  _journeyId: z.string().uuid().optional(),
 })
 
 export const listRequestSchema = z.object({

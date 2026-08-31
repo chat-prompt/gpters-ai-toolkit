@@ -8,7 +8,7 @@ import { createLogger } from '../core/logger'
 const log = createLogger('skill-execution')
 
 export async function recordSkillExecutionStart(params: {
-  sessionId: string
+  sessionId?: string | null
   userId?: string
   report: AxSkillExecutionStartReport
 }): Promise<void> {
@@ -20,7 +20,8 @@ export async function recordSkillExecutionStart(params: {
       .values({
         attemptId: report.attemptId,
         eventId: report.eventId,
-        sessionId: params.sessionId,
+        sessionId: params.sessionId ?? null,
+        journeyId: report.journeyId,
         userId: params.userId,
         source: report.source,
         skillId: report.skillId,
@@ -38,7 +39,11 @@ export async function recordSkillExecutionStart(params: {
     // 완료가 먼저 들어온 구형/지연 보고에는 최초 시작 시각만 보완한다.
     await db
       .update(axSkillExecutionAttempts)
-      .set({ startObserved: true, startedAt })
+      .set({
+        startObserved: true,
+        startedAt,
+        ...(report.journeyId && { journeyId: report.journeyId }),
+      })
       .where(and(
         eq(axSkillExecutionAttempts.attemptId, report.attemptId),
         eq(axSkillExecutionAttempts.startObserved, false),
@@ -79,7 +84,7 @@ export async function recordSkillExecutionStart(params: {
 }
 
 export async function recordSkillExecutionAttempt(params: {
-  sessionId: string
+  sessionId?: string | null
   userId?: string
   report: AxSkillExecutionReport
 }): Promise<boolean> {
@@ -91,7 +96,8 @@ export async function recordSkillExecutionAttempt(params: {
       .values({
         attemptId: report.attemptId,
         eventId: report.eventId,
-        sessionId: params.sessionId,
+        sessionId: params.sessionId ?? null,
+        journeyId: report.journeyId,
         userId: params.userId,
         source: report.source,
         skillId: report.skillId,
@@ -115,6 +121,7 @@ export async function recordSkillExecutionAttempt(params: {
     const updatedAttempts = await db
       .update(axSkillExecutionAttempts)
       .set({
+        ...(report.journeyId && { journeyId: report.journeyId }),
         skillVersion: report.skillVersion,
         agent: report.agent,
         agentId: report.agentId,

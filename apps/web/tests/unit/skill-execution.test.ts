@@ -2,11 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let insertCount = 0
 let eventInserted = true
+let attemptInsertValues: Record<string, unknown> | undefined
 
 function insertBuilder() {
   const isEventInsert = insertCount++ % 2 === 1
   const chain: Record<string, unknown> = {}
-  chain.values = vi.fn(() => chain)
+  chain.values = vi.fn((values: Record<string, unknown>) => {
+    if (!isEventInsert) attemptInsertValues = values
+    return chain
+  })
   chain.onConflictDoNothing = vi.fn(() => chain)
   chain.returning = vi.fn(() => Promise.resolve(
     isEventInsert && eventInserted ? [{ eventId: 'event-id' }] : []
@@ -50,6 +54,7 @@ const { recordSkillExecutionAttempt } = await import(
 const report = {
   eventId: '22222222-2222-4222-8222-222222222222',
   attemptId: '11111111-1111-4111-8111-111111111111',
+  journeyId: null,
   source: 'aitk' as const,
   skillId: 'review-helper',
   skillVersion: '1.0.0',
@@ -67,6 +72,7 @@ describe('recordSkillExecutionAttempt', () => {
   beforeEach(() => {
     insertCount = 0
     eventInserted = true
+    attemptInsertValues = undefined
     vi.clearAllMocks()
   })
 
@@ -77,5 +83,14 @@ describe('recordSkillExecutionAttempt', () => {
   it('같은 eventId 재전송이면 false를 반환해 파생 지표 중복을 막는다', async () => {
     eventInserted = false
     expect(await recordSkillExecutionAttempt({ sessionId: 'session', report })).toBe(false)
+  })
+
+  it('transport session 없이도 journey가 있는 실행 시도를 저장한다', async () => {
+    const journeyId = '44444444-4444-4444-8444-444444444444'
+    expect(await recordSkillExecutionAttempt({
+      sessionId: null,
+      report: { ...report, journeyId },
+    })).toBe(true)
+    expect(attemptInsertValues).toEqual(expect.objectContaining({ sessionId: null, journeyId }))
   })
 })

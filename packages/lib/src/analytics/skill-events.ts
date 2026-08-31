@@ -27,6 +27,7 @@ export const ZERO_RESULT_SKILL_ID = '__zero_result__'
 export async function recordSearchEvents(params: {
   sessionId?: string | null
   sourceAuditLogId?: string
+  journeyId?: string | null
   occurredAt?: Date
   userId?: string
   query: string
@@ -37,6 +38,7 @@ export async function recordSearchEvents(params: {
       // Record zero-result search event for accurate zero-result rate tracking
       const insert = db.insert(skillEvents).values({
         sessionId: params.sessionId ?? null,
+        ...(params.journeyId && { journeyId: params.journeyId }),
         userId: params.userId,
         skillId: ZERO_RESULT_SKILL_ID,
         action: 'search' as const,
@@ -53,6 +55,7 @@ export async function recordSearchEvents(params: {
 
     const rows = params.results.map((r) => ({
       sessionId: params.sessionId ?? null,
+      ...(params.journeyId && { journeyId: params.journeyId }),
       userId: params.userId,
       skillId: r.itemId,
       action: 'search' as const,
@@ -82,6 +85,7 @@ export async function recordSearchEvents(params: {
 export async function recordLoadEvent(params: {
   sessionId?: string | null
   sourceAuditLogId?: string
+  journeyId?: string | null
   occurredAt?: Date
   userId?: string
   skillId: string
@@ -89,6 +93,7 @@ export async function recordLoadEvent(params: {
   try {
     const insert = db.insert(skillEvents).values({
       sessionId: params.sessionId ?? null,
+      ...(params.journeyId && { journeyId: params.journeyId }),
       userId: params.userId,
       skillId: params.skillId,
       action: 'load',
@@ -115,6 +120,7 @@ export async function recordLoadEvent(params: {
 export async function recordOutcomeEvent(params: {
   sessionId?: string | null
   sourceAuditLogId?: string
+  journeyId?: string | null
   occurredAt?: Date
   userId?: string
   skillId: string
@@ -124,6 +130,7 @@ export async function recordOutcomeEvent(params: {
   try {
     const insert = db.insert(skillEvents).values({
       sessionId: params.sessionId ?? null,
+      ...(params.journeyId && { journeyId: params.journeyId }),
       userId: params.userId,
       skillId: params.skillId,
       action: params.applied ? 'apply' : 'skip',

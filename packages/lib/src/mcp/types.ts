@@ -14,6 +14,8 @@ export interface SearchPluginsInput {
 
 export interface GetPluginContentInput {
   pluginId: string
+  /** 탐색→로드→실행 연결용 UUID. 인증정보가 아니다. */
+  _journeyId?: string
 }
 
 export interface ListPluginsInput {
@@ -270,6 +272,8 @@ export interface SemanticSearchInput {
   limit?: number
   /** Source marker for referral tracking (e.g., 'skill-suggest') */
   _source?: string
+  /** 탐색→로드→실행 연결용 UUID. 인증정보가 아니다. */
+  _journeyId?: string
   /** Optional user context to improve search relevance (e.g., '슬랙 멘션 자동 수집 봇 구현, airtable 연동 완료') */
   userContext?: string
 }
@@ -279,6 +283,8 @@ export interface SemanticSearchInput {
  * Stripped before sending response to client.
  */
 export interface ToolExecutionMeta {
+  /** 탐색·로드·실행을 transport session과 독립적으로 연결한다 */
+  journeyId?: string
   /** Search result snapshot for discovery analytics */
   searchResults?: Array<{ itemId: string; rank: number; score: number }>
   /** Referral source marker (e.g., 'suggest' from skill-suggest hook) */
@@ -304,6 +310,7 @@ export interface ToolExecutionMeta {
     skillId: string
     applied: boolean
     summary: string
+    journeyId?: string | null
   }
   /** 검증 가능한 스킬 실행 결과. 기존 applied 자기보고와 별도 저장한다 */
   skillExecution?: import('../features/ax/execution-report').AxSkillExecutionReport
@@ -316,6 +323,8 @@ export interface SemanticSearchResult {
   total: number
   query: string
   searchTime: number
+  /** 후속 get/report 호출이 같은 흐름을 명시적으로 전달할 때 사용 */
+  journeyId: string
 }
 
 // File management inputs/responses

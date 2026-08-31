@@ -230,27 +230,27 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .groupBy(kstHourExpr)
         .orderBy(kstHourExpr)
 
-      // 5. 로드 코호트 전환 — 세션×스킬을 한 번만 세고, 로드 뒤 적용 여부를 겹쳐 보여준다.
-      //    세션 없는 로드는 연결할 수 없어 전환 분모에서 제외한다. 세션 없는 적용은 직접 적용이다.
+      // 5. 로드 코호트 전환 — journey 우선, 기존 MCP session fallback으로 흐름×스킬을 센다.
+      //    둘 다 없는 과거 적용만 직접 적용으로 남고, 새 단발 CLI는 journey로 정상 연결된다.
       const flowResult = await db.execute(sql`
         WITH load_journeys AS (
           SELECT
-            loaded.session_id,
+            COALESCE(loaded.journey_id, loaded.session_id) AS flow_id,
             loaded.skill_id,
             min(loaded.created_at) AS loaded_at
           FROM skill_events loaded
           INNER JOIN catalog_items catalog ON catalog.id = loaded.skill_id
           WHERE loaded.action = 'load'
-            AND loaded.session_id IS NOT NULL
+            AND COALESCE(loaded.journey_id, loaded.session_id) IS NOT NULL
             AND loaded.created_at >= ${since}
-          GROUP BY loaded.session_id, loaded.skill_id
+          GROUP BY COALESCE(loaded.journey_id, loaded.session_id), loaded.skill_id
         ), classified_loads AS (
           SELECT
             load_journeys.loaded_at,
             EXISTS (
               SELECT 1
               FROM skill_events applied
-              WHERE applied.session_id = load_journeys.session_id
+              WHERE COALESCE(applied.journey_id, applied.session_id) = load_journeys.flow_id
                 AND applied.skill_id = load_journeys.skill_id
                 AND applied.action = 'apply'
                 AND applied.created_at >= load_journeys.loaded_at
@@ -258,22 +258,22 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           FROM load_journeys
         ), apply_journeys AS (
           SELECT
-            applied.session_id,
+            COALESCE(applied.journey_id, applied.session_id) AS flow_id,
             applied.skill_id,
             min(applied.created_at) AS applied_at
           FROM skill_events applied
           INNER JOIN catalog_items catalog ON catalog.id = applied.skill_id
           WHERE applied.action = 'apply'
-            AND applied.session_id IS NOT NULL
+            AND COALESCE(applied.journey_id, applied.session_id) IS NOT NULL
             AND applied.created_at >= ${since}
-          GROUP BY applied.session_id, applied.skill_id
+          GROUP BY COALESCE(applied.journey_id, applied.session_id), applied.skill_id
         ), direct_applies AS (
           SELECT apply_journeys.applied_at
           FROM apply_journeys
           WHERE NOT EXISTS (
             SELECT 1
             FROM skill_events loaded
-            WHERE loaded.session_id = apply_journeys.session_id
+            WHERE COALESCE(loaded.journey_id, loaded.session_id) = apply_journeys.flow_id
               AND loaded.skill_id = apply_journeys.skill_id
               AND loaded.action = 'load'
               AND loaded.created_at <= apply_journeys.applied_at
@@ -283,6 +283,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           FROM skill_events applied
           INNER JOIN catalog_items catalog ON catalog.id = applied.skill_id
           WHERE applied.action = 'apply'
+            AND applied.journey_id IS NULL
             AND applied.session_id IS NULL
             AND applied.created_at >= ${since}
         ), all_load_daily AS (

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../src/client.js', () => ({
-  jsonRpcSessionCall: vi.fn().mockResolvedValue({ ok: true, data: { success: true } }),
+  jsonRpcCall: vi.fn().mockResolvedValue({ ok: true, data: { success: true } }),
 }))
 vi.mock('../../src/auth.js', () => ({ resolveToken: vi.fn(() => 'token') }))
 vi.mock('../../src/output.js', () => ({
@@ -9,8 +9,14 @@ vi.mock('../../src/output.js', () => ({
   info: vi.fn(),
   error: vi.fn((message: string) => { throw new Error(message) }),
 }))
+vi.mock('../../src/journey.js', () => ({
+  resolveJourneyForSkill: vi.fn().mockResolvedValue('44444444-4444-4444-8444-444444444444'),
+  resolveJourneyForAttempt: vi.fn().mockResolvedValue('44444444-4444-4444-8444-444444444444'),
+  rememberExecutionAttempt: vi.fn().mockResolvedValue(undefined),
+  markJourneyReported: vi.fn().mockResolvedValue(undefined),
+}))
 
-import { jsonRpcSessionCall } from '../../src/client.js'
+import { jsonRpcCall } from '../../src/client.js'
 import { runReportExecution, runReportExecutionStart } from '../../src/commands/report-execution.js'
 
 describe('aitk report-execution', () => {
@@ -32,7 +38,7 @@ describe('aitk report-execution', () => {
       occurredAt: '2026-08-25T00:00:00.000Z',
     })
 
-    expect(jsonRpcSessionCall).toHaveBeenCalledWith(
+    expect(jsonRpcCall).toHaveBeenCalledWith(
       'tools/call',
       {
         name: 'report_skill_execution',
@@ -40,6 +46,7 @@ describe('aitk report-execution', () => {
           skillId: 'review-helper',
           status: 'success',
           agentId: 'codex-reviewer',
+          journeyId: '44444444-4444-4444-8444-444444444444',
           validation: {
             method: 'test',
             passed: true,
@@ -47,8 +54,7 @@ describe('aitk report-execution', () => {
           },
         }),
       },
-      'token',
-      { name: 'codex-reviewer', version: '1.2.0' }
+      'token'
     )
   })
 
@@ -62,7 +68,7 @@ describe('aitk report-execution', () => {
       validationPassed: true,
     })
 
-    const args = vi.mocked(jsonRpcSessionCall).mock.calls[0][1] as {
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as {
       arguments: { validation: { passed: boolean | null } }
     }
     expect(args.arguments.validation.passed).toBeNull()
@@ -79,7 +85,7 @@ describe('aitk report-execution', () => {
       validationPassed: true,
     })
 
-    const args = vi.mocked(jsonRpcSessionCall).mock.calls[0][1] as {
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as {
       arguments: { source: string; agent: string }
     }
     expect(args.arguments).toEqual(expect.objectContaining({ source: 'aitk', agent: 'test-agent' }))
@@ -94,7 +100,7 @@ describe('aitk report-execution', () => {
       eventId: '33333333-3333-4333-8333-333333333333',
       occurredAt: '2026-08-25T00:00:00.000Z',
     })
-    const args = vi.mocked(jsonRpcSessionCall).mock.calls[0][1] as {
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as {
       name: string
       arguments: { attemptId: string; agentId: string }
     }
@@ -111,16 +117,13 @@ describe('aitk report-execution', () => {
       agent: 'hermes',
     })
 
-    const args = vi.mocked(jsonRpcSessionCall).mock.calls[0][1] as {
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as {
       arguments: { agent: string; agentId: string }
     }
     expect(args.arguments).toEqual(expect.objectContaining({
       agent: 'hermes',
       agentId: 'hermes',
     }))
-    expect(vi.mocked(jsonRpcSessionCall).mock.calls[0][3]).toEqual({
-      name: 'hermes',
-      version: 'local',
-    })
+    expect(vi.mocked(jsonRpcCall).mock.calls[0]).toHaveLength(3)
   })
 })
