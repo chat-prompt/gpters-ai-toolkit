@@ -4,7 +4,7 @@
   "description": "GPTers AI Toolkit CLI - MCP fallback & standalone CLI tool",
   "type": "module",
   "bin": {
-    "aitk": "./dist/bin/aitk.js"
+    "aitk": "dist/bin/aitk.js"
   },
   "files": [
     "dist"

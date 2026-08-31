@@ -184,4 +184,14 @@ describe('버전 보고', () => {
     expect(source).not.toMatch(/const VERSION = ['"]\d/)
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/)
   })
+
+  it('npm 11에서도 aitk 실행 파일 매핑을 보존한다', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf-8'))
+
+    // npm 11 publish는 "./dist/..."를 자동 보정하며 경고한다. 정규화된 경로를
+    // 소스에 유지해 실제 공개 tarball에서도 aitk bin 링크가 그대로 생성되게 한다.
+    expect(pkg.bin).toEqual({ aitk: 'dist/bin/aitk.js' })
+  })
 })
