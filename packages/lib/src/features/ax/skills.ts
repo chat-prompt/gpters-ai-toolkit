@@ -28,13 +28,13 @@ const SKILL_LIMIT = 50
  */
 export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as const
 
-/** 미사용 관리에서 실제 사용으로 보는 행위 — 검색 노출·스킵은 사용으로 세지 않는다 */
-const MEANINGFUL_USAGE_ACTIONS = ['load', 'apply'] as const
+/** 서버가 스킬에 대한 관심 또는 적용을 직접 관측한 행위 — 검색 노출·스킵은 제외한다 */
+const OBSERVED_USAGE_ACTIONS = ['load', 'apply'] as const
 
 const meta: AxPanelMeta = {
   id: 'skill-usage',
   title: '스킬',
-  description: 'aitk에서 검색·로드·적용된 스킬 사용 현황',
+  description: 'aitk 서버에서 관측된 검색·콘텐츠 로드·적용 보고 현황',
   source: 'aitk DB (skill_events · mcp_sessions)',
   visibility: 'org',
   usesPeriod: true,
@@ -121,8 +121,8 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           applied: actionCount('apply'),
           skipped: actionCount('skip'),
           deployed: actionCount('deploy'),
-          activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)})::int`,
-          sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)})::int`,
+          activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)})::int`,
+          sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)})::int`,
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
@@ -138,7 +138,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           applied: actionCount('apply'),
           skipped: actionCount('skip'),
           deployed: actionCount('deploy'),
-          users: sql<number>`count(distinct ${skillEvents.userId})::int`,
+          users: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)})::int`,
           lastUsedAt: sql<Date | null>`max(${skillEvents.createdAt})`,
         })
         .from(skillEvents)
@@ -155,19 +155,19 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         .groupBy(dayExpr)
         .orderBy(dayExpr)
 
-      // 4. 기간 내 실제 사용(load/apply)이 없는 카탈로그 스킬
+      // 4. 기간 내 서버가 관측한 load/apply가 없는 카탈로그 스킬
       //    빈 배열 notInArray는 Drizzle에서 깨지므로 서브쿼리로 처리한다
-      //    검색 노출·스킵만 있는 스킬도 관리 관점에서는 미사용이다. 정리 우선순위는
-      //    전 기간의 마지막 실제 사용일이 오래된 순, 같은 시각이면 누적 사용 세션이 적은 순이다.
+      //    검색 노출·스킵만 있는 스킬도 관리 관점에서는 미관측이다. 정리 우선순위는
+      //    전 기간의 마지막 load/apply가 오래된 순, 같은 시각이면 누적 대화 세션이 적은 순이다.
       const allTimeLastUsedAt = sql<Date | null>`(
         select max("skill_events"."created_at") from "skill_events"
         where "skill_events"."skill_id" = "catalog_items"."id"
-          and ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)}
+          and ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)}
       )`
       const allTimeUsageSessions = sql<number>`(
         select count(distinct "skill_events"."session_id")::int from "skill_events"
         where "skill_events"."skill_id" = "catalog_items"."id"
-          and ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)}
+          and ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)}
       )`
       const unusedRows = await db
         .select({
@@ -186,7 +186,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             sql`${catalogItems.id} not in (
               select distinct ${skillEvents.skillId} from ${skillEvents}
               where ${skillEvents.createdAt} >= ${since.toISOString()}
-                and ${inArray(skillEvents.action, MEANINGFUL_USAGE_ACTIONS)}
+                and ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)}
             )`
           )
         )
@@ -249,8 +249,8 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         },
         [
           // 기간 라벨은 붙이지 않는다 — 화면의 기간 선택이 이 두 타일 바로 옆에 있다
-          { label: '실제 스킬 사용', value: meaningfulUses.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
-          { label: '실제 사용자', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
+          { label: '콘텐츠 로드·적용 보고', value: meaningfulUses.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
+          { label: '관측 사용자', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
         ]
       )
     } catch (error) {

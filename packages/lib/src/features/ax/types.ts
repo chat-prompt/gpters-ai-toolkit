@@ -235,11 +235,11 @@ export interface AxSkillUsageRow {
 export interface AxSkillUsageData {
   /** 기간 내 전체 스킬 이벤트 수 */
   totalEvents: number
-  /** 기간 내 실제 사용(load/apply) 이벤트 수 */
+  /** 기간 내 서버가 관측한 콘텐츠 로드+적용 보고 이벤트 수 */
   meaningfulUses: number
-  /** 기간 내 실제 사용(load/apply)을 남긴 고유 사용자 수 */
+  /** 기간 내 콘텐츠 로드 또는 적용 보고를 남긴 고유 사용자 수 */
   activeUsers: number
-  /** 실제 사용(load/apply)이 발생한 세션 수 */
+  /** 콘텐츠 로드 또는 적용 보고가 발생한 정식 MCP 대화 세션 수 */
   sessions: number
   /** 검색·로드·적용 등 행동별 이벤트 수 */
   actionTotals: Record<'search' | 'load' | 'apply' | 'skip' | 'deploy', number>
@@ -249,7 +249,7 @@ export interface AxSkillUsageData {
   daily: Array<{ date: string; events: number }>
   /** 카탈로그에는 있으나 기간 내 load/apply가 0인 스킬의 전체 수 */
   totalUnusedSkills: number
-  /** 정리 우선순위 상위 미사용 스킬 */
+  /** 정리 우선순위 상위 장기 미관측 스킬 */
   unusedSkills: Array<{
     id: string
     name: string

@@ -901,7 +901,13 @@ export const skillEventActionEnum = pgEnum('skill_event_action', [
  */
 export const skillEvents = pgTable('skill_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  sessionId: text('session_id').notNull().references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  /**
+   * MCP 대화 세션. 단발성 AITK CLI REST/JSON-RPC 호출은 정식 세션이 없으므로 nullable이다.
+   * 세션이 없다는 이유로 사건 자체를 버리지는 않되, 퍼널·세션 수에는 포함하지 않는다.
+   */
+  sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  /** 원천 감사 로그 — 세션 없는 호출과 백필을 멱등하게 연결한다. */
+  sourceAuditLogId: text('source_audit_log_id').references(() => mcpAuditLogs.id, { onDelete: 'set null' }),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   skillId: text('skill_id').notNull(),
 
@@ -928,6 +934,10 @@ export const skillEvents = pgTable('skill_events', {
   index('skill_events_user_id_idx').on(table.userId),
   index('skill_events_created_at_idx').on(table.createdAt),
   index('skill_events_skill_action_idx').on(table.skillId, table.action),
+  index('skill_events_source_audit_idx').on(table.sourceAuditLogId),
+  uniqueIndex('skill_events_source_skill_action_uidx')
+    .on(table.sourceAuditLogId, table.skillId, table.action)
+    .where(sql`${table.sourceAuditLogId} is not null`),
 ])
 
 export type SkillEventRecord = typeof skillEvents.$inferSelect
@@ -938,6 +948,10 @@ export const skillEventsRelations = relations(skillEvents, ({ one }) => ({
   session: one(mcpSessions, {
     fields: [skillEvents.sessionId],
     references: [mcpSessions.sessionId],
+  }),
+  sourceAuditLog: one(mcpAuditLogs, {
+    fields: [skillEvents.sourceAuditLogId],
+    references: [mcpAuditLogs.id],
   }),
   user: one(users, {
     fields: [skillEvents.userId],

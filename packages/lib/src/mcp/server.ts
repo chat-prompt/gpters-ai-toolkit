@@ -8,7 +8,7 @@
 
 import { MCP_TOOLS } from './tools'
 import { executeTool, listPrompts, getPrompt } from './handlers'
-import type { McpToolResponse, McpPromptResult, GetPromptInput } from './types'
+import type { McpToolResponse, McpPromptResult, GetPromptInput, ToolExecutionMeta } from './types'
 
 // MCP Protocol types
 interface McpRequest {
@@ -290,7 +290,7 @@ export async function handleSimpleRequest(
   userRole?: string,
   orgId?: string,
   clientType?: string
-): Promise<{ success: boolean; data?: unknown; error?: string }> {
+): Promise<{ success: boolean; data?: unknown; error?: string; meta?: ToolExecutionMeta }> {
   try {
     switch (action) {
       case 'search': {
@@ -298,6 +298,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 
@@ -306,6 +307,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 
@@ -314,6 +316,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 
@@ -334,6 +337,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 
@@ -342,6 +346,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 
@@ -350,6 +355,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 
@@ -358,6 +364,7 @@ export async function handleSimpleRequest(
         return {
           success: !result.isError,
           data: JSON.parse(result.content[0].text),
+          meta: result._meta,
         }
       }
 

@@ -154,8 +154,9 @@ export async function jsonRpcCall<T = unknown>(
 /**
  * MCP 세션을 먼저 초기화한 뒤 JSON-RPC 도구를 호출한다.
  *
- * 분석 이벤트는 MCP 세션 ID를 외래키로 사용하므로, 실행 결과처럼 반드시
- * 저장되어야 하는 보고 명령은 세션 없는 jsonRpcCall 대신 이 함수를 사용한다.
+ * 시작→완료 수명주기와 세션 외래키가 필요한 검증 실행 보고에 사용한다.
+ * 검색·로드·간단한 적용 보고는 명령 하나마다 가짜 대화 세션을 만들지 않고
+ * 세션 없는 jsonRpcCall을 사용하며, 서버가 감사 로그 ID로 멱등 저장한다.
  */
 export async function jsonRpcSessionCall<T = unknown>(
   method: string,

@@ -82,15 +82,18 @@ export function extractSkillId(body: unknown, tool?: string): string | undefined
 
   const rpcBody = body as Record<string, unknown>
   const params = rpcBody.params as Record<string, unknown> | undefined
-  const args = params?.arguments as Record<string, unknown> | undefined
-
-  if (!args) return undefined
+  // JSON-RPC은 params.arguments, 레거시 REST는 body 자체가 arguments 역할을 한다.
+  const args = (params?.arguments as Record<string, unknown> | undefined) ?? rpcBody
 
   switch (tool) {
     case 'get_plugin_content':
       return args.pluginId as string | undefined
     case 'deploy_skill':
       return (args.id as string | undefined) || (args.name as string | undefined)
+    case 'report_skill_outcome':
+    case 'report_skill_execution_started':
+    case 'report_skill_execution':
+      return args.skillId as string | undefined
     default:
       return undefined
   }
@@ -108,9 +111,7 @@ export function extractSearchQuery(body: unknown, tool?: string): string | undef
 
   const rpcBody = body as Record<string, unknown>
   const params = rpcBody.params as Record<string, unknown> | undefined
-  const args = params?.arguments as Record<string, unknown> | undefined
-
-  if (!args) return undefined
+  const args = (params?.arguments as Record<string, unknown> | undefined) ?? rpcBody
 
   if (tool === 'semantic_search' || tool === 'search_plugins') {
     return args.query as string | undefined

@@ -64,8 +64,17 @@ jobs:
 
   test-api:
     name: API Tests
+    # API suite mutates catalog data. Run only when the repository has an isolated
+    # test DB configured and an owner explicitly enables the workflow variable.
+    if: ${{ vars.RUN_ISOLATED_API_TESTS == 'true' }}
     runs-on: ubuntu-latest
     needs: build
+    env:
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      TEST_API_URL: http://127.0.0.1:3100
+      CONFIRM_ISOLATED_API_TESTS: run-mutating-api-tests
+      RUN_DB_TEST_CLEANUP: 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -81,6 +90,20 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Start isolated API server
+        run: pnpm --filter @gpters/web exec next dev -p 3100 > /tmp/aitk-api-test-server.log 2>&1 &
+
+      - name: Wait for isolated API server
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/auth/signin >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/aitk-api-test-server.log
+          exit 1
 
       - name: Run API tests
         run: pnpm test:api

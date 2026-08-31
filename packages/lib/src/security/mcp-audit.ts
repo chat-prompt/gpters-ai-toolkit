@@ -178,10 +178,14 @@ export async function createAuditContext(
 
 /**
  * Log MCP API request
+ *
+ * @returns 저장된 감사 로그 ID. 감사 기록에 실패하면 null
  */
-export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
+export async function logMcpRequest(entry: McpAuditEntry): Promise<string | null> {
+  const auditLogId = crypto.randomUUID()
   try {
     await db.insert(mcpAuditLogs).values({
+      id: auditLogId,
       method: entry.method,
       tool: entry.tool,
       accessTokenId: entry.accessTokenId,
@@ -223,9 +227,11 @@ export async function logMcpRequest(entry: McpAuditEntry): Promise<void> {
       search_result_count: entry.searchResults?.length,
       search_top_score: entry.searchResults?.[0]?.score,
     })
+    return auditLogId
   } catch (error) {
     // Don't let audit logging failures break the request
     log.error('Failed to write audit log', error)
+    return null
   }
 }
 

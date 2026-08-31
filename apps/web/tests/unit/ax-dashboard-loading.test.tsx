@@ -51,15 +51,16 @@ describe('AxDashboard 패널 요청', () => {
     render(<AxDashboard panels={PANELS} isAdmin={false} />)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    expect(fetchMock).toHaveBeenCalledWith('/api/ax/overview?days=30', expect.any(Object))
-    expect(fetchMock).toHaveBeenCalledWith('/api/ax/shared-skills?days=30', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/ax/overview?days=7', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/ax/shared-skills?days=7', expect.any(Object))
+    expect(screen.getByRole('button', { name: '7일' }).getAttribute('aria-pressed')).toBe('true')
 
-    fireEvent.click(screen.getByRole('button', { name: '7일' }))
+    fireEvent.click(screen.getByRole('button', { name: '30일' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/ax/overview?days=7', expect.any(Object))
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/ax/overview?days=30', expect.any(Object))
     expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
-      '/api/ax/shared-skills?days=7'
+      '/api/ax/shared-skills?days=30'
     )
   })
 

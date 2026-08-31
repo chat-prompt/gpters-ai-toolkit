@@ -25,7 +25,10 @@
     "db:migrate:ax-production": "tsx scripts/apply-ax-child-migrations.ts --production",
     "db:migrate:agent-collector-child": "tsx scripts/apply-agent-telemetry-collector-migration.ts",
     "db:migrate:agent-collector-production": "tsx scripts/apply-agent-telemetry-collector-migration.ts --production",
-    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts"
+    "db:migrate:sessionless-skills-child": "tsx scripts/apply-sessionless-skill-events-migration.ts",
+    "db:migrate:sessionless-skills-production": "tsx scripts/apply-sessionless-skill-events-migration.ts --production",
+    "db:backfill:sessionless-skills": "tsx scripts/backfill-sessionless-skill-events.ts",
+    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts tests/sessionless-skill-events-guard.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

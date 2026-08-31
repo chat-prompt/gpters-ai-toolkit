@@ -10,11 +10,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run tests/unit",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:api": "vitest run tests/api",
+    "test:api": "node scripts/assert-isolated-api-tests.mjs && vitest run tests/api",
     "clean": "rm -rf .next .turbo node_modules"
   },
   "dependencies": {

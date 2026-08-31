@@ -25,7 +25,9 @@ export const ZERO_RESULT_SKILL_ID = '__zero_result__'
  * @param params.results - Array of search result items with rank and score
  */
 export async function recordSearchEvents(params: {
-  sessionId: string
+  sessionId?: string | null
+  sourceAuditLogId?: string
+  occurredAt?: Date
   userId?: string
   query: string
   results: Array<{ itemId: string; rank: number; score: number }>
@@ -33,29 +35,37 @@ export async function recordSearchEvents(params: {
   try {
     if (params.results.length === 0) {
       // Record zero-result search event for accurate zero-result rate tracking
-      await db.insert(skillEvents).values({
-        sessionId: params.sessionId,
+      const insert = db.insert(skillEvents).values({
+        sessionId: params.sessionId ?? null,
         userId: params.userId,
         skillId: ZERO_RESULT_SKILL_ID,
         action: 'search' as const,
         query: params.query,
         rank: 0,
         score: 0,
+        ...(params.sourceAuditLogId && { sourceAuditLogId: params.sourceAuditLogId }),
+        ...(params.occurredAt && { createdAt: params.occurredAt }),
       })
+      if (params.sourceAuditLogId) await insert.onConflictDoNothing()
+      else await insert
       return
     }
 
     const rows = params.results.map((r) => ({
-      sessionId: params.sessionId,
+      sessionId: params.sessionId ?? null,
       userId: params.userId,
       skillId: r.itemId,
       action: 'search' as const,
       query: params.query,
       rank: r.rank,
       score: Math.round(r.score * 100),
+      ...(params.sourceAuditLogId && { sourceAuditLogId: params.sourceAuditLogId }),
+      ...(params.occurredAt && { createdAt: params.occurredAt }),
     }))
 
-    await db.insert(skillEvents).values(rows)
+    const insert = db.insert(skillEvents).values(rows)
+    if (params.sourceAuditLogId) await insert.onConflictDoNothing()
+    else await insert
   } catch (error) {
     log.warn('Failed to record search events', { error, sessionId: params.sessionId })
   }
@@ -70,17 +80,23 @@ export async function recordSearchEvents(params: {
  * @param params.skillId - ID of the loaded skill
  */
 export async function recordLoadEvent(params: {
-  sessionId: string
+  sessionId?: string | null
+  sourceAuditLogId?: string
+  occurredAt?: Date
   userId?: string
   skillId: string
 }): Promise<void> {
   try {
-    await db.insert(skillEvents).values({
-      sessionId: params.sessionId,
+    const insert = db.insert(skillEvents).values({
+      sessionId: params.sessionId ?? null,
       userId: params.userId,
       skillId: params.skillId,
       action: 'load',
+      ...(params.sourceAuditLogId && { sourceAuditLogId: params.sourceAuditLogId }),
+      ...(params.occurredAt && { createdAt: params.occurredAt }),
     })
+    if (params.sourceAuditLogId) await insert.onConflictDoNothing()
+    else await insert
   } catch (error) {
     log.warn('Failed to record load event', { error, sessionId: params.sessionId })
   }
@@ -97,20 +113,26 @@ export async function recordLoadEvent(params: {
  * @param params.summary - Optional summary of what happened
  */
 export async function recordOutcomeEvent(params: {
-  sessionId: string
+  sessionId?: string | null
+  sourceAuditLogId?: string
+  occurredAt?: Date
   userId?: string
   skillId: string
   applied: boolean
   summary?: string
 }): Promise<void> {
   try {
-    await db.insert(skillEvents).values({
-      sessionId: params.sessionId,
+    const insert = db.insert(skillEvents).values({
+      sessionId: params.sessionId ?? null,
       userId: params.userId,
       skillId: params.skillId,
       action: params.applied ? 'apply' : 'skip',
       context: params.summary,
+      ...(params.sourceAuditLogId && { sourceAuditLogId: params.sourceAuditLogId }),
+      ...(params.occurredAt && { createdAt: params.occurredAt }),
     })
+    if (params.sourceAuditLogId) await insert.onConflictDoNothing()
+    else await insert
   } catch (error) {
     log.warn('Failed to record outcome event', { error, sessionId: params.sessionId })
   }
@@ -169,7 +191,9 @@ export async function recordAutoSkipEvents(params: {
  * @param params.reason - Reason for skipping
  */
 export async function recordSearchSkipEvent(params: {
-  sessionId: string
+  sessionId?: string | null
+  sourceAuditLogId?: string
+  occurredAt?: Date
   userId?: string
   query: string
   resultIds: string[]
@@ -179,15 +203,19 @@ export async function recordSearchSkipEvent(params: {
     if (params.resultIds.length === 0) return
 
     const rows = params.resultIds.map((id) => ({
-      sessionId: params.sessionId,
+      sessionId: params.sessionId ?? null,
       userId: params.userId,
       skillId: id,
       action: 'skip' as const,
       query: params.query,
       context: params.reason,
+      ...(params.sourceAuditLogId && { sourceAuditLogId: params.sourceAuditLogId }),
+      ...(params.occurredAt && { createdAt: params.occurredAt }),
     }))
 
-    await db.insert(skillEvents).values(rows)
+    const insert = db.insert(skillEvents).values(rows)
+    if (params.sourceAuditLogId) await insert.onConflictDoNothing()
+    else await insert
   } catch (error) {
     log.warn('Failed to record search skip events', { error, sessionId: params.sessionId })
   }
@@ -202,17 +230,23 @@ export async function recordSearchSkipEvent(params: {
  * @param params.skillId - ID of the deployed skill
  */
 export async function recordDeployEvent(params: {
-  sessionId: string
+  sessionId?: string | null
+  sourceAuditLogId?: string
+  occurredAt?: Date
   userId?: string
   skillId: string
 }): Promise<void> {
   try {
-    await db.insert(skillEvents).values({
-      sessionId: params.sessionId,
+    const insert = db.insert(skillEvents).values({
+      sessionId: params.sessionId ?? null,
       userId: params.userId,
       skillId: params.skillId,
       action: 'deploy',
+      ...(params.sourceAuditLogId && { sourceAuditLogId: params.sourceAuditLogId }),
+      ...(params.occurredAt && { createdAt: params.occurredAt }),
     })
+    if (params.sourceAuditLogId) await insert.onConflictDoNothing()
+    else await insert
   } catch (error) {
     log.warn('Failed to record deploy event', { error, sessionId: params.sessionId })
   }
@@ -296,4 +330,3 @@ export async function recordExerciseApplyEvent(params: {
     log.warn('Failed to record exercise apply event', { error, sessionId: params.sessionId })
   }
 }
-
