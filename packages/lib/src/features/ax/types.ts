@@ -108,7 +108,7 @@ export interface AxOverviewMemberRow {
 /** 성과 요약 패널 — 실제로 계측되는 지표만 담는다 */
 export interface AxOverviewData {
   /**
-   * 누적 참여 인원 — 스킬 상세 로드·적용 보고를 한 번이라도 남긴 계정 수.
+   * 누적 참여 인원 — 스킬 적용 보고를 한 번이라도 남긴 계정 수.
    * 계정이 식별된 사용자만 센다 — 익명 세션은 "인원"에 넣지 않는다.
    * (기간별 활성 인원은 스킬 사용량 패널의 activeUsers가 담당한다)
    */
@@ -116,13 +116,23 @@ export interface AxOverviewData {
   /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
   catalogSkills: number
   /**
-   * 잔디밭용 일별 상세 로드·적용 보고 수 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
+   * 잔디밭용 일별 적용 보고 수 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
    * 날짜가 지나면 창이 최신 쪽으로 굴러간다.
    */
-  grassDaily: Array<{ date: string; events: number }>
-  /** 일자별 상세 로드·적용 보고 사용자 수 (조회 기간) */
-  dailyActiveUsers: Array<{ date: string; users: number }>
-  /** 시간대별 상세 로드·적용 보고 사용자 수 — KST 기준 0~23시 (조회 기간) */
+  grassDaily: Array<{ date: string; events: number; loads?: number }>
+  /** 일자별 로드 코호트와 적용 전환 — 연결 가능한 세션×스킬 기준 */
+  dailySkillFlow: Array<{
+    date: string
+    /** 같은 세션에서 앞선 로드 없이 적용된 고유 세션×스킬(세션 없는 적용은 이벤트 단위) */
+    directApplied: number
+    /** 해당 날짜에 기록된 전체 로드 이벤트 수(세션 없는 로드 포함) */
+    loaded: number
+    /** 위 로드 중 세션 ID가 있어 적용 여부를 정확히 연결할 수 있는 고유 세션×스킬 */
+    linkableLoaded: number
+    /** 위 로드 중 이후 적용 보고까지 이어진 고유 세션×스킬 */
+    appliedAfterLoad: number
+  }>
+  /** 시간대별 적용 보고 사용자 수 — KST 기준 0~23시 (조회 기간) */
   hourlyDensity: Array<{ hour: number; users: number }>
   /**
    * 사용자별 사용량 (조회 기간, 사용량 내림차순).
@@ -235,19 +245,19 @@ export interface AxSkillUsageRow {
 export interface AxSkillUsageData {
   /** 기간 내 전체 스킬 이벤트 수 */
   totalEvents: number
-  /** 기간 내 서버가 관측한 콘텐츠 로드+적용 보고 이벤트 수 */
+  /** 기간 내 실제 사용으로 해석하는 적용 보고 이벤트 수 */
   meaningfulUses: number
-  /** 기간 내 콘텐츠 로드 또는 적용 보고를 남긴 고유 사용자 수 */
+  /** 기간 내 적용 보고를 남긴 고유 사용자 수 */
   activeUsers: number
-  /** 콘텐츠 로드 또는 적용 보고가 발생한 정식 MCP 대화 세션 수 */
+  /** 적용 보고가 발생한 정식 MCP 대화 세션 수 */
   sessions: number
   /** 검색·로드·적용 등 행동별 이벤트 수 */
   actionTotals: Record<'search' | 'load' | 'apply' | 'skip' | 'deploy', number>
-  /** 사용량 상위 스킬 (loaded+applied 기준 내림차순) */
+  /** 사용량 상위 스킬 (applied 우선, loaded 보조 내림차순) */
   skills: AxSkillUsageRow[]
-  /** 일자별 콘텐츠 로드·적용 보고 추이 */
+  /** 일자별 적용 보고 추이 */
   daily: Array<{ date: string; events: number }>
-  /** 카탈로그에는 있으나 기간 내 load/apply가 0인 스킬의 전체 수 */
+  /** 카탈로그에는 있으나 기간 내 apply가 0인 스킬의 전체 수 */
   totalUnusedSkills: number
   /** 정리 우선순위 상위 장기 미관측 스킬 */
   unusedSkills: Array<{

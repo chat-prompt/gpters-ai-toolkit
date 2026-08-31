@@ -122,12 +122,12 @@ describe('skillUsagePanel', () => {
     expect(skillUsagePanel.meta.visibility).toBe('org')
   })
 
-  it('스킬별 action을 피벗하고 loaded+applied 내림차순으로 정렬한다', async () => {
+  it('스킬별 action을 피벗하고 실제 적용 보고 내림차순으로 정렬한다', async () => {
     queueQueries([
       [{
-        totalEvents: 42,
+        totalEvents: 61,
         searched: 16,
-        loaded: 10,
+        loaded: 29,
         applied: 6,
         skipped: 5,
         deployed: 5,
@@ -139,7 +139,7 @@ describe('skillUsagePanel', () => {
           skillId: 'low-usage',
           name: '적게 쓴 스킬',
           searched: 9,
-          loaded: 1,
+          loaded: 20,
           applied: 0,
           skipped: 4,
           deployed: 0,
@@ -190,14 +190,18 @@ describe('skillUsagePanel', () => {
     expect(result.data).not.toBeNull()
 
     const data = result.data!
-    expect(data.totalEvents).toBe(42)
-    expect(data.meaningfulUses).toBe(16)
+    expect(data.totalEvents).toBe(61)
+    expect(data.meaningfulUses).toBe(6)
     expect(data.activeUsers).toBe(5)
     expect(data.sessions).toBe(7)
-    expect(data.actionTotals).toEqual({ search: 16, load: 10, apply: 6, skip: 5, deploy: 5 })
+    expect(data.actionTotals).toEqual({ search: 16, load: 29, apply: 6, skip: 5, deploy: 5 })
 
-    // loaded+applied: top-skill 10 > unnamed-skill 5 > low-usage 1
+    // applied: top-skill 4 > unnamed-skill 2 > low-usage 0
     expect(data.skills.map((s) => s.skillId)).toEqual(['top-skill', 'unnamed-skill', 'low-usage'])
+    expect(result.highlights).toEqual([
+      { label: '실제 적용 보고', value: '6', hint: '건', periodLinked: true },
+      { label: '실제 사용 구성원', value: '5', hint: '명', periodLinked: true },
+    ])
 
     expect(data.skills[0]).toEqual({
       skillId: 'top-skill',
@@ -262,7 +266,7 @@ describe('skillUsagePanel', () => {
     const data = (await skillUsagePanel.load({ days: 7, isAdmin: false })).data!
 
     expect(data.totalEvents).toBe(11)
-    expect(data.meaningfulUses).toBe(5)
+    expect(data.meaningfulUses).toBe(2)
     expect(data.activeUsers).toBe(2)
     expect(data.sessions).toBe(3)
     expect(data.skills[0].loaded).toBe(3)
@@ -375,11 +379,12 @@ describe('skillUsagePanel', () => {
       expect(innerJoinCalls).toHaveLength(3)
     })
 
-    it('일자별 사용 추이는 검색 노출을 빼고 로드·적용 보고만 센다', async () => {
+    it('일자별 실제 사용 추이는 적용 보고만 센다', async () => {
       await loadPanel()
 
       const values = collectValues(whereConditions[DAILY_WHERE])
-      expect(values).toEqual(expect.arrayContaining(['load', 'apply']))
+      expect(values).toContain('apply')
+      expect(values).not.toContain('load')
       expect(values).not.toContain('search')
       expect(values).not.toContain('skip')
       expect(values).not.toContain('deploy')

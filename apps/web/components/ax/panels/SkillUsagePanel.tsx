@@ -41,7 +41,7 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
     <div className="space-y-10">
       {/* 이벤트 수·사용자 수는 상단 밴드에 이미 나가므로, 밴드에 없는 대화 세션만 짚는다 */}
       <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        로드·적용 보고가 기록된 {formatCount(data.sessions)}개 대화 세션 · 서버 관측 독립 이벤트{' '}
+        실제 적용 보고가 기록된 {formatCount(data.sessions)}개 대화 세션 · 서버 관측 독립 이벤트{' '}
         {formatCount(data.totalEvents)}건
       </p>
 
@@ -100,7 +100,7 @@ function ActionEventSummary({ totals }: { totals: AxSkillUsageData['actionTotals
  * 스킬 이름 칸 안에만 사용량 비례 막대를 깔아, 숫자 칸을 침범하지 않으면서도
  * 표를 읽지 않고 순위 차이가 보이게 한다.
  *
- * @param skills - 서버 관측량(로드+적용 보고) 내림차순으로 정렬된 스킬 목록
+ * @param skills - 실제 적용 보고 내림차순으로 정렬된 스킬 목록
  */
 function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
   const { rows: shown, pager } = usePagedRows(skills, SKILL_PAGE_SIZE)
@@ -110,7 +110,7 @@ function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
   return (
     <div>
       <p className="mb-3 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        스킬별 독립 이벤트 · 순위는 로드+적용 보고 기준 · 주황색 바는 선택 기간 상대값(1위=100%)
+        스킬별 독립 이벤트 · 순위와 주황색 바는 실제 적용 보고 기준(1위=100%)
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
@@ -138,7 +138,7 @@ function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
                 </td>
                 <td
                   className={`relative ${TD}`}
-                  title={`선택 기간 로드+적용 보고 ${formatCount(activity(skill))}건 · 1위 대비 ${Math.round((activity(skill) / max) * 100)}%`}
+                  title={`선택 기간 실제 적용 보고 ${formatCount(activity(skill))}건 · 1위 대비 ${Math.round((activity(skill) / max) * 100)}%`}
                 >
                   {/* 사용량 비례 막대 — 이름 칸 안에서만 찬다 */}
                   <span
@@ -174,7 +174,7 @@ function SkillTable({ skills }: { skills: AxSkillUsageRow[] }) {
 }
 
 /**
- * 기간 내 로드·적용 보고가 없는 스킬 정리 우선순위 (접힘)
+ * 기간 내 실제 적용 보고가 없는 스킬 정리 우선순위 (접힘)
  *
  * 이름을 한 줄로 이어 붙이면 줄바꿈이 아무 데서나 일어나 읽히지 않는다.
  * 격자로 세워 한 칸에 한 이름씩 두고, 긴 이름은 잘라 칸을 지킨다.
@@ -191,20 +191,20 @@ function UnusedSkillsDetails({
   return (
     <details className="border-t border-[var(--border-subtle)] pt-5">
       <summary className="cursor-pointer list-none font-mono text-[11px] tabular-nums text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--text-primary)]">
-        기간 내 로드·적용 보고 없는 스킬 {formatCount(total)}개
+        기간 내 실제 적용 보고 없는 스킬 {formatCount(total)}개
         {total > skills.length && ` · 정리 우선순위 상위 ${formatCount(skills.length)}개 표시`}
       </summary>
       <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
-        한 번도 로드·적용이 관측되지 않은 스킬부터, 마지막 관측이 오래되고 누적 대화 세션이 적은
-        순서입니다. 검색 노출과 스킵은 제외하며, 서버 호출 없는 로컬 재사용은 알 수 없습니다.
+        한 번도 적용 보고가 관측되지 않은 스킬부터, 마지막 적용이 오래되고 누적 적용 세션이 적은
+        순서입니다. 검색 노출과 로드·스킵은 실제 사용에서 제외하며, 서버 호출 없는 로컬 재사용은 알 수 없습니다.
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH}`}>스킬</th>
-              <th className={`text-right ${TD} ${TH}`}>마지막 로드·적용</th>
-              <th className={`text-right ${TD} ${TH}`}>누적 대화 세션</th>
+              <th className={`text-right ${TD} ${TH}`}>마지막 실제 적용</th>
+              <th className={`text-right ${TD} ${TH}`}>누적 적용 세션</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -244,11 +244,11 @@ function NumberCell({ value, emphasized = false }: { value: number; emphasized?:
 }
 
 /**
- * 순위를 가르는 관측량 — 콘텐츠 로드+적용 보고
+ * 순위를 가르는 실제 사용량 — 적용 보고
  *
  * @param skill - 스킬 한 줄
- * @returns 로드와 적용의 합
+ * @returns 적용 보고 수
  */
 function activity(skill: AxSkillUsageRow): number {
-  return skill.loaded + skill.applied
+  return skill.applied
 }

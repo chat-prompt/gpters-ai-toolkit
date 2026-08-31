@@ -22,12 +22,12 @@ const SKILL_LIMIT = 50
  * `exercise_search`·`exercise_apply`는 실습 생성 엔진이 남기는 기계 트래픽이라
  * 사용자 없이 건수만 올린다. 행동별 현황과 스킬별 표에서는 이 목록만 사용한다.
  * `suggest`는 기능 자체가 제거돼(2026-05-18) 새 행이 쌓이지 않으므로 포함하지 않는다.
- * 사용 지표는 아래 OBSERVED_USAGE_ACTIONS로 더 좁혀 검색 노출 등을 제외한다.
+ * 실제 사용 지표는 아래 ACTUAL_USAGE_ACTIONS로 더 좁혀 적용 보고만 센다.
  */
 export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as const
 
-/** 서버가 스킬의 상세 확인 또는 적용 보고를 직접 관측한 행위 — 검색 노출·스킵은 제외한다 */
-export const OBSERVED_USAGE_ACTIONS = ['load', 'apply'] as const
+/** 실제 사용으로 해석하는 서버 신호 — 에이전트의 명시적인 적용 보고만 센다 */
+export const ACTUAL_USAGE_ACTIONS = ['apply'] as const
 
 const meta: AxPanelMeta = {
   id: 'skill-usage',
@@ -119,8 +119,8 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           applied: actionCount('apply'),
           skipped: actionCount('skip'),
           deployed: actionCount('deploy'),
-          activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)})::int`,
-          sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)})::int`,
+          activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
+          sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
@@ -136,36 +136,36 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           applied: actionCount('apply'),
           skipped: actionCount('skip'),
           deployed: actionCount('deploy'),
-          users: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)})::int`,
-          lastUsedAt: sql<Date | null>`max(${skillEvents.createdAt})`,
+          users: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
+          lastUsedAt: sql<Date | null>`max(${skillEvents.createdAt}) filter (where ${skillEvents.action} = 'apply')`,
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
         .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
         .groupBy(skillEvents.skillId, catalogItems.name)
 
-      // 3. 일자별 사용 신호 추이 — 검색 노출·스킵·배포는 제외한다
+      // 3. 일자별 실제 사용 추이 — 명시적인 적용 보고만 센다
       const dailyRows = await db
         .select({ date: dayExpr, events: sql<number>`count(*)::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)))
+        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)))
         .groupBy(dayExpr)
         .orderBy(dayExpr)
 
-      // 4. 기간 내 서버가 관측한 load/apply가 없는 카탈로그 스킬
+      // 4. 기간 내 적용 보고가 없는 카탈로그 스킬
       //    빈 배열 notInArray는 Drizzle에서 깨지므로 서브쿼리로 처리한다
       //    검색 노출·스킵만 있는 스킬도 관리 관점에서는 미관측이다. 정리 우선순위는
-      //    전 기간의 마지막 load/apply가 오래된 순, 같은 시각이면 누적 대화 세션이 적은 순이다.
+      //    전 기간의 마지막 적용 보고가 오래된 순, 같은 시각이면 누적 적용 세션이 적은 순이다.
       const allTimeLastUsedAt = sql<Date | null>`(
         select max("skill_events"."created_at") from "skill_events"
         where "skill_events"."skill_id" = "catalog_items"."id"
-          and ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)}
+          and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
       )`
       const allTimeUsageSessions = sql<number>`(
         select count(distinct "skill_events"."session_id")::int from "skill_events"
         where "skill_events"."skill_id" = "catalog_items"."id"
-          and ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)}
+          and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
       )`
       const unusedRows = await db
         .select({
@@ -184,7 +184,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             sql`${catalogItems.id} not in (
               select distinct ${skillEvents.skillId} from ${skillEvents}
               where ${skillEvents.createdAt} >= ${since.toISOString()}
-                and ${inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)}
+                and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
             )`
           )
         )
@@ -208,13 +208,13 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           users: num(row.users),
           lastUsedAt: toIso(row.lastUsedAt),
         }))
-        .sort((a, b) => b.loaded + b.applied - (a.loaded + a.applied))
+        .sort((a, b) => b.applied - a.applied || b.loaded - a.loaded)
         .slice(0, SKILL_LIMIT)
 
       const totalEvents = num(totals?.totalEvents)
       const loaded = num(totals?.loaded)
       const applied = num(totals?.applied)
-      const meaningfulUses = loaded + applied
+      const meaningfulUses = applied
       const activeUsers = num(totals?.activeUsers)
 
       return panelOk(
@@ -247,8 +247,8 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         },
         [
           // 기간 라벨은 붙이지 않는다 — 화면의 기간 선택이 이 두 타일 바로 옆에 있다
-          { label: '콘텐츠 로드·적용 보고', value: meaningfulUses.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
-          { label: '로드·적용 사용자', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
+          { label: '실제 적용 보고', value: meaningfulUses.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
+          { label: '실제 사용 구성원', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
         ]
       )
     } catch (error) {
