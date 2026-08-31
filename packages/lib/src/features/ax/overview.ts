@@ -5,15 +5,15 @@
  * 활성 인원·일별 추이·시간대별 활성 인원은 skill_events에서 나오고,
  * 완료 세션·완주율·절감 시간·부서별 참여는 계측 근거가 없어 `unmeasured`로 밝힌다.
  *
- * 모집단은 스킬 사용량 패널과 동일하다(단일 GPTers 카탈로그 × CORE_ACTIONS).
- * 두 패널이 다른 숫자를 말하면 대시보드 전체의 신뢰가 무너진다.
+ * 사용 지표는 스킬 사용량 패널과 동일하게 상세 로드·적용 보고만 센다.
+ * 검색 결과 노출은 발견 지표이지 사용이 아니므로 요약 모집단에서 제외한다.
  */
 
 import { db, skillEvents, catalogItems, users } from '@gpters/db'
 import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
-import { CORE_ACTIONS } from './skills'
+import { OBSERVED_USAGE_ACTIONS } from './skills'
 import type { AxOverviewData, AxOverviewMemberRow, AxPanel, AxPanelMeta } from './types'
 
 const log = createLogger('ax-overview')
@@ -152,11 +152,11 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
       new Date(now.getTime() - (GRASS_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000)
     )
 
-    /** 모든 쿼리가 공유하는 모집단 조건 — 카탈로그에 있는 스킬 × 사람 행위 */
-    const corePopulation = (from?: Date) =>
+    /** 모든 사용 쿼리가 공유하는 모집단 — 카탈로그 스킬의 상세 로드·적용 보고 */
+    const usagePopulation = (from?: Date) =>
       from
-        ? and(gte(skillEvents.createdAt, from), inArray(skillEvents.action, CORE_ACTIONS))
-        : inArray(skillEvents.action, CORE_ACTIONS)
+        ? and(gte(skillEvents.createdAt, from), inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS))
+        : inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)
 
     try {
       // 1. 누적 참여 인원 — 전 기간
@@ -164,7 +164,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .select({ users: sql<number>`count(distinct ${skillEvents.userId})::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(corePopulation())
+        .where(usagePopulation())
 
       // 2. 팀 스킬(aitk 카탈로그) 수 — 현재 시점 인벤토리. 미사용 스킬 쿼리와 같은 발행 기준
       const [catalog] = await db
@@ -182,7 +182,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .select({ date: kstDayExpr, events: sql<number>`count(*)::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(corePopulation(grassSince))
+        .where(usagePopulation(grassSince))
         .groupBy(kstDayExpr)
         .orderBy(kstDayExpr)
 
@@ -191,7 +191,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .select({ date: kstDayExpr, users: sql<number>`count(distinct ${skillEvents.userId})::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(corePopulation(since))
+        .where(usagePopulation(since))
         .groupBy(kstDayExpr)
         .orderBy(kstDayExpr)
 
@@ -203,7 +203,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(corePopulation(since))
+        .where(usagePopulation(since))
         .groupBy(kstHourExpr)
         .orderBy(kstHourExpr)
 
@@ -212,14 +212,14 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         ? await db
             .select({
               name: users.name,
-              events: sql<number>`count(*)::int`,
+              loaded: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
               applied: sql<number>`count(*) filter (where ${skillEvents.action} = 'apply')::int`,
               lastActiveAt: sql<Date | null>`max(${skillEvents.createdAt})`,
             })
             .from(skillEvents)
             .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
             .innerJoin(users, eq(users.id, skillEvents.userId))
-            .where(corePopulation(since))
+            .where(usagePopulation(since))
             .groupBy(users.id, users.name)
             .orderBy(sql`count(*) desc`)
             .limit(MEMBER_LIMIT)
@@ -231,7 +231,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
       const memberUsage: AxOverviewMemberRow[] | null = memberRows
         ? memberRows.map((row) => ({
             name: (row.name ?? '').trim() || '이름 미설정',
-            events: num(row.events),
+            loaded: num(row.loaded),
             applied: num(row.applied),
             lastActiveAt: toIso(row.lastActiveAt),
           }))

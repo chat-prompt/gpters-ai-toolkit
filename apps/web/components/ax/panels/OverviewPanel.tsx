@@ -33,7 +33,7 @@ export function OverviewPanel({ data, days }: AxPanelViewProps<AxOverviewData>) 
     <div className="space-y-10">
       <DailyActiveTrend daily={data.dailyActiveUsers} days={days} />
       <HourlyActiveUsers rows={data.hourlyDensity} />
-      {/* 사용자별 사용량 — 관리자에게만 데이터가 내려온다 */}
+      {/* 사용자별 로드·적용 보고 — 관리자에게만 데이터가 내려온다 */}
       {data.memberUsage !== null && <MemberUsageTable rows={data.memberUsage} days={days} />}
       <UnmeasuredList items={data.unmeasured} />
     </div>
@@ -41,7 +41,7 @@ export function OverviewPanel({ data, days }: AxPanelViewProps<AxOverviewData>) 
 }
 
 /**
- * 사용자별 사용량 표 (관리자 전용)
+ * 사용자별 로드·적용 보고 표 (관리자 전용)
  *
  * 이름 칸에 사용량 비례 막대를 깔아 순위 차이가 표를 읽지 않고도 보이게 한다.
  * 에이전트별 사용량은 별도 에이전트 활동 패널에서 토큰·도구·스킬 신호로 보여준다.
@@ -59,24 +59,24 @@ function MemberUsageTable({
   if (rows.length === 0) {
     return (
       <div>
-        <p className={SECTION_LABEL}>사용자별 사용량</p>
-        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 활동한 사용자가 없습니다.</p>
+        <p className={SECTION_LABEL}>사용자별 로드·적용 보고</p>
+        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 로드·적용 보고가 없습니다.</p>
       </div>
     )
   }
 
-  const max = Math.max(1, ...rows.map((row) => row.events))
+  const max = Math.max(1, ...rows.map((row) => row.loaded + row.applied))
 
   return (
     <div>
-      <p className={SECTION_LABEL}>사용자별 사용량</p>
+      <p className={SECTION_LABEL}>사용자별 로드·적용 보고</p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className="py-2.5 px-3 text-left font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)] w-[36%]">사용자</th>
-              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">관측 이벤트</th>
-              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">적용</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">로드</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">적용 보고</th>
               <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">마지막 활동</th>
             </tr>
           </thead>
@@ -88,12 +88,12 @@ function MemberUsageTable({
                   <span
                     aria-hidden
                     className="absolute inset-y-0 left-0 bg-[var(--brand-primary)]/[0.07]"
-                    style={{ width: `${(row.events / max) * 100}%` }}
+                    style={{ width: `${((row.loaded + row.applied) / max) * 100}%` }}
                   />
                   <span className="relative text-[var(--text-primary)]">{row.name}</span>
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-primary)]">
-                  {formatCount(row.events)}건
+                  {formatCount(row.loaded)}건
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-secondary)]">
                   {formatCount(row.applied)}
@@ -107,9 +107,9 @@ function MemberUsageTable({
         </table>
       </div>
       <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--text-muted)]">
-        관측 이벤트는 검색 결과 노출·스킬 내용 로드·적용 또는 미적용 보고·배포가 서버에
-        기록된 횟수의 합입니다. 적용은 그중 에이전트가 작업에 적용했다고 명시적으로 보고한
-        횟수이며, 성공 여부나 서버 호출 없이 로컬에서 재사용한 횟수는 포함하지 않습니다.
+        로드는 에이전트가 스킬의 전체 지침을 불러온 횟수이고, 적용 보고는 작업에 적용했다고
+        명시적으로 기록한 횟수입니다. 두 값은 독립 신호라 합계가 실제 작업 횟수는 아니며,
+        검색 결과 노출·성공 여부·서버 호출 없이 로컬에서 재사용한 횟수는 포함하지 않습니다.
       </p>
     </div>
   )
@@ -136,8 +136,8 @@ function DailyActiveTrend({
   if (daily.length === 0 || daily.every((point) => point.users === 0)) {
     return (
       <div>
-        <p className={SECTION_LABEL}>일별 활성 인원 (KST)</p>
-        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 기록된 활동이 없습니다.</p>
+        <p className={SECTION_LABEL}>일별 로드·적용 인원 (KST)</p>
+        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 로드·적용 보고가 없습니다.</p>
       </div>
     )
   }
@@ -148,7 +148,7 @@ function DailyActiveTrend({
 
   return (
     <div>
-      <p className={SECTION_LABEL}>일별 활성 인원 (KST)</p>
+      <p className={SECTION_LABEL}>일별 로드·적용 인원 (KST)</p>
       <div className="mt-3 flex h-40 items-end gap-[2px]">
         {daily.map((point) => (
           <div
@@ -191,15 +191,15 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
   if (total === 0) {
     return (
       <div>
-        <p className={SECTION_LABEL}>시간대별 활성 인원 (KST)</p>
-        <p className={`mt-3 ${EMPTY_NOTE}`}>이 기간에 기록된 활동이 없습니다.</p>
+        <p className={SECTION_LABEL}>시간대별 로드·적용 인원 (KST)</p>
+        <p className={`mt-3 ${EMPTY_NOTE}`}>이 기간에 로드·적용 보고가 없습니다.</p>
       </div>
     )
   }
 
   return (
     <div>
-      <p className={SECTION_LABEL}>시간대별 활성 인원 (KST)</p>
+      <p className={SECTION_LABEL}>시간대별 로드·적용 인원 (KST)</p>
       <div className="mt-3 flex h-24 items-end gap-[3px]">
         {rows.map((point) => (
           <div

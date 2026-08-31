@@ -374,6 +374,16 @@ describe('skillUsagePanel', () => {
       expect(whereConditions).toHaveLength(4)
       expect(innerJoinCalls).toHaveLength(3)
     })
+
+    it('일자별 사용 추이는 검색 노출을 빼고 로드·적용 보고만 센다', async () => {
+      await loadPanel()
+
+      const values = collectValues(whereConditions[DAILY_WHERE])
+      expect(values).toEqual(expect.arrayContaining(['load', 'apply']))
+      expect(values).not.toContain('search')
+      expect(values).not.toContain('skip')
+      expect(values).not.toContain('deploy')
+    })
   })
 
   it('쿼리가 실패하면 throw하지 않고 error 상태를 반환한다', async () => {

@@ -17,19 +17,17 @@ const log = createLogger('ax-skills')
 const SKILL_LIMIT = 50
 
 /**
- * 사람이 스킬을 쓴 행위만 센다
+ * 카탈로그에서 서버가 기록하는 핵심 상호작용
  *
  * `exercise_search`·`exercise_apply`는 실습 생성 엔진이 남기는 기계 트래픽이라
- * 사용자 없이 건수만 올린다. 요약 타일과 표가 같은 숫자를 말하도록 모든 쿼리에서 함께 제외한다.
+ * 사용자 없이 건수만 올린다. 행동별 현황과 스킬별 표에서는 이 목록만 사용한다.
  * `suggest`는 기능 자체가 제거돼(2026-05-18) 새 행이 쌓이지 않으므로 포함하지 않는다.
- *
- * 성과 요약 패널(overview)도 이 상수를 그대로 가져다 쓴다 —
- * 두 패널이 서로 다른 모집단을 세면 화면의 숫자가 어긋난다.
+ * 사용 지표는 아래 OBSERVED_USAGE_ACTIONS로 더 좁혀 검색 노출 등을 제외한다.
  */
 export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as const
 
-/** 서버가 스킬에 대한 관심 또는 적용을 직접 관측한 행위 — 검색 노출·스킵은 제외한다 */
-const OBSERVED_USAGE_ACTIONS = ['load', 'apply'] as const
+/** 서버가 스킬의 상세 확인 또는 적용 보고를 직접 관측한 행위 — 검색 노출·스킵은 제외한다 */
+export const OBSERVED_USAGE_ACTIONS = ['load', 'apply'] as const
 
 const meta: AxPanelMeta = {
   id: 'skill-usage',
@@ -146,12 +144,12 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
         .groupBy(skillEvents.skillId, catalogItems.name)
 
-      // 3. 일자별 추이 — 요약·표와 같은 모집단
+      // 3. 일자별 사용 신호 추이 — 검색 노출·스킵·배포는 제외한다
       const dailyRows = await db
         .select({ date: dayExpr, events: sql<number>`count(*)::int` })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
+        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, OBSERVED_USAGE_ACTIONS)))
         .groupBy(dayExpr)
         .orderBy(dayExpr)
 
@@ -250,7 +248,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         [
           // 기간 라벨은 붙이지 않는다 — 화면의 기간 선택이 이 두 타일 바로 옆에 있다
           { label: '콘텐츠 로드·적용 보고', value: meaningfulUses.toLocaleString('ko-KR'), hint: '건', periodLinked: true },
-          { label: '관측 사용자', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
+          { label: '로드·적용 사용자', value: activeUsers.toLocaleString('ko-KR'), hint: '명', periodLinked: true },
         ]
       )
     } catch (error) {
