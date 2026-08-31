@@ -303,8 +303,10 @@ pnpm db:studio      # Drizzle Studio
 npm의 Trusted Publisher(OIDC)를 사용하므로 장기 `NPM_TOKEN` secret은 두지 않습니다.
 각 npm 패키지 설정에 GitHub 조직 `chat-prompt`, 저장소 `gpters-ai-toolkit`, workflow
 `release-public-packages.yml`을 publisher로 한 번 등록해야 하며, 같은 버전이 이미
-레지스트리에 있으면 해당 패키지는 건너뜁니다. DB migration과 웹 배포를 먼저
-검증한 뒤 `workflow_dispatch`로 실행하므로 패키지가 서버보다 먼저 배포되지 않습니다.
+레지스트리에 있으면 해당 패키지는 건너뜁니다. 수동 실행 시 `aitk`, `codex-plugin`,
+`all` 중 승인받은 배포 대상만 선택하며 기본값은 `aitk`입니다. 두 패키지를 함께
+승인받지 않았다면 `all`을 선택하지 않습니다. DB migration과 웹 배포를 먼저 검증한
+뒤 `workflow_dispatch`로 실행하므로 패키지가 서버보다 먼저 배포되지 않습니다.
 내부 에이전트 텔레메트리는 npm 공개를 기다리지 않고
 `infra/agent-telemetry/install-from-repo.sh`로 설치하며, 공개 패키지가 필요한
 외부 배포 시점까지 이 workflow를 실행하지 않아도 됩니다.

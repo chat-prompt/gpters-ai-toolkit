@@ -2,6 +2,16 @@ name: Release public packages
 
 on:
   workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish
+        required: true
+        default: aitk
+        type: choice
+        options:
+          - aitk
+          - codex-plugin
+          - all
 
 permissions:
   contents: read
@@ -18,11 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - package: '@gpters/aitk'
-            directory: apps/aitk-cli
-          - package: '@gpters/codex-plugin'
-            directory: apps/codex-plugin
+        include: ${{ fromJSON(inputs.package == 'all' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"},{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]' || inputs.package == 'aitk' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || '[{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]') }}
 
     steps:
       - name: Checkout
