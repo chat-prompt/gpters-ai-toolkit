@@ -318,6 +318,18 @@ describe('MCP Server', () => {
         expect(result.success).toBe(true)
         expect(result.data).toBeDefined()
       })
+
+      it('preserves internal search metadata for REST audit normalization', async () => {
+        const searchResults = [{ itemId: 'eli5-visual', rank: 1, score: 0.91 }]
+        vi.mocked(executeTool).mockResolvedValueOnce({
+          content: [{ type: 'text', text: '{"plugins": []}' }],
+          _meta: { searchResults },
+        })
+
+        const result = await handleSimpleRequest('search', { query: '쉽게 설명' })
+
+        expect(result.meta?.searchResults).toEqual(searchResults)
+      })
     })
 
     describe('get action', () => {

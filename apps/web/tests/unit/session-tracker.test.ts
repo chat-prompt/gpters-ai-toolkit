@@ -50,6 +50,10 @@ describe('extractSkillId', () => {
     expect(extractSkillId(body, 'get_plugin_content')).toBe('code-reviewer')
   })
 
+  it('extracts pluginId from sessionless REST get body', () => {
+    expect(extractSkillId({ pluginId: 'eli5-visual' }, 'get_plugin_content')).toBe('eli5-visual')
+  })
+
   it('extracts id from deploy_skill', () => {
     const body = {
       params: {
@@ -66,6 +70,15 @@ describe('extractSkillId', () => {
       },
     }
     expect(extractSkillId(body, 'deploy_skill')).toBe('New Skill')
+  })
+
+  it('extracts id from sessionless REST deploy body', () => {
+    expect(extractSkillId({ id: 'eli5-visual', name: 'ELI5' }, 'deploy_skill')).toBe('eli5-visual')
+  })
+
+  it('extracts skillId from an outcome report', () => {
+    const body = { params: { arguments: { skillId: 'eli5-visual', applied: true } } }
+    expect(extractSkillId(body, 'report_skill_outcome')).toBe('eli5-visual')
   })
 
   it('returns undefined for unknown tools', () => {
@@ -108,6 +121,10 @@ describe('extractSearchQuery', () => {
       },
     }
     expect(extractSearchQuery(body, 'search_plugins')).toBe('code review')
+  })
+
+  it('extracts query from sessionless REST search body', () => {
+    expect(extractSearchQuery({ query: '쉽게 설명' }, 'search_plugins')).toBe('쉽게 설명')
   })
 
   it('returns undefined for non-search tools', () => {

@@ -552,7 +552,7 @@ export async function POST(request: NextRequest) {
         return
       }
 
-      await logMcpRequest({
+      const auditLogId = await logMcpRequest({
         method,
         tool,
         ...auditCtx,
@@ -656,6 +656,7 @@ export async function POST(request: NextRequest) {
           if (firstCompletion) {
             await recordOutcomeEvent({
               sessionId: sid,
+              sourceAuditLogId: auditLogId ?? undefined,
               userId: auth?.userId,
               skillId: meta.skillExecution.skillId,
               applied: true,
@@ -666,12 +667,17 @@ export async function POST(request: NextRequest) {
           const sess = sessions.get(sid)
           if (sess) sess.reportedSkills.add(meta.skillExecution.skillId)
         }
+      }
 
-        // ── Normalized skill_events recording ──
+      // ── Normalized skill_events recording ──
+      // 단발성 AITK CLI는 정식 MCP 세션이 없어도 성공 사건 자체는 보존한다.
+      // session_id=NULL은 세션·퍼널에서는 빠지고, 사건·사용자 집계에는 포함된다.
+      if (status === 'success' && auditLogId) {
         // Record search events including zero-result searches for accurate metrics
         if (meta?.searchResults !== undefined) {
           await recordSearchEvents({
-            sessionId: sid,
+            sessionId: sid ?? null,
+            sourceAuditLogId: auditLogId,
             userId: auth?.userId,
             query: extractSearchQuery(body, tool) ?? '',
             results: meta.searchResults ?? [],
@@ -682,7 +688,8 @@ export async function POST(request: NextRequest) {
           const skillId = extractSkillId(body, tool)
           if (skillId) {
             await recordLoadEvent({
-              sessionId: sid,
+              sessionId: sid ?? null,
+              sourceAuditLogId: auditLogId,
               userId: auth?.userId,
               skillId,
             }).catch(() => {})
@@ -698,7 +705,8 @@ export async function POST(request: NextRequest) {
 
         if (meta?.skillOutcome) {
           await recordOutcomeEvent({
-            sessionId: sid,
+            sessionId: sid ?? null,
+            sourceAuditLogId: auditLogId,
             userId: auth?.userId,
             skillId: meta.skillOutcome.skillId,
             applied: meta.skillOutcome.applied,
@@ -714,7 +722,8 @@ export async function POST(request: NextRequest) {
 
         if (meta?.searchSkip) {
           await recordSearchSkipEvent({
-            sessionId: sid,
+            sessionId: sid ?? null,
+            sourceAuditLogId: auditLogId,
             userId: auth?.userId,
             query: meta.searchSkip.query,
             resultIds: meta.searchSkip.resultIds,
@@ -726,13 +735,13 @@ export async function POST(request: NextRequest) {
           const skillId = extractSkillId(body, tool)
           if (skillId) {
             await recordDeployEvent({
-              sessionId: sid,
+              sessionId: sid ?? null,
+              sourceAuditLogId: auditLogId,
               userId: auth?.userId,
               skillId,
             }).catch(() => {})
           }
         }
-
       }
     })
   }
@@ -777,6 +786,7 @@ export async function POST(request: NextRequest) {
       get: 'get_plugin_content',
       search: 'search_plugins',
       list: 'list_plugins',
+      deploy: 'deploy_skill',
     }
 
     // Simple REST mode (action parameter)
@@ -867,10 +877,13 @@ export async function POST(request: NextRequest) {
         REST_ACTION_TO_TOOL[action],
         result.success ? 'success' : 'error',
         body,
-        result.success ? undefined : { code: 'REQUEST_FAILED', message: result.error }
+        result.success ? undefined : { code: 'REQUEST_FAILED', message: result.error },
+        result.meta
       )
 
-      return NextResponse.json(result, {
+      // 내부 분석 메타데이터는 감사/정규화 기록에만 쓰고 REST 응답에는 노출하지 않는다.
+      const { meta: _meta, ...publicResult } = result
+      return NextResponse.json(publicResult, {
         status: result.success ? 200 : 400,
         headers: corsHeaders,
       })
