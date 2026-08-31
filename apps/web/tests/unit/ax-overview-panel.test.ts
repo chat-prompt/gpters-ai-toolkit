@@ -197,7 +197,7 @@ describe('overviewPanel', () => {
     expect(innerJoinCalls).toBe(4)
   })
 
-  it('모든 쿼리가 CORE_ACTIONS 필터를 쓰고, 누적 쿼리만 날짜 필터가 없다', async () => {
+  it('사용 지표는 로드·적용 보고만 세고, 누적 쿼리만 날짜 필터가 없다', async () => {
     queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
@@ -215,10 +215,10 @@ describe('overviewPanel', () => {
         continue
       }
 
-      // 기계 트래픽(exercise_*)이 섞이면 스킬 사용량 패널과 숫자가 어긋난다
-      expect(values, `쿼리 ${index} CORE_ACTIONS`).toEqual(
-        expect.arrayContaining(['search', 'load', 'apply', 'skip', 'deploy'])
-      )
+      expect(values, `쿼리 ${index} 사용 신호`).toEqual(expect.arrayContaining(['load', 'apply']))
+      expect(values, `쿼리 ${index} 검색 노출 제외`).not.toContain('search')
+      expect(values, `쿼리 ${index} 스킵 제외`).not.toContain('skip')
+      expect(values, `쿼리 ${index} 배포 제외`).not.toContain('deploy')
       expect(values, `쿼리 ${index} exercise 제외`).not.toContain('exercise_apply')
 
       if (index === 0) {
@@ -269,16 +269,16 @@ describe('overviewPanel', () => {
       [],
       [],
       [
-        { name: '하영', events: 40, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
-        { name: null, events: 3, applied: 0, lastActiveAt: null },
+        { name: '하영', loaded: 31, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
+        { name: null, loaded: 3, applied: 0, lastActiveAt: null },
       ],
     ])
 
     const data = (await overviewPanel.load({ days: 30, isAdmin: true })).data!
 
     expect(data.memberUsage).toEqual([
-      { name: '하영', events: 40, applied: 9, lastActiveAt: '2026-08-18T02:00:00.000Z' },
-      { name: '이름 미설정', events: 3, applied: 0, lastActiveAt: null },
+      { name: '하영', loaded: 31, applied: 9, lastActiveAt: '2026-08-18T02:00:00.000Z' },
+      { name: '이름 미설정', loaded: 3, applied: 0, lastActiveAt: null },
     ])
   })
 

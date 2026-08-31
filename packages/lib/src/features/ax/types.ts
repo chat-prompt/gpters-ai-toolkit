@@ -97,9 +97,9 @@ export interface AxPanel<T = unknown> {
 export interface AxOverviewMemberRow {
   /** 계정 표시 이름. 프로필에 이름이 없으면 "이름 미설정" */
   name: string
-  /** 기간 내 스킬 이벤트 수 */
-  events: number
-  /** 그중 실제 적용(apply) 수 */
+  /** 기간 내 스킬 상세 콘텐츠 로드 수 */
+  loaded: number
+  /** 기간 내 적용(apply) 보고 수 */
   applied: number
   /** 마지막 활동 시각 (ISO 8601) */
   lastActiveAt: string | null
@@ -108,7 +108,7 @@ export interface AxOverviewMemberRow {
 /** 성과 요약 패널 — 실제로 계측되는 지표만 담는다 */
 export interface AxOverviewData {
   /**
-   * 누적 참여 인원 — 스킬 이벤트를 한 번이라도 남긴 계정 수.
+   * 누적 참여 인원 — 스킬 상세 로드·적용 보고를 한 번이라도 남긴 계정 수.
    * 계정이 식별된 사용자만 센다 — 익명 세션은 "인원"에 넣지 않는다.
    * (기간별 활성 인원은 스킬 사용량 패널의 activeUsers가 담당한다)
    */
@@ -116,13 +116,13 @@ export interface AxOverviewData {
   /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
   catalogSkills: number
   /**
-   * 잔디밭용 일별 활동량 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
+   * 잔디밭용 일별 상세 로드·적용 보고 수 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
    * 날짜가 지나면 창이 최신 쪽으로 굴러간다.
    */
   grassDaily: Array<{ date: string; events: number }>
-  /** 일자별 활성 인원 추이 (조회 기간) */
+  /** 일자별 상세 로드·적용 보고 사용자 수 (조회 기간) */
   dailyActiveUsers: Array<{ date: string; users: number }>
-  /** 시간대별 활성 인원 — KST 기준 0~23시 (조회 기간) */
+  /** 시간대별 상세 로드·적용 보고 사용자 수 — KST 기준 0~23시 (조회 기간) */
   hourlyDensity: Array<{ hour: number; users: number }>
   /**
    * 사용자별 사용량 (조회 기간, 사용량 내림차순).
@@ -245,7 +245,7 @@ export interface AxSkillUsageData {
   actionTotals: Record<'search' | 'load' | 'apply' | 'skip' | 'deploy', number>
   /** 사용량 상위 스킬 (loaded+applied 기준 내림차순) */
   skills: AxSkillUsageRow[]
-  /** 일자별 이벤트 추이 */
+  /** 일자별 콘텐츠 로드·적용 보고 추이 */
   daily: Array<{ date: string; events: number }>
   /** 카탈로그에는 있으나 기간 내 load/apply가 0인 스킬의 전체 수 */
   totalUnusedSkills: number

@@ -228,7 +228,8 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
 
       <GrassCard
         daily={grassDaily}
-        label="일별 팀 스킬(aitk) 사용 — 사람"
+        label="일별 팀 스킬 로드·적용 보고 — 건"
+        info="검색 노출은 제외합니다. 로드와 적용 보고는 독립 신호이므로 합계가 실제 작업 횟수와 같지는 않습니다."
         loading={anyLoading && grassDaily === null}
       />
       {/* 에이전트 활동은 실행 이벤트가 붙기 전까지 저장소 커밋을 프록시로 쓴다 — 라벨이 그 사실을 밝힌다 */}
