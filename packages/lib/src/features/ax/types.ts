@@ -116,22 +116,39 @@ export interface AxOverviewData {
   /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
   catalogSkills: number
   /**
-   * 잔디밭용 일별 적용 보고 수 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
-   * 날짜가 지나면 창이 최신 쪽으로 굴러간다.
+   * 잔디밭용 일별 팀 스킬 활동 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
+   * 활동은 로드 없이 적용 + 로드 후 적용이며, 날짜가 지나면 창이 최신 쪽으로 굴러간다.
    */
-  grassDaily: Array<{ date: string; events: number; loads?: number }>
-  /** 일자별 로드 코호트와 적용 전환 — 연결 가능한 세션×스킬 기준 */
+  grassDaily: Array<{
+    date: string
+    /** 로드 없이 적용 + 로드 후 적용 */
+    events: number
+    /** 도움말용 전체 로드 이벤트 수 */
+    loads?: number
+    /** 앞선 로드와 연결되지 않은 적용 이벤트 수 */
+    directApplied?: number
+    /** 같은 세션·스킬의 앞선 로드와 연결된 적용 이벤트 수 */
+    appliedAfterLoad?: number
+  }>
+  /** 일자별 고유 사용 인원 — 로드 코호트와 적용 전환을 사람 수로 표현한다 */
   dailySkillFlow: Array<{
     date: string
-    /** 같은 세션에서 앞선 로드 없이 적용된 고유 세션×스킬(세션 없는 적용은 이벤트 단위) */
+    /** 그날 앞선 로드와 연결되지 않은 적용을 보고한 고유 사용자 수 */
     directApplied: number
-    /** 해당 날짜에 기록된 전체 로드 이벤트 수(세션 없는 로드 포함) */
+    /** 그날 로드를 기록한 고유 사용자 수(세션 없는 로드 포함) */
     loaded: number
-    /** 위 로드 중 세션 ID가 있어 적용 여부를 정확히 연결할 수 있는 고유 세션×스킬 */
+    /** 위 사용자 중 세션 ID가 있어 적용 여부를 정확히 연결할 수 있는 고유 사용자 수 */
     linkableLoaded: number
-    /** 위 로드 중 이후 적용 보고까지 이어진 고유 세션×스킬 */
+    /** 위 사용자 중 이후 적용 보고까지 이어진 고유 사용자 수 */
     appliedAfterLoad: number
   }>
+  /** 선택 기간 전체의 고유 사용자 수 — 일별 인원 합계와 달리 같은 사람을 한 번만 센다 */
+  skillFlowSummary: {
+    directApplied: number
+    loaded: number
+    linkableLoaded: number
+    appliedAfterLoad: number
+  }
   /** 시간대별 적용 보고 사용자 수 — KST 기준 0~23시 (조회 기간) */
   hourlyDensity: Array<{ hour: number; users: number }>
   /**

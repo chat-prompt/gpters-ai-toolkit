@@ -160,16 +160,22 @@ describe('AxDashboard 패널 요청', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('팀 스킬 잔디는 적용 기준이고 도움말 클릭 시 로드 합계를 보여준다', async () => {
+  it('팀 스킬 잔디는 적용 경로별 활동을 합치고 도움말 클릭 시 의미와 로드 합계를 보여준다', async () => {
     const overview = PANELS[0]
     const data: AxOverviewData = {
       totalParticipants: 1,
       catalogSkills: 1,
       grassDaily: [
-        { date: '2026-08-30', events: 2, loads: 4 },
-        { date: '2026-08-31', events: 1, loads: 5 },
+        { date: '2026-08-30', events: 2, loads: 4, directApplied: 1, appliedAfterLoad: 1 },
+        { date: '2026-08-31', events: 1, loads: 5, directApplied: 1, appliedAfterLoad: 0 },
       ],
       dailySkillFlow: [],
+      skillFlowSummary: {
+        directApplied: 0,
+        loaded: 0,
+        linkableLoaded: 0,
+        appliedAfterLoad: 0,
+      },
       hourlyDensity: [],
       memberUsage: null,
       unmeasured: [],
@@ -188,8 +194,8 @@ describe('AxDashboard 패널 요청', () => {
     render(<AxDashboard panels={[overview]} isAdmin />)
 
     expect(await screen.findByText(/일별 팀 스킬 활동/)).toBeTruthy()
-    expect(screen.getByText(/적용 3건 · 최대 2건\/일/)).toBeTruthy()
-    const help = screen.getByRole('button', { name: /스킬 전체 지침을 확인한 로드는 9건/ })
+    expect(screen.getByText(/활동 3건 · 로드 없이 적용 2 · 로드 후 적용 1 · 최대 2건\/일/)).toBeTruthy()
+    const help = screen.getByRole('button', { name: /활동은 로드 없이 적용한 경우와 로드 후 적용 보고/ })
     expect(help.getAttribute('aria-expanded')).toBe('false')
 
     fireEvent.click(help)

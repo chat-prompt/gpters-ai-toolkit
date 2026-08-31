@@ -205,11 +205,37 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           )
         )
 
-      // 3. 잔디밭 — 농도는 실제 적용 보고, 도움말에는 같은 날의 로드를 함께 제공한다
+      // 3. 잔디밭 — 활동은 로드 없이 적용 + 로드 후 적용이다.
+      //    journey를 우선하고 기존 MCP session을 fallback으로 사용해 앞선 로드를 찾는다.
       const grassRows = await db
         .select({
           date: kstDayExpr,
-          events: sql<number>`count(*) filter (where ${skillEvents.action} = 'apply')::int`,
+          directApplied: sql<number>`count(*) filter (
+            where ${skillEvents.action} = 'apply'
+              and not exists (
+                select 1
+                from skill_events loaded
+                where coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
+                  and coalesce(loaded.journey_id, loaded.session_id) = coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId})
+                  and loaded.user_id = ${skillEvents.userId}
+                  and loaded.skill_id = ${skillEvents.skillId}
+                  and loaded.action = 'load'
+                  and loaded.created_at <= ${skillEvents.createdAt}
+              )
+          )::int`,
+          appliedAfterLoad: sql<number>`count(*) filter (
+            where ${skillEvents.action} = 'apply'
+              and exists (
+                select 1
+                from skill_events loaded
+                where coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
+                  and coalesce(loaded.journey_id, loaded.session_id) = coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId})
+                  and loaded.user_id = ${skillEvents.userId}
+                  and loaded.skill_id = ${skillEvents.skillId}
+                  and loaded.action = 'load'
+                  and loaded.created_at <= ${skillEvents.createdAt}
+              )
+          )::int`,
           loads: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
         })
         .from(skillEvents)
@@ -218,7 +244,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .groupBy(kstDayExpr)
         .orderBy(kstDayExpr)
 
-      // 4. 시간대별 실제 사용 인원 — KST (조회 기간)
+      // 4. 시간대별 사용 인원 — KST (조회 기간)
       const hourlyRows = await db
         .select({
           hour: kstHourExpr,
@@ -230,27 +256,32 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .groupBy(kstHourExpr)
         .orderBy(kstHourExpr)
 
-      // 5. 로드 코호트 전환 — journey 우선, 기존 MCP session fallback으로 흐름×스킬을 센다.
-      //    둘 다 없는 과거 적용만 직접 적용으로 남고, 새 단발 CLI는 journey로 정상 연결된다.
+      // 5. 일별 사용 인원 — 각 날짜 안에서는 같은 사용자를 한 번만 센다.
+      //    journey를 우선하고 기존 MCP session을 fallback으로 사용해 로드 전환을 판별한다.
+      //    화면에는 고유 사용자 수를 집계하고, 둘 다 없는 적용은 직접 적용으로 남긴다.
       const flowResult = await db.execute(sql`
         WITH load_journeys AS (
           SELECT
+            loaded.user_id,
             COALESCE(loaded.journey_id, loaded.session_id) AS flow_id,
             loaded.skill_id,
             min(loaded.created_at) AS loaded_at
           FROM skill_events loaded
           INNER JOIN catalog_items catalog ON catalog.id = loaded.skill_id
           WHERE loaded.action = 'load'
+            AND loaded.user_id IS NOT NULL
             AND COALESCE(loaded.journey_id, loaded.session_id) IS NOT NULL
             AND loaded.created_at >= ${since}
-          GROUP BY COALESCE(loaded.journey_id, loaded.session_id), loaded.skill_id
+          GROUP BY loaded.user_id, COALESCE(loaded.journey_id, loaded.session_id), loaded.skill_id
         ), classified_loads AS (
           SELECT
+            load_journeys.user_id,
             load_journeys.loaded_at,
             EXISTS (
               SELECT 1
               FROM skill_events applied
               WHERE COALESCE(applied.journey_id, applied.session_id) = load_journeys.flow_id
+                AND applied.user_id = load_journeys.user_id
                 AND applied.skill_id = load_journeys.skill_id
                 AND applied.action = 'apply'
                 AND applied.created_at >= load_journeys.loaded_at
@@ -258,56 +289,78 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           FROM load_journeys
         ), apply_journeys AS (
           SELECT
+            applied.user_id,
             COALESCE(applied.journey_id, applied.session_id) AS flow_id,
             applied.skill_id,
             min(applied.created_at) AS applied_at
           FROM skill_events applied
           INNER JOIN catalog_items catalog ON catalog.id = applied.skill_id
           WHERE applied.action = 'apply'
+            AND applied.user_id IS NOT NULL
             AND COALESCE(applied.journey_id, applied.session_id) IS NOT NULL
             AND applied.created_at >= ${since}
-          GROUP BY COALESCE(applied.journey_id, applied.session_id), applied.skill_id
+          GROUP BY applied.user_id, COALESCE(applied.journey_id, applied.session_id), applied.skill_id
         ), direct_applies AS (
-          SELECT apply_journeys.applied_at
+          SELECT apply_journeys.user_id, apply_journeys.applied_at
           FROM apply_journeys
           WHERE NOT EXISTS (
             SELECT 1
             FROM skill_events loaded
             WHERE COALESCE(loaded.journey_id, loaded.session_id) = apply_journeys.flow_id
+              AND loaded.user_id = apply_journeys.user_id
               AND loaded.skill_id = apply_journeys.skill_id
               AND loaded.action = 'load'
               AND loaded.created_at <= apply_journeys.applied_at
           )
           UNION ALL
-          SELECT applied.created_at AS applied_at
+          SELECT applied.user_id, applied.created_at AS applied_at
           FROM skill_events applied
           INNER JOIN catalog_items catalog ON catalog.id = applied.skill_id
           WHERE applied.action = 'apply'
+            AND applied.user_id IS NOT NULL
             AND applied.journey_id IS NULL
             AND applied.session_id IS NULL
             AND applied.created_at >= ${since}
         ), all_load_daily AS (
           SELECT
             to_char(date_trunc('day', loaded.created_at at time zone 'Asia/Seoul'), 'YYYY-MM-DD') AS date,
-            count(*)::int AS loaded
+            count(distinct loaded.user_id)::int AS loaded
           FROM skill_events loaded
           INNER JOIN catalog_items catalog ON catalog.id = loaded.skill_id
           WHERE loaded.action = 'load'
+            AND loaded.user_id IS NOT NULL
             AND loaded.created_at >= ${since}
           GROUP BY 1
         ), linked_load_daily AS (
           SELECT
             to_char(date_trunc('day', loaded_at at time zone 'Asia/Seoul'), 'YYYY-MM-DD') AS date,
-            count(*)::int AS linkable_loaded,
-            count(*) filter (where applied_after_load)::int AS applied_after_load
+            count(distinct user_id)::int AS linkable_loaded,
+            count(distinct user_id) filter (where applied_after_load)::int AS applied_after_load
           FROM classified_loads
           GROUP BY 1
         ), direct_daily AS (
           SELECT
             to_char(date_trunc('day', applied_at at time zone 'Asia/Seoul'), 'YYYY-MM-DD') AS date,
-            count(*)::int AS direct_applied
+            count(distinct user_id)::int AS direct_applied
           FROM direct_applies
           GROUP BY 1
+        ), summary AS (
+          SELECT
+            (
+              SELECT count(distinct loaded.user_id)::int
+              FROM skill_events loaded
+              INNER JOIN catalog_items catalog ON catalog.id = loaded.skill_id
+              WHERE loaded.action = 'load'
+                AND loaded.user_id IS NOT NULL
+                AND loaded.created_at >= ${since}
+            ) AS loaded,
+            (SELECT count(distinct user_id)::int FROM classified_loads) AS linkable_loaded,
+            (
+              SELECT count(distinct user_id)::int
+              FROM classified_loads
+              WHERE applied_after_load
+            ) AS applied_after_load,
+            (SELECT count(distinct user_id)::int FROM direct_applies) AS direct_applied
         ), all_dates AS (
           SELECT date FROM all_load_daily
           UNION
@@ -320,8 +373,13 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           COALESCE(direct_daily.direct_applied, 0)::int AS direct_applied,
           COALESCE(all_load_daily.loaded, 0)::int AS loaded,
           COALESCE(linked_load_daily.linkable_loaded, 0)::int AS linkable_loaded,
-          COALESCE(linked_load_daily.applied_after_load, 0)::int AS applied_after_load
+          COALESCE(linked_load_daily.applied_after_load, 0)::int AS applied_after_load,
+          summary.direct_applied AS summary_direct_applied,
+          summary.loaded AS summary_loaded,
+          summary.linkable_loaded AS summary_linkable_loaded,
+          summary.applied_after_load AS summary_applied_after_load
         FROM all_dates
+        CROSS JOIN summary
         LEFT JOIN all_load_daily ON all_load_daily.date = all_dates.date
         LEFT JOIN linked_load_daily ON linked_load_daily.date = all_dates.date
         LEFT JOIN direct_daily ON direct_daily.date = all_dates.date
@@ -352,6 +410,11 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
       const totalParticipants = num(cumulative?.users)
       const catalogSkills = num(catalog?.count)
       const grassLoadCounts = new Map(grassRows.map((row) => [row.date, num(row.loads)]))
+      const grassDirectCounts = new Map(grassRows.map((row) => [row.date, num(row.directApplied)]))
+      const grassConvertedCounts = new Map(
+        grassRows.map((row) => [row.date, num(row.appliedAfterLoad)])
+      )
+      const flowSummaryRow = flowResult.rows[0]
 
       const memberUsage: AxOverviewMemberRow[] | null = memberRows
         ? memberRows.map((row) => ({
@@ -368,14 +431,21 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           totalParticipants,
           catalogSkills,
           grassDaily: fillDailySeries(
-            new Map(grassRows.map((row) => [row.date, num(row.events)])),
+            new Map(
+              grassRows.map((row) => [
+                row.date,
+                num(row.directApplied) + num(row.appliedAfterLoad),
+              ])
+            ),
             grassSince,
             now
           ).map((point) => ({
-              date: point.date,
-              events: point.value,
-              loads: grassLoadCounts.get(point.date) ?? 0,
-            })),
+            date: point.date,
+            events: point.value,
+            loads: grassLoadCounts.get(point.date) ?? 0,
+            directApplied: grassDirectCounts.get(point.date) ?? 0,
+            appliedAfterLoad: grassConvertedCounts.get(point.date) ?? 0,
+          })),
           dailySkillFlow: fillDailySkillFlow(
             flowResult.rows.map((row) => ({
               date: String(row.date),
@@ -387,6 +457,12 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             since,
             now
           ),
+          skillFlowSummary: {
+            directApplied: num(flowSummaryRow?.summary_direct_applied),
+            loaded: num(flowSummaryRow?.summary_loaded),
+            linkableLoaded: num(flowSummaryRow?.summary_linkable_loaded),
+            appliedAfterLoad: num(flowSummaryRow?.summary_applied_after_load),
+          },
           hourlyDensity: fillMissingHours(
             hourlyRows.map((row) => ({ hour: num(row.hour), users: num(row.users) }))
           ),
