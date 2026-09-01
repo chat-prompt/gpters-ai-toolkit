@@ -101,7 +101,7 @@ Commands:
   deploy          Deploy a skill, agent, or command
   undeploy        Remove a deployed skill (owner only)
   updates         Check for installed skill updates
-  config          View or change settings (searchMethod, serverUrl)
+  config          View or change settings (searchMethod, serverUrl, agentId)
   add-files       Add files to a plugin
   remove-files    Remove files from a plugin
   report-session  Report session event (for hooks)
@@ -247,7 +247,7 @@ Usage: aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id
 
 Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
-  --agent-id <stable-id>        Stable bot identifier (default: runtime name)
+  --agent-id <stable-id>        Stable bot ID (default: AITK_AGENT_ID/config agentId/runtime)
   --attempt-id <uuid>           Stable attempt identifier (generated if omitted)
   --journey-id <uuid>           Search/load journey (normally inferred automatically)
   --event-id <uuid>             Idempotency identifier (generated if omitted)
@@ -258,7 +258,7 @@ Usage: aitk report-execution --skill-id <id> --status success|partial|failed|aba
 
 Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
-  --agent-id <stable-id>        Stable bot identifier shared with the start report (default: runtime name)
+  --agent-id <stable-id>        Stable bot ID shared with start (default: AITK_AGENT_ID/config agentId/runtime)
   --attempt-id <uuid>          Stable attempt identifier (generated if omitted)
   --journey-id <uuid>          Search/load journey (normally inferred automatically)
   --event-id <uuid>            Idempotency identifier (generated if omitted)

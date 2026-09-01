@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { jsonRpcCall } from '../client.js'
 import { resolveToken } from '../auth.js'
+import { readConfig } from '../config.js'
 import { jsonOut, info, error } from '../output.js'
 import {
   markJourneyReported,
@@ -51,11 +52,25 @@ function assertToolSuccess(data: unknown, fallback: string): void {
   if (result?.isError) error(result.content?.[0]?.text ?? fallback)
 }
 
+const SAFE_AGENT_ID = /^[a-z0-9][a-z0-9._:-]{0,79}$/
+
+/** 명시값 → 프로세스 환경 → 로컬 설정 순으로 안정 ID를 찾고, 없을 때만 runtime으로 돌아간다. */
+function resolveAgentId(explicit: string | undefined, runtime: ReportExecutionOptions['agent']): string {
+  const configured = [explicit, process.env.AITK_AGENT_ID, readConfig().agentId]
+    .map((value) => value?.trim())
+    .find((value) => Boolean(value))
+  const agentId = configured || runtime
+  if (!SAFE_AGENT_ID.test(agentId)) {
+    error('agentId must be a stable lowercase ID (letters, numbers, . _ : -)')
+  }
+  return agentId
+}
+
 export async function runReportExecutionStart(opts: ReportExecutionStartOptions): Promise<void> {
   const token = resolveToken()
   const attemptId = opts.attemptId ?? randomUUID()
   const eventId = opts.eventId ?? randomUUID()
-  const agentId = opts.agentId ?? opts.agent
+  const agentId = resolveAgentId(opts.agentId, opts.agent)
   const journeyId = await resolveJourneyForSkill(opts.skillId, opts.journeyId)
   const result = await jsonRpcCall(
     'tools/call',
@@ -91,7 +106,7 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
   const attemptId = opts.attemptId ?? randomUUID()
   const eventId = opts.eventId ?? randomUUID()
   const validationMethod = opts.validationMethod ?? 'none'
-  const agentId = opts.agentId ?? opts.agent
+  const agentId = resolveAgentId(opts.agentId, opts.agent)
   const journeyId = await resolveJourneyForAttempt(opts.attemptId, opts.skillId, opts.journeyId)
 
   const result = await jsonRpcCall(

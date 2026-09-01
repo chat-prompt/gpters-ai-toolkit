@@ -13,6 +13,7 @@ export type SearchMethod = 'auto' | 'mcp' | 'cli'
 export const CONFIGURABLE_KEYS: Record<string, { description: string; values?: string[] }> = {
   searchMethod: { description: '스킬 검색 방법', values: ['auto', 'mcp', 'cli'] },
   serverUrl: { description: 'API 서버 URL' },
+  agentId: { description: '실행 결과 보고에 사용할 안정적인 에이전트 ID' },
 }
 
 /** CLI 설정 구조 */
@@ -23,6 +24,8 @@ export interface AitkConfig {
   serverUrl: string
   /** 스킬 검색 방법 (auto | mcp | cli) */
   searchMethod?: SearchMethod
+  /** 공유 런타임 이름과 구분되는 안정적인 봇 식별자 */
+  agentId?: string
 }
 
 /** 기본 서버 URL */
@@ -59,6 +62,7 @@ export function readConfig(): AitkConfig {
       serverUrl: parsed.serverUrl ?? DEFAULT_SERVER_URL,
       token: parsed.token,
       searchMethod: parsed.searchMethod ?? 'cli',
+      agentId: typeof parsed.agentId === 'string' ? parsed.agentId : undefined,
     }
   } catch {
     return { serverUrl: DEFAULT_SERVER_URL, searchMethod: 'cli' }

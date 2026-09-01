@@ -14,9 +14,10 @@ import { error, info } from '../output.js'
  */
 function listConfig(): void {
   const config = readConfig()
-  const output: Record<string, string> = {
+  const output: Record<string, string | null> = {
     searchMethod: config.searchMethod ?? 'auto',
     serverUrl: config.serverUrl,
+    agentId: config.agentId ?? null,
   }
   console.log(JSON.stringify(output, null, 2))
 }
@@ -31,7 +32,7 @@ function getConfig(key: string): void {
     error(`Unknown key: ${key}\nAvailable keys: ${Object.keys(CONFIGURABLE_KEYS).join(', ')}`)
   }
   const config = readConfig()
-  const value = config[key as keyof AitkConfig] ?? (key === 'searchMethod' ? 'auto' : undefined)
+  const value = config[key as keyof AitkConfig] ?? (key === 'searchMethod' ? 'auto' : null)
   console.log(JSON.stringify({ [key]: value }))
 }
 
@@ -48,6 +49,9 @@ function setConfig(key: string, value: string): void {
   }
   if (meta.values && !meta.values.includes(value)) {
     error(`Invalid value: ${value}\nAllowed values: ${meta.values.join(', ')}`)
+  }
+  if (key === 'agentId' && !/^[a-z0-9][a-z0-9._:-]{0,79}$/.test(value)) {
+    error('Invalid agentId: use a stable lowercase ID (letters, numbers, . _ : -)')
   }
 
   const config = readConfig()
