@@ -31,6 +31,11 @@ function install(...args: string[]) {
   })
 }
 
+function writeExecutable(path: string, contents: string): void {
+  writeFileSync(path, contents)
+  chmodSync(path, 0o755)
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'aitk-repo-installer-'))
   repo = join(root, 'repo')
@@ -83,5 +88,33 @@ describe('repo-built AITK installer', () => {
     expect(blocked.status).not.toBe(0)
     expect(blocked.stderr).toContain('already installed with a different binary')
     expect(install('--force').status).toBe(0)
+  })
+
+  it('호출 위치와 무관하게 저장소 루트에서 고정 pnpm을 선택한다', () => {
+    const fakeBin = join(root, 'bin')
+    const corepackLog = join(root, 'corepack.log')
+    mkdirSync(fakeBin)
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.12.2' }))
+    writeExecutable(join(fakeBin, 'git'), `#!/bin/sh\ncase "$*" in\n  *"rev-parse HEAD"*) echo test-commit ;;\n  *) exit 0 ;;\nesac\n`)
+    writeExecutable(join(fakeBin, 'bun'), '#!/bin/sh\nexit 0\n')
+    writeExecutable(join(fakeBin, 'corepack'), `#!/bin/sh\nprintf '%s|%s\\n' "$PWD" "$*" >> "$COREPACK_LOG"\nif [ "$1" = pnpm ] && [ "$2" = --version ]; then echo 10.12.2; fi\nexit 0\n`)
+
+    const caller = join(root, 'outside-repo')
+    mkdirSync(caller)
+    const result = spawnSync('sh', [SCRIPT, '--repo-root', repo, '--prefix', prefix], {
+      cwd: caller,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        COREPACK_LOG: corepackLog,
+      },
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    const calls = readFileSync(corepackLog, 'utf8').trim().split('\n')
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    expect(calls.every((call) => call.startsWith(`${repo}|pnpm `))).toBe(true)
+    expect(calls[0]).toBe(`${repo}|pnpm --version`)
   })
 })

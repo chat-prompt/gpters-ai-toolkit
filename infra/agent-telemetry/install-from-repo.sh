@@ -85,6 +85,29 @@ esac
 if [ "$skip_build" -eq 0 ]; then
   command -v git >/dev/null 2>&1 || { echo "error: git is required for a source build" >&2; exit 1; }
   command -v corepack >/dev/null 2>&1 || { echo "error: corepack is required for a source build" >&2; exit 1; }
+
+  # Corepack resolves packageManager from its current directory before pnpm
+  # processes --dir. Always enter the checkout first so a host-level pnpm
+  # default cannot override the version pinned by this repository.
+  run_repo_pnpm() (
+    cd "$repo_root"
+    corepack pnpm "$@"
+  )
+
+  package_manager=$(node -e 'const p = require(process.argv[1]); process.stdout.write(String(p.packageManager || ""))' "$repo_root/package.json")
+  case "$package_manager" in
+    pnpm@*) expected_pnpm_version=${package_manager#pnpm@} ;;
+    *)
+      echo "error: repository packageManager must pin pnpm" >&2
+      exit 1
+      ;;
+  esac
+  actual_pnpm_version=$(run_repo_pnpm --version)
+  [ "$actual_pnpm_version" = "$expected_pnpm_version" ] || {
+    echo "error: repository requires pnpm $expected_pnpm_version but Corepack selected $actual_pnpm_version" >&2
+    exit 1
+  }
+
   if [ "$allow_dirty" -eq 0 ]; then
     build_input_status=$(git -C "$repo_root" status --porcelain --untracked-files=all -- \
       apps/aitk-cli/bin apps/aitk-cli/src apps/aitk-cli/package.json \
@@ -96,13 +119,13 @@ if [ "$skip_build" -eq 0 ]; then
   fi
 
   if [ ! -d "$repo_root/node_modules/.pnpm" ]; then
-    corepack pnpm --dir "$repo_root" install --frozen-lockfile
+    run_repo_pnpm install --frozen-lockfile
   fi
   if command -v bun >/dev/null 2>&1; then
-    corepack pnpm --dir "$repo_root" --filter @gpters/aitk build
+    run_repo_pnpm --filter @gpters/aitk build
   else
     echo "notice: bun is not installed; using pinned bun@1.4.0 for this repo build"
-    corepack pnpm dlx bun@1.4.0 run --cwd "$repo_root/apps/aitk-cli" build
+    run_repo_pnpm dlx bun@1.4.0 run --cwd "$repo_root/apps/aitk-cli" build
   fi
 fi
 
