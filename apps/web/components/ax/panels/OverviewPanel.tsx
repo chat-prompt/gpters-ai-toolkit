@@ -22,7 +22,7 @@ const SECTION_LABEL = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[v
 /** 데이터가 비었을 때의 조용한 안내문 */
 const EMPTY_NOTE = 'border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]'
 
-/** 구성원 AX 활동 그래프의 실제 막대 영역 높이(px) */
+/** 일별 사용 인원 그래프의 실제 막대 영역 높이(px) */
 const ACTIVITY_CHART_HEIGHT = 176
 
 /**
@@ -34,7 +34,7 @@ const ACTIVITY_CHART_HEIGHT = 176
 export function OverviewPanel({ data, days }: AxPanelViewProps<AxOverviewData>) {
   return (
     <div className="space-y-10">
-      <DailySkillFlow daily={data.dailySkillFlow} days={days} />
+      <DailySkillFlow daily={data.dailySkillFlow} summary={data.skillFlowSummary} days={days} />
       <HourlyActiveUsers rows={data.hourlyDensity} />
       {/* 사용자별 로드·적용 보고 — 관리자에게만 데이터가 내려온다 */}
       {data.memberUsage !== null && <MemberUsageTable rows={data.memberUsage} days={days} />}
@@ -129,21 +129,22 @@ function MemberUsageTable({
  */
 function DailySkillFlow({
   daily,
+  summary,
   days,
 }: {
   daily: AxOverviewData['dailySkillFlow']
+  summary: AxOverviewData['skillFlowSummary']
   days: number
 }) {
-  const totalDirect = daily.reduce((sum, point) => sum + point.directApplied, 0)
-  const totalLoaded = daily.reduce((sum, point) => sum + point.loaded, 0)
-  const totalLinkable = daily.reduce((sum, point) => sum + point.linkableLoaded, 0)
-  const totalConverted = daily.reduce((sum, point) => sum + point.appliedAfterLoad, 0)
-  const conversionRate = totalLinkable > 0 ? Math.round((totalConverted / totalLinkable) * 100) : 0
+  const conversionRate = summary.linkableLoaded > 0
+    ? Math.round((summary.appliedAfterLoad / summary.linkableLoaded) * 100)
+    : 0
+  const hasActivity = daily.some((point) => point.directApplied > 0 || point.loaded > 0)
 
-  if (daily.length === 0 || (totalDirect === 0 && totalLoaded === 0)) {
+  if (daily.length === 0 || !hasActivity) {
     return (
       <div>
-        <p className={SECTION_LABEL}>구성원의 AX 활동</p>
+        <p className={SECTION_LABEL}>일별 사용 인원 (KST)</p>
         <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 로드·적용 활동이 없습니다.</p>
       </div>
     )
@@ -156,13 +157,16 @@ function DailySkillFlow({
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <p className={SECTION_LABEL}>구성원의 AX 활동</p>
+        <p className={SECTION_LABEL}>일별 사용 인원 (KST)</p>
         <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-          로드 {formatCount(totalLoaded)} · 로드 후 적용 {formatCount(totalConverted)}/{formatCount(totalLinkable)} · {conversionRate}%
-          {' · '}로드 없이 적용 {formatCount(totalDirect)}
+          로드 {formatCount(summary.loaded)}명 · 로드 후 적용 {formatCount(summary.appliedAfterLoad)}/{formatCount(summary.linkableLoaded)}명 · {conversionRate}%
+          {' · '}로드 없이 적용 {formatCount(summary.directApplied)}명
         </p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[var(--text-muted)]">
+      <div
+        className="mt-4 flex flex-wrap text-xs text-[var(--text-muted)]"
+        style={{ columnGap: '3rem', rowGap: '0.75rem' }}
+      >
         <LegendSwatch color="var(--brand-secondary)" label="로드 없이 적용" />
         <LegendSwatch color="var(--brand-primary)" opacity={0.15} label="로드" />
         <LegendSwatch color="var(--brand-primary)" opacity={0.75} label="로드 후 적용" />
@@ -175,7 +179,7 @@ function DailySkillFlow({
             style={{
               height: `${Math.max(3, ((point.directApplied + point.loaded) / max) * ACTIVITY_CHART_HEIGHT)}px`,
             }}
-            aria-label={`${formatDayLabel(point.date)} · 로드 ${formatCount(point.loaded)}건 · 연결 가능 로드 ${formatCount(point.linkableLoaded)}건 · 로드 후 적용 ${formatCount(point.appliedAfterLoad)}건 · 로드 없이 적용 ${formatCount(point.directApplied)}건`}
+            aria-label={`${formatDayLabel(point.date)} · 로드 ${formatCount(point.loaded)}명 · 연결 가능 로드 ${formatCount(point.linkableLoaded)}명 · 로드 후 적용 ${formatCount(point.appliedAfterLoad)}명 · 로드 없이 적용 ${formatCount(point.directApplied)}명`}
           >
             {point.loaded > 0 && (
               <div
@@ -206,23 +210,24 @@ function DailySkillFlow({
               />
             )}
             <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block">
-              {formatDayLabel(point.date)} · 로드 {formatCount(point.loaded)} (연결 가능{' '}
-              {formatCount(point.linkableLoaded)}) · 로드 후 적용{' '}
-              {formatCount(point.appliedAfterLoad)} · 로드 없이 적용 {formatCount(point.directApplied)}
+              {formatDayLabel(point.date)} · 로드 {formatCount(point.loaded)}명 (연결 가능{' '}
+              {formatCount(point.linkableLoaded)}명) · 로드 후 적용{' '}
+              {formatCount(point.appliedAfterLoad)}명 · 로드 없이 적용 {formatCount(point.directApplied)}명
             </span>
           </div>
         ))}
       </div>
       <div className="mt-3 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
         <span>{first ? formatDayLabel(first.date) : ''}</span>
-        <span>최대 {formatCount(max)}개 흐름/일</span>
+        <span>최대 {formatCount(max)}명 활동/일</span>
         <span>{last ? formatDayLabel(last.date) : ''}</span>
       </div>
       <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--text-muted)]">
-        반투명 막대는 전체 로드입니다. 로드 전환은 그중 세션 ID가 있는 세션×스킬에서 첫 로드
-        뒤 적용 보고가 이어졌는지 계산하며, 세션이 없어 연결할 수 없는 로드는 전환율에서
-        제외합니다. 세션 없는 적용 보고는 로드 없이 적용에 포함하고, 선택 기간 이전에 로드된
-        흐름은 이 기간의 로드 코호트에 포함하지 않습니다.
+        각 막대는 그날의 고유 사용자 수입니다. 밝은 아래 막대는 로드 없이 적용한 인원,
+        반투명 막대는 로드한 인원이며, 그중 진한 영역은 같은 세션·스킬에서 적용까지 이어진
+        인원입니다. 상단 합계도 선택 기간의 고유 인원이라 같은 사람을 한 번만 셉니다. 다만 한
+        사람이 서로 다른 스킬에서 로드와 로드 없는 적용을 모두 하면 두 범주에는 각각 포함될 수
+        있습니다. 세션이 없어 연결할 수 없는 로드는 전환율에서 제외합니다.
       </p>
     </div>
   )
@@ -239,7 +244,7 @@ function LegendSwatch({
   label: string
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center" style={{ gap: '0.625rem' }}>
       <span aria-hidden className="h-2.5 w-2.5 rounded-[2px]" style={{ background: color, opacity }} />
       {label}
     </span>
@@ -260,7 +265,7 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
   if (total === 0) {
     return (
       <div>
-        <p className={SECTION_LABEL}>시간대별 실제 사용 인원 (KST)</p>
+        <p className={SECTION_LABEL}>시간대별 사용 인원 (KST)</p>
         <p className={`mt-3 ${EMPTY_NOTE}`}>이 기간에 적용 보고가 없습니다.</p>
       </div>
     )
@@ -268,7 +273,7 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
 
   return (
     <div>
-      <p className={SECTION_LABEL}>시간대별 실제 사용 인원 (KST)</p>
+      <p className={SECTION_LABEL}>시간대별 사용 인원 (KST)</p>
       <div className="mt-3 flex h-24 items-end gap-[3px]">
         {rows.map((point) => (
           <div

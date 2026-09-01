@@ -10,6 +10,12 @@ const DATA: AxOverviewData = {
   dailySkillFlow: [
     { date: '2026-08-30', directApplied: 1, loaded: 7, linkableLoaded: 4, appliedAfterLoad: 2 },
   ],
+  skillFlowSummary: {
+    directApplied: 1,
+    loaded: 7,
+    linkableLoaded: 4,
+    appliedAfterLoad: 2,
+  },
   hourlyDensity: Array.from({ length: 24 }, (_, hour) => ({ hour, users: 0 })),
   memberUsage: [
     {
@@ -28,8 +34,10 @@ describe('AX 요약 사용자별 사용량 표', () => {
 
     expect(screen.getByRole('columnheader', { name: '로드' })).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: '적용 보고' })).toBeTruthy()
-    expect(screen.getByText(/로드 7 · 로드 후 적용 2\/4 · 50%/)).toBeTruthy()
+    expect(screen.getByText(/일별 사용 인원 \(KST\)/)).toBeTruthy()
+    expect(screen.getByText(/로드 7명 · 로드 후 적용 2\/4명 · 50%/)).toBeTruthy()
     expect(screen.getByText(/세션이 없어 연결할 수 없는 로드는 전환율에서/)).toBeTruthy()
+    expect(screen.getAllByText(/시간대별 사용 인원 \(KST\)/).length).toBeGreaterThan(0)
     expect(screen.getByText(/로드는 에이전트가 스킬의 전체 지침/).textContent).toContain(
       '검색 결과 노출·성공 여부·서버 호출 없이 로컬에서 재사용한 횟수는 포함하지 않습니다.'
     )

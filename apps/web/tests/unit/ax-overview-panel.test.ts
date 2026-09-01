@@ -2,7 +2,7 @@
  * AX 대시보드 — 성과 요약 패널 테스트
  *
  * db는 모킹하고, 다음을 검증한다:
- * 1. 실측 지표(누적 참여·로드 전환·시간대별 실제 사용)가 올바르게 조립되는지
+ * 1. 실측 지표(누적 참여·일별 사용 인원·시간대별 사용 인원)가 올바르게 조립되는지
  * 2. 미계측 지표가 값 대신 사유와 함께 내려가는지
  * 3. 빈 구간·문자열 count·쿼리 실패 같은 경계가 안전한지
  */
@@ -13,6 +13,7 @@ vi.mock('@gpters/db', () => ({
   db: { select: vi.fn(), execute: vi.fn() },
   skillEvents: {
     skillId: 'skill_events.skill_id',
+    sessionId: 'skill_events.session_id',
     userId: 'skill_events.user_id',
     action: 'skill_events.action',
     createdAt: 'skill_events.created_at',
@@ -136,14 +137,24 @@ describe('overviewPanel', () => {
     queueQueries([
       [{ users: 21 }],
       [{ count: 504 }],
-      [{ date: '2026-08-18', events: 12, loads: 20 }],
+      [{ date: '2026-08-18', directApplied: 9, appliedAfterLoad: 3, loads: 20 }],
       [
         { hour: 10, users: 4 },
         { hour: 15, users: 2 },
       ],
     ])
     queueFlow([
-      { date: '2026-08-18', direct_applied: 2, loaded: 12, linkable_loaded: 7, applied_after_load: 3 },
+      {
+        date: '2026-08-18',
+        direct_applied: 2,
+        loaded: 12,
+        linkable_loaded: 7,
+        applied_after_load: 3,
+        summary_direct_applied: 2,
+        summary_loaded: 12,
+        summary_linkable_loaded: 7,
+        summary_applied_after_load: 3,
+      },
     ])
 
     const result = await overviewPanel.load({ days: 30, isAdmin: false })
@@ -162,6 +173,8 @@ describe('overviewPanel', () => {
       date: '2026-08-18',
       events: 12,
       loads: 20,
+      directApplied: 9,
+      appliedAfterLoad: 3,
     })
 
     // 관리자가 아니면 사용자별 사용량은 내려가지 않는다
@@ -171,6 +184,12 @@ describe('overviewPanel', () => {
     expect(data.dailySkillFlow).toHaveLength(30)
     expect(data.dailySkillFlow.find((d) => d.date === '2026-08-18')).toEqual({
       date: '2026-08-18',
+      directApplied: 2,
+      loaded: 12,
+      linkableLoaded: 7,
+      appliedAfterLoad: 3,
+    })
+    expect(data.skillFlowSummary).toEqual({
       directApplied: 2,
       loaded: 12,
       linkableLoaded: 7,
@@ -248,11 +267,21 @@ describe('overviewPanel', () => {
     queueQueries([
       [{ users: '9' }],
       [{ count: '11' }],
-      [{ date: '2026-08-18', events: '3', loads: '8' }],
+      [{ date: '2026-08-18', directApplied: '2', appliedAfterLoad: '1', loads: '8' }],
       [{ hour: '9', users: '5' }],
     ])
     queueFlow([
-      { date: '2026-08-18', direct_applied: '2', loaded: '9', linkable_loaded: '6', applied_after_load: '4' },
+      {
+        date: '2026-08-18',
+        direct_applied: '2',
+        loaded: '9',
+        linkable_loaded: '6',
+        applied_after_load: '4',
+        summary_direct_applied: '2',
+        summary_loaded: '9',
+        summary_linkable_loaded: '6',
+        summary_applied_after_load: '4',
+      },
     ])
 
     const data = (await overviewPanel.load({ days: 7, isAdmin: false })).data!
@@ -261,7 +290,15 @@ describe('overviewPanel', () => {
     expect(data.catalogSkills).toBe(11)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.events).toBe(3)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.loads).toBe(8)
+    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.directApplied).toBe(2)
+    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.appliedAfterLoad).toBe(1)
     expect(data.dailySkillFlow.find((d) => d.date === '2026-08-18')).toMatchObject({
+      directApplied: 2,
+      loaded: 9,
+      linkableLoaded: 6,
+      appliedAfterLoad: 4,
+    })
+    expect(data.skillFlowSummary).toEqual({
       directApplied: 2,
       loaded: 9,
       linkableLoaded: 6,

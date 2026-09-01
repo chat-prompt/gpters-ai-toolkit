@@ -230,8 +230,8 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
       <GrassCard
         daily={grassDaily}
         label="일별 팀 스킬 활동"
-        valueLabel="적용"
-        info={`잔디 농도는 실제 사용인 적용 보고 기준입니다. 같은 최근 365일 동안 스킬 전체 지침을 확인한 로드는 ${formatCount(grassLoadTotal)}건입니다.`}
+        valueLabel="활동"
+        info={`활동은 로드 없이 적용한 경우와 로드 후 적용 보고까지 이어진 경우를 합친 값입니다. 잔디 농도는 이 활동 기준이며, 같은 최근 365일 동안 스킬 전체 지침을 확인한 로드는 ${formatCount(grassLoadTotal)}건입니다.`}
         loading={anyLoading && grassDaily === null}
       />
       {/* 에이전트 활동은 실행 이벤트가 붙기 전까지 저장소 커밋을 프록시로 쓴다 — 라벨이 그 사실을 밝힌다 */}
@@ -492,6 +492,11 @@ function ActivityGrass({
 
   const max = Math.max(1, ...daily.map((point) => point.events))
   const total = daily.reduce((sum, point) => sum + point.events, 0)
+  const totalDirect = daily.reduce((sum, point) => sum + (point.directApplied ?? 0), 0)
+  const totalConverted = daily.reduce((sum, point) => sum + (point.appliedAfterLoad ?? 0), 0)
+  const hasApplicationBreakdown = daily.some(
+    (point) => point.directApplied !== undefined || point.appliedAfterLoad !== undefined
+  )
   const first = daily[0]
   const last = daily[daily.length - 1]
 
@@ -520,7 +525,7 @@ function ActivityGrass({
   /** 칸에 마우스가 올라오면 카드 기준 좌표로 툴팁을 띄운다 */
   const showTip = (
     event: ReactMouseEvent<HTMLElement>,
-    point: { date: string; events: number; loads?: number }
+    point: AxOverviewData['grassDaily'][number]
   ) => {
     const wrap = wrapRef.current
     if (!wrap) return
@@ -529,7 +534,7 @@ function ActivityGrass({
     setTip({
       left: cell.left - base.left + cell.width / 2,
       top: cell.top - base.top,
-      text: `${point.date} (${WEEKDAY_LABELS[weekdayOf(point.date)]}) · ${valueLabel ? `${valueLabel} ` : ''}${formatCount(point.events)}건${point.loads === undefined ? '' : ` · 로드 ${formatCount(point.loads)}건`}`,
+      text: `${point.date} (${WEEKDAY_LABELS[weekdayOf(point.date)]}) · ${valueLabel ? `${valueLabel} ` : ''}${formatCount(point.events)}건${point.loads === undefined ? '' : ` · 로드 ${formatCount(point.loads)}건`}${point.directApplied === undefined ? '' : ` · 로드 없이 적용 ${formatCount(point.directApplied)}건`}${point.appliedAfterLoad === undefined ? '' : ` · 로드 후 적용 ${formatCount(point.appliedAfterLoad)}건`}`,
     })
   }
 
@@ -556,7 +561,11 @@ function ActivityGrass({
           )}
         </p>
         <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-          {valueLabel ? `${valueLabel} ` : ''}{formatCount(total)}건 · 최대 {formatCount(max)}건/일
+          {valueLabel ? `${valueLabel} ` : ''}{formatCount(total)}건
+          {hasApplicationBreakdown && (
+            <> · 로드 없이 적용 {formatCount(totalDirect)} · 로드 후 적용 {formatCount(totalConverted)}</>
+          )}
+          {' · '}최대 {formatCount(max)}건/일
         </p>
       </div>
 
