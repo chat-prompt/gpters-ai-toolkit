@@ -177,11 +177,16 @@ async function loadCollectors(): Promise<{
 async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityData>> {
   try {
     const cutoff = new Date(Date.now() - ctx.days * 86_400_000)
-    const [rows, executionResult, collectorResult] = await Promise.all([
+    const [candidateRows, executionResult, collectorResult] = await Promise.all([
       db.select().from(axAgentTelemetryBatches).where(gte(axAgentTelemetryBatches.windowEnd, cutoff)),
       loadVerifiedExecutions(cutoff),
       loadCollectors(),
     ])
+    // 한 batch는 내부 시간대별 분포를 보존하지 않는 집계 단위다. 기간 경계에 걸친 초기
+    // backfill을 비례 배분하면 사용량이 균등했다는 거짓 가정이 생기므로, 완전히 기간 안에
+    // 들어온 batch만 합산한다. 제외 사실은 아래 insight로 숨기지 않는다.
+    const rows = candidateRows.filter((row) => new Date(row.windowStart).getTime() >= cutoff.getTime())
+    const excludedBoundaryBatches = candidateRows.length - rows.length
     if (rows.length === 0 && collectorResult.rows.length === 0) {
       return panelNotConfigured(meta, '선택한 기간에 수집된 에이전트 텔레메트리가 없습니다')
     }
@@ -429,13 +434,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const total = processedTokens(totalUsage)
     const insights: AxAgentActivityData['insights'] = []
 
-    const coveredHours = rows.length > 0 ? (windowEnd - windowStart) / 3_600_000 : 0
-    // 6시간 수집 주기의 경계 겹침은 정상 오차로 보고, 그보다 긴 초기 backfill만 경고한다.
-    if (coveredHours > ctx.days * 24 + 6) {
+    if (excludedBoundaryBatches > 0) {
       insights.push({
-        severity: 'warning',
-        title: `실제 집계 범위 ${Math.round((coveredHours / 24) * 10) / 10}일`,
-        detail: '초기 backfill batch가 선택 기간과 일부 겹쳐 있습니다. 화면은 이를 숨기지 않고 실제 집계 시작·종료 시각을 함께 표시합니다.',
+        severity: 'info',
+        title: `기간 경계 batch ${excludedBoundaryBatches}개 제외`,
+        detail: '기간 밖 사용량이 섞인 초기 backfill은 비례 추정하지 않고 합계에서 제외했습니다. 이후 완전히 기간 안에 들어온 증분 batch만 표시합니다.',
       })
     }
 

@@ -4,6 +4,9 @@ vi.mock('../../src/client.js', () => ({
   jsonRpcCall: vi.fn().mockResolvedValue({ ok: true, data: { success: true } }),
 }))
 vi.mock('../../src/auth.js', () => ({ resolveToken: vi.fn(() => 'token') }))
+vi.mock('../../src/config.js', () => ({
+  readConfig: vi.fn(() => ({ serverUrl: 'https://test.example.com', searchMethod: 'cli' })),
+}))
 vi.mock('../../src/output.js', () => ({
   jsonOut: vi.fn(),
   info: vi.fn(),
@@ -17,10 +20,15 @@ vi.mock('../../src/journey.js', () => ({
 }))
 
 import { jsonRpcCall } from '../../src/client.js'
+import { readConfig } from '../../src/config.js'
 import { runReportExecution, runReportExecutionStart } from '../../src/commands/report-execution.js'
 
 describe('aitk report-execution', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.AITK_AGENT_ID
+    vi.mocked(readConfig).mockReturnValue({ serverUrl: 'https://test.example.com', searchMethod: 'cli' })
+  })
 
   it('검증 결과와 멱등 식별자를 서버 계약 형태로 보낸다', async () => {
     await runReportExecution({
@@ -125,5 +133,46 @@ describe('aitk report-execution', () => {
       agentId: 'hermes',
     }))
     expect(vi.mocked(jsonRpcCall).mock.calls[0]).toHaveLength(3)
+  })
+
+  it('agent ID를 생략하면 설정의 안정 ID를 runtime 이름보다 우선한다', async () => {
+    vi.mocked(readConfig).mockReturnValue({
+      serverUrl: 'https://test.example.com',
+      searchMethod: 'cli',
+      agentId: 'bbodoong',
+    })
+
+    await runReportExecutionStart({ skillId: 'review-helper', agent: 'openclaw' })
+
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as { arguments: { agentId: string } }
+    expect(args.arguments.agentId).toBe('bbodoong')
+  })
+
+  it('환경변수의 안정 ID를 로컬 설정보다 우선한다', async () => {
+    process.env.AITK_AGENT_ID = 'bbokeoter'
+    vi.mocked(readConfig).mockReturnValue({
+      serverUrl: 'https://test.example.com',
+      searchMethod: 'cli',
+      agentId: 'shared-default',
+    })
+
+    await runReportExecutionStart({ skillId: 'review-helper', agent: 'hermes' })
+
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as { arguments: { agentId: string } }
+    expect(args.arguments.agentId).toBe('bbokeoter')
+  })
+
+  it('빈 환경변수는 무시하고 로컬 설정의 안정 ID를 사용한다', async () => {
+    process.env.AITK_AGENT_ID = '  '
+    vi.mocked(readConfig).mockReturnValue({
+      serverUrl: 'https://test.example.com',
+      searchMethod: 'cli',
+      agentId: 'bbodoong',
+    })
+
+    await runReportExecutionStart({ skillId: 'review-helper', agent: 'openclaw' })
+
+    const args = vi.mocked(jsonRpcCall).mock.calls[0][1] as { arguments: { agentId: string } }
+    expect(args.arguments.agentId).toBe('bbodoong')
   })
 })

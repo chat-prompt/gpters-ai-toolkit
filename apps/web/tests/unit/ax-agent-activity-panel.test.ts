@@ -143,6 +143,42 @@ describe('agentActivityPanel', () => {
     expect(result.data!.insights.some((item) => item.title === '수집 지연')).toBe(true)
   })
 
+  it('기간 경계에 걸친 초기 backfill batch는 합계에서 보수적으로 제외한다', async () => {
+    queueRows([
+      row({
+        windowStart: new Date('2026-08-19T00:00:00Z'),
+        windowEnd: new Date('2026-08-26T00:00:00Z'),
+        turns: 100,
+        outputTokens: 1_000,
+      }),
+      row({
+        windowStart: new Date('2026-08-26T00:00:00Z'),
+        windowEnd: new Date('2026-08-26T01:00:00Z'),
+        turns: 3,
+        outputTokens: 30,
+        models: [{ model: 'claude-opus-5', turns: 3, usage: usage(10, 30, 30, 40, 8) }],
+      }),
+    ], [], [{
+      collectorId: 'col-1',
+      agentId: 'bbodoong',
+      source: 'claude-code',
+      intervalSeconds: 3600,
+      lastSuccessAt: new Date('2026-08-26T01:00:00Z'),
+      lastHealthStatus: 'healthy',
+      lastHealthWarnings: [],
+      createdAt: new Date('2026-08-20T00:00:00Z'),
+    }])
+
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+
+    expect(result.status).toBe('ok')
+    expect(result.data).toMatchObject({ turns: 3, collection: { batches: 1 } })
+    expect(result.data!.totalUsage.outputTokens).toBe(30)
+    expect(result.data!.insights).toContainEqual(expect.objectContaining({
+      title: '기간 경계 batch 1개 제외',
+    }))
+  })
+
   it('Hermes batch를 reporter와 source coverage에 포함한다', async () => {
     queueRows([row({
       agentId: 'bbokeoter',

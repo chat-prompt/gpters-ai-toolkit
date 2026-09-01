@@ -107,6 +107,22 @@ example a bot name or a user-and-runtime combination. The server refuses a
 second active collector for the same `(agentId, source)` so two schedulers
 cannot silently double-count one stream.
 
+On a machine dedicated to one bot, set the same stable ID for explicit skill
+execution reports so telemetry and verified outcomes appear under one name:
+
+```sh
+aitk config set agentId <stable-agent-id>
+```
+
+If several bots or Hermes profiles share one OS account, do not use this global
+default. Set `AITK_AGENT_ID` in each bot process or pass `--agent-id` on both
+`report-execution-start` and `report-execution` instead.
+
+The dashboard only sums batches whose complete window falls inside the selected
+period. A first-run backfill that crosses the period boundary is shown as an
+excluded boundary batch rather than being proportionally estimated and mixed
+into a misleading 7-day total.
+
 If a matching legacy pilot checkpoint already exists, `install` adopts its
 `collectorInstanceId` automatically. It does not reset or delete the checkpoint,
 so the first enrolled upload continues from the last committed window.

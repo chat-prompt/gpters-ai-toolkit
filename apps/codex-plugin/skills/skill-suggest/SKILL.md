@@ -118,7 +118,9 @@ Bash("aitk report-execution-start --skill-id '스킬ID' --agent codex")
 
 응답의 `attemptId`를 기억합니다. 뽀둥이처럼 공유 머신의 봇을 구분해야 하면 시작·완료 모두에
 `agentId="안정적인-봇-id"` 또는 `--agent-id '안정적인-봇-id'`를 추가합니다. 생략하면
-런타임 이름(`codex`)이 사용됩니다.
+`AITK_AGENT_ID`, 로컬 `agentId` 설정, 런타임 이름 순서로 결정됩니다. 단일 봇 머신은
+`aitk config set agentId '안정적인-봇-id'`로 한 번 설정하고, 여러 봇이 같은 OS 계정을
+공유하면 전역 설정 대신 봇 프로세스별 `AITK_AGENT_ID` 또는 명시 인자를 사용합니다.
 
 ### 5단계: 적용하고 검증
 
