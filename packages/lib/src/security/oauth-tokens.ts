@@ -10,7 +10,7 @@ import { db, oauthAccessTokens, oauthClients, oauthRefreshTokens, users } from '
 import { eq, and, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 import { getBaseUrl } from '../utils'
-import { isGptersEmail } from '../account-access'
+import { isAllowedAccountEmail } from '../account-access'
 
 const log = createLogger('oauth-tokens')
 
@@ -129,7 +129,7 @@ export async function createAccessToken(
     .from(users)
     .where(eq(users.id, options.userId))
 
-  if (!isGptersEmail(tokenOwner?.email)) {
+  if (!isAllowedAccountEmail(tokenOwner?.email)) {
     log.warn('Access token issuance denied: account is not authorized', {
       userId: options.userId,
       clientId: options.clientId,
@@ -202,7 +202,7 @@ export async function validateAccessToken(
       return { valid: false, error: 'Invalid token' }
     }
 
-    if (!isGptersEmail(tokenRecord.userEmail)) {
+    if (!isAllowedAccountEmail(tokenRecord.userEmail)) {
       log.warn('Access token validation failed: account is not authorized', {
         accessTokenId: tokenRecord.id,
       })

@@ -118,11 +118,6 @@ vi.mock('@gpters/lib/security', () => ({
   // Types are erased at runtime, no need to mock them
 }))
 
-vi.mock('@gpters/lib/account-access', () => ({
-  isGptersEmail: (email: string | null | undefined) =>
-    typeof email === 'string' && /^[^@]+@gpters\.org$/i.test(email.trim()),
-}))
-
 // Mock NextAuth
 const mockSignInCallback = vi.fn()
 const mockSessionCallback = vi.fn()

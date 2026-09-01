@@ -71,6 +71,15 @@ describe('OAuth access token domain enforcement', () => {
     expect(result.userId).toBe('user-1')
   })
 
+  it('accepts a token owned by the individually approved external account', async () => {
+    tokenRecord.current = { ...tokenRecord.current, userEmail: 'zeusajm@yonsei.ac.kr' }
+
+    const result = await validateAccessToken(VALID_TOKEN)
+
+    expect(result.valid).toBe(true)
+    expect(result.userId).toBe('user-1')
+  })
+
   it('rejects an otherwise valid token owned by an external account', async () => {
     tokenRecord.current = { ...tokenRecord.current, userEmail: 'jwhyun2215@gmail.com' }
 
@@ -87,6 +96,13 @@ describe('OAuth access token domain enforcement', () => {
 
     expect(result).toEqual({ valid: false, error: 'Account is not authorized' })
     expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('issues CLI and MCP tokens to the individually approved external account', async () => {
+    tokenRecord.current = { ...tokenRecord.current, userEmail: 'zeusajm@yonsei.ac.kr' }
+
+    await expect(createAccessToken({ clientId: 'client-1', userId: 'user-1' })).resolves.toBeDefined()
+    expect(insertValues).toHaveBeenCalled()
   })
 
   it('refuses to issue any new CLI or MCP token to an external account', async () => {

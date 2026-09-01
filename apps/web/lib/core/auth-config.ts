@@ -3,7 +3,7 @@ import Google from 'next-auth/providers/google'
 import { db, users, organizations, orgMemberships } from '@gpters/db'
 import { eq, sql, and } from 'drizzle-orm'
 import { createLogger } from '@gpters/lib/core'
-import { isGptersEmail } from '@gpters/lib/account-access'
+import { accessDomainOf, isAllowedAccountEmail } from '@gpters/lib/account-access'
 import type { UserRole, OrgRole } from '@gpters/lib/security'
 
 const log = createLogger('auth')
@@ -22,14 +22,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      if (!isGptersEmail(user.email)) {
-        log.warn('Login denied: account is outside the GPTers domain')
+      if (!isAllowedAccountEmail(user.email)) {
+        log.warn('Login denied: account is not authorized')
         return false
       }
 
       const email = user.email.trim().toLowerCase()
       user.email = email
-      const domain = email.trim().toLowerCase().split('@')[1]
+      const domain = accessDomainOf(email)
 
       try {
         const matchingOrgs = await db
@@ -172,7 +172,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session
     },
     async jwt({ token, user }) {
-      if (!isGptersEmail(token.email)) {
+      if (!isAllowedAccountEmail(token.email)) {
         return null
       }
 
