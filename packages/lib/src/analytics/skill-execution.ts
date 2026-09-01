@@ -1,7 +1,7 @@
 /** 검증 가능한 스킬 실행 시도를 eventId 멱등으로 저장한다 */
 
 import { axSkillExecutionAttempts, axSkillExecutionEvents, db } from '@gpters/db'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import type { AxSkillExecutionReport, AxSkillExecutionStartReport } from '../features/ax/execution-report'
 import { createLogger } from '../core/logger'
 
@@ -91,7 +91,7 @@ export async function recordSkillExecutionAttempt(params: {
   const { report } = params
   const completedAt = new Date(report.occurredAt)
   try {
-    await db
+    const insertedAttempts = await db
       .insert(axSkillExecutionAttempts)
       .values({
         attemptId: report.attemptId,
@@ -117,6 +117,27 @@ export async function recordSkillExecutionAttempt(params: {
         completedAt,
       })
       .onConflictDoNothing({ target: axSkillExecutionAttempts.attemptId })
+      .returning({ attemptId: axSkillExecutionAttempts.attemptId })
+
+    // A new eventId may be used to enrich validation for an already completed
+    // attempt. Atomically claim only the first completion so derived apply
+    // metrics are emitted once per attempt while later reports still update it.
+    let firstCompletion = insertedAttempts.length > 0
+    if (!firstCompletion) {
+      const claimedCompletions = await db
+        .update(axSkillExecutionAttempts)
+        .set({ completedAt })
+        .where(and(
+          eq(axSkillExecutionAttempts.attemptId, report.attemptId),
+          eq(axSkillExecutionAttempts.source, report.source),
+          eq(axSkillExecutionAttempts.skillId, report.skillId),
+          eq(axSkillExecutionAttempts.agent, report.agent),
+          eq(axSkillExecutionAttempts.agentId, report.agentId),
+          isNull(axSkillExecutionAttempts.completedAt),
+        ))
+        .returning({ attemptId: axSkillExecutionAttempts.attemptId })
+      firstCompletion = claimedCompletions.length > 0
+    }
 
     const updatedAttempts = await db
       .update(axSkillExecutionAttempts)
@@ -160,7 +181,7 @@ export async function recordSkillExecutionAttempt(params: {
       })
       .onConflictDoNothing({ target: axSkillExecutionEvents.eventId })
       .returning({ eventId: axSkillExecutionEvents.eventId })
-    return insertedEvents.length > 0
+    return firstCompletion && insertedEvents.length > 0
   } catch (error) {
     log.warn('Failed to record skill execution attempt', {
       error,

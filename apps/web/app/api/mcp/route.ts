@@ -654,7 +654,7 @@ export async function POST(request: NextRequest) {
         }).catch(() => false)
 
         // 실패·부분 성공도 스킬을 실제로 적용한 시도이므로 apply로 기록한다.
-        // 동일 eventId 재전송은 실행 이벤트와 기존 지표 모두 한 번만 반영한다.
+        // 동일 attemptId의 재보고는 eventId가 달라도 파생 apply를 한 번만 반영한다.
         if (firstCompletion) {
           await recordOutcomeEvent({
             sessionId: sid ?? null,

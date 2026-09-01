@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let insertCount = 0
 let eventInserted = true
+let attemptInserted = true
 let attemptInsertValues: Record<string, unknown> | undefined
+let updateResults: Array<Array<Record<string, string>>> = []
 
 function insertBuilder() {
   const isEventInsert = insertCount++ % 2 === 1
@@ -12,8 +14,9 @@ function insertBuilder() {
     return chain
   })
   chain.onConflictDoNothing = vi.fn(() => chain)
-  chain.returning = vi.fn(() => Promise.resolve(
-    isEventInsert && eventInserted ? [{ eventId: 'event-id' }] : []
+  chain.returning = vi.fn(() => Promise.resolve(isEventInsert
+    ? eventInserted ? [{ eventId: 'event-id' }] : []
+    : attemptInserted ? [{ attemptId: 'attempt-id' }] : []
   ))
   chain.then = (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) =>
     Promise.resolve([]).then(resolve, reject)
@@ -24,7 +27,7 @@ function updateBuilder() {
   const chain: Record<string, unknown> = {}
   chain.set = vi.fn(() => chain)
   chain.where = vi.fn(() => chain)
-  chain.returning = vi.fn(() => Promise.resolve([{ attemptId: 'attempt-id' }]))
+  chain.returning = vi.fn(() => Promise.resolve(updateResults.shift() ?? [{ attemptId: 'attempt-id' }]))
   return chain
 }
 
@@ -39,6 +42,7 @@ vi.mock('@gpters/db', () => ({
     skillId: 'skill_id',
     agent: 'agent',
     agentId: 'agent_id',
+    completedAt: 'completed_at',
   },
   axSkillExecutionEvents: { eventId: 'event_id' },
 }))
@@ -72,16 +76,30 @@ describe('recordSkillExecutionAttempt', () => {
   beforeEach(() => {
     insertCount = 0
     eventInserted = true
+    attemptInserted = true
     attemptInsertValues = undefined
+    updateResults = []
     vi.clearAllMocks()
   })
 
-  it('새 완료 이벤트일 때만 true를 반환한다', async () => {
+  it('새 attempt의 최초 완료일 때 true를 반환한다', async () => {
     expect(await recordSkillExecutionAttempt({ sessionId: 'session', report })).toBe(true)
   })
 
   it('같은 eventId 재전송이면 false를 반환해 파생 지표 중복을 막는다', async () => {
     eventInserted = false
+    expect(await recordSkillExecutionAttempt({ sessionId: 'session', report })).toBe(false)
+  })
+
+  it('시작된 attempt의 최초 완료를 원자적으로 선점하면 true를 반환한다', async () => {
+    attemptInserted = false
+    updateResults = [[{ attemptId: 'attempt-id' }], [{ attemptId: 'attempt-id' }]]
+    expect(await recordSkillExecutionAttempt({ sessionId: 'session', report })).toBe(true)
+  })
+
+  it('완료된 attempt를 새 eventId로 보완해도 파생 apply를 다시 만들지 않는다', async () => {
+    attemptInserted = false
+    updateResults = [[], [{ attemptId: 'attempt-id' }]]
     expect(await recordSkillExecutionAttempt({ sessionId: 'session', report })).toBe(false)
   })
 
