@@ -483,6 +483,18 @@ export type AxUsageParticipationStatus =
   | 'stale'
   | 'reporting'
 
+/**
+ * 수집 참여 상태의 표시 순서 — 나쁜 상태부터 좋은 상태로.
+ * 참여 목록 정렬과 상태 요약 pill 순서가 모두 이 배열을 따른다.
+ */
+export const AX_USAGE_PARTICIPATION_STATUS_ORDER: readonly AxUsageParticipationStatus[] = [
+  'not_approved',
+  'not_installed',
+  'stale',
+  'not_using',
+  'reporting',
+]
+
 /** 내부 계정 한 명의 수집 참여 상태. 이메일은 포함하지 않는다. */
 export interface AxUsageParticipationRow {
   userId: string
