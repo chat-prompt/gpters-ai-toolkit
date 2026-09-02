@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AxAgentActivityData,
   AxOverviewData,
   AxPanelMeta,
   AxPanelResult,
+  AxSkillUsageData,
 } from '../../../../packages/lib/src/features/ax/types'
 import { AxDashboard } from '../../components/ax/AxDashboard'
 
@@ -160,8 +162,8 @@ describe('AxDashboard 패널 요청', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('팀 스킬 잔디는 적용 경로별 활동을 합치고 도움말 클릭 시 의미와 로드 합계를 보여준다', async () => {
-    const overview = PANELS[0]
+  it('요약은 장기 활동과 내부 데이터 출처를 노출하지 않는다', async () => {
+    const overview = { ...PANELS[0], source: 'aitk DB (skill_events)' }
     const data: AxOverviewData = {
       totalParticipants: 1,
       catalogSkills: 1,
@@ -178,7 +180,6 @@ describe('AxDashboard 패널 요청', () => {
       },
       hourlyDensity: [],
       memberUsage: null,
-      unmeasured: [],
     }
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
@@ -193,14 +194,187 @@ describe('AxDashboard 패널 요청', () => {
 
     render(<AxDashboard panels={[overview]} isAdmin />)
 
-    expect(await screen.findByText(/일별 팀 스킬 활동/)).toBeTruthy()
-    expect(screen.getByText(/활동 3건 · 로드 없이 적용 2 · 로드 후 적용 1 · 최대 2건\/일/)).toBeTruthy()
-    const help = screen.getByRole('button', { name: /활동은 로드 없이 적용한 경우와 로드 후 적용 보고/ })
-    expect(help.getAttribute('aria-expanded')).toBe('false')
+    await screen.findByRole('tabpanel', { name: '요약' })
+    expect(screen.queryByText('장기 활동')).toBeNull()
+    expect(screen.queryByText(/일별 팀 스킬 활동/)).toBeNull()
+    expect(screen.queryByText('aitk DB (skill_events)')).toBeNull()
+  })
 
-    fireEvent.click(help)
+  it('요약은 구성원 활동을, 스킬 탭은 일별 스킬 이벤트를 보여준다', async () => {
+    const activityPanels: AxPanelMeta[] = [
+      {
+        id: 'overview', title: '요약', description: '구성원의 AX 활동', source: 'test',
+        visibility: 'org', usesPeriod: true,
+      },
+      {
+        id: 'skill-usage', title: '스킬', description: 'aitk 서버에서 관측된 검색·콘텐츠 로드·적용 보고 현황', source: 'aitk DB (skill_events · mcp_sessions)',
+        visibility: 'org', usesPeriod: true,
+      },
+      {
+        id: 'agent-activity', title: '에이전트 활동', description: '에이전트 사용', source: 'test',
+        visibility: 'org', parentId: 'skill-usage', usesPeriod: true,
+      },
+    ]
+    const overviewData: AxOverviewData = {
+      totalParticipants: 6,
+      catalogSkills: 1,
+      grassDaily: [
+        { date: '2026-08-30', events: 3, loads: 20, directApplied: 2, appliedAfterLoad: 1 },
+        { date: '2026-08-31', events: 8, loads: 45, directApplied: 5, appliedAfterLoad: 3 },
+      ],
+      dailySkillFlow: [
+        { date: '2026-08-30', directApplied: 1, loaded: 4, linkableLoaded: 3, appliedAfterLoad: 2 },
+        { date: '2026-08-31', directApplied: 2, loaded: 5, linkableLoaded: 4, appliedAfterLoad: 3 },
+      ],
+      skillFlowSummary: {
+        directApplied: 3,
+        loaded: 9,
+        linkableLoaded: 7,
+        appliedAfterLoad: 5,
+      },
+      hourlyDensity: [],
+      memberUsage: null,
+    }
+    const skillData: AxSkillUsageData = {
+      totalEvents: 100,
+      meaningfulUses: 65,
+      activeUsers: 6,
+      sessions: 5,
+      actionTotals: { search: 10, load: 20, apply: 65, skip: 4, deploy: 1 },
+      skills: [],
+      daily: [
+        { date: '2026-08-30', events: 20 },
+        { date: '2026-08-31', events: 45 },
+      ],
+      totalUnusedSkills: 0,
+      unusedSkills: [],
+    }
+    const zeroUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+      thinkingTokens: 0,
+      thinkingTokensRelation: 'unknown' as const,
+    }
+    const agentData: AxAgentActivityData = {
+      syncedAt: '2026-08-31T00:00:00.000Z',
+      windowStart: '2026-08-24T00:00:00.000Z',
+      windowEnd: '2026-08-31T00:00:00.000Z',
+      totalUsage: zeroUsage,
+      totalProcessedTokens: 1000,
+      sessions: 30,
+      turns: 3830,
+      toolCalls: 100,
+      toolFailures: 0,
+      agents: ['bbodoong', 'bbokeoter'].map((agentId) => ({
+        agentId,
+        totalUsage: zeroUsage,
+        totalProcessedTokens: 500,
+        sessions: 15,
+        turns: 1915,
+        toolCalls: 50,
+        toolFailures: 0,
+        models: [],
+        tools: [],
+        skills: [],
+        observedExecutionReports: [],
+        verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0 },
+        collection: { batches: 1, recordsRead: 1, parseFailures: 0, unsupportedRecordsSkipped: 0 },
+      })),
+      reporters: [],
+      sourceCoverage: [],
+      models: [],
+      tools: [],
+      skills: [],
+      observedExecutionReports: [],
+      verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0 },
+      collection: { batches: 2, recordsRead: 2, parseFailures: 0, unsupportedRecordsSkipped: 0 },
+      insights: [],
+    }
 
-    expect(help.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getAllByText(/스킬 전체 지침을 확인한 로드는 9건/).length).toBeGreaterThan(0)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const meta = activityPanels.find((panel) => url.includes(`/api/ax/${panel.id}?`))!
+      return {
+        ok: true,
+        json: async () => ({
+          meta,
+          status: 'ok',
+          data: meta.id === 'overview'
+            ? overviewData
+            : meta.id === 'skill-usage'
+              ? skillData
+              : agentData,
+          // 예전 전역 타일의 원천 데이터가 응답에 남아 있어도 상단에는 노출하지 않는다.
+          highlights: [
+            { label: '전체 구성원', value: '21', hint: '명' },
+            { label: '주간 활성', value: '2', hint: '명' },
+          ],
+          generatedAt: '2026-08-31T00:00:00.000Z',
+        } satisfies AxPanelResult),
+      }
+    }))
+
+    render(<AxDashboard panels={activityPanels} isAdmin />)
+
+    expect(await screen.findByText('활성 구성원')).toBeTruthy()
+    expect(screen.getByText('실제 적용 호출')).toBeTruthy()
+    expect(screen.getByText('1인당 적용')).toBeTruthy()
+    expect(screen.queryByText('활동일')).toBeNull()
+    expect(screen.queryByText('구성원 AX 활동')).toBeNull()
+    expect(screen.queryByText('구성원의 AX 활동')).toBeNull()
+    expect(screen.queryByText('활성 에이전트')).toBeNull()
+    expect(screen.queryByText('에이전트 턴')).toBeNull()
+    expect(screen.queryByText(/7일 활성 구성원/)).toBeNull()
+    expect(screen.getByRole('tooltip', { name: '적용 보고를 남긴 사람' }).className).toContain('inset-x-0')
+    expect(screen.getByText('일별 사용 인원').className).toContain('font-mono')
+    const quieterDay = screen.getByLabelText('8월 30일 · 사용 인원 3명').firstElementChild as HTMLElement
+    const peakDay = screen.getByLabelText('8월 31일 · 사용 인원 5명').firstElementChild as HTMLElement
+    expect(quieterDay.className).toContain('ax-activity-mark')
+    expect(quieterDay.dataset.activityFill).toContain('25.0%')
+    expect(quieterDay.style.transform).toBe('')
+    expect(peakDay.dataset.activityFill).toContain('100.0%')
+    fireEvent.mouseEnter(quieterDay.parentElement!)
+    expect(quieterDay.style.boxShadow).toContain('var(--brand-primary)')
+    expect(quieterDay.style.transform).toBe('')
+    fireEvent.mouseLeave(quieterDay.parentElement!)
+    expect(quieterDay.style.boxShadow).toBe('none')
+    expect(screen.queryByLabelText('일별 스킬 활동 범례')).toBeNull()
+    expect(screen.queryByText('장기 활동')).toBeNull()
+
+    fireEvent.click(screen.getByRole('tab', { name: '스킬' }))
+
+    expect(screen.getByLabelText('일별 스킬 활동 범례')).toBeTruthy()
+    const eventSummary = screen.getByLabelText('검색 노출 10건 · 전체 이벤트 중 10.0%')
+    const dailyChartTitle = screen.getByText('일별 스킬 활동')
+    expect(eventSummary.compareDocumentPosition(dailyChartTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const flowDay = screen.getByLabelText('8월 31일 · 로드 없이 적용 5건 · 로드 45건 · 로드 후 적용 3건')
+    const flowBar = flowDay.querySelector<HTMLElement>('[data-flow-total]')
+    expect(flowBar?.dataset.flowTotal).toBe('50')
+    expect(flowBar?.style.transform).toBe('')
+    expect(flowBar?.style.filter).toBe('')
+    expect(flowBar?.style.opacity).toBe('')
+    expect(flowDay.querySelector<HTMLElement>('[data-flow-segment="direct"]')?.dataset.flowColor).toContain('#7a2f12')
+    const loadSegment = flowDay.querySelector<HTMLElement>('[data-flow-segment="load"]')
+    const convertedSegment = flowDay.querySelector<HTMLElement>('[data-flow-segment="converted"]')
+    expect(loadSegment?.dataset.flowColor).toContain('16%')
+    expect(loadSegment?.style.boxShadow).toBe('')
+    expect(convertedSegment?.dataset.flowColor).toBe('var(--brand-primary)')
+    expect(convertedSegment?.style.boxShadow).toBe('')
+    const selectedTooltipText = '8월 31일 · 로드 없이 적용 5 · 로드 45 · 로드 후 적용 3 (7%)'
+    const otherTooltipText = '8월 30일 · 로드 없이 적용 2 · 로드 20 · 로드 후 적용 1 (5%)'
+    expect(screen.queryByText(selectedTooltipText)).toBeNull()
+    expect(screen.queryByText(otherTooltipText)).toBeNull()
+    fireEvent.mouseEnter(flowDay)
+    expect(screen.getByText(selectedTooltipText)).toBeTruthy()
+    expect(screen.queryByText(otherTooltipText)).toBeNull()
+    fireEvent.mouseLeave(flowDay)
+    expect(screen.queryByText(selectedTooltipText)).toBeNull()
+    expect(screen.queryByText('aitk 서버에서 관측된 검색·콘텐츠 로드·적용 보고 현황')).toBeNull()
+    expect(screen.queryByText('aitk DB (skill_events · mcp_sessions)')).toBeNull()
+    expect(screen.queryByText('장기 활동')).toBeNull()
+    expect(screen.queryByText('전체 구성원')).toBeNull()
+    expect(screen.queryByText('주간 활성')).toBeNull()
   })
 })

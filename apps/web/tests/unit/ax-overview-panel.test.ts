@@ -3,7 +3,7 @@
  *
  * db는 모킹하고, 다음을 검증한다:
  * 1. 실측 지표(누적 참여·일별 사용 인원·시간대별 사용 인원)가 올바르게 조립되는지
- * 2. 미계측 지표가 값 대신 사유와 함께 내려가는지
+ * 2. 사용자별 고유 스킬 수를 실제 적용 횟수와 분리해 내려주는지
  * 3. 빈 구간·문자열 count·쿼리 실패 같은 경계가 안전한지
  */
 
@@ -133,7 +133,7 @@ describe('overviewPanel', () => {
     expect(overviewPanel.meta.usesPeriod).toBe(true)
   })
 
-  it('실측 지표를 조립하고 미계측 지표를 사유와 함께 내려준다', async () => {
+  it('사람 중심의 실측 지표만 조립한다', async () => {
     queueQueries([
       [{ users: 21 }],
       [{ count: 504 }],
@@ -200,14 +200,6 @@ describe('overviewPanel', () => {
     expect(data.hourlyDensity).toHaveLength(24)
     expect(data.hourlyDensity[10]).toEqual({ hour: 10, users: 4 })
     expect(data.hourlyDensity[0]).toEqual({ hour: 0, users: 0 })
-
-    // 미계측 지표는 값 없이 사유만 내려간다
-    expect(data.unmeasured.length).toBeGreaterThan(0)
-    for (const item of data.unmeasured) {
-      expect(item.label.trim()).not.toBe('')
-      expect(item.reason.trim()).not.toBe('')
-    }
-    expect(data.unmeasured.map((item) => item.label)).not.toContain('에이전트별 사용량')
 
     // 요약 밴드 수치
     expect(result.highlights).toEqual([
@@ -327,16 +319,16 @@ describe('overviewPanel', () => {
       [],
       [],
       [
-        { name: '하영', loaded: 31, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
-        { name: null, loaded: 3, applied: 0, lastActiveAt: null },
+        { name: '하영', uniqueSkills: 4, loaded: 31, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
+        { name: null, uniqueSkills: 0, loaded: 3, applied: 0, lastActiveAt: null },
       ],
     ])
 
     const data = (await overviewPanel.load({ days: 30, isAdmin: true })).data!
 
     expect(data.memberUsage).toEqual([
-      { name: '하영', loaded: 31, applied: 9, lastActiveAt: '2026-08-18T02:00:00.000Z' },
-      { name: '이름 미설정', loaded: 3, applied: 0, lastActiveAt: null },
+      { name: '하영', uniqueSkills: 4, loaded: 31, applied: 9, lastActiveAt: '2026-08-18T02:00:00.000Z' },
+      { name: '이름 미설정', uniqueSkills: 0, loaded: 3, applied: 0, lastActiveAt: null },
     ])
   })
 

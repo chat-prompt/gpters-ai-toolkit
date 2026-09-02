@@ -3,27 +3,20 @@
 /**
  * AX 대시보드 — 성과 요약 패널 본문
  *
- * 상단은 전체 구성원 수를 보여주고, 계정이 연결된 누적 스킬 참여 수는 내부 집계로만
- * 남긴다. 익명 이벤트가 있어 실제 사람 수로 단정할 수 없기 때문이다. 본문은 사람 중심의
- * 실측 그래프(일별 활성 추이 · 시간대별 밀도)와,
- * 목업에는 있으나 아직 계측하지 못하는 지표의 목록으로 구성된다.
- *
- * 미계측 지표를 숨기지 않고 사유와 함께 보여주는 것이 이 패널의 핵심 설계다 —
- * 0이나 추정값으로 채우면 대시보드 전체 수치의 신뢰가 무너진다.
+ * 상단의 구성원 활동 카드가 선택 기간의 일별 실제 사용 인원을 담당한다. 이 본문은
+ * 시간대별 사용 인원과 사용자별 고유 스킬 활용처럼 사람 중심의 상세로 구성된다.
  */
 
 import type { AxOverviewData } from '@/lib/features/ax'
+import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate } from '../format'
+import { formatCount, formatDate, relativeActivityFill } from '../format'
 
 /** 표 머리칸 공통 스타일 */
 const SECTION_LABEL = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]'
 
 /** 데이터가 비었을 때의 조용한 안내문 */
 const EMPTY_NOTE = 'border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]'
-
-/** 일별 사용 인원 그래프의 실제 막대 영역 높이(px) */
-const ACTIVITY_CHART_HEIGHT = 176
 
 /**
  * 성과 요약 패널 화면
@@ -34,19 +27,19 @@ const ACTIVITY_CHART_HEIGHT = 176
 export function OverviewPanel({ data, days }: AxPanelViewProps<AxOverviewData>) {
   return (
     <div className="space-y-10">
-      <DailySkillFlow daily={data.dailySkillFlow} summary={data.skillFlowSummary} days={days} />
       <HourlyActiveUsers rows={data.hourlyDensity} />
-      {/* 사용자별 로드·적용 보고 — 관리자에게만 데이터가 내려온다 */}
+      {/* 사용자별 고유 스킬 활용 — 관리자에게만 데이터가 내려온다 */}
       {data.memberUsage !== null && <MemberUsageTable rows={data.memberUsage} days={days} />}
-      <UnmeasuredList items={data.unmeasured} />
     </div>
   )
 }
 
 /**
- * 사용자별 로드·적용 보고 표 (관리자 전용)
+ * 사용자별 고유 스킬 활용 표 (관리자 전용)
  *
- * 이름 칸에 사용량 비례 막대를 깔아 순위 차이가 표를 읽지 않고도 보이게 한다.
+ * 이름 칸에 실제 적용 횟수 비례 막대를 깔아 활동량 차이를 표를 읽지 않고도 보이게 한다.
+ * 표의 숫자 컬럼은 활동량과 별개로 실제 적용한 고유 스킬 수를 보여준다.
+ * 로드·적용 횟수는 행을 호버하거나 키보드로 포커스했을 때만 보조 정보로 드러낸다.
  * 에이전트별 사용량은 별도 에이전트 활동 패널에서 토큰·도구·스킬 신호로 보여준다.
  *
  * @param rows - 사용자별 집계 (사용량 내림차순)
@@ -59,47 +52,65 @@ function MemberUsageTable({
   rows: NonNullable<AxOverviewData['memberUsage']>
   days: number
 }) {
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
   if (rows.length === 0) {
     return (
       <div>
-        <p className={SECTION_LABEL}>사용자별 로드와 실제 적용</p>
-        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 로드·적용 활동이 없습니다.</p>
+        <p className={SECTION_LABEL}>사용자별 스킬 활용</p>
+        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 스킬 활동이 없습니다.</p>
       </div>
     )
   }
 
   const max = Math.max(1, ...rows.map((row) => row.applied))
+  const positiveValues = rows.map((row) => row.applied).filter((value) => value > 0)
+  const min = positiveValues.length > 0 ? Math.min(...positiveValues) : max
 
   return (
     <div>
-      <p className={SECTION_LABEL}>사용자별 로드와 실제 적용</p>
+      <p className={SECTION_LABEL}>사용자별 스킬 활용</p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
-              <th className="py-2.5 px-3 text-left font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)] w-[36%]">사용자</th>
-              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">로드</th>
-              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">적용 보고</th>
+              <th className="py-2.5 px-3 text-left font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)] w-[56%]">사용자</th>
+              <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">고유 스킬</th>
               <th className="py-2.5 px-3 text-right font-mono text-[11px] uppercase tracking-[0.14em] font-normal text-[var(--text-muted)]">마지막 활동</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
             {rows.map((row, index) => (
               // 이름은 유일키가 아니다 — "이름 미설정"이 둘이면 충돌한다
-              <tr key={`${row.name}-${index}`} className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]">
+              <tr
+                key={`${row.name}-${index}`}
+                className="group focus-visible:outline-none"
+                tabIndex={0}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                onMouseLeave={() => setHighlightedIndex(null)}
+                onFocus={() => setHighlightedIndex(index)}
+                onBlur={() => setHighlightedIndex(null)}
+                aria-label={`${row.name} · 고유 스킬 ${formatCount(row.uniqueSkills)}개 · 로드 ${formatCount(row.loaded)}건 · 적용 보고 ${formatCount(row.applied)}건`}
+              >
                 <td className="relative py-2.5 px-3">
                   <span
                     aria-hidden
-                    className="absolute inset-y-0 left-0 bg-[var(--brand-primary)]/[0.07]"
-                    style={{ width: `${(row.applied / max) * 100}%` }}
+                    className="ax-activity-mark absolute inset-y-0 left-0 transition-shadow duration-150"
+                    data-activity-fill={relativeActivityFill(row.applied, min, max)}
+                    style={{
+                      width: `${(row.applied / max) * 100}%`,
+                      background: relativeActivityFill(row.applied, min, max),
+                      boxShadow: highlightedIndex === index
+                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-primary)'
+                        : 'none',
+                    }}
                   />
                   <span className="relative text-[var(--text-primary)]">{row.name}</span>
+                  <span className={`pointer-events-none absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm ${highlightedIndex === index ? 'block' : 'hidden'}`}>
+                    로드 {formatCount(row.loaded)} · 적용 {formatCount(row.applied)}
+                  </span>
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-primary)]">
-                  {formatCount(row.loaded)}건
-                </td>
-                <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-secondary)]">
-                  {formatCount(row.applied)}
+                  {formatCount(row.uniqueSkills)}개
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--text-muted)]">
                   {formatDate(row.lastActiveAt)}
@@ -109,145 +120,7 @@ function MemberUsageTable({
           </tbody>
         </table>
       </div>
-      <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--text-muted)]">
-        로드는 에이전트가 스킬의 전체 지침을 불러온 횟수이고, 실제 사용은 작업에 적용했다고
-        명시적으로 보고한 횟수입니다. 이름 칸의 막대와 정렬은 실제 적용 보고 기준이며,
-        검색 결과 노출·성공 여부·서버 호출 없이 로컬에서 재사용한 횟수는 포함하지 않습니다.
-      </p>
     </div>
-  )
-}
-
-/**
- * 일별 로드 코호트와 적용 전환을 누적·겹침 막대로 표시한다
- *
- * 맨 아래는 앞선 로드 없이 적용된 흐름, 그 위 반투명 막대는 로드 전체다.
- * 로드 뒤 실제 적용까지 이어진 부분은 반투명 로드 막대 안에 진하게 겹친다.
- *
- * @param daily - 일자별 직접 적용·로드·로드 후 적용 코호트
- * @param days - 조회 기간(일). 데이터가 없을 때 안내 문구에만 쓴다
- */
-function DailySkillFlow({
-  daily,
-  summary,
-  days,
-}: {
-  daily: AxOverviewData['dailySkillFlow']
-  summary: AxOverviewData['skillFlowSummary']
-  days: number
-}) {
-  const conversionRate = summary.linkableLoaded > 0
-    ? Math.round((summary.appliedAfterLoad / summary.linkableLoaded) * 100)
-    : 0
-  const hasActivity = daily.some((point) => point.directApplied > 0 || point.loaded > 0)
-
-  if (daily.length === 0 || !hasActivity) {
-    return (
-      <div>
-        <p className={SECTION_LABEL}>일별 사용 인원 (KST)</p>
-        <p className={`mt-3 ${EMPTY_NOTE}`}>최근 {days}일 동안 로드·적용 활동이 없습니다.</p>
-      </div>
-    )
-  }
-
-  const max = Math.max(1, ...daily.map((point) => point.directApplied + point.loaded))
-  const first = daily[0]
-  const last = daily[daily.length - 1]
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <p className={SECTION_LABEL}>일별 사용 인원 (KST)</p>
-        <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-          로드 {formatCount(summary.loaded)}명 · 로드 후 적용 {formatCount(summary.appliedAfterLoad)}/{formatCount(summary.linkableLoaded)}명 · {conversionRate}%
-          {' · '}로드 없이 적용 {formatCount(summary.directApplied)}명
-        </p>
-      </div>
-      <div
-        className="mt-4 flex flex-wrap text-xs text-[var(--text-muted)]"
-        style={{ columnGap: '3rem', rowGap: '0.75rem' }}
-      >
-        <LegendSwatch color="var(--brand-secondary)" label="로드 없이 적용" />
-        <LegendSwatch color="var(--brand-primary)" opacity={0.15} label="로드" />
-        <LegendSwatch color="var(--brand-primary)" opacity={0.75} label="로드 후 적용" />
-      </div>
-      <div className="mt-4 flex h-44 items-end gap-[2px]">
-        {daily.map((point) => (
-          <div
-            key={point.date}
-            className="group relative flex min-w-[2px] flex-1 flex-col justify-end"
-            style={{
-              height: `${Math.max(3, ((point.directApplied + point.loaded) / max) * ACTIVITY_CHART_HEIGHT)}px`,
-            }}
-            aria-label={`${formatDayLabel(point.date)} · 로드 ${formatCount(point.loaded)}명 · 연결 가능 로드 ${formatCount(point.linkableLoaded)}명 · 로드 후 적용 ${formatCount(point.appliedAfterLoad)}명 · 로드 없이 적용 ${formatCount(point.directApplied)}명`}
-          >
-            {point.loaded > 0 && (
-              <div
-                className="relative w-full rounded-t-[3px]"
-                style={{
-                  height: `${(point.loaded / (point.loaded + point.directApplied)) * 100}%`,
-                  background: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 bottom-0 transition-opacity group-hover:opacity-90"
-                  style={{
-                    height: `${(point.appliedAfterLoad / point.loaded) * 100}%`,
-                    background: 'var(--brand-primary)',
-                    opacity: 0.75,
-                  }}
-                />
-              </div>
-            )}
-            {point.directApplied > 0 && (
-              <div
-                className="w-full transition-opacity group-hover:opacity-80"
-                style={{
-                  height: `${(point.directApplied / (point.loaded + point.directApplied)) * 100}%`,
-                  background: 'var(--brand-secondary)',
-                }}
-              />
-            )}
-            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block">
-              {formatDayLabel(point.date)} · 로드 {formatCount(point.loaded)}명 (연결 가능{' '}
-              {formatCount(point.linkableLoaded)}명) · 로드 후 적용{' '}
-              {formatCount(point.appliedAfterLoad)}명 · 로드 없이 적용 {formatCount(point.directApplied)}명
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        <span>{first ? formatDayLabel(first.date) : ''}</span>
-        <span>최대 {formatCount(max)}명 활동/일</span>
-        <span>{last ? formatDayLabel(last.date) : ''}</span>
-      </div>
-      <p className="mt-3 max-w-3xl text-xs leading-relaxed text-[var(--text-muted)]">
-        각 막대는 그날의 고유 사용자 수입니다. 밝은 아래 막대는 로드 없이 적용한 인원,
-        반투명 막대는 로드한 인원이며, 그중 진한 영역은 같은 세션·스킬에서 적용까지 이어진
-        인원입니다. 상단 합계도 선택 기간의 고유 인원이라 같은 사람을 한 번만 셉니다. 다만 한
-        사람이 서로 다른 스킬에서 로드와 로드 없는 적용을 모두 하면 두 범주에는 각각 포함될 수
-        있습니다. 세션이 없어 연결할 수 없는 로드는 전환율에서 제외합니다.
-      </p>
-    </div>
-  )
-}
-
-/** 활동 그래프 범례 한 항목 */
-function LegendSwatch({
-  color,
-  opacity = 1,
-  label,
-}: {
-  color: string
-  opacity?: number
-  label: string
-}) {
-  return (
-    <span className="inline-flex items-center" style={{ gap: '0.625rem' }}>
-      <span aria-hidden className="h-2.5 w-2.5 rounded-[2px]" style={{ background: color, opacity }} />
-      {label}
-    </span>
   )
 }
 
@@ -259,7 +132,10 @@ function LegendSwatch({
  * @param rows - 시간대별 고유 사용자 수 (24칸이 모두 채워져 내려온다)
  */
 function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) {
+  const [highlightedHour, setHighlightedHour] = useState<number | null>(null)
   const max = Math.max(1, ...rows.map((row) => row.users))
+  const positiveValues = rows.map((row) => row.users).filter((value) => value > 0)
+  const min = positiveValues.length > 0 ? Math.min(...positiveValues) : max
   const total = rows.reduce((sum, row) => sum + row.users, 0)
 
   if (total === 0) {
@@ -278,16 +154,26 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
         {rows.map((point) => (
           <div
             key={point.hour}
-            className="group relative min-w-[3px] flex-1"
+            className="group relative min-w-[3px] flex-1 focus-visible:outline-none"
             style={{ height: `${Math.max(2, (point.users / max) * 100)}%` }}
             aria-label={`${point.hour}시 · ${formatCount(point.users)}명`}
+            tabIndex={0}
+            onMouseEnter={() => setHighlightedHour(point.hour)}
+            onMouseLeave={() => setHighlightedHour(null)}
+            onFocus={() => setHighlightedHour(point.hour)}
+            onBlur={() => setHighlightedHour(null)}
           >
             <div
-              className={`h-full rounded-t-[3px] bg-[var(--brand-primary)] transition-opacity duration-200 ${
-                point.users === max ? 'opacity-100' : 'opacity-25 group-hover:opacity-60'
-              }`}
+              className="ax-activity-mark h-full rounded-t-[3px] transition-shadow duration-150"
+              data-activity-fill={relativeActivityFill(point.users, min, max)}
+              style={{
+                background: relativeActivityFill(point.users, min, max),
+                boxShadow: highlightedHour === point.hour
+                  ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-primary)'
+                  : 'none',
+              }}
             />
-            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block">
+            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block">
               {point.hour}시 · {formatCount(point.users)}명
             </span>
           </div>
@@ -302,44 +188,4 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
       </div>
     </div>
   )
-}
-
-/**
- * 아직 계측하지 않는 지표 목록
- *
- * 접지 않고 항상 펼쳐 둔다 — 이 목록은 부끄러운 부록이 아니라
- * "여기 있는 숫자는 전부 실측"이라는 선언의 반쪽이다.
- *
- * @param items - 미계측 지표와 사유
- */
-function UnmeasuredList({ items }: { items: AxOverviewData['unmeasured'] }) {
-  if (items.length === 0) return null
-
-  return (
-    <div className="rounded-xl border border-dashed border-[var(--border-hover)] px-5 py-4">
-      <p className={SECTION_LABEL}>아직 계측하지 않는 지표</p>
-      <ul className="mt-3 space-y-1.5">
-        {items.map((item) => (
-          <li key={item.label} className="flex flex-wrap gap-x-2 text-sm">
-            <span className="text-[var(--text-primary)]">{item.label}</span>
-            <span className="text-[var(--text-secondary)]">— {item.reason}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/**
- * 일자 라벨 (YYYY-MM-DD → "8월 3일")
- *
- * Date로 파싱하면 시간대에 따라 하루가 밀리므로 문자열을 그대로 쪼갠다.
- *
- * @param date - YYYY-MM-DD 형식 날짜
- * @returns "8월 3일". 형식이 다르면 입력을 그대로 돌려준다
- */
-function formatDayLabel(date: string): string {
-  const parts = date.split('-')
-  if (parts.length !== 3) return date
-  return `${Number(parts[1])}월 ${Number(parts[2])}일`
 }

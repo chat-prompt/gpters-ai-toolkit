@@ -12,4 +12,8 @@ export interface AxPanelViewProps<T> {
   data: T
   /** 현재 조회 기간(일) */
   days: number
+  /** 기간 재조회처럼 본문이 다시 만들어져도 유지할 패널별 선택값 */
+  selection?: string
+  /** 패널별 선택값을 대시보드 수준에 보관하는 콜백 */
+  onSelectionChange?: (selection: string) => void
 }

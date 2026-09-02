@@ -90,3 +90,16 @@ export function formatMoneyMap(byCurrency: Record<string, number>): string {
 export function formatCount(value: number): string {
   return value.toLocaleString('ko-KR')
 }
+
+/**
+ * 같은 차트 안의 최솟값~최댓값을 25%~100% 브랜드색 농도로 바꾼다.
+ * 제곱근 곡선으로 작은 값 사이의 차이도 검은 배경에서 사라지지 않게 한다.
+ */
+export function relativeActivityFill(value: number, min: number, max: number): string {
+  if (value <= 0) return 'var(--border-subtle)'
+  if (max <= min) return 'var(--brand-primary)'
+
+  const ratio = Math.min(1, Math.max(0, (value - min) / (max - min)))
+  const intensity = 25 + 75 * Math.sqrt(ratio)
+  return `color-mix(in srgb, var(--brand-primary) ${intensity.toFixed(1)}%, transparent)`
+}

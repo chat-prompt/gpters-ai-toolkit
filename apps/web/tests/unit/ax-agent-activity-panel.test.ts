@@ -15,6 +15,7 @@ vi.mock('@gpters/db', () => ({
     isActive: 'is_active',
   },
   axSkillExecutionAttempts: {
+    agentId: 'agent_id',
     status: 'status',
     validationMethod: 'validation_method',
     validationPassed: 'validation_passed',
@@ -101,8 +102,8 @@ describe('agentActivityPanel', () => {
         collection: { source: 'codex', recordsRead: 50, parseFailures: 1, unsupportedRecordsSkipped: 3, healthWarnings: [] },
       }),
     ], [
-      { status: 'success', validationMethod: 'test', validationPassed: true },
-      { status: 'failed', validationMethod: 'none', validationPassed: null },
+      { agentId: 'bbodoong', status: 'success', validationMethod: 'test', validationPassed: true },
+      { agentId: 'bbodoong', status: 'failed', validationMethod: 'none', validationPassed: null },
     ])
 
     const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
@@ -124,6 +125,16 @@ describe('agentActivityPanel', () => {
       withEvidence: 1,
     })
     expect(result.data!.reporters).toHaveLength(2)
+    expect(result.data!.agents).toEqual([
+      expect.objectContaining({
+        agentId: 'bbodoong',
+        totalProcessedTokens: 110,
+        turns: 5,
+        toolCalls: 20,
+        collection: { batches: 2, recordsRead: 150, parseFailures: 1, unsupportedRecordsSkipped: 5 },
+        verifiedExecutions: expect.objectContaining({ attempts: 2, success: 1, failed: 1, withEvidence: 1 }),
+      }),
+    ])
     expect(result.data!.sourceCoverage.find((item) => item.source === 'claude-code')?.status).toBe('reporting')
     expect(result.data!.sourceCoverage.find((item) => item.source === 'codex')?.status).toBe('reporting')
     expect(result.data!.sourceCoverage.find((item) => item.source === 'openclaw')?.status).toBe('alternate')
