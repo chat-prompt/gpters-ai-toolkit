@@ -85,6 +85,6 @@ describe('AX 스킬 사용 패널 화면', () => {
     const betaBar = screen.getByText('베타 스킬').closest('tr')
       ?.querySelector<HTMLElement>('[data-activity-fill]')
     expect(alphaBar?.dataset.activityFill).toContain('100.0%')
-    expect(betaBar?.dataset.activityFill).toContain('25.0%')
+    expect(betaBar?.dataset.activityFill).toContain('30.0%')
   })
 })

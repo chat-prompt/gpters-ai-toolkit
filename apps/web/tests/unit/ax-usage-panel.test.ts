@@ -391,6 +391,15 @@ describe('clientUsagePanel', () => {
       status: 'reporting',
       source: 'legacy_usage',
     })
+    // 나쁜 상태부터 좋은 상태로 묶고, 같은 상태 안에서는 이름순이다.
+    expect(result.data!.participation!.map((item) => `${item.status}:${item.memberName}`)).toEqual([
+      'not_approved:미승인',
+      'not_installed:미설치',
+      'stale:장기미보고',
+      'not_using:미사용',
+      'reporting:레거시',
+      'reporting:정상',
+    ])
     // 사용량 0 heartbeat는 수집 정상 상태지만 실제 주간 활성에는 포함하지 않는다.
     expect(result.data!.reportingMembers).toBe(2)
     expect(result.highlights?.[2]).toEqual({

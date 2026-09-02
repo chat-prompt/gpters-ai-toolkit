@@ -13,6 +13,7 @@ vi.mock('@gpters/db', () => ({
   db: { select: vi.fn(), execute: vi.fn() },
   skillEvents: {
     skillId: 'skill_events.skill_id',
+    journeyId: 'skill_events.journey_id',
     sessionId: 'skill_events.session_id',
     userId: 'skill_events.user_id',
     action: 'skill_events.action',
@@ -25,6 +26,12 @@ vi.mock('@gpters/db', () => ({
     status: 'catalog_items.status',
   },
   users: { id: 'users.id', name: 'users.name' },
+  axAgentTelemetryBatches: {
+    agentId: 'ax_agent_telemetry_batches.agent_id',
+    windowStart: 'ax_agent_telemetry_batches.window_start',
+    windowEnd: 'ax_agent_telemetry_batches.window_end',
+    turns: 'ax_agent_telemetry_batches.turns',
+  },
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -97,6 +104,23 @@ function collectValues(node: unknown, out: unknown[] = []): unknown[] {
   return out
 }
 
+/**
+ * Drizzle sql 템플릿을 사람이 읽을 수 있는 문자열로 편다 — 컬럼은 이름, 리터럴은 값으로.
+ * 실제 SQL 실행 없이도 집계 정의(필터·distinct 키)가 의도와 맞는지 단언하기 위한 근사치다.
+ */
+function sqlText(node: unknown): string {
+  if (node === null || node === undefined) return ''
+  if (typeof node === 'string') return node
+  if (typeof node !== 'object') return String(node)
+  const record = node as Record<string, unknown>
+  if (Array.isArray(record.queryChunks)) return record.queryChunks.map(sqlText).join('')
+  if (Array.isArray(record.value)) return record.value.map(sqlText).join('')
+  if (Array.isArray(node)) return node.map(sqlText).join('')
+  if (typeof record.name === 'string') return record.name
+  if ('value' in record) return sqlText(record.value)
+  return ''
+}
+
 /** select 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·잔디·시간대(·관리자면 사용자별) */
 function queueQueries(results: unknown[]) {
   const select = vi.mocked(db.select)
@@ -137,11 +161,12 @@ describe('overviewPanel', () => {
     queueQueries([
       [{ users: 21 }],
       [{ count: 504 }],
-      [{ date: '2026-08-18', directApplied: 9, appliedAfterLoad: 3, loads: 20 }],
+      [{ date: '2026-08-18', directApplied: 9, appliedAfterLoad: 3, loads: 20, linkableLoads: 15 }],
       [
         { hour: 10, users: 4 },
         { hour: 15, users: 2 },
       ],
+      [{ date: '2026-08-18', turns: 43, agents: 2 }],
     ])
     queueFlow([
       {
@@ -173,8 +198,15 @@ describe('overviewPanel', () => {
       date: '2026-08-18',
       events: 12,
       loads: 20,
+      linkableLoads: 15,
       directApplied: 9,
       appliedAfterLoad: 3,
+    })
+    expect(data.agentGrassDaily).toHaveLength(365)
+    expect(data.agentGrassDaily.find((d) => d.date === '2026-08-18')).toEqual({
+      date: '2026-08-18',
+      events: 43,
+      agents: 2,
     })
 
     // 관리자가 아니면 사용자별 사용량은 내려가지 않는다
@@ -208,7 +240,7 @@ describe('overviewPanel', () => {
   })
 
   it('모든 쿼리가 카탈로그 모집단(innerJoin)을 쓴다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
@@ -217,14 +249,38 @@ describe('overviewPanel', () => {
     expect(innerJoinCalls).toBe(3)
   })
 
+  it('잔디의 연결 가능 로드와 로드 후 적용은 사용자×흐름×스킬 코호트로 세고, 활동 에이전트는 턴이 있는 batch만 센다', async () => {
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
+    await overviewPanel.load({ days: 7, isAdmin: false })
+
+    const columns = vi.mocked(db.select).mock.calls.map((call) => call[0] as Record<string, unknown>)
+    // mock 컬럼은 'skill_events.user_id'처럼 테이블 접두사가 붙으므로 떼고 비교한다.
+    const normalize = (node: unknown) => sqlText(node)
+      .replace(/\b(skill_events|ax_agent_telemetry_batches)\./g, '')
+      .replace(/\s+/g, ' ')
+    const linkable = normalize(columns[2].linkableLoads)
+    const converted = normalize(columns[2].appliedAfterLoad)
+    // 분모: 코호트 distinct, flow ID와 user ID가 모두 있어야 한다.
+    expect(linkable).toMatch(/count\(distinct \( user_id, coalesce\(journey_id, session_id\), skill_id \)\)/)
+    expect(linkable).toContain('coalesce(journey_id, session_id) is not null')
+    expect(linkable).toContain('user_id is not null')
+    // 분자: 같은 코호트 키 + 같은 필터 + 이후 apply 존재. 분모의 부분집합이 된다.
+    expect(converted).toMatch(/count\(distinct \( user_id, coalesce\(journey_id, session_id\), skill_id \)\)/)
+    expect(converted).toContain('user_id is not null')
+    expect(converted).toContain("applied.action = 'apply'")
+    expect(converted).toContain('applied.created_at >= created_at')
+
+    expect(normalize(columns[4].agents)).toContain('filter (where turns > 0)')
+  })
+
   it('실제 사용 지표는 적용만 세고, 잔디만 도움말용 로드를 함께 센다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    expect(whereConditions).toHaveLength(4)
+    expect(whereConditions).toHaveLength(5)
 
-    for (const [index, condition] of whereConditions.entries()) {
+    for (const [index, condition] of whereConditions.slice(0, 4).entries()) {
       const values = collectValues(condition)
       const hasDateFilter = values.some((value) => value instanceof Date)
 
@@ -253,14 +309,19 @@ describe('overviewPanel', () => {
         expect(hasDateFilter, `쿼리 ${index}는 기간 필터가 있어야 한다`).toBe(true)
       }
     }
+
+    const agentValues = collectValues(whereConditions[4])
+    expect(agentValues.some((value) => value instanceof Date), '에이전트 잔디도 365일 경계가 있어야 한다').toBe(true)
+    expect(agentValues, '에이전트 잔디는 스킬 이벤트 action을 섞지 않는다').not.toContain('apply')
   })
 
   it('count가 문자열로 와도 숫자로 환산한다', async () => {
     queueQueries([
       [{ users: '9' }],
       [{ count: '11' }],
-      [{ date: '2026-08-18', directApplied: '2', appliedAfterLoad: '1', loads: '8' }],
+      [{ date: '2026-08-18', directApplied: '2', appliedAfterLoad: '1', loads: '8', linkableLoads: '6' }],
       [{ hour: '9', users: '5' }],
+      [{ date: '2026-08-18', turns: '17', agents: '1' }],
     ])
     queueFlow([
       {
@@ -282,8 +343,13 @@ describe('overviewPanel', () => {
     expect(data.catalogSkills).toBe(11)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.events).toBe(3)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.loads).toBe(8)
+    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.linkableLoads).toBe(6)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.directApplied).toBe(2)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.appliedAfterLoad).toBe(1)
+    expect(data.agentGrassDaily.find((d) => d.date === '2026-08-18')).toMatchObject({
+      events: 17,
+      agents: 1,
+    })
     expect(data.dailySkillFlow.find((d) => d.date === '2026-08-18')).toMatchObject({
       directApplied: 2,
       loaded: 9,
@@ -300,7 +366,7 @@ describe('overviewPanel', () => {
   })
 
   it('활동이 전혀 없으면 error가 아니라 0으로 채운 정상 응답을 준다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     const result = await overviewPanel.load({ days: 30, isAdmin: false })
 
@@ -322,6 +388,7 @@ describe('overviewPanel', () => {
         { name: '하영', uniqueSkills: 4, loaded: 31, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
         { name: null, uniqueSkills: 0, loaded: 3, applied: 0, lastActiveAt: null },
       ],
+      [],
     ])
 
     const data = (await overviewPanel.load({ days: 30, isAdmin: true })).data!

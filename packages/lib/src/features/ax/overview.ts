@@ -9,7 +9,7 @@
  * 로드는 적용 전환을 설명하는 보조 신호로만 별도 집계한다.
  */
 
-import { db, skillEvents, catalogItems, users } from '@gpters/db'
+import { axAgentTelemetryBatches, db, skillEvents, catalogItems, users } from '@gpters/db'
 import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
@@ -59,6 +59,9 @@ const kstDayExpr = sql<string>`to_char(date_trunc('day', ${skillEvents.createdAt
  * 저장 시각(UTC)이 아니라 근무 시간대(Asia/Seoul)로 변환해 센다.
  */
 const kstHourExpr = sql<number>`extract(hour from ${skillEvents.createdAt} at time zone 'Asia/Seoul')::int`
+
+/** 에이전트 증분 batch 종료 시각을 KST 일자 문자열로 자른 표현식 */
+const agentKstDayExpr = sql<string>`to_char(date_trunc('day', ${axAgentTelemetryBatches.windowEnd} at time zone 'Asia/Seoul'), 'YYYY-MM-DD')`
 
 /** KST 기준 하루의 시작(= KST 자정에 해당하는 UTC 시각)으로 내린다 */
 function startOfKstDay(date: Date): Date {
@@ -195,6 +198,8 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
 
       // 3. 잔디밭 — 활동은 로드 없이 적용 + 로드 후 적용이다.
       //    journey를 우선하고 기존 MCP session을 fallback으로 사용해 앞선 로드를 찾는다.
+      //    로드 후 적용과 연결 가능 로드는 사용자×흐름×스킬 코호트 단위로 로드 날짜에 귀속한다.
+      //    적용 날짜 기준 이벤트 수를 쓰면 기간 전 로드·반복 적용 때문에 분자가 분모를 넘을 수 있다.
       const grassRows = await db
         .select({
           date: kstDayExpr,
@@ -211,20 +216,37 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
                   and loaded.created_at <= ${skillEvents.createdAt}
               )
           )::int`,
-          appliedAfterLoad: sql<number>`count(*) filter (
-            where ${skillEvents.action} = 'apply'
+          // 로드 코호트 중 같은 사용자·흐름·스킬에서 이후 apply가 한 번이라도 있으면 전환으로 센다.
+          appliedAfterLoad: sql<number>`count(distinct (
+            ${skillEvents.userId},
+            coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}),
+            ${skillEvents.skillId}
+          )) filter (
+            where ${skillEvents.action} = 'load'
+              and coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
+              and ${skillEvents.userId} is not null
               and exists (
                 select 1
-                from skill_events loaded
-                where coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
-                  and coalesce(loaded.journey_id, loaded.session_id) = coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId})
-                  and loaded.user_id = ${skillEvents.userId}
-                  and loaded.skill_id = ${skillEvents.skillId}
-                  and loaded.action = 'load'
-                  and loaded.created_at <= ${skillEvents.createdAt}
+                from skill_events applied
+                where coalesce(applied.journey_id, applied.session_id) = coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId})
+                  and applied.user_id = ${skillEvents.userId}
+                  and applied.skill_id = ${skillEvents.skillId}
+                  and applied.action = 'apply'
+                  and applied.created_at >= ${skillEvents.createdAt}
               )
           )::int`,
           loads: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
+          // 세션 ID 없는 과거 CLI 로드는 전체 로드에는 넣되 전환율 분모에서는 구분한다.
+          // 연결 조건이 user_id 일치까지 요구하므로 user_id 없는 로드도 분모에서 뺀다.
+          linkableLoads: sql<number>`count(distinct (
+            ${skillEvents.userId},
+            coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}),
+            ${skillEvents.skillId}
+          )) filter (
+            where ${skillEvents.action} = 'load'
+              and coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
+              and ${skillEvents.userId} is not null
+          )::int`,
         })
         .from(skillEvents)
         .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
@@ -396,13 +418,37 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             .limit(MEMBER_LIMIT)
         : null
 
+      // 7. 에이전트 사용량 잔디 — 짧은 증분 batch만 종료일에 귀속한다.
+      //    여러 날을 덮는 초기 backfill은 내부 일별 분포를 알 수 없어 제외한다.
+      const agentGrassRows = await db
+        .select({
+          date: agentKstDayExpr,
+          turns: sql<number>`sum(${axAgentTelemetryBatches.turns})::int`,
+          // 턴이 0인 빈 배치는 "활동 에이전트"로 세지 않는다.
+          agents: sql<number>`count(distinct ${axAgentTelemetryBatches.agentId}) filter (where ${axAgentTelemetryBatches.turns} > 0)::int`,
+        })
+        .from(axAgentTelemetryBatches)
+        .where(
+          and(
+            gte(axAgentTelemetryBatches.windowStart, grassSince),
+            sql`${axAgentTelemetryBatches.windowEnd} >= ${axAgentTelemetryBatches.windowStart}`,
+            sql`${axAgentTelemetryBatches.windowEnd} - ${axAgentTelemetryBatches.windowStart} <= interval '24 hours'`
+          )
+        )
+        .groupBy(agentKstDayExpr)
+        .orderBy(agentKstDayExpr)
+
       const totalParticipants = num(cumulative?.users)
       const catalogSkills = num(catalog?.count)
       const grassLoadCounts = new Map(grassRows.map((row) => [row.date, num(row.loads)]))
+      const grassLinkableCounts = new Map(
+        grassRows.map((row) => [row.date, num(row.linkableLoads)])
+      )
       const grassDirectCounts = new Map(grassRows.map((row) => [row.date, num(row.directApplied)]))
       const grassConvertedCounts = new Map(
         grassRows.map((row) => [row.date, num(row.appliedAfterLoad)])
       )
+      const agentCounts = new Map(agentGrassRows.map((row) => [row.date, num(row.agents)]))
       const flowSummaryRow = flowResult.rows[0]
 
       const memberUsage: AxOverviewMemberRow[] | null = memberRows
@@ -433,8 +479,18 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             date: point.date,
             events: point.value,
             loads: grassLoadCounts.get(point.date) ?? 0,
+            linkableLoads: grassLinkableCounts.get(point.date) ?? 0,
             directApplied: grassDirectCounts.get(point.date) ?? 0,
             appliedAfterLoad: grassConvertedCounts.get(point.date) ?? 0,
+          })),
+          agentGrassDaily: fillDailySeries(
+            new Map(agentGrassRows.map((row) => [row.date, num(row.turns)])),
+            grassSince,
+            now
+          ).map((point) => ({
+            date: point.date,
+            events: point.value,
+            agents: agentCounts.get(point.date) ?? 0,
           })),
           dailySkillFlow: fillDailySkillFlow(
             flowResult.rows.map((row) => ({

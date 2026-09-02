@@ -475,6 +475,7 @@ export const journeyInsightsPanel: AxPanel<AxJourneyInsightsData> = {
                   inProgress: num(row.in_progress),
                   unreported: num(row.unreported),
                   verifiedAttempts: agentVerifiedAttempts,
+                  verifiedSuccesses: num(row.verified_successes),
                   verifiedSuccessRate: rate(num(row.verified_successes), agentVerifiedAttempts),
                   lastReportedAt: toIso(row.last_reported_at),
                 }

@@ -4,7 +4,7 @@
 
 import type { AxJourneyInsightsData, AxSkillOutcomeRow } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate } from '../format'
+import { RATE_MIN_SAMPLE, formatCount, formatDate, formatSampledRate } from '../format'
 
 const TH = 'px-3 py-2.5 font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-[var(--text-muted)]'
 const TD = 'px-3 py-2.5'
@@ -33,6 +33,8 @@ export function JourneyInsightsPanel({ data, days }: AxPanelViewProps<AxJourneyI
       </div>
 
       <MetricStrip data={data} />
+
+      <ReliabilityStrip data={data} />
 
       <JourneyGuide data={data} />
 
@@ -79,8 +81,10 @@ function ExecutionSection({ data }: { data: AxJourneyInsightsData['execution'] }
             ))}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
-            전체 {formatCount(data.attempts)}회 · 자기보고 성공률 {formatRate(data.selfReportedSuccessRate)} ·
-            검증 결과가 있는 {formatCount(data.verifiedAttempts)}회 중 검증 성공률 {formatRate(data.verifiedSuccessRate)}
+            전체 {formatCount(data.attempts)}회 · 자기보고 성공률{' '}
+            {formatSampledRate(data.success, data.success + data.partial + data.failed)} ·
+            검증 결과가 있는 {formatCount(data.verifiedAttempts)}회 중 검증 성공률{' '}
+            {formatSampledRate(data.verifiedSuccesses, data.verifiedAttempts)}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
             검증 성공은 status=success이면서 테스트·명령·산출물·사용자 확인 결과가 통과한 경우만 셉니다.
@@ -138,7 +142,9 @@ function ExecutionSection({ data }: { data: AxJourneyInsightsData['execution'] }
                         <NumberCell value={row.inProgress} />
                         <NumberCell value={row.unreported} emphasize={row.unreported > 0} />
                         <td className={`${TD} text-right font-mono text-xs tabular-nums text-[var(--text-secondary)]`}>
-                          {row.verifiedAttempts === 0 ? '미측정' : formatRate(row.verifiedSuccessRate)}
+                          {row.verifiedAttempts === 0
+                            ? '미측정'
+                            : formatSampledRate(row.verifiedSuccesses, row.verifiedAttempts)}
                         </td>
                         <td className={`${TD} text-right font-mono text-[11px] text-[var(--text-muted)]`}>
                           {formatDate(row.lastReportedAt)}
@@ -175,13 +181,16 @@ function MetricStrip({ data }: { data: AxJourneyInsightsData }) {
     },
     {
       label: '고유 후보 상세 확인율',
-      value: formatRate(data.exploration.searchToLoadRate),
+      value: formatSampledRate(data.exploration.loadedFromSearchPairs, data.exploration.exposedPairs),
       unit: '',
       note: `고유 후보 ${formatCount(data.exploration.exposedPairs)}개 중 ${formatCount(data.exploration.loadedFromSearchPairs)}개`,
     },
     {
       label: '로드 후 적용 판단 기록률',
-      value: formatRate(data.exploration.loadToDecisionRate),
+      value: formatSampledRate(
+        data.exploration.appliedFromSearchPairs + data.exploration.notAppliedFromSearchPairs,
+        data.exploration.loadedFromSearchPairs,
+      ),
       unit: '',
       note: `검색에서 이어진 상세 확인 ${formatCount(data.exploration.loadedFromSearchPairs)}개 중 ${formatCount(data.exploration.appliedFromSearchPairs + data.exploration.notAppliedFromSearchPairs)}개`,
     },
@@ -205,6 +214,60 @@ function MetricStrip({ data }: { data: AxJourneyInsightsData }) {
   )
 }
 
+/**
+ * 전환율을 읽기 전에 볼 분모 신뢰도.
+ * 수집 누락(미기록·미보고)을 실제 0건과 같은 칸에 두지 않고, 각 비율의 분모가 어디까지 관측됐는지 먼저 보여준다.
+ */
+function ReliabilityStrip({ data }: { data: AxJourneyInsightsData }) {
+  const { exploration, outcomes, execution } = data
+  const totalSearches = exploration.observedSearches + exploration.unobservedSearches
+  const explicitOutcomes = outcomes.appliedPairs + outcomes.notAppliedPairs
+  const completedAttempts = execution ? execution.success + execution.partial + execution.failed : 0
+  const tiles = [
+    {
+      label: '결과 배열 미기록 검색',
+      value: formatSampledRate(exploration.unobservedSearches, totalSearches),
+      note: totalSearches === 0
+        ? '선택 기간에 검색 요청이 없습니다.'
+        : `${formatCount(exploration.unobservedSearches)} / ${formatCount(totalSearches)}건 · 미기록은 0건 검색이 아니라 판정 불가라서 0건 비율의 분모에서 뺍니다.`,
+    },
+    {
+      label: '적용 여부 기록 커버리지',
+      value: formatSampledRate(explicitOutcomes, outcomes.loadedPairs),
+      note: outcomes.loadedPairs === 0
+        ? '선택 기간에 스킬 콘텐츠 로드가 없습니다.'
+        : `로드 조합 ${formatCount(outcomes.loadedPairs)}개 중 ${formatCount(explicitOutcomes)}개 · 기록 없음은 미적용이 아니라 관측 공백입니다.`,
+    },
+    {
+      label: '검증 결과가 있는 판정',
+      value: execution ? formatSampledRate(execution.verifiedAttempts, completedAttempts) : '미관측',
+      note: execution
+        ? `성공·부분·실패 판정 ${formatCount(completedAttempts)}회 중 ${formatCount(execution.verifiedAttempts)}회 · 검증 성공률은 이 표본만으로 계산합니다.`
+        : '새 실행 결과 계약으로 보고된 시도가 아직 없습니다.',
+    },
+    {
+      label: '백분율 표시 기준',
+      value: `${formatCount(RATE_MIN_SAMPLE)}건`,
+      note: '분모가 이보다 작은 비율은 백분율 대신 분수와 참고 표시로 보여줍니다. 검색결과 0건 비율만 표본 100건 기준입니다.',
+    },
+  ]
+
+  return (
+    <section aria-label="분모 신뢰도">
+      <SectionTitle eyebrow="분모 신뢰도" title="전환율을 읽기 전에 확인할 관측 범위" />
+      <div className="mt-4 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
+        {tiles.map((tile) => (
+          <div key={tile.label} className="min-w-0 bg-[var(--bg-primary)] px-5 py-5">
+            <p className="text-xs text-[var(--text-muted)]">{tile.label}</p>
+            <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{tile.value}</p>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">{tile.note}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 /** 동일한 세션×스킬을 검색 후보부터 적용 판단까지 연결한 엄격한 퍼널 */
 function JourneyGuide({ data }: { data: AxJourneyInsightsData }) {
   const { exploration } = data
@@ -223,14 +286,18 @@ function JourneyGuide({ data }: { data: AxJourneyInsightsData }) {
       number: '2',
       title: '후보 상세 확인',
       value: exploration.loadedFromSearchPairs,
-      rate: exploration.searchToLoadRate,
+      rate: exploration.exposedPairs > 0
+        ? formatSampledRate(exploration.loadedFromSearchPairs, exploration.exposedPairs)
+        : null,
       body: '검색 요약이 관련 있어 보여 에이전트가 같은 세션에서 전체 스킬 지침을 불러온 경우입니다.',
     },
     {
       number: '3',
       title: '적용 판단 기록',
       value: decidedPairs,
-      rate: exploration.loadToDecisionRate,
+      rate: exploration.loadedFromSearchPairs > 0
+        ? formatSampledRate(decidedPairs, exploration.loadedFromSearchPairs)
+        : null,
       body: '상세 확인한 후보에 대해 에이전트가 적용 또는 미적용을 명시한 경우입니다. 성공률은 아닙니다.',
     },
   ]
@@ -253,7 +320,7 @@ function JourneyGuide({ data }: { data: AxJourneyInsightsData }) {
             <p className="mt-4 font-mono text-xl tabular-nums text-[var(--text-primary)]">
               {formatCount(step.value)}개
               {step.rate !== null && (
-                <span className="ml-2 text-xs text-[var(--text-muted)]">직전 단계의 {formatRate(step.rate)}</span>
+                <span className="ml-2 text-xs text-[var(--text-muted)]">직전 단계의 {step.rate}</span>
               )}
             </p>
             <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">{step.body}</p>
@@ -337,7 +404,8 @@ function OutcomeSection({ data }: { data: AxJourneyInsightsData }) {
             ))}
           </div>
           <p className="mt-4 text-xs leading-relaxed text-[var(--text-muted)]">
-            적용 여부를 기록한 경우 중 적용 기록 비율은 {formatRate(outcomes.confirmedApplyRate)}입니다.
+            적용 여부를 기록한 경우 중 적용 기록 비율은{' '}
+            {formatSampledRate(outcomes.appliedPairs, outcomes.appliedPairs + outcomes.notAppliedPairs)}입니다.
             위 퍼널과 달리 검색 없이 직접 상세를 불러온 경우도 포함합니다. 기록 없음은 실패가 아니라
             관측 공백이며, 적용했어도 보고 이벤트가 없으면 여기에 포함됩니다.
           </p>
@@ -377,7 +445,7 @@ function OutcomeTable({ rows }: { rows: AxSkillOutcomeRow[] }) {
                 <NumberCell value={row.notAppliedPairs} />
                 <NumberCell value={row.unreportedPairs} emphasize={row.unreportedPairs > 0} />
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
-                  {formatRate(row.outcomeCoverageRate)}
+                  {formatSampledRate(row.appliedPairs + row.notAppliedPairs, row.loadedPairs)}
                 </td>
               </tr>
             ))}
@@ -485,6 +553,14 @@ function MeasurementDefinitions() {
     {
       label: '실행 성공',
       meaning: 'report_skill_execution에서 status=success로 보고한 시도입니다. 검증 성공률은 그중 테스트·명령·산출물·사용자 확인 결과가 실제로 통과한 시도만 따로 셉니다.',
+    },
+    {
+      label: '참고 수치',
+      meaning: `분모가 ${RATE_MIN_SAMPLE}건보다 작은 비율입니다. 백분율로 읽으면 한두 건 차이가 크게 보이므로 분수 그대로 보여주고 추세 판단에는 쓰지 않습니다.`,
+    },
+    {
+      label: '분모 신뢰도',
+      meaning: '각 비율의 분모가 어디까지 관측됐는지 나타냅니다. 결과 배열 미기록 검색, 적용 여부 기록 없음, 검증 없는 완료는 실제 0건이 아니라 수집 공백이며 해당 비율의 분모에서 제외합니다.',
     },
     {
       label: '완료 보고 지연',

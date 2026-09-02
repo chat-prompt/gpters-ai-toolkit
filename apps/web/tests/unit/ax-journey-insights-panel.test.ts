@@ -167,6 +167,7 @@ describe('journeyInsightsPanel', () => {
         inProgress: 1,
         unreported: 0,
         verifiedAttempts: 5,
+        verifiedSuccesses: 3,
         verifiedSuccessRate: 60,
         lastReportedAt: '2026-08-25T00:00:00.000Z',
       }],

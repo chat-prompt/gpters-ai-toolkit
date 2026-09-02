@@ -57,8 +57,22 @@ function agent(
     models: [{ model, turns: 4 * multiplier, usage: usage(multiplier), processedTokens: 100 * multiplier }],
     tools: [{ name: tool, calls: 5 * multiplier, failures: 0, failureRate: 0 }],
     skills: skill ? [{ skillId: skill, loaded: multiplier, failed: 0, interrupted: 0 }] : [],
+    uniqueLoadedSkills: skill ? 1 : 0,
+    skillLoadsObserved: skill !== null,
     observedExecutionReports: [{ status: 'success', evidence: 'test', count: multiplier }],
-    verifiedExecutions: { attempts: multiplier, success: multiplier, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: multiplier },
+    verifiedExecutions: {
+      attempts: multiplier,
+      success: multiplier,
+      partial: 0,
+      failed: 0,
+      abandoned: 0,
+      running: 0,
+      withEvidence: multiplier,
+      uniqueSkills: 1,
+      verifiedSkills: 1,
+      linkedLoads: multiplier,
+      linkedVerifiedSuccesses: multiplier,
+    },
     collection: { batches: multiplier, recordsRead: 100 * multiplier, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   }
 }
@@ -88,8 +102,23 @@ const DATA: AxAgentActivityData = {
   models: [...BBODOONG.models, ...BBOKEOTER.models],
   tools: [...BBODOONG.tools, ...BBOKEOTER.tools],
   skills: BBODOONG.skills,
+  uniqueLoadedSkills: 1,
+  skillLoadsObserved: true,
   observedExecutionReports: [{ status: 'success', evidence: 'test', count: 3 }],
-  verifiedExecutions: { attempts: 3, success: 3, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 3 },
+  verifiedExecutionsAvailable: true,
+  verifiedExecutions: {
+    attempts: 3,
+    success: 3,
+    partial: 0,
+    failed: 0,
+    abandoned: 0,
+    running: 0,
+    withEvidence: 3,
+    uniqueSkills: 2,
+    verifiedSkills: 2,
+    linkedLoads: 3,
+    linkedVerifiedSuccesses: 3,
+  },
   collection: { batches: 3, recordsRead: 300, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   insights: [],
 }
@@ -110,9 +139,26 @@ describe('AgentActivityPanel', () => {
     expect(screen.queryByText('claude-opus-5')).toBeNull()
     expect(screen.getByText('hermes-3')).toBeTruthy()
     expect(screen.getByText('shell')).toBeTruthy()
-    expect(screen.getByText('이 소스에서는 아직 스킬 로드가 관측되지 않았습니다.')).toBeTruthy()
+    expect(screen.getByText('이 수집 소스는 스킬 로드 신호를 제공하지 않아 미관측입니다.')).toBeTruthy()
+    expect(screen.getByText('미관측', { selector: 'p' })).toBeTruthy()
+    // 연결 가능한 로드가 1회뿐이라 백분율 대신 분수를 참고 수치로 보여준다.
+    expect(screen.queryByText('100.0%')).toBeNull()
+    expect(screen.getByText('1/1 · 참고')).toBeTruthy()
+    expect(screen.getByText('표본 10회 미만')).toBeTruthy()
     expect(screen.getAllByText('Hermes')).toHaveLength(2)
     expect(screen.queryByText('Claude Code')).toBeNull()
+  })
+
+  it('실행 결과 테이블이 없으면 검증 지표를 0이 아니라 미관측으로 보여준다', () => {
+    render(<AgentActivityPanel data={{ ...DATA, verifiedExecutionsAvailable: false }} days={7} />)
+
+    // 스킬 활용 4칸 중 검증에 기대는 3칸과 실행 결과 4칸이 모두 미관측이다.
+    expect(screen.getAllByText('미관측', { selector: 'p' }).length).toBeGreaterThanOrEqual(7)
+    expect(screen.getAllByText('실행 결과 계측 준비 중').length).toBeGreaterThanOrEqual(3)
+    expect(screen.queryByText('3개', { selector: 'p' })).toBeNull()
+    expect(screen.queryByText('3/3 · 참고')).toBeNull()
+    // 텔레메트리에서 직접 관측한 고유 로드 스킬은 그대로 보인다.
+    expect(screen.getByText('1개', { selector: 'p' })).toBeTruthy()
   })
 
   it('핵심 지표의 의미를 클릭해서 확인할 수 있다', () => {

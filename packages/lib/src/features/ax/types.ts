@@ -127,10 +127,29 @@ export interface AxOverviewData {
     events: number
     /** 도움말용 전체 로드 이벤트 수 */
     loads?: number
-    /** 앞선 로드와 연결되지 않은 적용 이벤트 수 */
+    /**
+     * 그날 시작한 연결 가능 로드 코호트 수 — journey·session ID와 user ID가 있어 이후 적용과
+     * 연결할 수 있는 사용자×흐름×스킬 조합. 로드 후 적용 전환율의 분모는 전체 로드가 아니라 이 값이다.
+     */
+    linkableLoads?: number
+    /** 앞선 로드와 연결되지 않은 적용 이벤트 수 (적용 날짜 기준) */
     directApplied?: number
-    /** 같은 세션·스킬의 앞선 로드와 연결된 적용 이벤트 수 */
+    /**
+     * 그날 시작한 연결 가능 로드 코호트(사용자×흐름×스킬) 중 이후 적용으로 이어진 수.
+     * 로드 날짜에 귀속하고 코호트당 한 번만 세므로 항상 `linkableLoads` 이하다.
+     */
     appliedAfterLoad?: number
+  }>
+  /**
+   * 에이전트 텔레메트리의 일별 사용량 — 오늘 포함 최근 365일 고정 윈도우.
+   * 내부 분포를 알 수 없는 24시간 초과 backfill batch는 날짜에 억지로 배분하지 않는다.
+   */
+  agentGrassDaily: Array<{
+    date: string
+    /** 해당 날짜에 수집된 에이전트 턴 */
+    events: number
+    /** 해당 날짜에 활동이 관측된 고유 에이전트 수 */
+    agents: number
   }>
   /** 일자별 고유 사용 인원 — 로드 코호트와 적용 전환을 사람 수로 표현한다 */
   dailySkillFlow: Array<{
@@ -347,6 +366,8 @@ export interface AxJourneyInsightsData {
       inProgress: number
       unreported: number
       verifiedAttempts: number
+      /** success이면서 검증 통과한 시도 수 — 화면이 표본 인지 비율을 직접 계산할 수 있게 둔다 */
+      verifiedSuccesses: number
       verifiedSuccessRate: number | null
       lastReportedAt: string | null
     }>
@@ -462,6 +483,18 @@ export type AxUsageParticipationStatus =
   | 'stale'
   | 'reporting'
 
+/**
+ * 수집 참여 상태의 표시 순서 — 나쁜 상태부터 좋은 상태로.
+ * 참여 목록 정렬과 상태 요약 pill 순서가 모두 이 배열을 따른다.
+ */
+export const AX_USAGE_PARTICIPATION_STATUS_ORDER: readonly AxUsageParticipationStatus[] = [
+  'not_approved',
+  'not_installed',
+  'stale',
+  'not_using',
+  'reporting',
+]
+
 /** 내부 계정 한 명의 수집 참여 상태. 이메일은 포함하지 않는다. */
 export interface AxUsageParticipationRow {
   userId: string
@@ -554,6 +587,10 @@ export interface AxAgentActivityAgentRow {
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
   tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
   skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  /** 기간 내 텔레메트리에서 관측한 고유 스킬 로드 수. skills 배열의 화면 상한과 무관한 전체 값. */
+  uniqueLoadedSkills: number
+  /** false면 0건이 아니라 해당 소스가 스킬 로드 신호를 제공하지 않는 미관측 상태다. */
+  skillLoadsObserved: boolean
   observedExecutionReports: Array<{ status: string; evidence: string; count: number }>
   verifiedExecutions: {
     attempts: number
@@ -563,6 +600,14 @@ export interface AxAgentActivityAgentRow {
     abandoned: number
     running: number
     withEvidence: number
+    /** 실행 시작을 보고한 고유 스킬 수 */
+    uniqueSkills: number
+    /** success이면서 검증을 통과한 고유 스킬 수 */
+    verifiedSkills: number
+    /** 같은 journey/session의 선행 load와 연결된 실행 시도 수 */
+    linkedLoads: number
+    /** 선행 load와 연결되고 success·검증 통과한 실행 시도 수 */
+    linkedVerifiedSuccesses: number
   }
   collection: {
     batches: number
@@ -591,8 +636,17 @@ export interface AxAgentActivityData {
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
   tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
   skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  /** 기간 내 전체 에이전트에서 관측한 고유 스킬 로드 수 */
+  uniqueLoadedSkills: number
+  /** false면 스킬 로드 0이 아니라 현재 수집 소스에서 미관측 */
+  skillLoadsObserved: boolean
   /** batch에서 관측한 명시 보고 이벤트 수. 검증 정본과 합산하지 않는다. */
   observedExecutionReports: Array<{ status: string; evidence: string; count: number }>
+  /**
+   * false면 실행 결과 테이블이 아직 없어 `verifiedExecutions`의 0이 실제 0건이 아니라 미관측이다.
+   * 화면은 이 값이 false일 때 검증 지표를 0 대신 미관측으로 표시한다.
+   */
+  verifiedExecutionsAvailable: boolean
   /** 명시적으로 보고되고 서버 DB에 저장된 실행 결과 정본. */
   verifiedExecutions: {
     attempts: number
@@ -602,6 +656,10 @@ export interface AxAgentActivityData {
     abandoned: number
     running: number
     withEvidence: number
+    uniqueSkills: number
+    verifiedSkills: number
+    linkedLoads: number
+    linkedVerifiedSuccesses: number
   }
   collection: {
     batches: number

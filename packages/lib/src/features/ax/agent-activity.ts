@@ -1,7 +1,7 @@
 /** AX Dashboard — 에이전트 활동·수집 건강도 패널 */
 
 import { axAgentTelemetryBatches, axAgentTelemetryCollectors, axSkillExecutionAttempts, db } from '@gpters/db'
-import { eq, gte } from 'drizzle-orm'
+import { eq, gte, sql } from 'drizzle-orm'
 import type {
   AxAgentActivityAgentRow,
   AxAgentActivityData,
@@ -123,13 +123,28 @@ interface AgentAccumulator {
   models: Map<string, { turns: number; usage: AxAgentTokenUsage }>
   tools: Map<string, { calls: number; failures: number }>
   skills: Map<string, { loaded: number; failed: number; interrupted: number }>
+  skillLoadsObserved: boolean
   observedExecutions: Map<string, { status: string; evidence: string; count: number }>
   verifiedExecutions: AxAgentActivityAgentRow['verifiedExecutions']
+  executionSkillIds: Set<string>
+  verifiedSkillIds: Set<string>
   collection: AxAgentActivityAgentRow['collection']
 }
 
 function emptyVerifiedExecutions(): AxAgentActivityAgentRow['verifiedExecutions'] {
-  return { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0 }
+  return {
+    attempts: 0,
+    success: 0,
+    partial: 0,
+    failed: 0,
+    abandoned: 0,
+    running: 0,
+    withEvidence: 0,
+    uniqueSkills: 0,
+    verifiedSkills: 0,
+    linkedLoads: 0,
+    linkedVerifiedSuccesses: 0,
+  }
 }
 
 function createAgentAccumulator(agentId: string): AgentAccumulator {
@@ -143,8 +158,11 @@ function createAgentAccumulator(agentId: string): AgentAccumulator {
     models: new Map(),
     tools: new Map(),
     skills: new Map(),
+    skillLoadsObserved: false,
     observedExecutions: new Map(),
     verifiedExecutions: emptyVerifiedExecutions(),
+    executionSkillIds: new Set(),
+    verifiedSkillIds: new Set(),
     collection: { batches: 0, recordsRead: 0, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   }
 }
@@ -171,6 +189,8 @@ function finalizeAgent(accumulator: AgentAccumulator): AxAgentActivityAgentRow {
     })).sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name)).slice(0, 20),
     skills: [...accumulator.skills.entries()].map(([skillId, metric]) => ({ skillId, ...metric }))
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20),
+    uniqueLoadedSkills: [...accumulator.skills.values()].filter((metric) => metric.loaded > 0).length,
+    skillLoadsObserved: accumulator.skillLoadsObserved,
     observedExecutionReports: [...accumulator.observedExecutions.values()]
       .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status)),
     verifiedExecutions: accumulator.verifiedExecutions,
@@ -180,14 +200,30 @@ function finalizeAgent(accumulator: AgentAccumulator): AxAgentActivityAgentRow {
 
 function addVerifiedExecution(
   target: AxAgentActivityAgentRow['verifiedExecutions'],
-  execution: { status: string; validationMethod: string; validationPassed: boolean | null },
+  execution: {
+    skillId: string
+    status: string
+    validationMethod: string
+    validationPassed: boolean | null
+    linkedLoad: boolean
+  },
+  executionSkillIds: Set<string>,
+  verifiedSkillIds: Set<string>,
 ): void {
   target.attempts += 1
+  executionSkillIds.add(execution.skillId)
   if (execution.status === 'success' || execution.status === 'partial' || execution.status === 'failed' ||
     execution.status === 'abandoned' || execution.status === 'running') {
     target[execution.status] += 1
   }
   if (execution.validationMethod !== 'none' && execution.validationPassed !== null) target.withEvidence += 1
+  if (execution.linkedLoad) target.linkedLoads += 1
+  if (execution.status === 'success' && execution.validationPassed === true) {
+    verifiedSkillIds.add(execution.skillId)
+    if (execution.linkedLoad) target.linkedVerifiedSuccesses += 1
+  }
+  target.uniqueSkills = executionSkillIds.size
+  target.verifiedSkills = verifiedSkillIds.size
 }
 
 /** 실행 결과 마이그레이션이 아직 없는 환경에서도 텔레메트리 본체는 계속 보여준다. */
@@ -195,17 +231,32 @@ async function loadVerifiedExecutions(cutoff: Date): Promise<{
   available: boolean
   rows: Array<{
     agentId: string
+    skillId: string
     status: string
     validationMethod: string
     validationPassed: boolean | null
+    linkedLoad: boolean
   }>
 }> {
   try {
     const rows = await db.select({
       agentId: axSkillExecutionAttempts.agentId,
+      skillId: axSkillExecutionAttempts.skillId,
       status: axSkillExecutionAttempts.status,
       validationMethod: axSkillExecutionAttempts.validationMethod,
       validationPassed: axSkillExecutionAttempts.validationPassed,
+      linkedLoad: sql<boolean>`exists (
+        select 1
+        from skill_events loaded
+        where coalesce(loaded.journey_id, loaded.session_id) is not null
+          and coalesce(loaded.journey_id, loaded.session_id) = coalesce(
+            ${axSkillExecutionAttempts.journeyId},
+            ${axSkillExecutionAttempts.sessionId}
+          )
+          and loaded.skill_id = ${axSkillExecutionAttempts.skillId}
+          and loaded.action = 'load'
+          and loaded.created_at <= ${axSkillExecutionAttempts.startedAt}
+      )`,
     })
       .from(axSkillExecutionAttempts)
       .where(gte(axSkillExecutionAttempts.startedAt, cutoff))
@@ -285,6 +336,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     let recordsRead = 0
     let parseFailures = 0
     let unsupportedRecordsSkipped = 0
+    let skillLoadsObserved = false
     let windowStart = Number.POSITIVE_INFINITY
     let windowEnd = 0
     let syncedAt = 0
@@ -297,6 +349,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       const source = sourceValue as AxAgentTelemetrySource
       const agent = agentMap.get(row.agentId) ?? createAgentAccumulator(row.agentId)
       agentMap.set(row.agentId, agent)
+      if (SOURCE_INFO[source].capabilities.skills) {
+        skillLoadsObserved = true
+        agent.skillLoadsObserved = true
+      }
       const usage: AxAgentTokenUsage = {
         inputTokens: number(row.inputTokens),
         outputTokens: number(row.outputTokens),
@@ -528,10 +584,22 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const observedExecutionReports = [...observedExecutionMap.values()]
       .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status))
     const verifiedExecutions: AxAgentActivityData['verifiedExecutions'] = emptyVerifiedExecutions()
+    const executionSkillIds = new Set<string>()
+    const verifiedSkillIds = new Set<string>()
+    let excludedUnregisteredExecutions = 0
     for (const execution of executionResult.rows) {
-      addVerifiedExecution(verifiedExecutions, execution)
       const agent = agentMap.get(execution.agentId)
-      if (agent) addVerifiedExecution(agent.verifiedExecutions, execution)
+      if (!agent) {
+        excludedUnregisteredExecutions += 1
+        continue
+      }
+      addVerifiedExecution(verifiedExecutions, execution, executionSkillIds, verifiedSkillIds)
+      addVerifiedExecution(
+        agent.verifiedExecutions,
+        execution,
+        agent.executionSkillIds,
+        agent.verifiedSkillIds,
+      )
     }
     const agents = [...agentMap.values()].map(finalizeAgent)
       .sort((a, b) => b.totalProcessedTokens - a.totalProcessedTokens || a.agentId.localeCompare(b.agentId))
@@ -611,6 +679,13 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         detail: '사용량 텔레메트리는 정상이며, 검증된 실행 결과는 후속 DB 마이그레이션 적용 뒤 표시됩니다.',
       })
     }
+    if (excludedUnregisteredExecutions > 0) {
+      insights.push({
+        severity: 'info',
+        title: `수집 없는 에이전트의 실행 보고 ${excludedUnregisteredExecutions}건 제외`,
+        detail: '선택 기간에 텔레메트리 batch도 활성 수집기도 없는 에이전트의 실행 보고입니다. 탐색·결과 분석의 실행 시도 수에는 포함되므로 두 화면의 실행 수가 다를 수 있습니다.',
+      })
+    }
 
     return panelOk(meta, {
       syncedAt: new Date(syncedAt || now).toISOString(),
@@ -628,7 +703,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       models,
       tools,
       skills,
+      uniqueLoadedSkills: [...skillMap.values()].filter((metric) => metric.loaded > 0).length,
+      skillLoadsObserved,
       observedExecutionReports,
+      verifiedExecutionsAvailable: executionResult.available,
       verifiedExecutions,
       collection: { batches: rows.length, recordsRead, parseFailures, unsupportedRecordsSkipped },
       insights,

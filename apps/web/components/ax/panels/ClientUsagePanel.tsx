@@ -12,9 +12,9 @@ import type {
   AxClientUsageData,
   AxClientUsageMemberRow,
   AxUsageParticipationRow,
-  AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
+import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, formatDateTime } from '../format'
 
@@ -108,7 +108,8 @@ const PARTICIPATION_SOURCE: Record<AxUsageParticipationRow['source'], string> = 
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
   const active = rows.filter((row) => row.status === 'reporting').length
-  const statusCounts = (Object.keys(PARTICIPATION_STATUS) as AxUsageParticipationStatus[])
+  // pill과 표 모두 나쁜 상태부터 좋은 상태 순이다.
+  const statusCounts = AX_USAGE_PARTICIPATION_STATUS_ORDER
     .map((status) => ({ status, count: rows.filter((row) => row.status === status).length }))
     .filter((item) => item.count > 0)
 
@@ -120,7 +121,8 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
       <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
         상태는 수집기 점검 신호, 기존 보고, OAuth 승인 기록을 순서대로 대조한 결과입니다. 승인됐지만
         점검 신호가 없는 계정은 승인 후 수집 미확인으로 분류합니다. 최근 사용 기록 없음은 수집기가
-        정상 응답했지만 해당 기간의 사용량이 0건이라는 뜻입니다.
+        정상 응답했지만 해당 기간의 사용량이 0건이라는 뜻입니다. 표는 챙겨야 할 상태부터 정상 보고
+        순으로 묶고, 같은 상태 안에서는 이름순입니다.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {statusCounts.map(({ status, count }) => (
@@ -145,12 +147,17 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const status = PARTICIPATION_STATUS[row.status]
+              // 상태 그룹이 바뀌는 행은 굵은 선으로 묶음 경계를 드러낸다.
+              const startsGroup = index > 0 && rows[index - 1].status !== row.status
               return (
                 <tr
                   key={row.userId}
-                  className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
+                  data-status-group-start={startsGroup ? row.status : undefined}
+                  className={`transition-colors duration-200 hover:bg-[var(--bg-secondary)] ${
+                    startsGroup ? 'border-t-2 border-t-[var(--border-hover)]' : ''
+                  }`}
                 >
                   <td className={`${TD} text-[var(--text-primary)]`}>{row.memberName}</td>
                   <td className={`${TD} ${status.tone}`}>{status.label}</td>

@@ -11,7 +11,7 @@ import type {
   AxAgentTelemetrySource,
   AxAgentTokenUsage,
 } from '@/lib/features/ax'
-import { formatCount, formatDateTime } from '../format'
+import { RATE_MIN_SAMPLE, formatCount, formatDateTime, formatSampledRate } from '../format'
 import type { AxPanelViewProps } from './types'
 
 const SOURCE_LABELS: Record<AxAgentTelemetrySource, string> = {
@@ -42,9 +42,6 @@ function formatTokens(value: number): string {
   return String(value)
 }
 
-function rate(failures: number, calls: number): string {
-  return calls > 0 ? `${Math.round((failures / calls) * 1000) / 10}%` : '0%'
-}
 
 function processedTokens(usage: AxAgentTokenUsage): number {
   return usage.inputTokens + usage.outputTokens + usage.cacheCreationInputTokens + usage.cacheReadInputTokens +
@@ -119,7 +116,7 @@ export function AgentActivityPanel({
           <Metric
             label="도구 호출"
             value={formatCount(scope.toolCalls)}
-            hint={`실패 ${rate(scope.toolFailures, scope.toolCalls)}`}
+            hint={`실패 ${formatSampledRate(scope.toolFailures, scope.toolCalls)}`}
             explanation="쉘·파일 읽기·편집·검색처럼 런타임이 기록한 도구 호출입니다. OpenClaw 요약 소스처럼 도구를 제공하지 않는 소스는 포함되지 않습니다."
           />
           <Metric
@@ -130,6 +127,8 @@ export function AgentActivityPanel({
           />
         </div>
       </section>
+
+      <SkillImpactSummary scope={scope} available={data.verifiedExecutionsAvailable} />
 
       <TokenBreakdown usage={scope.totalUsage} />
 
@@ -176,15 +175,17 @@ export function AgentActivityPanel({
           rows={scope.tools.map((row) => ({
             name: row.name,
             value: formatCount(row.calls),
-            hint: `실패 ${row.failureRate}%`,
+            hint: `실패 ${formatSampledRate(row.failures, row.calls)}`,
             magnitude: row.calls,
           }))}
         />
       </div>
 
       <RankTable
-        title="스킬 로드"
-        empty="이 소스에서는 아직 스킬 로드가 관측되지 않았습니다."
+        title="관측된 스킬 로드"
+        empty={scope.skillLoadsObserved
+          ? '선택 기간에 관측된 스킬 로드가 없습니다.'
+          : '이 수집 소스는 스킬 로드 신호를 제공하지 않아 미관측입니다.'}
         rows={scope.skills.map((row) => ({
           name: row.skillId,
           value: formatCount(row.loaded),
@@ -193,8 +194,57 @@ export function AgentActivityPanel({
         }))}
       />
 
-      <ExecutionSection scope={scope} />
+      <ExecutionSection scope={scope} available={data.verifiedExecutionsAvailable} />
     </div>
+  )
+}
+
+/** 스킬을 얼마나 다양하게 불렀고, 그중 검증 완료까지 이어진 흐름이 얼마나 되는지 보여준다. */
+function SkillImpactSummary({ scope, available }: { scope: ActivityScope; available: boolean }) {
+  const execution = scope.verifiedExecutions
+  // 실행 결과 테이블이 없으면 0이 아니라 미관측이다.
+  const unavailableHint = '실행 결과 계측 준비 중'
+  // 분모가 작으면 백분율 대신 분수와 참고 표시로 보여준다.
+  const conversion = available
+    ? formatSampledRate(execution.linkedVerifiedSuccesses, execution.linkedLoads)
+    : '미관측'
+  const conversionHint = !available
+    ? unavailableHint
+    : execution.linkedLoads === 0
+      ? '연결 가능한 로드 없음'
+      : execution.linkedLoads < RATE_MIN_SAMPLE
+        ? `표본 ${RATE_MIN_SAMPLE}회 미만`
+        : `${formatCount(execution.linkedVerifiedSuccesses)} / ${formatCount(execution.linkedLoads)}회`
+
+  return (
+    <section>
+      <SectionTitle title="스킬 활용" hint="관측 범위가 다른 신호를 0으로 합치지 않습니다" />
+      <div className="mt-3 grid gap-px overflow-visible rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+        <Metric
+          label="고유 로드 스킬"
+          value={scope.skillLoadsObserved ? `${formatCount(scope.uniqueLoadedSkills)}개` : '미관측'}
+          explanation="에이전트 텔레메트리에서 실제 로드가 관측된 서로 다른 스킬 수입니다. Hermes·Codex처럼 이 신호를 제공하지 않는 소스는 0으로 표시하지 않습니다."
+        />
+        <Metric
+          label="검증 완료 스킬"
+          value={available ? `${formatCount(execution.verifiedSkills)}개` : '미관측'}
+          hint={available ? `실행 시도 고유 ${formatCount(execution.uniqueSkills)}개` : unavailableHint}
+          explanation="서버에 success와 검증 통과가 함께 보고된 서로 다른 스킬 수입니다. 단순 로드와 구분합니다."
+        />
+        <Metric
+          label="선행 로드 연결"
+          value={available ? `${formatCount(execution.linkedLoads)}회` : '미관측'}
+          hint={available ? `전체 실행 ${formatCount(execution.attempts)}회 중` : unavailableHint}
+          explanation="서버 여정 기록에서 같은 journey 또는 session의 앞선 스킬 로드와 연결할 수 있는 실행 수입니다. 텔레메트리의 로드 관측 여부와는 별도 신호입니다."
+        />
+        <Metric
+          label="로드→검증 성공"
+          value={conversion}
+          hint={conversionHint}
+          explanation={`앞선 로드와 연결된 실행을 분모로 삼아 성공이면서 검증을 통과한 비율입니다. 미연결 실행은 분모에서 제외하고, 분모가 ${RATE_MIN_SAMPLE}회 미만이면 백분율 대신 분수를 참고 수치로 보여줍니다.`}
+        />
+      </div>
+    </section>
   )
 }
 
@@ -359,7 +409,7 @@ function AgentNotices({ reporters, scope }: { reporters: AxAgentReporterRow[]; s
     if (stale.length > 0) rows.push({ title: '수집 지연', detail: `${stale.length}개 소스가 예정된 두 번의 주기 안에 보고하지 않았습니다.`, warning: true })
     if (waiting.length > 0) rows.push({ title: '첫 수집 대기', detail: `${waiting.length}개 소스가 설치됐지만 아직 첫 배치를 보내지 않았습니다.`, warning: false })
     if (scope.toolCalls >= 10 && scope.toolFailures / scope.toolCalls >= 0.05) {
-      rows.push({ title: `도구 실패 ${rate(scope.toolFailures, scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
+      rows.push({ title: `도구 실패 ${formatSampledRate(scope.toolFailures, scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
     }
     return rows
   }, [reporters, scope.toolCalls, scope.toolFailures])
@@ -442,7 +492,7 @@ function ReporterSection({
                 </td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(row.turns)}</td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-primary)]`}>{formatTokens(processedTokens(row.usage))}</td>
-                <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{rate(row.toolFailures, row.toolCalls)}</td>
+                <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatSampledRate(row.toolFailures, row.toolCalls)}</td>
               </tr>
             ))}
           </tbody>
@@ -457,9 +507,12 @@ function SmallStat({ label, value }: { label: string; value: string }) {
 }
 
 /** 수집 batch의 관측치와 서버의 검증된 실행 결과를 분리해 보여준다. */
-function ExecutionSection({ scope }: { scope: ActivityScope }) {
+function ExecutionSection({ scope, available }: { scope: ActivityScope; available: boolean }) {
   const execution = scope.verifiedExecutions
   const observed = scope.observedExecutionReports.reduce((sum, row) => sum + row.count, 0)
+  // 실행 결과 테이블이 없으면 네 칸 모두 0이 아니라 미관측으로 남긴다.
+  const count = (value: number) => (available ? formatCount(value) : '미관측')
+  const pair = (left: number, right: number) => (available ? `${formatCount(left)} / ${formatCount(right)}` : '미관측')
   return (
     <section>
       <SectionTitle title="검증된 스킬 실행 결과" hint="자동 사용량과 명시적 스킬 실행 보고를 합산하지 않습니다" />
@@ -468,10 +521,10 @@ function ExecutionSection({ scope }: { scope: ActivityScope }) {
         아래 수치는 서버에 명시적으로 보고된 스킬 실행 결과만 셉니다.
       </p>
       <div className="mt-3 grid gap-px overflow-visible rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="전체 시도" value={formatCount(execution.attempts)} hint={`검증 근거 ${formatCount(execution.withEvidence)}`} explanation="스킬 실행 시작이 서버에 보고된 고유 시도 수입니다. 검증 근거는 테스트·명령·산출물·사용자 확인 결과가 함께 보고된 시도입니다." />
-        <Metric label="성공" value={formatCount(execution.success)} explanation="에이전트가 완료 상태를 success로 보고한 시도입니다. 검증 근거가 있는 성공과는 구분해서 봅니다." />
-        <Metric label="부분 / 실패" value={`${formatCount(execution.partial)} / ${formatCount(execution.failed)}`} explanation="일부만 완료한 partial과 명시적으로 실패를 보고한 failed 시도입니다." />
-        <Metric label="진행 / 중단" value={`${formatCount(execution.running)} / ${formatCount(execution.abandoned)}`} explanation="아직 완료 보고가 없는 진행 중 시도와 일정 시간 뒤에도 완료되지 않은 중단 시도입니다." />
+        <Metric label="전체 시도" value={count(execution.attempts)} hint={available ? `검증 근거 ${formatCount(execution.withEvidence)}` : '실행 결과 계측 준비 중'} explanation="스킬 실행 시작이 서버에 보고된 고유 시도 수입니다. 검증 근거는 테스트·명령·산출물·사용자 확인 결과가 함께 보고된 시도입니다." />
+        <Metric label="성공" value={count(execution.success)} explanation="에이전트가 완료 상태를 success로 보고한 시도입니다. 검증 근거가 있는 성공과는 구분해서 봅니다." />
+        <Metric label="부분 / 실패" value={pair(execution.partial, execution.failed)} explanation="일부만 완료한 partial과 명시적으로 실패를 보고한 failed 시도입니다." />
+        <Metric label="진행 / 중단" value={pair(execution.running, execution.abandoned)} explanation="아직 완료 보고가 없는 진행 중 시도와 일정 시간 뒤에도 완료되지 않은 중단 시도입니다." />
       </div>
     </section>
   )
@@ -502,12 +555,13 @@ function Metric({
 
 function MetricHelp({ label, explanation }: { label: string; explanation: string }) {
   return (
-    <details className="group relative">
+    <details className="group">
       <summary
         className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)] [&::-webkit-details-marker]:hidden"
         aria-label={`${label} 설명`}
       >?</summary>
-      <p className="absolute left-0 top-6 z-20 w-64 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
+      {/* 타일 전체 폭 안에 띄워 4열 그리드의 양 끝 타일에서도 화면 밖으로 잘리지 않는다. */}
+      <p className="absolute inset-x-4 top-11 z-20 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
         {explanation}
       </p>
     </details>

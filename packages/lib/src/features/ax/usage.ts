@@ -28,6 +28,7 @@ import type {
   AxUsageParticipationRow,
   AxUsageClient,
 } from './types'
+import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from './types'
 import { panelOk, panelError, panelNotConfigured } from './panel'
 import { createLogger } from '../../core/logger'
 
@@ -301,9 +302,11 @@ async function loadParticipation(
           source: authorized.has(member.id) ? 'authorization' : 'none',
         }
       })
+      // 챙겨야 할 계정이 먼저 보이도록 나쁜 상태부터, 같은 상태 안에서는 이름순.
       .sort(
         (a, b) =>
-          (a.status === 'reporting' ? 1 : 0) - (b.status === 'reporting' ? 1 : 0) ||
+          AX_USAGE_PARTICIPATION_STATUS_ORDER.indexOf(a.status) -
+            AX_USAGE_PARTICIPATION_STATUS_ORDER.indexOf(b.status) ||
           a.memberName.localeCompare(b.memberName, 'ko')
       )
   } catch (err) {
