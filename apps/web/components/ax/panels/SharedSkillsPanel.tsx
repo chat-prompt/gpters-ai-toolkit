@@ -10,6 +10,7 @@
 
 import type { AxSharedSkillsData } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
+import { EMPTY_NOTE } from './primitives'
 import { formatCount } from '../format'
 
 /**
@@ -27,12 +28,10 @@ export function SharedSkillsPanel({ data }: AxPanelViewProps<AxSharedSkillsData>
       </p>
 
       {!data.eventsConnected && (
-        <div className="rounded-xl border border-dashed border-[var(--border-hover)] px-5 py-4">
-          <p className="text-sm text-[var(--text-secondary)]">
-            실행 이벤트 수집은 아직 연결되지 않았습니다. 지금은 저장소에 어떤 스킬이 있는지만
-            보여주며, 에이전트별 사용량은 수집 계약이 정해진 뒤 붙습니다.
-          </p>
-        </div>
+        <p className={EMPTY_NOTE}>
+          실행 이벤트 수집은 아직 연결되지 않았습니다. 지금은 저장소에 어떤 스킬이 있는지만
+          보여주며, 에이전트별 사용량은 수집 계약이 정해진 뒤 붙습니다.
+        </p>
       )}
 
       {data.skills.length > 0 ? (

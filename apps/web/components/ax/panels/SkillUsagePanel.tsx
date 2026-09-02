@@ -19,14 +19,7 @@ import { TablePager, usePagedRows } from './TablePager'
 /** 한 장에 실을 스킬 수 */
 const SKILL_PAGE_SIZE = 20
 
-/** 표 머리칸 공통 스타일 */
-const TH = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)] font-normal'
-
-/** 표 본문칸 공통 여백 */
-const TD = 'py-2.5 px-3'
-
-/** 데이터가 비었을 때의 조용한 안내문 */
-const EMPTY_NOTE = 'border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]'
+import { EMPTY_NOTE, SECTION_LABEL, TD, TH } from './primitives'
 
 /**
  * 스킬 사용량 패널 화면
@@ -148,7 +141,7 @@ function SkillTable({
   return (
     <div>
       <div className="relative mb-3 inline-flex items-center gap-1.5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">스킬별 실제 적용</p>
+        <p className={SECTION_LABEL}>스킬별 실제 적용</p>
         <span
           className="cursor-help rounded-full px-1 font-mono text-[10px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--brand-primary)]"
           tabIndex={0}
@@ -175,10 +168,10 @@ function SkillTable({
         <table className="w-full min-w-[600px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
-              <th className={`text-right ${TD} ${TH} w-12`}>순위</th>
-              <th className={`text-left ${TD} ${TH} w-[56%]`}>스킬</th>
-              <th className={`text-right ${TD} ${TH}`}>활성 사용자 중 적용</th>
-              <th className={`text-right ${TD} ${TH}`}>마지막 사용</th>
+              <th className={`text-right ${TH} w-12`}>순위</th>
+              <th className={`text-left ${TH} w-[56%]`}>스킬</th>
+              <th className={`text-right ${TH}`}>활성 사용자 중 적용</th>
+              <th className={`text-right ${TH}`}>마지막 사용</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">

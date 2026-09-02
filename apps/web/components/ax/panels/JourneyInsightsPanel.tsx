@@ -5,9 +5,17 @@
 import type { AxJourneyInsightsData, AxSkillOutcomeRow } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { RATE_MIN_SAMPLE, formatCount, formatDate, formatSampledRate } from '../format'
-
-const TH = 'px-3 py-2.5 font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-[var(--text-muted)]'
-const TD = 'px-3 py-2.5'
+import {
+  DefinitionRows,
+  EmptyNote,
+  META_LINE,
+  NumberCell,
+  SectionHeader,
+  Stat,
+  StatGrid,
+  TD,
+  TH,
+} from './primitives'
 
 /** 검색 품질과 로드 이후 결과 누락을 한 화면에 연결한다 */
 export function JourneyInsightsPanel({ data, days }: AxPanelViewProps<AxJourneyInsightsData>) {
@@ -65,22 +73,19 @@ function ExecutionSection({ data }: { data: AxJourneyInsightsData['execution'] }
         <EmptyNote>아직 새 실행 결과 계약으로 보고된 시도가 없습니다. 기존 적용 기록을 성공률로 바꾸지 않습니다.</EmptyNote>
       ) : (
         <>
-          <div className="mt-4 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              { label: '성공', value: data.success },
-              { label: '부분 성공', value: data.partial },
-              { label: '실패', value: data.failed },
-              { label: '시도 중단', value: data.abandoned },
-            ].map((item) => (
-              <div key={item.label} className="bg-[var(--bg-primary)] p-5">
-                <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
-                <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">
-                  {formatCount(item.value)}회
-                </p>
-              </div>
-            ))}
+          <div className="mt-4">
+            <StatGrid columns={4}>
+              {[
+                { label: '성공', value: data.success },
+                { label: '부분 성공', value: data.partial },
+                { label: '실패', value: data.failed },
+                { label: '시도 중단', value: data.abandoned },
+              ].map((item) => (
+                <Stat key={item.label} label={item.label} value={formatCount(item.value)} unit="회" />
+              ))}
+            </StatGrid>
           </div>
-          <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+          <p className="mt-4 text-xs leading-relaxed text-[var(--text-secondary)]">
             전체 {formatCount(data.attempts)}회 · 자기보고 성공률{' '}
             {formatSampledRate(data.success, data.success + data.partial + data.failed)} ·
             검증 결과가 있는 {formatCount(data.verifiedAttempts)}회 중 검증 성공률{' '}
@@ -93,21 +98,19 @@ function ExecutionSection({ data }: { data: AxJourneyInsightsData['execution'] }
 
           <div className="mt-8">
             <SectionTitle eyebrow="계측 건강도" title="시작 보고와 완료 보고의 연결 상태" />
-            <div className="mt-4 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-3">
-              {[
-                { label: '시작이 관측된 시도', value: `${formatCount(data.startedAttempts)} / ${formatCount(data.attempts)}회`, note: '구형 완료 보고는 시작 미관측으로 남깁니다.' },
-                { label: '진행 중', value: `${formatCount(data.inProgressAttempts)}회`, note: '시작 후 30분 이내이며 아직 완료되지 않음' },
-                { label: '완료 보고 지연', value: `${formatCount(data.unreportedAttempts)}회`, note: '시작 후 30분이 지나도 완료 이벤트가 없음' },
-                { label: '시작 없이 완료', value: `${formatCount(data.completionWithoutStart)}회`, note: '구형 클라이언트 또는 시작 훅 누락 후보' },
-                { label: '버전 미기록', value: `${formatCount(data.missingVersion)}회`, note: 'SKILL.md 버전 또는 commit SHA 보완 필요' },
-                { label: '검증 없는 완료', value: `${formatCount(data.unvalidatedCompleted)}회`, note: data.averageDurationSeconds === null ? '관측된 실행 시간 없음' : `시작·완료 연결 평균 ${formatDuration(data.averageDurationSeconds)}` },
-              ].map((item) => (
-                <div key={item.label} className="bg-[var(--bg-primary)] p-5">
-                  <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
-                  <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{item.value}</p>
-                  <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">{item.note}</p>
-                </div>
-              ))}
+            <div className="mt-4">
+              <StatGrid columns={3}>
+                {[
+                  { label: '시작이 관측된 시도', value: `${formatCount(data.startedAttempts)} / ${formatCount(data.attempts)}회`, note: '구형 완료 보고는 시작 미관측으로 남깁니다.' },
+                  { label: '진행 중', value: `${formatCount(data.inProgressAttempts)}회`, note: '시작 후 30분 이내이며 아직 완료되지 않음' },
+                  { label: '완료 보고 지연', value: `${formatCount(data.unreportedAttempts)}회`, note: '시작 후 30분이 지나도 완료 이벤트가 없음' },
+                  { label: '시작 없이 완료', value: `${formatCount(data.completionWithoutStart)}회`, note: '구형 클라이언트 또는 시작 훅 누락 후보' },
+                  { label: '버전 미기록', value: `${formatCount(data.missingVersion)}회`, note: 'SKILL.md 버전 또는 commit SHA 보완 필요' },
+                  { label: '검증 없는 완료', value: `${formatCount(data.unvalidatedCompleted)}회`, note: data.averageDurationSeconds === null ? '관측된 실행 시간 없음' : `시작·완료 연결 평균 ${formatDuration(data.averageDurationSeconds)}` },
+                ].map((item) => (
+                  <Stat key={item.label} label={item.label} value={item.value} note={item.note} />
+                ))}
+              </StatGrid>
             </div>
           </div>
 
@@ -197,20 +200,17 @@ function MetricStrip({ data }: { data: AxJourneyInsightsData }) {
   ]
 
   return (
-    <div className="grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
+    <StatGrid columns={4}>
       {metrics.map((metric) => (
-        <div key={metric.label} className="min-w-0 bg-[var(--bg-primary)] px-5 py-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-            {metric.label}
-          </p>
-          <p className="mt-2 flex items-baseline gap-1 font-mono tabular-nums">
-            <span className="text-2xl text-[var(--text-primary)]">{metric.value}</span>
-            {metric.unit && <span className="text-xs text-[var(--text-muted)]">{metric.unit}</span>}
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">{metric.note}</p>
-        </div>
+        <Stat
+          key={metric.label}
+          label={metric.label}
+          value={metric.value}
+          unit={metric.unit || undefined}
+          note={metric.note}
+        />
       ))}
-    </div>
+    </StatGrid>
   )
 }
 
@@ -255,14 +255,12 @@ function ReliabilityStrip({ data }: { data: AxJourneyInsightsData }) {
   return (
     <section aria-label="분모 신뢰도">
       <SectionTitle eyebrow="분모 신뢰도" title="전환율을 읽기 전에 확인할 관측 범위" />
-      <div className="mt-4 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
-        {tiles.map((tile) => (
-          <div key={tile.label} className="min-w-0 bg-[var(--bg-primary)] px-5 py-5">
-            <p className="text-xs text-[var(--text-muted)]">{tile.label}</p>
-            <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{tile.value}</p>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">{tile.note}</p>
-          </div>
-        ))}
+      <div className="mt-4">
+        <StatGrid columns={4}>
+          {tiles.map((tile) => (
+            <Stat key={tile.label} label={tile.label} value={tile.value} note={tile.note} />
+          ))}
+        </StatGrid>
       </div>
     </section>
   )
@@ -305,27 +303,28 @@ function JourneyGuide({ data }: { data: AxJourneyInsightsData }) {
   return (
     <section>
       <SectionTitle eyebrow="동일 후보 퍼널" title="검색 후보 → 상세 확인 → 적용 판단 기록" />
-      <p className="mt-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+      <p className={`mt-2 ${META_LINE}`}>
         반복 포함 검색 후보 총 노출 {formatCount(totalExposures)}회 · 세션×스킬 기준 고유 후보 {formatCount(exploration.exposedPairs)}개
       </p>
-      <div className="mt-4 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] lg:grid-cols-3">
-        {steps.map((step) => (
-          <div key={step.number} className="bg-[var(--bg-primary)] p-5">
-            <div className="flex items-center gap-3">
-              <span className="flex size-6 items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[11px] text-[var(--text-muted)]">
-                {step.number}
-              </span>
-              <p className="text-sm text-[var(--text-primary)]">{step.title}</p>
-            </div>
-            <p className="mt-4 font-mono text-xl tabular-nums text-[var(--text-primary)]">
-              {formatCount(step.value)}개
-              {step.rate !== null && (
-                <span className="ml-2 text-xs text-[var(--text-muted)]">직전 단계의 {step.rate}</span>
+      <div className="mt-4">
+        <StatGrid columns={3}>
+          {steps.map((step) => (
+            <Stat
+              key={step.number}
+              label={`${step.number} · ${step.title}`}
+              value={formatCount(step.value)}
+              unit="개"
+              note={(
+                <>
+                  {step.rate !== null && (
+                    <span className={`block ${META_LINE}`}>직전 단계의 {step.rate}</span>
+                  )}
+                  <span className="mt-1 block text-[var(--text-secondary)]">{step.body}</span>
+                </>
               )}
-            </p>
-            <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">{step.body}</p>
-          </div>
-        ))}
+            />
+          ))}
+        </StatGrid>
       </div>
       <p className="mt-3 text-xs leading-relaxed text-[var(--text-muted)]">
         세 단계는 모두 동일한 세션×스킬 후보를 시간 순서대로 연결합니다. 총 노출은 반복 추천 문제를
@@ -504,17 +503,14 @@ function AlertSection({
   return (
     <section>
       <SectionTitle eyebrow="정기 확인" title="지금 확인할 항목" />
-      <div className="mt-5 grid gap-px overflow-hidden rounded-2xl bg-[var(--border-subtle)] lg:grid-cols-2">
-        {alerts.map((alert) => (
-          <div key={alert.label} className="bg-[var(--bg-primary)] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-[var(--text-primary)]">{alert.label}</p>
-              <StatusBadge ready={alert.ready}>{alert.status}</StatusBadge>
-            </div>
-            <p className="mt-4 text-xs leading-relaxed text-[var(--text-secondary)]">{alert.body}</p>
-          </div>
-        ))}
-      </div>
+      <DefinitionRows
+        rows={alerts.map((alert) => ({
+          title: alert.label,
+          detail: alert.body,
+          badge: alert.status,
+          warning: alert.status === '확인 필요',
+        }))}
+      />
     </section>
   )
 }
@@ -592,13 +588,9 @@ function formatDuration(seconds: number): string {
   return `${Math.round((minutes / 60) * 10) / 10}시간`
 }
 
+/** 섹션 머리 — 제목을 모노 라벨로, 분류 눈썹은 오른쪽 보조 문구로 둔다 */
 function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return (
-    <div>
-      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">{eyebrow}</p>
-      <h3 className="mt-1 text-base font-medium text-[var(--text-primary)]">{title}</h3>
-    </div>
-  )
+  return <SectionHeader label={title} aside={eyebrow} />
 }
 
 function PhraseList({ title, rows }: { title: string; rows: AxJourneyInsightsData['searchSkipReasons'] }) {
@@ -621,35 +613,8 @@ function PhraseList({ title, rows }: { title: string; rows: AxJourneyInsightsDat
   )
 }
 
-function StatusBadge({ ready, children }: { ready: boolean; children: string }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-1 font-mono text-[10px] ${
-      ready
-        ? 'border-[var(--brand-primary)]/30 text-[var(--brand-primary)]'
-        : 'border-[var(--border-hover)] text-[var(--text-muted)]'
-    }`}>
-      {children}
-    </span>
-  )
-}
 
-function EmptyNote({ children }: { children: string }) {
-  return (
-    <p className="mt-4 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
-      {children}
-    </p>
-  )
-}
 
-function NumberCell({ value, emphasize = false }: { value: number; emphasize?: boolean }) {
-  return (
-    <td className={`${TD} text-right font-mono tabular-nums ${
-      emphasize ? 'text-[var(--brand-primary)]' : value === 0 ? 'text-[var(--text-muted)]' : 'text-[var(--text-secondary)]'
-    }`}>
-      {formatCount(value)}
-    </td>
-  )
-}
 
 function formatRate(value: number | null): string {
   if (value === null) return '—'
