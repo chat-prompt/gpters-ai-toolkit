@@ -11,7 +11,7 @@ import type {
   AxAgentTelemetrySource,
   AxAgentTokenUsage,
 } from '@/lib/features/ax'
-import { formatCount, formatDateTime } from '../format'
+import { RATE_MIN_SAMPLE, formatCount, formatDateTime, formatSampledRate } from '../format'
 import type { AxPanelViewProps } from './types'
 
 const SOURCE_LABELS: Record<AxAgentTelemetrySource, string> = {
@@ -131,6 +131,8 @@ export function AgentActivityPanel({
         </div>
       </section>
 
+      <SkillImpactSummary scope={scope} />
+
       <TokenBreakdown usage={scope.totalUsage} />
 
       <section>
@@ -183,8 +185,10 @@ export function AgentActivityPanel({
       </div>
 
       <RankTable
-        title="스킬 로드"
-        empty="이 소스에서는 아직 스킬 로드가 관측되지 않았습니다."
+        title="관측된 스킬 로드"
+        empty={scope.skillLoadsObserved
+          ? '선택 기간에 관측된 스킬 로드가 없습니다.'
+          : '이 수집 소스는 스킬 로드 신호를 제공하지 않아 미관측입니다.'}
         rows={scope.skills.map((row) => ({
           name: row.skillId,
           value: formatCount(row.loaded),
@@ -195,6 +199,49 @@ export function AgentActivityPanel({
 
       <ExecutionSection scope={scope} />
     </div>
+  )
+}
+
+/** 스킬을 얼마나 다양하게 불렀고, 그중 검증 완료까지 이어진 흐름이 얼마나 되는지 보여준다. */
+function SkillImpactSummary({ scope }: { scope: ActivityScope }) {
+  const execution = scope.verifiedExecutions
+  // 분모가 작으면 백분율 대신 분수와 참고 표시로 보여준다.
+  const conversion = formatSampledRate(execution.linkedVerifiedSuccesses, execution.linkedLoads)
+  const conversionHint = execution.linkedLoads === 0
+    ? '연결 가능한 로드 없음'
+    : execution.linkedLoads < RATE_MIN_SAMPLE
+      ? `표본 ${RATE_MIN_SAMPLE}회 미만`
+      : `${formatCount(execution.linkedVerifiedSuccesses)} / ${formatCount(execution.linkedLoads)}회`
+
+  return (
+    <section>
+      <SectionTitle title="스킬 활용" hint="관측 범위가 다른 신호를 0으로 합치지 않습니다" />
+      <div className="mt-3 grid gap-px overflow-visible rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+        <Metric
+          label="고유 로드 스킬"
+          value={scope.skillLoadsObserved ? `${formatCount(scope.uniqueLoadedSkills)}개` : '미관측'}
+          explanation="에이전트 텔레메트리에서 실제 로드가 관측된 서로 다른 스킬 수입니다. Hermes·Codex처럼 이 신호를 제공하지 않는 소스는 0으로 표시하지 않습니다."
+        />
+        <Metric
+          label="검증 완료 스킬"
+          value={`${formatCount(execution.verifiedSkills)}개`}
+          hint={`실행 시도 고유 ${formatCount(execution.uniqueSkills)}개`}
+          explanation="서버에 success와 검증 통과가 함께 보고된 서로 다른 스킬 수입니다. 단순 로드와 구분합니다."
+        />
+        <Metric
+          label="선행 로드 연결"
+          value={`${formatCount(execution.linkedLoads)}회`}
+          hint={`전체 실행 ${formatCount(execution.attempts)}회 중`}
+          explanation="서버 여정 기록에서 같은 journey 또는 session의 앞선 스킬 로드와 연결할 수 있는 실행 수입니다. 텔레메트리의 로드 관측 여부와는 별도 신호입니다."
+        />
+        <Metric
+          label="로드→검증 성공"
+          value={conversion}
+          hint={conversionHint}
+          explanation={`앞선 로드와 연결된 실행을 분모로 삼아 성공이면서 검증을 통과한 비율입니다. 미연결 실행은 분모에서 제외하고, 분모가 ${RATE_MIN_SAMPLE}회 미만이면 백분율 대신 분수를 참고 수치로 보여줍니다.`}
+        />
+      </div>
+    </section>
   )
 }
 
@@ -507,7 +554,7 @@ function MetricHelp({ label, explanation }: { label: string; explanation: string
         className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)] [&::-webkit-details-marker]:hidden"
         aria-label={`${label} 설명`}
       >?</summary>
-      <p className="absolute left-0 top-6 z-20 w-64 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
+      <p className="absolute left-1/2 top-6 z-20 w-64 -translate-x-1/2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
         {explanation}
       </p>
     </details>

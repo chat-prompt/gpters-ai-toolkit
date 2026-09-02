@@ -66,9 +66,13 @@ export function SkillEventSummary({
     {
       label: '로드',
       value: totals.load,
-      color: 'color-mix(in srgb, var(--brand-primary) 48%, var(--bg-primary))',
+      color: 'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))',
     },
-    { label: '적용 보고', value: totals.apply, color: 'var(--brand-primary)' },
+    {
+      label: '적용 보고',
+      value: totals.apply,
+      color: 'var(--accent-orange)',
+    },
   ]
 
   return (
@@ -104,7 +108,7 @@ export function SkillEventSummary({
                   width: `${totalEvents > 0 ? Math.min(100, (step.value / totalEvents) * 100) : 0}%`,
                   background: step.color,
                   boxShadow: highlighted
-                    ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-primary)'
+                    ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
                     : 'none',
                 }}
               />

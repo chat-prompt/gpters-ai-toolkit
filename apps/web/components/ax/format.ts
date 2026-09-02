@@ -91,15 +91,60 @@ export function formatCount(value: number): string {
   return value.toLocaleString('ko-KR')
 }
 
+/** 비율을 백분율로 믿고 읽을 수 있는 최소 분모. 그 미만은 분수와 참고 표시로 보여준다. */
+export const RATE_MIN_SAMPLE = 10
+
 /**
- * 같은 차트 안의 최솟값~최댓값을 25%~100% 브랜드색 농도로 바꾼다.
- * 제곱근 곡선으로 작은 값 사이의 차이도 검은 배경에서 사라지지 않게 한다.
+ * 분모 신뢰도를 함께 드러내는 비율 표기
+ *
+ * 분모가 없으면 0%로 꾸미지 않고 대시, 최소 표본 미만이면 백분율 대신 `n/d · 참고`,
+ * 그 외에는 소수점 한 자리 백분율을 돌려준다.
+ *
+ * @param numerator - 분자
+ * @param denominator - 분모
+ * @param minSample - 백분율로 표시할 최소 분모 (기본 RATE_MIN_SAMPLE)
+ * @returns 화면 표기 문자열
+ */
+export function formatSampledRate(
+  numerator: number,
+  denominator: number,
+  minSample: number = RATE_MIN_SAMPLE
+): string {
+  if (denominator <= 0) return EMPTY
+  if (denominator < minSample) {
+    return `${formatCount(numerator)}/${formatCount(denominator)} · 참고`
+  }
+  const percentage = Math.round((numerator / denominator) * 1000) / 10
+  return `${percentage.toLocaleString('ko-KR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`
+}
+
+/**
+ * 같은 차트 안의 최솟값~최댓값을 선명한 주황 농도 스케일로 바꾼다.
+ * 배경색과 섞어 밝은·어두운 테마 모두에서 탁한 갈색으로 뭉개지지 않게 하고,
+ * 제곱근 곡선으로 작은 값 사이의 차이도 사라지지 않게 한다.
  */
 export function relativeActivityFill(value: number, min: number, max: number): string {
   if (value <= 0) return 'var(--border-subtle)'
-  if (max <= min) return 'var(--brand-primary)'
+  if (max <= min) return 'var(--accent-orange)'
 
   const ratio = Math.min(1, Math.max(0, (value - min) / (max - min)))
-  const intensity = 25 + 75 * Math.sqrt(ratio)
-  return `color-mix(in srgb, var(--brand-primary) ${intensity.toFixed(1)}%, transparent)`
+  const intensity = 30 + 70 * Math.sqrt(ratio)
+  return `color-mix(in srgb, var(--accent-orange) ${intensity.toFixed(1)}%, var(--bg-tertiary))`
+}
+
+/**
+ * 막대 차트 툴팁의 가로 기준점 — 가장자리 막대는 화면 밖으로 잘리지 않게 안쪽으로 붙인다.
+ *
+ * @param index - 막대 순서(0부터)
+ * @param length - 전체 막대 수
+ * @returns 왼쪽 끝은 `left-0`, 오른쪽 끝은 `right-0`, 가운데는 중앙 정렬 클래스
+ */
+export function tooltipAnchorClass(index: number, length: number): string {
+  if (length <= 1) return 'left-0'
+  if (index < length / 4) return 'left-0'
+  if (index >= length * 3 / 4) return 'right-0'
+  return 'left-1/2 -translate-x-1/2'
 }

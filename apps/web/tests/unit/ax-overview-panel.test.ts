@@ -25,6 +25,12 @@ vi.mock('@gpters/db', () => ({
     status: 'catalog_items.status',
   },
   users: { id: 'users.id', name: 'users.name' },
+  axAgentTelemetryBatches: {
+    agentId: 'ax_agent_telemetry_batches.agent_id',
+    windowStart: 'ax_agent_telemetry_batches.window_start',
+    windowEnd: 'ax_agent_telemetry_batches.window_end',
+    turns: 'ax_agent_telemetry_batches.turns',
+  },
 }))
 
 vi.mock('../../../../packages/lib/src/core/logger', () => ({
@@ -137,11 +143,12 @@ describe('overviewPanel', () => {
     queueQueries([
       [{ users: 21 }],
       [{ count: 504 }],
-      [{ date: '2026-08-18', directApplied: 9, appliedAfterLoad: 3, loads: 20 }],
+      [{ date: '2026-08-18', directApplied: 9, appliedAfterLoad: 3, loads: 20, linkableLoads: 15 }],
       [
         { hour: 10, users: 4 },
         { hour: 15, users: 2 },
       ],
+      [{ date: '2026-08-18', turns: 43, agents: 2 }],
     ])
     queueFlow([
       {
@@ -173,8 +180,15 @@ describe('overviewPanel', () => {
       date: '2026-08-18',
       events: 12,
       loads: 20,
+      linkableLoads: 15,
       directApplied: 9,
       appliedAfterLoad: 3,
+    })
+    expect(data.agentGrassDaily).toHaveLength(365)
+    expect(data.agentGrassDaily.find((d) => d.date === '2026-08-18')).toEqual({
+      date: '2026-08-18',
+      events: 43,
+      agents: 2,
     })
 
     // 관리자가 아니면 사용자별 사용량은 내려가지 않는다
@@ -208,7 +222,7 @@ describe('overviewPanel', () => {
   })
 
   it('모든 쿼리가 카탈로그 모집단(innerJoin)을 쓴다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
@@ -218,13 +232,13 @@ describe('overviewPanel', () => {
   })
 
   it('실제 사용 지표는 적용만 세고, 잔디만 도움말용 로드를 함께 센다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    expect(whereConditions).toHaveLength(4)
+    expect(whereConditions).toHaveLength(5)
 
-    for (const [index, condition] of whereConditions.entries()) {
+    for (const [index, condition] of whereConditions.slice(0, 4).entries()) {
       const values = collectValues(condition)
       const hasDateFilter = values.some((value) => value instanceof Date)
 
@@ -253,14 +267,19 @@ describe('overviewPanel', () => {
         expect(hasDateFilter, `쿼리 ${index}는 기간 필터가 있어야 한다`).toBe(true)
       }
     }
+
+    const agentValues = collectValues(whereConditions[4])
+    expect(agentValues.some((value) => value instanceof Date), '에이전트 잔디도 365일 경계가 있어야 한다').toBe(true)
+    expect(agentValues, '에이전트 잔디는 스킬 이벤트 action을 섞지 않는다').not.toContain('apply')
   })
 
   it('count가 문자열로 와도 숫자로 환산한다', async () => {
     queueQueries([
       [{ users: '9' }],
       [{ count: '11' }],
-      [{ date: '2026-08-18', directApplied: '2', appliedAfterLoad: '1', loads: '8' }],
+      [{ date: '2026-08-18', directApplied: '2', appliedAfterLoad: '1', loads: '8', linkableLoads: '6' }],
       [{ hour: '9', users: '5' }],
+      [{ date: '2026-08-18', turns: '17', agents: '1' }],
     ])
     queueFlow([
       {
@@ -282,8 +301,13 @@ describe('overviewPanel', () => {
     expect(data.catalogSkills).toBe(11)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.events).toBe(3)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.loads).toBe(8)
+    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.linkableLoads).toBe(6)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.directApplied).toBe(2)
     expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.appliedAfterLoad).toBe(1)
+    expect(data.agentGrassDaily.find((d) => d.date === '2026-08-18')).toMatchObject({
+      events: 17,
+      agents: 1,
+    })
     expect(data.dailySkillFlow.find((d) => d.date === '2026-08-18')).toMatchObject({
       directApplied: 2,
       loaded: 9,
@@ -300,7 +324,7 @@ describe('overviewPanel', () => {
   })
 
   it('활동이 전혀 없으면 error가 아니라 0으로 채운 정상 응답을 준다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
 
     const result = await overviewPanel.load({ days: 30, isAdmin: false })
 
@@ -322,6 +346,7 @@ describe('overviewPanel', () => {
         { name: '하영', uniqueSkills: 4, loaded: 31, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
         { name: null, uniqueSkills: 0, loaded: 3, applied: 0, lastActiveAt: null },
       ],
+      [],
     ])
 
     const data = (await overviewPanel.load({ days: 30, isAdmin: true })).data!

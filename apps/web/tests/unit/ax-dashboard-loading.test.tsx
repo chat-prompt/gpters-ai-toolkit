@@ -162,7 +162,7 @@ describe('AxDashboard 패널 요청', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('요약은 장기 활동과 내부 데이터 출처를 노출하지 않는다', async () => {
+  it('요약은 팀 스킬 활동 잔디를 보여주되 장황한 설명과 내부 데이터 출처는 숨긴다', async () => {
     const overview = { ...PANELS[0], source: 'aitk DB (skill_events)' }
     const data: AxOverviewData = {
       totalParticipants: 1,
@@ -170,6 +170,10 @@ describe('AxDashboard 패널 요청', () => {
       grassDaily: [
         { date: '2026-08-30', events: 2, loads: 4, directApplied: 1, appliedAfterLoad: 1 },
         { date: '2026-08-31', events: 1, loads: 5, directApplied: 1, appliedAfterLoad: 0 },
+      ],
+      agentGrassDaily: [
+        { date: '2026-08-30', events: 12, agents: 1 },
+        { date: '2026-08-31', events: 24, agents: 2 },
       ],
       dailySkillFlow: [],
       skillFlowSummary: {
@@ -195,8 +199,19 @@ describe('AxDashboard 패널 요청', () => {
     render(<AxDashboard panels={[overview]} isAdmin />)
 
     await screen.findByRole('tabpanel', { name: '요약' })
+    expect(screen.getByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeTruthy()
+    expect(screen.getByRole('button', {
+      name: '2026-08-30 · 활동 2건 · 로드 없이 적용 1건 · 로드 후 적용 1건',
+    })).toBeTruthy()
+    const agentGrassCell = screen.getByRole('button', {
+      name: '2026-08-31 · 턴 24건 · 활동 에이전트 2개',
+    })
+    fireEvent.mouseEnter(agentGrassCell)
+    expect(screen.getByRole('status').textContent).toContain('턴 24건')
+    fireEvent.mouseLeave(agentGrassCell.parentElement!)
+    expect(screen.queryByRole('status')).toBeNull()
     expect(screen.queryByText('장기 활동')).toBeNull()
-    expect(screen.queryByText(/일별 팀 스킬 활동/)).toBeNull()
     expect(screen.queryByText('aitk DB (skill_events)')).toBeNull()
   })
 
@@ -219,8 +234,12 @@ describe('AxDashboard 패널 요청', () => {
       totalParticipants: 6,
       catalogSkills: 1,
       grassDaily: [
-        { date: '2026-08-30', events: 3, loads: 20, directApplied: 2, appliedAfterLoad: 1 },
-        { date: '2026-08-31', events: 8, loads: 45, directApplied: 5, appliedAfterLoad: 3 },
+        { date: '2026-08-30', events: 3, loads: 20, linkableLoads: 8, directApplied: 2, appliedAfterLoad: 1 },
+        { date: '2026-08-31', events: 8, loads: 45, linkableLoads: 40, directApplied: 5, appliedAfterLoad: 3 },
+      ],
+      agentGrassDaily: [
+        { date: '2026-08-30', events: 30, agents: 1 },
+        { date: '2026-08-31', events: 45, agents: 2 },
       ],
       dailySkillFlow: [
         { date: '2026-08-30', directApplied: 1, loaded: 4, linkableLoaded: 3, appliedAfterLoad: 2 },
@@ -278,8 +297,10 @@ describe('AxDashboard 패널 요청', () => {
         models: [],
         tools: [],
         skills: [],
+        uniqueLoadedSkills: 0,
+        skillLoadsObserved: false,
         observedExecutionReports: [],
-        verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0 },
+        verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0, uniqueSkills: 0, verifiedSkills: 0, linkedLoads: 0, linkedVerifiedSuccesses: 0 },
         collection: { batches: 1, recordsRead: 1, parseFailures: 0, unsupportedRecordsSkipped: 0 },
       })),
       reporters: [],
@@ -287,8 +308,10 @@ describe('AxDashboard 패널 요청', () => {
       models: [],
       tools: [],
       skills: [],
+      uniqueLoadedSkills: 0,
+      skillLoadsObserved: false,
       observedExecutionReports: [],
-      verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0 },
+      verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0, uniqueSkills: 0, verifiedSkills: 0, linkedLoads: 0, linkedVerifiedSuccesses: 0 },
       collection: { batches: 2, recordsRead: 2, parseFailures: 0, unsupportedRecordsSkipped: 0 },
       insights: [],
     }
@@ -332,38 +355,55 @@ describe('AxDashboard 패널 요청', () => {
     const quieterDay = screen.getByLabelText('8월 30일 · 사용 인원 3명').firstElementChild as HTMLElement
     const peakDay = screen.getByLabelText('8월 31일 · 사용 인원 5명').firstElementChild as HTMLElement
     expect(quieterDay.className).toContain('ax-activity-mark')
-    expect(quieterDay.dataset.activityFill).toContain('25.0%')
+    expect(quieterDay.dataset.activityFill).toContain('30.0%')
     expect(quieterDay.style.transform).toBe('')
     expect(peakDay.dataset.activityFill).toContain('100.0%')
     fireEvent.mouseEnter(quieterDay.parentElement!)
-    expect(quieterDay.style.boxShadow).toContain('var(--brand-primary)')
+    expect(quieterDay.style.boxShadow).toContain('var(--brand-secondary)')
     expect(quieterDay.style.transform).toBe('')
     fireEvent.mouseLeave(quieterDay.parentElement!)
     expect(quieterDay.style.boxShadow).toBe('none')
     expect(screen.queryByLabelText('일별 스킬 활동 범례')).toBeNull()
+    expect(screen.getByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeTruthy()
     expect(screen.queryByText('장기 활동')).toBeNull()
 
     fireEvent.click(screen.getByRole('tab', { name: '스킬' }))
 
+    expect(screen.queryByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeNull()
+    expect(screen.queryByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeNull()
     expect(screen.getByLabelText('일별 스킬 활동 범례')).toBeTruthy()
     const eventSummary = screen.getByLabelText('검색 노출 10건 · 전체 이벤트 중 10.0%')
     const dailyChartTitle = screen.getByText('일별 스킬 활동')
     expect(eventSummary.compareDocumentPosition(dailyChartTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const flowDay = screen.getByLabelText('8월 31일 · 로드 없이 적용 5건 · 로드 45건 · 로드 후 적용 3건')
+    // 전환율 분모는 전체 로드가 아니라 연결 가능한 로드이고, 그 몫을 차트 위에 먼저 적는다.
+    expect(screen.getByLabelText('로드 후 적용 전환율 분모').textContent).toBe(
+      '로드 65건 중 연결 가능 48건 (73.8%) · 로드 후 적용 4건은 연결 가능 로드의 8.3%',
+    )
+    const flowDay = screen.getByLabelText(
+      '8월 31일 · 로드 없이 적용 5건 · 로드 45건 · 로드 후 적용 3건 · 연결 가능 로드 40건 중 7.5%',
+    )
     const flowBar = flowDay.querySelector<HTMLElement>('[data-flow-total]')
     expect(flowBar?.dataset.flowTotal).toBe('50')
     expect(flowBar?.style.transform).toBe('')
     expect(flowBar?.style.filter).toBe('')
     expect(flowBar?.style.opacity).toBe('')
-    expect(flowDay.querySelector<HTMLElement>('[data-flow-segment="direct"]')?.dataset.flowColor).toContain('#7a2f12')
+    expect(flowDay.querySelector<HTMLElement>('[data-flow-segment="direct"]')?.dataset.flowColor).toBe(
+      'color-mix(in srgb, var(--brand-secondary) 62%, var(--bg-tertiary))',
+    )
     const loadSegment = flowDay.querySelector<HTMLElement>('[data-flow-segment="load"]')
     const convertedSegment = flowDay.querySelector<HTMLElement>('[data-flow-segment="converted"]')
-    expect(loadSegment?.dataset.flowColor).toContain('16%')
+    expect(loadSegment?.dataset.flowColor).toBe(
+      'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))',
+    )
     expect(loadSegment?.style.boxShadow).toBe('')
-    expect(convertedSegment?.dataset.flowColor).toBe('var(--brand-primary)')
+    expect(convertedSegment?.dataset.flowColor).toBe(
+      'var(--accent-orange)',
+    )
     expect(convertedSegment?.style.boxShadow).toBe('')
-    const selectedTooltipText = '8월 31일 · 로드 없이 적용 5 · 로드 45 · 로드 후 적용 3 (7%)'
-    const otherTooltipText = '8월 30일 · 로드 없이 적용 2 · 로드 20 · 로드 후 적용 1 (5%)'
+    const selectedTooltipText = '8월 31일 · 로드 없이 적용 5 · 로드 45 · 로드 후 적용 3 · 연결 가능 로드 40건 중 7.5%'
+    // 분모가 10건 미만인 날은 백분율 대신 분수를 참고 수치로 보여준다.
+    const otherTooltipText = '8월 30일 · 로드 없이 적용 2 · 로드 20 · 로드 후 적용 1 · 연결 가능 로드 8건 중 1/8 · 참고'
     expect(screen.queryByText(selectedTooltipText)).toBeNull()
     expect(screen.queryByText(otherTooltipText)).toBeNull()
     fireEvent.mouseEnter(flowDay)

@@ -10,7 +10,7 @@
 import type { AxOverviewData } from '@/lib/features/ax'
 import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate, relativeActivityFill } from '../format'
+import { formatCount, formatDate, relativeActivityFill, tooltipAnchorClass } from '../format'
 
 /** 표 머리칸 공통 스타일 */
 const SECTION_LABEL = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]'
@@ -100,7 +100,7 @@ function MemberUsageTable({
                       width: `${(row.applied / max) * 100}%`,
                       background: relativeActivityFill(row.applied, min, max),
                       boxShadow: highlightedIndex === index
-                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-primary)'
+                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
                         : 'none',
                     }}
                   />
@@ -169,11 +169,11 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
               style={{
                 background: relativeActivityFill(point.users, min, max),
                 boxShadow: highlightedHour === point.hour
-                  ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-primary)'
+                  ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
                   : 'none',
               }}
             />
-            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block">
+            <span className={`pointer-events-none absolute bottom-full z-10 mb-2 hidden whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block ${tooltipAnchorClass(point.hour, rows.length)}`}>
               {point.hour}시 · {formatCount(point.users)}명
             </span>
           </div>

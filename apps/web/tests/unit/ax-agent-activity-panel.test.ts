@@ -16,6 +16,9 @@ vi.mock('@gpters/db', () => ({
   },
   axSkillExecutionAttempts: {
     agentId: 'agent_id',
+    skillId: 'skill_id',
+    journeyId: 'journey_id',
+    sessionId: 'session_id',
     status: 'status',
     validationMethod: 'validation_method',
     validationPassed: 'validation_passed',
@@ -86,7 +89,12 @@ describe('agentActivityPanel', () => {
 
   it('source별 batch를 합치되 included thinking을 총 토큰에 중복 합산하지 않는다', async () => {
     queueRows([
-      row(),
+      row({
+        skillLoads: [
+          { skillId: 'browse', loaded: 2, failed: 0, interrupted: 0 },
+          { skillId: 'broken-load', loaded: 0, failed: 1, interrupted: 0 },
+        ],
+      }),
       row({
         collectedAt: new Date('2026-08-26T22:00:00Z'),
         inputTokens: 1,
@@ -102,8 +110,8 @@ describe('agentActivityPanel', () => {
         collection: { source: 'codex', recordsRead: 50, parseFailures: 1, unsupportedRecordsSkipped: 3, healthWarnings: [] },
       }),
     ], [
-      { agentId: 'bbodoong', status: 'success', validationMethod: 'test', validationPassed: true },
-      { agentId: 'bbodoong', status: 'failed', validationMethod: 'none', validationPassed: null },
+      { agentId: 'bbodoong', skillId: 'browse', status: 'success', validationMethod: 'test', validationPassed: true, linkedLoad: true },
+      { agentId: 'bbodoong', skillId: 'debug', status: 'failed', validationMethod: 'none', validationPassed: null, linkedLoad: false },
     ])
 
     const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
@@ -118,11 +126,16 @@ describe('agentActivityPanel', () => {
       collection: { batches: 2, recordsRead: 150, parseFailures: 1, unsupportedRecordsSkipped: 5 },
     })
     expect(result.data!.totalUsage.thinkingTokens).toBe(9)
+    expect(result.data!.uniqueLoadedSkills).toBe(1)
     expect(result.data!.verifiedExecutions).toMatchObject({
       attempts: 2,
       success: 1,
       failed: 1,
       withEvidence: 1,
+      uniqueSkills: 2,
+      verifiedSkills: 1,
+      linkedLoads: 1,
+      linkedVerifiedSuccesses: 1,
     })
     expect(result.data!.reporters).toHaveLength(2)
     expect(result.data!.agents).toEqual([
@@ -133,6 +146,8 @@ describe('agentActivityPanel', () => {
         toolCalls: 20,
         collection: { batches: 2, recordsRead: 150, parseFailures: 1, unsupportedRecordsSkipped: 5 },
         verifiedExecutions: expect.objectContaining({ attempts: 2, success: 1, failed: 1, withEvidence: 1 }),
+        uniqueLoadedSkills: 1,
+        skillLoadsObserved: true,
       }),
     ])
     expect(result.data!.sourceCoverage.find((item) => item.source === 'claude-code')?.status).toBe('reporting')
@@ -200,13 +215,46 @@ describe('agentActivityPanel', () => {
       tools: [{ name: 'shell', calls: 3, failures: 1 }],
       skillLoads: [],
       collection: { source: 'hermes', recordsRead: 100, parseFailures: 0, unsupportedRecordsSkipped: 0, healthWarnings: [] },
-    })])
+    })], [{
+      agentId: 'bbokeoter',
+      skillId: 'internal-comms',
+      status: 'success',
+      validationMethod: 'artifact',
+      validationPassed: true,
+      linkedLoad: true,
+    }])
     const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
     expect(result.data!.reporters[0]).toMatchObject({ agentId: 'bbokeoter', source: 'hermes' })
     expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')).toMatchObject({
       status: 'reporting', capabilities: { usage: true, tools: true, skills: false },
     })
     expect(result.data!.totalProcessedTokens).toBe(100)
+    expect(result.data!.agents[0]).toMatchObject({
+      uniqueLoadedSkills: 0,
+      skillLoadsObserved: false,
+      verifiedExecutions: expect.objectContaining({
+        attempts: 1,
+        success: 1,
+        uniqueSkills: 1,
+        verifiedSkills: 1,
+        linkedLoads: 1,
+        linkedVerifiedSuccesses: 1,
+      }),
+    })
+  })
+
+  it('활성 수집기가 없는 smoke 실행은 운영 에이전트 합계에서 제외한다', async () => {
+    queueRows([row()], [
+      { agentId: 'bbodoong', skillId: 'browse', status: 'success', validationMethod: 'test', validationPassed: true, linkedLoad: true },
+      { agentId: 'prod-smoke', skillId: 'smoke', status: 'success', validationMethod: 'test', validationPassed: true, linkedLoad: true },
+    ])
+
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+
+    expect(result.data!.verifiedExecutions).toMatchObject({ attempts: 1, verifiedSkills: 1 })
+    expect(result.data!.insights).toContainEqual(expect.objectContaining({
+      title: '미등록 실행 보고 1건 제외',
+    }))
   })
 
   it('설치 후 첫 batch 전인 수집기를 대기 상태로 보여준다', async () => {

@@ -14,6 +14,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import type {
@@ -24,7 +25,13 @@ import type {
 } from '@/lib/features/ax'
 import { getAxPanelView, SkillEventSummary } from './panels'
 import { AxPanelBoundary } from './AxPanelBoundary'
-import { formatCount, formatUpdatedAt, relativeActivityFill } from './format'
+import {
+  formatCount,
+  formatSampledRate,
+  formatUpdatedAt,
+  relativeActivityFill,
+  tooltipAnchorClass,
+} from './format'
 
 /** 조회 기간(일) — API가 허용하는 값과 같아야 한다 */
 const DAY_OPTIONS = [7, 30, 90] as const
@@ -189,11 +196,13 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   )
 
   const grassDaily = overviewData?.grassDaily ?? null
+  const agentGrassDaily = overviewData?.agentGrassDaily ?? null
   // 선택 기간의 상단 차트는 KST 일자별 이벤트 흐름을 쓴다. overview가 없는 제한된
   // 화면·테스트 환경에서는 apply 일별 집계를 모두 직접 적용으로 보아 안전하게 폴백한다.
   const periodApplicationFlow = (grassDaily ?? skillUsageData?.daily.map((point) => ({
     ...point,
     loads: 0,
+    linkableLoads: 0,
     directApplied: point.events,
     appliedAfterLoad: 0,
   })) ?? []).slice(-days)
@@ -312,10 +321,170 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
             ? () => loadPanel(active.id, days, true)
             : undefined}
         />
+        {active.id === 'overview' && (
+          <div className="mt-12 space-y-3" aria-label="사람과 에이전트 장기 사용량">
+            <ActivityGrassCard
+              daily={grassDaily}
+              label="일별 구성원 스킬 활동 · 최근 365일"
+              valueLabel="활동"
+              kind="member"
+              loading={memberActivityLoading && grassDaily === null}
+            />
+            <ActivityGrassCard
+              daily={agentGrassDaily}
+              label="일별 에이전트 사용량 · 최근 365일"
+              valueLabel="턴"
+              kind="agent"
+              loading={memberActivityLoading && agentGrassDaily === null}
+            />
+          </div>
+        )}
       </div>
 
     </>
   )
+}
+
+type GrassPoint =
+  | AxOverviewData['grassDaily'][number]
+  | AxOverviewData['agentGrassDaily'][number]
+
+/** 요약 맨 아래의 최근 365일 활동 잔디 — 기간 토글과 무관한 장기 리듬이다. */
+function ActivityGrassCard({
+  daily,
+  label,
+  valueLabel,
+  kind,
+  loading,
+}: {
+  daily: GrassPoint[] | null
+  label: string
+  valueLabel: string
+  kind: 'member' | 'agent'
+  loading: boolean
+}) {
+  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const wrapRef = useRef<HTMLElement>(null)
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-[var(--border-subtle)] px-5 py-5">
+        <div className="ax-shimmer h-3 w-32 rounded" />
+        <div className="ax-shimmer mt-4 h-28 rounded" />
+      </div>
+    )
+  }
+
+  if (!daily || daily.length === 0) return null
+
+  const first = daily[0]
+  const last = daily[daily.length - 1]
+  const max = Math.max(1, ...daily.map((point) => point.events))
+  const positive = daily.map((point) => point.events).filter((events) => events > 0)
+  const min = positive.length > 0 ? Math.min(...positive) : max
+  const total = daily.reduce((sum, point) => sum + point.events, 0)
+  const leading = first ? weekdayOf(first.date) : 0
+  const cells: Array<(typeof daily)[number] | null> = [
+    ...Array.from({ length: leading }, () => null),
+    ...daily,
+  ]
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weekCount = cells.length / 7
+
+  const cellStyle = (events: number): CSSProperties => ({
+    background: events > 0
+      ? relativeActivityFill(events, min, max)
+      : 'var(--bg-tertiary)',
+  })
+
+  const showTip = (
+    event: { currentTarget: HTMLElement },
+    point: GrassPoint
+  ) => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    const cell = event.currentTarget.getBoundingClientRect()
+    const base = wrap.getBoundingClientRect()
+    const rawLeft = cell.left - base.left + cell.width / 2
+    const safeHalfWidth = Math.min(220, base.width / 2)
+    setTip({
+      left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
+      top: cell.top - base.top,
+      text: grassTooltip(point, kind),
+    })
+  }
+
+  return (
+    <section
+      ref={wrapRef}
+      className="ax-reveal relative rounded-2xl border border-[var(--border-subtle)] px-5 py-5"
+      aria-label={label}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium text-[var(--text-primary)]">{label}</h3>
+        <p className="font-mono text-[10px] tabular-nums text-[var(--text-muted)]">
+          {valueLabel} {formatCount(total)}건 · 최대 {formatCount(max)}건/일
+        </p>
+      </div>
+
+      <div className="mt-4 overflow-x-auto pb-1">
+        <div
+          className="grid min-w-[680px] gap-[3px]"
+          style={{
+            gridTemplateColumns: `repeat(${weekCount}, minmax(0, 1fr))`,
+            gridTemplateRows: 'repeat(7, auto)',
+            gridAutoFlow: 'column',
+          }}
+          onMouseLeave={() => setTip(null)}
+        >
+          {cells.map((point, index) => point === null ? (
+            <span key={`pad-${index}`} className="w-full rounded-[2px]" style={{ aspectRatio: '1' }} />
+          ) : (
+            <button
+              key={point.date}
+              type="button"
+              className="w-full rounded-[2px] outline-none transition-shadow hover:ring-1 hover:ring-[var(--brand-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-secondary)]"
+              style={{ aspectRatio: '1', ...cellStyle(point.events) }}
+              data-activity-fill={cellStyle(point.events).background}
+              aria-label={grassTooltip(point, kind)}
+              onMouseEnter={(event) => showTip(event, point)}
+              onFocus={(event) => showTip(event, point)}
+              onBlur={() => setTip(null)}
+            />
+          ))}
+        </div>
+        <div className="mt-2 flex items-center justify-between font-mono text-[10px] tabular-nums text-[var(--text-muted)]">
+          <span>{first?.date}</span>
+          <span>{last?.date}</span>
+        </div>
+      </div>
+
+      {tip && (
+        <div
+          className="pointer-events-none absolute z-20 max-w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-full whitespace-normal rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-center font-mono text-[10px] tabular-nums text-[var(--text-primary)] shadow-lg"
+          style={{ left: tip.left, top: tip.top - 6 }}
+          role="status"
+        >
+          {tip.text}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** YYYY-MM-DD 날짜 키의 요일(0=일요일). */
+function weekdayOf(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay()
+}
+
+/** 잔디 셀의 접근성 이름과 즉시 툴팁을 같은 문구로 유지한다. */
+function grassTooltip(point: GrassPoint, kind: 'member' | 'agent'): string {
+  if (kind === 'agent') {
+    const agents = 'agents' in point ? point.agents : 0
+    return `${point.date} · 턴 ${formatCount(point.events)}건 · 활동 에이전트 ${formatCount(agents)}개`
+  }
+  const memberPoint = point as AxOverviewData['grassDaily'][number]
+  return `${point.date} · 활동 ${formatCount(point.events)}건 · 로드 없이 적용 ${formatCount(memberPoint.directApplied ?? 0)}건 · 로드 후 적용 ${formatCount(memberPoint.appliedAfterLoad ?? 0)}건`
 }
 
 /**
@@ -472,11 +641,11 @@ function DailyActiveUsersChart({
                       height: users === 0 ? '2px' : `${Math.max(3, (users / max) * 100)}%`,
                       background: relativeActivityFill(users, min, max),
                       boxShadow: highlightedIndex === index
-                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-primary)'
+                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
                         : 'none',
                     }}
                   >
-                    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block">
+                    <span className={`pointer-events-none absolute bottom-full z-20 mb-2 hidden whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block ${tooltipAnchorClass(index, daily.length)}`}>
                       {formatChartDate(point.date)} · {formatCount(users)}명
                     </span>
                   </div>
@@ -492,9 +661,9 @@ function DailyActiveUsersChart({
 }
 
 /** 선택 기간의 일별 로드·적용 이벤트 흐름 — 사람 수가 아니라 서버 이벤트 수다. */
-const FLOW_DIRECT_COLOR = 'color-mix(in srgb, var(--brand-secondary) 68%, #7a2f12)'
-const FLOW_LOAD_COLOR = 'color-mix(in srgb, var(--brand-primary) 16%, var(--bg-primary))'
-const FLOW_CONVERTED_COLOR = 'var(--brand-primary)'
+const FLOW_DIRECT_COLOR = 'color-mix(in srgb, var(--brand-secondary) 62%, var(--bg-tertiary))'
+const FLOW_LOAD_COLOR = 'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))'
+const FLOW_CONVERTED_COLOR = 'var(--accent-orange)'
 
 function DailyApplicationFlowChart({
   daily,
@@ -514,6 +683,16 @@ function DailyApplicationFlowChart({
     (point) => (point.directApplied ?? 0) > 0 || (point.loads ?? 0) > 0
   )
   const axisIndexes = chartAxisIndexes(daily.length)
+  // 연결 가능 로드는 새 응답에만 있다. 한 날이라도 값이 없으면 분모를 추정하지 않는다.
+  const linkableObserved = daily.length > 0 && daily.every((point) => point.linkableLoads !== undefined)
+  const totals = daily.reduce(
+    (sum, point) => ({
+      loads: sum.loads + (point.loads ?? 0),
+      linkableLoads: sum.linkableLoads + (point.linkableLoads ?? 0),
+      appliedAfterLoad: sum.appliedAfterLoad + (point.appliedAfterLoad ?? 0),
+    }),
+    { loads: 0, linkableLoads: 0, appliedAfterLoad: 0 }
+  )
 
   return (
     <div>
@@ -525,6 +704,13 @@ function DailyApplicationFlowChart({
           <FlowLegend color={FLOW_CONVERTED_COLOR} label="로드 후 적용" />
         </div>
       </div>
+      {hasActivity && totals.loads > 0 && (
+        <FlowDenominatorNote
+          loads={totals.loads}
+          linkableLoads={linkableObserved ? totals.linkableLoads : null}
+          appliedAfterLoad={totals.appliedAfterLoad}
+        />
+      )}
 
       {daily.length === 0 || !hasActivity ? (
         <div className="mt-5 flex items-center justify-center rounded-xl border border-dashed border-[var(--border-hover)] text-sm text-[var(--text-muted)]" style={{ height: '13rem' }}>
@@ -538,7 +724,11 @@ function DailyApplicationFlowChart({
               const loads = point.loads ?? 0
               const appliedAfterLoad = point.appliedAfterLoad ?? 0
               const total = directApplied + loads
-              const appliedRate = loads > 0 ? Math.round((appliedAfterLoad / loads) * 100) : 0
+              // 전환율 분모는 연결 가능한 로드다. 구형 응답이면 전체 로드로 물러나되 그 사실을 적는다.
+              const linkableLoads = point.linkableLoads
+              const conversionBase = linkableLoads ?? loads
+              const conversionLabel = linkableLoads === undefined ? '전체 로드' : '연결 가능 로드'
+              const conversion = `${conversionLabel} ${formatCount(conversionBase)}건 중 ${formatSampledRate(appliedAfterLoad, conversionBase)}`
               return (
                 <div
                   key={point.date}
@@ -548,7 +738,7 @@ function DailyApplicationFlowChart({
                   onMouseLeave={() => setHoveredIndex(null)}
                   onFocus={() => setHoveredIndex(index)}
                   onBlur={() => setHoveredIndex(null)}
-                  aria-label={`${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)}건 · 로드 ${formatCount(loads)}건 · 로드 후 적용 ${formatCount(appliedAfterLoad)}건`}
+                  aria-label={`${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)}건 · 로드 ${formatCount(loads)}건 · 로드 후 적용 ${formatCount(appliedAfterLoad)}건 · ${conversion}`}
                 >
                   <div
                     className="relative flex w-full flex-col"
@@ -599,9 +789,9 @@ function DailyApplicationFlowChart({
                     <div className="h-[2px] w-full shrink-0 bg-[var(--border-subtle)] opacity-70" />
                   )}
                   {hoveredIndex === index && (
-                    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg">
+                    <span className={`pointer-events-none absolute bottom-full z-20 mb-2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg ${tooltipAnchorClass(index, daily.length)}`}>
                       {formatChartDate(point.date)} · 로드 없이 적용 {formatCount(directApplied)} · 로드{' '}
-                      {formatCount(loads)} · 로드 후 적용 {formatCount(appliedAfterLoad)} ({appliedRate}%)
+                      {formatCount(loads)} · 로드 후 적용 {formatCount(appliedAfterLoad)} · {conversion}
                     </span>
                   )}
                   </div>
@@ -613,6 +803,32 @@ function DailyApplicationFlowChart({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * 로드 후 적용 전환율의 분모 신뢰도 — 전체 로드 중 세션·journey로 연결할 수 있는 몫을 먼저 보여준다.
+ * 연결 불가 로드는 0건이 아니라 미관측이므로 전환율 분모에서 뺀다.
+ */
+function FlowDenominatorNote({
+  loads,
+  linkableLoads,
+  appliedAfterLoad,
+}: {
+  loads: number
+  linkableLoads: number | null
+  appliedAfterLoad: number
+}) {
+  const text = linkableLoads === null
+    ? `로드 ${formatCount(loads)}건 · 연결 가능 여부 미관측 · 로드 후 적용 ${formatCount(appliedAfterLoad)}건은 전체 로드의 ${formatSampledRate(appliedAfterLoad, loads)}`
+    : `로드 ${formatCount(loads)}건 중 연결 가능 ${formatCount(linkableLoads)}건 (${formatSampledRate(linkableLoads, loads)}) · 로드 후 적용 ${formatCount(appliedAfterLoad)}건은 연결 가능 로드의 ${formatSampledRate(appliedAfterLoad, linkableLoads)}`
+  return (
+    <p
+      className="mt-2 font-mono text-[11px] tabular-nums leading-relaxed text-[var(--text-muted)]"
+      aria-label="로드 후 적용 전환율 분모"
+    >
+      {text}
+    </p>
   )
 }
 

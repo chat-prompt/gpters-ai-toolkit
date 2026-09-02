@@ -7,6 +7,7 @@ const DATA: AxOverviewData = {
   totalParticipants: 1,
   catalogSkills: 1,
   grassDaily: [],
+  agentGrassDaily: [],
   dailySkillFlow: [
     { date: '2026-08-30', directApplied: 1, loaded: 7, linkableLoaded: 4, appliedAfterLoad: 2 },
   ],
@@ -56,19 +57,19 @@ describe('AX 요약 사용자별 사용량 표', () => {
     expect(memberRow?.className).toContain('group')
     expect(usageBar?.className).toContain('ax-activity-mark')
     expect(usageBar?.dataset.activityFill).toContain('100.0%')
-    expect(secondaryBar?.dataset.activityFill).toContain('25.0%')
+    expect(secondaryBar?.dataset.activityFill).toContain('30.0%')
     const secondaryRow = screen.getByText('보조 사용자').closest('tr')!
     const hoverDetail = screen.getByText('로드 2 · 적용 1')
     expect(hoverDetail.className).toContain('hidden')
     fireEvent.mouseEnter(secondaryRow)
-    expect(secondaryBar?.style.boxShadow).toContain('var(--brand-primary)')
+    expect(secondaryBar?.style.boxShadow).toContain('var(--brand-secondary)')
     expect(hoverDetail.className).toContain('block')
 
     const quietHour = screen.getByLabelText('10시 · 1명').firstElementChild as HTMLElement
     const peakHour = screen.getByLabelText('14시 · 3명').firstElementChild as HTMLElement
-    expect(quietHour.dataset.activityFill).toContain('25.0%')
+    expect(quietHour.dataset.activityFill).toContain('30.0%')
     expect(peakHour.dataset.activityFill).toContain('100.0%')
     fireEvent.mouseEnter(quietHour.parentElement!)
-    expect(quietHour.style.boxShadow).toContain('var(--brand-primary)')
+    expect(quietHour.style.boxShadow).toContain('var(--brand-secondary)')
   })
 })

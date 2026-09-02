@@ -57,8 +57,22 @@ function agent(
     models: [{ model, turns: 4 * multiplier, usage: usage(multiplier), processedTokens: 100 * multiplier }],
     tools: [{ name: tool, calls: 5 * multiplier, failures: 0, failureRate: 0 }],
     skills: skill ? [{ skillId: skill, loaded: multiplier, failed: 0, interrupted: 0 }] : [],
+    uniqueLoadedSkills: skill ? 1 : 0,
+    skillLoadsObserved: skill !== null,
     observedExecutionReports: [{ status: 'success', evidence: 'test', count: multiplier }],
-    verifiedExecutions: { attempts: multiplier, success: multiplier, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: multiplier },
+    verifiedExecutions: {
+      attempts: multiplier,
+      success: multiplier,
+      partial: 0,
+      failed: 0,
+      abandoned: 0,
+      running: 0,
+      withEvidence: multiplier,
+      uniqueSkills: 1,
+      verifiedSkills: 1,
+      linkedLoads: multiplier,
+      linkedVerifiedSuccesses: multiplier,
+    },
     collection: { batches: multiplier, recordsRead: 100 * multiplier, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   }
 }
@@ -88,8 +102,22 @@ const DATA: AxAgentActivityData = {
   models: [...BBODOONG.models, ...BBOKEOTER.models],
   tools: [...BBODOONG.tools, ...BBOKEOTER.tools],
   skills: BBODOONG.skills,
+  uniqueLoadedSkills: 1,
+  skillLoadsObserved: true,
   observedExecutionReports: [{ status: 'success', evidence: 'test', count: 3 }],
-  verifiedExecutions: { attempts: 3, success: 3, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 3 },
+  verifiedExecutions: {
+    attempts: 3,
+    success: 3,
+    partial: 0,
+    failed: 0,
+    abandoned: 0,
+    running: 0,
+    withEvidence: 3,
+    uniqueSkills: 2,
+    verifiedSkills: 2,
+    linkedLoads: 3,
+    linkedVerifiedSuccesses: 3,
+  },
   collection: { batches: 3, recordsRead: 300, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   insights: [],
 }
@@ -110,7 +138,12 @@ describe('AgentActivityPanel', () => {
     expect(screen.queryByText('claude-opus-5')).toBeNull()
     expect(screen.getByText('hermes-3')).toBeTruthy()
     expect(screen.getByText('shell')).toBeTruthy()
-    expect(screen.getByText('이 소스에서는 아직 스킬 로드가 관측되지 않았습니다.')).toBeTruthy()
+    expect(screen.getByText('이 수집 소스는 스킬 로드 신호를 제공하지 않아 미관측입니다.')).toBeTruthy()
+    expect(screen.getByText('미관측', { selector: 'p' })).toBeTruthy()
+    // 연결 가능한 로드가 1회뿐이라 백분율 대신 분수를 참고 수치로 보여준다.
+    expect(screen.queryByText('100.0%')).toBeNull()
+    expect(screen.getByText('1/1 · 참고')).toBeTruthy()
+    expect(screen.getByText('표본 10회 미만')).toBeTruthy()
     expect(screen.getAllByText('Hermes')).toHaveLength(2)
     expect(screen.queryByText('Claude Code')).toBeNull()
   })
