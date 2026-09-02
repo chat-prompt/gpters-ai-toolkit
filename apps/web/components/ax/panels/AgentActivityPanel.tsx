@@ -186,7 +186,9 @@ export function AgentActivityPanel({
         onSelectAgent={selectAgent}
       />
 
-      <div className="grid gap-10 lg:grid-cols-2">
+      {/* 두 표의 1위 막대가 한 줄로 이어져 보이지 않게 가운데 구분선을 둔다 */}
+      <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-0">
+        <div className="lg:pr-10">
         <RankTable
           title="모델별 처리 토큰"
           rows={scope.models.map((row) => ({
@@ -196,6 +198,8 @@ export function AgentActivityPanel({
             magnitude: row.processedTokens,
           }))}
         />
+        </div>
+        <div className="lg:border-l lg:border-[var(--border-subtle)] lg:pl-10">
         <RankTable
           title="도구 호출·실패"
           rows={scope.tools.map((row) => ({
@@ -205,6 +209,7 @@ export function AgentActivityPanel({
             magnitude: row.calls,
           }))}
         />
+        </div>
       </div>
 
       <RankTable
@@ -562,7 +567,7 @@ function ExecutionSection({ scope, available }: { scope: ActivityScope; availabl
   )
 }
 
-/** 공통 Stat에 위임 — 힌트는 보조 문구, 설명은 `?`로 접힌다 */
+/** 공통 Stat에 위임 — 힌트는 항상 보이는 보조 수치, 설명은 호버·포커스 때만 보인다 */
 function Metric({
   label,
   value,
@@ -574,7 +579,7 @@ function Metric({
   hint?: string
   explanation?: string
 }) {
-  return <Stat label={label} value={value} note={hint} help={explanation} />
+  return <Stat label={label} value={value} hint={hint} description={explanation} />
 }
 
 

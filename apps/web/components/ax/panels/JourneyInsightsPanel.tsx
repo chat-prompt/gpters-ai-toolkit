@@ -101,14 +101,19 @@ function ExecutionSection({ data }: { data: AxJourneyInsightsData['execution'] }
             <div className="mt-4">
               <StatGrid columns={3}>
                 {[
-                  { label: '시작이 관측된 시도', value: `${formatCount(data.startedAttempts)} / ${formatCount(data.attempts)}회`, note: '구형 완료 보고는 시작 미관측으로 남깁니다.' },
-                  { label: '진행 중', value: `${formatCount(data.inProgressAttempts)}회`, note: '시작 후 30분 이내이며 아직 완료되지 않음' },
-                  { label: '완료 보고 지연', value: `${formatCount(data.unreportedAttempts)}회`, note: '시작 후 30분이 지나도 완료 이벤트가 없음' },
-                  { label: '시작 없이 완료', value: `${formatCount(data.completionWithoutStart)}회`, note: '구형 클라이언트 또는 시작 훅 누락 후보' },
-                  { label: '버전 미기록', value: `${formatCount(data.missingVersion)}회`, note: 'SKILL.md 버전 또는 commit SHA 보완 필요' },
-                  { label: '검증 없는 완료', value: `${formatCount(data.unvalidatedCompleted)}회`, note: data.averageDurationSeconds === null ? '관측된 실행 시간 없음' : `시작·완료 연결 평균 ${formatDuration(data.averageDurationSeconds)}` },
+                  { label: '시작이 관측된 시도', value: `${formatCount(data.startedAttempts)} / ${formatCount(data.attempts)}회`, description: '구형 완료 보고는 시작 미관측으로 남깁니다.' },
+                  { label: '진행 중', value: `${formatCount(data.inProgressAttempts)}회`, description: '시작 후 30분 이내이며 아직 완료되지 않은 시도입니다.' },
+                  { label: '완료 보고 지연', value: `${formatCount(data.unreportedAttempts)}회`, description: '시작 후 30분이 지나도 완료 이벤트가 없는 시도입니다.' },
+                  { label: '시작 없이 완료', value: `${formatCount(data.completionWithoutStart)}회`, description: '구형 클라이언트 또는 시작 훅 누락 후보입니다.' },
+                  { label: '버전 미기록', value: `${formatCount(data.missingVersion)}회`, description: 'SKILL.md 버전 또는 commit SHA 보완이 필요한 시도입니다.' },
+                  {
+                    label: '검증 없는 완료',
+                    value: `${formatCount(data.unvalidatedCompleted)}회`,
+                    hint: data.averageDurationSeconds === null ? '관측된 실행 시간 없음' : `시작·완료 연결 평균 ${formatDuration(data.averageDurationSeconds)}`,
+                    description: '성공·부분·실패로 완료됐지만 테스트·명령·산출물·사용자 확인 같은 검증 방법이 없는 시도입니다.',
+                  },
                 ].map((item) => (
-                  <Stat key={item.label} label={item.label} value={item.value} note={item.note} />
+                  <Stat key={item.label} label={item.label} value={item.value} hint={item.hint} description={item.description} />
                 ))}
               </StatGrid>
             </div>
@@ -172,21 +177,24 @@ function MetricStrip({ data }: { data: AxJourneyInsightsData }) {
       label: '결과가 기록된 검색',
       value: formatCount(data.exploration.observedSearches),
       unit: '건',
-      note: data.exploration.unobservedSearches > 0
+      hint: data.exploration.unobservedSearches > 0
         ? `결과 배열 미기록 ${formatCount(data.exploration.unobservedSearches)}건 제외`
-        : '검색 결과 목록까지 저장된 요청',
+        : undefined,
+      description: '검색 결과 목록까지 저장된 요청입니다. 자동 검색 훅과 직접 검색을 구분하지 않습니다.',
     },
     {
       label: '검색결과 0건 비율',
       value: formatRate(data.exploration.zeroResultRate),
       unit: '',
-      note: `${formatCount(data.exploration.zeroResultSearches)} / ${formatCount(data.exploration.observedSearches)}건${data.exploration.sampleIsSignificant ? '' : ' · 표본 100건 미만'}`,
+      hint: `${formatCount(data.exploration.zeroResultSearches)} / ${formatCount(data.exploration.observedSearches)}건${data.exploration.sampleIsSignificant ? '' : ' · 표본 100건 미만'}`,
+      description: '검색 결과 배열이 0개였던 비율입니다. 결과가 하나라도 있으면 관련성이 낮아도 빈 결과로 세지 않습니다.',
     },
     {
       label: '고유 후보 상세 확인율',
       value: formatSampledRate(data.exploration.loadedFromSearchPairs, data.exploration.exposedPairs),
       unit: '',
-      note: `고유 후보 ${formatCount(data.exploration.exposedPairs)}개 중 ${formatCount(data.exploration.loadedFromSearchPairs)}개`,
+      hint: `고유 후보 ${formatCount(data.exploration.exposedPairs)}개 중 ${formatCount(data.exploration.loadedFromSearchPairs)}개`,
+      description: '검색 결과의 이름·요약을 본 에이전트가 같은 세션에서 전체 스킬 지침을 불러온 비율입니다. 화면 클릭률·설치율이 아닙니다.',
     },
     {
       label: '로드 후 적용 판단 기록률',
@@ -195,7 +203,8 @@ function MetricStrip({ data }: { data: AxJourneyInsightsData }) {
         data.exploration.loadedFromSearchPairs,
       ),
       unit: '',
-      note: `검색에서 이어진 상세 확인 ${formatCount(data.exploration.loadedFromSearchPairs)}개 중 ${formatCount(data.exploration.appliedFromSearchPairs + data.exploration.notAppliedFromSearchPairs)}개`,
+      hint: `상세 확인 ${formatCount(data.exploration.loadedFromSearchPairs)}개 중 ${formatCount(data.exploration.appliedFromSearchPairs + data.exploration.notAppliedFromSearchPairs)}개`,
+      description: '검색 후보에서 이어진 상세 확인 중 같은 세션에서 적용 또는 미적용을 기록한 비율입니다. 성공률은 아닙니다.',
     },
   ]
 
@@ -207,7 +216,8 @@ function MetricStrip({ data }: { data: AxJourneyInsightsData }) {
           label={metric.label}
           value={metric.value}
           unit={metric.unit || undefined}
-          note={metric.note}
+          hint={metric.hint}
+          description={metric.description}
         />
       ))}
     </StatGrid>
@@ -227,28 +237,34 @@ function ReliabilityStrip({ data }: { data: AxJourneyInsightsData }) {
     {
       label: '결과 배열 미기록 검색',
       value: formatSampledRate(exploration.unobservedSearches, totalSearches),
-      note: totalSearches === 0
-        ? '선택 기간에 검색 요청이 없습니다.'
-        : `${formatCount(exploration.unobservedSearches)} / ${formatCount(totalSearches)}건 · 미기록은 0건 검색이 아니라 판정 불가라서 0건 비율의 분모에서 뺍니다.`,
+      hint: totalSearches === 0
+        ? '선택 기간에 검색 요청 없음'
+        : `${formatCount(exploration.unobservedSearches)} / ${formatCount(totalSearches)}건`,
+      description: '미기록은 0건 검색이 아니라 판정 불가라서 0건 비율의 분모에서 뺍니다.',
     },
     {
       label: '적용 여부 기록 커버리지',
       value: formatSampledRate(explicitOutcomes, outcomes.loadedPairs),
-      note: outcomes.loadedPairs === 0
-        ? '선택 기간에 스킬 콘텐츠 로드가 없습니다.'
-        : `로드 조합 ${formatCount(outcomes.loadedPairs)}개 중 ${formatCount(explicitOutcomes)}개 · 기록 없음은 미적용이 아니라 관측 공백입니다.`,
+      hint: outcomes.loadedPairs === 0
+        ? '선택 기간에 스킬 콘텐츠 로드 없음'
+        : `로드 조합 ${formatCount(outcomes.loadedPairs)}개 중 ${formatCount(explicitOutcomes)}개`,
+      description: '기록 없음은 미적용이 아니라 관측 공백입니다.',
     },
     {
       label: '검증 결과가 있는 판정',
       value: execution ? formatSampledRate(execution.verifiedAttempts, completedAttempts) : '미관측',
-      note: execution
-        ? `성공·부분·실패 판정 ${formatCount(completedAttempts)}회 중 ${formatCount(execution.verifiedAttempts)}회 · 검증 성공률은 이 표본만으로 계산합니다.`
+      hint: execution
+        ? `성공·부분·실패 판정 ${formatCount(completedAttempts)}회 중 ${formatCount(execution.verifiedAttempts)}회`
+        : '보고된 시도 없음',
+      description: execution
+        ? '검증 성공률은 이 표본만으로 계산합니다.'
         : '새 실행 결과 계약으로 보고된 시도가 아직 없습니다.',
     },
     {
       label: '백분율 표시 기준',
       value: `${formatCount(RATE_MIN_SAMPLE)}건`,
-      note: '분모가 이보다 작은 비율은 백분율 대신 분수와 참고 표시로 보여줍니다. 검색결과 0건 비율만 표본 100건 기준입니다.',
+      hint: '분모가 이보다 작으면 n/d · 참고',
+      description: '분모가 이보다 작은 비율은 백분율 대신 분수와 참고 표시로 보여줍니다. 검색결과 0건 비율만 표본 100건 기준입니다.',
     },
   ]
 
@@ -258,7 +274,7 @@ function ReliabilityStrip({ data }: { data: AxJourneyInsightsData }) {
       <div className="mt-4">
         <StatGrid columns={4}>
           {tiles.map((tile) => (
-            <Stat key={tile.label} label={tile.label} value={tile.value} note={tile.note} />
+            <Stat key={tile.label} label={tile.label} value={tile.value} hint={tile.hint} description={tile.description} />
           ))}
         </StatGrid>
       </div>
@@ -314,14 +330,8 @@ function JourneyGuide({ data }: { data: AxJourneyInsightsData }) {
               label={`${step.number} · ${step.title}`}
               value={formatCount(step.value)}
               unit="개"
-              note={(
-                <>
-                  {step.rate !== null && (
-                    <span className={`block ${META_LINE}`}>직전 단계의 {step.rate}</span>
-                  )}
-                  <span className="mt-1 block text-[var(--text-secondary)]">{step.body}</span>
-                </>
-              )}
+              hint={step.rate !== null ? `직전 단계의 ${step.rate}` : undefined}
+              description={step.body}
             />
           ))}
         </StatGrid>

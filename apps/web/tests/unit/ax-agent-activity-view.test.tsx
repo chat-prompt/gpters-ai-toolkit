@@ -161,12 +161,22 @@ describe('AgentActivityPanel', () => {
     expect(screen.getByText('1개', { selector: 'p' })).toBeTruthy()
   })
 
-  it('핵심 지표의 의미를 클릭해서 확인할 수 있다', () => {
+  it('핵심 지표의 설명은 기본 화면에 두지 않고 라벨에 호버·포커스했을 때 툴팁으로 보여준다', () => {
     render(<AgentActivityPanel data={DATA} days={7} />)
-    const help = screen.getByLabelText('처리 토큰 설명')
 
-    fireEvent.click(help)
-
-    expect(screen.getByText(/입력·출력·캐시 생성·캐시 읽기를 합친 값/)).toBeTruthy()
+    // `?` 버튼은 없고, 설명은 칸 전체의 aria-describedby 툴팁이다.
+    expect(screen.queryByLabelText('처리 토큰 설명')).toBeNull()
+    // '처리 토큰'은 표 머리칸에도 있으므로 설명이 붙은 수치 칸만 고른다.
+    const stat = screen.getAllByText('처리 토큰')
+      .map((element) => element.closest('[aria-describedby]'))
+      .find((element): element is HTMLElement => element !== null)!
+    expect(stat.tabIndex).toBe(0)
+    const tooltip = document.getElementById(stat.getAttribute('aria-describedby')!)!
+    expect(tooltip.getAttribute('role')).toBe('tooltip')
+    expect(tooltip.textContent).toContain('입력·출력·캐시 생성·캐시 읽기를 합친 값')
+    // 기본 상태에서는 보이지 않고, 호버·포커스 때만 group 클래스로 드러난다.
+    expect(tooltip.className).toContain('invisible')
+    expect(tooltip.className).toContain('group-hover:visible')
+    expect(tooltip.className).toContain('group-focus:visible')
   })
 })

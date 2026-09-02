@@ -8,7 +8,7 @@
  * 열린 격자에 둔다. 새 패널을 만들거나 고칠 때는 여기 있는 조각부터 쓴다.
  */
 
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { formatCount } from '../format'
 
 /** 섹션 라벨 — 표 머리칸과 같은 모노 대문자 소형 텍스트 */
@@ -77,56 +77,52 @@ export function StatGrid({
 }
 
 /**
- * 수치 한 칸 — 라벨, 큰 모노 숫자, 보조 문구. 설명이 있으면 `?`로 접어 둔다.
+ * 수치 한 칸 — 라벨, 큰 모노 숫자, 짧은 수치 힌트.
+ * 설명 문장은 기본 화면에 두지 않고, 칸에 호버하거나 포커스했을 때만 요약 KPI 카드처럼 아래에 띄운다.
  * 값은 `<p>`에 두어 테스트가 selector로 잡을 수 있게 한다.
  */
 export function Stat({
   label,
   value,
   unit,
-  note,
-  help,
+  hint,
+  description,
   tone = 'default',
 }: {
   label: string
   value: string
   unit?: string
-  note?: ReactNode
-  /** `?`를 눌렀을 때 펼쳐지는 설명 */
-  help?: string
+  /** 항상 보이는 짧은 수치 보조 문구 (분모·표본·비율 등) */
+  hint?: ReactNode
+  /** 호버·포커스 때만 보이는 설명 문장 */
+  description?: ReactNode
   /** warning이면 값을 주황으로 강조 */
   tone?: 'default' | 'warning'
 }) {
+  const tooltipId = useId()
   return (
-    <div className="relative min-w-0">
-      <div className="flex items-center gap-1.5">
-        <p className="text-xs text-[var(--text-secondary)]">{label}</p>
-        {help && <StatHelp label={label} explanation={help} />}
-      </div>
+    <div
+      className="group relative min-w-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--brand-primary)]"
+      tabIndex={description ? 0 : undefined}
+      aria-describedby={description ? tooltipId : undefined}
+    >
+      <p className={`text-xs text-[var(--text-secondary)] ${description ? 'cursor-help' : ''}`}>{label}</p>
       <p className={`mt-2 min-w-0 break-words font-mono text-xl tabular-nums ${tone === 'warning' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>
         {value}
         {unit && <span className="ml-1 text-xs text-[var(--text-muted)]">{unit}</span>}
       </p>
-      {note && <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{note}</p>}
+      {hint && <p className={`mt-1 ${META_LINE}`}>{hint}</p>}
+      {description && (
+        <span
+          id={tooltipId}
+          role="tooltip"
+          className="pointer-events-none invisible absolute inset-x-0 top-full z-30 mt-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-3 py-2 text-[11px] font-normal leading-relaxed tracking-normal text-[var(--text-secondary)] opacity-0 shadow-lg transition-[opacity,transform] duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus:visible group-focus:translate-y-0 group-focus:opacity-100"
+          style={{ transform: 'translateY(-2px)' }}
+        >
+          {description}
+        </span>
+      )}
     </div>
-  )
-}
-
-/** 수치 옆 `?` — 누르면 칸 폭 안에 설명을 띄운다. 칸 폭 안에 두어 격자 양 끝에서도 잘리지 않는다. */
-function StatHelp({ label, explanation }: { label: string; explanation: string }) {
-  return (
-    <details className="group">
-      {/* 히트 영역은 24px, 보이는 원은 16px. 포커스 링은 다른 컨트롤과 같은 브랜드색 */}
-      <summary
-        className="-my-1 flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand-primary)] [&::-webkit-details-marker]:hidden"
-        aria-label={`${label} 설명`}
-      >
-        <span aria-hidden className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)]">?</span>
-      </summary>
-      <p className="absolute inset-x-0 top-full z-20 mt-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed text-[var(--text-secondary)] shadow-lg">
-        {explanation}
-      </p>
-    </details>
   )
 }
 

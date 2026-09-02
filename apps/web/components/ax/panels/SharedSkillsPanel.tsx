@@ -10,7 +10,6 @@
 
 import type { AxSharedSkillsData } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
-import { EMPTY_NOTE } from './primitives'
 import { formatCount } from '../format'
 
 /**
@@ -20,7 +19,7 @@ import { formatCount } from '../format'
  */
 export function SharedSkillsPanel({ data }: AxPanelViewProps<AxSharedSkillsData>) {
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
         {data.repo} · {formatCount(data.skills.length)}개
         {data.aitkOverlap !== null && ` · 팀 스킬(aitk)과 겹침 ${formatCount(data.aitkOverlap)}개`}
@@ -28,10 +27,12 @@ export function SharedSkillsPanel({ data }: AxPanelViewProps<AxSharedSkillsData>
       </p>
 
       {!data.eventsConnected && (
-        <p className={EMPTY_NOTE}>
-          실행 이벤트 수집은 아직 연결되지 않았습니다. 지금은 저장소에 어떤 스킬이 있는지만
-          보여주며, 에이전트별 사용량은 수집 계약이 정해진 뒤 붙습니다.
-        </p>
+        <div className="rounded-xl border border-dashed border-[var(--border-hover)] px-5 py-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            실행 이벤트 수집은 아직 연결되지 않았습니다. 지금은 저장소에 어떤 스킬이 있는지만
+            보여주며, 에이전트별 사용량은 수집 계약이 정해진 뒤 붙습니다.
+          </p>
+        </div>
       )}
 
       {data.skills.length > 0 ? (
@@ -68,22 +69,14 @@ function SkillGrid({ skills }: { skills: AxSharedSkillsData['skills'] }) {
             }`}
           >
             {skill.inAitk && (
-              <>
-                <span
-                  aria-hidden
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)]"
-                />
-                <span className="sr-only">팀 스킬에도 등록됨 · </span>
-              </>
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)]"
+              />
             )}
             <span className="truncate">
               {skill.id}
-              {!skill.hasSkillDoc && (
-                <>
-                  <span aria-hidden> *</span>
-                  <span className="sr-only"> · SKILL.md 없음</span>
-                </>
-              )}
+              {!skill.hasSkillDoc && ' *'}
             </span>
           </li>
         ))}
