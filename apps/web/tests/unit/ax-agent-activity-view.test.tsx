@@ -105,6 +105,7 @@ const DATA: AxAgentActivityData = {
   uniqueLoadedSkills: 1,
   skillLoadsObserved: true,
   observedExecutionReports: [{ status: 'success', evidence: 'test', count: 3 }],
+  verifiedExecutionsAvailable: true,
   verifiedExecutions: {
     attempts: 3,
     success: 3,
@@ -146,6 +147,18 @@ describe('AgentActivityPanel', () => {
     expect(screen.getByText('표본 10회 미만')).toBeTruthy()
     expect(screen.getAllByText('Hermes')).toHaveLength(2)
     expect(screen.queryByText('Claude Code')).toBeNull()
+  })
+
+  it('실행 결과 테이블이 없으면 검증 지표를 0이 아니라 미관측으로 보여준다', () => {
+    render(<AgentActivityPanel data={{ ...DATA, verifiedExecutionsAvailable: false }} days={7} />)
+
+    // 스킬 활용 4칸 중 검증에 기대는 3칸과 실행 결과 4칸이 모두 미관측이다.
+    expect(screen.getAllByText('미관측', { selector: 'p' }).length).toBeGreaterThanOrEqual(7)
+    expect(screen.getAllByText('실행 결과 계측 준비 중').length).toBeGreaterThanOrEqual(3)
+    expect(screen.queryByText('3개', { selector: 'p' })).toBeNull()
+    expect(screen.queryByText('3/3 · 참고')).toBeNull()
+    // 텔레메트리에서 직접 관측한 고유 로드 스킬은 그대로 보인다.
+    expect(screen.getByText('1개', { selector: 'p' })).toBeTruthy()
   })
 
   it('핵심 지표의 의미를 클릭해서 확인할 수 있다', () => {

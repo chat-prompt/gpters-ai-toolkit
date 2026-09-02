@@ -676,6 +676,28 @@ function DailyApplicationFlowChart({
   // 막대는 정적으로 유지하되, 포인터·키보드가 가리킨 날짜의 정보만 연다.
   // CSS group-hover를 쓰면 상위 group과 중첩될 때 모든 툴팁이 열릴 수 있다.
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  // 툴팁은 막대가 아니라 차트 컨테이너 기준으로 한 개만 띄우고 좌우를 컨테이너 안으로 클램프한다.
+  // 막대 안에 두면 좁은 화면의 가장자리 막대에서 뷰포트를 넘어 가로 스크롤이 생긴다.
+  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
+  const showTip = (index: number, element: HTMLElement, text: string) => {
+    setHoveredIndex(index)
+    const wrap = chartRef.current
+    if (!wrap) return
+    const bar = element.getBoundingClientRect()
+    const base = wrap.getBoundingClientRect()
+    const rawLeft = bar.left - base.left + bar.width / 2
+    const safeHalfWidth = Math.min(220, base.width / 2)
+    setTip({
+      left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
+      top: bar.top - base.top,
+      text,
+    })
+  }
+  const hideTip = () => {
+    setHoveredIndex(null)
+    setTip(null)
+  }
   const max = Math.max(
     1,
     ...daily.map((point) => (point.directApplied ?? 0) + (point.loads ?? 0))
@@ -718,7 +740,7 @@ function DailyApplicationFlowChart({
           최근 {days}일의 로드·적용 활동이 없습니다.
         </div>
       ) : (
-        <div className="mt-5">
+        <div className="relative mt-5" ref={chartRef}>
           <div className="flex items-end gap-[3px] border-b border-[var(--border-subtle)] px-1" style={{ height: '13rem' }}>
             {daily.map((point, index) => {
               const directApplied = point.directApplied ?? 0
@@ -730,15 +752,16 @@ function DailyApplicationFlowChart({
               const conversionBase = linkableLoads ?? loads
               const conversionLabel = linkableLoads === undefined ? '전체 로드' : '연결 가능 로드'
               const conversion = `${conversionLabel} ${formatCount(conversionBase)}건 중 ${formatSampledRate(appliedAfterLoad, conversionBase)}`
+              const tooltip = `${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)} · 로드 ${formatCount(loads)} · 로드 후 적용 ${formatCount(appliedAfterLoad)} · ${conversion}`
               return (
                 <div
                   key={point.date}
                   className="group relative flex h-full min-w-[3px] flex-1 cursor-default items-end focus-visible:outline-none"
                   tabIndex={0}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  onFocus={() => setHoveredIndex(index)}
-                  onBlur={() => setHoveredIndex(null)}
+                  onMouseEnter={(event) => showTip(index, event.currentTarget, tooltip)}
+                  onMouseLeave={hideTip}
+                  onFocus={(event) => showTip(index, event.currentTarget, tooltip)}
+                  onBlur={hideTip}
                   aria-label={`${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)}건 · 로드 ${formatCount(loads)}건 · 로드 후 적용 ${formatCount(appliedAfterLoad)}건 · ${conversion}`}
                 >
                   <div
@@ -769,7 +792,7 @@ function DailyApplicationFlowChart({
                         data-flow-color={FLOW_CONVERTED_COLOR}
                         data-flow-segment="converted"
                         style={{
-                          height: `${Math.min(1, appliedAfterLoad / loads) * 100}%`,
+                          height: `${Math.min(1, appliedAfterLoad / Math.max(1, conversionBase)) * 100}%`,
                           background: FLOW_CONVERTED_COLOR,
                         }}
                       />
@@ -789,18 +812,21 @@ function DailyApplicationFlowChart({
                   {total === 0 && (
                     <div className="h-[2px] w-full shrink-0 bg-[var(--border-subtle)] opacity-70" />
                   )}
-                  {hoveredIndex === index && (
-                    <span className={`pointer-events-none absolute bottom-full z-20 mb-2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg ${tooltipAnchorClass(index, daily.length)}`}>
-                      {formatChartDate(point.date)} · 로드 없이 적용 {formatCount(directApplied)} · 로드{' '}
-                      {formatCount(loads)} · 로드 후 적용 {formatCount(appliedAfterLoad)} · {conversion}
-                    </span>
-                  )}
                   </div>
                 </div>
               )
             })}
           </div>
           <ChartDateAxis daily={daily} axisIndexes={axisIndexes} />
+          {tip && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute z-20 max-w-[min(28rem,calc(100%-1rem))] -translate-x-1/2 -translate-y-full whitespace-normal rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-center font-mono text-[11px] tabular-nums leading-relaxed text-[var(--text-primary)] shadow-lg"
+              style={{ left: tip.left, top: tip.top - 8 }}
+            >
+              {tip.text}
+            </span>
+          )}
         </div>
       )}
     </div>

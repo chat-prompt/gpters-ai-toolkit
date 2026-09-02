@@ -127,6 +127,7 @@ describe('agentActivityPanel', () => {
     })
     expect(result.data!.totalUsage.thinkingTokens).toBe(9)
     expect(result.data!.uniqueLoadedSkills).toBe(1)
+    expect(result.data!.verifiedExecutionsAvailable).toBe(true)
     expect(result.data!.verifiedExecutions).toMatchObject({
       attempts: 2,
       success: 1,

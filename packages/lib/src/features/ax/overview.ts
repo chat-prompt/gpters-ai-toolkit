@@ -198,6 +198,8 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
 
       // 3. 잔디밭 — 활동은 로드 없이 적용 + 로드 후 적용이다.
       //    journey를 우선하고 기존 MCP session을 fallback으로 사용해 앞선 로드를 찾는다.
+      //    로드 후 적용과 연결 가능 로드는 사용자×흐름×스킬 코호트 단위로 로드 날짜에 귀속한다.
+      //    적용 날짜 기준 이벤트 수를 쓰면 기간 전 로드·반복 적용 때문에 분자가 분모를 넘을 수 있다.
       const grassRows = await db
         .select({
           date: kstDayExpr,
@@ -214,23 +216,33 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
                   and loaded.created_at <= ${skillEvents.createdAt}
               )
           )::int`,
-          appliedAfterLoad: sql<number>`count(*) filter (
-            where ${skillEvents.action} = 'apply'
+          // 로드 코호트 중 같은 사용자·흐름·스킬에서 이후 apply가 한 번이라도 있으면 전환으로 센다.
+          appliedAfterLoad: sql<number>`count(distinct (
+            ${skillEvents.userId},
+            coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}),
+            ${skillEvents.skillId}
+          )) filter (
+            where ${skillEvents.action} = 'load'
+              and coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
+              and ${skillEvents.userId} is not null
               and exists (
                 select 1
-                from skill_events loaded
-                where coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
-                  and coalesce(loaded.journey_id, loaded.session_id) = coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId})
-                  and loaded.user_id = ${skillEvents.userId}
-                  and loaded.skill_id = ${skillEvents.skillId}
-                  and loaded.action = 'load'
-                  and loaded.created_at <= ${skillEvents.createdAt}
+                from skill_events applied
+                where coalesce(applied.journey_id, applied.session_id) = coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId})
+                  and applied.user_id = ${skillEvents.userId}
+                  and applied.skill_id = ${skillEvents.skillId}
+                  and applied.action = 'apply'
+                  and applied.created_at >= ${skillEvents.createdAt}
               )
           )::int`,
           loads: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
           // 세션 ID 없는 과거 CLI 로드는 전체 로드에는 넣되 전환율 분모에서는 구분한다.
-          // 연결 조건(appliedAfterLoad)이 user_id 일치까지 요구하므로 user_id 없는 로드도 분모에서 뺀다.
-          linkableLoads: sql<number>`count(*) filter (
+          // 연결 조건이 user_id 일치까지 요구하므로 user_id 없는 로드도 분모에서 뺀다.
+          linkableLoads: sql<number>`count(distinct (
+            ${skillEvents.userId},
+            coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}),
+            ${skillEvents.skillId}
+          )) filter (
             where ${skillEvents.action} = 'load'
               and coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
               and ${skillEvents.userId} is not null

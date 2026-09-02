@@ -314,6 +314,7 @@ describe('AxDashboard 패널 요청', () => {
       uniqueLoadedSkills: 0,
       skillLoadsObserved: false,
       observedExecutionReports: [],
+      verifiedExecutionsAvailable: true,
       verifiedExecutions: { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0, uniqueSkills: 0, verifiedSkills: 0, linkedLoads: 0, linkedVerifiedSuccesses: 0 },
       collection: { batches: 2, recordsRead: 2, parseFailures: 0, unsupportedRecordsSkipped: 0 },
       insights: [],

@@ -706,6 +706,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       uniqueLoadedSkills: [...skillMap.values()].filter((metric) => metric.loaded > 0).length,
       skillLoadsObserved,
       observedExecutionReports,
+      verifiedExecutionsAvailable: executionResult.available,
       verifiedExecutions,
       collection: { batches: rows.length, recordsRead, parseFailures, unsupportedRecordsSkipped },
       insights,

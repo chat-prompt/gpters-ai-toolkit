@@ -128,13 +128,16 @@ export interface AxOverviewData {
     /** 도움말용 전체 로드 이벤트 수 */
     loads?: number
     /**
-     * 위 로드 중 journey·session ID가 있어 이후 적용과 연결할 수 있는 이벤트 수.
-     * 로드 후 적용 전환율의 분모는 전체 로드가 아니라 이 값이다.
+     * 그날 시작한 연결 가능 로드 코호트 수 — journey·session ID와 user ID가 있어 이후 적용과
+     * 연결할 수 있는 사용자×흐름×스킬 조합. 로드 후 적용 전환율의 분모는 전체 로드가 아니라 이 값이다.
      */
     linkableLoads?: number
-    /** 앞선 로드와 연결되지 않은 적용 이벤트 수 */
+    /** 앞선 로드와 연결되지 않은 적용 이벤트 수 (적용 날짜 기준) */
     directApplied?: number
-    /** 같은 세션·스킬의 앞선 로드와 연결된 적용 이벤트 수 */
+    /**
+     * 그날 시작한 연결 가능 로드 코호트(사용자×흐름×스킬) 중 이후 적용으로 이어진 수.
+     * 로드 날짜에 귀속하고 코호트당 한 번만 세므로 항상 `linkableLoads` 이하다.
+     */
     appliedAfterLoad?: number
   }>
   /**
@@ -627,6 +630,11 @@ export interface AxAgentActivityData {
   skillLoadsObserved: boolean
   /** batch에서 관측한 명시 보고 이벤트 수. 검증 정본과 합산하지 않는다. */
   observedExecutionReports: Array<{ status: string; evidence: string; count: number }>
+  /**
+   * false면 실행 결과 테이블이 아직 없어 `verifiedExecutions`의 0이 실제 0건이 아니라 미관측이다.
+   * 화면은 이 값이 false일 때 검증 지표를 0 대신 미관측으로 표시한다.
+   */
+  verifiedExecutionsAvailable: boolean
   /** 명시적으로 보고되고 서버 DB에 저장된 실행 결과 정본. */
   verifiedExecutions: {
     attempts: number

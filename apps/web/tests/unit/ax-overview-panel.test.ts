@@ -13,6 +13,7 @@ vi.mock('@gpters/db', () => ({
   db: { select: vi.fn(), execute: vi.fn() },
   skillEvents: {
     skillId: 'skill_events.skill_id',
+    journeyId: 'skill_events.journey_id',
     sessionId: 'skill_events.session_id',
     userId: 'skill_events.user_id',
     action: 'skill_events.action',
@@ -101,6 +102,23 @@ function collectValues(node: unknown, out: unknown[] = []): unknown[] {
     collectValues(record.value, out)
   }
   return out
+}
+
+/**
+ * Drizzle sql 템플릿을 사람이 읽을 수 있는 문자열로 편다 — 컬럼은 이름, 리터럴은 값으로.
+ * 실제 SQL 실행 없이도 집계 정의(필터·distinct 키)가 의도와 맞는지 단언하기 위한 근사치다.
+ */
+function sqlText(node: unknown): string {
+  if (node === null || node === undefined) return ''
+  if (typeof node === 'string') return node
+  if (typeof node !== 'object') return String(node)
+  const record = node as Record<string, unknown>
+  if (Array.isArray(record.queryChunks)) return record.queryChunks.map(sqlText).join('')
+  if (Array.isArray(record.value)) return record.value.map(sqlText).join('')
+  if (Array.isArray(node)) return node.map(sqlText).join('')
+  if (typeof record.name === 'string') return record.name
+  if ('value' in record) return sqlText(record.value)
+  return ''
 }
 
 /** select 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·잔디·시간대(·관리자면 사용자별) */
@@ -229,6 +247,30 @@ describe('overviewPanel', () => {
     // select로 스킬 이벤트를 읽는 3개 쿼리(누적·잔디·시간대) 전부.
     // 로드 전환은 별도 raw SQL에서 같은 카탈로그 조인을 사용한다
     expect(innerJoinCalls).toBe(3)
+  })
+
+  it('잔디의 연결 가능 로드와 로드 후 적용은 사용자×흐름×스킬 코호트로 세고, 활동 에이전트는 턴이 있는 batch만 센다', async () => {
+    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
+    await overviewPanel.load({ days: 7, isAdmin: false })
+
+    const columns = vi.mocked(db.select).mock.calls.map((call) => call[0] as Record<string, unknown>)
+    // mock 컬럼은 'skill_events.user_id'처럼 테이블 접두사가 붙으므로 떼고 비교한다.
+    const normalize = (node: unknown) => sqlText(node)
+      .replace(/\b(skill_events|ax_agent_telemetry_batches)\./g, '')
+      .replace(/\s+/g, ' ')
+    const linkable = normalize(columns[2].linkableLoads)
+    const converted = normalize(columns[2].appliedAfterLoad)
+    // 분모: 코호트 distinct, flow ID와 user ID가 모두 있어야 한다.
+    expect(linkable).toMatch(/count\(distinct \( user_id, coalesce\(journey_id, session_id\), skill_id \)\)/)
+    expect(linkable).toContain('coalesce(journey_id, session_id) is not null')
+    expect(linkable).toContain('user_id is not null')
+    // 분자: 같은 코호트 키 + 같은 필터 + 이후 apply 존재. 분모의 부분집합이 된다.
+    expect(converted).toMatch(/count\(distinct \( user_id, coalesce\(journey_id, session_id\), skill_id \)\)/)
+    expect(converted).toContain('user_id is not null')
+    expect(converted).toContain("applied.action = 'apply'")
+    expect(converted).toContain('applied.created_at >= created_at')
+
+    expect(normalize(columns[4].agents)).toContain('filter (where turns > 0)')
   })
 
   it('실제 사용 지표는 적용만 세고, 잔디만 도움말용 로드를 함께 센다', async () => {
