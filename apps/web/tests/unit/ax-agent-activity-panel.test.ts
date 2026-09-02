@@ -253,7 +253,7 @@ describe('agentActivityPanel', () => {
 
     expect(result.data!.verifiedExecutions).toMatchObject({ attempts: 1, verifiedSkills: 1 })
     expect(result.data!.insights).toContainEqual(expect.objectContaining({
-      title: '미등록 실행 보고 1건 제외',
+      title: '수집 없는 에이전트의 실행 보고 1건 제외',
     }))
   })
 

@@ -363,6 +363,8 @@ export interface AxJourneyInsightsData {
       inProgress: number
       unreported: number
       verifiedAttempts: number
+      /** success이면서 검증 통과한 시도 수 — 화면이 표본 인지 비율을 직접 계산할 수 있게 둔다 */
+      verifiedSuccesses: number
       verifiedSuccessRate: number | null
       lastReportedAt: string | null
     }>

@@ -52,6 +52,7 @@ const DATA: AxJourneyInsightsData = {
         inProgress: 1,
         unreported: 2,
         verifiedAttempts: 5,
+        verifiedSuccesses: 4,
         verifiedSuccessRate: 80,
         lastReportedAt: '2026-09-01T00:00:00.000Z',
       },
@@ -91,9 +92,10 @@ describe('JourneyInsightsPanel 분모 신뢰도', () => {
     expect(reliability.getByText('적용 여부 기록 커버리지')).toBeTruthy()
     expect(reliability.getByText('40.0%')).toBeTruthy()
     expect(reliability.getByText(/기록 없음은 미적용이 아니라 관측 공백/)).toBeTruthy()
-    expect(reliability.getByText('검증 결과가 있는 완료')).toBeTruthy()
-    // 완료 9회 중 검증 5회 — 분모가 10회 미만이라 분수로 남긴다.
+    expect(reliability.getByText('검증 결과가 있는 판정')).toBeTruthy()
+    // 성공·부분·실패 판정 9회 중 검증 5회 — 분모가 10회 미만이라 분수로 남긴다.
     expect(reliability.getByText('5/9 · 참고')).toBeTruthy()
+    expect(reliability.getByText(/검색결과 0건 비율만 표본 100건 기준/)).toBeTruthy()
     expect(reliability.getByText('백분율 표시 기준')).toBeTruthy()
     expect(reliability.getByText('10건')).toBeTruthy()
 
@@ -116,8 +118,10 @@ describe('JourneyInsightsPanel 분모 신뢰도', () => {
     // 검증 5회 중 성공 4회 → 표본 부족, 자기보고는 9회 중 6회 → 표본 부족
     expect(screen.getByText(/자기보고 성공률 6\/9 · 참고/)).toBeTruthy()
     expect(screen.getByText(/검증 성공률 4\/5 · 참고/)).toBeTruthy()
-    // 에이전트 표는 기존 비율에 표본 수를 덧붙인다.
-    expect(screen.getByText('80% · 표본 5회')).toBeTruthy()
+    // 에이전트 표도 같은 10건 규칙을 따른다.
+    const agentRow = screen.getByText('bbodoong').closest('tr')!
+    expect(agentRow.textContent).toContain('4/5 · 참고')
+    expect(agentRow.textContent).not.toContain('80%')
     // 스킬별 기록률도 같은 규칙을 따른다.
     expect(screen.getByText('알파 스킬').closest('tr')?.textContent).toContain('1/4 · 참고')
     // 확정 적용률 9/12 → 12개라 백분율

@@ -208,9 +208,12 @@ describe('AxDashboard 패널 요청', () => {
       name: '2026-08-31 · 턴 24건 · 활동 에이전트 2개',
     })
     fireEvent.mouseEnter(agentGrassCell)
-    expect(screen.getByRole('status').textContent).toContain('턴 24건')
+    // 셀 aria-label이 같은 문구를 이미 제공하므로 툴팁은 live region이 아니라 장식이다.
+    const grassTooltip = document.querySelector<HTMLElement>('[data-grass-tooltip]')
+    expect(grassTooltip?.textContent).toContain('턴 24건')
+    expect(grassTooltip?.getAttribute('aria-hidden')).toBe('true')
     fireEvent.mouseLeave(agentGrassCell.parentElement!)
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(document.querySelector('[data-grass-tooltip]')).toBeNull()
     expect(screen.queryByText('장기 활동')).toBeNull()
     expect(screen.queryByText('aitk DB (skill_events)')).toBeNull()
   })
@@ -416,5 +419,55 @@ describe('AxDashboard 패널 요청', () => {
     expect(screen.queryByText('장기 활동')).toBeNull()
     expect(screen.queryByText('전체 구성원')).toBeNull()
     expect(screen.queryByText('주간 활성')).toBeNull()
+  })
+
+  it('연결 가능 로드가 없는 구형 응답이면 전체 로드 분모임을 밝히고 추정하지 않는다', async () => {
+    const legacyPanels: AxPanelMeta[] = [
+      { id: 'overview', title: '요약', description: '요약', source: 'test', visibility: 'org', usesPeriod: true },
+      { id: 'skill-usage', title: '스킬', description: '스킬', source: 'test', visibility: 'org', usesPeriod: true },
+    ]
+    const legacyOverview: AxOverviewData = {
+      totalParticipants: 1,
+      catalogSkills: 1,
+      grassDaily: [
+        { date: '2026-08-30', events: 3, loads: 20, directApplied: 2, appliedAfterLoad: 1 },
+        { date: '2026-08-31', events: 8, loads: 40, directApplied: 5, appliedAfterLoad: 3 },
+      ],
+      agentGrassDaily: [],
+      dailySkillFlow: [],
+      skillFlowSummary: { directApplied: 0, loaded: 0, linkableLoaded: 0, appliedAfterLoad: 0 },
+      hourlyDensity: [],
+      memberUsage: null,
+    }
+    const legacySkill: AxSkillUsageData = {
+      totalEvents: 10, meaningfulUses: 4, activeUsers: 2, sessions: 1,
+      actionTotals: { search: 4, load: 2, apply: 4, skip: 0, deploy: 0 },
+      skills: [], daily: [], totalUnusedSkills: 0, unusedSkills: [],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const meta = legacyPanels.find((panel) => url.includes(`/api/ax/${panel.id}?`))!
+      return {
+        ok: true,
+        json: async () => ({
+          meta,
+          status: 'ok',
+          data: meta.id === 'overview' ? legacyOverview : legacySkill,
+          highlights: [],
+          generatedAt: '2026-08-31T00:00:00.000Z',
+        } satisfies AxPanelResult),
+      }
+    }))
+
+    render(<AxDashboard panels={legacyPanels} isAdmin={false} />)
+    await screen.findByText('활성 구성원')
+    fireEvent.click(screen.getByRole('tab', { name: '스킬' }))
+
+    expect(screen.getByRole('note', { name: '로드 후 적용 전환율 분모' }).textContent).toBe(
+      '로드 60건 · 연결 가능 여부 미관측 · 로드 후 적용 4건은 전체 로드의 6.7%',
+    )
+    expect(screen.getByLabelText(
+      '8월 31일 · 로드 없이 적용 5건 · 로드 40건 · 로드 후 적용 3건 · 전체 로드 40건 중 7.5%',
+    )).toBeTruthy()
   })
 })

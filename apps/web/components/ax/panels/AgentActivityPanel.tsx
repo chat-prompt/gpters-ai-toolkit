@@ -42,9 +42,6 @@ function formatTokens(value: number): string {
   return String(value)
 }
 
-function rate(failures: number, calls: number): string {
-  return calls > 0 ? `${Math.round((failures / calls) * 1000) / 10}%` : '0%'
-}
 
 function processedTokens(usage: AxAgentTokenUsage): number {
   return usage.inputTokens + usage.outputTokens + usage.cacheCreationInputTokens + usage.cacheReadInputTokens +
@@ -119,7 +116,7 @@ export function AgentActivityPanel({
           <Metric
             label="도구 호출"
             value={formatCount(scope.toolCalls)}
-            hint={`실패 ${rate(scope.toolFailures, scope.toolCalls)}`}
+            hint={`실패 ${formatSampledRate(scope.toolFailures, scope.toolCalls)}`}
             explanation="쉘·파일 읽기·편집·검색처럼 런타임이 기록한 도구 호출입니다. OpenClaw 요약 소스처럼 도구를 제공하지 않는 소스는 포함되지 않습니다."
           />
           <Metric
@@ -178,7 +175,7 @@ export function AgentActivityPanel({
           rows={scope.tools.map((row) => ({
             name: row.name,
             value: formatCount(row.calls),
-            hint: `실패 ${row.failureRate}%`,
+            hint: `실패 ${formatSampledRate(row.failures, row.calls)}`,
             magnitude: row.calls,
           }))}
         />
@@ -406,7 +403,7 @@ function AgentNotices({ reporters, scope }: { reporters: AxAgentReporterRow[]; s
     if (stale.length > 0) rows.push({ title: '수집 지연', detail: `${stale.length}개 소스가 예정된 두 번의 주기 안에 보고하지 않았습니다.`, warning: true })
     if (waiting.length > 0) rows.push({ title: '첫 수집 대기', detail: `${waiting.length}개 소스가 설치됐지만 아직 첫 배치를 보내지 않았습니다.`, warning: false })
     if (scope.toolCalls >= 10 && scope.toolFailures / scope.toolCalls >= 0.05) {
-      rows.push({ title: `도구 실패 ${rate(scope.toolFailures, scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
+      rows.push({ title: `도구 실패 ${formatSampledRate(scope.toolFailures, scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
     }
     return rows
   }, [reporters, scope.toolCalls, scope.toolFailures])
@@ -489,7 +486,7 @@ function ReporterSection({
                 </td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(row.turns)}</td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-primary)]`}>{formatTokens(processedTokens(row.usage))}</td>
-                <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{rate(row.toolFailures, row.toolCalls)}</td>
+                <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatSampledRate(row.toolFailures, row.toolCalls)}</td>
               </tr>
             ))}
           </tbody>
@@ -549,12 +546,13 @@ function Metric({
 
 function MetricHelp({ label, explanation }: { label: string; explanation: string }) {
   return (
-    <details className="group relative">
+    <details className="group">
       <summary
         className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)] [&::-webkit-details-marker]:hidden"
         aria-label={`${label} 설명`}
       >?</summary>
-      <p className="absolute left-1/2 top-6 z-20 w-64 -translate-x-1/2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
+      {/* 타일 전체 폭 안에 띄워 4열 그리드의 양 끝 타일에서도 화면 밖으로 잘리지 않는다. */}
+      <p className="absolute inset-x-4 top-11 z-20 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
         {explanation}
       </p>
     </details>

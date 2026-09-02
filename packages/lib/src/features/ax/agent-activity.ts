@@ -682,8 +682,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     if (excludedUnregisteredExecutions > 0) {
       insights.push({
         severity: 'info',
-        title: `미등록 실행 보고 ${excludedUnregisteredExecutions}건 제외`,
-        detail: '활성 수집기가 없는 테스트·개인 클라이언트 실행은 운영 에이전트 합계에서 제외했습니다.',
+        title: `수집 없는 에이전트의 실행 보고 ${excludedUnregisteredExecutions}건 제외`,
+        detail: '선택 기간에 텔레메트리 batch도 활성 수집기도 없는 에이전트의 실행 보고입니다. 탐색·결과 분석의 실행 시도 수에는 포함되므로 두 화면의 실행 수가 다를 수 있습니다.',
       })
     }
 

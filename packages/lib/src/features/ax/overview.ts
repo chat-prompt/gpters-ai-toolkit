@@ -229,9 +229,11 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
           )::int`,
           loads: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
           // 세션 ID 없는 과거 CLI 로드는 전체 로드에는 넣되 전환율 분모에서는 구분한다.
+          // 연결 조건(appliedAfterLoad)이 user_id 일치까지 요구하므로 user_id 없는 로드도 분모에서 뺀다.
           linkableLoads: sql<number>`count(*) filter (
             where ${skillEvents.action} = 'load'
               and coalesce(${skillEvents.journeyId}, ${skillEvents.sessionId}) is not null
+              and ${skillEvents.userId} is not null
           )::int`,
         })
         .from(skillEvents)
@@ -410,7 +412,8 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         .select({
           date: agentKstDayExpr,
           turns: sql<number>`sum(${axAgentTelemetryBatches.turns})::int`,
-          agents: sql<number>`count(distinct ${axAgentTelemetryBatches.agentId})::int`,
+          // 턴이 0인 빈 배치는 "활동 에이전트"로 세지 않는다.
+          agents: sql<number>`count(distinct ${axAgentTelemetryBatches.agentId}) filter (where ${axAgentTelemetryBatches.turns} > 0)::int`,
         })
         .from(axAgentTelemetryBatches)
         .where(

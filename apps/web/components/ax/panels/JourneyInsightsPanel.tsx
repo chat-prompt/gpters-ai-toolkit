@@ -144,9 +144,7 @@ function ExecutionSection({ data }: { data: AxJourneyInsightsData['execution'] }
                         <td className={`${TD} text-right font-mono text-xs tabular-nums text-[var(--text-secondary)]`}>
                           {row.verifiedAttempts === 0
                             ? '미측정'
-                            : row.verifiedAttempts < RATE_MIN_SAMPLE
-                              ? `${formatRate(row.verifiedSuccessRate)} · 표본 ${formatCount(row.verifiedAttempts)}회`
-                              : formatRate(row.verifiedSuccessRate)}
+                            : formatSampledRate(row.verifiedSuccesses, row.verifiedAttempts)}
                         </td>
                         <td className={`${TD} text-right font-mono text-[11px] text-[var(--text-muted)]`}>
                           {formatDate(row.lastReportedAt)}
@@ -241,16 +239,16 @@ function ReliabilityStrip({ data }: { data: AxJourneyInsightsData }) {
         : `로드 조합 ${formatCount(outcomes.loadedPairs)}개 중 ${formatCount(explicitOutcomes)}개 · 기록 없음은 미적용이 아니라 관측 공백입니다.`,
     },
     {
-      label: '검증 결과가 있는 완료',
+      label: '검증 결과가 있는 판정',
       value: execution ? formatSampledRate(execution.verifiedAttempts, completedAttempts) : '미관측',
       note: execution
-        ? `완료 ${formatCount(completedAttempts)}회 중 ${formatCount(execution.verifiedAttempts)}회 · 검증 성공률은 이 표본만으로 계산합니다.`
+        ? `성공·부분·실패 판정 ${formatCount(completedAttempts)}회 중 ${formatCount(execution.verifiedAttempts)}회 · 검증 성공률은 이 표본만으로 계산합니다.`
         : '새 실행 결과 계약으로 보고된 시도가 아직 없습니다.',
     },
     {
       label: '백분율 표시 기준',
       value: `${formatCount(RATE_MIN_SAMPLE)}건`,
-      note: '분모가 이보다 작은 비율은 백분율 대신 분수와 참고 표시로 보여줍니다.',
+      note: '분모가 이보다 작은 비율은 백분율 대신 분수와 참고 표시로 보여줍니다. 검색결과 0건 비율만 표본 100건 기준입니다.',
     },
   ]
 

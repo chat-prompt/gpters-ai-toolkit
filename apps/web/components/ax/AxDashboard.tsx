@@ -322,7 +322,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
             : undefined}
         />
         {active.id === 'overview' && (
-          <div className="mt-12 space-y-3" aria-label="사람과 에이전트 장기 사용량">
+          <section className="mt-12 space-y-3" aria-label="사람과 에이전트 장기 사용량">
             <ActivityGrassCard
               daily={grassDaily}
               label="일별 구성원 스킬 활동 · 최근 365일"
@@ -337,7 +337,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
               kind="agent"
               loading={memberActivityLoading && agentGrassDaily === null}
             />
-          </div>
+          </section>
         )}
       </div>
 
@@ -463,7 +463,8 @@ function ActivityGrassCard({
         <div
           className="pointer-events-none absolute z-20 max-w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-full whitespace-normal rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-center font-mono text-[10px] tabular-nums text-[var(--text-primary)] shadow-lg"
           style={{ left: tip.left, top: tip.top - 6 }}
-          role="status"
+          aria-hidden
+          data-grass-tooltip
         >
           {tip.text}
         </div>
@@ -824,6 +825,7 @@ function FlowDenominatorNote({
     : `로드 ${formatCount(loads)}건 중 연결 가능 ${formatCount(linkableLoads)}건 (${formatSampledRate(linkableLoads, loads)}) · 로드 후 적용 ${formatCount(appliedAfterLoad)}건은 연결 가능 로드의 ${formatSampledRate(appliedAfterLoad, linkableLoads)}`
   return (
     <p
+      role="note"
       className="mt-2 font-mono text-[11px] tabular-nums leading-relaxed text-[var(--text-muted)]"
       aria-label="로드 후 적용 전환율 분모"
     >
