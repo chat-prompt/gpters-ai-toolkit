@@ -12,6 +12,7 @@ import type {
   AxClientUsageData,
   AxClientUsageMemberRow,
   AxUsageParticipationRow,
+  AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
 import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from '@/lib/features/ax'
