@@ -3,6 +3,7 @@
 import { axAgentTelemetryBatches, axAgentTelemetryCollectors, axSkillExecutionAttempts, db } from '@gpters/db'
 import { eq, gte } from 'drizzle-orm'
 import type {
+  AxAgentActivityAgentRow,
   AxAgentActivityData,
   AxAgentReporterRow,
   AxAgentSourceCoverageRow,
@@ -112,10 +113,88 @@ function formatTokens(value: number): string {
   return String(value)
 }
 
+interface AgentAccumulator {
+  agentId: string
+  totalUsage: AxAgentTokenUsage
+  sessions: number
+  turns: number
+  toolCalls: number
+  toolFailures: number
+  models: Map<string, { turns: number; usage: AxAgentTokenUsage }>
+  tools: Map<string, { calls: number; failures: number }>
+  skills: Map<string, { loaded: number; failed: number; interrupted: number }>
+  observedExecutions: Map<string, { status: string; evidence: string; count: number }>
+  verifiedExecutions: AxAgentActivityAgentRow['verifiedExecutions']
+  collection: AxAgentActivityAgentRow['collection']
+}
+
+function emptyVerifiedExecutions(): AxAgentActivityAgentRow['verifiedExecutions'] {
+  return { attempts: 0, success: 0, partial: 0, failed: 0, abandoned: 0, running: 0, withEvidence: 0 }
+}
+
+function createAgentAccumulator(agentId: string): AgentAccumulator {
+  return {
+    agentId,
+    totalUsage: emptyUsage(),
+    sessions: 0,
+    turns: 0,
+    toolCalls: 0,
+    toolFailures: 0,
+    models: new Map(),
+    tools: new Map(),
+    skills: new Map(),
+    observedExecutions: new Map(),
+    verifiedExecutions: emptyVerifiedExecutions(),
+    collection: { batches: 0, recordsRead: 0, parseFailures: 0, unsupportedRecordsSkipped: 0 },
+  }
+}
+
+function finalizeAgent(accumulator: AgentAccumulator): AxAgentActivityAgentRow {
+  return {
+    agentId: accumulator.agentId,
+    totalUsage: accumulator.totalUsage,
+    totalProcessedTokens: processedTokens(accumulator.totalUsage),
+    sessions: accumulator.sessions,
+    turns: accumulator.turns,
+    toolCalls: accumulator.toolCalls,
+    toolFailures: accumulator.toolFailures,
+    models: [...accumulator.models.entries()].map(([model, metric]) => ({
+      model,
+      turns: metric.turns,
+      usage: metric.usage,
+      processedTokens: processedTokens(metric.usage),
+    })).sort((a, b) => b.processedTokens - a.processedTokens || a.model.localeCompare(b.model)).slice(0, 12),
+    tools: [...accumulator.tools.entries()].map(([name, metric]) => ({
+      name,
+      ...metric,
+      failureRate: metric.calls > 0 ? Math.round((metric.failures / metric.calls) * 1000) / 10 : 0,
+    })).sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name)).slice(0, 20),
+    skills: [...accumulator.skills.entries()].map(([skillId, metric]) => ({ skillId, ...metric }))
+      .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20),
+    observedExecutionReports: [...accumulator.observedExecutions.values()]
+      .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status)),
+    verifiedExecutions: accumulator.verifiedExecutions,
+    collection: accumulator.collection,
+  }
+}
+
+function addVerifiedExecution(
+  target: AxAgentActivityAgentRow['verifiedExecutions'],
+  execution: { status: string; validationMethod: string; validationPassed: boolean | null },
+): void {
+  target.attempts += 1
+  if (execution.status === 'success' || execution.status === 'partial' || execution.status === 'failed' ||
+    execution.status === 'abandoned' || execution.status === 'running') {
+    target[execution.status] += 1
+  }
+  if (execution.validationMethod !== 'none' && execution.validationPassed !== null) target.withEvidence += 1
+}
+
 /** 실행 결과 마이그레이션이 아직 없는 환경에서도 텔레메트리 본체는 계속 보여준다. */
 async function loadVerifiedExecutions(cutoff: Date): Promise<{
   available: boolean
   rows: Array<{
+    agentId: string
     status: string
     validationMethod: string
     validationPassed: boolean | null
@@ -123,6 +202,7 @@ async function loadVerifiedExecutions(cutoff: Date): Promise<{
 }> {
   try {
     const rows = await db.select({
+      agentId: axSkillExecutionAttempts.agentId,
       status: axSkillExecutionAttempts.status,
       validationMethod: axSkillExecutionAttempts.validationMethod,
       validationPassed: axSkillExecutionAttempts.validationPassed,
@@ -197,6 +277,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const toolMap = new Map<string, { calls: number; failures: number }>()
     const skillMap = new Map<string, { loaded: number; failed: number; interrupted: number }>()
     const observedExecutionMap = new Map<string, { status: string; evidence: string; count: number }>()
+    const agentMap = new Map<string, AgentAccumulator>()
     const sourceLatest = new Map<AxAgentTelemetrySource, number>()
     const sourceStaleAfterHours = new Map<AxAgentTelemetrySource, number>()
     let sessions = 0
@@ -214,6 +295,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       if (sourceValue !== 'openclaw' && sourceValue !== 'claude-code' &&
         sourceValue !== 'codex' && sourceValue !== 'hermes') continue
       const source = sourceValue as AxAgentTelemetrySource
+      const agent = agentMap.get(row.agentId) ?? createAgentAccumulator(row.agentId)
+      agentMap.set(row.agentId, agent)
       const usage: AxAgentTokenUsage = {
         inputTokens: number(row.inputTokens),
         outputTokens: number(row.outputTokens),
@@ -225,11 +308,18 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
           : 'unknown',
       }
       addUsage(totalUsage, usage)
+      addUsage(agent.totalUsage, usage)
       sessions += number(row.sessions)
       turns += number(row.turns)
+      agent.sessions += number(row.sessions)
+      agent.turns += number(row.turns)
       recordsRead += collectionNumber(collection, 'recordsRead')
       parseFailures += collectionNumber(collection, 'parseFailures')
       unsupportedRecordsSkipped += collectionNumber(collection, 'unsupportedRecordsSkipped')
+      agent.collection.batches += 1
+      agent.collection.recordsRead += collectionNumber(collection, 'recordsRead')
+      agent.collection.parseFailures += collectionNumber(collection, 'parseFailures')
+      agent.collection.unsupportedRecordsSkipped += collectionNumber(collection, 'unsupportedRecordsSkipped')
       const startAt = new Date(row.windowStart).getTime()
       const endAt = new Date(row.windowEnd).getTime()
       const collectedAt = new Date(row.collectedAt).getTime()
@@ -278,6 +368,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         metric.turns += number(item.turns)
         addUsage(metric.usage, usageFrom(item.usage))
         modelMap.set(item.model, metric)
+        const agentMetric = agent.models.get(item.model) ?? { turns: 0, usage: emptyUsage() }
+        agentMetric.turns += number(item.turns)
+        addUsage(agentMetric.usage, usageFrom(item.usage))
+        agent.models.set(item.model, agentMetric)
       }
       for (const raw of row.tools ?? []) {
         if (!raw || typeof raw !== 'object') continue
@@ -289,6 +383,12 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         metric.calls += calls
         metric.failures += failures
         toolMap.set(item.name, metric)
+        const agentMetric = agent.tools.get(item.name) ?? { calls: 0, failures: 0 }
+        agentMetric.calls += calls
+        agentMetric.failures += failures
+        agent.tools.set(item.name, agentMetric)
+        agent.toolCalls += calls
+        agent.toolFailures += failures
         reporter.toolCalls += calls
         reporter.toolFailures += failures
       }
@@ -301,6 +401,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         metric.failed += number(item.failed)
         metric.interrupted += number(item.interrupted)
         skillMap.set(item.skillId, metric)
+        const agentMetric = agent.skills.get(item.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+        agentMetric.loaded += number(item.loaded)
+        agentMetric.failed += number(item.failed)
+        agentMetric.interrupted += number(item.interrupted)
+        agent.skills.set(item.skillId, agentMetric)
       }
       for (const raw of row.executions ?? []) {
         if (!raw || typeof raw !== 'object') continue
@@ -314,6 +419,13 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         }
         metric.count += number(item.count)
         observedExecutionMap.set(key, metric)
+        const agentMetric = agent.observedExecutions.get(key) ?? {
+          status: item.status,
+          evidence: item.evidence,
+          count: 0,
+        }
+        agentMetric.count += number(item.count)
+        agent.observedExecutions.set(key, agentMetric)
       }
       reporterMap.set(reporterKey, reporter)
     }
@@ -323,6 +435,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       if (collector.source !== 'openclaw' && collector.source !== 'claude-code' &&
         collector.source !== 'codex' && collector.source !== 'hermes') continue
       const collectorSource = collector.source as AxAgentTelemetrySource
+      if (!agentMap.has(collector.agentId)) agentMap.set(collector.agentId, createAgentAccumulator(collector.agentId))
       installedSources.add(collectorSource)
       sourceStaleAfterHours.set(
         collectorSource,
@@ -414,23 +527,14 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20)
     const observedExecutionReports = [...observedExecutionMap.values()]
       .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status))
-    const verifiedExecutions: AxAgentActivityData['verifiedExecutions'] = {
-      attempts: executionResult.rows.length,
-      success: 0,
-      partial: 0,
-      failed: 0,
-      abandoned: 0,
-      running: 0,
-      withEvidence: 0,
-    }
+    const verifiedExecutions: AxAgentActivityData['verifiedExecutions'] = emptyVerifiedExecutions()
     for (const execution of executionResult.rows) {
-      if (execution.status in verifiedExecutions && execution.status !== 'attempts' && execution.status !== 'withEvidence') {
-        verifiedExecutions[execution.status as 'success' | 'partial' | 'failed' | 'abandoned' | 'running'] += 1
-      }
-      if (execution.validationMethod !== 'none' && execution.validationPassed !== null) {
-        verifiedExecutions.withEvidence += 1
-      }
+      addVerifiedExecution(verifiedExecutions, execution)
+      const agent = agentMap.get(execution.agentId)
+      if (agent) addVerifiedExecution(agent.verifiedExecutions, execution)
     }
+    const agents = [...agentMap.values()].map(finalizeAgent)
+      .sort((a, b) => b.totalProcessedTokens - a.totalProcessedTokens || a.agentId.localeCompare(b.agentId))
     const total = processedTokens(totalUsage)
     const insights: AxAgentActivityData['insights'] = []
 
@@ -518,6 +622,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       turns,
       toolCalls,
       toolFailures,
+      agents,
       reporters,
       sourceCoverage,
       models,

@@ -97,6 +97,8 @@ export interface AxPanel<T = unknown> {
 export interface AxOverviewMemberRow {
   /** 계정 표시 이름. 프로필에 이름이 없으면 "이름 미설정" */
   name: string
+  /** 기간 내 실제 적용을 보고한 고유 스킬 수 */
+  uniqueSkills: number
   /** 기간 내 스킬 상세 콘텐츠 로드 수 */
   loaded: number
   /** 기간 내 적용(apply) 보고 수 */
@@ -156,11 +158,6 @@ export interface AxOverviewData {
    * 개인 식별 데이터이므로 관리자에게만 채워지고 그 외에는 null.
    */
   memberUsage: AxOverviewMemberRow[] | null
-  /**
-   * 아직 계측하지 않는 지표와 그 이유.
-   * 0이나 추정값으로 꾸미는 대신 미계측 상태를 화면에 그대로 밝힌다.
-   */
-  unmeasured: Array<{ label: string; reason: string }>
 }
 
 /** 에이전트 스킬 저장소의 스킬 한 개 */
@@ -545,6 +542,36 @@ export interface AxAgentSourceCoverageRow {
   note: string
 }
 
+/** 에이전트 한 명의 기간 내 활동 집계. 원문·세션 식별자는 포함하지 않는다. */
+export interface AxAgentActivityAgentRow {
+  agentId: string
+  totalUsage: AxAgentTokenUsage
+  totalProcessedTokens: number
+  sessions: number
+  turns: number
+  toolCalls: number
+  toolFailures: number
+  models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
+  tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
+  skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  observedExecutionReports: Array<{ status: string; evidence: string; count: number }>
+  verifiedExecutions: {
+    attempts: number
+    success: number
+    partial: number
+    failed: number
+    abandoned: number
+    running: number
+    withEvidence: number
+  }
+  collection: {
+    batches: number
+    recordsRead: number
+    parseFailures: number
+    unsupportedRecordsSkipped: number
+  }
+}
+
 /** 에이전트 활동 패널 — 원문·세션 ID·경로 없이 집계값만 담는다. */
 export interface AxAgentActivityData {
   syncedAt: string
@@ -557,6 +584,8 @@ export interface AxAgentActivityData {
   turns: number
   toolCalls: number
   toolFailures: number
+  /** 화면에서 전체 합계와 에이전트별 상세를 같은 계약으로 전환하기 위한 집계. */
+  agents: AxAgentActivityAgentRow[]
   reporters: AxAgentReporterRow[]
   sourceCoverage: AxAgentSourceCoverageRow[]
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>

@@ -9,7 +9,7 @@
 import type { ComponentType } from 'react'
 import type { AxPanelViewProps } from './types'
 import { OverviewPanel } from './OverviewPanel'
-import { SkillUsagePanel } from './SkillUsagePanel'
+import { SkillEventSummary, SkillUsagePanel } from './SkillUsagePanel'
 import { JourneyInsightsPanel } from './JourneyInsightsPanel'
 import { SharedSkillsPanel } from './SharedSkillsPanel'
 import { SkillDiffPanel } from './SkillDiffPanel'
@@ -52,6 +52,7 @@ export function getAxPanelView(panelId: string): AxPanelView {
 
 export {
   OverviewPanel,
+  SkillEventSummary,
   SkillUsagePanel,
   JourneyInsightsPanel,
   SharedSkillsPanel,

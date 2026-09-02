@@ -3,7 +3,7 @@
  *
  * 목업이 제안한 성과 지표 가운데 **지금 실측 가능한 것만** 계산한다.
  * 활성 인원·일별 추이·시간대별 활성 인원은 skill_events에서 나오고,
- * 완료 세션·완주율·절감 시간·부서별 참여는 계측 근거가 없어 `unmeasured`로 밝힌다.
+ * 스킬 실행 시작·완료는 별도 실행 결과 패널에서 다루며, 이 요약은 사람의 실제 적용에 집중한다.
  *
  * 실제 사용 지표는 스킬 사용량 패널과 동일하게 적용 보고만 센다.
  * 로드는 적용 전환을 설명하는 보조 신호로만 별도 집계한다.
@@ -26,18 +26,6 @@ const meta: AxPanelMeta = {
   visibility: 'org',
   usesPeriod: true,
 }
-
-/**
- * 목업에는 있으나 아직 계측 근거가 없는 지표
- *
- * 완료 기준("실제 데이터가 없는 패널은 0이나 추정값으로 꾸미지 않는다")에 따라
- * 값 대신 미계측 사유를 내려보낸다. 계측이 붙으면 여기서 지우고 데이터 필드로 옮긴다.
- */
-const UNMEASURED: AxOverviewData['unmeasured'] = [
-  { label: '완료 세션 · 완주율', reason: '스킬 실행 시작·완료는 계측하지만 사용자 작업 세션 전체의 완주 기준은 아직 없습니다' },
-  { label: '절감 시간', reason: '작업당 절감 시간을 산정할 실측 근거가 없습니다' },
-  { label: '부서별 참여', reason: '구성원-부서 매핑 데이터가 없습니다' },
-]
 
 /**
  * 잔디밭 고정 윈도우 — 오늘을 포함한 최근 365일
@@ -391,6 +379,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
         ? await db
             .select({
               name: users.name,
+              uniqueSkills: sql<number>`count(distinct ${skillEvents.skillId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
               loaded: sql<number>`count(*) filter (where ${skillEvents.action} = 'load')::int`,
               applied: sql<number>`count(*) filter (where ${skillEvents.action} = 'apply')::int`,
               lastActiveAt: sql<Date | null>`max(${skillEvents.createdAt})`,
@@ -419,6 +408,7 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
       const memberUsage: AxOverviewMemberRow[] | null = memberRows
         ? memberRows.map((row) => ({
             name: (row.name ?? '').trim() || '이름 미설정',
+            uniqueSkills: num(row.uniqueSkills),
             loaded: num(row.loaded),
             applied: num(row.applied),
             lastActiveAt: toIso(row.lastActiveAt),
@@ -467,7 +457,6 @@ export const overviewPanel: AxPanel<AxOverviewData> = {
             hourlyRows.map((row) => ({ hour: num(row.hour), users: num(row.users) }))
           ),
           memberUsage,
-          unmeasured: UNMEASURED,
         },
         [
           // aitk = 사람이 쓰는 팀 스킬, bbopters-shared = 에이전트 스킬 — 출처를 라벨로 가른다
