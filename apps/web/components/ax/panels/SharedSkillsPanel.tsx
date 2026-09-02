@@ -20,7 +20,7 @@ import { formatCount } from '../format'
  */
 export function SharedSkillsPanel({ data }: AxPanelViewProps<AxSharedSkillsData>) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
         {data.repo} · {formatCount(data.skills.length)}개
         {data.aitkOverlap !== null && ` · 팀 스킬(aitk)과 겹침 ${formatCount(data.aitkOverlap)}개`}
@@ -68,14 +68,22 @@ function SkillGrid({ skills }: { skills: AxSharedSkillsData['skills'] }) {
             }`}
           >
             {skill.inAitk && (
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)]"
-              />
+              <>
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-primary)]"
+                />
+                <span className="sr-only">팀 스킬에도 등록됨 · </span>
+              </>
             )}
             <span className="truncate">
               {skill.id}
-              {!skill.hasSkillDoc && ' *'}
+              {!skill.hasSkillDoc && (
+                <>
+                  <span aria-hidden> *</span>
+                  <span className="sr-only"> · SKILL.md 없음</span>
+                </>
+              )}
             </span>
           </li>
         ))}

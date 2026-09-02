@@ -23,13 +23,13 @@ export function JourneyInsightsPanel({ data, days }: AxPanelViewProps<AxJourneyI
   const topUnreported = data.skillOutcomes.find((skill) => skill.unreportedPairs > 0)
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       <div>
         <p className="max-w-4xl text-sm leading-relaxed text-[var(--text-secondary)]">
           검색 결과에 나온 후보를 에이전트가 상세 확인했는지, 확인한 뒤 적용 또는 미적용 판단을
           기록했는지 같은 세션×스킬을 따라갑니다. 검색에는 자동 검색 훅과 직접 실행한 MCP 검색이 모두 포함됩니다.
         </p>
-        <p className="mt-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        <p className={`mt-2 ${META_LINE}`}>
           최근 {days}일 · 검색은 요청 단위, 전환은 세션×스킬 단위
         </p>
         {days > 30 && (
@@ -371,7 +371,8 @@ function OutcomeSection({ data }: { data: AxJourneyInsightsData }) {
   const { outcomes } = data
   const segments = [
     { label: '적용 기록', value: outcomes.appliedPairs, color: 'bg-[var(--brand-primary)]' },
-    { label: '미적용 기록', value: outcomes.notAppliedPairs, color: 'bg-[#8f6a5a]' },
+    // 테마 토큰만 쓴다 — 미적용은 적용보다 옅은 주황, 기록 없음은 중립 회색
+    { label: '미적용 기록', value: outcomes.notAppliedPairs, color: 'bg-[color-mix(in_srgb,var(--accent-orange)_45%,var(--bg-tertiary))]' },
     { label: '적용 여부 기록 없음', value: outcomes.unreportedPairs, color: 'bg-[var(--border-hover)]' },
   ]
 
@@ -386,6 +387,7 @@ function OutcomeSection({ data }: { data: AxJourneyInsightsData }) {
             {segments.map((segment) => (
               <span
                 key={segment.label}
+                aria-hidden
                 className={segment.color}
                 style={{ width: `${(segment.value / outcomes.loadedPairs) * 100}%` }}
                 title={`${segment.label} ${formatCount(segment.value)}조합`}
@@ -565,8 +567,9 @@ function MeasurementDefinitions() {
   ]
 
   return (
-    <details className="border-t border-[var(--border-subtle)] pt-5">
-      <summary className="cursor-pointer list-none text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]">
+    <details className="group border-t border-[var(--border-subtle)] pt-5">
+      <summary className="group flex cursor-pointer list-none items-center gap-2 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)] [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="inline-block font-mono text-[11px] text-[var(--text-muted)] transition-transform group-open:rotate-90">▸</span>
         지표 기준 보기
       </summary>
       <dl className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
@@ -603,7 +606,7 @@ function PhraseList({ title, rows }: { title: string; rows: AxJourneyInsightsDat
         <ul className="mt-3 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
           {rows.map((row, index) => (
             <li key={`${row.text}:${index}`} className="flex items-start justify-between gap-4 py-3">
-              <span className="text-xs leading-relaxed text-[var(--text-secondary)]" title={row.text}>{row.text}</span>
+              <span className="min-w-0 break-words text-xs leading-relaxed text-[var(--text-secondary)]" title={row.text}>{row.text}</span>
               <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--text-muted)]">{formatCount(row.count)}회</span>
             </li>
           ))}

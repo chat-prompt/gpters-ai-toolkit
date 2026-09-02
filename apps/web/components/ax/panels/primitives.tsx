@@ -47,7 +47,7 @@ export function SectionHeader({
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <p id={id} className={SECTION_LABEL}>{label}</p>
+        <h3 id={id} className={SECTION_LABEL}>{label}</h3>
         {aside && <p className={META_LINE}>{aside}</p>}
       </div>
       {description && (
@@ -103,7 +103,7 @@ export function Stat({
         <p className="text-xs text-[var(--text-secondary)]">{label}</p>
         {help && <StatHelp label={label} explanation={help} />}
       </div>
-      <p className={`mt-2 font-mono text-xl tabular-nums ${tone === 'warning' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>
+      <p className={`mt-2 min-w-0 break-words font-mono text-xl tabular-nums ${tone === 'warning' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>
         {value}
         {unit && <span className="ml-1 text-xs text-[var(--text-muted)]">{unit}</span>}
       </p>
@@ -116,10 +116,13 @@ export function Stat({
 function StatHelp({ label, explanation }: { label: string; explanation: string }) {
   return (
     <details className="group">
+      {/* 히트 영역은 24px, 보이는 원은 16px. 포커스 링은 다른 컨트롤과 같은 브랜드색 */}
       <summary
-        className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)] [&::-webkit-details-marker]:hidden"
+        className="-my-1 flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand-primary)] [&::-webkit-details-marker]:hidden"
         aria-label={`${label} 설명`}
-      >?</summary>
+      >
+        <span aria-hidden className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)]">?</span>
+      </summary>
       <p className="absolute inset-x-0 top-full z-20 mt-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed text-[var(--text-secondary)] shadow-lg">
         {explanation}
       </p>
