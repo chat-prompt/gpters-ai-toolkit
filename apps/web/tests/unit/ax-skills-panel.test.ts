@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // 모킹한 테이블의 컬럼은 서로 구분 가능한 문자열로 둔다.
 // 그래야 조립된 where 조건을 훑어 "어떤 컬럼이 조건에 들어갔는지" 단언할 수 있다.
 vi.mock('@gpters/db', () => ({
-  db: { select: vi.fn() },
+  db: { select: vi.fn(), execute: vi.fn() },
   skillEvents: {
     skillId: 'skill_events.skill_id',
     userId: 'skill_events.user_id',
@@ -118,6 +118,9 @@ describe('skillUsagePanel', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-19T03:00:00Z'))
+    // 기원 분해 raw SQL — 기본은 빈 결과
+    vi.mocked(db.execute).mockReset()
+    vi.mocked(db.execute).mockResolvedValue({ rows: [] } as never)
     vi.clearAllMocks()
     whereConditions = []
     innerJoinCalls = []
@@ -191,6 +194,19 @@ describe('skillUsagePanel', () => {
       ],
     ])
 
+    vi.mocked(db.execute).mockResolvedValue({
+      rows: [{
+        search_requests: '12',
+        loads_from_search: 5,
+        loads_direct: 3,
+        loads_unlinkable: 21,
+        applies_from_search: 2,
+        applies_after_direct_load: 1,
+        applies_without_load: 1,
+        applies_unlinkable: 2,
+      }],
+    } as never)
+
     const result = await skillUsagePanel.load({ days: 30, isAdmin: false })
 
     expect(result.status).toBe('ok')
@@ -198,6 +214,12 @@ describe('skillUsagePanel', () => {
 
     const data = result.data!
     expect(data.totalEvents).toBe(61)
+    // 기원 분해: 검색 요청은 요청 단위, 연결 불가는 따로 센다
+    expect(data.origins).toEqual({
+      searchRequests: 12,
+      loads: { fromSearch: 5, direct: 3, unlinkable: 21 },
+      applies: { fromSearch: 2, afterDirectLoad: 1, withoutLoad: 1, unlinkable: 2 },
+    })
     expect(data.meaningfulUses).toBe(6)
     expect(data.activeUsers).toBe(5)
     expect(data.sessions).toBe(7)

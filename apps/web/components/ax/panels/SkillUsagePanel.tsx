@@ -13,13 +13,13 @@
 import type { AxSkillUsageData, AxSkillUsageRow } from '@/lib/features/ax'
 import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate, relativeActivityFill } from '../format'
+import { formatCount, formatDate, formatSampledRate, relativeActivityFill } from '../format'
 import { TablePager, usePagedRows } from './TablePager'
 
 /** 한 장에 실을 스킬 수 */
 const SKILL_PAGE_SIZE = 20
 
-import { EMPTY_NOTE, SECTION_LABEL, TD, TH } from './primitives'
+import { EMPTY_NOTE, META_LINE, SECTION_LABEL, TD, TH, TIP_BOX, TipContent, tipText, type TipRow } from './primitives'
 
 /**
  * 스킬 사용량 패널 화면
@@ -45,70 +45,119 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
   )
 }
 
-/** 검색 노출·로드·적용 보고가 전체 관측 이벤트에서 차지한 비중을 보여준다. */
+/**
+ * 검색 요청 → 로드 → 적용 보고 깔때기.
+ *
+ * 분모(진입)는 검색 요청 수 + 검색 없는 로드 수다. 로드는 검색 후 로드와 검색 없는 로드로,
+ * 적용 보고는 검색 기원·검색 없이 로드 후·로드 없이 적용으로 나뉜다. 흐름 ID가 없어 판정할 수
+ * 없는 이벤트는 총량에는 넣되 "연결 불가"로 밝히고 분모·비율에서 뺀다.
+ */
 export function SkillEventSummary({
+  origins,
   totals,
-  totalEvents,
 }: {
+  origins: AxSkillUsageData['origins']
   totals: AxSkillUsageData['actionTotals']
-  totalEvents: number
 }) {
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
-  const steps = [
-    { label: '검색 노출', value: totals.search, color: 'var(--text-muted)' },
+  const { searchRequests, loads, applies } = origins
+  const base = searchRequests + loads.direct
+  const loadsTotal = loads.fromSearch + loads.direct + loads.unlinkable
+  const appliesTotal = applies.fromSearch + applies.afterDirectLoad + applies.withoutLoad + applies.unlinkable
+  const share = (count: number) => formatSampledRate(count, base)
+  const slice = (count: number) => `${formatCount(count)}건 · ${share(count)}`
+  const excluded = (count: number) => `${formatCount(count)}건 · 제외`
+
+  const steps: Array<{
+    label: string
+    value: number
+    /** 분모 대비 막대 길이에 쓰는 연결 가능 수 */
+    linkable: number
+    color: string
+    rows: TipRow[]
+  }> = [
+    {
+      label: '검색 요청',
+      value: searchRequests,
+      linkable: searchRequests,
+      color: 'var(--text-muted)',
+      rows: [
+        { label: '진입 중', value: share(searchRequests) },
+        { label: '결과 노출 줄', value: `${formatCount(totals.search)}줄` },
+      ],
+    },
     {
       label: '로드',
-      value: totals.load,
+      value: loadsTotal,
+      linkable: loads.fromSearch + loads.direct,
       color: 'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))',
+      rows: [
+        { label: '검색 후 로드', value: slice(loads.fromSearch) },
+        { label: '검색 없는 로드', value: slice(loads.direct) },
+        { label: '연결 불가', value: excluded(loads.unlinkable) },
+      ],
     },
     {
       label: '적용 보고',
-      value: totals.apply,
+      value: appliesTotal,
+      linkable: applies.fromSearch + applies.afterDirectLoad + applies.withoutLoad,
       color: 'var(--accent-orange)',
+      rows: [
+        { label: '검색 기원', value: slice(applies.fromSearch) },
+        { label: '검색 없이 로드 후', value: slice(applies.afterDirectLoad) },
+        { label: '로드 없이 적용', value: slice(applies.withoutLoad) },
+        { label: '연결 불가', value: excluded(applies.unlinkable) },
+      ],
     },
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-8">
-      {steps.map((step, index) => {
-        const rate = formatRate(step.value, totalEvents)
-        const highlighted = highlightedIndex === index
-        return (
-          <div
-            key={step.label}
-            className="relative py-2 outline-none"
-            tabIndex={0}
-            aria-label={`${step.label} ${formatCount(step.value)}건 · 전체 이벤트 중 ${rate}`}
-            onMouseEnter={() => setHighlightedIndex(index)}
-            onMouseLeave={() => setHighlightedIndex(null)}
-            onFocus={() => setHighlightedIndex(index)}
-            onBlur={() => setHighlightedIndex(null)}
-          >
-            <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-              <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
-              {step.label}
-            </p>
-            {highlighted && (
-              <p className="absolute right-0 top-0 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm">
-                전체 이벤트 중 {rate}
+    <div>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-8">
+        {steps.map((step, index) => {
+          const highlighted = highlightedIndex === index
+          const title = `${step.label} ${formatCount(step.value)}건`
+          return (
+            <div
+              key={step.label}
+              className="relative py-2 outline-none"
+              tabIndex={0}
+              aria-label={tipText(title, step.rows)}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              onMouseLeave={() => setHighlightedIndex(null)}
+              onFocus={() => setHighlightedIndex(index)}
+              onBlur={() => setHighlightedIndex(null)}
+            >
+              <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
+                {step.label}
               </p>
-            )}
-            <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{formatCount(step.value)}</p>
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
-              <span
-                className="block h-full rounded-full"
-                style={{
-                  width: `${totalEvents > 0 ? Math.min(100, (step.value / totalEvents) * 100) : 0}%`,
-                  background: step.color,
-                  boxShadow: highlighted
-                    ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
-                    : 'none',
-                }}
-              />
+              {highlighted && (
+                <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute left-0 top-full z-10 mt-1`}>
+                  <TipContent title={title} rows={step.rows} />
+                </div>
+              )}
+              <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{formatCount(step.value)}</p>
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${base > 0 ? Math.min(100, (step.linkable / base) * 100) : 0}%`,
+                    background: step.color,
+                    boxShadow: highlighted
+                      ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
+                      : 'none',
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
+      <p className={`mt-3 ${META_LINE}`} role="note" aria-label="깔때기 분모">
+        진입 {formatCount(base)}건 = 검색 요청 {formatCount(searchRequests)} + 검색 없는 로드 {formatCount(loads.direct)}
+        {' · '}연결 불가 로드 {formatCount(loads.unlinkable)}건·적용 {formatCount(applies.unlinkable)}건은 비율에서 제외
+      </p>
     </div>
   )
 }

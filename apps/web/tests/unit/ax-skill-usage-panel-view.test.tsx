@@ -12,6 +12,11 @@ const DATA: AxSkillUsageData = {
   activeUsers: 4,
   sessions: 3,
   actionTotals: { search: 60, load: 20, apply: 10, skip: 8, deploy: 2 },
+  origins: {
+    searchRequests: 12,
+    loads: { fromSearch: 5, direct: 3, unlinkable: 12 },
+    applies: { fromSearch: 2, afterDirectLoad: 1, withoutLoad: 3, unlinkable: 4 },
+  },
   skills: [
     {
       skillId: 'alpha',
@@ -45,19 +50,28 @@ describe('AX 스킬 사용 패널 화면', () => {
   it('이벤트 비율은 호버할 때만, 스킬은 전체 적용 비중과 활성 사용자 비율로 보여준다', () => {
     render(
       <>
-        <SkillEventSummary totals={DATA.actionTotals} totalEvents={DATA.totalEvents} />
+        <SkillEventSummary origins={DATA.origins} totals={DATA.actionTotals} />
         <SkillUsagePanel data={DATA} days={7} />
       </>
     )
 
-    expect(screen.queryByText('전체 이벤트 중 60.0%')).toBeNull()
-    const searchSummary = screen.getByLabelText('검색 노출 60건 · 전체 이벤트 중 60.0%')
+    // 분모(진입) = 검색 요청 12 + 검색 없는 로드 3 = 15. 연결 불가는 총량에만 있고 비율에서 빠진다.
+    expect(screen.getByRole('note', { name: '깔때기 분모' }).textContent).toContain('진입 15건 = 검색 요청 12 + 검색 없는 로드 3')
+    expect(screen.getByRole('note', { name: '깔때기 분모' }).textContent).toContain('연결 불가 로드 12건·적용 4건은 비율에서 제외')
+    expect(document.querySelector('[data-funnel-tooltip]')).toBeNull()
+    const searchSummary = screen.getByLabelText('검색 요청 12건 · 진입 중 80.0% · 결과 노출 줄 60줄')
     fireEvent.mouseEnter(searchSummary)
-    expect(screen.getByText('전체 이벤트 중 60.0%')).toBeTruthy()
-    expect(screen.queryByText('전체 이벤트 중 20.0%')).toBeNull()
+    expect(document.querySelector('[data-funnel-tooltip]')?.textContent).toContain('80.0%')
     fireEvent.mouseLeave(searchSummary)
-    expect(screen.queryByText('전체 이벤트 중 60.0%')).toBeNull()
-    expect(screen.queryByText(/같은 세션의 순차 전환율/)).toBeNull()
+    expect(document.querySelector('[data-funnel-tooltip]')).toBeNull()
+    // 로드 20건 = 검색 후 5 + 검색 없는 3 + 연결 불가 12. 비율은 진입 15건 기준.
+    const loadSummary = screen.getByLabelText('로드 20건 · 검색 후 로드 5건 · 33.3% · 검색 없는 로드 3건 · 20.0% · 연결 불가 12건 · 제외')
+    fireEvent.mouseEnter(loadSummary)
+    expect(Array.from(document.querySelectorAll('[data-funnel-tooltip] dt')).map((dt) => dt.textContent)).toEqual([
+      '검색 후 로드', '검색 없는 로드', '연결 불가',
+    ])
+    fireEvent.mouseLeave(loadSummary)
+    expect(screen.getByLabelText(/^적용 보고 10건 · 검색 기원 2건/)).toBeTruthy()
 
     expect(screen.queryByRole('columnheader', { name: '적용 보고' })).toBeNull()
     expect(screen.queryByRole('columnheader', { name: '전체 적용 중' })).toBeNull()

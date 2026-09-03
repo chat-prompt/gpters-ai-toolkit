@@ -119,8 +119,8 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
       )`
 
-      // 네 쿼리는 서로 독립이라 왕복 지연이 쌓이지 않게 한 번에 보낸다.
-      const [[totals], skillRows, dailyRows, unusedRows] = await Promise.all([
+      // 다섯 쿼리는 서로 독립이라 왕복 지연이 쌓이지 않게 한 번에 보낸다.
+      const [[totals], skillRows, dailyRows, unusedRows, originResult] = await Promise.all([
         // 1. 요약 지표 — 아래 표와 같은 단일 GPTers 카탈로그 모집단을 쓴다
         //    세션 수도 같은 집합에서 센다 — 별도로 mcp_sessions를 세면 조직 범위와
         //    익명 세션 취급이 달라져 옆 타일과 모집단이 어긋난다
@@ -198,7 +198,66 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             catalogItems.name
           )
           .limit(SKILL_LIMIT),
+
+        // 5. 기원 분해 — 로드·적용이 같은 흐름(journey, 없으면 session)의 앞선 검색·로드와 이어졌는지.
+        //    검색 요청 수는 결과 줄마다 한 행인 skill_events 대신 요청마다 한 행인 감사 로그에서 센다.
+        //    흐름 ID가 없는 이벤트는 판정 불가라 unlinkable로 따로 둔다.
+        db.execute(sql`
+          WITH loads AS (
+            SELECT e.skill_id, COALESCE(e.journey_id, e.session_id) AS flow_id, e.created_at
+            FROM skill_events e
+            INNER JOIN catalog_items c ON c.id = e.skill_id
+            WHERE e.action = 'load' AND e.created_at >= ${since}
+          ), applies AS (
+            SELECT e.skill_id, COALESCE(e.journey_id, e.session_id) AS flow_id, e.created_at
+            FROM skill_events e
+            INNER JOIN catalog_items c ON c.id = e.skill_id
+            WHERE e.action = 'apply' AND e.created_at >= ${since}
+          ), load_origin AS (
+            SELECT CASE
+              WHEN flow_id IS NULL THEN 'unlinkable'
+              WHEN EXISTS (
+                SELECT 1 FROM skill_events s
+                WHERE COALESCE(s.journey_id, s.session_id) = loads.flow_id
+                  AND s.skill_id = loads.skill_id AND s.action = 'search'
+                  AND s.created_at <= loads.created_at
+              ) THEN 'from_search'
+              ELSE 'direct' END AS origin
+            FROM loads
+          ), apply_origin AS (
+            SELECT CASE
+              WHEN flow_id IS NULL THEN 'unlinkable'
+              WHEN EXISTS (
+                SELECT 1 FROM skill_events s
+                WHERE COALESCE(s.journey_id, s.session_id) = applies.flow_id
+                  AND s.skill_id = applies.skill_id AND s.action = 'search'
+                  AND s.created_at <= applies.created_at
+              ) THEN 'from_search'
+              WHEN EXISTS (
+                SELECT 1 FROM skill_events l
+                WHERE COALESCE(l.journey_id, l.session_id) = applies.flow_id
+                  AND l.skill_id = applies.skill_id AND l.action = 'load'
+                  AND l.created_at <= applies.created_at
+              ) THEN 'after_direct_load'
+              ELSE 'without_load' END AS origin
+            FROM applies
+          )
+          SELECT
+            (SELECT count(*)::int FROM mcp_audit_logs
+              WHERE tool IN ('search_plugins', 'semantic_search')
+                AND response_status = 'success'
+                AND created_at >= ${since}) AS search_requests,
+            (SELECT count(*)::int FROM load_origin WHERE origin = 'from_search') AS loads_from_search,
+            (SELECT count(*)::int FROM load_origin WHERE origin = 'direct') AS loads_direct,
+            (SELECT count(*)::int FROM load_origin WHERE origin = 'unlinkable') AS loads_unlinkable,
+            (SELECT count(*)::int FROM apply_origin WHERE origin = 'from_search') AS applies_from_search,
+            (SELECT count(*)::int FROM apply_origin WHERE origin = 'after_direct_load') AS applies_after_direct_load,
+            (SELECT count(*)::int FROM apply_origin WHERE origin = 'without_load') AS applies_without_load,
+            (SELECT count(*)::int FROM apply_origin WHERE origin = 'unlinkable') AS applies_unlinkable
+        `),
       ])
+
+      const originRow = ((originResult as { rows?: Record<string, unknown>[] } | null)?.rows ?? [])[0] ?? {}
 
       const skills: AxSkillUsageRow[] = skillRows
         .map((row) => ({
@@ -234,6 +293,20 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             apply: applied,
             skip: num(totals?.skipped),
             deploy: num(totals?.deployed),
+          },
+          origins: {
+            searchRequests: num(originRow.search_requests),
+            loads: {
+              fromSearch: num(originRow.loads_from_search),
+              direct: num(originRow.loads_direct),
+              unlinkable: num(originRow.loads_unlinkable),
+            },
+            applies: {
+              fromSearch: num(originRow.applies_from_search),
+              afterDirectLoad: num(originRow.applies_after_direct_load),
+              withoutLoad: num(originRow.applies_without_load),
+              unlinkable: num(originRow.applies_unlinkable),
+            },
           },
           skills,
           daily: fillMissingDays(
