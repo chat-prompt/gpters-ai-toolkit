@@ -355,6 +355,11 @@ describe('AxDashboard 패널 요청', () => {
       activeUsers: 6,
       sessions: 5,
       actionTotals: { search: 10, load: 20, apply: 65, skip: 4, deploy: 1 },
+      origins: {
+        searchRequests: 4,
+        loads: { fromSearch: 6, direct: 4, unlinkable: 10 },
+        applies: { fromSearch: 20, afterDirectLoad: 10, withoutLoad: 15, unlinkable: 20 },
+      },
       skills: [],
       daily: [
         { date: '2026-08-30', events: 20 },
@@ -471,7 +476,7 @@ describe('AxDashboard 패널 요청', () => {
     expect(screen.queryByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeNull()
     expect(screen.queryByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeNull()
     expect(screen.getByLabelText('일별 스킬 활동 범례')).toBeTruthy()
-    const eventSummary = screen.getByLabelText('검색 노출 10건 · 전체 이벤트 중 10.0%')
+    const eventSummary = screen.getByLabelText(/^검색 요청 4건/)
     const dailyChartTitle = screen.getByText('일별 스킬 활동')
     expect(eventSummary.compareDocumentPosition(dailyChartTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // 전환율 분모는 전체 로드가 아니라 연결 가능한 로드이고, 그 몫을 차트 위에 먼저 적는다.
@@ -547,6 +552,11 @@ describe('AxDashboard 패널 요청', () => {
     const legacySkill: AxSkillUsageData = {
       totalEvents: 10, meaningfulUses: 4, activeUsers: 2, sessions: 1,
       actionTotals: { search: 4, load: 2, apply: 4, skip: 0, deploy: 0 },
+      origins: {
+        searchRequests: 2,
+        loads: { fromSearch: 1, direct: 1, unlinkable: 0 },
+        applies: { fromSearch: 1, afterDirectLoad: 1, withoutLoad: 2, unlinkable: 0 },
+      },
       skills: [], daily: [], totalUnusedSkills: 0, unusedSkills: [],
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
