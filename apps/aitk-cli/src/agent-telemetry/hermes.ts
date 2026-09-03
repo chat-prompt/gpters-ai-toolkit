@@ -33,6 +33,8 @@ const SKILL_VIEW_TOOL = 'skill_view'
 // 서버 계약(packages/lib/src/features/ax/agent-telemetry-contract.ts의 safeId)과 같은 규칙.
 // 여기서 거르지 않으면 서버가 400을 돌려주고 pending batch가 영구 재시도에 빠진다.
 const SAFE_SKILL_ID = /^[a-z0-9][a-z0-9._:-]{0,99}$/
+// 존재하지 않는 스킬을 연 실패 호출은 이름 대신 이 값으로 센다. 실패한 이름은 카탈로그 식별자라는 보장이 없다.
+const UNKNOWN_SKILL_ID = 'unknown-skill'
 
 const REQUIRED_SESSION_COLUMNS = [
   'id', 'model', 'last_activity_at', 'input_tokens', 'output_tokens',
@@ -343,6 +345,8 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
     const parsedCalls = new Map<string, ParsedToolCall[] | null>()
     const callDirectory = new Map<string, DirectoryEntry>()
     const failedCalls = new Set<string>()
+    // 결과 행이 중복으로 들어와도 스킬 로드를 한 번만 세기 위한 호출 단위 확정 표시
+    const confirmedCalls = new Set<string>()
     for (const row of messageRows) {
       const sessionIdentity = rawIdentity(row.session_id)
       const messageIdentity = rawIdentity(row.id)
@@ -494,12 +498,17 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
         batchSeen.add(resultHash)
         retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
         // 스킬 로드는 결과가 도착한 시점에 확정한다 (OpenClaw와 같은 규칙). 결과가 아직 없는 호출은 세지 않고,
-        // 결과가 다음 수집 창에 들어오면 그때 센다. 결과 행은 자체 해시로 중복 제거되므로 두 번 세지 않는다.
-        if (call.skillId) {
-          const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
-          if (isFailedResult(row)) skill.failed++
+        // 결과가 다음 수집 창에 들어오면 그때 센다. 한 호출에 결과 행이 여러 개 와도 호출 해시로 한 번만 센다.
+        if (call.skillId && !confirmedCalls.has(callHash)) {
+          confirmedCalls.add(callHash)
+          const failed = isFailedResult(row)
+          // 실패한 로드의 이름은 존재하지 않는 스킬일 수 있어 그대로 보내지 않는다. 성공한 로드만 실제 SKILL.md가
+          // 있었다는 뜻이므로 카탈로그 식별자로 신뢰한다.
+          const skillId = failed ? UNKNOWN_SKILL_ID : call.skillId
+          const skill = skillMetrics.get(skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+          if (failed) skill.failed++
           else skill.loaded++
-          skillMetrics.set(call.skillId, skill)
+          skillMetrics.set(skillId, skill)
         }
         sessions.add(info.hash)
         collection.includedRecords++

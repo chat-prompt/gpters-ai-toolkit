@@ -195,10 +195,12 @@ describe('collectHermesAgent', () => {
 
     const result = await collectSkills()
 
+    // 실패한 로드는 존재하지 않는 스킬일 수 있어 이름 대신 unknown-skill로 센다
     expect(result.skillLoads).toEqual([
       { skillId: 'axolotl', loaded: 1, failed: 0, interrupted: 0 },
-      { skillId: 'humanizer', loaded: 1, failed: 1, interrupted: 0 },
+      { skillId: 'humanizer', loaded: 1, failed: 0, interrupted: 0 },
       { skillId: 'openclaw-skills:session-cleanup', loaded: 1, failed: 0, interrupted: 0 },
+      { skillId: 'unknown-skill', loaded: 0, failed: 1, interrupted: 0 },
     ])
     for (const load of result.skillLoads) expect(load.skillId).toMatch(/^[a-z0-9][a-z0-9._:-]*$/)
     expect(result.tools.find((tool) => tool.name === 'skill_view')).toEqual({ name: 'skill_view', calls: 8, failures: 1 })
@@ -228,6 +230,20 @@ describe('collectHermesAgent', () => {
 
     const third = await collectSkills(second.nextCommitted)
     expect(third.skillLoads).toEqual([])
+  })
+
+  it('한 호출에 결과 행이 여러 개 와도 스킬 로드를 한 번만 센다', async () => {
+    const insert = insertMessage()
+    insert([30, 'session-secret', 'assistant', 'private', null, JSON.stringify([
+      { id: 'skill-dup', function: { name: 'skill_view', arguments: { name: 'browse' } } },
+    ]), null, null, epoch('2026-08-26T04:00:00Z'), null, null])
+    insert([31, 'session-secret', 'tool', 'result one', 'skill-dup', null, 'skill_view', null,
+      epoch('2026-08-26T04:00:01Z'), null, null])
+    insert([32, 'session-secret', 'tool', 'result two', 'skill-dup', null, 'skill_view', null,
+      epoch('2026-08-26T04:00:02Z'), null, null])
+
+    const result = await collectSkills()
+    expect(result.skillLoads).toEqual([{ skillId: 'browse', loaded: 1, failed: 0, interrupted: 0 }])
   })
 
   it('같은 DB의 다른 Hermes 프로필 세션과 메시지를 집계에서 제외한다', async () => {
