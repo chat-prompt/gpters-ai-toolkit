@@ -101,10 +101,10 @@ function MemberUsageTable({
                     }}
                   />
                   <span className="relative text-[var(--text-primary)]">{row.name}</span>
-                  {/* 힌트는 막대 끝 바로 오른쪽에 붙인다. 막대가 길어 칸을 넘치면 칸 안쪽 끝에서 멈춘다 */}
+                  {/* 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다 */}
                   <span
                     className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm ${highlightedIndex === index ? 'block' : 'hidden'}`}
-                    style={{ left: `min(calc(${(row.applied / max) * 100}% + 0.5rem), calc(100% - 9rem))` }}
+                    style={{ left: `calc(${(row.applied / max) * 100}% + 0.5rem)` }}
                   >
                     로드 {formatCount(row.loaded)} · 적용 {formatCount(row.applied)}
                   </span>

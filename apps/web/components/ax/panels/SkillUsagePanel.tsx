@@ -206,9 +206,9 @@ function SkillTable({
                   <span className="relative text-[var(--text-primary)]">{skill.name}</span>
                   {highlightedSkillId === skill.skillId && (
                     <span
-                      // 힌트는 막대 끝 바로 오른쪽에 붙인다. 막대가 길어 칸을 넘치면 칸 안쪽 끝에서 멈춘다
+                      // 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다
                       className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm"
-                      style={{ left: `min(calc(${(activity(skill) / max) * 100}% + 0.5rem), calc(100% - 13rem))` }}
+                      style={{ left: `calc(${(activity(skill) / max) * 100}% + 0.5rem)` }}
                     >
                       적용 {formatCount(skill.applied)}건 · 전체 적용 중 {formatRate(skill.applied, totalApplied)}
                     </span>
