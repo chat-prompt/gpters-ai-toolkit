@@ -138,6 +138,50 @@ describe('collectHermesAgent', () => {
     expect(accounted).toBe(result.collection.recordsRead)
   })
 
+  it('skill_view가 SKILL.md를 연 호출만 스킬 이름으로 세고 다른 인자는 읽지 않는다', async () => {
+    const database = new DatabaseSync(databasePath)
+    const insert = database.prepare(`
+      INSERT INTO messages (
+        id, session_id, role, content, tool_call_id, tool_calls, tool_name,
+        effect_disposition, timestamp, finish_reason, display_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    insert.run(10, 'session-secret', 'assistant', 'private', null, JSON.stringify([
+      // 본문 로드 — 인자가 객체
+      { id: 'skill-1', function: { name: 'skill_view', arguments: { name: 'openclaw-skills:session-cleanup' } } },
+      // 본문 로드 — 인자가 JSON 문자열 (OpenAI 형식)
+      { id: 'skill-2', function: { name: 'skill_view', arguments: '{"name":"humanizer"}' } },
+      // 링크 파일 열람은 로드가 아니다
+      { id: 'skill-3', function: { name: 'skill_view', arguments: { name: 'humanizer', file_path: 'references/tone.md' } } },
+      // 실패한 로드
+      { id: 'skill-4', function: { name: 'skill_view', arguments: { name: 'humanizer' } } },
+      // 경로처럼 생긴 이름은 버린다
+      { id: 'skill-5', function: { name: 'skill_view', arguments: { name: '/Users/person/private/SKILL.md' } } },
+      // skill_view가 아닌 도구의 인자는 스킬로 읽지 않는다
+      { id: 'skill-6', function: { name: 'read_file', arguments: { name: 'humanizer', path: '/Users/person/private' } } },
+    ]), null, null, epoch('2026-08-26T02:00:00Z'), null, null)
+    insert.run(11, 'session-secret', 'tool', 'private failure', 'skill-4', null, 'skill_view', 'failed',
+      epoch('2026-08-26T02:00:01Z'), 'error', null)
+    database.close()
+
+    const result = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: START, end: END },
+      committed: committed(),
+      category: 'general',
+      source: 'hermes',
+    })
+
+    expect(result.skillLoads).toEqual([
+      { skillId: 'humanizer', loaded: 1, failed: 1, interrupted: 0 },
+      { skillId: 'openclaw-skills:session-cleanup', loaded: 1, failed: 0, interrupted: 0 },
+    ])
+    expect(result.tools.find((tool) => tool.name === 'skill_view')).toEqual({ name: 'skill_view', calls: 5, failures: 1 })
+    expect(JSON.stringify(result)).not.toContain('/Users/person')
+    expect(JSON.stringify(result)).not.toContain('references/tone.md')
+  })
+
   it('같은 DB의 다른 Hermes 프로필 세션과 메시지를 집계에서 제외한다', async () => {
     const database = new DatabaseSync(databasePath)
     database.prepare(`

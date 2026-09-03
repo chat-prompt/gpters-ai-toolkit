@@ -62,3 +62,16 @@ aitk agent-telemetry install \
 default 프로필에서 사람의 로컬 Hermes 작업도 수행한다면 그 세션 역시 같은 default 범위로
 집계된다. 플랫폼 메타데이터로 안정적으로 구분할 수 없는 DB에서는 default 프로필 전체를 해당
 에이전트의 활동으로 볼 수 있을 때만 설치한다.
+
+## 스킬 로드 신호 (2026-09-03)
+
+Hermes는 `skill_view(name, file_path?)` 도구로 SKILL.md를 연다. 수집기는 이 호출을 스킬 로드로 센다.
+
+- 도구 인자를 읽지 않는 원칙의 **유일한 예외**는 `skill_view`의 `name`이다. 스킬 이름은 카탈로그
+  식별자이며(`plugin:skill` 형태 포함) 개인 데이터가 아니다. 다른 도구의 인자와 `skill_view`의
+  다른 인자 값은 여전히 읽지 않는다.
+- `file_path`가 있으면 링크 파일(references·templates·scripts) 열람이라 로드로 세지 않는다.
+  값은 읽지 않고 존재 여부만 본다.
+- 이름이 라벨 규칙(경로·이메일·토큰 금지, 120자 이내)에 어긋나면 버린다.
+- 같은 호출의 tool 결과가 실패로 표시되면 `failed`, 아니면 `loaded`로 센다. 서버 소스 능력표의
+  Hermes `skills`는 `true`다.

@@ -213,8 +213,8 @@ describe('agentActivityPanel', () => {
       models: [{ model: 'hermes-3', turns: 4, usage: {
         ...usage(10, 20, 30, 40, 8), thinkingTokensRelation: 'unknown',
       } }],
-      tools: [{ name: 'shell', calls: 3, failures: 1 }],
-      skillLoads: [],
+      tools: [{ name: 'shell', calls: 3, failures: 1 }, { name: 'skill_view', calls: 2, failures: 0 }],
+      skillLoads: [{ skillId: 'internal-comms', loaded: 2, failed: 0, interrupted: 0 }],
       collection: { source: 'hermes', recordsRead: 100, parseFailures: 0, unsupportedRecordsSkipped: 0, healthWarnings: [] },
     })], [{
       agentId: 'bbokeoter',
@@ -227,12 +227,12 @@ describe('agentActivityPanel', () => {
     const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
     expect(result.data!.reporters[0]).toMatchObject({ agentId: 'bbokeoter', source: 'hermes' })
     expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')).toMatchObject({
-      status: 'reporting', capabilities: { usage: true, tools: true, skills: false },
+      status: 'reporting', capabilities: { usage: true, tools: true, skills: true },
     })
     expect(result.data!.totalProcessedTokens).toBe(100)
     expect(result.data!.agents[0]).toMatchObject({
-      uniqueLoadedSkills: 0,
-      skillLoadsObserved: false,
+      uniqueLoadedSkills: 1,
+      skillLoadsObserved: true,
       verifiedExecutions: expect.objectContaining({
         attempts: 1,
         success: 1,

@@ -255,7 +255,7 @@ function SkillImpactSummary({ scope, available }: { scope: ActivityScope; availa
         <Metric
           label="고유 로드 스킬"
           value={scope.skillLoadsObserved ? `${formatCount(scope.uniqueLoadedSkills)}개` : '미관측'}
-          explanation="에이전트 텔레메트리에서 실제 로드가 관측된 서로 다른 스킬 수입니다. Hermes·Codex처럼 이 신호를 제공하지 않는 소스는 0으로 표시하지 않습니다."
+          explanation="에이전트 텔레메트리에서 실제 로드가 관측된 서로 다른 스킬 수입니다. Codex처럼 이 신호를 제공하지 않는 소스는 0으로 표시하지 않습니다."
         />
         <Metric
           label="검증 완료 스킬"
