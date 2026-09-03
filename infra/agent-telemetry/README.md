@@ -23,7 +23,8 @@ local paths.
   fallback around unrelated sibling SQLite files, requires 0.7.2 or newer.
   Sessionless skill journey linking requires 0.7.3 or newer.
   Hermes skill-load counting (skill_view) requires 0.7.5 or newer, and
-  `agent-telemetry upgrade` requires 0.7.6 or newer.
+  `agent-telemetry upgrade` requires 0.7.6 or newer (0.7.7 for the atomic plist
+  swap and pending-batch guard).
   Internal agents install the CLI from an approved repository commit with
   `install-from-repo.sh`; publishing a new npm package is not required.
 - Node.js and Corepack/pnpm. If Bun is not already installed, the repo
@@ -171,8 +172,13 @@ running at install time (`share/gpters-aitk/<version>/aitk.js`), so replacing
 the `aitk` wrapper alone leaves the scheduled job on the old version — batches
 keep reporting the old `collectorVersion`. `upgrade` re-points the record and
 plist to the running CLI, keeps the collector ID, credential, checkpoint, and
-interval, and reloads launchd. `doctor` reports `cliUpToDate=false` (and
-`ok=false`) while the record still points at another CLI. The dashboard
+interval, and reloads launchd. It replaces the plist and reloads launchd before
+committing the record, so an interrupted upgrade leaves the old record and the
+next run repairs it. A pending (unsent) batch blocks the upgrade — run
+`agent-telemetry run` first so the health gate can actually re-read the source.
+`doctor` reports `cliUpToDate=false` while the record points at another CLI and
+`scheduleMatchesRecord=false` while the installed plist differs from the
+record; either makes `ok=false`. The dashboard
 differentiates a registered collector waiting for its first batch, a healthy
 reporter, a stale reporter, and a health-blocked reporter.
 

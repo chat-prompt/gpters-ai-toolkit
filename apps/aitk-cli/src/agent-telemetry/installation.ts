@@ -325,6 +325,27 @@ ${renderedArgs}
 `
 }
 
+/**
+ * 이미 설치된 launchd plist가 이 설치 기록과 같은 내용인지.
+ *
+ * 설치 기록만 보고 "최신"이라고 판단하면, 기록을 쓴 뒤 plist 교체 전에 중단된 상태를 영영 고치지 못한다.
+ * 읽을 수 없으면 불일치로 본다 — 다시 쓰는 쪽이 안전하다.
+ */
+export function launchdPlistMatches(installation: AgentTelemetryInstallation): boolean {
+  if (installation.schedule.provider !== 'launchd' || !installation.schedule.plistPath) return false
+  try {
+    return readFileSync(installation.schedule.plistPath, 'utf8') === renderLaunchdPlist(installation)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * plist를 원자적으로 교체하고 launchd에 다시 등록한다.
+ *
+ * lint는 임시 파일에서 먼저 수행해 살아 있는 plist를 건드리기 전에 실패한다. 등록에 실패하면 이전 plist
+ * 원문과 job을 되돌려, 기록과 실제 예약이 어긋난 채 남지 않게 한다.
+ */
 export function installLaunchdSchedule(
   installation: AgentTelemetryInstallation,
   runner: CommandRunner = defaultCommandRunner,
@@ -334,19 +355,47 @@ export function installLaunchdSchedule(
     throw new Error('Installation is not configured for launchd')
   }
   if (uid < 0) throw new Error('Could not determine the current user ID for launchd')
-  mkdirSync(dirname(installation.schedule.plistPath), { recursive: true })
+  const plistPath = installation.schedule.plistPath
+  mkdirSync(dirname(plistPath), { recursive: true })
   mkdirSync(dirname(installation.schedule.stdoutPath), { recursive: true, mode: 0o700 })
-  const temporary = `${installation.schedule.plistPath}.${process.pid}.tmp`
-  writeFileSync(temporary, renderLaunchdPlist(installation), { encoding: 'utf8', mode: 0o600 })
-  renameSync(temporary, installation.schedule.plistPath)
-  chmodSync(installation.schedule.plistPath, 0o600)
 
-  const lint = runner('/usr/bin/plutil', ['-lint', installation.schedule.plistPath])
-  if (lint.status !== 0) throw new Error('Generated launchd plist failed validation')
+  let previousPlist: string | null = null
+  try {
+    previousPlist = readFileSync(plistPath, 'utf8')
+  } catch {
+    previousPlist = null
+  }
+
+  const temporary = `${plistPath}.${process.pid}.tmp`
+  writeFileSync(temporary, renderLaunchdPlist(installation), { encoding: 'utf8', mode: 0o600 })
+  const lint = runner('/usr/bin/plutil', ['-lint', temporary])
+  if (lint.status !== 0) {
+    try {
+      unlinkSync(temporary)
+    } catch {
+      // 임시 파일이 이미 없으면 그대로 둔다
+    }
+    throw new Error('Generated launchd plist failed validation')
+  }
+  renameSync(temporary, plistPath)
+  chmodSync(plistPath, 0o600)
+
   const domain = `gui/${uid}`
-  runner('/bin/launchctl', ['bootout', domain, installation.schedule.plistPath])
-  const bootstrap = runner('/bin/launchctl', ['bootstrap', domain, installation.schedule.plistPath])
-  if (bootstrap.status !== 0) throw new Error('Failed to register agent telemetry launchd job')
+  runner('/bin/launchctl', ['bootout', domain, plistPath])
+  const bootstrap = runner('/bin/launchctl', ['bootstrap', domain, plistPath])
+  if (bootstrap.status !== 0) {
+    if (previousPlist === null) {
+      try {
+        unlinkSync(plistPath)
+      } catch {
+        // 되돌릴 이전 파일이 없고 삭제도 못 하면 그대로 두고 오류만 올린다
+      }
+    } else {
+      writeFileSync(plistPath, previousPlist, { encoding: 'utf8', mode: 0o600 })
+      runner('/bin/launchctl', ['bootstrap', domain, plistPath])
+    }
+    throw new Error('Failed to register agent telemetry launchd job')
+  }
 }
 
 export function launchdScheduleLoaded(

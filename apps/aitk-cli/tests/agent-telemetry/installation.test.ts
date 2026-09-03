@@ -1,11 +1,12 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   agentTelemetryInstallPath,
   createInstallation,
   installLaunchdSchedule,
+  launchdPlistMatches,
   readAgentTelemetryInstallation,
   renderLaunchdPlist,
   writeAgentTelemetryInstallation,
@@ -106,6 +107,48 @@ describe('agent telemetry installation', () => {
 
     expect(calls.map(([, args]) => args[0])).toEqual(['-lint', 'bootout', 'bootstrap'])
     expect(calls[2][1]).toContain('gui/501')
+  })
+
+  function seedPlist(path: string, content: string): void {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, content, 'utf8')
+  }
+
+  it('plist lint가 실패하면 살아 있는 plist를 건드리지 않는다', () => {
+    const value = installation()
+    seedPlist(value.schedule.plistPath!, '<previous/>')
+    const runner: CommandRunner = (command) =>
+      command === '/usr/bin/plutil' ? { status: 1, stdout: '', stderr: 'bad plist' } : { status: 0, stdout: '', stderr: '' }
+
+    expect(() => installLaunchdSchedule(value, runner, 501)).toThrow('failed validation')
+    expect(readFileSync(value.schedule.plistPath!, 'utf8')).toBe('<previous/>')
+  })
+
+  it('launchd 등록이 실패하면 이전 plist를 되돌리고 옛 job을 다시 올린다', () => {
+    const value = installation()
+    seedPlist(value.schedule.plistPath!, '<previous/>')
+    const calls: Array<[string, string[]]> = []
+    const runner: CommandRunner = (command, args) => {
+      calls.push([command, args])
+      if (command === '/bin/launchctl' && args[0] === 'bootstrap' && calls.filter((call) => call[1][0] === 'bootstrap').length === 1) {
+        return { status: 5, stdout: '', stderr: 'bootstrap failed' }
+      }
+      return { status: 0, stdout: '', stderr: '' }
+    }
+
+    expect(() => installLaunchdSchedule(value, runner, 501)).toThrow('Failed to register')
+    expect(readFileSync(value.schedule.plistPath!, 'utf8')).toBe('<previous/>')
+    // 되돌린 plist로 옛 job을 다시 올린다
+    expect(calls.filter((call) => call[1][0] === 'bootstrap')).toHaveLength(2)
+  })
+
+  it('설치된 plist가 기록과 같은 내용인지 판정한다', () => {
+    const value = installation()
+    expect(launchdPlistMatches(value)).toBe(false)
+    seedPlist(value.schedule.plistPath!, renderLaunchdPlist(value))
+    expect(launchdPlistMatches(value)).toBe(true)
+    seedPlist(value.schedule.plistPath!, '<stale/>')
+    expect(launchdPlistMatches(value)).toBe(false)
   })
 
   it('손상된 설정은 범위를 추정하지 않고 fail-closed한다', () => {

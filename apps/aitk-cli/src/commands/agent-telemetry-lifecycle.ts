@@ -1,8 +1,9 @@
 /** 설치형 agent telemetry collector의 install/upgrade/doctor/status/run/uninstall 명령. */
 
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+import { readAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
 import { resolveToken } from '../auth.js'
 import { readConfig } from '../config.js'
 import {
@@ -11,6 +12,7 @@ import {
   deleteAgentTelemetryInstallation,
   deleteMacOSKeychainCredential,
   installLaunchdSchedule,
+  launchdPlistMatches,
   launchdScheduleLoaded,
   readAgentTelemetryInstallation,
   readMacOSKeychainCredential,
@@ -22,7 +24,7 @@ import {
 } from '../agent-telemetry/installation.js'
 import type { AgentTelemetrySource } from '../agent-telemetry/types.js'
 import { error, jsonOut } from '../output.js'
-import { runAgentTelemetryCollect } from './agent-telemetry.js'
+import { checkpointName, runAgentTelemetryCollect } from './agent-telemetry.js'
 
 const SOURCES = new Set<AgentTelemetrySource>(['openclaw', 'claude-code', 'codex', 'hermes'])
 const COLLECTOR_TOKEN = /^agt_[a-f0-9]{64}$/
@@ -79,14 +81,36 @@ export interface AgentTelemetryCliIdentity {
   nodePath?: string
 }
 
+/**
+ * 같은 파일을 가리키는 두 경로인지. symlink나 경로 별칭으로 실행하면 문자열 비교만으로는 다르게 보인다.
+ * 실경로를 못 읽으면 문자열 비교로 되돌린다.
+ */
+function samePath(left: string, right: string): boolean {
+  if (left === right) return true
+  try {
+    return realpathSync.native(left) === realpathSync.native(right)
+  } catch {
+    return false
+  }
+}
+
 /** 설치 기록의 CLI 경로·버전이 지금 실행 중인 CLI와 같은지. 설치 뒤 CLI만 새로 깔면 launchd는 계속 옛 파일을 실행한다. */
 function cliMatchesInstallation(installation: AgentTelemetryInstallation, identity: AgentTelemetryCliIdentity): boolean {
   const scriptPath = resolve(identity.cliScriptPath ?? process.argv[1] ?? '')
   const nodePath = resolve(identity.nodePath ?? process.execPath)
   const version = identity.collectorVersion ?? installation.cli.collectorVersion
-  return installation.cli.scriptPath === scriptPath &&
-    installation.cli.nodePath === nodePath &&
+  return samePath(installation.cli.scriptPath, scriptPath) &&
+    samePath(installation.cli.nodePath, nodePath) &&
     installation.cli.collectorVersion === version
+}
+
+/** 기록과 실제 예약이 모두 최신인지. 기록만 최신이고 plist가 옛것이면 고칠 것이 남아 있다. */
+function installationFullyUpToDate(
+  installation: AgentTelemetryInstallation,
+  identity: AgentTelemetryCliIdentity
+): boolean {
+  if (!cliMatchesInstallation(installation, identity)) return false
+  return installation.schedule.provider !== 'launchd' || launchdPlistMatches(installation)
 }
 
 function source(value: string): AgentTelemetrySource {
@@ -149,6 +173,25 @@ async function revokeCollector(installation: AgentTelemetryInstallation, userTok
   }
   const body = await parseResponse<RevokeResponse>(response)
   if (!response.ok || body.ok !== true) throw new Error(body.error ?? `Collector revocation HTTP ${response.status}`)
+}
+
+/**
+ * 아직 서버로 보내지 못한 batch가 checkpoint에 남아 있는지.
+ *
+ * pending이 있으면 collect는 새로 수집하지 않고 그 batch를 그대로 돌려준다. 그래서 upgrade의 health gate가
+ * 새 CLI로 source를 실제로 읽었는지 확인할 수 없다.
+ */
+async function hasPendingBatch(installation: AgentTelemetryInstallation): Promise<boolean> {
+  // 파일 이름 규칙은 collect와 같아야 한다 — slug은 중복 제거 후 정렬한다.
+  const projectSlugs = installation.projectSlugs
+    ? [...new Set(installation.projectSlugs.split(',').map((slug) => slug.trim()))].sort()
+    : undefined
+  const path = join(
+    installation.checkpointDir,
+    checkpointName(installation.agentId, installation.source, projectSlugs, installation.hermesProfile)
+  )
+  const checkpoint = await readAgentTelemetryCheckpoint(path)
+  return Boolean(checkpoint?.pending)
 }
 
 function collectOptions(installation: AgentTelemetryInstallation, dryRun: boolean, token?: string, now?: Date) {
@@ -316,7 +359,8 @@ export async function runAgentTelemetryUpgrade(
 
   const previous = { ...installation.cli }
   const identity = { collectorVersion: options.collectorVersion, cliScriptPath: scriptPath, nodePath }
-  if (cliMatchesInstallation(installation, identity)) {
+  // 기록과 plist가 모두 최신일 때만 할 일이 없다. 기록만 최신이면 plist를 다시 써서 중단된 업그레이드를 고친다.
+  if (installationFullyUpToDate(installation, identity)) {
     jsonOut({
       ok: true,
       upgraded: false,
@@ -333,24 +377,25 @@ export async function runAgentTelemetryUpgrade(
     ...installation,
     cli: { nodePath, scriptPath, collectorVersion: options.collectorVersion },
   }
+  // 미전송 batch가 남아 있으면 dry-run이 그 batch를 그대로 돌려주므로 새 CLI가 source를 읽는지 확인할 수 없다.
+  if (await hasPendingBatch(upgraded)) {
+    error('A pending telemetry batch exists; run `agent-telemetry run` to flush it before upgrading')
+  }
+
   // 새 CLI로 source를 다시 읽을 수 있는지 먼저 확인한다. 전송·checkpoint 변경은 없다.
   const dryRun = await runAgentTelemetryCollect(collectOptions(upgraded, true, undefined, options.now))
   if (dryRun.batch.collection.healthStatus !== 'healthy') {
     error(`Telemetry source validation is blocked: ${dryRun.batch.collection.healthWarnings.join(', ')}`)
   }
 
-  writeAgentTelemetryInstallation(upgraded, options.home)
+  // plist·launchd를 먼저 바꾸고 설치 기록을 마지막에 커밋한다. 그 사이에 중단되면 기록이 옛 상태로 남아
+  // 다음 실행이 다시 업그레이드를 시도한다. 반대 순서로 하면 no-op으로 판정돼 스스로 복구하지 못한다.
   let scheduleReloaded = false
   if (upgraded.schedule.provider === 'launchd') {
-    try {
-      installLaunchdSchedule(upgraded, runner, options.uid)
-      scheduleReloaded = true
-    } catch (cause) {
-      // 예약 갱신에 실패하면 설치 기록을 되돌려 옛 plist와 기록이 어긋나지 않게 한다.
-      writeAgentTelemetryInstallation(installation, options.home)
-      throw cause
-    }
+    installLaunchdSchedule(upgraded, runner, options.uid)
+    scheduleReloaded = true
   }
+  writeAgentTelemetryInstallation(upgraded, options.home)
 
   jsonOut({
     ok: true,
@@ -374,8 +419,10 @@ export async function runAgentTelemetryDoctor(
   const runner = options.runner ?? defaultCommandRunner
   const sourceExists = existsSync(installation.sessionsDir)
   const cliExists = existsSync(installation.cli.scriptPath) && existsSync(installation.cli.nodePath)
-  // 설치 기록이 지금 실행 중인 CLI와 다르면 예약 수집은 옛 버전으로 돌고 있다. `agent-telemetry upgrade`로 맞춘다.
+  // 설치 기록이 지금 실행 중인 CLI와 다르거나 plist가 기록과 어긋나면 예약 수집은 옛 버전으로 돈다.
+  // `agent-telemetry upgrade`로 맞춘다.
   const cliUpToDate = cliMatchesInstallation(installation, options)
+  const scheduleMatchesRecord = installation.schedule.provider !== 'launchd' || launchdPlistMatches(installation)
   let credentialAvailable = false
   try {
     credentialAvailable = readMacOSKeychainCredential(installation, runner).length > 0
@@ -388,8 +435,8 @@ export async function runAgentTelemetryDoctor(
   const dryRun = sourceExists && cliExists
     ? await runAgentTelemetryCollect(collectOptions(installation, true, undefined, options.now))
     : null
-  const healthy = sourceExists && cliExists && cliUpToDate && credentialAvailable && scheduleLoaded !== false &&
-    dryRun?.batch.collection.healthStatus === 'healthy'
+  const healthy = sourceExists && cliExists && cliUpToDate && scheduleMatchesRecord && credentialAvailable &&
+    scheduleLoaded !== false && dryRun?.batch.collection.healthStatus === 'healthy'
 
   jsonOut({
     ok: healthy,
@@ -400,6 +447,7 @@ export async function runAgentTelemetryDoctor(
       sourceExists,
       cliExists,
       cliUpToDate,
+      scheduleMatchesRecord,
       installedCollectorVersion: installation.cli.collectorVersion,
       credentialAvailable,
       scheduleConfigured: installation.schedule.provider !== 'none',

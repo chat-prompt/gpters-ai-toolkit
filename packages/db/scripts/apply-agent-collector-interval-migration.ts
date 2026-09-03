@@ -7,18 +7,13 @@ import { drizzle } from 'drizzle-orm/neon-http'
 import { migrate } from 'drizzle-orm/neon-http/migrator'
 import { sql } from 'drizzle-orm'
 
-const PRODUCTION_CONFIRMATION = 'apply-ax-0034'
-const EXPECTED_DEFAULT = '3600'
+import {
+  type CollectorIntervalMigrationState,
+  validateCollectorIntervalAfterMigration,
+  validateCollectorIntervalBeforeMigration,
+} from '../src/migration/agent-collector-interval-guard'
 
-interface IntervalMigrationState {
-  actualProjectId: string | null
-  actualBranchId: string | null
-  migrationCount: number
-  hasCollectorTable: boolean
-  columnDefault: string | null
-  collectorRows: number
-  intervalHistogram: Array<{ intervalSeconds: number; count: number }>
-}
+const PRODUCTION_CONFIRMATION = 'apply-ax-0034'
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name)
@@ -44,13 +39,23 @@ function count(value: unknown): number {
   return typeof value === 'number' ? value : Number(value ?? 0)
 }
 
-async function inspect(db: ReturnType<typeof drizzle>): Promise<IntervalMigrationState> {
+async function inspect(
+  db: ReturnType<typeof drizzle>,
+  expectedProjectId: string,
+  expectedBranchId: string,
+  productionBranchId: string,
+  recoveryBranchId?: string,
+  expectedIntervalHistogram?: CollectorIntervalMigrationState['intervalHistogram'],
+): Promise<CollectorIntervalMigrationState> {
   const [identityResult, migrationResult, schemaResult, histogramResult] = await Promise.all([
     db.execute(sql`
       SELECT current_setting('neon.branch_id', true) AS branch_id,
              current_setting('neon.project_id', true) AS project_id
     `),
-    db.execute(sql`SELECT count(*)::int AS recorded_count FROM drizzle.__drizzle_migrations`),
+    db.execute(sql`
+      SELECT count(*)::int AS recorded_count, max(created_at)::text AS latest_created_at
+      FROM drizzle.__drizzle_migrations
+    `),
     db.execute(sql`
       SELECT to_regclass('public.ax_agent_telemetry_collectors') IS NOT NULL AS has_table,
              (SELECT column_default FROM information_schema.columns
@@ -63,6 +68,7 @@ async function inspect(db: ReturnType<typeof drizzle>): Promise<IntervalMigratio
     `),
   ])
   const identity = identityResult.rows[0] as Record<string, unknown>
+  const migrations = migrationResult.rows[0] as Record<string, unknown>
   const schema = schemaResult.rows[0] as Record<string, unknown>
   const histogram = (histogramResult.rows as Array<Record<string, unknown>>).map((row) => ({
     intervalSeconds: count(row.interval_seconds),
@@ -71,47 +77,31 @@ async function inspect(db: ReturnType<typeof drizzle>): Promise<IntervalMigratio
   return {
     actualProjectId: typeof identity.project_id === 'string' ? identity.project_id : null,
     actualBranchId: typeof identity.branch_id === 'string' ? identity.branch_id : null,
-    migrationCount: count((migrationResult.rows[0] as Record<string, unknown>).recorded_count),
+    expectedProjectId,
+    expectedBranchId,
+    productionBranchId,
+    recoveryBranchId,
+    migrationCount: count(migrations.recorded_count),
+    latestMigrationTimestamp: typeof migrations.latest_created_at === 'string'
+      ? migrations.latest_created_at
+      : null,
     hasCollectorTable: schema.has_table === true,
     columnDefault: typeof schema.column_default === 'string' ? schema.column_default : null,
-    collectorRows: histogram.reduce((sum, row) => sum + row.count, 0),
     intervalHistogram: histogram,
+    expectedIntervalHistogram,
   }
-}
-
-function validateBefore(state: IntervalMigrationState, expectedProjectId: string, expectedBranchId: string): string[] {
-  const errors: string[] = []
-  if (state.actualProjectId !== expectedProjectId) errors.push(`project mismatch: ${state.actualProjectId ?? 'unknown'}`)
-  if (state.actualBranchId !== expectedBranchId) errors.push(`branch mismatch: ${state.actualBranchId ?? 'unknown'}`)
-  if (!state.hasCollectorTable) errors.push('ax_agent_telemetry_collectors does not exist (0031 not applied)')
-  if (state.columnDefault !== null && state.columnDefault.includes(EXPECTED_DEFAULT)) {
-    errors.push('interval_seconds default is already 3600 (0034 already applied)')
-  }
-  return errors
-}
-
-function validateAfter(state: IntervalMigrationState, before: IntervalMigrationState): string[] {
-  const errors: string[] = []
-  if (!state.columnDefault || !state.columnDefault.includes(EXPECTED_DEFAULT)) {
-    errors.push(`interval_seconds default is ${state.columnDefault ?? 'null'}, expected ${EXPECTED_DEFAULT}`)
-  }
-  if (state.collectorRows !== before.collectorRows) errors.push('collector row count changed')
-  if (JSON.stringify(state.intervalHistogram) !== JSON.stringify(before.intervalHistogram)) {
-    errors.push('existing collector intervals changed; 0034 must only change the column default')
-  }
-  if (state.migrationCount !== before.migrationCount + 1) errors.push('expected exactly one new migration record')
-  return errors
 }
 
 function assertSafe(stage: string, errors: string[]): void {
   if (errors.length > 0) throw new Error(`${stage} blocked:\n- ${errors.join('\n- ')}`)
 }
 
-function summary(label: string, state: IntervalMigrationState): void {
+function summary(label: string, state: CollectorIntervalMigrationState): void {
   const histogram = state.intervalHistogram.map((row) => `${row.intervalSeconds}s×${row.count}`).join(', ') || 'none'
+  const rows = state.intervalHistogram.reduce((sum, row) => sum + row.count, 0)
   console.log(
     `${label}: branch=${state.actualBranchId ?? 'unknown'}, migrations=${state.migrationCount}, ` +
-      `default=${state.columnDefault ?? 'null'}, collectors=${state.collectorRows} (${histogram})`
+      `default=${state.columnDefault ?? 'null'}, collectors=${rows} (${histogram})`
   )
 }
 
@@ -134,9 +124,9 @@ async function main(): Promise<void> {
   }
 
   const db = drizzle(neon(databaseUrl))
-  const before = await inspect(db)
+  const before = await inspect(db, expectedProjectId, expectedBranchId, productionBranchId, recoveryBranchId)
   summary('AX 0034 preflight', before)
-  assertSafe('AX 0034 preflight', validateBefore(before, expectedProjectId, expectedBranchId))
+  assertSafe('AX 0034 preflight', validateCollectorIntervalBeforeMigration(before, production))
   if (!apply) {
     console.log(production
       ? `Ready. Re-run with --apply --confirm-production-migration ${PRODUCTION_CONFIRMATION}.`
@@ -146,9 +136,16 @@ async function main(): Promise<void> {
 
   const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url))
   await migrate(db, { migrationsFolder })
-  const after = await inspect(db)
+  const after = await inspect(
+    db,
+    expectedProjectId,
+    expectedBranchId,
+    productionBranchId,
+    recoveryBranchId,
+    before.intervalHistogram,
+  )
   summary('AX 0034 verification', after)
-  assertSafe('AX 0034 verification', validateAfter(after, before))
+  assertSafe('AX 0034 verification', validateCollectorIntervalAfterMigration(after, production))
   console.log('AX 0034 agent collector hourly default applied and verified.')
 }
 

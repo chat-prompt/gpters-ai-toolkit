@@ -228,6 +228,60 @@ describe('agent telemetry lifecycle commands', () => {
     expect(freshDoctor.checks).toMatchObject({ cliUpToDate: true, installedCollectorVersion: '0.7.6' })
   })
 
+  it('기록만 새 CLI이고 plist가 옛것이면 upgrade가 no-op하지 않고 plist를 다시 쓴다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.1',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath,
+      platform: 'darwin', keychainAccount: 'tester', uid: 501,
+    })
+    const installation = readAgentTelemetryInstallation('test-agent', 'openclaw', root)
+    const plistPath = installation.schedule.plistPath!
+    expect(readFileSync(plistPath, 'utf8')).toContain(cliPath)
+
+    // 업그레이드가 plist 교체 직후·기록 커밋 직전에 끊긴 상황: 기록은 새 CLI, plist는 옛 CLI
+    const newCliPath = join(root, 'aitk-new.js')
+    writeFileSync(newCliPath, '')
+    writeFileSync(
+      agentTelemetryInstallPath('test-agent', 'openclaw', root),
+      JSON.stringify({ ...installation, cli: { nodePath, scriptPath: newCliPath, collectorVersion: '0.7.6' } }),
+      { encoding: 'utf8', mode: 0o600 }
+    )
+
+    const later = { ...lifecycle(), uid: 501, now: new Date('2026-08-27T02:00:00Z') }
+    await runAgentTelemetryDoctor({ ...later, collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath })
+    const doctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { ok: boolean; checks: Record<string, unknown> }
+    expect(doctor.checks).toMatchObject({ cliUpToDate: true, scheduleMatchesRecord: false })
+    expect(doctor.ok).toBe(false)
+
+    await runAgentTelemetryUpgrade({
+      ...later, collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath, platform: 'darwin',
+    })
+    expect(vi.mocked(jsonOut).mock.calls.at(-1)?.[0]).toMatchObject({ ok: true, upgraded: true, scheduleReloaded: true })
+    expect(readFileSync(plistPath, 'utf8')).toContain(newCliPath)
+  })
+
+  it('upgrade는 미전송 batch가 남아 있으면 먼저 flush하라고 막는다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.1',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+    })
+    await runAgentTelemetryRun(lifecycle())
+    const checkpointPath = join(checkpointDir, 'test-agent-openclaw.json')
+    const checkpoint = JSON.parse(readFileSync(checkpointPath, 'utf8'))
+    checkpoint.pending = { batch: { batchId: 'pending-batch' }, nextCommitted: checkpoint.committed }
+    writeFileSync(checkpointPath, JSON.stringify(checkpoint), 'utf8')
+
+    const newCliPath = join(root, 'aitk-new.js')
+    writeFileSync(newCliPath, '')
+    await expect(runAgentTelemetryUpgrade({
+      ...lifecycle(), collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath, platform: 'darwin',
+      now: new Date('2026-08-27T02:00:00Z'),
+    })).rejects.toThrow('pending telemetry batch')
+    // 막혔으므로 기록은 그대로다
+    expect(readAgentTelemetryInstallation('test-agent', 'openclaw', root).cli.collectorVersion).toBe('0.7.1')
+  })
+
   it('서버 revoke가 실패해도 timer는 먼저 멈추고 재시도용 credential·config는 보존한다', async () => {
     await runAgentTelemetryInstall({
       ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.0',

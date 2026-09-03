@@ -56,16 +56,17 @@ const SOURCE_INFO: Record<AxAgentTelemetrySource, Omit<AxAgentSourceCoverageRow,
  */
 const SKILL_SIGNAL_MIN_VERSION: Partial<Record<AxAgentTelemetrySource, string>> = { hermes: '0.7.5' }
 
+/**
+ * `x.y.z` 정식 릴리스만 비교한다. prerelease(`0.7.5-beta`)나 형식이 어긋난 값은 아직 신호를 보장할 수 없으므로
+ * 최소 버전 미만으로 본다 — 없는 신호를 0으로 보여주는 쪽이 더 나쁘다.
+ */
 function versionAtLeast(actual: unknown, minimum: string): boolean {
-  if (typeof actual !== 'string') return false
+  if (typeof actual !== 'string' || !/^\d+\.\d+\.\d+$/.test(actual)) return false
   const parse = (value: string) => value.split('.').map((part) => Number.parseInt(part, 10))
   const a = parse(actual)
   const b = parse(minimum)
-  if (a.some((part) => !Number.isFinite(part))) return false
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const left = a[i] ?? 0
-    const right = b[i] ?? 0
-    if (left !== right) return left > right
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] > b[i]
   }
   return true
 }

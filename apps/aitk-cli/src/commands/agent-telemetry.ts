@@ -146,7 +146,8 @@ function resolveOpenClawAgent(source: AgentTelemetrySource, value: string | unde
   return value ? safeId(value.trim(), '--openclaw-agent') : undefined
 }
 
-function checkpointName(
+/** 설치 범위(project slugs / Hermes profile)마다 다른 checkpoint 파일 이름. lifecycle 명령도 같은 규칙을 써야 한다. */
+export function checkpointName(
   agentId: string,
   source: AgentTelemetrySource,
   projectSlugs: string[] | undefined,

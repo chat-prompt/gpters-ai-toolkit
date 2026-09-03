@@ -32,7 +32,7 @@
     "db:migrate:collector-interval-child": "tsx scripts/apply-agent-collector-interval-migration.ts",
     "db:migrate:collector-interval-production": "tsx scripts/apply-agent-collector-interval-migration.ts --production",
     "db:backfill:sessionless-skills": "tsx scripts/backfill-sessionless-skill-events.ts",
-    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts tests/sessionless-skill-events-guard.test.ts tests/skill-journey-guard.test.ts"
+    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts tests/sessionless-skill-events-guard.test.ts tests/skill-journey-guard.test.ts tests/agent-collector-interval-guard.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
