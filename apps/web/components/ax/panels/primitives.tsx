@@ -8,7 +8,7 @@
  * 열린 격자에 둔다. 새 패널을 만들거나 고칠 때는 여기 있는 조각부터 쓴다.
  */
 
-import { useCallback, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { formatCount } from '../format'
 
 /** 섹션 라벨 — 표 머리칸과 같은 모노 대문자 소형 텍스트 */
@@ -216,13 +216,14 @@ export function tipText(title: string, rows: TipRow[]): string {
   return [title, ...rows.map((row) => `${row.label} ${row.value}`)].join(' · ')
 }
 
-/** 툴팁 가로 절반 폭의 상한 — 컨테이너 가장자리에서 이만큼 안쪽으로 밀어 넣는다 */
-const TIP_HALF_WIDTH = 160
-
 /** 컨테이너 기준으로 계산한 데이터 포인트 툴팁 위치와 내용 */
 export interface PointTipState {
+  /** 포인트 가로 중심 (컨테이너 기준, 클램프 전) */
   left: number
+  /** 포인트 윗변 (컨테이너 기준) */
   top: number
+  /** 컨테이너 폭 — 툴팁이 넘칠 때만 이 안으로 민다 */
+  wrapWidth: number
   title: string
   rows: TipRow[]
 }
@@ -242,11 +243,10 @@ export function usePointTip<T extends HTMLElement>() {
     if (!wrap) return
     const point = element.getBoundingClientRect()
     const base = wrap.getBoundingClientRect()
-    const rawLeft = point.left - base.left + point.width / 2
-    const safeHalfWidth = Math.min(TIP_HALF_WIDTH, base.width / 2)
     setTip({
-      left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
+      left: point.left - base.left + point.width / 2,
       top: point.top - base.top,
+      wrapWidth: base.width,
       title,
       rows,
     })
@@ -255,7 +255,11 @@ export function usePointTip<T extends HTMLElement>() {
   return { ref, tip, show, hide }
 }
 
-/** `usePointTip`이 준 상태를 그리는 상자 — 포인트 위에 세로 나열 내용 */
+/**
+ * `usePointTip`이 준 상태를 그리는 상자 — 포인트 위, 가로 가운데에 세로 나열 내용.
+ * 그려진 뒤 자기 폭을 재서 컨테이너 밖으로 나가는 만큼만 안쪽으로 민다. 고정 폭으로 클램프하면
+ * 좁은 툴팁이 가장자리 막대에서 불필요하게 가운데 쪽으로 밀린다.
+ */
 export function PointTip({
   tip,
   offset = 8,
@@ -265,11 +269,18 @@ export function PointTip({
   /** 포인트 위쪽 여백(px) */
   offset?: number
 } & Record<`data-${string}`, string | boolean | undefined>) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [halfWidth, setHalfWidth] = useState(0)
+  useLayoutEffect(() => {
+    if (boxRef.current) setHalfWidth(boxRef.current.getBoundingClientRect().width / 2)
+  }, [tip])
   if (!tip) return null
-  const style: CSSProperties = { left: tip.left, top: tip.top - offset }
+  const left = Math.min(Math.max(tip.left, halfWidth), Math.max(halfWidth, tip.wrapWidth - halfWidth))
+  const style: CSSProperties = { left, top: tip.top - offset }
   return (
     <div
       {...rest}
+      ref={boxRef}
       aria-hidden
       className={`${TIP_BOX} absolute z-20 -translate-x-1/2 -translate-y-full`}
       style={style}
