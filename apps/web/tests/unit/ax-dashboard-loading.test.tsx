@@ -476,7 +476,7 @@ describe('AxDashboard 패널 요청', () => {
     expect(screen.queryByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeNull()
     expect(screen.queryByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeNull()
     expect(screen.getByLabelText('일별 스킬 활동 범례')).toBeTruthy()
-    const eventSummary = screen.getByLabelText(/^검색 요청 4건/)
+    const eventSummary = screen.getByLabelText(/^검색 경로 · 검색 요청 4건/)
     const dailyChartTitle = screen.getByText('일별 스킬 활동')
     expect(eventSummary.compareDocumentPosition(dailyChartTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // 전환율 분모는 전체 로드가 아니라 연결 가능한 로드이고, 그 몫을 차트 위에 먼저 적는다.
