@@ -24,6 +24,7 @@ import type {
   AxSkillUsageData,
 } from '@/lib/features/ax'
 import { getAxPanelView, SkillEventSummary } from './panels'
+import { SECTION_LABEL } from './panels/primitives'
 import { AxPanelBoundary } from './AxPanelBoundary'
 import {
   formatCount,
@@ -421,7 +422,7 @@ function ActivityGrassCard({
       aria-label={label}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium text-[var(--text-primary)]">{label}</h3>
+        <h3 className={SECTION_LABEL}>{label}</h3>
         <p className="font-mono text-[10px] tabular-nums text-[var(--text-muted)]">
           {valueLabel} {formatCount(total)}건 · 최대 {formatCount(max)}건/일
         </p>
@@ -720,7 +721,7 @@ function DailyApplicationFlowChart({
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
-        <p className="text-sm font-medium text-[var(--text-primary)]">일별 스킬 활동</p>
+        <p className={SECTION_LABEL}>일별 스킬 활동</p>
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-xs text-[var(--text-muted)]" aria-label="일별 스킬 활동 범례">
           <FlowLegend color={FLOW_DIRECT_COLOR} label="로드 없이 적용" />
           <FlowLegend color={FLOW_LOAD_COLOR} label="로드" />

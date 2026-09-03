@@ -72,6 +72,15 @@
 - 호버 시 막대가 움직이거나 확대되지 않는다. 색상/외곽선과 툴팁만 변한다.
 - 밝은·어두운 테마 모두에서 범례 간격, 막대 대비, 텍스트 잘림, 가로 스크롤을 직접 확인해야 한다.
 
+### 패널 디자인 어휘 (2026-09-02 통일)
+
+- 정본은 `apps/web/components/ax/panels/primitives.tsx`다. 새 패널이나 섹션은 여기 있는 조각부터 쓴다.
+  - 섹션 머리: `SectionHeader`(모노 11px 대문자 라벨 + 오른쪽 보조 문구 + 선택 설명). 눈썹+굵은 제목 2줄 헤더는 쓰지 않는다.
+  - 수치: `StatGrid`/`Stat`(열린 격자, 라벨 text-xs · 값 font-mono xl · 보조 문구 · `?` 도움말). `gap-px` 칸막이 타일과 테두리 카드는 쓰지 않는다.
+  - 표: `TH`/`TD`/`NumberCell`, 빈 상태: `EmptyNote`, 제목·설명 목록: `DefinitionRows`.
+  - 순위·비중 막대는 `relativeActivityFill`을 이름 칸 안에 깐다(스킬별 실제 적용 표와 같은 방식).
+- 패널 루트 간격은 `space-y-10`으로 통일한다.
+
 색상 구현 정본:
 
 - 상대 활동색: `relativeActivityFill()` in `apps/web/components/ax/format.ts`

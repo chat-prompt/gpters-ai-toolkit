@@ -11,8 +11,18 @@ import type {
   AxAgentTelemetrySource,
   AxAgentTokenUsage,
 } from '@/lib/features/ax'
-import { RATE_MIN_SAMPLE, formatCount, formatDateTime, formatSampledRate } from '../format'
+import { RATE_MIN_SAMPLE, formatCount, formatDateTime, formatSampledRate, relativeActivityFill } from '../format'
 import type { AxPanelViewProps } from './types'
+import {
+  DefinitionRows,
+  EMPTY_NOTE,
+  META_LINE,
+  SectionHeader,
+  Stat,
+  StatGrid,
+  TD as BASE_TD,
+  TH,
+} from './primitives'
 
 const SOURCE_LABELS: Record<AxAgentTelemetrySource, string> = {
   openclaw: 'OpenClaw',
@@ -30,8 +40,7 @@ const STATUS_LABELS: Record<AxAgentSourceCoverageRow['status'], string> = {
   alternate: 'Claude로 대체',
 }
 
-const TH = 'px-3 py-2.5 font-mono text-[11px] font-normal uppercase tracking-[0.12em] text-[var(--text-muted)]'
-const TD = 'px-3 py-3 text-sm'
+const TD = `${BASE_TD} text-sm`
 
 type ActivityScope = AxAgentActivityData | AxAgentActivityAgentRow
 
@@ -48,6 +57,14 @@ function processedTokens(usage: AxAgentTokenUsage): number {
     (usage.thinkingTokensRelation === 'separate-from-output' ? usage.thinkingTokens : 0)
 }
 
+/**
+ * 에이전트 활동 패널 화면 — 에이전트를 골라 토큰·도구·스킬·검증된 실행 결과와 수집 건강도를 본다.
+ *
+ * @param data - 에이전트 활동 집계
+ * @param days - 조회 기간(일)
+ * @param selection - 대시보드가 기억하는 선택 에이전트 ID ('all'이면 전체)
+ * @param onSelectionChange - 선택이 바뀔 때 대시보드에 알린다
+ */
 export function AgentActivityPanel({
   data,
   days,
@@ -88,7 +105,14 @@ export function AgentActivityPanel({
       <section aria-labelledby="agent-summary-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p id="agent-summary-title" className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+            {/* 에이전트 ID는 식별자라 대소문자를 바꾸지 않는다 */}
+            <p
+              id="agent-summary-title"
+              translate="no"
+              className={`max-w-[24rem] truncate font-mono text-[11px] tracking-[0.14em] text-[var(--text-muted)] ${
+                activeAgentId === 'all' ? 'uppercase' : ''
+              }`}
+            >
               {activeAgentId === 'all' ? '전체 에이전트' : activeAgentId}
             </p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -97,11 +121,12 @@ export function AgentActivityPanel({
                 : '설치됨 · 첫 수집 대기'} · {formatCount(scope.collection.batches)}개 배치
             </p>
           </div>
-          <p className="font-mono text-[10px] text-[var(--text-muted)]">
+          <p className={META_LINE}>
             전체 집계 구간 {formatDateTime(data.windowStart)} – {formatDateTime(data.windowEnd)}
           </p>
         </div>
-        <div className="mt-3 grid gap-px overflow-visible rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4">
+          <StatGrid columns={4}>
           <Metric
             label="처리 토큰"
             value={formatTokens(scope.totalProcessedTokens)}
@@ -125,6 +150,7 @@ export function AgentActivityPanel({
             hint={`파싱 실패 ${formatCount(scope.collection.parseFailures)}`}
             explanation="수집기가 원본 로그에서 확인한 레코드 수입니다. 활동량 자체가 아니라 수집 건강도를 확인하는 운영 지표입니다."
           />
+          </StatGrid>
         </div>
       </section>
 
@@ -139,7 +165,7 @@ export function AgentActivityPanel({
             ? '보이지 않는 소스를 0으로 오해하지 않습니다'
             : '표시되지 않은 소스는 이 에이전트에서 아직 관측되지 않았습니다'}
         />
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid border-t border-[var(--border-subtle)] md:grid-cols-2 md:gap-x-10">
           {coverage.map((row) => (
             <SourceCard
               key={row.source}
@@ -160,7 +186,9 @@ export function AgentActivityPanel({
         onSelectAgent={selectAgent}
       />
 
-      <div className="grid gap-10 lg:grid-cols-2">
+      {/* 두 표의 1위 막대가 한 줄로 이어져 보이지 않게 가운데 구분선을 둔다 */}
+      <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-0">
+        <div className="lg:pr-10">
         <RankTable
           title="모델별 처리 토큰"
           rows={scope.models.map((row) => ({
@@ -170,6 +198,8 @@ export function AgentActivityPanel({
             magnitude: row.processedTokens,
           }))}
         />
+        </div>
+        <div className="lg:border-l lg:border-[var(--border-subtle)] lg:pl-10">
         <RankTable
           title="도구 호출·실패"
           rows={scope.tools.map((row) => ({
@@ -179,6 +209,7 @@ export function AgentActivityPanel({
             magnitude: row.calls,
           }))}
         />
+        </div>
       </div>
 
       <RankTable
@@ -219,7 +250,8 @@ function SkillImpactSummary({ scope, available }: { scope: ActivityScope; availa
   return (
     <section>
       <SectionTitle title="스킬 활용" hint="관측 범위가 다른 신호를 0으로 합치지 않습니다" />
-      <div className="mt-3 grid gap-px overflow-visible rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4">
+        <StatGrid columns={4}>
         <Metric
           label="고유 로드 스킬"
           value={scope.skillLoadsObserved ? `${formatCount(scope.uniqueLoadedSkills)}개` : '미관측'}
@@ -243,6 +275,7 @@ function SkillImpactSummary({ scope, available }: { scope: ActivityScope; availa
           hint={conversionHint}
           explanation={`앞선 로드와 연결된 실행을 분모로 삼아 성공이면서 검증을 통과한 비율입니다. 미연결 실행은 분모에서 제외하고, 분모가 ${RATE_MIN_SAMPLE}회 미만이면 백분율 대신 분수를 참고 수치로 보여줍니다.`}
         />
+        </StatGrid>
       </div>
     </section>
   )
@@ -261,14 +294,14 @@ function AgentSelector({
 }) {
   return (
     <section aria-labelledby="agent-filter-title">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 id="agent-filter-title" className="text-sm font-medium text-[var(--text-primary)]">에이전트별 보기</h3>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">선택하면 아래 모든 사용량과 실행 결과가 해당 에이전트 기준으로 바뀝니다.</p>
-        </div>
-        <p className="font-mono text-[10px] text-[var(--text-muted)]">{formatCount(agents.length)}개 에이전트 · {formatCount(reporters.length)}개 수집기</p>
-      </div>
-      <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-1" role="group" aria-label="에이전트 선택">
+      <SectionHeader
+        id="agent-filter-title"
+        label="에이전트별 보기"
+        aside={`${formatCount(agents.length)}개 에이전트 · ${formatCount(reporters.length)}개 수집기`}
+        description="선택하면 아래 모든 사용량과 실행 결과가 해당 에이전트 기준으로 바뀝니다."
+      />
+      {/* 스크롤 컨테이너가 포커스 링을 잘라내지 않게 안쪽 여백을 두고 바깥 여백으로 상쇄한다 */}
+      <div className="-mx-1 mt-2 flex max-w-full gap-2 overflow-x-auto p-1" role="group" aria-label="에이전트 선택">
         <AgentButton label="전체" detail={`${formatCount(agents.length)}개`} active={value === 'all'} onClick={() => onChange('all')} />
         {agents.map((agent) => {
           const agentReporters = reporters.filter((row) => row.agentId === agent.agentId)
@@ -308,12 +341,12 @@ function AgentButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`shrink-0 rounded-xl border px-3.5 py-2 text-left transition-colors ${active
+      className={`shrink-0 rounded-xl border px-3.5 py-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)] ${active
         ? 'border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]'
         : 'border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'}`}
     >
-      <span className="block font-mono text-xs">{label}</span>
-      <span className={`mt-0.5 block text-[10px] ${active ? 'opacity-65' : warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>{detail}</span>
+      <span className="block max-w-[16rem] truncate font-mono text-xs" translate="no">{label}</span>
+      <span className={`mt-0.5 block text-[11px] ${active ? 'opacity-65' : warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>{detail}</span>
     </button>
   )
 }
@@ -327,6 +360,8 @@ function TokenBreakdown({ usage }: { usage: AxAgentTokenUsage }) {
     { label: '추론', value: usage.thinkingTokens },
   ]
   const max = Math.max(1, ...rows.map((row) => row.value))
+  const positive = rows.map((row) => row.value).filter((value) => value > 0)
+  const min = positive.length > 0 ? Math.min(...positive) : max
   const relation = usage.thinkingTokensRelation === 'included-in-output'
     ? '추론 토큰은 출력에 포함'
     : usage.thinkingTokensRelation === 'separate-from-output'
@@ -336,18 +371,23 @@ function TokenBreakdown({ usage }: { usage: AxAgentTokenUsage }) {
     <section>
       <SectionTitle title="토큰 구성" hint={`${relation} · 합계 ${formatTokens(processedTokens(usage))}`} />
       <div
-        className="mt-3 grid gap-2"
+        className="mt-4 grid gap-x-8 gap-y-5"
         style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(9rem, 1fr))' }}
       >
         {rows.map((row) => (
-          <div key={row.label} className="relative overflow-hidden rounded-xl border border-[var(--border-subtle)] px-3.5 py-3">
-            <span
-              aria-hidden
-              className="absolute inset-y-0 left-0 bg-[var(--brand-primary)]/[0.08]"
-              style={{ width: `${(row.value / max) * 100}%` }}
-            />
-            <p className="relative text-[10px] text-[var(--text-muted)]">{row.label}</p>
-            <p className="relative mt-1 font-mono text-sm tabular-nums text-[var(--text-primary)]">{formatTokens(row.value)}</p>
+          <div key={row.label} className="min-w-0">
+            <p className="text-xs text-[var(--text-secondary)]">{row.label}</p>
+            <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{formatTokens(row.value)}</p>
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+              <span
+                aria-hidden
+                className="block h-full rounded-full"
+                style={{
+                  width: `${(row.value / max) * 100}%`,
+                  background: relativeActivityFill(row.value, min, max),
+                }}
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -365,36 +405,38 @@ function SourceCard({
   scoped: boolean
 }) {
   return (
-    <div className="rounded-xl border border-[var(--border-subtle)] px-4 py-4">
+    <div className="border-b border-[var(--border-subtle)] py-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-[var(--text-primary)]">{SOURCE_LABELS[coverage.source]}</p>
+        <p className="text-sm text-[var(--text-primary)]">{SOURCE_LABELS[coverage.source]}</p>
         {scoped && reporter
           ? <CollectorStatus freshness={reporter.freshness} health={reporter.healthStatus} warnings={reporter.healthWarnings.length} />
           : <Status status={coverage.status} />}
       </div>
       <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">{coverage.note}</p>
-      <p className="mt-3 font-mono text-[10px] text-[var(--text-muted)]">
-        토큰 {coverage.capabilities.usage ? '✓' : '–'} · 도구 {coverage.capabilities.tools ? '✓' : '–'} · 스킬 {coverage.capabilities.skills ? '✓' : '–'}
+      <p className={`mt-2 ${META_LINE}`}>
+        토큰 <Capability supported={coverage.capabilities.usage} /> · 도구 <Capability supported={coverage.capabilities.tools} /> · 스킬 <Capability supported={coverage.capabilities.skills} />
         {(reporter?.lastCollectedAt ?? coverage.lastCollectedAt) ? ` · ${formatDateTime(reporter?.lastCollectedAt ?? coverage.lastCollectedAt!)}` : ''}
       </p>
     </div>
   )
 }
 
+/** 소스가 신호를 제공하는지 — 스크린리더에는 글리프 대신 말로 읽힌다 */
+function Capability({ supported }: { supported: boolean }) {
+  return <span role="img" aria-label={supported ? '지원' : '미지원'}>{supported ? '✓' : '–'}</span>
+}
+
 function Insights({ insights }: { insights: AxAgentActivityData['insights'] }) {
   return (
     <section>
       <SectionTitle title="지금 할 수 있는 개선" hint="수집값에서 자동으로 찾은 우선순위" />
-      <div className="mt-3 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
-        {insights.map((insight, index) => (
-          <div key={`${insight.title}-${index}`} className="grid gap-1 py-4 md:grid-cols-[9rem_1fr] md:gap-5">
-            <p className={`text-sm ${insight.severity === 'warning' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>
-              {insight.title}
-            </p>
-            <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{insight.detail}</p>
-          </div>
-        ))}
-      </div>
+      <DefinitionRows
+        rows={insights.map((insight) => ({
+          title: insight.title,
+          detail: insight.detail,
+          warning: insight.severity === 'warning',
+        }))}
+      />
     </section>
   )
 }
@@ -417,14 +459,7 @@ function AgentNotices({ reporters, scope }: { reporters: AxAgentReporterRow[]; s
   return (
     <section>
       <SectionTitle title="이 에이전트에서 확인할 점" hint="선택한 에이전트의 수집·실패 신호" />
-      <div className="mt-3 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
-        {notices.map((notice) => (
-          <div key={notice.title} className="grid gap-1 py-4 md:grid-cols-[9rem_1fr] md:gap-5">
-            <p className={`text-sm ${notice.warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>{notice.title}</p>
-            <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{notice.detail}</p>
-          </div>
-        ))}
-      </div>
+      <DefinitionRows rows={notices} />
     </section>
   )
 }
@@ -447,7 +482,7 @@ function ReporterSection({
             <div className="flex items-start justify-between gap-3">
               <div>
                 {showAgentLinks ? (
-                  <button type="button" className="font-mono text-sm text-[var(--text-primary)] underline-offset-4 hover:underline" onClick={() => onSelectAgent(row.agentId)}>
+                  <button type="button" className="font-mono text-sm text-[var(--text-primary)] underline decoration-[var(--border-hover)] underline-offset-4 hover:decoration-current" onClick={() => onSelectAgent(row.agentId)}>
                     {row.agentId}
                   </button>
                 ) : <p className="font-mono text-sm text-[var(--text-primary)]">{row.agentId}</p>}
@@ -479,12 +514,12 @@ function ReporterSection({
               <tr key={`${row.agentId}-${row.source}`} className="transition-colors hover:bg-[var(--bg-secondary)]">
                 <td className={`${TD} font-mono text-[var(--text-primary)]`}>
                   {showAgentLinks ? (
-                    <button type="button" className="underline-offset-4 hover:underline" onClick={() => onSelectAgent(row.agentId)}>{row.agentId}</button>
+                    <button type="button" className="underline decoration-[var(--border-hover)] underline-offset-4 hover:decoration-current" onClick={() => onSelectAgent(row.agentId)}>{row.agentId}</button>
                   ) : row.agentId}
                 </td>
                 <td className={`${TD} text-[var(--text-secondary)]`}>
                   {SOURCE_LABELS[row.source]}
-                  <span className="ml-2 font-mono text-[10px] text-[var(--text-muted)]">{row.managed ? '자동' : '기존 방식'}</span>
+                  <span className="ml-2 font-mono text-[11px] text-[var(--text-muted)]">{row.managed ? '자동' : '기존 방식'}</span>
                 </td>
                 <td className={TD}><CollectorStatus freshness={row.freshness} health={row.healthStatus} warnings={row.healthWarnings.length} /></td>
                 <td className={`${TD} text-right font-mono ${row.freshness === 'stale' || row.healthStatus === 'blocked' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
@@ -503,7 +538,7 @@ function ReporterSection({
 }
 
 function SmallStat({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-[10px] text-[var(--text-muted)]">{label}</p><p className="mt-1 font-mono text-xs text-[var(--text-primary)]">{value}</p></div>
+  return <div><p className="text-[11px] text-[var(--text-muted)]">{label}</p><p className="mt-1 font-mono text-xs text-[var(--text-primary)]">{value}</p></div>
 }
 
 /** 수집 batch의 관측치와 서버의 검증된 실행 결과를 분리해 보여준다. */
@@ -520,16 +555,19 @@ function ExecutionSection({ scope, available }: { scope: ActivityScope; availabl
         수집 로그에서 관측한 작업 종료 {formatCount(observed)}건은 런타임 안정성 대조용입니다.
         아래 수치는 서버에 명시적으로 보고된 스킬 실행 결과만 셉니다.
       </p>
-      <div className="mt-3 grid gap-px overflow-visible rounded-2xl bg-[var(--border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4">
+        <StatGrid columns={4}>
         <Metric label="전체 시도" value={count(execution.attempts)} hint={available ? `검증 근거 ${formatCount(execution.withEvidence)}` : '실행 결과 계측 준비 중'} explanation="스킬 실행 시작이 서버에 보고된 고유 시도 수입니다. 검증 근거는 테스트·명령·산출물·사용자 확인 결과가 함께 보고된 시도입니다." />
         <Metric label="성공" value={count(execution.success)} explanation="에이전트가 완료 상태를 success로 보고한 시도입니다. 검증 근거가 있는 성공과는 구분해서 봅니다." />
         <Metric label="부분 / 실패" value={pair(execution.partial, execution.failed)} explanation="일부만 완료한 partial과 명시적으로 실패를 보고한 failed 시도입니다." />
         <Metric label="진행 / 중단" value={pair(execution.running, execution.abandoned)} explanation="아직 완료 보고가 없는 진행 중 시도와 일정 시간 뒤에도 완료되지 않은 중단 시도입니다." />
+        </StatGrid>
       </div>
     </section>
   )
 }
 
+/** 공통 Stat에 위임 — 힌트는 항상 보이는 보조 수치, 설명은 호버·포커스 때만 보인다 */
 function Metric({
   label,
   value,
@@ -541,46 +579,19 @@ function Metric({
   hint?: string
   explanation?: string
 }) {
-  return (
-    <div className="relative bg-[var(--bg-primary)] px-5 py-5">
-      <div className="flex items-center gap-1.5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</p>
-        {explanation && <MetricHelp label={label} explanation={explanation} />}
-      </div>
-      <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{value}</p>
-      {hint && <p className="mt-1 text-xs text-[var(--text-muted)]">{hint}</p>}
-    </div>
-  )
+  return <Stat label={label} value={value} hint={hint} description={explanation} />
 }
 
-function MetricHelp({ label, explanation }: { label: string; explanation: string }) {
-  return (
-    <details className="group">
-      <summary
-        className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--border-hover)] font-mono text-[9px] text-[var(--text-muted)] [&::-webkit-details-marker]:hidden"
-        aria-label={`${label} 설명`}
-      >?</summary>
-      {/* 타일 전체 폭 안에 띄워 4열 그리드의 양 끝 타일에서도 화면 밖으로 잘리지 않는다. */}
-      <p className="absolute inset-x-4 top-11 z-20 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed normal-case tracking-normal text-[var(--text-secondary)] shadow-lg">
-        {explanation}
-      </p>
-    </details>
-  )
-}
 
+/** 섹션 머리 — 공통 모노 라벨과 오른쪽 보조 문구 */
 function SectionTitle({ title, hint }: { title: string; hint: string }) {
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="text-sm font-medium text-[var(--text-primary)]">{title}</h3>
-      <p className="text-xs text-[var(--text-muted)]">{hint}</p>
-    </div>
-  )
+  return <SectionHeader label={title} aside={hint} />
 }
 
 function Status({ status }: { status: AxAgentSourceCoverageRow['status'] }) {
   const active = status === 'reporting'
   return (
-    <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] ${active ? 'bg-[var(--bg-tertiary)] text-[var(--brand-primary)]' : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'}`}>
+    <span className={`rounded-full px-2.5 py-1 font-mono text-[11px] font-medium ${active ? 'bg-[var(--bg-tertiary)] text-[var(--brand-primary)]' : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'}`}>
       {STATUS_LABELS[status]}
     </span>
   )
@@ -606,7 +617,7 @@ function CollectorStatus({
           : '수집 중'
   const warning = health === 'blocked' || freshness === 'stale'
   return (
-    <span className={`rounded-full bg-[var(--bg-tertiary)] px-2.5 py-1 font-mono text-[10px] ${warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>
+    <span className={`rounded-full bg-[var(--bg-tertiary)] px-2.5 py-1 font-mono text-[11px] font-medium ${warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>
       {label}{warnings > 0 ? ` · 경고 ${warnings}` : ''}
     </span>
   )
@@ -622,19 +633,32 @@ function RankTable({
   empty?: string
 }) {
   const max = Math.max(1, ...rows.map((row) => row.magnitude))
+  const positive = rows.map((row) => row.magnitude).filter((value) => value > 0)
+  const min = positive.length > 0 ? Math.min(...positive) : max
   return (
     <section>
       <SectionTitle title={title} hint={`상위 ${formatCount(rows.length)}개`} />
       {rows.length === 0 ? (
-        <p className="mt-3 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-muted)]">{empty}</p>
+        <p className={`mt-3 ${EMPTY_NOTE}`}>{empty}</p>
       ) : (
-        <div className="mt-3 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
+        <div className="mt-3 divide-y divide-[var(--border-subtle)]">
           {rows.map((row) => (
-            <div key={row.name} className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 overflow-hidden py-3">
-              <span aria-hidden className="absolute inset-y-0 left-0 bg-[var(--brand-primary)]/[0.06]" style={{ width: `${(row.magnitude / max) * 100}%` }} />
-              <p className="relative truncate pl-2 font-mono text-[13px] text-[var(--text-primary)]">{row.name}</p>
-              <p className="relative pr-2 text-right font-mono text-sm tabular-nums text-[var(--text-primary)]">
-                {row.value} <span className="ml-2 text-[10px] text-[var(--text-muted)]">{row.hint}</span>
+            <div key={row.name} className="grid grid-cols-[minmax(0,58%)_auto] items-center gap-4 py-2.5">
+              {/* 스킬별 실제 적용 표처럼 이름 칸 안에만 활동 농도 막대를 깐다 */}
+              <div className="relative min-w-0 py-1">
+                <span
+                  aria-hidden
+                  className="ax-activity-mark absolute inset-y-0 left-0"
+                  data-activity-fill={relativeActivityFill(row.magnitude, min, max)}
+                  style={{
+                    width: `${(row.magnitude / max) * 100}%`,
+                    background: relativeActivityFill(row.magnitude, min, max),
+                  }}
+                />
+                <p className="relative truncate px-3 font-mono text-sm text-[var(--text-primary)]">{row.name}</p>
+              </div>
+              <p className="text-right font-mono text-sm tabular-nums text-[var(--text-primary)]">
+                {row.value} <span className={`ml-2 ${META_LINE}`}>{row.hint}</span>
               </p>
             </div>
           ))}

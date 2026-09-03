@@ -12,11 +12,7 @@ import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, relativeActivityFill, tooltipAnchorClass } from '../format'
 
-/** 표 머리칸 공통 스타일 */
-const SECTION_LABEL = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]'
-
-/** 데이터가 비었을 때의 조용한 안내문 */
-const EMPTY_NOTE = 'border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]'
+import { EMPTY_NOTE, SECTION_LABEL } from './primitives'
 
 /**
  * 성과 요약 패널 화면
