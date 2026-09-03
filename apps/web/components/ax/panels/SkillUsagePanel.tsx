@@ -129,12 +129,13 @@ export function SkillEventSummary({
 
   return (
     <div>
-      {/* 두 경로를 좌우 단으로 나누고 단계는 위에서 아래로 쌓는다 — 정보량에 맞춰 높이를 줄인다 */}
-      <div className="grid grid-cols-1 gap-x-10 gap-y-6 sm:grid-cols-2">
+      {/* 두 경로를 좌우 단으로 나누고 단계는 위에서 아래로 쌓는다.
+          단 사이 48px, 행 안쪽 16px, 라벨과 막대 12px — 4px 스케일로 숨 쉴 자리를 둔다 */}
+      <div className="grid grid-cols-1 gap-x-12 gap-y-8 sm:grid-cols-2">
         {lanes.map((lane) => (
           <div key={lane.id}>
             <p className={SECTION_LABEL}>{lane.label}</p>
-            <div className="mt-2 divide-y divide-[var(--border-subtle)]">
+            <div className="mt-4 divide-y divide-[var(--border-subtle)]">
               {lane.steps.map((step) => {
                 const key = `${lane.id}:${step.label}`
                 const active = highlighted === key
@@ -157,7 +158,7 @@ export function SkillEventSummary({
                 return (
                   <div
                     key={key}
-                    className="relative py-2.5 outline-none"
+                    className="relative py-4 outline-none"
                     tabIndex={0}
                     aria-label={label}
                     onMouseEnter={() => setHighlighted(key)}
@@ -165,15 +166,15 @@ export function SkillEventSummary({
                     onFocus={() => setHighlighted(key)}
                     onBlur={() => setHighlighted(null)}
                   >
-                    <div className="flex items-baseline justify-between gap-4">
+                    <div className="flex items-baseline justify-between gap-6">
                       <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                         <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
                         {step.label}
-                        {rate !== null && <span className={META_LINE}>→ {rate}</span>}
+                        {rate !== null && <span className={`ml-1 ${META_LINE}`}>→ {rate}</span>}
                       </p>
-                      <p className="font-mono text-lg tabular-nums text-[var(--text-primary)]">{formatCount(step.value)}</p>
+                      <p className="font-mono text-xl tabular-nums leading-none text-[var(--text-primary)]">{formatCount(step.value)}</p>
                     </div>
-                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+                    <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
                       <span
                         className="block h-full rounded-full"
                         style={{
@@ -185,7 +186,7 @@ export function SkillEventSummary({
                         }}
                       />
                     </div>
-                    {step.hint && <p className={`mt-1.5 ${META_LINE}`}>{step.hint}</p>}
+                    {step.hint && <p className={`mt-2 ${META_LINE}`}>{step.hint}</p>}
                     {active && rows.length > 0 && (
                       <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute left-0 top-full z-10 mt-1`}>
                         <TipContent title={title} rows={rows} />
@@ -198,7 +199,7 @@ export function SkillEventSummary({
           </div>
         ))}
       </div>
-      <p className={`mt-4 ${META_LINE}`} role="note" aria-label="연결 불가">
+      <p className={`mt-6 ${META_LINE}`} role="note" aria-label="연결 불가">
         연결 불가 · 로드 {formatCount(loads.unlinkable)}건 · 적용 {formatCount(applies.unlinkable)}건
         {applies.withoutLoad > 0 && ` · 로드 없이 적용 ${formatCount(applies.withoutLoad)}건`}
         {' — '}세션 ID가 없어 경로를 판정할 수 없는 보고라 위 비율에서 뺐습니다.
