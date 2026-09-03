@@ -79,7 +79,7 @@ function MemberUsageTable({
               // 이름은 유일키가 아니다 — "이름 미설정"이 둘이면 충돌한다
               <tr
                 key={`${row.name}-${index}`}
-                className="group focus-visible:outline-none"
+                className="group focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
                 tabIndex={0}
                 onMouseEnter={() => setHighlightedIndex(index)}
                 onMouseLeave={() => setHighlightedIndex(null)}
@@ -103,7 +103,7 @@ function MemberUsageTable({
                   <span className="relative text-[var(--text-primary)]">{row.name}</span>
                   {/* 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다 */}
                   <span
-                    className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm ${highlightedIndex === index ? 'block' : 'hidden'}`}
+                    className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-secondary)] shadow-sm ${highlightedIndex === index ? 'block' : 'hidden'}`}
                     style={{ left: `calc(${(row.applied / max) * 100}% + 0.5rem)` }}
                   >
                     로드 {formatCount(row.loaded)} · 적용 {formatCount(row.applied)}

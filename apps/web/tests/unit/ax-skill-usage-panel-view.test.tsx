@@ -56,7 +56,7 @@ describe('AX 스킬 사용 패널 화면', () => {
     )
 
     // 검색 경로: 검색 요청 12 → 로드 5 → 적용 2. 직접 경로: 검색 없는 로드 3 → 적용 1. 비율은 직전 단계 대비.
-    expect(screen.getByLabelText('검색 경로 · 검색 요청 12건 · 평균 검색 결과 5개')).toBeTruthy()
+    expect(screen.getByLabelText('검색 경로 · 검색 요청 12건 · 평균 검색 결과 5개 · 결과 노출 줄 60줄')).toBeTruthy()
     const searchLoad = screen.getByLabelText('검색 경로 · 로드 5건 · 직전 검색 요청 12건 중 41.7%')
     expect(screen.getByLabelText('검색 경로 · 적용 보고 2건 · 직전 로드 5건 중 2/5 · 참고')).toBeTruthy()
     expect(screen.getByLabelText('직접 경로 · 검색 없는 로드 3건')).toBeTruthy()

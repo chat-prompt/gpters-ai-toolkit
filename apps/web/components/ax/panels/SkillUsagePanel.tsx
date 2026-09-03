@@ -65,9 +65,9 @@ const FUNNEL_APPLY_COLOR = 'var(--accent-orange)'
 /**
  * 두 줄 깔때기 — 검색 경로(검색 요청 → 로드 → 적용)와 직접 경로(검색 없는 로드 → 적용).
  *
- * 각 칸의 비율은 직전 단계 대비 전환율이고, 막대 길이도 그 비율이다. 두 경로의 적용 칸을 같은
- * 열에 맞춰 최종 적용 수를 나란히 비교한다. 흐름(journey, 없으면 session) ID가 없어 경로를 판정할
- * 수 없는 로드·적용은 막대 없이 세 번째 줄에 따로 적고 비율에서 뺀다.
+ * 각 칸의 비율은 직전 단계 대비 전환율이고, 막대 길이도 그 비율이다. 경로의 첫 칸은 기준선이라
+ * 값이 있으면 꽉 차고 0이면 비어 있다. 흐름(journey, 없으면 session) ID가 없어 경로를 판정할
+ * 수 없는 로드·적용은 막대 없이 마지막 줄에 따로 적고 비율에서 뺀다.
  */
 export function SkillEventSummary({
   origins,
@@ -131,10 +131,10 @@ export function SkillEventSummary({
     <div>
       {/* 두 경로를 좌우 단으로 나누고 단계는 위에서 아래로 쌓는다.
           단 사이 48px, 행 안쪽 16px, 라벨과 막대 12px — 4px 스케일로 숨 쉴 자리를 둔다 */}
-      <div className="grid grid-cols-1 gap-x-12 gap-y-8 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-12 gap-y-6 sm:grid-cols-2">
         {lanes.map((lane) => (
           <div key={lane.id}>
-            <p className={SECTION_LABEL}>{lane.label}</p>
+            <h4 className={SECTION_LABEL}>{lane.label}</h4>
             <div className="mt-4 divide-y divide-[var(--border-subtle)]">
               {lane.steps.map((step) => {
                 const key = `${lane.id}:${step.label}`
@@ -142,7 +142,7 @@ export function SkillEventSummary({
                 const rate = step.previous ? formatSampledRate(step.value, step.previous.value) : null
                 const ratio = step.previous
                   ? (step.previous.value > 0 ? Math.min(1, step.value / step.previous.value) : 0)
-                  : 1
+                  : (step.value > 0 ? 1 : 0)
                 const rows: TipRow[] = [
                   ...(step.previous
                     ? [{ label: `직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중`, value: rate ?? '—' }]
@@ -154,11 +154,13 @@ export function SkillEventSummary({
                   `${lane.label} · ${title}`,
                   ...(step.previous ? [`직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중 ${rate}`] : []),
                   ...(step.hint ? [step.hint] : []),
+                  ...(step.extraRows ?? []).map((row) => `${row.label} ${row.value}`),
                 ].join(' · ')
                 return (
                   <div
                     key={key}
-                    className="relative py-4 outline-none"
+                    role="group"
+                    className="relative py-4 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
                     tabIndex={0}
                     aria-label={label}
                     onMouseEnter={() => setHighlighted(key)}
@@ -167,12 +169,12 @@ export function SkillEventSummary({
                     onBlur={() => setHighlighted(null)}
                   >
                     <div className="flex items-baseline justify-between gap-6">
-                      <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                        <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
+                      <p className="flex min-w-0 items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <span aria-hidden className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: step.color }} />
                         {step.label}
                         {rate !== null && <span className={`ml-1 ${META_LINE}`}>→ {rate}</span>}
                       </p>
-                      <p className="font-mono text-xl tabular-nums leading-none text-[var(--text-primary)]">{formatCount(step.value)}</p>
+                      <p className="shrink-0 whitespace-nowrap font-mono text-xl tabular-nums leading-none text-[var(--text-primary)]">{formatCount(step.value)}</p>
                     </div>
                     <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
                       <span
@@ -188,7 +190,7 @@ export function SkillEventSummary({
                     </div>
                     {step.hint && <p className={`mt-2 ${META_LINE}`}>{step.hint}</p>}
                     {active && rows.length > 0 && (
-                      <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute left-0 top-full z-10 mt-1`}>
+                      <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute inset-x-0 top-full z-10 mt-1 w-max max-w-full`}>
                         <TipContent title={title} rows={rows} />
                       </div>
                     )}
@@ -199,10 +201,12 @@ export function SkillEventSummary({
           </div>
         ))}
       </div>
-      <p className={`mt-6 ${META_LINE}`} role="note" aria-label="연결 불가">
-        연결 불가 · 로드 {formatCount(loads.unlinkable)}건 · 적용 {formatCount(applies.unlinkable)}건
-        {applies.withoutLoad > 0 && ` · 로드 없이 적용 ${formatCount(applies.withoutLoad)}건`}
-        {' — '}세션 ID가 없어 경로를 판정할 수 없는 보고라 위 비율에서 뺐습니다.
+      <p className="mt-6 text-xs leading-relaxed text-[var(--text-secondary)]" role="note" aria-label="연결 불가">
+        <span className={META_LINE}>
+          연결 불가 · 로드 {formatCount(loads.unlinkable)}건 · 적용 {formatCount(applies.unlinkable)}건
+          {applies.withoutLoad > 0 && ` · 로드 없이 적용 ${formatCount(applies.withoutLoad)}건`}
+        </span>
+        {' '}세션 ID가 없어 경로를 판정할 수 없는 보고라 위 비율에서 뺐습니다.
       </p>
     </div>
   )
@@ -235,11 +239,11 @@ function SkillTable({
 
   return (
     <div>
-      <div className="relative mb-3 inline-flex items-center gap-1.5">
+      <div className="relative mb-3 inline-flex items-center gap-2">
         <p className={SECTION_LABEL}>스킬별 실제 적용</p>
-        <span
-          className="cursor-help rounded-full px-1 font-mono text-[10px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--brand-primary)]"
-          tabIndex={0}
+        <button
+          type="button"
+          className="cursor-help rounded-full px-1 font-mono text-[11px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
           aria-label="스킬 적용 집계 범위 안내"
           aria-describedby="skill-application-coverage-help"
           onMouseEnter={() => setShowCoverageHelp(true)}
@@ -248,12 +252,12 @@ function SkillTable({
           onBlur={() => setShowCoverageHelp(false)}
         >
           ?
-        </span>
+        </button>
         {showCoverageHelp && (
           <span
             id="skill-application-coverage-help"
             role="tooltip"
-            className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 w-72 -translate-y-1/2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-2 text-[11px] font-normal leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-lg"
+            className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-72 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-2 text-[11px] font-normal leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-lg"
           >
             명시적인 적용 보고만 집계합니다. 로컬에서 다시 실행했지만 보고하지 않은 횟수는 0이 아니라 미관측입니다.
           </span>
@@ -273,7 +277,7 @@ function SkillTable({
             {shown.map((skill, index) => (
               <tr
                 key={skill.skillId}
-                className="focus-visible:outline-none"
+                className="focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
                 tabIndex={0}
                 aria-label={`${skill.name} · 적용 ${formatCount(skill.applied)}건 · 전체 적용 중 ${formatRate(skill.applied, totalApplied)} · 활성 사용자 ${formatCount(skill.users)}/${formatCount(activeUsers)}명`}
                 onMouseEnter={() => setHighlightedSkillId(skill.skillId)}
@@ -301,11 +305,11 @@ function SkillTable({
                         : 'none',
                     }}
                   />
-                  <span className="relative text-[var(--text-primary)]">{skill.name}</span>
+                  <span className="relative break-words text-[var(--text-primary)]">{skill.name}</span>
                   {highlightedSkillId === skill.skillId && (
                     <span
                       // 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다
-                      className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm"
+                      className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-secondary)] shadow-sm"
                       style={{ left: `calc(${(activity(skill) / max) * 100}% + 0.5rem)` }}
                     >
                       적용 {formatCount(skill.applied)}건 · 전체 적용 중 {formatRate(skill.applied, totalApplied)}
