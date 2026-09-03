@@ -11,6 +11,7 @@ export const GPTTERS_EMAIL_DOMAIN = 'gpters.org'
 /** Individually approved accounts outside the GPTers domain (lowercase). */
 export const ALLOWED_EXTERNAL_EMAILS: ReadonlySet<string> = new Set([
   'zeusajm@yonsei.ac.kr',
+  'qgq214@gmail.com',
 ])
 
 function normalizeEmail(email: string): string {
