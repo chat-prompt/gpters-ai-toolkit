@@ -348,14 +348,22 @@ corepack pnpm --filter @gpters/web exec dotenv -e ../../.env.local -- \
   결과를 기다리는 호출을 checkpoint(`hermesPendingSkillCalls`)에 들고 다니다가 결과를 만나면 그때 센다.
   7일이 지나면 버린다.
 
-## 11. AX 0034 마이그레이션 — 적용 대기
+## 11. AX 0034 마이그레이션 — 2026-09-03 적용 완료
 
-`interval_seconds` 컬럼 기본값을 21600에서 3600으로 바꾸는 마이그레이션이 아직 운영에 적용되지 않았다.
+`interval_seconds` 컬럼 기본값을 21600에서 3600으로 바꿨다. 마이그레이션 23건 → 24건, 기본값 21600 → 3600,
+등록된 수집기 2개의 interval은 그대로 3600이다.
 
-- 읽기 전용 확인 결과 스키마 조건은 모두 충족한다: 마이그레이션 23건(마지막 0033), 수집기 테이블 존재,
-  기본값 아직 21600, 등록된 수집기 2개 모두 3600.
-- 막힌 지점은 Neon 브랜치다. guard는 운영 적용에 운영과 다른 recovery 브랜치를 요구하고 child 모드는
-  운영 브랜치를 거부하는데, 로컬에는 Neon API 키가 없어 브랜치를 만들 수 없다. Vercel 환경변수에도 없다.
-- **기능 영향은 없다.** 등록 API(`/api/ax/agent-telemetry/enroll`)가 `intervalSeconds`를 필수로 검증하고
-  항상 그 값을 저장하므로 컬럼 기본값이 실제로 쓰이는 경로가 없다. 코드·문서와 DB를 일치시키는 정리 작업이다.
-- 절차는 `docs/plans/2026-09-03-agent-collector-interval-migration.md` 참조.
+- 등록 API가 `intervalSeconds`를 필수로 검증하고 항상 저장하므로 컬럼 기본값이 쓰이는 경로는 없다.
+  코드·문서와 DB를 일치시키는 정리 작업이었다.
+- 절차와 결과는 `docs/plans/2026-09-03-agent-collector-interval-migration.md` 참조.
+
+### Neon 복구 브랜치를 만드는 방법
+
+guard는 운영 적용에 운영과 다른 복구 브랜치 ID를 요구한다. 저장소와 Vercel 어디에도 Neon API 키가 없고
+`neonctl`도 설치돼 있지 않으므로, **Neon 콘솔을 브라우저로 열어 만든다.** 0031~0034가 모두 이 방식이었다.
+
+1. `https://console.neon.tech/app/projects/floral-wave-70284131/branches` 에서 New Branch
+2. 이름 `pre-ax-<번호>-prod-<YYYYMMDD>`, Auto-delete `After 1 day`, Parent `production`,
+   `Branch data and schema` 선택
+3. 생성 후 주소창의 `br-...`가 복구 브랜치 ID다. 연결 문자열은 필요 없다 — 마이그레이션은 운영
+   `DATABASE_URL`로 실행하고 복구 브랜치는 ID만 넘긴다

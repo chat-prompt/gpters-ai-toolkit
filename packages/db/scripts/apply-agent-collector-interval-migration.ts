@@ -118,6 +118,8 @@ async function main(): Promise<void> {
   const expectedProjectId = requiredArgument('--expected-project-id')
   const productionBranchId = requiredArgument('--production-branch-id')
   const expectedBranchId = production ? productionBranchId : requiredArgument('--expected-branch-id')
+  // 운영 적용은 운영과 다른 복구 브랜치를 반드시 명시해야 한다 (0033 runner와 같은 규칙)
+  const recoveryBranchId = production ? requiredArgument('--recovery-branch-id') : undefined
   const apply = process.argv.includes('--apply')
   if (production && apply && argument('--confirm-production-migration') !== PRODUCTION_CONFIRMATION) {
     throw new Error(`production apply requires --confirm-production-migration ${PRODUCTION_CONFIRMATION}`)
