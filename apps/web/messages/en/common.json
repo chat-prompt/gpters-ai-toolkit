@@ -4,7 +4,8 @@
     "catalog": "Catalog",
     "guides": "Guides",
     "ax": "AX Dashboard",
-    "stats": "Stats"
+    "stats": "Stats",
+    "menu": "Menu"
   },
   "footer": {
     "label": "AI Toolkit Catalog",

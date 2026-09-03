@@ -125,8 +125,8 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`
-          flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
-          transition-all duration-200
+          flex min-h-11 items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium touch-manipulation xl:min-h-0 xl:px-3
+          transition-colors duration-200
           ${isOpen
             ? 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)]'
             : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
@@ -155,9 +155,9 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
             d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
           />
         </svg>
-        <span>Admin</span>
+        <span className="hidden xl:inline">Admin</span>
         <svg
-          className={`w-3 h-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          className={`hidden h-3 w-3 transition-transform duration-200 xl:block ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

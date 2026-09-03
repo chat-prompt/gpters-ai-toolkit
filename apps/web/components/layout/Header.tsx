@@ -16,6 +16,7 @@ import { OrgSwitcher } from './OrgSwitcher'
 import { UpdateNotificationBell } from '../actions/UpdateNotificationBell'
 import { AdminQuickMenu } from '../admin/AdminQuickMenu'
 import { LocaleSwitcher } from './LocaleSwitcher'
+import { HeaderNavMenu, type HeaderNavItem } from './HeaderNavMenu'
 import type { UserRole } from '@/lib/security/rbac'
 
 /** Roles that can access the stats page */
@@ -74,13 +75,22 @@ export function Header({ user, canViewAx = false }: HeaderProps) {
   const canViewStats = user?.role && STATS_ROLES.includes(user.role)
   const isCatalogTab = !isGuidesTab && !isStartTab && !isAxTab && !(isStatsTab && canViewStats)
 
+  // 탭 목록은 한 곳에서만 만들고 데스크톱 줄과 접이식 메뉴가 함께 쓴다.
+  const navItems: HeaderNavItem[] = [
+    { href: '/getting-started', label: t('tutorial'), active: isStartTab },
+    { href: '/', label: t('catalog'), active: isCatalogTab },
+    { href: '/guides', label: t('guides'), active: isGuidesTab },
+    ...(canViewAx ? [{ href: '/ax', label: t('ax'), active: isAxTab }] : []),
+    ...(canViewStats ? [{ href: '/stats', label: t('stats'), active: isStatsTab }] : []),
+  ]
+
   return (
     <header className="sticky top-0 z-[1010] border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/85 backdrop-blur-md">
-      <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-4">
-        <div className="flex items-center justify-between">
+      <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 xl:px-10">
+        <div className="flex items-center justify-between gap-4">
           {/* Logo & Nav */}
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex min-w-0 items-center gap-3 xl:gap-8">
+            <Link href="/" className="flex min-h-11 flex-shrink-0 items-center gap-3 xl:min-h-0">
               <Image
                 src="/gpters-logo.png"
                 alt="AI Toolkit"
@@ -88,72 +98,35 @@ export function Header({ user, canViewAx = false }: HeaderProps) {
                 height={32}
                 className="rounded-full"
               />
-              <span className="text-lg font-medium text-[var(--text-primary)] whitespace-nowrap">
+              <span className="hidden whitespace-nowrap text-lg font-medium text-[var(--text-primary)] xl:inline">
                 AI Toolkit
               </span>
             </Link>
 
-            {/* Tab Navigation */}
-            <nav className="flex items-center gap-0.5 flex-shrink-0">
-              <Link
-                href="/getting-started"
-                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 whitespace-nowrap ${
-                  isStartTab
-                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                {t('tutorial')}
-              </Link>
-              <Link
-                href="/"
-                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 ${
-                  isCatalogTab
-                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                {t('catalog')}
-              </Link>
-              <Link
-                href="/guides"
-                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 ${
-                  isGuidesTab
-                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                {t('guides')}
-              </Link>
-              {canViewAx && (
+            {/* 좁은 화면에서는 같은 탭 목록을 하나의 메뉴로 접는다 */}
+            <HeaderNavMenu items={navItems} label={t('menu')} />
+
+            {/* Tab Navigation — 탭이 늘어도 헤더가 넘치지 않도록 줄어들 수 있게 둔다 */}
+            <nav className="hidden min-w-0 items-center gap-0.5 overflow-x-auto lg:flex">
+              {navItems.map((item) => (
                 <Link
-                  href="/ax"
-                  className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 whitespace-nowrap ${
-                    isAxTab
+                  key={item.href}
+                  href={item.href}
+                  aria-current={item.active ? 'page' : undefined}
+                  className={`whitespace-nowrap rounded-full px-2 py-1.5 text-xs transition-colors duration-200 xl:px-3.5 xl:text-sm ${
+                    item.active
                       ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
-                  {t('ax')}
+                  {item.label}
                 </Link>
-              )}
-              {canViewStats && (
-                <Link
-                  href="/stats"
-                  className={`px-3.5 py-1.5 rounded-full text-sm transition-colors duration-200 ${
-                    isStatsTab
-                      ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-medium'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  {t('stats')}
-                </Link>
-              )}
+              ))}
             </nav>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-shrink-0 items-center gap-1.5 xl:gap-3">
             {user && <OrgSwitcher />}
             <LocaleSwitcher />
             {user && <UpdateNotificationBell />}
