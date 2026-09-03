@@ -30,6 +30,9 @@ const FAILED_MARKERS = new Set([
 const DEFAULT_PROFILE_SCOPE = 'default'
 // Hermes가 SKILL.md를 여는 도구. 인자 중 스킬 이름만 읽고, file_path가 있으면 링크 파일 열람이라 로드로 세지 않는다.
 const SKILL_VIEW_TOOL = 'skill_view'
+// 서버 계약(packages/lib/src/features/ax/agent-telemetry-contract.ts의 safeId)과 같은 규칙.
+// 여기서 거르지 않으면 서버가 400을 돌려주고 pending batch가 영구 재시도에 빠진다.
+const SAFE_SKILL_ID = /^[a-z0-9][a-z0-9._:-]{0,99}$/
 
 const REQUIRED_SESSION_COLUMNS = [
   'id', 'model', 'last_activity_at', 'input_tokens', 'output_tokens',
@@ -68,6 +71,11 @@ interface ParsedToolCall {
   hash: string
   name: string
   /** skill_view가 SKILL.md 본문을 연 호출이면 그 스킬 ID */
+  skillId?: string
+}
+
+interface DirectoryEntry {
+  name: string
   skillId?: string
 }
 
@@ -208,7 +216,9 @@ function parseToolCalls(raw: unknown, sessionIdentity: string): ParsedToolCall[]
 
 /**
  * skill_view 인자에서 스킬 이름만 뽑는다. file_path가 있으면 링크 파일 열람이라 로드가 아니다.
- * 이름이 라벨 규칙(경로·이메일·토큰 금지)에 어긋나면 버린다. 다른 인자 값은 읽지 않는다.
+ * Hermes는 `plugin:skill`과 카테고리 상대 경로(`03-fine-tuning/axolotl`)도 받으므로 경로는 마지막 조각(스킬 이름)만 남기고
+ * 소문자로 정규화한 뒤, 서버 skillId 계약(소문자 영숫자·`._:-`)에 맞는 값만 쓴다. 공백·대문자·경로가 섞인 자유 문자열은
+ * 카탈로그 식별자가 아니라고 보고 버린다. 다른 인자 값은 읽지 않는다.
  */
 function skillIdFromArguments(raw: unknown): string | undefined {
   let value: unknown = raw
@@ -222,8 +232,13 @@ function skillIdFromArguments(raw: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const args = value as Record<string, unknown>
   if (typeof args.file_path === 'string' && args.file_path.trim().length > 0) return undefined
-  const skillId = safeLabel(args.name, '')
-  return skillId.length > 0 ? skillId : undefined
+  if (typeof args.name !== 'string') return undefined
+  const name = args.name.trim()
+  // 절대 경로·홈 경로·상위 디렉터리 참조는 스킬 이름이 아니라 파일 경로다. 전체 문자열에 금지 패턴을 먼저 건다.
+  if (/^[/~.]/.test(name) || name.includes('..') || FORBIDDEN_LABELS.some((pattern) => pattern.test(name))) return undefined
+  const segments = name.split('/').filter((segment) => segment.length > 0)
+  const candidate = (segments[segments.length - 1] ?? '').toLowerCase()
+  return SAFE_SKILL_ID.test(candidate) ? candidate : undefined
 }
 
 function requiredColumns(database: DatabaseConnection, table: string, required: readonly string[]): void {
@@ -326,7 +341,7 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
     `).all(...(defaultProfile ? [] : [options.profileName])) as HermesMessageRow[]
 
     const parsedCalls = new Map<string, ParsedToolCall[] | null>()
-    const callDirectory = new Map<string, string>()
+    const callDirectory = new Map<string, DirectoryEntry>()
     const failedCalls = new Set<string>()
     for (const row of messageRows) {
       const sessionIdentity = rawIdentity(row.session_id)
@@ -336,7 +351,9 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       if (role === 'assistant' && row.tool_calls !== null && row.tool_calls !== undefined && row.tool_calls !== '') {
         const calls = parseToolCalls(row.tool_calls, sessionIdentity)
         parsedCalls.set(messageIdentity, calls)
-        for (const call of calls ?? []) callDirectory.set(call.hash, call.name)
+        for (const call of calls ?? []) {
+          callDirectory.set(call.hash, call.skillId ? { name: call.name, skillId: call.skillId } : { name: call.name })
+        }
       }
       if (role === 'tool') {
         const callId = rawIdentity(row.tool_call_id)
@@ -446,12 +463,6 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
           metric.calls++
           if (failedCalls.has(call.hash)) metric.failures++
           toolMetrics.set(call.name, metric)
-          if (call.skillId) {
-            const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
-            if (failedCalls.has(call.hash)) skill.failed++
-            else skill.loaded++
-            skillMetrics.set(call.skillId, skill)
-          }
           added++
         }
         if (added === 0) collection.duplicatesSkipped++
@@ -470,7 +481,8 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
           continue
         }
         const callHash = hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${callId}`)
-        if (!callDirectory.has(callHash)) {
+        const call = callDirectory.get(callHash)
+        if (!call) {
           collection.orphanToolResultsSkipped++
           continue
         }
@@ -481,6 +493,14 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
         }
         batchSeen.add(resultHash)
         retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
+        // 스킬 로드는 결과가 도착한 시점에 확정한다 (OpenClaw와 같은 규칙). 결과가 아직 없는 호출은 세지 않고,
+        // 결과가 다음 수집 창에 들어오면 그때 센다. 결과 행은 자체 해시로 중복 제거되므로 두 번 세지 않는다.
+        if (call.skillId) {
+          const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+          if (isFailedResult(row)) skill.failed++
+          else skill.loaded++
+          skillMetrics.set(call.skillId, skill)
+        }
         sessions.add(info.hash)
         collection.includedRecords++
         latestIncludedAt = Math.max(latestIncludedAt, at)

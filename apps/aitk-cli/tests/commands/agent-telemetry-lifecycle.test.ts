@@ -15,8 +15,9 @@ import {
   runAgentTelemetryInstall,
   runAgentTelemetryRun,
   runAgentTelemetryUninstall,
+  runAgentTelemetryUpgrade,
 } from '../../src/commands/agent-telemetry-lifecycle.js'
-import { agentTelemetryInstallPath } from '../../src/agent-telemetry/installation.js'
+import { agentTelemetryInstallPath, readAgentTelemetryInstallation } from '../../src/agent-telemetry/installation.js'
 import { writeAgentTelemetryCheckpoint } from '../../src/agent-telemetry/checkpoint.js'
 import { jsonOut } from '../../src/output.js'
 
@@ -128,13 +129,16 @@ describe('agent telemetry lifecycle commands', () => {
     })
     vi.mocked(fetch).mockClear()
 
-    await runAgentTelemetryDoctor(lifecycle())
+    await runAgentTelemetryDoctor({ ...lifecycle(), collectorVersion: '0.7.0', cliScriptPath: cliPath, nodePath })
 
     expect(fetch).not.toHaveBeenCalled()
     expect(existsSync(checkpointDir)).toBe(false)
     expect(vi.mocked(jsonOut).mock.calls.at(-1)?.[0]).toMatchObject({
       ok: true,
-      checks: { sourceExists: true, cliExists: true, credentialAvailable: true, collectionHealth: 'healthy' },
+      checks: {
+        sourceExists: true, cliExists: true, cliUpToDate: true, installedCollectorVersion: '0.7.0',
+        credentialAvailable: true, collectionHealth: 'healthy',
+      },
     })
   })
 
@@ -179,6 +183,49 @@ describe('agent telemetry lifecycle commands', () => {
     expect(existsSync(agentTelemetryInstallPath('test-agent', 'openclaw', root))).toBe(false)
     expect(storedCollectorToken).toBe('')
     expect(existsSync(checkpointDir)).toBe(true)
+  })
+
+  it('upgrade는 설치 기록의 CLI 경로·버전을 실행 중인 CLI로 바꾸고 credential·checkpoint·collector ID를 보존한다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.1',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+    })
+    await runAgentTelemetryRun(lifecycle())
+
+    const later = { ...lifecycle(), now: new Date('2026-08-27T02:00:00Z') }
+    // 옛 CLI 기준 doctor는 최신이 아니라고 알린다
+    await runAgentTelemetryDoctor({ ...later, collectorVersion: '0.7.6', cliScriptPath: join(root, 'aitk-new.js') })
+    const staleDoctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { ok: boolean; checks: Record<string, unknown> }
+    expect(staleDoctor.ok).toBe(false)
+    expect(staleDoctor.checks).toMatchObject({ cliUpToDate: false, installedCollectorVersion: '0.7.1' })
+
+    const newCliPath = join(root, 'aitk-new.js')
+    writeFileSync(newCliPath, '')
+    await runAgentTelemetryUpgrade({
+      ...later, collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath, platform: 'darwin',
+    })
+    const upgrade = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(upgrade).toMatchObject({
+      ok: true, upgraded: true, collectorId: 'collector-test', scheduleReloaded: false,
+      previous: expect.objectContaining({ collectorVersion: '0.7.1', scriptPath: cliPath }),
+      cli: expect.objectContaining({ collectorVersion: '0.7.6', scriptPath: newCliPath }),
+    })
+    const installation = readAgentTelemetryInstallation('test-agent', 'openclaw', root)
+    expect(installation.cli).toEqual({ nodePath, scriptPath: newCliPath, collectorVersion: '0.7.6' })
+    expect(installation.collectorId).toBe('collector-test')
+    expect(storedCollectorToken).toBe(COLLECTOR_TOKEN)
+    expect(existsSync(checkpointDir)).toBe(true)
+
+    // 같은 CLI로 다시 실행하면 바꿀 것이 없다
+    await runAgentTelemetryUpgrade({
+      ...later, collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath, platform: 'darwin',
+    })
+    expect(vi.mocked(jsonOut).mock.calls.at(-1)?.[0]).toMatchObject({ ok: true, upgraded: false })
+
+    await runAgentTelemetryDoctor({ ...later, collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath })
+    const freshDoctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { checks: Record<string, unknown> }
+    expect(freshDoctor.checks).toMatchObject({ cliUpToDate: true, installedCollectorVersion: '0.7.6' })
   })
 
   it('서버 revoke가 실패해도 timer는 먼저 멈추고 재시도용 credential·config는 보존한다', async () => {

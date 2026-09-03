@@ -22,7 +22,8 @@ local paths.
   requires 0.7.1 or newer. Current OpenClaw auto-detection, including safe JSONL
   fallback around unrelated sibling SQLite files, requires 0.7.2 or newer.
   Sessionless skill journey linking requires 0.7.3 or newer.
-  Hermes skill-load counting (skill_view) requires 0.7.5 or newer.
+  Hermes skill-load counting (skill_view) requires 0.7.5 or newer, and
+  `agent-telemetry upgrade` requires 0.7.6 or newer.
   Internal agents install the CLI from an approved repository commit with
   `install-from-repo.sh`; publishing a new npm package is not required.
 - Node.js and Corepack/pnpm. If Bun is not already installed, the repo
@@ -163,9 +164,21 @@ backfill into a bot identity.
 - `run` performs one immediate upload using the Keychain credential.
 - Success is the JSON response body with `ok: true`, not exit code alone.
 
-After a CLI or runtime upgrade, run `doctor`. The dashboard differentiates a
-registered collector waiting for its first batch, a healthy reporter, a stale
-reporter, and a health-blocked reporter.
+After a CLI upgrade (for example `install-from-repo.sh` at a newer approved
+commit), run `aitk agent-telemetry upgrade --agent <id> --source <source>`.
+The installation record and the launchd plist pin the CLI file that was
+running at install time (`share/gpters-aitk/<version>/aitk.js`), so replacing
+the `aitk` wrapper alone leaves the scheduled job on the old version — batches
+keep reporting the old `collectorVersion`. `upgrade` re-points the record and
+plist to the running CLI, keeps the collector ID, credential, checkpoint, and
+interval, and reloads launchd. `doctor` reports `cliUpToDate=false` (and
+`ok=false`) while the record still points at another CLI. The dashboard
+differentiates a registered collector waiting for its first batch, a healthy
+reporter, a stale reporter, and a health-blocked reporter.
+
+  Hermes skill-load counting (skill_view) requires 0.7.5 or newer, and the
+  `upgrade` subcommand itself requires 0.7.6 or newer. Batches from an older
+  Hermes collector are shown as "skill loads not observed", not as zero.
 
 To remove a stream:
 
@@ -198,7 +211,10 @@ recovery.
 - Agents that run on a person's laptop may pass `--interval 21600` (six hours)
   to limit repeated log scans and network/DB requests. The allowed range is
   600–604800 seconds. This telemetry is separate from human usage: people keep
-  reporting once a day through `aitk usage report`. Managed collectors are
+  reporting once a day through `aitk usage report`.
+- Staleness: the dashboard marks a collector stale after
+  `max(12 hours, 2 × interval)`. With the hourly default that is twelve hours,
+  so the hourly cadence is about data freshness, not faster stale alerts. Managed collectors are
   considered stale after two configured intervals, with a twelve-hour floor
   to avoid false alarms from sleeping laptops.
 - The macOS job is a per-user LaunchAgent. It does not run while the machine is

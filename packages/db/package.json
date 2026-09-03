@@ -29,6 +29,8 @@
     "db:migrate:sessionless-skills-production": "tsx scripts/apply-sessionless-skill-events-migration.ts --production",
     "db:migrate:skill-journey-child": "tsx scripts/apply-skill-journey-migration.ts",
     "db:migrate:skill-journey-production": "tsx scripts/apply-skill-journey-migration.ts --production",
+    "db:migrate:collector-interval-child": "tsx scripts/apply-agent-collector-interval-migration.ts",
+    "db:migrate:collector-interval-production": "tsx scripts/apply-agent-collector-interval-migration.ts --production",
     "db:backfill:sessionless-skills": "tsx scripts/backfill-sessionless-skill-events.ts",
     "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts tests/sessionless-skill-events-guard.test.ts tests/skill-journey-guard.test.ts"
   },

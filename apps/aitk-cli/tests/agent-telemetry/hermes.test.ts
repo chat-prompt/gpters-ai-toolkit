@@ -138,7 +138,7 @@ describe('collectHermesAgent', () => {
     expect(accounted).toBe(result.collection.recordsRead)
   })
 
-  it('skill_view가 SKILL.md를 연 호출만 스킬 이름으로 세고 다른 인자는 읽지 않는다', async () => {
+  function insertMessage(): (row: unknown[]) => void {
     const database = new DatabaseSync(databasePath)
     const insert = database.prepare(`
       INSERT INTO messages (
@@ -146,11 +146,29 @@ describe('collectHermesAgent', () => {
         effect_disposition, timestamp, finish_reason, display_kind
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    insert.run(10, 'session-secret', 'assistant', 'private', null, JSON.stringify([
-      // 본문 로드 — 인자가 객체
+    return (row) => {
+      insert.run(...(row as Parameters<typeof insert.run>))
+    }
+  }
+
+  function collectSkills(committedState = committed()) {
+    return collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: START, end: END },
+      committed: committedState,
+      category: 'general',
+      source: 'hermes',
+    })
+  }
+
+  it('skill_view가 SKILL.md를 연 호출만 결과가 도착한 시점에 스킬 로드로 세고 다른 인자는 읽지 않는다', async () => {
+    const insert = insertMessage()
+    insert([10, 'session-secret', 'assistant', 'private', null, JSON.stringify([
+      // 본문 로드 — 인자가 객체, plugin:skill 형태
       { id: 'skill-1', function: { name: 'skill_view', arguments: { name: 'openclaw-skills:session-cleanup' } } },
-      // 본문 로드 — 인자가 JSON 문자열 (OpenAI 형식)
-      { id: 'skill-2', function: { name: 'skill_view', arguments: '{"name":"humanizer"}' } },
+      // 본문 로드 — 인자가 JSON 문자열 (OpenAI 형식), 대문자는 소문자로
+      { id: 'skill-2', function: { name: 'skill_view', arguments: '{"name":"Humanizer"}' } },
       // 링크 파일 열람은 로드가 아니다
       { id: 'skill-3', function: { name: 'skill_view', arguments: { name: 'humanizer', file_path: 'references/tone.md' } } },
       // 실패한 로드
@@ -159,27 +177,57 @@ describe('collectHermesAgent', () => {
       { id: 'skill-5', function: { name: 'skill_view', arguments: { name: '/Users/person/private/SKILL.md' } } },
       // skill_view가 아닌 도구의 인자는 스킬로 읽지 않는다
       { id: 'skill-6', function: { name: 'read_file', arguments: { name: 'humanizer', path: '/Users/person/private' } } },
-    ]), null, null, epoch('2026-08-26T02:00:00Z'), null, null)
-    insert.run(11, 'session-secret', 'tool', 'private failure', 'skill-4', null, 'skill_view', 'failed',
-      epoch('2026-08-26T02:00:01Z'), 'error', null)
-    database.close()
+      // Hermes 카테고리 상대 경로는 마지막 조각만 스킬 이름이다
+      { id: 'skill-7', function: { name: 'skill_view', arguments: { name: '03-fine-tuning/axolotl' } } },
+      // 공백이 섞인 자유 문자열은 카탈로그 식별자가 아니다 (서버 계약 위반, PII 가능)
+      { id: 'skill-8', function: { name: 'skill_view', arguments: { name: 'john smith medical record' } } },
+      // 깨진 JSON 인자는 조용히 버린다
+      { id: 'skill-9', function: { name: 'skill_view', arguments: '{"name":' } },
+    ]), null, null, epoch('2026-08-26T02:00:00Z'), null, null])
+    let id = 11
+    for (const [callId, disposition, finish] of [
+      ['skill-1', null, null], ['skill-2', null, null], ['skill-3', null, null], ['skill-4', 'failed', 'error'],
+      ['skill-5', null, null], ['skill-6', null, null], ['skill-7', null, null], ['skill-8', null, null], ['skill-9', null, null],
+    ] as const) {
+      insert([id++, 'session-secret', 'tool', 'private result', callId, null, 'skill_view', disposition,
+        epoch('2026-08-26T02:00:01Z'), finish, null])
+    }
 
-    const result = await collectHermesAgent({
-      sessionsDir: databasePath,
-      profileName: 'bbokeoter-private-profile',
-      window: { start: START, end: END },
-      committed: committed(),
-      category: 'general',
-      source: 'hermes',
-    })
+    const result = await collectSkills()
 
     expect(result.skillLoads).toEqual([
+      { skillId: 'axolotl', loaded: 1, failed: 0, interrupted: 0 },
       { skillId: 'humanizer', loaded: 1, failed: 1, interrupted: 0 },
       { skillId: 'openclaw-skills:session-cleanup', loaded: 1, failed: 0, interrupted: 0 },
     ])
-    expect(result.tools.find((tool) => tool.name === 'skill_view')).toEqual({ name: 'skill_view', calls: 5, failures: 1 })
-    expect(JSON.stringify(result)).not.toContain('/Users/person')
-    expect(JSON.stringify(result)).not.toContain('references/tone.md')
+    for (const load of result.skillLoads) expect(load.skillId).toMatch(/^[a-z0-9][a-z0-9._:-]*$/)
+    expect(result.tools.find((tool) => tool.name === 'skill_view')).toEqual({ name: 'skill_view', calls: 8, failures: 1 })
+    const serialized = JSON.stringify(result)
+    expect(serialized).not.toContain('/Users/person')
+    expect(serialized).not.toContain('references/tone.md')
+    expect(serialized).not.toContain('john')
+    expect(serialized).not.toContain('03-fine-tuning')
+  })
+
+  it('결과가 없는 skill_view 호출은 보류했다가 결과가 다음 수집 창에 오면 그때 센다', async () => {
+    const insert = insertMessage()
+    insert([20, 'session-secret', 'assistant', 'private', null, JSON.stringify([
+      { id: 'skill-late', function: { name: 'skill_view', arguments: { name: 'browse' } } },
+    ]), null, null, epoch('2026-08-26T03:00:00Z'), null, null])
+
+    const first = await collectSkills()
+    expect(first.skillLoads).toEqual([])
+    expect(first.tools.find((tool) => tool.name === 'skill_view')?.calls).toBe(1)
+
+    insert([21, 'session-secret', 'tool', 'private result', 'skill-late', null, 'skill_view', null,
+      epoch('2026-08-26T03:00:05Z'), null, null])
+    const second = await collectSkills(first.nextCommitted)
+    expect(second.skillLoads).toEqual([{ skillId: 'browse', loaded: 1, failed: 0, interrupted: 0 }])
+    // 호출 자체는 첫 수집에서 이미 셌으므로 다시 세지 않는다
+    expect(second.tools.find((tool) => tool.name === 'skill_view')).toBeUndefined()
+
+    const third = await collectSkills(second.nextCommitted)
+    expect(third.skillLoads).toEqual([])
   })
 
   it('같은 DB의 다른 Hermes 프로필 세션과 메시지를 집계에서 제외한다', async () => {

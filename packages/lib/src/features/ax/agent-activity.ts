@@ -50,6 +50,37 @@ const SOURCE_INFO: Record<AxAgentTelemetrySource, Omit<AxAgentSourceCoverageRow,
   },
 }
 
+/**
+ * 소스별로 스킬 신호를 보내기 시작한 최소 수집기 버전. 그 이전 배치의 빈 skillLoads는 "관측했는데 0건"이 아니라
+ * "관측하지 않음"이다 (Hermes는 0.7.5부터 skill_view를 스킬 로드로 센다).
+ */
+const SKILL_SIGNAL_MIN_VERSION: Partial<Record<AxAgentTelemetrySource, string>> = { hermes: '0.7.5' }
+
+function versionAtLeast(actual: unknown, minimum: string): boolean {
+  if (typeof actual !== 'string') return false
+  const parse = (value: string) => value.split('.').map((part) => Number.parseInt(part, 10))
+  const a = parse(actual)
+  const b = parse(minimum)
+  if (a.some((part) => !Number.isFinite(part))) return false
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const left = a[i] ?? 0
+    const right = b[i] ?? 0
+    if (left !== right) return left > right
+  }
+  return true
+}
+
+/** 이 배치가 스킬 로드 신호를 실제로 담을 수 있는 수집기에서 왔는지 */
+function batchObservesSkills(source: AxAgentTelemetrySource, runtime: unknown): boolean {
+  if (!SOURCE_INFO[source].capabilities.skills) return false
+  const minimum = SKILL_SIGNAL_MIN_VERSION[source]
+  if (!minimum) return true
+  const version = runtime && typeof runtime === 'object' && !Array.isArray(runtime)
+    ? (runtime as Record<string, unknown>).collectorVersion
+    : undefined
+  return versionAtLeast(version, minimum)
+}
+
 function emptyUsage(): AxAgentTokenUsage {
   return {
     inputTokens: 0,
@@ -349,7 +380,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       const source = sourceValue as AxAgentTelemetrySource
       const agent = agentMap.get(row.agentId) ?? createAgentAccumulator(row.agentId)
       agentMap.set(row.agentId, agent)
-      if (SOURCE_INFO[source].capabilities.skills) {
+      if (batchObservesSkills(source, row.runtime)) {
         skillLoadsObserved = true
         agent.skillLoadsObserved = true
       }

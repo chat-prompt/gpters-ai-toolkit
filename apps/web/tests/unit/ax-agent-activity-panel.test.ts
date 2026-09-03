@@ -206,6 +206,23 @@ describe('agentActivityPanel', () => {
     }))
   })
 
+  it('0.7.5 이전 Hermes batch의 빈 skillLoads는 관측 안 함으로 두고 0으로 표시하지 않는다', async () => {
+    queueRows([row({
+      agentId: 'bbokeoter',
+      thinkingTokensRelation: 'unknown',
+      runtime: { openclawVersion: 'unknown', claudeCliVersion: 'unknown', collectorVersion: '0.7.1' },
+      models: [{ model: 'hermes-3', turns: 2, usage: {
+        ...usage(10, 20, 30, 40, 8), thinkingTokensRelation: 'unknown',
+      } }],
+      tools: [{ name: 'skill_view', calls: 5, failures: 0 }],
+      skillLoads: [],
+      collection: { source: 'hermes', recordsRead: 50, parseFailures: 0, unsupportedRecordsSkipped: 0, healthWarnings: [] },
+    })], [])
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+    expect(result.data!.agents[0]).toMatchObject({ agentId: 'bbokeoter', uniqueLoadedSkills: 0, skillLoadsObserved: false })
+    expect(result.data!.sourceCoverage.find((item) => item.source === 'hermes')?.capabilities.skills).toBe(true)
+  })
+
   it('Hermes batch를 reporter와 source coverage에 포함한다', async () => {
     queueRows([row({
       agentId: 'bbokeoter',
@@ -213,6 +230,7 @@ describe('agentActivityPanel', () => {
       models: [{ model: 'hermes-3', turns: 4, usage: {
         ...usage(10, 20, 30, 40, 8), thinkingTokensRelation: 'unknown',
       } }],
+      runtime: { openclawVersion: 'unknown', claudeCliVersion: 'unknown', collectorVersion: '0.7.5' },
       tools: [{ name: 'shell', calls: 3, failures: 1 }, { name: 'skill_view', calls: 2, failures: 0 }],
       skillLoads: [{ skillId: 'internal-comms', loaded: 2, failed: 0, interrupted: 0 }],
       collection: { source: 'hermes', recordsRead: 100, parseFailures: 0, unsupportedRecordsSkipped: 0, healthWarnings: [] },
