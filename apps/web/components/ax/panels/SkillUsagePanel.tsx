@@ -193,14 +193,17 @@ function SkillTable({
                 <td
                   className={`relative ${TD}`}
                 >
-                  {/* 사용량 비례 막대 — 이름 칸 안에서만 찬다 */}
+                  {/* 사용량 비례 막대 — 이름 칸 안에서만 찬다. 호버·포커스 때 요약 표와 같은 외곽선이 붙는다 */}
                   <span
                     aria-hidden
-                    className="absolute inset-y-0 left-0"
+                    className="ax-activity-mark absolute inset-y-0 left-0 transition-shadow duration-150"
                     data-activity-fill={relativeActivityFill(activity(skill), min, max)}
                     style={{
                       width: `${(activity(skill) / max) * 100}%`,
                       background: relativeActivityFill(activity(skill), min, max),
+                      boxShadow: highlightedSkillId === skill.skillId
+                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
+                        : 'none',
                     }}
                   />
                   <span className="relative text-[var(--text-primary)]">{skill.name}</span>

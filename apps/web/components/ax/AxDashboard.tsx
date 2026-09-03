@@ -828,11 +828,15 @@ function DailyApplicationFlowChart({
                   onBlur={hideTip}
                   aria-label={`${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)}건 · 로드 ${formatCount(loads)}건 · 로드 후 적용 ${formatCount(appliedAfterLoad)}건 · ${conversion}`}
                 >
+                  {/* 막대 전체에 요약 차트와 같은 호버 외곽선을 붙인다. 막대 자체는 움직이지 않는다 */}
                   <div
-                    className="relative flex w-full flex-col"
+                    className="ax-activity-mark relative flex w-full flex-col rounded-t-[4px] transition-shadow duration-150"
                     data-flow-total={total}
                     style={{
                       height: total === 0 ? '2px' : `${Math.max(3, (total / max) * 100)}%`,
+                      boxShadow: hoveredIndex === index
+                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
+                        : 'none',
                     }}
                   >
                   {daily.length <= 7 && total > 0 && (
