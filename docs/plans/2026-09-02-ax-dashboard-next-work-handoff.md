@@ -6,11 +6,13 @@
 ## 1. 현재 작업 상태
 
 - 저장소: `/Users/hychoi/Projects/Geniefy/gpters-ai-toolkit`
-- 브랜치: `feat/ax-agent-dashboard-ui` (origin/main 위로 rebase 완료)
-- 2026-09-02 진행 상황
-  - 직전 워킹트리 작업(주황 팔레트·365일 잔디 2장·에이전트 스킬 활용 요약)과 §5의 **P0 지표 신뢰도**를
-    한 커밋(`feat(ax): show denominator reliability alongside conversion rates`)으로 묶었다.
-    아직 PR·운영 배포는 하지 않았다.
+- 브랜치: `main` (2026-09-03 기준 `12265496`, 아래 작업이 모두 운영 배포됨)
+- 2026-09-02~03 진행 상황 — PR #57~#66 전부 머지·배포 완료
+  - #57·#58 P0 지표 신뢰도와 수집 참여 상태 정렬 (#58은 타입 import 누락 핫픽스)
+  - #59 패널 디자인 어휘 통일, #60 기간 전환 성능(클라이언트 캐시·선로딩, 서버 병렬화, 365일 잔디 분리)
+  - #61 데이터 포인트 툴팁 세로 나열·잔디 툴팁 단순화, #63 스킬 이벤트를 검색 → 로드 → 적용 깔때기로 재정의
+  - #64 Hermes `skill_view` 호출을 스킬 로드로 집계, #65 에이전트 텔레메트리 기본 주기 1시간,
+    #66 `aitk agent-telemetry upgrade` 명령과 Codex 교차 검증 반영 (§10 참조)
   - 헤더·OrgSwitcher·UserMenu·AdminQuickMenu의 `xl` 미만 축약 변경은 AX 범위 밖이라 커밋하지 않고
     워킹트리에 남겨 두었다. 375px에서 헤더 요소가 겹치므로 별도로 다듬어야 한다.
   - 관련 Linear 이슈: DEV-4276(정기 점검용 지표 세트 정의와 배치) In Progress. DEV-4140·DEV-4221도 열려 있다.
@@ -246,7 +248,16 @@
 
 ## 7. 검증 상태와 명령
 
-마지막 검증 (2026-09-02, P0 커밋 기준):
+마지막 검증 (2026-09-03, main `12265496` 배포 기준):
+
+- `@gpters/web` 단위 테스트 97 files / 2460 tests, `@gpters/aitk` 124 tests, 두 패키지 eslint·production build 통과
+- Vercel 운영 배포 READY, 운영 대시보드에서 Hermes 소스가 "토큰 ✓ · 도구 ✓ · 스킬 ✓"로 관측됨을 확인
+- 뽀케터 호스트 실검증: `upgrade`로 0.7.1 → 0.7.6 재지정 후 실제 스킬 사용 → 서버 배치에 스킬 로드 2건 도착.
+  뽀케터의 독립 SQLite 읽기 전용 집계와 collector 결과가 일치(호출 303건, 루트 로드 264건)
+- Codex 교차 검증(PR #64·#65) 반영: skillId 서버 계약 정규화, 결과 도착 시점 확정, 구버전 배치 미관측 판정,
+  0034 guarded runner, CLI help·setup 스킬·README 문구. 미반영: Hermes 실패 판정 컬럼의 실제 값 검증(실패 사례 없음)
+
+이전 검증 (2026-09-02, P0 커밋 기준):
 
 - AX 관련 단위 테스트: 9 files / 37 tests 통과 (`ax-journey-insights-view.test.tsx` 포함)
 - 밝은·어두운 테마 브라우저 시각 검증 통과 — 375 / 1280 / 1920px, 요약·스킬·탐색·결과 분석·에이전트 활동
@@ -310,3 +321,25 @@ corepack pnpm --filter @gpters/web exec dotenv -e ../../.env.local -- \
 6. 화면 문구나 그래프를 바꿀 때 AX 대상 테스트와 브라우저 시각 검증을 함께 수행한다.
 7. 운영 배포, DB 변경, 백필은 별도 사용자 승인 전에는 실행하지 않는다.
 
+## 10. 에이전트 텔레메트리 수집기 운영 (2026-09-03)
+
+에이전트 활동 패널의 스킬 로드는 각 에이전트 호스트에 설치된 AITK 수집기가 보낸 값이다. 소스마다 관측 범위가
+다르므로 `SOURCE_INFO`(`packages/lib/src/features/ax/agent-activity.ts`)의 capabilities로 "미관측"과 "0건"을 구분한다.
+
+- **Hermes(뽀케터)**: `skill_view(name, file_path?)` 호출을 스킬 로드로 센다. 도구 인자를 읽지 않는 프라이버시 원칙의
+  유일한 예외가 스킬 이름이며, `file_path`가 있으면 링크 파일 열람이라 세지 않는다. 스킬 이름은 서버 계약
+  (`^[a-z0-9][a-z0-9._:-]*$`)에 맞춰 정규화하고 경로·공백이 섞인 자유 문자열은 버린다. AITK 0.7.5 이상 배치만
+  스킬 신호를 관측한 것으로 판정한다.
+- **Codex**: 스킬 로드 신호가 아직 없다. capabilities에서 `skills: false`.
+- **수집 주기**: 기본 1시간(`--interval 3600`). 사람의 `aitk usage report`는 별도로 하루 한 번이다. 노트북에서 도는
+  에이전트만 `--interval 21600`. 대시보드의 stale 판정은 `max(12시간, 2 × interval)`이라 1시간 설정에서도 12시간이다.
+- **CLI 업그레이드 함정**: `install`이 설치 당시 실행 파일(`share/gpters-aitk/<version>/aitk.js`)을 설치 기록과
+  launchd plist에 고정한다. `install-from-repo.sh`는 `aitk` 래퍼만 바꾸므로 **새 버전을 깔아도 예약 수집은 옛
+  바이너리로 돈다.** 배포 뒤에는 반드시
+  `aitk agent-telemetry upgrade --agent <id> --source <source>`까지 실행하고,
+  `doctor`의 `cliUpToDate`와 서버 배치의 `runtime.collectorVersion`으로 확인한다.
+- **뽀케터에게 작업을 요청할 때**: Slack DM(`D0BNWKWKXTM`)에서 원문은 한 줄, 상세는 스레드. 승인 커밋 전체 SHA를
+  주고 임시 clone에서만 작업하게 한다. 호스트에 Bun이 없어 빌드는 `corepack pnpm dlx bun`으로 돈다. 명령 실행
+  승인(특히 `rm -rf`)은 사용자가 직접 눌러야 한다.
+- **dry-run으로 과거 구간을 보려면** 빈 `--checkpoint-dir`을 지정해야 한다. 운영 checkpoint는 delta + seen 해시라
+  마지막 수집 이후만 새로 본다.
