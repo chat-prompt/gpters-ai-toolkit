@@ -67,9 +67,13 @@ Omit `--project-slugs` for OpenClaw and add `--openclaw-agent <internal-id>`.
 The collector prefers the current per-agent SQLite over archived JSONL and
 verifies its metadata before collecting. Replace `--project-slugs` with
 `--hermes-profile <dedicated-profile-or-default>` for Hermes. The installer performs a
-health-gated dry run before enrollment and registers a six-hour launchd job.
-For an always-on agent that needs fresher monitoring, add `--interval 3600`;
-do not shorten the interval without telling the user.
+health-gated dry run before enrollment and registers an hourly launchd job
+(`--interval 3600`, the default for always-on internal agents). For an agent
+that runs on a person's laptop, add `--interval 21600` (six hours); do not
+change the interval without telling the user. After installing a newer AITK
+build, run `aitk agent-telemetry upgrade --agent <id> --source <source>` so the
+scheduled job switches to the new binary; `doctor` reports `cliUpToDate=false`
+until you do.
 
 ## Verify and operate
 

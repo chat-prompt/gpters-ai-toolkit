@@ -1,4 +1,4 @@
-/** 설치형 agent telemetry collector의 install/doctor/status/run/uninstall 명령. */
+/** 설치형 agent telemetry collector의 install/upgrade/doctor/status/run/uninstall 명령. */
 
 import { existsSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
@@ -70,6 +70,23 @@ export interface AgentTelemetryLifecycleOptions {
   runner?: CommandRunner
   uid?: number
   now?: Date
+}
+
+/** upgrade·doctor가 "지금 실행 중인 CLI"를 알기 위해 받는 정보. 생략하면 process.argv[1]·process.execPath·설치 기록을 쓴다. */
+export interface AgentTelemetryCliIdentity {
+  collectorVersion?: string
+  cliScriptPath?: string
+  nodePath?: string
+}
+
+/** 설치 기록의 CLI 경로·버전이 지금 실행 중인 CLI와 같은지. 설치 뒤 CLI만 새로 깔면 launchd는 계속 옛 파일을 실행한다. */
+function cliMatchesInstallation(installation: AgentTelemetryInstallation, identity: AgentTelemetryCliIdentity): boolean {
+  const scriptPath = resolve(identity.cliScriptPath ?? process.argv[1] ?? '')
+  const nodePath = resolve(identity.nodePath ?? process.execPath)
+  const version = identity.collectorVersion ?? installation.cli.collectorVersion
+  return installation.cli.scriptPath === scriptPath &&
+    installation.cli.nodePath === nodePath &&
+    installation.cli.collectorVersion === version
 }
 
 function source(value: string): AgentTelemetrySource {
@@ -276,11 +293,89 @@ export async function runAgentTelemetryRun(options: AgentTelemetryLifecycleOptio
   if (result.dryRun) error('Installed telemetry runner unexpectedly used dry-run mode')
 }
 
-export async function runAgentTelemetryDoctor(options: AgentTelemetryLifecycleOptions): Promise<void> {
+/**
+ * 등록된 수집기가 실행할 CLI 경로·버전을 지금 실행 중인 CLI로 바꾸고 launchd 예약을 다시 올린다.
+ * credential·checkpoint·collector ID·interval은 그대로다. install-from-repo.sh로 새 버전을 깔아도 설치 기록의
+ * scriptPath는 옛 버전 파일을 가리키므로, 이 명령을 실행하지 않으면 예약 수집은 계속 옛 바이너리로 돈다.
+ */
+export async function runAgentTelemetryUpgrade(
+  options: AgentTelemetryLifecycleOptions & AgentTelemetryCliIdentity & { platform?: NodeJS.Platform }
+): Promise<void> {
+  const installation = readAgentTelemetryInstallation(options.agentId, source(options.source), options.home)
+  const runner = options.runner ?? defaultCommandRunner
+  const platform = options.platform ?? process.platform
+  if (platform !== 'darwin') error('Automatic telemetry installation currently supports macOS only')
+
+  const scriptPath = resolve(options.cliScriptPath ?? process.argv[1] ?? '')
+  if (!scriptPath || !existsSync(scriptPath) || scriptPath.endsWith('.ts')) {
+    error('Telemetry upgrade requires a packaged or built aitk JavaScript CLI')
+  }
+  const nodePath = resolve(options.nodePath ?? process.execPath)
+  if (!existsSync(nodePath)) error('Node.js executable does not exist')
+  if (!options.collectorVersion) error('Telemetry upgrade requires the running CLI version')
+
+  const previous = { ...installation.cli }
+  const identity = { collectorVersion: options.collectorVersion, cliScriptPath: scriptPath, nodePath }
+  if (cliMatchesInstallation(installation, identity)) {
+    jsonOut({
+      ok: true,
+      upgraded: false,
+      agentId: installation.agentId,
+      collectorId: installation.collectorId,
+      source: installation.source,
+      cli: previous,
+      scheduleReloaded: false,
+    })
+    return
+  }
+
+  const upgraded: AgentTelemetryInstallation = {
+    ...installation,
+    cli: { nodePath, scriptPath, collectorVersion: options.collectorVersion },
+  }
+  // 새 CLI로 source를 다시 읽을 수 있는지 먼저 확인한다. 전송·checkpoint 변경은 없다.
+  const dryRun = await runAgentTelemetryCollect(collectOptions(upgraded, true, undefined, options.now))
+  if (dryRun.batch.collection.healthStatus !== 'healthy') {
+    error(`Telemetry source validation is blocked: ${dryRun.batch.collection.healthWarnings.join(', ')}`)
+  }
+
+  writeAgentTelemetryInstallation(upgraded, options.home)
+  let scheduleReloaded = false
+  if (upgraded.schedule.provider === 'launchd') {
+    try {
+      installLaunchdSchedule(upgraded, runner, options.uid)
+      scheduleReloaded = true
+    } catch (cause) {
+      // 예약 갱신에 실패하면 설치 기록을 되돌려 옛 plist와 기록이 어긋나지 않게 한다.
+      writeAgentTelemetryInstallation(installation, options.home)
+      throw cause
+    }
+  }
+
+  jsonOut({
+    ok: true,
+    upgraded: true,
+    agentId: installation.agentId,
+    collectorId: installation.collectorId,
+    source: installation.source,
+    previous,
+    cli: upgraded.cli,
+    scheduleReloaded,
+    intervalSeconds: upgraded.schedule.intervalSeconds,
+    checkpointPreserved: true,
+    credentialPreserved: true,
+  })
+}
+
+export async function runAgentTelemetryDoctor(
+  options: AgentTelemetryLifecycleOptions & AgentTelemetryCliIdentity
+): Promise<void> {
   const installation = readAgentTelemetryInstallation(options.agentId, source(options.source), options.home)
   const runner = options.runner ?? defaultCommandRunner
   const sourceExists = existsSync(installation.sessionsDir)
   const cliExists = existsSync(installation.cli.scriptPath) && existsSync(installation.cli.nodePath)
+  // 설치 기록이 지금 실행 중인 CLI와 다르면 예약 수집은 옛 버전으로 돌고 있다. `agent-telemetry upgrade`로 맞춘다.
+  const cliUpToDate = cliMatchesInstallation(installation, options)
   let credentialAvailable = false
   try {
     credentialAvailable = readMacOSKeychainCredential(installation, runner).length > 0
@@ -293,7 +388,7 @@ export async function runAgentTelemetryDoctor(options: AgentTelemetryLifecycleOp
   const dryRun = sourceExists && cliExists
     ? await runAgentTelemetryCollect(collectOptions(installation, true, undefined, options.now))
     : null
-  const healthy = sourceExists && cliExists && credentialAvailable && scheduleLoaded !== false &&
+  const healthy = sourceExists && cliExists && cliUpToDate && credentialAvailable && scheduleLoaded !== false &&
     dryRun?.batch.collection.healthStatus === 'healthy'
 
   jsonOut({
@@ -304,6 +399,8 @@ export async function runAgentTelemetryDoctor(options: AgentTelemetryLifecycleOp
     checks: {
       sourceExists,
       cliExists,
+      cliUpToDate,
+      installedCollectorVersion: installation.cli.collectorVersion,
       credentialAvailable,
       scheduleConfigured: installation.schedule.provider !== 'none',
       scheduleLoaded,
