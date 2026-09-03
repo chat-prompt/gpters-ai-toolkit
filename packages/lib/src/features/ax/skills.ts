@@ -108,55 +108,6 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
     const since = startOfUtcDay(new Date(now.getTime() - (span - 1) * 24 * 60 * 60 * 1000))
 
     try {
-      // 1. 요약 지표 — 아래 표와 같은 단일 GPTers 카탈로그 모집단을 쓴다
-      //    세션 수도 같은 집합에서 센다 — 별도로 mcp_sessions를 세면 조직 범위와
-      //    익명 세션 취급이 달라져 옆 타일과 모집단이 어긋난다
-      const [totals] = await db
-        .select({
-          totalEvents: sql<number>`count(*)::int`,
-          searched: actionCount('search'),
-          loaded: actionCount('load'),
-          applied: actionCount('apply'),
-          skipped: actionCount('skip'),
-          deployed: actionCount('deploy'),
-          activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
-          sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
-        })
-        .from(skillEvents)
-        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
-
-      // 2. 스킬별 action 피벗 — 카탈로그에 존재하는 항목만 대상으로 한다
-      const skillRows = await db
-        .select({
-          skillId: skillEvents.skillId,
-          name: catalogItems.name,
-          searched: actionCount('search'),
-          loaded: actionCount('load'),
-          applied: actionCount('apply'),
-          skipped: actionCount('skip'),
-          deployed: actionCount('deploy'),
-          users: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
-          lastUsedAt: sql<Date | null>`max(${skillEvents.createdAt}) filter (where ${skillEvents.action} = 'apply')`,
-        })
-        .from(skillEvents)
-        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
-        .groupBy(skillEvents.skillId, catalogItems.name)
-
-      // 3. 일자별 실제 사용 추이 — 명시적인 적용 보고만 센다
-      const dailyRows = await db
-        .select({ date: dayExpr, events: sql<number>`count(*)::int` })
-        .from(skillEvents)
-        .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-        .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)))
-        .groupBy(dayExpr)
-        .orderBy(dayExpr)
-
-      // 4. 기간 내 적용 보고가 없는 카탈로그 스킬
-      //    빈 배열 notInArray는 Drizzle에서 깨지므로 서브쿼리로 처리한다
-      //    검색 노출·스킵만 있는 스킬도 관리 관점에서는 미관측이다. 정리 우선순위는
-      //    전 기간의 마지막 적용 보고가 오래된 순, 같은 시각이면 누적 적용 세션이 적은 순이다.
       const allTimeLastUsedAt = sql<Date | null>`(
         select max("skill_events"."created_at") from "skill_events"
         where "skill_events"."skill_id" = "catalog_items"."id"
@@ -167,34 +118,87 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
         where "skill_events"."skill_id" = "catalog_items"."id"
           and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
       )`
-      const unusedRows = await db
-        .select({
-          id: catalogItems.id,
-          name: catalogItems.name,
-          lastUsedAt: allTimeLastUsedAt,
-          usageSessions: allTimeUsageSessions,
-          totalUnused: sql<number>`count(*) over()::int`,
-        })
-        .from(catalogItems)
-        .where(
-          and(
-            eq(catalogItems.type, 'skill'),
-            // 발행된 적 없는 초안은 "안 쓰인 스킬"이 아니다
-            or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
-            sql`${catalogItems.id} not in (
-              select distinct ${skillEvents.skillId} from ${skillEvents}
-              where ${skillEvents.createdAt} >= ${since.toISOString()}
-                and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
-            )`
+
+      // 네 쿼리는 서로 독립이라 왕복 지연이 쌓이지 않게 한 번에 보낸다.
+      const [[totals], skillRows, dailyRows, unusedRows] = await Promise.all([
+        // 1. 요약 지표 — 아래 표와 같은 단일 GPTers 카탈로그 모집단을 쓴다
+        //    세션 수도 같은 집합에서 센다 — 별도로 mcp_sessions를 세면 조직 범위와
+        //    익명 세션 취급이 달라져 옆 타일과 모집단이 어긋난다
+        db
+          .select({
+            totalEvents: sql<number>`count(*)::int`,
+            searched: actionCount('search'),
+            loaded: actionCount('load'),
+            applied: actionCount('apply'),
+            skipped: actionCount('skip'),
+            deployed: actionCount('deploy'),
+            activeUsers: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
+            sessions: sql<number>`count(distinct ${skillEvents.sessionId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
+          })
+          .from(skillEvents)
+          .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+          .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS))),
+
+        // 2. 스킬별 action 피벗 — 카탈로그에 존재하는 항목만 대상으로 한다
+        db
+          .select({
+            skillId: skillEvents.skillId,
+            name: catalogItems.name,
+            searched: actionCount('search'),
+            loaded: actionCount('load'),
+            applied: actionCount('apply'),
+            skipped: actionCount('skip'),
+            deployed: actionCount('deploy'),
+            users: sql<number>`count(distinct ${skillEvents.userId}) filter (where ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)})::int`,
+            lastUsedAt: sql<Date | null>`max(${skillEvents.createdAt}) filter (where ${skillEvents.action} = 'apply')`,
+          })
+          .from(skillEvents)
+          .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+          .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, CORE_ACTIONS)))
+          .groupBy(skillEvents.skillId, catalogItems.name),
+
+        // 3. 일자별 실제 사용 추이 — 명시적인 적용 보고만 센다
+        db
+          .select({ date: dayExpr, events: sql<number>`count(*)::int` })
+          .from(skillEvents)
+          .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+          .where(and(gte(skillEvents.createdAt, since), inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)))
+          .groupBy(dayExpr)
+          .orderBy(dayExpr),
+
+        // 4. 기간 내 적용 보고가 없는 카탈로그 스킬
+        //    빈 배열 notInArray는 Drizzle에서 깨지므로 서브쿼리로 처리한다
+        //    검색 노출·스킵만 있는 스킬도 관리 관점에서는 미관측이다. 정리 우선순위는
+        //    전 기간의 마지막 적용 보고가 오래된 순, 같은 시각이면 누적 적용 세션이 적은 순이다.
+        db
+          .select({
+            id: catalogItems.id,
+            name: catalogItems.name,
+            lastUsedAt: allTimeLastUsedAt,
+            usageSessions: allTimeUsageSessions,
+            totalUnused: sql<number>`count(*) over()::int`,
+          })
+          .from(catalogItems)
+          .where(
+            and(
+              eq(catalogItems.type, 'skill'),
+              // 발행된 적 없는 초안은 "안 쓰인 스킬"이 아니다
+              or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+              sql`${catalogItems.id} not in (
+                select distinct ${skillEvents.skillId} from ${skillEvents}
+                where ${skillEvents.createdAt} >= ${since.toISOString()}
+                  and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
+              )`
+            )
           )
-        )
-        // NULLS FIRST = 한 번도 실제 사용된 적 없는 스킬이 정리 후보의 맨 앞이다.
-        .orderBy(
-          sql`${allTimeLastUsedAt} asc nulls first`,
-          allTimeUsageSessions,
-          catalogItems.name
-        )
-        .limit(SKILL_LIMIT)
+          // NULLS FIRST = 한 번도 실제 사용된 적 없는 스킬이 정리 후보의 맨 앞이다.
+          .orderBy(
+            sql`${allTimeLastUsedAt} asc nulls first`,
+            allTimeUsageSessions,
+            catalogItems.name
+          )
+          .limit(SKILL_LIMIT),
+      ])
 
       const skills: AxSkillUsageRow[] = skillRows
         .map((row) => ({

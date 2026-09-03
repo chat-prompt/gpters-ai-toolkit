@@ -6,8 +6,6 @@ import { OverviewPanel } from '../../components/ax/panels/OverviewPanel'
 const DATA: AxOverviewData = {
   totalParticipants: 1,
   catalogSkills: 1,
-  grassDaily: [],
-  agentGrassDaily: [],
   dailySkillFlow: [
     { date: '2026-08-30', directApplied: 1, loaded: 7, linkableLoaded: 4, appliedAfterLoad: 2 },
   ],

@@ -18,6 +18,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import type {
+  AxActivityGrassData,
   AxOverviewData,
   AxPanelMeta,
   AxPanelResult,
@@ -36,6 +37,9 @@ import {
 
 /** 조회 기간(일) — API가 허용하는 값과 같아야 한다 */
 const DAY_OPTIONS = [7, 30, 90] as const
+
+/** 첫 화면이 안정된 뒤 나머지 기간을 미리 받기 시작할 때까지의 여유 */
+const PREFETCH_DELAY_MS = 1500
 
 /** 조회 기간 타입 */
 type AxDays = (typeof DAY_OPTIONS)[number]
@@ -76,7 +80,8 @@ export interface AxDashboardProps {
  */
 export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // parentId가 있는 패널은 독립 데이터 소스지만, 화면에서는 부모 패널 안의 보조 보기다.
-  const topLevelPanels = panels.filter((panel) => !panel.parentId)
+  // hidden 패널은 탭으로 노출하지 않고 데이터만 가져다 쓴다.
+  const topLevelPanels = panels.filter((panel) => !panel.parentId && !panel.hidden)
   const firstTopLevelId = topLevelPanels[0]?.id ?? ''
   const [days, setDays] = useState<AxDays>(DEFAULT_DAYS)
   const [states, setStates] = useState<Record<string, PanelState>>({})
@@ -88,7 +93,39 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // 패널별 진행 중인 요청. 새 요청이 뜨면 이전 것을 끊어, 늦게 온 응답이
   // 이미 바뀐 기간의 화면에 얹히는 일을 막는다
   const requestsRef = useRef(new Map<string, AbortController>())
+  // 이미 받은 응답은 패널×기간 키로 보관한다. 같은 기간으로 돌아오면 즉시 보여주고
+  // 뒤에서 조용히 다시 받아 갱신한다(stale-while-revalidate).
+  const cacheRef = useRef(new Map<string, AxPanelResult>())
+  // 같은 패널×기간 요청이 겹치지 않게(선요청 중 사용자가 그 기간을 누르는 경우) 진행 중인 약속을 공유한다.
+  const inflightRef = useRef(new Map<string, Promise<AxPanelResult>>())
 
+  /** 패널 하나를 받아 캐시에 넣는다. 같은 키의 요청이 진행 중이면 그 약속을 같이 기다린다. */
+  const fetchPanel = useCallback((panelId: string, targetDays: number, forceRefresh = false) => {
+    const key = `${panelId}:${targetDays}`
+    const inflight = inflightRef.current.get(key)
+    if (inflight && !forceRefresh) return inflight
+
+    const query = new URLSearchParams({ days: String(targetDays) })
+    if (forceRefresh) query.set('refresh', '1')
+    // 권한별로 내용이 다른 응답이라 브라우저 HTTP 캐시에는 남기지 않는다. 재사용은 위 cacheRef가 맡는다.
+    const promise = fetch(`/api/ax/${panelId}?${query.toString()}`, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('데이터를 불러오지 못했습니다')
+        const result = (await response.json()) as AxPanelResult
+        cacheRef.current.set(key, result)
+        return result
+      })
+      .finally(() => {
+        if (inflightRef.current.get(key) === promise) inflightRef.current.delete(key)
+      })
+    inflightRef.current.set(key, promise)
+    return promise
+  }, [])
+
+  /**
+   * 패널을 화면 상태에 싣는다.
+   * 캐시가 있으면 먼저 보여주고 조용히 재검증하며, 없으면 이전 결과를 유지한 채 로딩만 표시한다.
+   */
   const loadPanel = useCallback(async (
     panelId: string,
     targetDays: number,
@@ -98,33 +135,30 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     const request = new AbortController()
     requestsRef.current.set(panelId, request)
 
+    const cached = forceRefresh ? undefined : cacheRef.current.get(`${panelId}:${targetDays}`)
     setStates((prev) => ({
       ...prev,
-      [panelId]: { loading: true, fetchError: null, result: prev[panelId]?.result ?? null },
+      [panelId]: cached
+        ? { loading: false, fetchError: null, result: cached }
+        : { loading: true, fetchError: null, result: prev[panelId]?.result ?? null },
     }))
 
     try {
-      const query = new URLSearchParams({ days: String(targetDays) })
-      if (forceRefresh) query.set('refresh', '1')
-      const response = await fetch(`/api/ax/${panelId}?${query.toString()}`, {
-        signal: request.signal,
-      })
-      if (!response.ok) {
-        throw new Error('데이터를 불러오지 못했습니다')
-      }
-      const result = (await response.json()) as AxPanelResult
+      const result = await fetchPanel(panelId, targetDays, forceRefresh)
       if (request.signal.aborted) return
       setStates((prev) => ({ ...prev, [panelId]: { loading: false, fetchError: null, result } }))
     } catch (error) {
       // 우리가 끊은 요청은 오류가 아니다 — 뒤이은 요청이 화면을 채운다
       if (request.signal.aborted) return
+      // 캐시로 이미 보여주고 있었다면 재검증 실패는 조용히 넘긴다.
+      if (cached) return
       const message = error instanceof Error ? error.message : '데이터를 불러오지 못했습니다'
       setStates((prev) => ({
         ...prev,
         [panelId]: { loading: false, fetchError: message, result: null },
       }))
     }
-  }, [])
+  }, [fetchPanel])
 
   // panels 배열은 렌더마다 새 객체라 요청에 필요한 메타만 문자열로 굳혀 의존성으로 쓴다.
   // usesPeriod까지 포함해야 패널의 기간 계약이 바뀌었을 때 초기 조회를 다시 잡는다.
@@ -141,17 +175,43 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   }, [days])
 
   // 최초 진입이나 볼 수 있는 패널 구성이 바뀌면 전체를 한 번 조회한다.
+  // 첫 화면이 안정된 뒤에는 기간 연동 패널의 나머지 기간을 뒤에서 미리 받아 두어
+  // 7일·30일·90일 전환이 즉시 되게 한다.
   useEffect(() => {
     const panelConfigs = JSON.parse(panelRequestKey) as Array<{
       id: string
       usesPeriod: boolean
     }>
+    const initialDays = selectedDaysRef.current
 
-    for (const panel of panelConfigs) {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // 효과 본문에서 동기적으로 상태를 바꾸지 않도록 요청 시작을 다음 마이크로태스크로 미룬다.
+    void Promise.resolve().then(() => {
+      if (cancelled) return
       // 패널마다 독립 요청 — 하나가 느리거나 실패해도 나머지를 막지 않는다
-      void loadPanel(panel.id, selectedDaysRef.current)
+      return Promise.allSettled(panelConfigs.map((panel) => loadPanel(panel.id, initialDays)))
+    }).then(() => {
+      if (cancelled) return
+      timer = setTimeout(() => {
+        if (cancelled) return
+        const periodPanels = panelConfigs.filter((panel) => panel.usesPeriod)
+        const otherDays = DAY_OPTIONS.filter((option) => option !== initialDays)
+        // 서버와 DB를 한꺼번에 때리지 않게 기간 하나씩, 그 안에서는 패널을 동시에 받는다.
+        void otherDays.reduce(
+          (chain, targetDays) => chain.then(() =>
+            Promise.allSettled(periodPanels.map((panel) => fetchPanel(panel.id, targetDays)))
+          ),
+          Promise.resolve<unknown>(undefined)
+        )
+      }, PREFETCH_DELAY_MS)
+    })
+
+    return () => {
+      cancelled = true
+      if (timer !== undefined) clearTimeout(timer)
     }
-  }, [panelRequestKey, loadPanel])
+  }, [panelRequestKey, loadPanel, fetchPanel])
 
   // 기간만 바뀌면 usesPeriod=true 패널만 갱신한다.
   // 고정 스냅샷을 재요청하면 기간과 무관한 값이 토글 직후 달라질 수 있고,
@@ -167,9 +227,12 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
       id: string
       usesPeriod: boolean
     }>
-    for (const panel of panelConfigs) {
-      if (panel.usesPeriod) void loadPanel(panel.id, days)
-    }
+    // 효과 본문에서 동기적으로 상태를 바꾸지 않도록 다음 마이크로태스크에서 요청한다.
+    queueMicrotask(() => {
+      for (const panel of panelConfigs) {
+        if (panel.usesPeriod) void loadPanel(panel.id, days)
+      }
+    })
   }, [panelRequestKey, days, loadPanel])
 
   // 의존성 변경 때마다 전체 요청을 끊으면, 기간 전환 중인 고정 패널 요청이
@@ -196,8 +259,13 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
       (!states[panelId] || states[panelId]?.loading)
   )
 
-  const grassDaily = overviewData?.grassDaily ?? null
-  const agentGrassDaily = overviewData?.agentGrassDaily ?? null
+  // 365일 잔디는 기간과 무관한 숨김 패널이 따로 가져온다.
+  const grassData =
+    (states['activity-grass']?.result?.data as AxActivityGrassData | null) ?? null
+  const grassLoading = panels.some((panel) => panel.id === 'activity-grass') &&
+    (!states['activity-grass'] || states['activity-grass']?.loading)
+  const grassDaily = grassData?.grassDaily ?? null
+  const agentGrassDaily = grassData?.agentGrassDaily ?? null
   // 선택 기간의 상단 차트는 KST 일자별 이벤트 흐름을 쓴다. overview가 없는 제한된
   // 화면·테스트 환경에서는 apply 일별 집계를 모두 직접 적용으로 보아 안전하게 폴백한다.
   const periodApplicationFlow = (grassDaily ?? skillUsageData?.daily.map((point) => ({
@@ -211,7 +279,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   const activeRoot = topLevelPanels.find((panel) => panel.id === activeRootId) ?? topLevelPanels[0]
   const nestedPanels = [
     activeRoot,
-    ...panels.filter((panel) => panel.parentId === activeRoot.id),
+    ...panels.filter((panel) => panel.parentId === activeRoot.id && !panel.hidden),
   ]
   const active = nestedPanels.find((panel) => panel.id === activePanelId) ?? activeRoot
 
@@ -329,14 +397,14 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
               label="일별 구성원 스킬 활동 · 최근 365일"
               valueLabel="활동"
               kind="member"
-              loading={memberActivityLoading && grassDaily === null}
+              loading={grassLoading && grassDaily === null}
             />
             <ActivityGrassCard
               daily={agentGrassDaily}
               label="일별 에이전트 사용량 · 최근 365일"
               valueLabel="턴"
               kind="agent"
-              loading={memberActivityLoading && agentGrassDaily === null}
+              loading={grassLoading && agentGrassDaily === null}
             />
           </section>
         )}
@@ -347,8 +415,8 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
 }
 
 type GrassPoint =
-  | AxOverviewData['grassDaily'][number]
-  | AxOverviewData['agentGrassDaily'][number]
+  | AxActivityGrassData['grassDaily'][number]
+  | AxActivityGrassData['agentGrassDaily'][number]
 
 /** 요약 맨 아래의 최근 365일 활동 잔디 — 기간 토글과 무관한 장기 리듬이다. */
 function ActivityGrassCard({
@@ -485,7 +553,7 @@ function grassTooltip(point: GrassPoint, kind: 'member' | 'agent'): string {
     const agents = 'agents' in point ? point.agents : 0
     return `${point.date} · 턴 ${formatCount(point.events)}건 · 활동 에이전트 ${formatCount(agents)}개`
   }
-  const memberPoint = point as AxOverviewData['grassDaily'][number]
+  const memberPoint = point as AxActivityGrassData['grassDaily'][number]
   return `${point.date} · 활동 ${formatCount(point.events)}건 · 로드 없이 적용 ${formatCount(memberPoint.directApplied ?? 0)}건 · 로드 후 적용 ${formatCount(memberPoint.appliedAfterLoad ?? 0)}건`
 }
 
@@ -671,7 +739,7 @@ function DailyApplicationFlowChart({
   daily,
   days,
 }: {
-  daily: AxOverviewData['grassDaily']
+  daily: AxActivityGrassData['grassDaily']
   days: number
 }) {
   // 막대는 정적으로 유지하되, 포인터·키보드가 가리킨 날짜의 정보만 연다.
@@ -1187,12 +1255,29 @@ function AxPanelBody({
   selection?: string
   onSelectionChange?: (selection: string) => void
 }) {
-  if (!state || state.loading) {
+  // 처음 받는 중일 때만 뼈대를 보여준다. 기간을 바꿔 다시 받는 중이면 이전 표를 흐리게 둔 채
+  // 새 데이터가 오면 교체한다 — 전환할 때마다 화면이 비워지지 않게.
+  if (!state || (state.loading && !state.result)) {
     return <PanelSkeleton />
   }
 
   if (state.fetchError) {
     return <ErrorNotice message={state.fetchError} onRetry={onRetry} />
+  }
+
+  if (state.loading && state.result) {
+    return (
+      <div aria-busy="true" className="opacity-60 transition-opacity duration-200">
+        <AxPanelBody
+          meta={meta}
+          state={{ ...state, loading: false }}
+          days={days}
+          onRetry={onRetry}
+          selection={selection}
+          onSelectionChange={onSelectionChange}
+        />
+      </div>
+    )
   }
 
   const result = state.result

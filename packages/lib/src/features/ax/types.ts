@@ -34,6 +34,11 @@ export interface AxPanelMeta {
    * false면 항상 현재 시점 스냅숏이며, 화면은 그 사실을 표시해야 한다.
    */
   usesPeriod: boolean
+  /**
+   * true면 탭으로 노출하지 않는다. 다른 화면 조각이 데이터만 가져다 쓰는 보조 패널이며,
+   * 대시보드는 여전히 이 패널을 조회한다.
+   */
+  hidden?: boolean
 }
 
 /** 패널 로딩 컨텍스트 */
@@ -108,15 +113,11 @@ export interface AxOverviewMemberRow {
 }
 
 /** 성과 요약 패널 — 실제로 계측되는 지표만 담는다 */
-export interface AxOverviewData {
-  /**
-   * 누적 참여 인원 — 스킬 적용 보고를 한 번이라도 남긴 계정 수.
-   * 계정이 식별된 사용자만 센다 — 익명 세션은 "인원"에 넣지 않는다.
-   * (기간별 활성 인원은 스킬 사용량 패널의 activeUsers가 담당한다)
-   */
-  totalParticipants: number
-  /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
-  catalogSkills: number
+/**
+ * 장기 활동(잔디) 패널 데이터 — 요약 맨 아래 최근 365일 잔디 두 장.
+ * 기간 선택과 무관한 고정 윈도우라 요약 패널과 별도로 한 번만 조회한다.
+ */
+export interface AxActivityGrassData {
   /**
    * 잔디밭용 일별 팀 스킬 활동 — 조회 기간과 무관하게 **오늘 포함 최근 365일 고정 윈도우**.
    * 활동은 로드 없이 적용 + 로드 후 적용이며, 날짜가 지나면 창이 최신 쪽으로 굴러간다.
@@ -151,6 +152,17 @@ export interface AxOverviewData {
     /** 해당 날짜에 활동이 관측된 고유 에이전트 수 */
     agents: number
   }>
+}
+
+export interface AxOverviewData {
+  /**
+   * 누적 참여 인원 — 스킬 적용 보고를 한 번이라도 남긴 계정 수.
+   * 계정이 식별된 사용자만 센다 — 익명 세션은 "인원"에 넣지 않는다.
+   * (기간별 활성 인원은 스킬 사용량 패널의 activeUsers가 담당한다)
+   */
+  totalParticipants: number
+  /** aitk 카탈로그에 발행된 팀 스킬(사람용) 수 — 현재 시점 인벤토리 */
+  catalogSkills: number
   /** 일자별 고유 사용 인원 — 로드 코호트와 적용 전환을 사람 수로 표현한다 */
   dailySkillFlow: Array<{
     date: string
