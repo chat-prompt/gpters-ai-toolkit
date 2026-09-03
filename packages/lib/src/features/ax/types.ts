@@ -298,6 +298,33 @@ export interface AxSkillUsageData {
   sessions: number
   /** 검색·로드·적용 등 행동별 이벤트 수 */
   actionTotals: Record<'search' | 'load' | 'apply' | 'skip' | 'deploy', number>
+  /**
+   * 검색 요청부터 로드·적용까지의 기원 분해.
+   * 진입 분모는 `searchRequests + loads.direct`다. 흐름(journey, 없으면 session) ID가 없어
+   * 앞선 검색·로드와 연결할 수 없는 이벤트는 `unlinkable`로 따로 세고 분모·비율에서 뺀다.
+   */
+  origins: {
+    /** 검색 요청 수 — 결과 줄 수가 아니라 요청 건수 */
+    searchRequests: number
+    loads: {
+      /** 같은 흐름에서 앞선 검색 결과에 그 스킬이 있었던 로드 */
+      fromSearch: number
+      /** 흐름은 있지만 앞선 검색이 없는 로드 */
+      direct: number
+      /** 흐름 ID가 없어 판정할 수 없는 로드 */
+      unlinkable: number
+    }
+    applies: {
+      /** 같은 흐름에서 앞선 검색 결과에 그 스킬이 있었던 적용 */
+      fromSearch: number
+      /** 검색 없이 로드한 뒤 보고한 적용 */
+      afterDirectLoad: number
+      /** 흐름은 있지만 앞선 검색·로드가 모두 없는 적용 (로컬 저장 스킬 재사용 등) */
+      withoutLoad: number
+      /** 흐름 ID가 없어 판정할 수 없는 적용 */
+      unlinkable: number
+    }
+  }
   /** 사용량 상위 스킬 (applied 우선, loaded 보조 내림차순) */
   skills: AxSkillUsageRow[]
   /** 일자별 적용 보고 추이 */

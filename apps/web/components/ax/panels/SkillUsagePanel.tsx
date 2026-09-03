@@ -13,13 +13,13 @@
 import type { AxSkillUsageData, AxSkillUsageRow } from '@/lib/features/ax'
 import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate, relativeActivityFill } from '../format'
+import { formatCount, formatDate, formatSampledRate, relativeActivityFill } from '../format'
 import { TablePager, usePagedRows } from './TablePager'
 
 /** 한 장에 실을 스킬 수 */
 const SKILL_PAGE_SIZE = 20
 
-import { EMPTY_NOTE, SECTION_LABEL, TD, TH } from './primitives'
+import { EMPTY_NOTE, META_LINE, SECTION_LABEL, TD, TH, TIP_BOX, TipContent, type TipRow } from './primitives'
 
 /**
  * 스킬 사용량 패널 화면
@@ -45,70 +45,193 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
   )
 }
 
-/** 검색 노출·로드·적용 보고가 전체 관측 이벤트에서 차지한 비중을 보여준다. */
+/** 깔때기 한 칸 */
+interface FunnelStep {
+  label: string
+  value: number
+  color: string
+  /** 직전 단계 — 없으면 경로의 첫 칸 */
+  previous?: { label: string; value: number }
+  /** 칸 아래 항상 보이는 짧은 보조 문구 */
+  hint?: string
+  /** 호버 때 덧붙일 행 */
+  extraRows?: TipRow[]
+}
+
+/** sm 이상에서 단계가 놓이는 격자 행 — 로드·적용이 두 경로에서 같은 행이 되게 한다 */
+const FUNNEL_ROW_CLASS: Record<number, string> = {
+  2: 'sm:row-start-2',
+  3: 'sm:row-start-3',
+  4: 'sm:row-start-4',
+}
+
+const FUNNEL_SEARCH_COLOR = 'var(--text-muted)'
+const FUNNEL_LOAD_COLOR = 'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))'
+const FUNNEL_APPLY_COLOR = 'var(--accent-orange)'
+
+/**
+ * 두 줄 깔때기 — 검색 경로(검색 요청 → 로드 → 적용)와 직접 경로(검색 없는 로드 → 적용).
+ *
+ * 각 칸의 비율은 직전 단계 대비 전환율이고, 막대 길이도 그 비율이다. 경로의 첫 칸은 기준선이라
+ * 값이 있으면 꽉 차고 0이면 비어 있다. 흐름(journey, 없으면 session) ID가 없어 경로를 판정할
+ * 수 없는 로드·적용은 막대 없이 마지막 줄에 따로 적고 비율에서 뺀다.
+ */
 export function SkillEventSummary({
+  origins,
   totals,
-  totalEvents,
 }: {
+  origins: AxSkillUsageData['origins']
   totals: AxSkillUsageData['actionTotals']
-  totalEvents: number
 }) {
-  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
-  const steps = [
-    { label: '검색 노출', value: totals.search, color: 'var(--text-muted)' },
+  const [highlighted, setHighlighted] = useState<string | null>(null)
+  const { searchRequests, loads, applies } = origins
+  const averageResults = searchRequests > 0
+    ? (totals.search / searchRequests).toLocaleString('ko-KR', { maximumFractionDigits: 1 })
+    : null
+
+  const lanes: Array<{ id: string; label: string; steps: FunnelStep[] }> = [
     {
-      label: '로드',
-      value: totals.load,
-      color: 'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))',
+      id: 'search',
+      label: '검색 경로',
+      steps: [
+        {
+          label: '검색 요청',
+          value: searchRequests,
+          color: FUNNEL_SEARCH_COLOR,
+          hint: averageResults === null ? undefined : `평균 검색 결과 ${averageResults}개`,
+          extraRows: [{ label: '결과 노출 줄', value: `${formatCount(totals.search)}줄` }],
+        },
+        {
+          label: '로드',
+          value: loads.fromSearch,
+          color: FUNNEL_LOAD_COLOR,
+          previous: { label: '검색 요청', value: searchRequests },
+        },
+        {
+          label: '적용 보고',
+          value: applies.fromSearch,
+          color: FUNNEL_APPLY_COLOR,
+          previous: { label: '로드', value: loads.fromSearch },
+        },
+      ],
     },
     {
-      label: '적용 보고',
-      value: totals.apply,
-      color: 'var(--accent-orange)',
+      id: 'direct',
+      label: '직접 경로',
+      steps: [
+        {
+          label: '검색 없는 로드',
+          value: loads.direct,
+          color: FUNNEL_LOAD_COLOR,
+        },
+        {
+          label: '적용 보고',
+          value: applies.afterDirectLoad,
+          color: FUNNEL_APPLY_COLOR,
+          previous: { label: '검색 없는 로드', value: loads.direct },
+        },
+      ],
     },
   ]
 
+  // 막대는 두 경로가 공유하는 한 자(최댓값 = 경로 첫 단계 중 큰 값)로 그린다.
+  // 그래야 직전 단계 대비 100%인 적용 막대가 로드 막대와 같은 길이가 되고, 두 경로의 크기도 견줄 수 있다.
+  const scaleMax = Math.max(1, ...lanes.map((lane) => lane.steps[0]?.value ?? 0))
+
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-8">
-      {steps.map((step, index) => {
-        const rate = formatRate(step.value, totalEvents)
-        const highlighted = highlightedIndex === index
-        return (
-          <div
-            key={step.label}
-            className="relative py-2 outline-none"
-            tabIndex={0}
-            aria-label={`${step.label} ${formatCount(step.value)}건 · 전체 이벤트 중 ${rate}`}
-            onMouseEnter={() => setHighlightedIndex(index)}
-            onMouseLeave={() => setHighlightedIndex(null)}
-            onFocus={() => setHighlightedIndex(index)}
-            onBlur={() => setHighlightedIndex(null)}
-          >
-            <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-              <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
-              {step.label}
-            </p>
-            {highlighted && (
-              <p className="absolute right-0 top-0 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm">
-                전체 이벤트 중 {rate}
-              </p>
-            )}
-            <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{formatCount(step.value)}</p>
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
-              <span
-                className="block h-full rounded-full"
-                style={{
-                  width: `${totalEvents > 0 ? Math.min(100, (step.value / totalEvents) * 100) : 0}%`,
-                  background: step.color,
-                  boxShadow: highlighted
-                    ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
-                    : 'none',
-                }}
-              />
+    <div>
+      {/* 두 경로를 좌우 단으로 나누되 같은 종류의 단계(로드·적용)는 같은 행에 맞춘다.
+          직접 경로는 검색 단계가 없으므로 첫 행을 비운다. sm 미만에서는 경로별로 세로로 쌓인다.
+          단 사이 48px, 행 안쪽 16px, 라벨과 막대 12px — 4px 스케일 */}
+      <div className="grid grid-cols-1 gap-x-12 sm:grid-cols-2 sm:grid-rows-[auto_auto_auto_auto]">
+        {lanes.map((lane, laneIndex) => {
+          // 검색 경로는 2~4행, 직접 경로는 3~4행에 놓아 로드·적용이 같은 행이 된다
+          const firstRow = lane.steps.length === 3 ? 2 : 3
+          const column = laneIndex === 0 ? 'sm:col-start-1' : 'sm:col-start-2'
+          return (
+            <div key={lane.id} className="contents">
+              <h4 className={`${SECTION_LABEL} ${column} sm:row-start-1 ${laneIndex > 0 ? 'mt-6 sm:mt-0' : ''}`}>
+                {lane.label}
+              </h4>
+              {lane.steps.map((step, stepIndex) => {
+                const key = `${lane.id}:${step.label}`
+                const active = highlighted === key
+                const rate = step.previous ? formatSampledRate(step.value, step.previous.value) : null
+                const ratio = Math.min(1, step.value / scaleMax)
+                const rows: TipRow[] = [
+                  ...(step.previous
+                    ? [{ label: `직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중`, value: rate ?? '—' }]
+                    : []),
+                  ...(step.extraRows ?? []),
+                ]
+                const title = `${step.label} ${formatCount(step.value)}건`
+                const label = [
+                  `${lane.label} · ${title}`,
+                  ...(step.previous ? [`직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중 ${rate}`] : []),
+                  ...(step.hint ? [step.hint] : []),
+                  ...(step.extraRows ?? []).map((row) => `${row.label} ${row.value}`),
+                ].join(' · ')
+                // Tailwind는 정적 클래스만 생성하므로 행 번호를 문자열 조립 대신 매핑한다
+                const rowClass = FUNNEL_ROW_CLASS[firstRow + stepIndex] ?? ''
+                // 경로의 첫 칸은 제목 바로 아래라 선이 없다. 단, 직접 경로의 첫 칸은 sm 이상에서 로드 행과 나란하므로 선을 맞춘다.
+                const divider = stepIndex > 0
+                  ? 'border-t border-[var(--border-subtle)]'
+                  : (firstRow > 2 ? 'sm:border-t sm:border-[var(--border-subtle)]' : '')
+                return (
+                  <div
+                    key={key}
+                    role="group"
+                    className={`relative py-4 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)] ${column} ${rowClass} ${stepIndex === 0 ? (firstRow > 2 ? 'mt-4 sm:mt-0' : 'mt-4') : ''} ${divider}`}
+                    tabIndex={0}
+                    aria-label={label}
+                    onMouseEnter={() => setHighlighted(key)}
+                    onMouseLeave={() => setHighlighted(null)}
+                    onFocus={() => setHighlighted(key)}
+                    onBlur={() => setHighlighted(null)}
+                  >
+                    <div className="flex items-baseline justify-between gap-6">
+                      <p className="flex min-w-0 items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <span aria-hidden className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: step.color }} />
+                        {step.label}
+                        {rate !== null && <span className={`ml-1 ${META_LINE}`}>→ {rate}</span>}
+                      </p>
+                      <p className="shrink-0 whitespace-nowrap font-mono text-xl tabular-nums leading-none text-[var(--text-primary)]">{formatCount(step.value)}</p>
+                    </div>
+                    <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+                      <span
+                        data-funnel-bar={step.label}
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${ratio * 100}%`,
+                          // 0이 아닌 값은 최소 2px로 남겨 존재만은 보이게 한다
+                          minWidth: step.value > 0 ? '2px' : undefined,
+                          background: step.color,
+                          boxShadow: active
+                            ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
+                            : 'none',
+                        }}
+                      />
+                    </div>
+                    {step.hint && <p className={`mt-2 ${META_LINE}`}>{step.hint}</p>}
+                    {active && rows.length > 0 && (
+                      <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute inset-x-0 top-full z-10 mt-1 w-max max-w-full`}>
+                        <TipContent title={title} rows={rows} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
+      <p className="mt-6 text-xs leading-relaxed text-[var(--text-secondary)]" role="note" aria-label="연결 불가">
+        <span className={META_LINE}>
+          연결 불가 · 로드 {formatCount(loads.unlinkable)}건 · 적용 {formatCount(applies.unlinkable)}건
+          {applies.withoutLoad > 0 && ` · 로드 없이 적용 ${formatCount(applies.withoutLoad)}건`}
+        </span>
+        {' '}세션 ID가 없어 경로를 판정할 수 없는 보고라 위 비율에서 뺐습니다.
+      </p>
     </div>
   )
 }
@@ -140,11 +263,11 @@ function SkillTable({
 
   return (
     <div>
-      <div className="relative mb-3 inline-flex items-center gap-1.5">
+      <div className="relative mb-3 inline-flex items-center gap-2">
         <p className={SECTION_LABEL}>스킬별 실제 적용</p>
-        <span
-          className="cursor-help rounded-full px-1 font-mono text-[10px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--brand-primary)]"
-          tabIndex={0}
+        <button
+          type="button"
+          className="cursor-help rounded-full px-1 font-mono text-[11px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
           aria-label="스킬 적용 집계 범위 안내"
           aria-describedby="skill-application-coverage-help"
           onMouseEnter={() => setShowCoverageHelp(true)}
@@ -153,12 +276,12 @@ function SkillTable({
           onBlur={() => setShowCoverageHelp(false)}
         >
           ?
-        </span>
+        </button>
         {showCoverageHelp && (
           <span
             id="skill-application-coverage-help"
             role="tooltip"
-            className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 w-72 -translate-y-1/2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-2 text-[11px] font-normal leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-lg"
+            className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-72 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-2 text-[11px] font-normal leading-relaxed tracking-normal text-[var(--text-secondary)] shadow-lg"
           >
             명시적인 적용 보고만 집계합니다. 로컬에서 다시 실행했지만 보고하지 않은 횟수는 0이 아니라 미관측입니다.
           </span>
@@ -178,7 +301,7 @@ function SkillTable({
             {shown.map((skill, index) => (
               <tr
                 key={skill.skillId}
-                className="focus-visible:outline-none"
+                className="focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
                 tabIndex={0}
                 aria-label={`${skill.name} · 적용 ${formatCount(skill.applied)}건 · 전체 적용 중 ${formatRate(skill.applied, totalApplied)} · 활성 사용자 ${formatCount(skill.users)}/${formatCount(activeUsers)}명`}
                 onMouseEnter={() => setHighlightedSkillId(skill.skillId)}
@@ -206,11 +329,11 @@ function SkillTable({
                         : 'none',
                     }}
                   />
-                  <span className="relative text-[var(--text-primary)]">{skill.name}</span>
+                  <span className="relative break-words text-[var(--text-primary)]">{skill.name}</span>
                   {highlightedSkillId === skill.skillId && (
                     <span
                       // 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다
-                      className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm"
+                      className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-secondary)] shadow-sm"
                       style={{ left: `calc(${(activity(skill) / max) * 100}% + 0.5rem)` }}
                     >
                       적용 {formatCount(skill.applied)}건 · 전체 적용 중 {formatRate(skill.applied, totalApplied)}

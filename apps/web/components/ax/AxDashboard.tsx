@@ -365,8 +365,8 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
       >
         {active.id === 'skill-usage' && skillUsageData && (
           <SkillEventSummary
+            origins={skillUsageData.origins}
             totals={skillUsageData.actionTotals}
-            totalEvents={skillUsageData.totalEvents}
           />
         )}
         {active.id === 'skill-usage' && (
