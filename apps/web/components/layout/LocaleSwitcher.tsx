@@ -25,7 +25,7 @@ export function LocaleSwitcher() {
   return (
     <button
       onClick={() => handleChange(locale === 'ko' ? 'en' : 'ko')}
-      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+      className="min-h-11 touch-manipulation rounded-lg bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] xl:min-h-0"
       title={t('label')}
     >
       {locale === 'ko' ? 'EN' : '한국어'}

@@ -44,7 +44,7 @@ export function ThemeToggle() {
   if (!mounted) {
     return (
       <button
-        className="w-9 h-9 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center"
+        className="flex h-11 w-9 items-center justify-center rounded-lg bg-[var(--bg-tertiary)] xl:h-9"
         aria-label="Toggle theme"
       >
         <span className="w-5 h-5" />
@@ -109,7 +109,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="w-9 h-9 rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--border-hover)] flex items-center justify-center transition-colors relative group"
+      className="group relative flex h-11 w-9 touch-manipulation items-center justify-center rounded-lg bg-[var(--bg-tertiary)] transition-colors hover:bg-[var(--border-hover)] xl:h-9"
       aria-label={`Current: ${getLabel()}. Click to switch to ${getNextTheme()} mode`}
       title={`${getLabel()} - Click to switch`}
     >

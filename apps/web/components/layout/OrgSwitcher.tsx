@@ -41,6 +41,7 @@ export function OrgSwitcher() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     async function fetchOrganizations() {
@@ -65,10 +66,20 @@ export function OrgSwitcher() {
         setIsOpen(false)
       }
     }
+    // xl 미만에서는 조직 이름이 없는 아이콘 버튼이라, 키보드로 닫을 방법이 Escape뿐이다
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      setIsOpen(false)
+      buttonRef.current?.focus()
+    }
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleKeyDown)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+        document.removeEventListener('keydown', handleKeyDown)
+      }
     }
   }, [isOpen])
 
@@ -95,18 +106,19 @@ export function OrgSwitcher() {
     <div className="relative" ref={dropdownRef}>
       {/* Trigger Button */}
       <button
+        ref={buttonRef}
         onClick={() => !isDisabled && setIsOpen(!isOpen)}
         disabled={isDisabled}
         className={`
-          flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium
-          transition-all
+          flex min-h-11 items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium touch-manipulation xl:min-h-0 xl:px-3
+          transition-colors
           ${
             isDisabled
               ? 'bg-[var(--bg-secondary)] text-[var(--text-muted)] cursor-not-allowed'
               : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
           }
         `}
-        aria-label="Switch organization"
+        aria-label={currentOrg ? `Switch organization: ${currentOrg.name}` : 'Switch organization'}
         aria-expanded={isOpen}
       >
         {/* Organization Icon */}
@@ -126,14 +138,14 @@ export function OrgSwitcher() {
         </svg>
 
         {/* Organization Name */}
-        <span className="whitespace-nowrap">
+        <span className="hidden whitespace-nowrap xl:inline">
           {isLoadingOrgs ? 'Loading...' : currentOrg?.name || 'Select Org'}
         </span>
 
         {/* Chevron Icon (only if multiple orgs) */}
         {hasMultipleOrgs && !isLoadingOrgs && (
           <svg
-            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`hidden h-4 w-4 transition-transform xl:block ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

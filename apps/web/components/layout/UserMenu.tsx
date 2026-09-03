@@ -93,7 +93,9 @@ export function UserMenu({ user }: UserMenuProps) {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        aria-label={`User menu: ${user.name || user.email?.split('@')[0] || 'account'}`}
+        aria-expanded={isOpen}
+        className="flex min-h-11 touch-manipulation items-center gap-2 rounded-xl bg-[var(--bg-secondary)] px-2 py-2 transition-colors hover:bg-[var(--bg-tertiary)] xl:min-h-0 xl:px-3"
       >
         {user.image ? (
           <Image
@@ -109,12 +111,12 @@ export function UserMenu({ user }: UserMenuProps) {
             {user.name?.[0] || user.email?.[0] || '?'}
           </div>
         )}
-        <span className="text-sm text-[var(--text-primary)] max-w-[100px] truncate hidden sm:block">
+        <span className="hidden max-w-[100px] truncate text-sm text-[var(--text-primary)] xl:block">
           {user.name || user.email?.split('@')[0]}
         </span>
         {/* Admin badge */}
         {user.role === 'admin' && (
-          <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+          <span className="hidden items-center rounded border border-red-500/30 bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-400 xl:inline-flex">
             Admin
           </span>
         )}
