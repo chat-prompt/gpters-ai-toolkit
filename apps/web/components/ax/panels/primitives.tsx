@@ -8,7 +8,7 @@
  * 열린 격자에 둔다. 새 패널을 만들거나 고칠 때는 여기 있는 조각부터 쓴다.
  */
 
-import { useId, type ReactNode } from 'react'
+import { useCallback, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { formatCount } from '../format'
 
 /** 섹션 라벨 — 표 머리칸과 같은 모노 대문자 소형 텍스트 */
@@ -214,4 +214,67 @@ export function TipContent({ title, rows }: { title: string; rows: TipRow[] }) {
 /** 툴팁과 같은 내용을 접근성 이름용 한 줄 문자열로 */
 export function tipText(title: string, rows: TipRow[]): string {
   return [title, ...rows.map((row) => `${row.label} ${row.value}`)].join(' · ')
+}
+
+/** 툴팁 가로 절반 폭의 상한 — 컨테이너 가장자리에서 이만큼 안쪽으로 밀어 넣는다 */
+const TIP_HALF_WIDTH = 160
+
+/** 컨테이너 기준으로 계산한 데이터 포인트 툴팁 위치와 내용 */
+export interface PointTipState {
+  left: number
+  top: number
+  title: string
+  rows: TipRow[]
+}
+
+/**
+ * 데이터 포인트 툴팁 한 개를 컨테이너 기준으로 띄우는 훅
+ *
+ * `ref`를 차트 컨테이너(`relative`)에 달고, 막대·셀에 호버·포커스하면 `show(element, title, rows)`를 부른다.
+ * 툴팁은 그 요소 **위, 가로 가운데**에 놓이며 컨테이너 밖으로 나가지 않게 좌우를 클램프한다.
+ * 막대 안에 CSS로 두는 방식과 달리 가장자리에서도 가운데 정렬이 유지된다.
+ */
+export function usePointTip<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  const [tip, setTip] = useState<PointTipState | null>(null)
+  const show = useCallback((element: HTMLElement, title: string, rows: TipRow[]) => {
+    const wrap = ref.current
+    if (!wrap) return
+    const point = element.getBoundingClientRect()
+    const base = wrap.getBoundingClientRect()
+    const rawLeft = point.left - base.left + point.width / 2
+    const safeHalfWidth = Math.min(TIP_HALF_WIDTH, base.width / 2)
+    setTip({
+      left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
+      top: point.top - base.top,
+      title,
+      rows,
+    })
+  }, [])
+  const hide = useCallback(() => setTip(null), [])
+  return { ref, tip, show, hide }
+}
+
+/** `usePointTip`이 준 상태를 그리는 상자 — 포인트 위에 세로 나열 내용 */
+export function PointTip({
+  tip,
+  offset = 8,
+  ...rest
+}: {
+  tip: PointTipState | null
+  /** 포인트 위쪽 여백(px) */
+  offset?: number
+} & Record<`data-${string}`, string | boolean | undefined>) {
+  if (!tip) return null
+  const style: CSSProperties = { left: tip.left, top: tip.top - offset }
+  return (
+    <div
+      {...rest}
+      aria-hidden
+      className={`${TIP_BOX} absolute z-20 -translate-x-1/2 -translate-y-full`}
+      style={style}
+    >
+      <TipContent title={tip.title} rows={tip.rows} />
+    </div>
+  )
 }

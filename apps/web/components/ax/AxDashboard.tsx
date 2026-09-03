@@ -25,14 +25,13 @@ import type {
   AxSkillUsageData,
 } from '@/lib/features/ax'
 import { getAxPanelView, SkillEventSummary } from './panels'
-import { SECTION_LABEL, TIP_BOX, TipContent, tipText, type TipRow } from './panels/primitives'
+import { PointTip, SECTION_LABEL, tipText, usePointTip, type TipRow } from './panels/primitives'
 import { AxPanelBoundary } from './AxPanelBoundary'
 import {
   formatCount,
   formatSampledRate,
   formatUpdatedAt,
   relativeActivityFill,
-  tooltipAnchorClass,
 } from './format'
 
 /** 조회 기간(일) — API가 허용하는 값과 같아야 한다 */
@@ -432,8 +431,7 @@ function ActivityGrassCard({
   kind: 'member' | 'agent'
   loading: boolean
 }) {
-  const [tip, setTip] = useState<{ left: number; top: number; title: string; rows: TipRow[] } | null>(null)
-  const wrapRef = useRef<HTMLElement>(null)
+  const { ref: wrapRef, tip, show: showPointTip, hide: hideTip } = usePointTip<HTMLElement>()
 
   if (loading) {
     return (
@@ -466,21 +464,9 @@ function ActivityGrassCard({
       : 'var(--bg-tertiary)',
   })
 
-  const showTip = (
-    event: { currentTarget: HTMLElement },
-    point: GrassPoint
-  ) => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    const cell = event.currentTarget.getBoundingClientRect()
-    const base = wrap.getBoundingClientRect()
-    const rawLeft = cell.left - base.left + cell.width / 2
-    const safeHalfWidth = Math.min(220, base.width / 2)
-    setTip({
-      left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
-      top: cell.top - base.top,
-      ...grassTip(point, kind),
-    })
+  const showTip = (event: { currentTarget: HTMLElement }, point: GrassPoint) => {
+    const content = grassTip(point, kind)
+    showPointTip(event.currentTarget, content.title, content.rows)
   }
 
   return (
@@ -504,7 +490,7 @@ function ActivityGrassCard({
             gridTemplateRows: 'repeat(7, auto)',
             gridAutoFlow: 'column',
           }}
-          onMouseLeave={() => setTip(null)}
+          onMouseLeave={hideTip}
         >
           {cells.map((point, index) => point === null ? (
             <span key={`pad-${index}`} className="w-full rounded-[2px]" style={{ aspectRatio: '1' }} />
@@ -518,7 +504,7 @@ function ActivityGrassCard({
               aria-label={grassLabel(point, kind)}
               onMouseEnter={(event) => showTip(event, point)}
               onFocus={(event) => showTip(event, point)}
-              onBlur={() => setTip(null)}
+              onBlur={hideTip}
             />
           ))}
         </div>
@@ -528,16 +514,7 @@ function ActivityGrassCard({
         </div>
       </div>
 
-      {tip && (
-        <div
-          className={`${TIP_BOX} absolute z-20 -translate-x-1/2 -translate-y-full`}
-          style={{ left: tip.left, top: tip.top - 6 }}
-          aria-hidden
-          data-grass-tooltip
-        >
-          <TipContent title={tip.title} rows={tip.rows} />
-        </div>
-      )}
+      <PointTip tip={tip} offset={6} data-grass-tooltip />
     </section>
   )
 }
@@ -691,6 +668,7 @@ function DailyActiveUsersChart({
   const min = positiveCounts.length > 0 ? Math.min(...positiveCounts) : max
   const hasActivity = counts.some((count) => count > 0)
   const axisIndexes = chartAxisIndexes(rows.length)
+  const { ref: chartRef, tip, show: showTip, hide: hideTip } = usePointTip<HTMLDivElement>()
 
   return (
     <div style={{ marginTop: '3.5rem' }}>
@@ -702,20 +680,31 @@ function DailyActiveUsersChart({
           최근 {days}일의 실제 적용 활동이 없습니다.
         </div>
       ) : (
-        <div className="mt-5">
+        <div className="relative mt-5" ref={chartRef}>
           <div className="flex items-end gap-[3px] border-b border-[var(--border-subtle)] px-1" style={{ height: '13rem' }}>
             {rows.map((point, index) => {
               const users = counts[index] ?? 0
+              const tipRows: TipRow[] = [{ label: '사용 인원', value: `${formatCount(users)}명` }]
+              // 툴팁은 열 전체가 아니라 막대(첫 자식) 위에 놓는다
+              const enter = (event: { currentTarget: HTMLElement }) => {
+                setHighlightedIndex(index)
+                const bar = event.currentTarget.firstElementChild as HTMLElement | null
+                showTip(bar ?? event.currentTarget, formatChartDate(point.date), tipRows)
+              }
+              const leave = () => {
+                setHighlightedIndex(null)
+                hideTip()
+              }
               return (
                 <div
                   key={point.date}
                   className="group relative flex h-full min-w-[3px] flex-1 cursor-default items-end focus-visible:outline-none"
                   tabIndex={0}
                   aria-label={`${formatChartDate(point.date)} · 사용 인원 ${formatCount(users)}명`}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  onMouseLeave={() => setHighlightedIndex(null)}
-                  onFocus={() => setHighlightedIndex(index)}
-                  onBlur={() => setHighlightedIndex(null)}
+                  onMouseEnter={enter}
+                  onMouseLeave={leave}
+                  onFocus={enter}
+                  onBlur={leave}
                 >
                   <div
                     className="ax-activity-mark relative w-full rounded-t-[4px] transition-shadow duration-150"
@@ -727,19 +716,13 @@ function DailyActiveUsersChart({
                         ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
                         : 'none',
                     }}
-                  >
-                    <span
-                      aria-hidden
-                      className={`${TIP_BOX} absolute bottom-full z-20 mb-2 hidden group-hover:block group-focus:block ${tooltipAnchorClass(index, daily.length)}`}
-                    >
-                      <TipContent title={formatChartDate(point.date)} rows={[{ label: '사용 인원', value: `${formatCount(users)}명` }]} />
-                    </span>
-                  </div>
+                  />
                 </div>
               )
             })}
           </div>
           <ChartDateAxis daily={rows} axisIndexes={axisIndexes} />
+          <PointTip tip={tip} data-users-tooltip />
         </div>
       )}
     </div>
@@ -763,26 +746,16 @@ function DailyApplicationFlowChart({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   // 툴팁은 막대가 아니라 차트 컨테이너 기준으로 한 개만 띄우고 좌우를 컨테이너 안으로 클램프한다.
   // 막대 안에 두면 좁은 화면의 가장자리 막대에서 뷰포트를 넘어 가로 스크롤이 생긴다.
-  const [tip, setTip] = useState<{ left: number; top: number; title: string; rows: TipRow[] } | null>(null)
-  const chartRef = useRef<HTMLDivElement>(null)
+  const { ref: chartRef, tip, show: showPointTip, hide: hidePointTip } = usePointTip<HTMLDivElement>()
   const showTip = (index: number, element: HTMLElement, title: string, rows: TipRow[]) => {
     setHoveredIndex(index)
-    const wrap = chartRef.current
-    if (!wrap) return
-    const bar = element.getBoundingClientRect()
-    const base = wrap.getBoundingClientRect()
-    const rawLeft = bar.left - base.left + bar.width / 2
-    const safeHalfWidth = Math.min(220, base.width / 2)
-    setTip({
-      left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
-      top: bar.top - base.top,
-      title,
-      rows,
-    })
+    // 툴팁은 열 전체가 아니라 실제 막대 위에 놓는다
+    const bar = element.querySelector<HTMLElement>('[data-flow-total]') ?? element
+    showPointTip(bar, title, rows)
   }
   const hideTip = () => {
     setHoveredIndex(null)
-    setTip(null)
+    hidePointTip()
   }
   const max = Math.max(
     1,
@@ -909,16 +882,7 @@ function DailyApplicationFlowChart({
             })}
           </div>
           <ChartDateAxis daily={daily} axisIndexes={axisIndexes} />
-          {tip && (
-            <span
-              aria-hidden
-              data-flow-tooltip
-              className={`${TIP_BOX} absolute z-20 block -translate-x-1/2 -translate-y-full`}
-              style={{ left: tip.left, top: tip.top - 8 }}
-            >
-              <TipContent title={tip.title} rows={tip.rows} />
-            </span>
-          )}
+          <PointTip tip={tip} data-flow-tooltip />
         </div>
       )}
     </div>
