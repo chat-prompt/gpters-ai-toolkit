@@ -33,7 +33,7 @@
   <key>RunAtLoad</key>
   <true/>
   <key>StartInterval</key>
-  <integer>21600</integer>
+  <integer>3600</integer>
   <key>ProcessType</key>
   <string>Background</string>
   <key>ThrottleInterval</key>

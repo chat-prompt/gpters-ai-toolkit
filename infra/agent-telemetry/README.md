@@ -2,7 +2,7 @@
 
 `aitk agent-telemetry install` is the canonical setup path. One installation
 owns exactly one `(agentId, source)` stream, collector credential, checkpoint,
-and scheduler. The default launchd interval is six hours.
+and scheduler. The default launchd interval is one hour.
 
 This telemetry is different from `aitk usage report`:
 
@@ -191,11 +191,14 @@ recovery.
 
 ## Review cadence
 
-- Automatic: launchd defaults to every six hours. This is a conservative
-  laptop-safe cadence that limits repeated log scans and network/DB requests;
-  checkpointed deltas make the totals independent of the cadence.
-- Always-on internal agents may use `--interval 3600` for hourly dashboard
-  freshness. The allowed range is 600–604800 seconds. Managed collectors are
+- Automatic: launchd defaults to every hour (`--interval 3600`). Internal
+  agents are always-on, and the dashboard treats a collector as stale after
+  two intervals, so hourly keeps agent panels fresh; checkpointed deltas make
+  the totals independent of the cadence.
+- Agents that run on a person's laptop may pass `--interval 21600` (six hours)
+  to limit repeated log scans and network/DB requests. The allowed range is
+  600–604800 seconds. This telemetry is separate from human usage: people keep
+  reporting once a day through `aitk usage report`. Managed collectors are
   considered stale after two configured intervals, with a twelve-hour floor
   to avoid false alarms from sleeping laptops.
 - The macOS job is a per-user LaunchAgent. It does not run while the machine is

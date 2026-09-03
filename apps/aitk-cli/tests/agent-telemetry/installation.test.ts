@@ -73,6 +73,27 @@ describe('agent telemetry installation', () => {
     expect(plist).not.toContain(value.credential.service)
   })
 
+  it('interval을 생략하면 상시 가동 에이전트 기준 1시간으로 예약한다', () => {
+    const value = createInstallation({
+      agentId: 'test-agent',
+      collectorId: 'collector-test',
+      source: 'openclaw',
+      sessionsDir,
+      openclawAgent: 'main',
+      serverUrl: 'https://ai-toolkit.gpters.org/',
+      backfillDays: 7,
+      nodePath,
+      scriptPath: cliPath,
+      collectorVersion: '0.7.0',
+      account: 'tester',
+      schedule: 'launchd',
+      home: root,
+    })
+
+    expect(value.schedule.intervalSeconds).toBe(3600)
+    expect(renderLaunchdPlist(value)).toContain('<integer>3600</integer>')
+  })
+
   it('plist 검증 후 현재 사용자 launchd 도메인에 등록한다', () => {
     const value = installation()
     const calls: Array<[string, string[]]> = []

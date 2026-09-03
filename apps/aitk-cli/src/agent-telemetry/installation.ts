@@ -400,7 +400,8 @@ export function createInstallation(input: {
   const checkpointDir = resolve(input.checkpointDir ?? agentTelemetryCheckpointDir(home))
   const nodePath = resolve(input.nodePath)
   const scriptPath = resolve(input.scriptPath)
-  const intervalSeconds = input.intervalSeconds ?? 21_600
+  // 에이전트 텔레메트리는 상시 가동 에이전트가 기본이라 1시간마다 수집한다. 노트북에서 도는 에이전트는 --interval로 늘린다.
+  const intervalSeconds = input.intervalSeconds ?? 3600
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 600 || intervalSeconds > 604_800) {
     throw new Error('Telemetry interval must be between 600 and 604800 seconds')
   }

@@ -169,6 +169,13 @@
       "when": 1788141600000,
       "tag": "0033_ax_skill_journeys",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788414275714,
+      "tag": "0034_agent_collector_hourly_default",
+      "breakpoints": true
     }
   ]
 }
