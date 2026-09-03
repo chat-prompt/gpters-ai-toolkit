@@ -12,9 +12,10 @@
   - #59 패널 디자인 어휘 통일, #60 기간 전환 성능(클라이언트 캐시·선로딩, 서버 병렬화, 365일 잔디 분리)
   - #61 데이터 포인트 툴팁 세로 나열·잔디 툴팁 단순화, #63 스킬 이벤트를 검색 → 로드 → 적용 깔때기로 재정의
   - #64 Hermes `skill_view` 호출을 스킬 로드로 집계, #65 에이전트 텔레메트리 기본 주기 1시간,
-    #66 `aitk agent-telemetry upgrade` 명령과 Codex 교차 검증 반영 (§10 참조)
-  - 헤더·OrgSwitcher·UserMenu·AdminQuickMenu의 `xl` 미만 축약 변경은 AX 범위 밖이라 커밋하지 않고
-    워킹트리에 남겨 두었다. 375px에서 헤더 요소가 겹치므로 별도로 다듬어야 한다.
+    #66 `aitk agent-telemetry upgrade` 명령과 Codex 교차 검증 반영, #68 upgrade 원자성과 0034 가드 (§10 참조)
+  - #70 좁은 화면에서 헤더 탭 접기 (`HeaderNavMenu`). 375~1920px에서 겹침 0, 조작 요소 세로 44px.
+    남겨 두었던 헤더 축약 워킹트리 변경도 이 PR에 함께 들어갔다.
+  - #71 결과를 기다리는 Hermes 스킬 호출을 다음 수집으로 넘겨 늦게 기록된 결과도 세도록 했다 (CLI 0.7.8).
   - 관련 Linear 이슈: DEV-4276(정기 점검용 지표 세트 정의와 배치) In Progress. DEV-4140·DEV-4221도 열려 있다.
 - 로컬 확인 주소: `http://127.0.0.1:3000/en/ax`
 - 로컬 화면은 운영 DB를 **읽기 전용**으로 조회한다. 운영·공유 DB를 변경하는 API/E2E 테스트를 실행하지 않는다.
@@ -343,3 +344,18 @@ corepack pnpm --filter @gpters/web exec dotenv -e ../../.env.local -- \
   승인(특히 `rm -rf`)은 사용자가 직접 눌러야 한다.
 - **dry-run으로 과거 구간을 보려면** 빈 `--checkpoint-dir`을 지정해야 한다. 운영 checkpoint는 delta + seen 해시라
   마지막 수집 이후만 새로 본다.
+- **늦게 기록된 결과**: 스킬 로드는 결과 행이 도착해야 확정하는데 수집 창은 앞으로만 움직인다. 0.7.8부터
+  결과를 기다리는 호출을 checkpoint(`hermesPendingSkillCalls`)에 들고 다니다가 결과를 만나면 그때 센다.
+  7일이 지나면 버린다.
+
+## 11. AX 0034 마이그레이션 — 적용 대기
+
+`interval_seconds` 컬럼 기본값을 21600에서 3600으로 바꾸는 마이그레이션이 아직 운영에 적용되지 않았다.
+
+- 읽기 전용 확인 결과 스키마 조건은 모두 충족한다: 마이그레이션 23건(마지막 0033), 수집기 테이블 존재,
+  기본값 아직 21600, 등록된 수집기 2개 모두 3600.
+- 막힌 지점은 Neon 브랜치다. guard는 운영 적용에 운영과 다른 recovery 브랜치를 요구하고 child 모드는
+  운영 브랜치를 거부하는데, 로컬에는 Neon API 키가 없어 브랜치를 만들 수 없다. Vercel 환경변수에도 없다.
+- **기능 영향은 없다.** 등록 API(`/api/ax/agent-telemetry/enroll`)가 `intervalSeconds`를 필수로 검증하고
+  항상 그 값을 저장하므로 컬럼 기본값이 실제로 쓰이는 경로가 없다. 코드·문서와 DB를 일치시키는 정리 작업이다.
+- 절차는 `docs/plans/2026-09-03-agent-collector-interval-migration.md` 참조.
