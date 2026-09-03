@@ -58,6 +58,13 @@ interface FunnelStep {
   extraRows?: TipRow[]
 }
 
+/** sm 이상에서 단계가 놓이는 격자 행 — 로드·적용이 두 경로에서 같은 행이 되게 한다 */
+const FUNNEL_ROW_CLASS: Record<number, string> = {
+  2: 'sm:row-start-2',
+  3: 'sm:row-start-3',
+  4: 'sm:row-start-4',
+}
+
 const FUNNEL_SEARCH_COLOR = 'var(--text-muted)'
 const FUNNEL_LOAD_COLOR = 'color-mix(in srgb, var(--text-muted) 58%, var(--bg-primary))'
 const FUNNEL_APPLY_COLOR = 'var(--accent-orange)'
@@ -129,14 +136,20 @@ export function SkillEventSummary({
 
   return (
     <div>
-      {/* 두 경로를 좌우 단으로 나누고 단계는 위에서 아래로 쌓는다.
-          단 사이 48px, 행 안쪽 16px, 라벨과 막대 12px — 4px 스케일로 숨 쉴 자리를 둔다 */}
-      <div className="grid grid-cols-1 gap-x-12 gap-y-6 sm:grid-cols-2">
-        {lanes.map((lane) => (
-          <div key={lane.id}>
-            <h4 className={SECTION_LABEL}>{lane.label}</h4>
-            <div className="mt-4 divide-y divide-[var(--border-subtle)]">
-              {lane.steps.map((step) => {
+      {/* 두 경로를 좌우 단으로 나누되 같은 종류의 단계(로드·적용)는 같은 행에 맞춘다.
+          직접 경로는 검색 단계가 없으므로 첫 행을 비운다. sm 미만에서는 경로별로 세로로 쌓인다.
+          단 사이 48px, 행 안쪽 16px, 라벨과 막대 12px — 4px 스케일 */}
+      <div className="grid grid-cols-1 gap-x-12 sm:grid-cols-2 sm:grid-rows-[auto_auto_auto_auto]">
+        {lanes.map((lane, laneIndex) => {
+          // 검색 경로는 2~4행, 직접 경로는 3~4행에 놓아 로드·적용이 같은 행이 된다
+          const firstRow = lane.steps.length === 3 ? 2 : 3
+          const column = laneIndex === 0 ? 'sm:col-start-1' : 'sm:col-start-2'
+          return (
+            <div key={lane.id} className="contents">
+              <h4 className={`${SECTION_LABEL} ${column} sm:row-start-1 ${laneIndex > 0 ? 'mt-6 sm:mt-0' : ''}`}>
+                {lane.label}
+              </h4>
+              {lane.steps.map((step, stepIndex) => {
                 const key = `${lane.id}:${step.label}`
                 const active = highlighted === key
                 const rate = step.previous ? formatSampledRate(step.value, step.previous.value) : null
@@ -156,11 +169,17 @@ export function SkillEventSummary({
                   ...(step.hint ? [step.hint] : []),
                   ...(step.extraRows ?? []).map((row) => `${row.label} ${row.value}`),
                 ].join(' · ')
+                // Tailwind는 정적 클래스만 생성하므로 행 번호를 문자열 조립 대신 매핑한다
+                const rowClass = FUNNEL_ROW_CLASS[firstRow + stepIndex] ?? ''
+                // 경로의 첫 칸은 제목 바로 아래라 선이 없다. 단, 직접 경로의 첫 칸은 sm 이상에서 로드 행과 나란하므로 선을 맞춘다.
+                const divider = stepIndex > 0
+                  ? 'border-t border-[var(--border-subtle)]'
+                  : (firstRow > 2 ? 'sm:border-t sm:border-[var(--border-subtle)]' : '')
                 return (
                   <div
                     key={key}
                     role="group"
-                    className="relative py-4 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
+                    className={`relative py-4 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)] ${column} ${rowClass} ${stepIndex === 0 ? (firstRow > 2 ? 'mt-4 sm:mt-0' : 'mt-4') : ''} ${divider}`}
                     tabIndex={0}
                     aria-label={label}
                     onMouseEnter={() => setHighlighted(key)}
@@ -198,8 +217,8 @@ export function SkillEventSummary({
                 )
               })}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
       <p className="mt-6 text-xs leading-relaxed text-[var(--text-secondary)]" role="note" aria-label="연결 불가">
         <span className={META_LINE}>
