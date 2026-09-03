@@ -1397,7 +1397,7 @@ export const axAgentTelemetryCollectors = pgTable('ax_agent_telemetry_collectors
   agentId: text('agent_id').notNull(),
   source: text('source').notNull(),
   tokenHash: text('token_hash').notNull().unique(),
-  intervalSeconds: integer('interval_seconds').notNull().default(21_600),
+  intervalSeconds: integer('interval_seconds').notNull().default(3600), // 상시 가동 에이전트 기준 1시간
   isActive: boolean('is_active').notNull().default(true),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
