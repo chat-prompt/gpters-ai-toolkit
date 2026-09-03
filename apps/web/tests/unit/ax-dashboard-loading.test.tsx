@@ -288,7 +288,7 @@ describe('AxDashboard 패널 요청', () => {
     expect(screen.getByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeTruthy()
     expect(screen.getByRole('button', {
-      name: '2026-08-30 · 활동 2건 · 로드 없이 적용 1건 · 로드 후 적용 1건',
+      name: '2026-08-30 · 활동 2건',
     })).toBeTruthy()
     const agentGrassCell = screen.getByRole('button', {
       name: '2026-08-31 · 턴 24건 · 활동 에이전트 2개',
@@ -296,7 +296,10 @@ describe('AxDashboard 패널 요청', () => {
     fireEvent.mouseEnter(agentGrassCell)
     // 셀 aria-label이 같은 문구를 이미 제공하므로 툴팁은 live region이 아니라 장식이다.
     const grassTooltip = document.querySelector<HTMLElement>('[data-grass-tooltip]')
-    expect(grassTooltip?.textContent).toContain('턴 24건')
+    // 제목(날짜) 아래 항목을 세로로 쌓는다 — 가로로 잇지 않는다
+    expect(grassTooltip?.querySelector('p')?.textContent).toBe('2026-08-31')
+    expect(Array.from(grassTooltip!.querySelectorAll('dt')).map((dt) => dt.textContent)).toEqual(['턴', '활동 에이전트'])
+    expect(Array.from(grassTooltip!.querySelectorAll('dd')).map((dd) => dd.textContent)).toEqual(['24건', '2개'])
     expect(grassTooltip?.getAttribute('aria-hidden')).toBe('true')
     fireEvent.mouseLeave(agentGrassCell.parentElement!)
     expect(document.querySelector('[data-grass-tooltip]')).toBeNull()
@@ -496,16 +499,23 @@ describe('AxDashboard 패널 요청', () => {
       'var(--accent-orange)',
     )
     expect(convertedSegment?.style.boxShadow).toBe('')
-    const selectedTooltipText = '8월 31일 · 로드 없이 적용 5 · 로드 45 · 로드 후 적용 3 · 연결 가능 로드 40건 중 7.5%'
-    // 분모가 10건 미만인 날은 백분율 대신 분수를 참고 수치로 보여준다.
-    const otherTooltipText = '8월 30일 · 로드 없이 적용 2 · 로드 20 · 로드 후 적용 1 · 연결 가능 로드 8건 중 1/8 · 참고'
-    expect(screen.queryByText(selectedTooltipText)).toBeNull()
-    expect(screen.queryByText(otherTooltipText)).toBeNull()
+    const flowTip = () => document.querySelector<HTMLElement>('[data-flow-tooltip]')
+    expect(flowTip()).toBeNull()
     fireEvent.mouseEnter(flowDay)
-    expect(screen.getByText(selectedTooltipText)).toBeTruthy()
-    expect(screen.queryByText(otherTooltipText)).toBeNull()
+    // 툴팁은 날짜 제목 아래 항목을 세로로 쌓고, 전환율 분모는 연결 가능 로드다.
+    expect(flowTip()?.querySelector('p')?.textContent).toBe('8월 31일')
+    expect(Array.from(flowTip()!.querySelectorAll('dt')).map((dt) => dt.textContent)).toEqual([
+      '로드 없이 적용', '로드', '로드 후 적용', '연결 가능 로드',
+    ])
+    expect(Array.from(flowTip()!.querySelectorAll('dd')).map((dd) => dd.textContent)).toEqual([
+      '5건', '45건', '3건', '40건 중 7.5%',
+    ])
     fireEvent.mouseLeave(flowDay)
-    expect(screen.queryByText(selectedTooltipText)).toBeNull()
+    expect(flowTip()).toBeNull()
+    // 분모가 10건 미만인 날은 백분율 대신 분수를 참고 수치로 보여준다.
+    fireEvent.mouseEnter(screen.getByLabelText(/^8월 30일 · 로드 없이 적용/))
+    expect(Array.from(flowTip()!.querySelectorAll('dd')).map((dd) => dd.textContent)).toContain('8건 중 1/8 · 참고')
+    fireEvent.mouseLeave(screen.getByLabelText(/^8월 30일 · 로드 없이 적용/))
     expect(screen.queryByText('aitk 서버에서 관측된 검색·콘텐츠 로드·적용 보고 현황')).toBeNull()
     expect(screen.queryByText('aitk DB (skill_events · mcp_sessions)')).toBeNull()
     expect(screen.queryByText('장기 활동')).toBeNull()

@@ -176,3 +176,42 @@ export function NumberCell({
     </td>
   )
 }
+
+/** 데이터 포인트 툴팁 한 줄 — 왼쪽 이름, 오른쪽 값 */
+export interface TipRow {
+  label: string
+  value: string
+}
+
+/**
+ * 데이터 포인트 툴팁 상자 클래스.
+ * 위치 규칙은 한 가지다: 가리킨 포인트 **위**, 가로 가운데, 차트 컨테이너 안으로 클램프.
+ */
+export const TIP_BOX = 'pointer-events-none rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-2 text-left font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg'
+
+/**
+ * 데이터 포인트 툴팁 본문 — 제목(날짜·시각) 한 줄 아래 항목을 세로로 쌓는다.
+ * 가로로 길게 잇지 않으므로 줄바꿈이 생기지 않는다.
+ */
+export function TipContent({ title, rows }: { title: string; rows: TipRow[] }) {
+  return (
+    <>
+      <p className="whitespace-nowrap text-[var(--text-muted)]">{title}</p>
+      {rows.length > 0 && (
+        <dl className="mt-1 space-y-0.5">
+          {rows.map((row) => (
+            <div key={row.label} className="flex items-baseline justify-between gap-4 whitespace-nowrap">
+              <dt className="text-[var(--text-secondary)]">{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </>
+  )
+}
+
+/** 툴팁과 같은 내용을 접근성 이름용 한 줄 문자열로 */
+export function tipText(title: string, rows: TipRow[]): string {
+  return [title, ...rows.map((row) => `${row.label} ${row.value}`)].join(' · ')
+}

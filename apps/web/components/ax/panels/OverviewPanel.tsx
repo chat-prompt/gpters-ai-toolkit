@@ -12,7 +12,7 @@ import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, relativeActivityFill, tooltipAnchorClass } from '../format'
 
-import { EMPTY_NOTE, SECTION_LABEL } from './primitives'
+import { EMPTY_NOTE, SECTION_LABEL, TIP_BOX, TipContent } from './primitives'
 
 /**
  * 성과 요약 패널 화면
@@ -169,8 +169,11 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
                   : 'none',
               }}
             />
-            <span className={`pointer-events-none absolute bottom-full z-10 mb-2 hidden whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block ${tooltipAnchorClass(point.hour, rows.length)}`}>
-              {point.hour}시 · {formatCount(point.users)}명
+            <span
+              aria-hidden
+              className={`${TIP_BOX} absolute bottom-full z-10 mb-2 hidden group-hover:block group-focus:block ${tooltipAnchorClass(point.hour, rows.length)}`}
+            >
+              <TipContent title={`${point.hour}시`} rows={[{ label: '사용 인원', value: `${formatCount(point.users)}명` }]} />
             </span>
           </div>
         ))}

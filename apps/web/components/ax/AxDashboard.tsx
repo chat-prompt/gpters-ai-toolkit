@@ -25,7 +25,7 @@ import type {
   AxSkillUsageData,
 } from '@/lib/features/ax'
 import { getAxPanelView, SkillEventSummary } from './panels'
-import { SECTION_LABEL } from './panels/primitives'
+import { SECTION_LABEL, TIP_BOX, TipContent, tipText, type TipRow } from './panels/primitives'
 import { AxPanelBoundary } from './AxPanelBoundary'
 import {
   formatCount,
@@ -432,7 +432,7 @@ function ActivityGrassCard({
   kind: 'member' | 'agent'
   loading: boolean
 }) {
-  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const [tip, setTip] = useState<{ left: number; top: number; title: string; rows: TipRow[] } | null>(null)
   const wrapRef = useRef<HTMLElement>(null)
 
   if (loading) {
@@ -479,7 +479,7 @@ function ActivityGrassCard({
     setTip({
       left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
       top: cell.top - base.top,
-      text: grassTooltip(point, kind),
+      ...grassTip(point, kind),
     })
   }
 
@@ -515,7 +515,7 @@ function ActivityGrassCard({
               className="w-full rounded-[2px] outline-none transition-shadow hover:ring-1 hover:ring-[var(--brand-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-secondary)]"
               style={{ aspectRatio: '1', ...cellStyle(point.events) }}
               data-activity-fill={cellStyle(point.events).background}
-              aria-label={grassTooltip(point, kind)}
+              aria-label={grassLabel(point, kind)}
               onMouseEnter={(event) => showTip(event, point)}
               onFocus={(event) => showTip(event, point)}
               onBlur={() => setTip(null)}
@@ -530,12 +530,12 @@ function ActivityGrassCard({
 
       {tip && (
         <div
-          className="pointer-events-none absolute z-20 max-w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-full whitespace-normal rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-center font-mono text-[10px] tabular-nums text-[var(--text-primary)] shadow-lg"
+          className={`${TIP_BOX} absolute z-20 -translate-x-1/2 -translate-y-full`}
           style={{ left: tip.left, top: tip.top - 6 }}
           aria-hidden
           data-grass-tooltip
         >
-          {tip.text}
+          <TipContent title={tip.title} rows={tip.rows} />
         </div>
       )}
     </section>
@@ -547,14 +547,27 @@ function weekdayOf(date: string): number {
   return new Date(`${date}T00:00:00Z`).getUTCDay()
 }
 
-/** 잔디 셀의 접근성 이름과 즉시 툴팁을 같은 문구로 유지한다. */
-function grassTooltip(point: GrassPoint, kind: 'member' | 'agent'): string {
+/**
+ * 잔디 셀 툴팁 — 날짜 아래 활동량만 둔다. 로드 유무 분해는 스킬 탭의 일별 흐름 차트가 맡는다.
+ * 접근성 이름은 같은 내용을 한 줄로 잇는다.
+ */
+function grassTip(point: GrassPoint, kind: 'member' | 'agent'): { title: string; rows: TipRow[] } {
   if (kind === 'agent') {
     const agents = 'agents' in point ? point.agents : 0
-    return `${point.date} · 턴 ${formatCount(point.events)}건 · 활동 에이전트 ${formatCount(agents)}개`
+    return {
+      title: point.date,
+      rows: [
+        { label: '턴', value: `${formatCount(point.events)}건` },
+        { label: '활동 에이전트', value: `${formatCount(agents)}개` },
+      ],
+    }
   }
-  const memberPoint = point as AxActivityGrassData['grassDaily'][number]
-  return `${point.date} · 활동 ${formatCount(point.events)}건 · 로드 없이 적용 ${formatCount(memberPoint.directApplied ?? 0)}건 · 로드 후 적용 ${formatCount(memberPoint.appliedAfterLoad ?? 0)}건`
+  return { title: point.date, rows: [{ label: '활동', value: `${formatCount(point.events)}건` }] }
+}
+
+function grassLabel(point: GrassPoint, kind: 'member' | 'agent'): string {
+  const tip = grassTip(point, kind)
+  return tipText(tip.title, tip.rows)
 }
 
 /**
@@ -715,8 +728,11 @@ function DailyActiveUsersChart({
                         : 'none',
                     }}
                   >
-                    <span className={`pointer-events-none absolute bottom-full z-20 mb-2 hidden whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block ${tooltipAnchorClass(index, daily.length)}`}>
-                      {formatChartDate(point.date)} · {formatCount(users)}명
+                    <span
+                      aria-hidden
+                      className={`${TIP_BOX} absolute bottom-full z-20 mb-2 hidden group-hover:block group-focus:block ${tooltipAnchorClass(index, daily.length)}`}
+                    >
+                      <TipContent title={formatChartDate(point.date)} rows={[{ label: '사용 인원', value: `${formatCount(users)}명` }]} />
                     </span>
                   </div>
                 </div>
@@ -747,9 +763,9 @@ function DailyApplicationFlowChart({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   // 툴팁은 막대가 아니라 차트 컨테이너 기준으로 한 개만 띄우고 좌우를 컨테이너 안으로 클램프한다.
   // 막대 안에 두면 좁은 화면의 가장자리 막대에서 뷰포트를 넘어 가로 스크롤이 생긴다.
-  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const [tip, setTip] = useState<{ left: number; top: number; title: string; rows: TipRow[] } | null>(null)
   const chartRef = useRef<HTMLDivElement>(null)
-  const showTip = (index: number, element: HTMLElement, text: string) => {
+  const showTip = (index: number, element: HTMLElement, title: string, rows: TipRow[]) => {
     setHoveredIndex(index)
     const wrap = chartRef.current
     if (!wrap) return
@@ -760,7 +776,8 @@ function DailyApplicationFlowChart({
     setTip({
       left: Math.min(Math.max(rawLeft, safeHalfWidth), base.width - safeHalfWidth),
       top: bar.top - base.top,
-      text,
+      title,
+      rows,
     })
   }
   const hideTip = () => {
@@ -821,15 +838,20 @@ function DailyApplicationFlowChart({
               const conversionBase = linkableLoads ?? loads
               const conversionLabel = linkableLoads === undefined ? '전체 로드' : '연결 가능 로드'
               const conversion = `${conversionLabel} ${formatCount(conversionBase)}건 중 ${formatSampledRate(appliedAfterLoad, conversionBase)}`
-              const tooltip = `${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)} · 로드 ${formatCount(loads)} · 로드 후 적용 ${formatCount(appliedAfterLoad)} · ${conversion}`
+              const tipRows: TipRow[] = [
+                { label: '로드 없이 적용', value: `${formatCount(directApplied)}건` },
+                { label: '로드', value: `${formatCount(loads)}건` },
+                { label: '로드 후 적용', value: `${formatCount(appliedAfterLoad)}건` },
+                { label: conversionLabel, value: `${formatCount(conversionBase)}건 중 ${formatSampledRate(appliedAfterLoad, conversionBase)}` },
+              ]
               return (
                 <div
                   key={point.date}
                   className="group relative flex h-full min-w-[3px] flex-1 cursor-default items-end focus-visible:outline-none"
                   tabIndex={0}
-                  onMouseEnter={(event) => showTip(index, event.currentTarget, tooltip)}
+                  onMouseEnter={(event) => showTip(index, event.currentTarget, formatChartDate(point.date), tipRows)}
                   onMouseLeave={hideTip}
-                  onFocus={(event) => showTip(index, event.currentTarget, tooltip)}
+                  onFocus={(event) => showTip(index, event.currentTarget, formatChartDate(point.date), tipRows)}
                   onBlur={hideTip}
                   aria-label={`${formatChartDate(point.date)} · 로드 없이 적용 ${formatCount(directApplied)}건 · 로드 ${formatCount(loads)}건 · 로드 후 적용 ${formatCount(appliedAfterLoad)}건 · ${conversion}`}
                 >
@@ -890,10 +912,11 @@ function DailyApplicationFlowChart({
           {tip && (
             <span
               aria-hidden
-              className="pointer-events-none absolute z-20 max-w-[min(28rem,calc(100%-1rem))] -translate-x-1/2 -translate-y-full whitespace-normal rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-center font-mono text-[11px] tabular-nums leading-relaxed text-[var(--text-primary)] shadow-lg"
+              data-flow-tooltip
+              className={`${TIP_BOX} absolute z-20 block -translate-x-1/2 -translate-y-full`}
               style={{ left: tip.left, top: tip.top - 8 }}
             >
-              {tip.text}
+              <TipContent title={tip.title} rows={tip.rows} />
             </span>
           )}
         </div>
