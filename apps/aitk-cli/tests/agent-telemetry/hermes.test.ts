@@ -232,6 +232,72 @@ describe('collectHermesAgent', () => {
     expect(third.skillLoads).toEqual([])
   })
 
+  it('수집 창이 지나간 뒤 기록된 결과도 보류 목록으로 잡아 센다', async () => {
+    const insert = insertMessage()
+    const MID = new Date('2026-08-26T12:00:00.000Z')
+    insert([40, 'session-secret', 'assistant', 'private', null, JSON.stringify([
+      { id: 'skill-slow', function: { name: 'skill_view', arguments: { name: 'humanizer' } } },
+    ]), null, null, epoch('2026-08-26T06:00:00Z'), null, null])
+
+    // 첫 수집: 호출만 보이고 결과 행은 아직 없다
+    const first = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: START, end: MID },
+      committed: committed(),
+      category: 'general',
+      source: 'hermes',
+    })
+    expect(first.skillLoads).toEqual([])
+    expect(first.nextCommitted.hermesPendingSkillCalls).toHaveLength(1)
+    expect(first.nextCommitted.hermesPendingSkillCalls?.[0]).toMatchObject({ skillId: 'humanizer' })
+
+    // 결과 행이 뒤늦게 저장되는데 기록된 시각은 이미 지나간 창 안이다
+    insert([41, 'session-secret', 'tool', 'late result', 'skill-slow', null, 'skill_view', null,
+      epoch('2026-08-26T06:00:02Z'), null, null])
+
+    // 창은 앞으로만 움직이지만 보류 목록 덕분에 확정된다
+    const second = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: MID, end: END },
+      committed: first.nextCommitted,
+      category: 'general',
+      source: 'hermes',
+    })
+    expect(second.skillLoads).toEqual([{ skillId: 'humanizer', loaded: 1, failed: 0, interrupted: 0 }])
+    expect(second.nextCommitted.hermesPendingSkillCalls ?? []).toEqual([])
+
+    // 한 번 확정한 뒤에는 다시 세지 않는다
+    const third = await collectHermesAgent({
+      sessionsDir: databasePath,
+      profileName: 'bbokeoter-private-profile',
+      window: { start: END, end: new Date('2026-08-27T12:00:00.000Z') },
+      committed: second.nextCommitted,
+      category: 'general',
+      source: 'hermes',
+    })
+    expect(third.skillLoads).toEqual([])
+  })
+
+  it('오래 기다린 보류 호출은 결과가 오지 않은 것으로 보고 버린다', async () => {
+    const stale = {
+      ...committed(),
+      hermesPendingSkillCalls: [
+        { hash: 'stale-call-hash', skillId: 'browse', atUtc: '2026-08-15T00:00:00.000Z' },
+        { hash: 'fresh-call-hash', skillId: 'humanizer', atUtc: '2026-08-25T00:00:00.000Z' },
+      ],
+    }
+
+    const result = await collectSkills(stale)
+
+    // 결과를 만나지 못한 12일 전 호출은 사라지고, 아직 기다릴 만한 호출만 남는다
+    expect(result.skillLoads).toEqual([])
+    expect(result.nextCommitted.hermesPendingSkillCalls).toEqual([
+      { hash: 'fresh-call-hash', skillId: 'humanizer', atUtc: '2026-08-25T00:00:00.000Z' },
+    ])
+  })
+
   it('한 호출에 결과 행이 여러 개 와도 스킬 로드를 한 번만 센다', async () => {
     const insert = insertMessage()
     insert([30, 'session-secret', 'assistant', 'private', null, JSON.stringify([
