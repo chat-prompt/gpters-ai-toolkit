@@ -8,12 +8,16 @@ import type {
   AgentTaskCategory,
   AgentTelemetryCommittedState,
   AgentTelemetryHealthWarning,
+  AgentTelemetryPendingSkillCall,
   AgentTelemetrySeenMessage,
   AgentTokenUsage,
 } from './types.js'
 import { emptyAgentUsage } from './types.js'
 
 const SEEN_RETENTION_MS = 90 * 86_400_000
+// 결과를 기다리는 skill_view 호출을 들고 다니는 기간. 이보다 오래되면 결과가 오지 않은 것으로 보고 버린다.
+const PENDING_SKILL_RETENTION_MS = 7 * 86_400_000
+const MAX_PENDING_SKILL_CALLS = 5_000
 const MAX_SEEN_MESSAGES = 100_000
 const MIN_HEALTH_SAMPLE_RECORDS = 20
 const MAX_UNSUPPORTED_RATIO = 0.5
@@ -283,6 +287,8 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
     if (Date.parse(seen.atUtc) >= retentionCutoff) retainedSeen.set(seen.hash, seen)
   }
   const nextHermesSessions: NonNullable<AgentTelemetryCommittedState['hermesSessions']> = {}
+  // 결과를 기다리는 skill_view 호출. 트랜잭션 안에서 채우고 다음 checkpoint로 넘긴다.
+  let pendingSkillCalls: AgentTelemetryPendingSkillCall[] = []
   const collection = {
     source: options.source,
     filesDiscovered: 1,
@@ -345,8 +351,29 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
     const parsedCalls = new Map<string, ParsedToolCall[] | null>()
     const callDirectory = new Map<string, DirectoryEntry>()
     const failedCalls = new Set<string>()
+    // 결과 행을 만난 호출. 시간 창과 무관하게 모으므로 늦게 기록된 결과도 찾을 수 있다.
+    const resolvedCalls = new Set<string>()
     // 결과 행이 중복으로 들어와도 스킬 로드를 한 번만 세기 위한 호출 단위 확정 표시
     const confirmedCalls = new Set<string>()
+    // 이번에도 결과를 만나지 못해 다음 수집으로 넘길 호출
+    const nextPendingSkillCalls = new Map<string, AgentTelemetryPendingSkillCall>()
+
+    /**
+     * 결과가 있는 호출만 스킬 로드로 확정한다. 실패한 로드의 이름은 존재하지 않는 스킬일 수 있어 그대로 두지 않고,
+     * 성공한 로드만 실제 SKILL.md가 있었다는 뜻이므로 카탈로그 식별자로 신뢰한다.
+     */
+    const confirmSkillCall = (callHash: string, skillId: string): boolean => {
+      if (!resolvedCalls.has(callHash)) return false
+      if (confirmedCalls.has(callHash)) return true
+      confirmedCalls.add(callHash)
+      const failed = failedCalls.has(callHash)
+      const countedId = failed ? UNKNOWN_SKILL_ID : skillId
+      const skill = skillMetrics.get(countedId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+      if (failed) skill.failed++
+      else skill.loaded++
+      skillMetrics.set(countedId, skill)
+      return true
+    }
     for (const row of messageRows) {
       const sessionIdentity = rawIdentity(row.session_id)
       const messageIdentity = rawIdentity(row.id)
@@ -361,6 +388,7 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       }
       if (role === 'tool') {
         const callId = rawIdentity(row.tool_call_id)
+        if (callId) resolvedCalls.add(hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${callId}`))
         if (callId && isFailedResult(row)) {
           failedCalls.add(hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${callId}`))
         }
@@ -404,6 +432,14 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       sessions.add(sessionHash)
       collection.includedRecords++
       latestIncludedAt = Math.max(latestIncludedAt, at)
+    }
+
+    // 지난 수집에서 결과를 못 만난 호출을 먼저 확인한다. 결과 행은 시간 창과 무관하게 모았으므로,
+    // 뒤늦게 기록된 결과도 여기서 잡힌다. 너무 오래된 항목은 결과가 오지 않은 것으로 보고 버린다.
+    for (const pending of options.committed.hermesPendingSkillCalls ?? []) {
+      const pendingAt = Date.parse(pending.atUtc)
+      if (!Number.isFinite(pendingAt) || endMs - pendingAt > PENDING_SKILL_RETENTION_MS) continue
+      if (!confirmSkillCall(pending.hash, pending.skillId)) nextPendingSkillCalls.set(pending.hash, pending)
     }
 
     for (const row of messageRows) {
@@ -461,6 +497,14 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
         let added = 0
         for (const call of calls) {
           if (retainedSeen.has(call.hash) || batchSeen.has(call.hash)) continue
+          // 스킬 로드는 결과가 도착해야 확정한다. 아직 결과가 없으면 다음 수집으로 넘긴다.
+          if (call.skillId && !confirmSkillCall(call.hash, call.skillId)) {
+            nextPendingSkillCalls.set(call.hash, {
+              hash: call.hash,
+              skillId: call.skillId,
+              atUtc: new Date(at).toISOString(),
+            })
+          }
           batchSeen.add(call.hash)
           retainedSeen.set(call.hash, { hash: call.hash, atUtc: new Date(at).toISOString() })
           const metric = toolMetrics.get(call.name) ?? { calls: 0, failures: 0 }
@@ -497,19 +541,6 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
         }
         batchSeen.add(resultHash)
         retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
-        // 스킬 로드는 결과가 도착한 시점에 확정한다 (OpenClaw와 같은 규칙). 결과가 아직 없는 호출은 세지 않고,
-        // 결과가 다음 수집 창에 들어오면 그때 센다. 한 호출에 결과 행이 여러 개 와도 호출 해시로 한 번만 센다.
-        if (call.skillId && !confirmedCalls.has(callHash)) {
-          confirmedCalls.add(callHash)
-          const failed = isFailedResult(row)
-          // 실패한 로드의 이름은 존재하지 않는 스킬일 수 있어 그대로 보내지 않는다. 성공한 로드만 실제 SKILL.md가
-          // 있었다는 뜻이므로 카탈로그 식별자로 신뢰한다.
-          const skillId = failed ? UNKNOWN_SKILL_ID : call.skillId
-          const skill = skillMetrics.get(skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
-          if (failed) skill.failed++
-          else skill.loaded++
-          skillMetrics.set(skillId, skill)
-        }
         sessions.add(info.hash)
         collection.includedRecords++
         latestIncludedAt = Math.max(latestIncludedAt, at)
@@ -519,6 +550,10 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       if (role === 'session_meta') collection.metadataSkipped++
       else collection.unsupportedRecordsSkipped++
     }
+
+    pendingSkillCalls = [...nextPendingSkillCalls.values()]
+      .sort((a, b) => Date.parse(a.atUtc) - Date.parse(b.atUtc))
+      .slice(-MAX_PENDING_SKILL_CALLS)
 
     database.exec('ROLLBACK')
   } catch (cause) {
@@ -578,6 +613,7 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       files: options.committed.files,
       seenMessages,
       hermesSessions: nextHermesSessions,
+      ...(pendingSkillCalls.length > 0 ? { hermesPendingSkillCalls: pendingSkillCalls } : {}),
     },
   }
 }

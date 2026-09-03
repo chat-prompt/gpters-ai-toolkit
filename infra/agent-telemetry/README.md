@@ -24,7 +24,9 @@ local paths.
   Sessionless skill journey linking requires 0.7.3 or newer.
   Hermes skill-load counting (skill_view) requires 0.7.5 or newer, and
   `agent-telemetry upgrade` requires 0.7.6 or newer (0.7.7 for the atomic plist
-  swap and pending-batch guard).
+  swap and pending-batch guard). 0.7.8 carries skill_view calls whose result row
+  has not arrived yet across collections, so a late-written result is still
+  counted instead of being skipped when the window moves on.
   Internal agents install the CLI from an approved repository commit with
   `install-from-repo.sh`; publishing a new npm package is not required.
 - Node.js and Corepack/pnpm. If Bun is not already installed, the repo
