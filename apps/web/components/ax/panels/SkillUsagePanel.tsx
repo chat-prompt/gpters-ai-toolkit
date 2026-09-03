@@ -129,71 +129,72 @@ export function SkillEventSummary({
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-[6rem_repeat(3,minmax(0,1fr))] sm:gap-y-8">
+      {/* 두 경로를 좌우 단으로 나누고 단계는 위에서 아래로 쌓는다 — 정보량에 맞춰 높이를 줄인다 */}
+      <div className="grid grid-cols-1 gap-x-10 gap-y-6 sm:grid-cols-2">
         {lanes.map((lane) => (
-          <div key={lane.id} className="contents">
-            <p className={`${SECTION_LABEL} sm:self-start sm:pt-2`}>{lane.label}</p>
-            {/* 직접 경로는 첫 열을 비워 적용 칸을 검색 경로와 같은 열에 맞춘다 */}
-            {lane.steps.length < 3 && <div className="hidden sm:block" aria-hidden />}
-            {lane.steps.map((step) => {
-              const key = `${lane.id}:${step.label}`
-              const active = highlighted === key
-              const rate = step.previous ? formatSampledRate(step.value, step.previous.value) : null
-              const ratio = step.previous
-                ? (step.previous.value > 0 ? Math.min(1, step.value / step.previous.value) : 0)
-                : 1
-              const rows: TipRow[] = [
-                ...(step.previous
-                  ? [{ label: `직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중`, value: rate ?? '—' }]
-                  : []),
-                ...(step.extraRows ?? []),
-              ]
-              const title = `${step.label} ${formatCount(step.value)}건`
-              const label = [
-                `${lane.label} · ${title}`,
-                ...(step.previous ? [`직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중 ${rate}`] : []),
-                ...(step.hint ? [step.hint] : []),
-              ].join(' · ')
-              return (
-                <div
-                  key={key}
-                  className="relative min-w-0 py-2 outline-none"
-                  tabIndex={0}
-                  aria-label={label}
-                  onMouseEnter={() => setHighlighted(key)}
-                  onMouseLeave={() => setHighlighted(null)}
-                  onFocus={() => setHighlighted(key)}
-                  onBlur={() => setHighlighted(null)}
-                >
-                  <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
-                    {step.label}
-                    {rate !== null && (
-                      <span className={`ml-auto ${META_LINE}`}>→ {rate}</span>
-                    )}
-                  </p>
-                  <p className="mt-2 font-mono text-xl tabular-nums text-[var(--text-primary)]">{formatCount(step.value)}</p>
-                  <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
-                    <span
-                      className="block h-full rounded-full"
-                      style={{
-                        width: `${ratio * 100}%`,
-                        background: step.color,
-                        boxShadow: active
-                          ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
-                          : 'none',
-                      }}
-                    />
-                  </div>
-                  {step.hint && <p className={`mt-1 ${META_LINE}`}>{step.hint}</p>}
-                  {active && rows.length > 0 && (
-                    <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute left-0 top-full z-10 mt-1`}>
-                      <TipContent title={title} rows={rows} />
+          <div key={lane.id}>
+            <p className={SECTION_LABEL}>{lane.label}</p>
+            <div className="mt-2 divide-y divide-[var(--border-subtle)]">
+              {lane.steps.map((step) => {
+                const key = `${lane.id}:${step.label}`
+                const active = highlighted === key
+                const rate = step.previous ? formatSampledRate(step.value, step.previous.value) : null
+                const ratio = step.previous
+                  ? (step.previous.value > 0 ? Math.min(1, step.value / step.previous.value) : 0)
+                  : 1
+                const rows: TipRow[] = [
+                  ...(step.previous
+                    ? [{ label: `직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중`, value: rate ?? '—' }]
+                    : []),
+                  ...(step.extraRows ?? []),
+                ]
+                const title = `${step.label} ${formatCount(step.value)}건`
+                const label = [
+                  `${lane.label} · ${title}`,
+                  ...(step.previous ? [`직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중 ${rate}`] : []),
+                  ...(step.hint ? [step.hint] : []),
+                ].join(' · ')
+                return (
+                  <div
+                    key={key}
+                    className="relative py-2.5 outline-none"
+                    tabIndex={0}
+                    aria-label={label}
+                    onMouseEnter={() => setHighlighted(key)}
+                    onMouseLeave={() => setHighlighted(null)}
+                    onFocus={() => setHighlighted(key)}
+                    onBlur={() => setHighlighted(null)}
+                  >
+                    <div className="flex items-baseline justify-between gap-4">
+                      <p className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <span className="h-2 w-2 rounded-[2px]" style={{ background: step.color }} />
+                        {step.label}
+                        {rate !== null && <span className={META_LINE}>→ {rate}</span>}
+                      </p>
+                      <p className="font-mono text-lg tabular-nums text-[var(--text-primary)]">{formatCount(step.value)}</p>
                     </div>
-                  )}
-                </div>
-              )
-            })}
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+                      <span
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${ratio * 100}%`,
+                          background: step.color,
+                          boxShadow: active
+                            ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
+                            : 'none',
+                        }}
+                      />
+                    </div>
+                    {step.hint && <p className={`mt-1.5 ${META_LINE}`}>{step.hint}</p>}
+                    {active && rows.length > 0 && (
+                      <div aria-hidden data-funnel-tooltip className={`${TIP_BOX} absolute left-0 top-full z-10 mt-1`}>
+                        <TipContent title={title} rows={rows} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         ))}
       </div>
