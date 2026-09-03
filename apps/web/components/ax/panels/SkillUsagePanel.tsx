@@ -134,6 +134,10 @@ export function SkillEventSummary({
     },
   ]
 
+  // 막대는 두 경로가 공유하는 한 자(최댓값 = 경로 첫 단계 중 큰 값)로 그린다.
+  // 그래야 직전 단계 대비 100%인 적용 막대가 로드 막대와 같은 길이가 되고, 두 경로의 크기도 견줄 수 있다.
+  const scaleMax = Math.max(1, ...lanes.map((lane) => lane.steps[0]?.value ?? 0))
+
   return (
     <div>
       {/* 두 경로를 좌우 단으로 나누되 같은 종류의 단계(로드·적용)는 같은 행에 맞춘다.
@@ -153,9 +157,7 @@ export function SkillEventSummary({
                 const key = `${lane.id}:${step.label}`
                 const active = highlighted === key
                 const rate = step.previous ? formatSampledRate(step.value, step.previous.value) : null
-                const ratio = step.previous
-                  ? (step.previous.value > 0 ? Math.min(1, step.value / step.previous.value) : 0)
-                  : (step.value > 0 ? 1 : 0)
+                const ratio = Math.min(1, step.value / scaleMax)
                 const rows: TipRow[] = [
                   ...(step.previous
                     ? [{ label: `직전 ${step.previous.label} ${formatCount(step.previous.value)}건 중`, value: rate ?? '—' }]
@@ -197,9 +199,12 @@ export function SkillEventSummary({
                     </div>
                     <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
                       <span
+                        data-funnel-bar={step.label}
                         className="block h-full rounded-full"
                         style={{
                           width: `${ratio * 100}%`,
+                          // 0이 아닌 값은 최소 2px로 남겨 존재만은 보이게 한다
+                          minWidth: step.value > 0 ? '2px' : undefined,
                           background: step.color,
                           boxShadow: active
                             ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'

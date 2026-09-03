@@ -61,6 +61,16 @@ describe('AX 스킬 사용 패널 화면', () => {
     expect(screen.getByLabelText('검색 경로 · 적용 보고 2건 · 직전 로드 5건 중 2/5 · 참고')).toBeTruthy()
     expect(screen.getByLabelText('직접 경로 · 검색 없는 로드 3건')).toBeTruthy()
     expect(screen.getByLabelText('직접 경로 · 적용 보고 1건 · 직전 검색 없는 로드 3건 중 1/3 · 참고')).toBeTruthy()
+    // 막대는 두 경로가 한 자를 공유한다 — 검색 요청 12건이 100%, 로드 5건은 그 5/12, 적용은 로드 막대 안쪽으로 줄어든다
+    const bars = Array.from(document.querySelectorAll<HTMLElement>('[data-funnel-bar]'))
+    expect(bars.map((bar) => bar.style.width)).toEqual([
+      '100%',
+      `${(5 / 12) * 100}%`,
+      `${(2 / 12) * 100}%`,
+      `${(3 / 12) * 100}%`,
+      `${(1 / 12) * 100}%`,
+    ])
+    expect(bars.every((bar) => bar.style.minWidth === '2px')).toBe(true)
     // 연결 불가는 막대 없이 따로 적고 비율에서 뺀다
     const unlinkable = screen.getByRole('note', { name: '연결 불가' }).textContent
     expect(unlinkable).toContain('로드 12건 · 적용 4건 · 로드 없이 적용 3건')
