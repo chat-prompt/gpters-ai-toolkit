@@ -97,7 +97,7 @@ const DATA: AxAgentActivityData = {
     { source: 'openclaw', status: 'alternate', lastCollectedAt: null, capabilities: { usage: true, tools: false, skills: false }, note: '요약 로그' },
     { source: 'claude-code', status: 'reporting', lastCollectedAt: '2026-09-01T04:00:00.000Z', capabilities: { usage: true, tools: true, skills: true }, note: '정밀 수집' },
     { source: 'codex', status: 'missing', lastCollectedAt: null, capabilities: { usage: true, tools: true, skills: false }, note: 'Codex 수집' },
-    { source: 'hermes', status: 'reporting', lastCollectedAt: '2026-09-01T04:00:00.000Z', capabilities: { usage: true, tools: true, skills: false }, note: 'Hermes 수집' },
+    { source: 'hermes', status: 'reporting', lastCollectedAt: '2026-09-01T04:00:00.000Z', capabilities: { usage: true, tools: true, skills: true }, note: 'Hermes 수집' },
   ],
   models: [...BBODOONG.models, ...BBOKEOTER.models],
   tools: [...BBODOONG.tools, ...BBOKEOTER.tools],

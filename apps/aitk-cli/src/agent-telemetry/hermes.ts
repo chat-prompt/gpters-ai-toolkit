@@ -28,6 +28,8 @@ const FAILED_MARKERS = new Set([
   'error', 'failed', 'failure', 'cancelled', 'canceled', 'aborted', 'denied', 'rejected',
 ])
 const DEFAULT_PROFILE_SCOPE = 'default'
+// Hermes가 SKILL.md를 여는 도구. 인자 중 스킬 이름만 읽고, file_path가 있으면 링크 파일 열람이라 로드로 세지 않는다.
+const SKILL_VIEW_TOOL = 'skill_view'
 
 const REQUIRED_SESSION_COLUMNS = [
   'id', 'model', 'last_activity_at', 'input_tokens', 'output_tokens',
@@ -65,6 +67,8 @@ interface HermesMessageRow {
 interface ParsedToolCall {
   hash: string
   name: string
+  /** skill_view가 SKILL.md 본문을 연 호출이면 그 스킬 ID */
+  skillId?: string
 }
 
 interface MutableMetric {
@@ -193,10 +197,33 @@ function parseToolCalls(raw: unknown, sessionIdentity: string): ParsedToolCall[]
       ? call.function as Record<string, unknown>
       : {}
     // arguments/input은 의도적으로 읽거나 보존하지 않는다.
+    // 유일한 예외는 skill_view의 스킬 이름 — 어떤 스킬을 로드했는지가 이 수집의 목적이고, 이름은 카탈로그 식별자다.
     const name = safeLabel(call.name ?? call.tool_name ?? fn.name, 'unknown-tool')
-    calls.push({ hash: hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${id}`), name })
+    const hash = hashIdentity(`${sessionIdentity}\u0000tool-call\u0000${id}`)
+    const skillId = name === SKILL_VIEW_TOOL ? skillIdFromArguments(call.arguments ?? fn.arguments) : undefined
+    calls.push(skillId ? { hash, name, skillId } : { hash, name })
   }
   return calls
+}
+
+/**
+ * skill_view 인자에서 스킬 이름만 뽑는다. file_path가 있으면 링크 파일 열람이라 로드가 아니다.
+ * 이름이 라벨 규칙(경로·이메일·토큰 금지)에 어긋나면 버린다. 다른 인자 값은 읽지 않는다.
+ */
+function skillIdFromArguments(raw: unknown): string | undefined {
+  let value: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw) as unknown
+    } catch {
+      return undefined
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const args = value as Record<string, unknown>
+  if (typeof args.file_path === 'string' && args.file_path.trim().length > 0) return undefined
+  const skillId = safeLabel(args.name, '')
+  return skillId.length > 0 ? skillId : undefined
 }
 
 function requiredColumns(database: DatabaseConnection, table: string, required: readonly string[]): void {
@@ -229,6 +256,7 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
   const totalUsage = emptyAgentUsage()
   const modelMetrics = new Map<string, MutableMetric>()
   const toolMetrics = new Map<string, { calls: number; failures: number }>()
+  const skillMetrics = new Map<string, { loaded: number; failed: number; interrupted: number }>()
   const sessions = new Set<string>()
   const sessionInfo = new Map<string, { hash: string; model: string }>()
   const batchSeen = new Set<string>()
@@ -418,6 +446,12 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
           metric.calls++
           if (failedCalls.has(call.hash)) metric.failures++
           toolMetrics.set(call.name, metric)
+          if (call.skillId) {
+            const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
+            if (failedCalls.has(call.hash)) skill.failed++
+            else skill.loaded++
+            skillMetrics.set(call.skillId, skill)
+          }
           added++
         }
         if (added === 0) collection.duplicatesSkipped++
@@ -500,7 +534,8 @@ export async function collectHermesAgent(options: CollectHermesOptions): Promise
       .sort((a, b) => b.turns - a.turns || a.model.localeCompare(b.model)),
     tools: [...toolMetrics.entries()].map(([name, metric]) => ({ name, ...metric }))
       .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name)),
-    skillLoads: [],
+    skillLoads: [...skillMetrics.entries()].map(([skillId, metric]) => ({ skillId, ...metric }))
+      .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)),
     taskCategories: turns > 0 ? [{
       category: options.category,
       sessions: sessions.size,

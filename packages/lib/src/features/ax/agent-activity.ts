@@ -45,8 +45,8 @@ const SOURCE_INFO: Record<AxAgentTelemetrySource, Omit<AxAgentSourceCoverageRow,
     note: '토큰·턴·도구 호출·실행 보고를 수집하며 스킬 로드는 아직 별도 신호가 없습니다',
   },
   hermes: {
-    capabilities: { usage: true, tools: true, skills: false },
-    note: 'SQLite 누적 사용량의 증분·사용자 턴·도구 호출을 수집하며 추론 토큰 포함 관계와 스킬 신호는 아직 미확정입니다',
+    capabilities: { usage: true, tools: true, skills: true },
+    note: 'SQLite 누적 사용량의 증분·사용자 턴·도구 호출을 수집하고, skill_view가 SKILL.md를 연 호출을 스킬 로드로 셉니다. 추론 토큰 포함 관계는 아직 미확정입니다',
   },
 }
 
