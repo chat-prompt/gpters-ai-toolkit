@@ -10,9 +10,9 @@
 import type { AxOverviewData } from '@/lib/features/ax'
 import { useState } from 'react'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate, relativeActivityFill, tooltipAnchorClass } from '../format'
+import { formatCount, formatDate, relativeActivityFill } from '../format'
 
-import { EMPTY_NOTE, SECTION_LABEL } from './primitives'
+import { EMPTY_NOTE, PointTip, SECTION_LABEL, usePointTip } from './primitives'
 
 /**
  * 성과 요약 패널 화면
@@ -101,7 +101,11 @@ function MemberUsageTable({
                     }}
                   />
                   <span className="relative text-[var(--text-primary)]">{row.name}</span>
-                  <span className={`pointer-events-none absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm ${highlightedIndex === index ? 'block' : 'hidden'}`}>
+                  {/* 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다 */}
+                  <span
+                    className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm ${highlightedIndex === index ? 'block' : 'hidden'}`}
+                    style={{ left: `calc(${(row.applied / max) * 100}% + 0.5rem)` }}
+                  >
                     로드 {formatCount(row.loaded)} · 적용 {formatCount(row.applied)}
                   </span>
                 </td>
@@ -129,6 +133,7 @@ function MemberUsageTable({
  */
 function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) {
   const [highlightedHour, setHighlightedHour] = useState<number | null>(null)
+  const { ref: chartRef, tip, show: showTip, hide: hideTip } = usePointTip<HTMLDivElement>()
   const max = Math.max(1, ...rows.map((row) => row.users))
   const positiveValues = rows.map((row) => row.users).filter((value) => value > 0)
   const min = positiveValues.length > 0 ? Math.min(...positiveValues) : max
@@ -146,18 +151,28 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
   return (
     <div>
       <p className={SECTION_LABEL}>시간대별 사용 인원 (KST)</p>
-      <div className="mt-3 flex h-24 items-end gap-[3px]">
-        {rows.map((point) => (
+      <div className="relative mt-3" ref={chartRef}>
+      <div className="flex h-24 items-end gap-[3px]">
+        {rows.map((point) => {
+          const enter = (event: { currentTarget: HTMLElement }) => {
+            setHighlightedHour(point.hour)
+            showTip(event.currentTarget, `${point.hour}시`, [{ label: '사용 인원', value: `${formatCount(point.users)}명` }])
+          }
+          const leave = () => {
+            setHighlightedHour(null)
+            hideTip()
+          }
+          return (
           <div
             key={point.hour}
             className="group relative min-w-[3px] flex-1 focus-visible:outline-none"
             style={{ height: `${Math.max(2, (point.users / max) * 100)}%` }}
             aria-label={`${point.hour}시 · ${formatCount(point.users)}명`}
             tabIndex={0}
-            onMouseEnter={() => setHighlightedHour(point.hour)}
-            onMouseLeave={() => setHighlightedHour(null)}
-            onFocus={() => setHighlightedHour(point.hour)}
-            onBlur={() => setHighlightedHour(null)}
+            onMouseEnter={enter}
+            onMouseLeave={leave}
+            onFocus={enter}
+            onBlur={leave}
           >
             <div
               className="ax-activity-mark h-full rounded-t-[3px] transition-shadow duration-150"
@@ -169,11 +184,11 @@ function HourlyActiveUsers({ rows }: { rows: AxOverviewData['hourlyDensity'] }) 
                   : 'none',
               }}
             />
-            <span className={`pointer-events-none absolute bottom-full z-10 mb-2 hidden whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg group-hover:block group-focus:block ${tooltipAnchorClass(point.hour, rows.length)}`}>
-              {point.hour}시 · {formatCount(point.users)}명
-            </span>
           </div>
-        ))}
+          )
+        })}
+      </div>
+      <PointTip tip={tip} data-hourly-tooltip />
       </div>
       <div className="mt-2 flex justify-between border-t border-[var(--border-subtle)] pt-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
         <span>0시</span>

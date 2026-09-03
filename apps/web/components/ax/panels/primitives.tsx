@@ -8,7 +8,7 @@
  * 열린 격자에 둔다. 새 패널을 만들거나 고칠 때는 여기 있는 조각부터 쓴다.
  */
 
-import { useId, type ReactNode } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { formatCount } from '../format'
 
 /** 섹션 라벨 — 표 머리칸과 같은 모노 대문자 소형 텍스트 */
@@ -174,5 +174,118 @@ export function NumberCell({
     }`}>
       {formatCount(value)}{suffix}
     </td>
+  )
+}
+
+/** 데이터 포인트 툴팁 한 줄 — 왼쪽 이름, 오른쪽 값 */
+export interface TipRow {
+  label: string
+  value: string
+}
+
+/**
+ * 데이터 포인트 툴팁 상자 클래스.
+ * 위치 규칙은 한 가지다: 가리킨 포인트 **위**, 가로 가운데, 차트 컨테이너 안으로 클램프.
+ */
+export const TIP_BOX = 'pointer-events-none rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2.5 py-2 text-left font-mono text-[11px] tabular-nums text-[var(--text-primary)] shadow-lg'
+
+/**
+ * 데이터 포인트 툴팁 본문 — 제목(날짜·시각) 한 줄 아래 항목을 세로로 쌓는다.
+ * 가로로 길게 잇지 않으므로 줄바꿈이 생기지 않는다.
+ */
+export function TipContent({ title, rows }: { title: string; rows: TipRow[] }) {
+  return (
+    <>
+      <p className="whitespace-nowrap text-[var(--text-muted)]">{title}</p>
+      {rows.length > 0 && (
+        <dl className="mt-1 space-y-0.5">
+          {rows.map((row) => (
+            <div key={row.label} className="flex items-baseline justify-between gap-4 whitespace-nowrap">
+              <dt className="text-[var(--text-secondary)]">{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </>
+  )
+}
+
+/** 툴팁과 같은 내용을 접근성 이름용 한 줄 문자열로 */
+export function tipText(title: string, rows: TipRow[]): string {
+  return [title, ...rows.map((row) => `${row.label} ${row.value}`)].join(' · ')
+}
+
+/** 컨테이너 기준으로 계산한 데이터 포인트 툴팁 위치와 내용 */
+export interface PointTipState {
+  /** 포인트 가로 중심 (컨테이너 기준, 클램프 전) */
+  left: number
+  /** 포인트 윗변 (컨테이너 기준) */
+  top: number
+  /** 컨테이너 폭 — 툴팁이 넘칠 때만 이 안으로 민다 */
+  wrapWidth: number
+  title: string
+  rows: TipRow[]
+}
+
+/**
+ * 데이터 포인트 툴팁 한 개를 컨테이너 기준으로 띄우는 훅
+ *
+ * `ref`를 차트 컨테이너(`relative`)에 달고, 막대·셀에 호버·포커스하면 `show(element, title, rows)`를 부른다.
+ * 툴팁은 그 요소 **위, 가로 가운데**에 놓이며 컨테이너 밖으로 나가지 않게 좌우를 클램프한다.
+ * 막대 안에 CSS로 두는 방식과 달리 가장자리에서도 가운데 정렬이 유지된다.
+ */
+export function usePointTip<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  const [tip, setTip] = useState<PointTipState | null>(null)
+  const show = useCallback((element: HTMLElement, title: string, rows: TipRow[]) => {
+    const wrap = ref.current
+    if (!wrap) return
+    const point = element.getBoundingClientRect()
+    const base = wrap.getBoundingClientRect()
+    setTip({
+      left: point.left - base.left + point.width / 2,
+      top: point.top - base.top,
+      wrapWidth: base.width,
+      title,
+      rows,
+    })
+  }, [])
+  const hide = useCallback(() => setTip(null), [])
+  return { ref, tip, show, hide }
+}
+
+/**
+ * `usePointTip`이 준 상태를 그리는 상자 — 포인트 위, 가로 가운데에 세로 나열 내용.
+ * 그려진 뒤 자기 폭을 재서 컨테이너 밖으로 나가는 만큼만 안쪽으로 민다. 고정 폭으로 클램프하면
+ * 좁은 툴팁이 가장자리 막대에서 불필요하게 가운데 쪽으로 밀린다.
+ */
+export function PointTip({
+  tip,
+  offset = 8,
+  ...rest
+}: {
+  tip: PointTipState | null
+  /** 포인트 위쪽 여백(px) */
+  offset?: number
+} & Record<`data-${string}`, string | boolean | undefined>) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [halfWidth, setHalfWidth] = useState(0)
+  useLayoutEffect(() => {
+    if (boxRef.current) setHalfWidth(boxRef.current.getBoundingClientRect().width / 2)
+  }, [tip])
+  if (!tip) return null
+  const left = Math.min(Math.max(tip.left, halfWidth), Math.max(halfWidth, tip.wrapWidth - halfWidth))
+  const style: CSSProperties = { left, top: tip.top - offset }
+  return (
+    <div
+      {...rest}
+      ref={boxRef}
+      aria-hidden
+      className={`${TIP_BOX} absolute z-20 -translate-x-1/2 -translate-y-full`}
+      style={style}
+    >
+      <TipContent title={tip.title} rows={tip.rows} />
+    </div>
   )
 }

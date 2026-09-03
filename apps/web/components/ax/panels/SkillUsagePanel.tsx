@@ -193,19 +193,26 @@ function SkillTable({
                 <td
                   className={`relative ${TD}`}
                 >
-                  {/* 사용량 비례 막대 — 이름 칸 안에서만 찬다 */}
+                  {/* 사용량 비례 막대 — 이름 칸 안에서만 찬다. 호버·포커스 때 요약 표와 같은 외곽선이 붙는다 */}
                   <span
                     aria-hidden
-                    className="absolute inset-y-0 left-0"
+                    className="ax-activity-mark absolute inset-y-0 left-0 transition-shadow duration-150"
                     data-activity-fill={relativeActivityFill(activity(skill), min, max)}
                     style={{
                       width: `${(activity(skill) / max) * 100}%`,
                       background: relativeActivityFill(activity(skill), min, max),
+                      boxShadow: highlightedSkillId === skill.skillId
+                        ? '0 0 0 1px var(--bg-primary), 0 0 0 3px var(--brand-secondary)'
+                        : 'none',
                     }}
                   />
                   <span className="relative text-[var(--text-primary)]">{skill.name}</span>
                   {highlightedSkillId === skill.skillId && (
-                    <span className="pointer-events-none absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm">
+                    <span
+                      // 힌트는 항상 막대 끝 바로 오른쪽에 붙는다. 막대가 칸을 꽉 채우면 옆 수치 칸 위로 겹쳐 뜬다
+                      className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--text-secondary)] shadow-sm"
+                      style={{ left: `calc(${(activity(skill) / max) * 100}% + 0.5rem)` }}
+                    >
                       적용 {formatCount(skill.applied)}건 · 전체 적용 중 {formatRate(skill.applied, totalApplied)}
                     </span>
                   )}
