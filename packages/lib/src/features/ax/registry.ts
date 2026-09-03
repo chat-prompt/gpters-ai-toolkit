@@ -22,6 +22,7 @@ import { vercelDeploymentsPanel } from './vercel'
 import { subscriptionsPanel } from './subscriptions'
 import { clientUsagePanel } from './usage'
 import { agentActivityPanel } from './agent-activity'
+import { activityGrassPanel } from './activity-grass'
 
 /** 등록된 패널 — 배열 순서가 화면 표시 순서다 */
 export const AX_PANELS: AxPanel[] = [
@@ -34,6 +35,8 @@ export const AX_PANELS: AxPanel[] = [
   clientUsagePanel,
   subscriptionsPanel,
   vercelDeploymentsPanel,
+  // 탭으로 노출하지 않는 보조 패널 — 요약 하단 365일 잔디의 데이터 소스
+  activityGrassPanel,
 ]
 
 /** id로 패널 찾기 */

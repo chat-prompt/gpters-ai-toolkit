@@ -49,7 +49,7 @@ const { db } = await import('@gpters/db')
 /** innerJoin 호출 횟수 — 모든 쿼리가 카탈로그 모집단을 쓰는지 확인용 */
 let innerJoinCalls = 0
 
-/** 각 select 쿼리에 넘어간 where 조건 (실행 순서: 누적·카탈로그·잔디·시간대) */
+/** 각 select 쿼리에 넘어간 where 조건 (실행 순서: 누적·카탈로그·시간대) */
 let whereConditions: unknown[] = []
 
 /** 어떤 체이닝에도 자신을 돌려주고, await 하면 결과를 내는 쿼리 빌더 */
@@ -104,24 +104,7 @@ function collectValues(node: unknown, out: unknown[] = []): unknown[] {
   return out
 }
 
-/**
- * Drizzle sql 템플릿을 사람이 읽을 수 있는 문자열로 편다 — 컬럼은 이름, 리터럴은 값으로.
- * 실제 SQL 실행 없이도 집계 정의(필터·distinct 키)가 의도와 맞는지 단언하기 위한 근사치다.
- */
-function sqlText(node: unknown): string {
-  if (node === null || node === undefined) return ''
-  if (typeof node === 'string') return node
-  if (typeof node !== 'object') return String(node)
-  const record = node as Record<string, unknown>
-  if (Array.isArray(record.queryChunks)) return record.queryChunks.map(sqlText).join('')
-  if (Array.isArray(record.value)) return record.value.map(sqlText).join('')
-  if (Array.isArray(node)) return node.map(sqlText).join('')
-  if (typeof record.name === 'string') return record.name
-  if ('value' in record) return sqlText(record.value)
-  return ''
-}
-
-/** select 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·잔디·시간대(·관리자면 사용자별) */
+/** select 결과를 실행 순서대로 큐에 넣는다: 누적·카탈로그·시간대(·관리자면 사용자별). 잔디는 activity-grass 패널이 맡는다 */
 function queueQueries(results: unknown[]) {
   const select = vi.mocked(db.select)
   select.mockReset()
@@ -161,12 +144,10 @@ describe('overviewPanel', () => {
     queueQueries([
       [{ users: 21 }],
       [{ count: 504 }],
-      [{ date: '2026-08-18', directApplied: 9, appliedAfterLoad: 3, loads: 20, linkableLoads: 15 }],
       [
         { hour: 10, users: 4 },
         { hour: 15, users: 2 },
       ],
-      [{ date: '2026-08-18', turns: 43, agents: 2 }],
     ])
     queueFlow([
       {
@@ -189,25 +170,6 @@ describe('overviewPanel', () => {
 
     expect(data.totalParticipants).toBe(21)
     expect(data.catalogSkills).toBe(504)
-
-    // 잔디밭은 기간 선택과 무관한 오늘 포함 365일 고정 윈도우다
-    expect(data.grassDaily).toHaveLength(365)
-    expect(data.grassDaily[0]?.date).toBe('2025-08-20')
-    expect(data.grassDaily.at(-1)?.date).toBe('2026-08-19')
-    expect(data.grassDaily.find((d) => d.date === '2026-08-18')).toEqual({
-      date: '2026-08-18',
-      events: 12,
-      loads: 20,
-      linkableLoads: 15,
-      directApplied: 9,
-      appliedAfterLoad: 3,
-    })
-    expect(data.agentGrassDaily).toHaveLength(365)
-    expect(data.agentGrassDaily.find((d) => d.date === '2026-08-18')).toEqual({
-      date: '2026-08-18',
-      events: 43,
-      agents: 2,
-    })
 
     // 관리자가 아니면 사용자별 사용량은 내려가지 않는다
     expect(data.memberUsage).toBeNull()
@@ -240,47 +202,23 @@ describe('overviewPanel', () => {
   })
 
   it('모든 쿼리가 카탈로그 모집단(innerJoin)을 쓴다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    // select로 스킬 이벤트를 읽는 3개 쿼리(누적·잔디·시간대) 전부.
-    // 로드 전환은 별도 raw SQL에서 같은 카탈로그 조인을 사용한다
-    expect(innerJoinCalls).toBe(3)
+    // select로 스킬 이벤트를 읽는 2개 쿼리(누적·시간대) 전부.
+    // 로드 전환은 별도 raw SQL에서 같은 카탈로그 조인을 사용하고, 잔디는 activity-grass 패널이 맡는다
+    expect(innerJoinCalls).toBe(2)
   })
 
-  it('잔디의 연결 가능 로드와 로드 후 적용은 사용자×흐름×스킬 코호트로 세고, 활동 에이전트는 턴이 있는 batch만 센다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
-    await overviewPanel.load({ days: 7, isAdmin: false })
-
-    const columns = vi.mocked(db.select).mock.calls.map((call) => call[0] as Record<string, unknown>)
-    // mock 컬럼은 'skill_events.user_id'처럼 테이블 접두사가 붙으므로 떼고 비교한다.
-    const normalize = (node: unknown) => sqlText(node)
-      .replace(/\b(skill_events|ax_agent_telemetry_batches)\./g, '')
-      .replace(/\s+/g, ' ')
-    const linkable = normalize(columns[2].linkableLoads)
-    const converted = normalize(columns[2].appliedAfterLoad)
-    // 분모: 코호트 distinct, flow ID와 user ID가 모두 있어야 한다.
-    expect(linkable).toMatch(/count\(distinct \( user_id, coalesce\(journey_id, session_id\), skill_id \)\)/)
-    expect(linkable).toContain('coalesce(journey_id, session_id) is not null')
-    expect(linkable).toContain('user_id is not null')
-    // 분자: 같은 코호트 키 + 같은 필터 + 이후 apply 존재. 분모의 부분집합이 된다.
-    expect(converted).toMatch(/count\(distinct \( user_id, coalesce\(journey_id, session_id\), skill_id \)\)/)
-    expect(converted).toContain('user_id is not null')
-    expect(converted).toContain("applied.action = 'apply'")
-    expect(converted).toContain('applied.created_at >= created_at')
-
-    expect(normalize(columns[4].agents)).toContain('filter (where turns > 0)')
-  })
-
-  it('실제 사용 지표는 적용만 세고, 잔디만 도움말용 로드를 함께 센다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
+  it('실제 사용 지표는 적용만 세고 로드·검색·스킵을 섞지 않는다', async () => {
+    queueQueries([[{ users: 0 }], [{ count: 0 }], []])
 
     await overviewPanel.load({ days: 7, isAdmin: false })
 
-    expect(whereConditions).toHaveLength(5)
+    expect(whereConditions).toHaveLength(3)
 
-    for (const [index, condition] of whereConditions.slice(0, 4).entries()) {
+    for (const [index, condition] of whereConditions.entries()) {
       const values = collectValues(condition)
       const hasDateFilter = values.some((value) => value instanceof Date)
 
@@ -292,11 +230,7 @@ describe('overviewPanel', () => {
       }
 
       expect(values, `쿼리 ${index} 적용 보고`).toContain('apply')
-      if (index === 2) {
-        expect(values, '잔디는 도움말용 로드를 함께 조회').toContain('load')
-      } else {
-        expect(values, `쿼리 ${index} 실제 사용에 로드 제외`).not.toContain('load')
-      }
+      expect(values, `쿼리 ${index} 실제 사용에 로드 제외`).not.toContain('load')
       expect(values, `쿼리 ${index} 검색 노출 제외`).not.toContain('search')
       expect(values, `쿼리 ${index} 스킵 제외`).not.toContain('skip')
       expect(values, `쿼리 ${index} 배포 제외`).not.toContain('deploy')
@@ -309,19 +243,13 @@ describe('overviewPanel', () => {
         expect(hasDateFilter, `쿼리 ${index}는 기간 필터가 있어야 한다`).toBe(true)
       }
     }
-
-    const agentValues = collectValues(whereConditions[4])
-    expect(agentValues.some((value) => value instanceof Date), '에이전트 잔디도 365일 경계가 있어야 한다').toBe(true)
-    expect(agentValues, '에이전트 잔디는 스킬 이벤트 action을 섞지 않는다').not.toContain('apply')
   })
 
   it('count가 문자열로 와도 숫자로 환산한다', async () => {
     queueQueries([
       [{ users: '9' }],
       [{ count: '11' }],
-      [{ date: '2026-08-18', directApplied: '2', appliedAfterLoad: '1', loads: '8', linkableLoads: '6' }],
       [{ hour: '9', users: '5' }],
-      [{ date: '2026-08-18', turns: '17', agents: '1' }],
     ])
     queueFlow([
       {
@@ -341,15 +269,6 @@ describe('overviewPanel', () => {
 
     expect(data.totalParticipants).toBe(9)
     expect(data.catalogSkills).toBe(11)
-    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.events).toBe(3)
-    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.loads).toBe(8)
-    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.linkableLoads).toBe(6)
-    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.directApplied).toBe(2)
-    expect(data.grassDaily.find((d) => d.date === '2026-08-18')?.appliedAfterLoad).toBe(1)
-    expect(data.agentGrassDaily.find((d) => d.date === '2026-08-18')).toMatchObject({
-      events: 17,
-      agents: 1,
-    })
     expect(data.dailySkillFlow.find((d) => d.date === '2026-08-18')).toMatchObject({
       directApplied: 2,
       loaded: 9,
@@ -366,7 +285,7 @@ describe('overviewPanel', () => {
   })
 
   it('활동이 전혀 없으면 error가 아니라 0으로 채운 정상 응답을 준다', async () => {
-    queueQueries([[{ users: 0 }], [{ count: 0 }], [], [], []])
+    queueQueries([[{ users: 0 }], [{ count: 0 }], []])
 
     const result = await overviewPanel.load({ days: 30, isAdmin: false })
 
@@ -383,12 +302,10 @@ describe('overviewPanel', () => {
       [{ users: 5 }],
       [{ count: 0 }],
       [],
-      [],
       [
         { name: '하영', uniqueSkills: 4, loaded: 31, applied: 9, lastActiveAt: new Date('2026-08-18T02:00:00Z') },
         { name: null, uniqueSkills: 0, loaded: 3, applied: 0, lastActiveAt: null },
       ],
-      [],
     ])
 
     const data = (await overviewPanel.load({ days: 30, isAdmin: true })).data!
@@ -397,6 +314,29 @@ describe('overviewPanel', () => {
       { name: '하영', uniqueSkills: 4, loaded: 31, applied: 9, lastActiveAt: '2026-08-18T02:00:00.000Z' },
       { name: '이름 미설정', uniqueSkills: 0, loaded: 3, applied: 0, lastActiveAt: null },
     ])
+  })
+
+  it('독립 쿼리를 순서대로 기다리지 않고 한 번에 보낸다', async () => {
+    // 각 쿼리가 완료되기 전에 다음 select가 호출됐는지로 병렬 여부를 본다.
+    let resolvePending: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => { resolvePending = resolve })
+    const select = vi.mocked(db.select)
+    select.mockReset()
+    const slow = builder([{ users: 0 }]) as Record<string, unknown>
+    slow.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+      gate.then(() => [{ users: 0 }]).then(resolve, reject)
+    select.mockReturnValueOnce(slow as never)
+    select.mockReturnValueOnce(builder([{ count: 0 }]) as never)
+    select.mockReturnValueOnce(builder([]) as never)
+
+    const pending = overviewPanel.load({ days: 7, isAdmin: false })
+    await Promise.resolve()
+    // 첫 쿼리가 아직 안 끝났는데도 나머지 select가 이미 호출됐다.
+    expect(select).toHaveBeenCalledTimes(3)
+
+    resolvePending!()
+    const result = await pending
+    expect(result.status).toBe('ok')
   })
 
   it('쿼리가 실패하면 throw하지 않고 error 상태를 반환한다', async () => {

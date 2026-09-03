@@ -5,7 +5,7 @@
  * 모든 집계가 단일 GPTers 카탈로그를 같은 모집단으로 사용하는지 검증한다.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // 모킹한 테이블의 컬럼은 서로 구분 가능한 문자열로 둔다.
 // 그래야 조립된 where 조건을 훑어 "어떤 컬럼이 조건에 들어갔는지" 단언할 수 있다.
@@ -110,7 +110,14 @@ function collectValues(node: unknown, out: unknown[] = []): unknown[] {
 }
 
 describe('skillUsagePanel', () => {
+  // 픽스처 날짜(2026-08-04 등)가 조회 창 밖으로 밀리지 않게 시계를 고정한다
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-19T03:00:00Z'))
     vi.clearAllMocks()
     whereConditions = []
     innerJoinCalls = []

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AxActivityGrassData,
   AxAgentActivityData,
   AxOverviewData,
   AxPanelMeta,
@@ -28,6 +29,17 @@ const PANELS: AxPanelMeta[] = [
     usesPeriod: false,
   },
 ]
+
+/** 요약 하단 잔디의 데이터 소스 — 탭으로는 보이지 않는 기간 비연동 패널 */
+const GRASS_PANEL: AxPanelMeta = {
+  id: 'activity-grass',
+  title: '장기 활동',
+  description: '최근 365일',
+  source: 'test',
+  visibility: 'org',
+  usesPeriod: false,
+  hidden: true,
+}
 
 function responseFor(url: string): AxPanelResult {
   const panel = PANELS.find((item) => url.includes(`/api/ax/${item.id}?`))!
@@ -68,6 +80,73 @@ describe('AxDashboard 패널 요청', () => {
     expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
       '/api/ax/shared-skills?days=30'
     )
+  })
+
+  it('첫 화면 뒤 나머지 기간을 미리 받고, 받아 둔 기간은 즉시 보여주며, 다시 받는 동안 이전 표를 유지한다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const overview: AxPanelMeta = {
+      id: 'overview', title: '요약', description: '요약', source: 'test', visibility: 'org', usesPeriod: true,
+    }
+    const overviewFor = (days: number): AxOverviewData => ({
+      totalParticipants: days,
+      catalogSkills: 1,
+      dailySkillFlow: [],
+      skillFlowSummary: { directApplied: 0, loaded: 0, linkableLoaded: 0, appliedAfterLoad: 0 },
+      hourlyDensity: [{ hour: 10, users: days }],
+      memberUsage: null,
+    })
+    // 90일 응답은 사용자가 눌러 열어 주기 전까지 붙잡아 두고,
+    // 30일은 첫 선요청만 응답하고 그 뒤(재검증)는 영원히 대기시켜 캐시로만 보이게 한다.
+    let release90: (() => void) | null = null
+    const callsFor = new Map<number, number>()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const days = Number(new URL(url, 'http://test').searchParams.get('days'))
+      callsFor.set(days, (callsFor.get(days) ?? 0) + 1)
+      if (days === 30 && callsFor.get(30)! > 1) {
+        await new Promise<void>(() => {})
+      }
+      if (days === 90 && !release90) {
+        await new Promise<void>((resolve) => { release90 = resolve })
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          meta: overview,
+          status: 'ok',
+          data: overviewFor(days),
+          highlights: [],
+          generatedAt: '2026-08-31T00:00:00.000Z',
+        } satisfies AxPanelResult<AxOverviewData>),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AxDashboard panels={[overview]} isAdmin={false} />)
+    await screen.findByLabelText('10시 · 7명')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    // 첫 화면이 안정된 뒤 나머지 두 기간을 순서대로 미리 받는다 (30일 먼저, 그 다음 90일).
+    await vi.advanceTimersByTimeAsync(1600)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/ax/overview?days=30', expect.any(Object)))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/ax/overview?days=90', expect.any(Object)))
+
+    // 미리 받아 둔 30일로 바꾸면 서버 응답을 기다리지 않고(재검증 요청은 대기 중) 30일 표가 보인다.
+    fireEvent.click(screen.getByRole('button', { name: '30일' }))
+    await screen.findByLabelText('10시 · 30명')
+    expect(screen.queryByLabelText('10시 · 7명')).toBeNull()
+    expect(screen.getByRole('tabpanel', { name: '요약' }).querySelector('[aria-busy="true"]')).toBeNull()
+
+    // 아직 응답이 오지 않은 90일로 바꾸면 30일 표를 흐리게 유지한 채 기다린다.
+    fireEvent.click(screen.getByRole('button', { name: '90일' }))
+    await waitFor(() => expect(
+      screen.getByRole('tabpanel', { name: '요약' }).querySelector('[aria-busy="true"]')
+    ).not.toBeNull())
+    expect(screen.getByLabelText('10시 · 30명')).toBeTruthy()
+
+    release90!()
+    await screen.findByLabelText('10시 · 90명')
+    expect(screen.getByRole('tabpanel', { name: '요약' }).querySelector('[aria-busy="true"]')).toBeNull()
   })
 
   it('데이터 패널을 네 업무 영역의 세부 보기로 묶고 키보드로 이동한다', async () => {
@@ -164,9 +243,7 @@ describe('AxDashboard 패널 요청', () => {
 
   it('요약은 팀 스킬 활동 잔디를 보여주되 장황한 설명과 내부 데이터 출처는 숨긴다', async () => {
     const overview = { ...PANELS[0], source: 'aitk DB (skill_events)' }
-    const data: AxOverviewData = {
-      totalParticipants: 1,
-      catalogSkills: 1,
+    const grass: AxActivityGrassData = {
       grassDaily: [
         { date: '2026-08-30', events: 2, loads: 4, directApplied: 1, appliedAfterLoad: 1 },
         { date: '2026-08-31', events: 1, loads: 5, directApplied: 1, appliedAfterLoad: 0 },
@@ -175,6 +252,10 @@ describe('AxDashboard 패널 요청', () => {
         { date: '2026-08-30', events: 12, agents: 1 },
         { date: '2026-08-31', events: 24, agents: 2 },
       ],
+    }
+    const data: AxOverviewData = {
+      totalParticipants: 1,
+      catalogSkills: 1,
       dailySkillFlow: [],
       skillFlowSummary: {
         directApplied: 0,
@@ -185,20 +266,25 @@ describe('AxDashboard 패널 요청', () => {
       hourlyDensity: [],
       memberUsage: null,
     }
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        meta: overview,
-        status: 'ok',
-        data,
-        highlights: [],
-        generatedAt: '2026-08-31T00:00:00.000Z',
-      } satisfies AxPanelResult<AxOverviewData>),
-    })))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const isGrass = String(input).includes('/api/ax/activity-grass?')
+      return {
+        ok: true,
+        json: async () => ({
+          meta: isGrass ? GRASS_PANEL : overview,
+          status: 'ok',
+          data: isGrass ? grass : data,
+          highlights: [],
+          generatedAt: '2026-08-31T00:00:00.000Z',
+        } satisfies AxPanelResult),
+      }
+    }))
 
-    render(<AxDashboard panels={[overview]} isAdmin />)
+    render(<AxDashboard panels={[overview, GRASS_PANEL]} isAdmin />)
 
     await screen.findByRole('tabpanel', { name: '요약' })
+    // 숨김 패널은 탭으로 보이지 않는다
+    expect(screen.queryByRole('tab', { name: '장기 활동' })).toBeNull()
     expect(screen.getByRole('region', { name: '일별 구성원 스킬 활동 · 최근 365일' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '일별 에이전트 사용량 · 최근 365일' })).toBeTruthy()
     expect(screen.getByRole('button', {
@@ -232,10 +318,9 @@ describe('AxDashboard 패널 요청', () => {
         id: 'agent-activity', title: '에이전트 활동', description: '에이전트 사용', source: 'test',
         visibility: 'org', parentId: 'skill-usage', usesPeriod: true,
       },
+      GRASS_PANEL,
     ]
-    const overviewData: AxOverviewData = {
-      totalParticipants: 6,
-      catalogSkills: 1,
+    const grassData: AxActivityGrassData = {
       grassDaily: [
         { date: '2026-08-30', events: 3, loads: 20, linkableLoads: 8, directApplied: 2, appliedAfterLoad: 1 },
         { date: '2026-08-31', events: 8, loads: 45, linkableLoads: 40, directApplied: 5, appliedAfterLoad: 3 },
@@ -244,6 +329,10 @@ describe('AxDashboard 패널 요청', () => {
         { date: '2026-08-30', events: 30, agents: 1 },
         { date: '2026-08-31', events: 45, agents: 2 },
       ],
+    }
+    const overviewData: AxOverviewData = {
+      totalParticipants: 6,
+      catalogSkills: 1,
       dailySkillFlow: [
         { date: '2026-08-30', directApplied: 1, loaded: 4, linkableLoaded: 3, appliedAfterLoad: 2 },
         { date: '2026-08-31', directApplied: 2, loaded: 5, linkableLoaded: 4, appliedAfterLoad: 3 },
@@ -332,7 +421,9 @@ describe('AxDashboard 패널 요청', () => {
             ? overviewData
             : meta.id === 'skill-usage'
               ? skillData
-              : agentData,
+              : meta.id === 'activity-grass'
+                ? grassData
+                : agentData,
           // 예전 전역 타일의 원천 데이터가 응답에 남아 있어도 상단에는 노출하지 않는다.
           highlights: [
             { label: '전체 구성원', value: '21', hint: '명' },
@@ -426,15 +517,18 @@ describe('AxDashboard 패널 요청', () => {
     const legacyPanels: AxPanelMeta[] = [
       { id: 'overview', title: '요약', description: '요약', source: 'test', visibility: 'org', usesPeriod: true },
       { id: 'skill-usage', title: '스킬', description: '스킬', source: 'test', visibility: 'org', usesPeriod: true },
+      GRASS_PANEL,
     ]
-    const legacyOverview: AxOverviewData = {
-      totalParticipants: 1,
-      catalogSkills: 1,
+    const legacyGrass: AxActivityGrassData = {
       grassDaily: [
         { date: '2026-08-30', events: 3, loads: 20, directApplied: 2, appliedAfterLoad: 1 },
         { date: '2026-08-31', events: 8, loads: 40, directApplied: 5, appliedAfterLoad: 3 },
       ],
       agentGrassDaily: [],
+    }
+    const legacyOverview: AxOverviewData = {
+      totalParticipants: 1,
+      catalogSkills: 1,
       dailySkillFlow: [],
       skillFlowSummary: { directApplied: 0, loaded: 0, linkableLoaded: 0, appliedAfterLoad: 0 },
       hourlyDensity: [],
@@ -453,7 +547,11 @@ describe('AxDashboard 패널 요청', () => {
         json: async () => ({
           meta,
           status: 'ok',
-          data: meta.id === 'overview' ? legacyOverview : legacySkill,
+          data: meta.id === 'overview'
+            ? legacyOverview
+            : meta.id === 'activity-grass'
+              ? legacyGrass
+              : legacySkill,
           highlights: [],
           generatedAt: '2026-08-31T00:00:00.000Z',
         } satisfies AxPanelResult),
