@@ -55,23 +55,24 @@ describe('AX 스킬 사용 패널 화면', () => {
       </>
     )
 
-    // 분모(진입) = 검색 요청 12 + 검색 없는 로드 3 = 15. 연결 불가는 총량에만 있고 비율에서 빠진다.
-    expect(screen.getByRole('note', { name: '깔때기 분모' }).textContent).toContain('진입 15건 = 검색 요청 12 + 검색 없는 로드 3')
-    expect(screen.getByRole('note', { name: '깔때기 분모' }).textContent).toContain('연결 불가 로드 12건·적용 4건은 비율에서 제외')
+    // 검색 경로: 검색 요청 12 → 로드 5 → 적용 2. 직접 경로: 검색 없는 로드 3 → 적용 1. 비율은 직전 단계 대비.
+    expect(screen.getByLabelText('검색 경로 · 검색 요청 12건 · 평균 검색 결과 5개')).toBeTruthy()
+    const searchLoad = screen.getByLabelText('검색 경로 · 로드 5건 · 직전 검색 요청 12건 중 41.7%')
+    expect(screen.getByLabelText('검색 경로 · 적용 보고 2건 · 직전 로드 5건 중 2/5 · 참고')).toBeTruthy()
+    expect(screen.getByLabelText('직접 경로 · 검색 없는 로드 3건')).toBeTruthy()
+    expect(screen.getByLabelText('직접 경로 · 적용 보고 1건 · 직전 검색 없는 로드 3건 중 1/3 · 참고')).toBeTruthy()
+    // 연결 불가는 막대 없이 따로 적고 비율에서 뺀다
+    const unlinkable = screen.getByRole('note', { name: '연결 불가' }).textContent
+    expect(unlinkable).toContain('로드 12건 · 적용 4건 · 로드 없이 적용 3건')
+    // 호버하면 직전 단계 대비 행이 세로로 뜬다
     expect(document.querySelector('[data-funnel-tooltip]')).toBeNull()
-    const searchSummary = screen.getByLabelText('검색 요청 12건 · 진입 중 80.0% · 결과 노출 줄 60줄')
-    fireEvent.mouseEnter(searchSummary)
-    expect(document.querySelector('[data-funnel-tooltip]')?.textContent).toContain('80.0%')
-    fireEvent.mouseLeave(searchSummary)
-    expect(document.querySelector('[data-funnel-tooltip]')).toBeNull()
-    // 로드 20건 = 검색 후 5 + 검색 없는 3 + 연결 불가 12. 비율은 진입 15건 기준.
-    const loadSummary = screen.getByLabelText('로드 20건 · 검색 후 로드 5건 · 33.3% · 검색 없는 로드 3건 · 20.0% · 연결 불가 12건 · 제외')
-    fireEvent.mouseEnter(loadSummary)
+    fireEvent.mouseEnter(searchLoad)
     expect(Array.from(document.querySelectorAll('[data-funnel-tooltip] dt')).map((dt) => dt.textContent)).toEqual([
-      '검색 후 로드', '검색 없는 로드', '연결 불가',
+      '직전 검색 요청 12건 중',
     ])
-    fireEvent.mouseLeave(loadSummary)
-    expect(screen.getByLabelText(/^적용 보고 10건 · 검색 기원 2건/)).toBeTruthy()
+    expect(document.querySelector('[data-funnel-tooltip] dd')?.textContent).toBe('41.7%')
+    fireEvent.mouseLeave(searchLoad)
+    expect(document.querySelector('[data-funnel-tooltip]')).toBeNull()
 
     expect(screen.queryByRole('columnheader', { name: '적용 보고' })).toBeNull()
     expect(screen.queryByRole('columnheader', { name: '전체 적용 중' })).toBeNull()
