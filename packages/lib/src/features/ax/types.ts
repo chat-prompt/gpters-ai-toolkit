@@ -263,6 +263,21 @@ export interface AxSharedSkillRow {
    * 표시용 마킹일 뿐, 두 소스의 수치를 합산하는 근거로 쓰지 않는다.
    */
   inAitk: boolean
+  /**
+   * 최근 `usageWindowDays`일 동안 에이전트가 이 스킬을 연 횟수.
+   * 스킬 신호를 관측할 수 있는 수집기가 하나도 없으면 null — 0으로 꾸미지 않는다.
+   */
+  agentLoads: number | null
+  /** 이 스킬을 연 에이전트 수 */
+  agentCount: number
+  /** 마지막 로드가 담긴 수집 창의 끝 (ISO). 로드가 없으면 null */
+  lastLoadedAt: string | null
+  /**
+   * 네임스페이스를 뗀 이름으로 맞춘 로드가 섞여 있는지.
+   * 수집기는 `openclaw-skills:session-cleanup`처럼 플러그인 접두어를 붙여 보고하는데
+   * 저장소 인벤토리는 디렉터리 이름뿐이라 이름으로 맞춘다 — 같은 이름의 다른 스킬일 수 있다.
+   */
+  matchedByName: boolean
 }
 
 /** 에이전트 스킬 패널이 내려주는 인벤토리 */
@@ -285,9 +300,30 @@ export interface AxSharedSkillsData {
   commitDaily: Array<{ date: string; events: number }> | null
   /**
    * 실행 이벤트 수집 연결 여부.
-   * 아직 인벤토리만 있고 사용량은 미연결이므로 화면이 이 사실을 명시해야 한다.
+   * 스킬 신호를 관측할 수 있는 수집기의 배치가 하나도 없으면 false이고,
+   * 그때 화면은 사용량을 0으로 그리지 않고 "미관측"으로 밝혀야 한다.
    */
   eventsConnected: boolean
+  /**
+   * 에이전트 스킬 로드 집계 창(일).
+   *
+   * 이 패널은 상단 기간 필터를 쓰지 않는 스냅숏(`usesPeriod: false`)이라 창을 고정한다.
+   * 화면은 이 값을 그대로 적어 어떤 구간의 수치인지 보이게 한다.
+   */
+  usageWindowDays: number
+  /** 스킬 로드를 관측한 에이전트 수 — 관측 자체가 없으면 0 */
+  observedAgents: number
+  /** 이 저장소의 스킬로 이어진 로드 합계 */
+  matchedLoads: number
+  /** 관측된 스킬 로드 전체 합계 (저장소 밖 포함) */
+  totalObservedLoads: number
+  /**
+   * 이 저장소와 이어지지 않은 스킬 로드 — 로드 많은 순.
+   *
+   * "아직 수집이 안 됐다"와 "수집은 되는데 이 저장소 스킬이 아니다"는 다른 결론이다.
+   * 이 값을 감추면 저장소 스킬의 0이 계측 누락처럼 읽힌다.
+   */
+  unmatchedLoads: Array<{ id: string; loads: number }>
   /** GitHub tree 응답이 잘렸는지 — true면 목록이 일부일 수 있다 */
   truncated: boolean
 }

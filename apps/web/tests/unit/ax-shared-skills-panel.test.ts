@@ -9,13 +9,16 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// 겹침 판정용 카탈로그 조회를 모킹한다 — 기본은 빈 카탈로그
+// 겹침 판정용 카탈로그 조회와 에이전트 스킬 로드 조회를 모킹한다
 vi.mock('@gpters/db', () => ({
   db: { select: vi.fn() },
   catalogItems: {
     id: 'catalog_items.id',
     type: 'catalog_items.type',
     status: 'catalog_items.status',
+  },
+  axAgentTelemetryBatches: {
+    windowEnd: 'ax_agent_telemetry_batches.window_end',
   },
 }))
 
@@ -31,26 +34,62 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
 const { sharedSkillsPanel, __resetSharedSkillsCache } = await import(
   '../../../../packages/lib/src/features/ax/shared-skills'
 )
-const { db } = await import('@gpters/db')
+const { db, catalogItems, axAgentTelemetryBatches } = await import('@gpters/db')
 
 const CTX = { days: 30, isAdmin: false }
 
-/** 어떤 체이닝에도 자신을 돌려주고, await 하면 결과를 내는 쿼리 빌더 */
-function dbBuilder(result: unknown) {
+/** 텔레메트리 배치 한 건 — 테스트가 필요한 필드만 채운다 */
+interface TestBatch {
+  agentId: string
+  source: string
+  collectorVersion: string
+  /** 수집 창 시작·끝 (epoch ms). 기본은 최근 */
+  windowStart?: number
+  windowEnd?: number
+  skillLoads: Array<{ skillId: string; loaded: number }>
+}
+
+/** `from(table)`이 어느 테이블인지 보고 결과를 갈라 주는 쿼리 빌더 */
+function dbBuilder(byTable: Map<unknown, unknown>) {
   const stub: Record<string, unknown> = {}
-  for (const method of ['from', 'where']) {
-    stub[method] = vi.fn(() => stub)
-  }
+  let table: unknown
+  stub.from = vi.fn((value: unknown) => {
+    table = value
+    return stub
+  })
+  stub.where = vi.fn(() => stub)
   stub.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
-    Promise.resolve(result).then(resolve, reject)
+    Promise.resolve(byTable.get(table) ?? []).then(resolve, reject)
   return stub
 }
 
-/** 카탈로그에 등록된 스킬 id 목록을 큐에 넣는다 */
-function mockCatalog(ids: string[]) {
+/**
+ * 카탈로그 스킬 id와 텔레메트리 배치를 함께 모킹한다
+ *
+ * @param ids - aitk 카탈로그에 등록된 스킬 id
+ * @param batches - 텔레메트리 배치. 생략하면 배치 0건(= 미관측)
+ */
+function mockDb(ids: string[], batches: TestBatch[] = []) {
+  const now = Date.now()
+  const rows = batches.map((batch) => ({
+    agentId: batch.agentId,
+    windowStart: new Date(batch.windowStart ?? now - 3_600_000),
+    windowEnd: new Date(batch.windowEnd ?? now - 60_000),
+    runtime: { collectorVersion: batch.collectorVersion },
+    collection: { source: batch.source },
+    skillLoads: batch.skillLoads,
+  }))
+  // from()에 넘어오는 테이블 객체로 결과를 가른다 — 카탈로그와 배치가 같은 db.select를 쓴다
+  const byTable = new Map<unknown, unknown>([
+    [catalogItems, ids.map((id) => ({ id }))],
+    [axAgentTelemetryBatches, rows],
+  ])
   vi.mocked(db.select).mockReset()
-  vi.mocked(db.select).mockReturnValue(dbBuilder(ids.map((id) => ({ id }))) as never)
+  vi.mocked(db.select).mockImplementation((() => dbBuilder(byTable) as never) as never)
 }
+
+/** 하위 호환 별칭 — 카탈로그만 지정하는 기존 테스트용 */
+const mockCatalog = (ids: string[]) => mockDb(ids)
 
 /**
  * fetch를 URL별로 라우팅해 모킹한다
@@ -148,14 +187,17 @@ describe('sharedSkillsPanel', () => {
     const data = result.data!
     expect(data.repo).toBe('geniefy/bbopters-shared')
     // id 오름차순 정렬
-    expect(data.skills).toEqual([
+    expect(data.skills.map((skill) => ({
+      id: skill.id, path: skill.path, hasSkillDoc: skill.hasSkillDoc, inAitk: skill.inAitk,
+    }))).toEqual([
       { id: 'alpha-tool', path: 'skills/alpha-tool', hasSkillDoc: true, inAitk: false },
       { id: 'data-sync', path: 'skills/data-sync', hasSkillDoc: false, inAitk: false },
       { id: 'review-helper', path: 'skills/review-helper', hasSkillDoc: true, inAitk: false },
     ])
     expect(data.aitkOverlap).toBe(0)
-    // 실행 이벤트는 아직 미연결 — 화면이 이 값을 보고 상태를 밝힌다
+    // 관측 가능한 배치가 없으면 사용량은 0이 아니라 미관측이다
     expect(data.eventsConnected).toBe(false)
+    expect(data.skills.every((skill) => skill.agentLoads === null)).toBe(true)
     expect(data.truncated).toBe(false)
     expect(result.highlights).toEqual([{ label: '에이전트 스킬', value: '3', hint: '개' }])
   })
@@ -202,8 +244,10 @@ describe('sharedSkillsPanel', () => {
 
     const result = await sharedSkillsPanel.load(CTX)
 
-    expect(result.data!.skills).toEqual([
-      { id: 'custom', path: 'packages/skills/custom', hasSkillDoc: true, inAitk: false },
+    expect(result.data!.skills.map((skill) => ({
+      id: skill.id, path: skill.path, hasSkillDoc: skill.hasSkillDoc,
+    }))).toEqual([
+      { id: 'custom', path: 'packages/skills/custom', hasSkillDoc: true },
     ])
   })
 
@@ -327,5 +371,128 @@ describe('sharedSkillsPanel', () => {
 
     // 옛 경로의 캐시가 새 설정에 서빙되면 안 된다
     expect(result.data!.skills[0].id).toBe('two')
+  })
+
+  describe('에이전트 스킬 로드 (DEV-4221)', () => {
+    const TREE = [
+      { path: 'skills/session-cleanup/SKILL.md', type: 'blob' },
+      { path: 'skills/broadcast-abort/SKILL.md', type: 'blob' },
+      { path: 'skills/never-used/SKILL.md', type: 'blob' },
+    ]
+
+    it('관측 가능한 배치의 로드를 스킬에 붙이고 미사용 스킬은 0으로 둔다', async () => {
+      mockDb([], [{
+        agentId: 'bbokeoter',
+        source: 'hermes',
+        collectorVersion: '0.7.8',
+        skillLoads: [{ skillId: 'session-cleanup', loaded: 3 }],
+      }])
+      mockTree(TREE)
+
+      const data = (await sharedSkillsPanel.load(CTX)).data!
+
+      expect(data.eventsConnected).toBe(true)
+      expect(data.observedAgents).toBe(1)
+      expect(data.usageWindowDays).toBe(30)
+      const used = data.skills.find((skill) => skill.id === 'session-cleanup')!
+      expect(used.agentLoads).toBe(3)
+      expect(used.agentCount).toBe(1)
+      expect(used.lastLoadedAt).not.toBeNull()
+      expect(used.matchedByName).toBe(false)
+      // 관측은 됐으므로 안 쓰인 스킬은 null이 아니라 0이다 — "안 씀"과 "미관측"은 다르다
+      expect(data.skills.find((skill) => skill.id === 'never-used')!.agentLoads).toBe(0)
+      expect(data.matchedLoads).toBe(3)
+    })
+
+    it('네임스페이스 접두어를 뗀 이름으로 맞추고 그 사실을 표시한다', async () => {
+      mockDb([], [{
+        agentId: 'bbokeoter',
+        source: 'hermes',
+        collectorVersion: '0.7.8',
+        skillLoads: [{ skillId: 'openclaw-skills:session-cleanup', loaded: 2 }],
+      }])
+      mockTree(TREE)
+
+      const skill = (await sharedSkillsPanel.load(CTX)).data!
+        .skills.find((row) => row.id === 'session-cleanup')!
+
+      expect(skill.agentLoads).toBe(2)
+      expect(skill.matchedByName).toBe(true)
+    })
+
+    it('저장소에 없는 스킬 로드는 unmatchedLoads로 분리한다', async () => {
+      mockDb([], [{
+        agentId: 'bbokeoter',
+        source: 'hermes',
+        collectorVersion: '0.7.8',
+        skillLoads: [
+          { skillId: 'session-cleanup', loaded: 1 },
+          { skillId: 'slack-agent-communication', loaded: 7 },
+          { skillId: 'google-workspace', loaded: 4 },
+        ],
+      }])
+      mockTree(TREE)
+
+      const data = (await sharedSkillsPanel.load(CTX)).data!
+
+      expect(data.totalObservedLoads).toBe(12)
+      expect(data.matchedLoads).toBe(1)
+      // 로드 많은 순 — 저장소가 실제 스킬 출처가 아니라는 사실이 먼저 보여야 한다
+      expect(data.unmatchedLoads).toEqual([
+        { id: 'slack-agent-communication', loads: 7 },
+        { id: 'google-workspace', loads: 4 },
+      ])
+    })
+
+    it('스킬 신호를 못 보내는 구버전 배치는 0이 아니라 미관측으로 둔다', async () => {
+      mockDb([], [{
+        agentId: 'bbokeoter',
+        source: 'hermes',
+        // hermes는 0.7.5부터 skill_view를 스킬 로드로 센다
+        collectorVersion: '0.7.1',
+        skillLoads: [],
+      }])
+      mockTree(TREE)
+
+      const data = (await sharedSkillsPanel.load(CTX)).data!
+
+      expect(data.eventsConnected).toBe(false)
+      expect(data.observedAgents).toBe(0)
+      expect(data.skills.every((skill) => skill.agentLoads === null)).toBe(true)
+    })
+
+    it('집계 창에 걸친 배치는 통째로 제외한다 — 부분 배분은 하지 않는다', async () => {
+      const now = Date.now()
+      mockDb([], [{
+        agentId: 'bbokeoter',
+        source: 'hermes',
+        collectorVersion: '0.7.8',
+        // 창 시작 이전에 시작해 창 안에서 끝나는 배치
+        windowStart: now - 40 * 86_400_000,
+        windowEnd: now - 60_000,
+        skillLoads: [{ skillId: 'session-cleanup', loaded: 99 }],
+      }])
+      mockTree(TREE)
+
+      const data = (await sharedSkillsPanel.load(CTX)).data!
+
+      expect(data.eventsConnected).toBe(false)
+      expect(data.totalObservedLoads).toBe(0)
+    })
+
+    it('스킬 신호를 못 보내는 소스(codex)의 배치는 관측으로 세지 않는다', async () => {
+      mockDb([], [{
+        agentId: 'codex',
+        source: 'codex',
+        collectorVersion: '0.7.8',
+        skillLoads: [{ skillId: 'session-cleanup', loaded: 5 }],
+      }])
+      mockTree(TREE)
+
+      const data = (await sharedSkillsPanel.load(CTX)).data!
+
+      expect(data.eventsConnected).toBe(false)
+      expect(data.totalObservedLoads).toBe(0)
+    })
   })
 })

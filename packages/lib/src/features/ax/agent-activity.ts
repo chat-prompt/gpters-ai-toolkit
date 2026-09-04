@@ -71,8 +71,15 @@ function versionAtLeast(actual: unknown, minimum: string): boolean {
   return true
 }
 
-/** 이 배치가 스킬 로드 신호를 실제로 담을 수 있는 수집기에서 왔는지 */
-function batchObservesSkills(source: AxAgentTelemetrySource, runtime: unknown): boolean {
+/**
+ * 이 배치가 스킬 로드 신호를 실제로 담을 수 있는 수집기에서 왔는지
+ *
+ * 공유 스킬 패널도 같은 판정을 써야 "관측했는데 0건"과 "관측하지 않음"이 두 화면에서 갈리지 않는다.
+ *
+ * @param source - 배치의 수집 소스
+ * @param runtime - 배치의 `runtime` (collectorVersion을 읽는다)
+ */
+export function batchObservesSkills(source: AxAgentTelemetrySource, runtime: unknown): boolean {
   if (!SOURCE_INFO[source].capabilities.skills) return false
   const minimum = SKILL_SIGNAL_MIN_VERSION[source]
   if (!minimum) return true
