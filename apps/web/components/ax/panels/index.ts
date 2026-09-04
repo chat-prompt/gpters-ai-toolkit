@@ -11,6 +11,7 @@ import type { AxPanelViewProps } from './types'
 import { OverviewPanel } from './OverviewPanel'
 import { SkillEventSummary, SkillUsagePanel } from './SkillUsagePanel'
 import { SkillOpportunitiesPanel } from './SkillOpportunitiesPanel'
+import { RetentionPanel } from './RetentionPanel'
 import { JourneyInsightsPanel } from './JourneyInsightsPanel'
 import { SharedSkillsPanel } from './SharedSkillsPanel'
 import { SkillDiffPanel } from './SkillDiffPanel'
@@ -33,6 +34,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   overview: OverviewPanel,
   'skill-usage': SkillUsagePanel,
   'skill-opportunities': SkillOpportunitiesPanel,
+  'skill-retention': RetentionPanel,
   'journey-insights': JourneyInsightsPanel,
   'shared-skills': SharedSkillsPanel,
   'skill-diff': SkillDiffPanel,
@@ -57,6 +59,7 @@ export {
   SkillEventSummary,
   SkillUsagePanel,
   SkillOpportunitiesPanel,
+  RetentionPanel,
   JourneyInsightsPanel,
   SharedSkillsPanel,
   SkillDiffPanel,
