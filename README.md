@@ -31,8 +31,10 @@ MCP 서버에 연결하면 스킬을 로컬에 설치할 필요 없이 필요한
 ### 분석 및 추적
 
 - **세션 추적** — MCP 세션별 사용 패턴 분석
-- **스킬 이벤트** — 검색 → 조회 → 배포 퍼널 추적
+- **스킬 이벤트** — 검색 → 로드 → 적용 퍼널 추적
 - **감사 로그** — MCP 요청/응답 로깅 및 보안 감사
+- **AX 대시보드** (`/ax`) — 사내 구성원·스킬·에이전트 활용도. 패널 레지스트리로 지표를 추가한다
+  (`packages/lib/src/features/ax/registry.ts`). 인수인계는 `docs/plans/`의 최신 AX 핸드오프 문서
 
 ## 빠른 시작
 
@@ -80,35 +82,39 @@ Turbo 모노레포 구조로 운영됩니다.
 gpters-ai-toolkit/
 ├── apps/
 │   ├── web/                         # Next.js 웹 애플리케이션
-│   │   ├── app/                     # App Router 페이지 및 API
+│   │   ├── app/
+│   │   │   ├── [locale]/            # 페이지 (locale = ko | en)
+│   │   │   │   ├── skill|agent|command|hook|package/[id]/  # 아이템 상세
+│   │   │   │   ├── guides/          # 가이드 목록 및 상세
+│   │   │   │   ├── templates/       # 프로젝트 템플릿
+│   │   │   │   ├── getting-started/ # 설치 가이드
+│   │   │   │   ├── admin/           # 관리자 대시보드
+│   │   │   │   ├── ax/              # 사내 AX 대시보드
+│   │   │   │   ├── profile/         # 사용자 프로필
+│   │   │   │   ├── stats/           # 통계 대시보드
+│   │   │   │   └── welcome/ privacy/ terms/ auth/ device/
 │   │   │   ├── api/                 # API 라우트
-│   │   │   ├── skill/[id]/          # 스킬 상세 페이지
-│   │   │   ├── agent/[id]/          # 에이전트 상세 페이지
-│   │   │   ├── command/[id]/        # 커맨드 상세 페이지
-│   │   │   ├── hook/[id]/           # 훅 상세 페이지
-│   │   │   ├── package/[id]/        # 패키지 상세 페이지
-│   │   │   ├── guides/              # 가이드 목록 및 상세
-│   │   │   ├── getting-started/     # 설치 가이드
-│   │   │   ├── admin/               # 관리자 대시보드
-│   │   │   ├── profile/             # 사용자 프로필
-│   │   │   ├── stats/               # 통계 대시보드
-│   │   │   ├── privacy/             # 프라이버시 정책
-│   │   │   ├── oauth/               # OAuth 인증 플로우
-│   │   │   └── templates/           # 프로젝트 템플릿
-│   │   ├── components/              # React 컴포넌트 (58개)
-│   │   ├── lib/                     # 비즈니스 로직
-│   │   └── tests/                   # 테스트 (Vitest, Playwright)
+│   │   │   ├── oauth/               # OAuth 2.1 authorize/token/register
+│   │   │   └── .well-known/         # OAuth 디스커버리
+│   │   ├── components/              # React 컴포넌트 (~73개, components/ax = AX 화면)
+│   │   ├── lib/                     # 웹 전용 로직 + @gpters/lib 재수출
+│   │   ├── middleware.ts            # 인증 게이트 + locale 라우팅
+│   │   └── tests/{unit,api,e2e}/    # 테스트 (Vitest, Playwright)
 │   │
+│   ├── aitk-cli/                    # AITK CLI (npm `@gpters/aitk`) — 검색·배포·텔레메트리 수집
 │   ├── claude-code-plugin/          # Claude Code 마켓플레이스 플러그인
 │   ├── opencode-plugin/             # OpenCode 플러그인 (npm)
 │   └── codex-plugin/                # Codex 플러그인 (npm)
 │
 ├── packages/
 │   ├── db/                          # Drizzle ORM 스키마 및 마이그레이션
-│   ├── lib/                         # 공유 라이브러리 (MCP, auth, types)
+│   ├── lib/                         # 공유 라이브러리 (MCP, auth, search, features/ax)
 │   └── tsconfig/                    # 공유 TypeScript 설정
 │
-└── docs/                            # 문서 및 다이어그램
+├── design-system/aitk/              # 디자인 토큰
+├── infra/                           # ax-local(도커 검증 환경), agent-telemetry 설치 스크립트
+├── scripts/                         # 일회성 마이그레이션·동기화 스크립트
+└── docs/                            # 문서 및 다이어그램 (docs/plans/에 작업 인수인계)
 ```
 
 ## 기술 스택
@@ -118,7 +124,8 @@ gpters-ai-toolkit/
 | **Framework** | Next.js 16, React 19, TypeScript |
 | **Styling** | Tailwind CSS v4 |
 | **Database** | Neon PostgreSQL + Drizzle ORM |
-| **Auth** | NextAuth v5 + Google OAuth (@gpters.org 도메인 제한) |
+| **Auth** | NextAuth v5 + Google OAuth (조직에 등록된 도메인만 로그인 허용) |
+| **i18n** | next-intl (`ko` 기본 / `en`) |
 | **MCP Auth** | OAuth 2.1 (PKCE) |
 | **Testing** | Vitest (unit/API), Playwright (E2E) |
 | **Monorepo** | Turbo |
@@ -159,6 +166,12 @@ gpters-ai-toolkit/
 | | `skillEvents` | 스킬 사용 이벤트 |
 | **협업** | `suggestions` | 개선 제안 |
 | | `mcpServers` | MCP 서버 레지스트리 |
+| | `cliTools` | CLI 도구 버전 레지스트리 |
+| **AX** | `axSubscriptions` | 팀 SaaS 구독 현황 |
+| | `axClientUsage` | 클라이언트별 사용량 |
+| | `axSkillExecutionAttempts` / `axSkillExecutionEvents` | 스킬 실행 시도·결과 |
+| | `axAgentTelemetryBatches` / `axAgentTelemetryCollectors` | 에이전트 텔레메트리 배치·수집기 |
+| | `axUsageCollectorState` | 수집기 체크포인트 |
 
 ## API 엔드포인트
 
@@ -193,8 +206,16 @@ gpters-ai-toolkit/
 |--------|-----------|------|
 | `GET` | `/api/admin/stats` | 통계 대시보드 |
 | `GET` | `/api/admin/users` | 사용자 관리 |
-
 | `GET` | `/api/admin/security-audit` | 보안 감사 |
+
+### AX 대시보드
+
+| 메소드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| `GET` | `/api/ax` | 볼 수 있는 패널 메타 목록 |
+| `GET` | `/api/ax/[panel]?days=7\|30\|90` | 패널 데이터 (레지스트리 기반 단일 라우트) |
+| `POST` | `/api/ax/agent-telemetry` | 에이전트 텔레메트리 배치 수집 |
+| `POST` | `/api/ax/agent-telemetry/enroll` | 수집기 등록 |
 
 
 ### 기타
@@ -208,7 +229,7 @@ gpters-ai-toolkit/
 | `GET` | `/api/user` | 현재 사용자 정보 |
 | `GET` | `/api/updates/check` | 버전 업데이트 확인 |
 | `GET` | `/api/discovery-analysis` | 검색 분석 |
-| `POST` | `/api/cron/finalize-sessions` | 세션 정리 (Cron) |
+| `POST` | `/api/cron/*` | 정기 작업 — `finalize-sessions`, `weekly-report`, `sync-cli-versions`, `sync-model-docs`, `import-community-skills`, `evo-*` |
 
 ## MCP 도구
 
@@ -219,14 +240,15 @@ gpters-ai-toolkit/
 | `deploy_skill` | 스킬/에이전트/커맨드 배포 |
 | `undeploy_skill` | 배포된 스킬 제거 |
 | `check_updates` | 설치된 스킬 업데이트 확인 |
-| `suggest_improvement` | 다른 플러그인에 개선 제안 |
-| `list_suggestions` | 제안 목록 조회 |
-| `resolve_suggestion` | 제안 수락/거절 |
 | `add_files` | 스킬에 파일 추가 |
 | `remove_files` | 스킬에서 파일 제거 |
 | `report_session_event` | 세션 이벤트 보고 |
+| `report_usage` | 사용량 보고 |
 | `report_search_skip` | 검색 스킵 보고 |
 | `report_skill_outcome` | 스킬 사용 결과 보고 |
+| `report_skill_execution_started` / `report_skill_execution` | 스킬 실행 시작·결과 보고 |
+
+도구 정의 정본은 `packages/lib/src/mcp/tools.ts`입니다.
 
 ## 개발 환경 설정
 
@@ -268,12 +290,10 @@ pnpm start          # 프로덕션 서버
 
 # 품질
 pnpm lint           # ESLint
-pnpm test           # 유닛 + API 테스트
-pnpm test:watch     # 테스트 워치 모드
-pnpm test:api       # API 테스트만
+pnpm test           # 유닛 테스트 (web은 tests/unit만)
+pnpm typecheck      # tsc --noEmit
+pnpm test:api       # API 테스트 — 격리 DB 필수 (아래 주의)
 pnpm test:e2e       # E2E 테스트
-pnpm test:e2e:ui    # E2E UI 모드
-pnpm test:all       # 전체 테스트
 
 # 데이터베이스
 pnpm db:generate    # 마이그레이션 생성
@@ -281,9 +301,15 @@ pnpm db:push        # 스키마 푸시
 pnpm db:studio      # Drizzle Studio
 ```
 
+> **테스트 데이터 안전**: `tests/api`·`tests/e2e`는 카탈로그를 생성·수정·삭제합니다.
+> 운영·공유 DB를 바라보는 서버에는 실행하지 않습니다. API 테스트는 격리 DB와
+> `TEST_API_URL`, `TEST_DATABASE_URL`, `CONFIRM_ISOLATED_API_TESTS=run-mutating-api-tests`를
+> 모두 명시했을 때만 실행됩니다. 자세한 내용은 `AGENTS.md`를 보세요.
+
 ## 보안
 
-- **인증**: NextAuth v5 + Google OAuth (@gpters.org 도메인만)
+- **인증**: NextAuth v5 + Google OAuth. 이메일 도메인이 활성 조직의 `allowedDomains`에
+  등록돼 있어야 로그인됩니다 (정지 계정은 거부)
 - **MCP 인증**: OAuth 2.1 with PKCE (브라우저 로그인)
 - **권한**: RBAC (super_admin, admin, editor, viewer)
 - **가시성**: 아이템별 public/private 제어
@@ -322,9 +348,8 @@ npm의 Trusted Publisher(OIDC)를 사용하므로 장기 `NPM_TOKEN` secret은 �
 ## 기여하기
 
 1. 새 스킬/에이전트 만들기
-2. Claude Code에서 `"이 스킬 팀이랑 공유해줘"`로 배포
+2. Claude Code에서 `"이 스킬 팀이랑 공유해줘"`로 배포 (`deploy_skill`)
 3. 또는 웹 관리자 대시보드(`/admin`)에서 직접 추가
-4. 다른 사람의 스킬에 `suggest_improvement`로 개선 제안
 
 ## 라이선스
 
