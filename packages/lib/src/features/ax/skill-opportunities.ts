@@ -7,6 +7,10 @@
  * 종합 점수 하나로 순위를 매기지 않는다. 표본이 작아 점수는 오해를 부르기 쉽고, 분류마다 취할 조치가
  * 다르기 때문이다(이름을 고칠 것인가, 내용을 고칠 것인가, 알릴 것인가, 계측을 고칠 것인가).
  *
+ * 수치는 기간 안의 총합을 견준 것이지 하나의 흐름을 따라간 전환율이 아니다. 같은 스킬이라도 검색 없이
+ * 바로 로드하거나 다른 흐름에서 적용할 수 있다. 그래서 화면은 "전환"이라 말하지 않고 총합 비교로 적는다.
+ * 흐름을 따라간 전환은 스킬 탭의 깔때기와 탐색·결과 분석이 담당한다.
+ *
  * 검색 노출은 프롬프트 훅이 자동으로 돌린 검색까지 포함한다. 사람이 눈으로 본 횟수가 아니므로
  * 화면에서 참고치로 다뤄야 한다.
  */
@@ -15,6 +19,7 @@ import { db } from '@gpters/db'
 import { sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
+import { startOfUtcDay } from './kst'
 import type {
   AxPanel,
   AxPanelMeta,
@@ -73,6 +78,7 @@ function toRow(row: Record<string, unknown>): AxSkillOpportunityRow {
     applied: num(row.applied),
     skipped: num(row.skipped),
     appliers: num(row.appliers),
+    anonymousApplies: num(row.anonymous_applies),
   }
 }
 
@@ -84,7 +90,9 @@ function toRow(row: Record<string, unknown>): AxSkillOpportunityRow {
 export const skillOpportunitiesPanel: AxPanel<AxSkillOpportunitiesData> = {
   meta,
   async load({ days }) {
-    const since = new Date(Date.now() - days * 86_400_000)
+    // 기간 경계는 같은 탭의 스킬 사용량 패널과 맞춘다. 한쪽만 rolling window면 같은 "최근 30일"이
+    // 하루 어긋난 값을 보여 준다.
+    const since = startOfUtcDay(new Date(Date.now() - (days - 1) * 86_400_000))
 
     try {
       const [statsResult, searchResult] = await Promise.all([
@@ -94,19 +102,28 @@ export const skillOpportunitiesPanel: AxPanel<AxSkillOpportunitiesData> = {
             count(*) FILTER (WHERE e.action = 'search')::int AS shown,
             count(*) FILTER (WHERE e.action = 'load')::int AS loaded,
             count(*) FILTER (WHERE e.action = 'apply')::int AS applied,
-            count(*) FILTER (WHERE e.action = 'skip')::int AS skipped,
-            count(DISTINCT e.user_id) FILTER (WHERE e.action = 'apply')::int AS appliers
+            count(*) FILTER (
+              WHERE e.action = 'skip'
+                AND e.query IS NULL
+                AND COALESCE(e.context, '') NOT LIKE 'auto:%'
+            )::int AS skipped,
+            count(DISTINCT e.user_id) FILTER (WHERE e.action = 'apply')::int AS appliers,
+            -- 계정을 알 수 없는 적용. count(DISTINCT)는 NULL을 세지 않으므로 따로 세어 "한 사람" 판정에서 뺀다
+            count(*) FILTER (WHERE e.action = 'apply' AND e.user_id IS NULL)::int AS anonymous_applies
           FROM skill_events e
           INNER JOIN catalog_items c ON c.id = e.skill_id
           WHERE e.created_at >= ${since}
           GROUP BY e.skill_id, c.name
         `),
+        // 결과 배열이 기록된 요청만 "결과 수를 관측했다"고 본다. 배열이 없는 요청(구형 로그·계측 누락)은
+        // 결과가 0건이었다는 뜻이 아니므로 따로 센다. 탐색·결과 분석 패널과 같은 규칙이다.
         db.execute(sql`
           SELECT count(*)::int AS total,
-            count(*) FILTER (WHERE NOT EXISTS (
-              SELECT 1 FROM skill_events e
-              WHERE e.source_audit_log_id = a.id AND e.action = 'search'
-            ))::int AS zero_result
+            count(*) FILTER (WHERE jsonb_typeof(a.search_results) = 'array')::int AS observed,
+            count(*) FILTER (
+              WHERE jsonb_typeof(a.search_results) = 'array'
+                AND jsonb_array_length(a.search_results) = 0
+            )::int AS zero_result
           FROM mcp_audit_logs a
           WHERE a.tool IN ('search_plugins', 'semantic_search')
             AND a.response_status = 'success'
@@ -127,8 +144,11 @@ export const skillOpportunitiesPanel: AxPanel<AxSkillOpportunitiesData> = {
       for (const row of rows) {
         if (row.shown >= MIN_SHOWN && row.loaded < row.shown * LOAD_RATE) matches.low_load.push(row)
         if (row.loaded >= MIN_LOADED && row.applied < row.loaded * APPLY_RATE) matches.low_apply.push(row)
-        if (row.applied >= MIN_APPLIED && row.appliers === 1) matches.single_user.push(row)
-        // 결과를 아예 안 남긴 로드만 센다. 건너뜀도 결과 보고이므로 여기서 빠진다.
+        // 계정을 알 수 없는 적용이 섞여 있으면 정말 한 사람인지 알 수 없으므로 판정을 보류한다
+        if (row.applied >= MIN_APPLIED && row.appliers === 1 && row.anonymousApplies === 0) {
+          matches.single_user.push(row)
+        }
+        // 명시적 결과 보고가 하나도 없는 로드만 센다. 자동 스킵과 검색 결과 거절은 위 쿼리에서 이미 빠졌다.
         if (row.loaded >= MIN_LOADED && row.applied === 0 && row.skipped === 0) matches.no_outcome.push(row)
       }
 
@@ -153,6 +173,7 @@ export const skillOpportunitiesPanel: AxPanel<AxSkillOpportunitiesData> = {
       const data: AxSkillOpportunitiesData = {
         groups,
         searchRequests: num(searchRow.total),
+        observedSearches: num(searchRow.observed),
         zeroResultSearches: num(searchRow.zero_result),
         thresholds: {
           minShown: MIN_SHOWN,
@@ -163,9 +184,13 @@ export const skillOpportunitiesPanel: AxPanel<AxSkillOpportunitiesData> = {
         },
       }
 
-      const totalCandidates = groups.reduce((sum, group) => sum + group.total, 0)
+      // 한 스킬이 여러 분류에 들 수 있으므로 분류별 합이 아니라 고유 스킬 수를 센다
+      const candidateIds = new Set<string>()
+      for (const list of Object.values(matches)) {
+        for (const row of list) candidateIds.add(row.skillId)
+      }
       return panelOk(meta, data, [
-        { label: '개선 후보 스킬', value: String(totalCandidates), hint: '건', periodLinked: true },
+        { label: '개선 후보 스킬', value: String(candidateIds.size), hint: '개', periodLinked: true },
       ])
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

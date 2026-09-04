@@ -21,7 +21,14 @@ import { skillOpportunitiesPanel } from '../../../../packages/lib/src/features/a
 function skill(
   skill_id: string,
   name: string,
-  values: Partial<{ shown: number; loaded: number; applied: number; skipped: number; appliers: number }>
+  values: Partial<{
+    shown: number
+    loaded: number
+    applied: number
+    skipped: number
+    appliers: number
+    anonymous_applies: number
+  }>
 ) {
   return {
     skill_id,
@@ -31,12 +38,13 @@ function skill(
     applied: 0,
     skipped: 0,
     appliers: 0,
+    anonymous_applies: 0,
     ...values,
   }
 }
 
 /** 스킬 통계와 검색 요청 수를 순서대로 돌려준다 */
-function queueRows(skills: unknown[], search: { total: number; zero_result: number }) {
+function queueRows(skills: unknown[], search: { total: number; observed: number; zero_result: number }) {
   vi.mocked(db.execute)
     .mockResolvedValueOnce({ rows: skills } as never)
     .mockResolvedValueOnce({ rows: [search] } as never)
@@ -65,7 +73,7 @@ describe('AX 스킬 개선 기회 패널', () => {
       skill('solo', '혼자 쓰는 스킬', { shown: 12, loaded: 9, applied: 5, appliers: 1 }),
       // 두루 쓰이는 스킬은 어느 분류에도 들어가지 않는다
       skill('healthy', '건강한 스킬', { shown: 50, loaded: 20, applied: 12, appliers: 4 }),
-    ], { total: 300, zero_result: 7 })
+    ], { total: 300, observed: 280, zero_result: 7 })
 
     const result = await skillOpportunitiesPanel.load({ days: 30, isAdmin: false })
 
@@ -83,6 +91,8 @@ describe('AX 스킬 개선 기회 패널', () => {
     }
 
     expect(data.searchRequests).toBe(300)
+    // 결과 목록이 기록된 요청만 결과 수를 확인할 수 있다
+    expect(data.observedSearches).toBe(280)
     expect(data.zeroResultSearches).toBe(7)
     // 기준값을 함께 내려보내 화면이 판단 근거를 적을 수 있게 한다
     expect(data.thresholds).toEqual({
@@ -92,14 +102,27 @@ describe('AX 스킬 개선 기회 패널', () => {
       loadRate: 0.1,
       applyRate: 1 / 3,
     })
-    expect(result.highlights?.[0]).toMatchObject({ label: '개선 후보 스킬', value: '5' })
+    // silent가 두 분류에 들어가므로 분류별 합(5)이 아니라 고유 스킬 수(4)를 센다
+    expect(result.highlights?.[0]).toMatchObject({ label: '개선 후보 스킬', value: '4' })
+  })
+
+  it('계정을 알 수 없는 적용이 섞여 있으면 한 사람이라고 단정하지 않는다', async () => {
+    queueRows([
+      // 식별된 계정 1개 + 계정 불명 2건 → 정말 한 사람인지 알 수 없다
+      skill('mixed', '섞인 스킬', { applied: 5, appliers: 1, anonymous_applies: 2 }),
+      // 계정 불명 보고가 없으면 그대로 한 사람으로 본다
+      skill('clean', '깨끗한 스킬', { applied: 4, appliers: 1 }),
+    ], { total: 0, observed: 0, zero_result: 0 })
+
+    const data = (await skillOpportunitiesPanel.load({ days: 30, isAdmin: false })).data!
+    expect(groupOf(data, 'single_user').skills.map((s) => s.skillId)).toEqual(['clean'])
   })
 
   it('분류마다 고치면 효과가 큰 순으로 정렬하고 열 개까지만 내려보낸다', async () => {
     const many = Array.from({ length: 12 }, (_, index) =>
       skill(`low-${index}`, `스킬 ${index}`, { shown: 30 + index * 10, loaded: 1 })
     )
-    queueRows(many, { total: 10, zero_result: 0 })
+    queueRows(many, { total: 10, observed: 10, zero_result: 0 })
 
     const data = (await skillOpportunitiesPanel.load({ days: 7, isAdmin: false })).data!
     const group = groupOf(data, 'low_load')
@@ -112,8 +135,10 @@ describe('AX 스킬 개선 기회 패널', () => {
   })
 
   it('이름이 비어 있으면 스킬 ID로 대신하고, 조회가 실패하면 오류 상태를 돌려준다', async () => {
-    queueRows([{ skill_id: 'no-name', name: '  ', shown: 60, loaded: 0, applied: 0, skipped: 0, appliers: 0 }],
-      { total: 1, zero_result: 0 })
+    queueRows(
+      [{ skill_id: 'no-name', name: '  ', shown: 60, loaded: 0, applied: 0, skipped: 0, appliers: 0, anonymous_applies: 0 }],
+      { total: 1, observed: 1, zero_result: 0 }
+    )
     const named = (await skillOpportunitiesPanel.load({ days: 30, isAdmin: false })).data!
     expect(groupOf(named, 'low_load').skills[0].name).toBe('no-name')
 

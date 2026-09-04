@@ -119,8 +119,10 @@ export interface AxSkillOpportunityRow {
   loaded: number
   applied: number
   skipped: number
-  /** 적용을 보고한 서로 다른 사용자 수 */
+  /** 적용을 보고한 서로 다른 사용자 수. 계정을 알 수 없는 보고는 세지 않는다 */
   appliers: number
+  /** 계정을 알 수 없는 적용 보고 수. 있으면 "한 사람만 쓴다"고 단정할 수 없다 */
+  anonymousApplies: number
 }
 
 /** 한 분류의 결과 */
@@ -136,7 +138,9 @@ export interface AxSkillOpportunitiesData {
   groups: AxSkillOpportunityGroup[]
   /** 기간 내 성공한 검색 요청 수 */
   searchRequests: number
-  /** 그중 결과가 한 줄도 없던 요청 수 — 없는 스킬을 찾고 있다는 신호 */
+  /** 그중 결과 목록이 기록돼 결과 수를 실제로 확인할 수 있는 요청 수 */
+  observedSearches: number
+  /** 결과 목록이 비어 있던 요청 수 — 없는 스킬을 찾고 있다는 신호 */
   zeroResultSearches: number
   /** 분류에 쓴 기준값. 화면이 그대로 적어 판단 근거를 남긴다 */
   thresholds: {
