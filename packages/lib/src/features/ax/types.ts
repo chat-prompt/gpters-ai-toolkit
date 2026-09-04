@@ -157,6 +157,109 @@ export interface AxSkillOpportunitiesData {
   }
 }
 
+/**
+ * 반복 사용 패널 — 7일 창 하나의 재방문
+ *
+ * 창은 오늘(UTC 하루 끝)에서 7일씩 거슬러 잡은 것이라 달력 주가 아니다. 부분 주가 생기지 않는 대신
+ * 첫 창의 "직전 창"은 조회 기간 밖에 있을 수 있다.
+ */
+export interface AxRetentionWeek {
+  /** 창 시작 (ISO 8601, 포함) */
+  start: string
+  /** 창 끝 (ISO 8601, 미포함) */
+  end: string
+  /** 이 창에서 적용을 보고한 고유 사용자 수 */
+  activeUsers: number
+  /**
+   * 직전 7일 창의 활성 사용자 수. 직전 창이 첫 적용 보고보다 앞이라 관측 자체가 없으면 null이다.
+   * 0과 다르다 — 0은 관측했는데 아무도 없었다는 뜻이다.
+   */
+  previousActiveUsers: number | null
+  /** 직전 창에도 있던 사용자 수 (재방문). 직전 창이 미관측이면 null */
+  retainedUsers: number | null
+  /** 이 창에서 처음(전 기간 최초) 적용을 보고한 사용자 수 */
+  newUsers: number
+}
+
+/** 반복 사용 패널 — 스킬별 재사용 한 줄 */
+export interface AxRetentionSkillRow {
+  skillId: string
+  /** 카탈로그 표시 이름 */
+  name: string
+  /** 기간 내 적용 보고 수 (계정 있는 것만) */
+  applies: number
+  /** 적용을 보고한 고유 사용자 수 */
+  users: number
+  /** 그중 서로 다른 날에 2일 이상 적용해 "다시 쓴" 사용자 수 */
+  reusedUsers: number
+  /** 한 사용자가 이 스킬을 적용한 서로 다른 날의 최댓값 — 반복 깊이 */
+  maxActiveDays: number
+}
+
+/**
+ * 반복 사용과 정착률 패널 데이터
+ *
+ * 모든 수치는 명시적 `apply` 보고이며 계정(user_id)이 있는 것만 센다. 흐름 ID 없는 보고를
+ * 시간 근접으로 이어 붙이는 추정은 하지 않는다. "재사용"은 같은 사용자가 같은 스킬을
+ * **서로 다른 날(UTC) 2일 이상** 적용한 것이다. 같은 날의 반복 보고는 한 작업의 중복 보고인 경우가
+ * 잦아 반복으로 세지 않는다.
+ */
+export interface AxRetentionData {
+  /** 조회 기간 시작 (ISO 8601, UTC 하루 경계) */
+  since: string
+  /** 조회 기간 끝 (ISO 8601, 미포함) */
+  until: string
+  /** 전 기간에서 적용 보고가 처음 관측된 시각. 보고가 하나도 없으면 null */
+  firstObservedAt: string | null
+  /** 계정을 알 수 없는 적용 보고 수 — 사람 단위 지표에 넣을 수 없어 따로 적는다 */
+  anonymousApplies: number
+  /** 기간 내 사용자 구분 */
+  users: {
+    /** 기간 내 적용을 보고한 고유 사용자 */
+    active: number
+    /** 그중 전 기간 최초 적용이 이 기간 안에 있는 사용자 */
+    new: number
+    /** 그중 기간 시작 전에도 적용 보고가 있던 사용자 */
+    returning: number
+    /** 그중 어떤 스킬이든 2일 이상 다시 쓴 사용자 */
+    reusing: number
+  }
+  /** 7일 창 재방문 — 오래된 창이 먼저, 마지막이 오늘까지의 창 */
+  weeks: AxRetentionWeek[]
+  /** 기간 내 적용된 스킬 구분 */
+  skills: {
+    /** 적용 보고가 있는 고유 스킬 */
+    applied: number
+    /** 한 번만 적용된 스킬 */
+    single: number
+    /** 여러 번 적용됐지만 같은 사람이 다른 날 다시 쓴 적은 없는 스킬 */
+    multipleWithoutReuse: number
+    /** 최소 한 사용자가 다른 날 다시 쓴 스킬 */
+    reused: number
+  }
+  /** 사용자×스킬 조합의 반복 깊이 분포 — 적용한 서로 다른 날 수 */
+  pairs: {
+    total: number
+    /** 하루만 */
+    oneDay: number
+    /** 이틀 */
+    twoDays: number
+    /** 사흘 이상 */
+    threePlusDays: number
+  }
+  /** 두 번 이상 적용된 스킬 — 다시 쓴 사용자 많은 순, 같으면 적용 많은 순 */
+  topSkills: AxRetentionSkillRow[]
+  /** 두 번 이상 적용된 스킬 전체 수. topSkills는 이 중 상위 일부다 */
+  totalMultiApplySkills: number
+  /** 판정에 쓴 기준값. 화면이 그대로 적는다 */
+  thresholds: {
+    /** 재사용으로 보는 최소 활동 일수 */
+    reuseMinDays: number
+    /** 재방문 창의 길이(일) */
+    weekDays: number
+  }
+}
+
 /** 사용자별 사용량 한 줄 (관리자에게만 내려간다) */
 export interface AxOverviewMemberRow {
   /** 계정 표시 이름. 프로필에 이름이 없으면 "이름 미설정" */
