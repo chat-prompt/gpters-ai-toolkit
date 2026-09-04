@@ -991,6 +991,9 @@ const ROOT_VIEW_LABELS: Record<string, string> = {
 /**
  * 같은 업무 영역의 독립 데이터 패널을 작은 세그먼트 컨트롤로 묶는다.
  * API·권한·오류 격리는 유지하되 최상위 탭 수만 줄이는 정보 구조다.
+ *
+ * 세부 보기는 여섯 개까지 늘어난다. 좁은 화면에서 줄이 접히면 글자가 세로로 쪼개지므로,
+ * 각 버튼은 줄바꿈 없이 두고 컨트롤 자체를 가로로 넘겨 본다.
  */
 function NestedPanelNav({
   parentId,
@@ -1004,11 +1007,12 @@ function NestedPanelNav({
   onChange: (panelId: string) => void
 }) {
   return (
-    <div
-      className="mt-5 inline-flex items-center gap-0.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-1"
-      role="tablist"
-      aria-label={`${panels[0]?.title ?? '항목'} 세부 보기`}
-    >
+    <div className="mt-5 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <div
+        className="inline-flex w-max items-center gap-0.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-1"
+        role="tablist"
+        aria-label={`${panels[0]?.title ?? '항목'} 세부 보기`}
+      >
       {panels.map((panel) => {
         const selected = panel.id === activeId
         const label = panel.id === parentId
@@ -1030,7 +1034,7 @@ function NestedPanelNav({
               panel.id,
               onChange
             )}
-            className={`rounded-full px-4 py-1.5 text-xs transition-colors ${
+            className={`min-h-11 shrink-0 touch-manipulation whitespace-nowrap rounded-full px-4 text-xs transition-colors sm:min-h-0 sm:py-1.5 ${
               selected
                 ? 'bg-[var(--text-primary)] font-medium text-[var(--bg-primary)]'
                 : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -1040,6 +1044,7 @@ function NestedPanelNav({
           </button>
         )
       })}
+      </div>
     </div>
   )
 }

@@ -10,6 +10,16 @@
 export const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 
 /** KST 기준 하루의 시작(= KST 자정에 해당하는 UTC 시각)으로 내린다 */
+/**
+ * UTC 기준 하루의 시작으로 내린다 — 기간 첫 날이 반쪽만 담기는 것을 막는다
+ *
+ * @param date - 기준 시각
+ * @returns 그 날 00:00 UTC
+ */
+export function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
 export function startOfKstDay(date: Date): Date {
   const shifted = new Date(date.getTime() + KST_OFFSET_MS)
   const floor = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate())

@@ -9,6 +9,7 @@ import { db, skillEvents, catalogItems } from '@gpters/db'
 import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
+import { startOfUtcDay } from './kst'
 import type { AxPanel, AxPanelMeta, AxSkillUsageData, AxSkillUsageRow } from './types'
 
 const log = createLogger('ax-skills')
@@ -50,11 +51,6 @@ function actionCount(action: string) {
  * 배포 환경마다 하루 경계가 달라진다.
  */
 const dayExpr = sql<string>`to_char(date_trunc('day', ${skillEvents.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`
-
-/** UTC 기준 하루의 시작으로 내린다 — 첫 막대가 반쪽만 담기는 것을 막는다 */
-function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-}
 
 /**
  * 이벤트가 없는 날을 0으로 채운다
