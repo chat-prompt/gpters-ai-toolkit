@@ -201,7 +201,11 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
 
         // 5. 기원 분해 — 로드·적용이 같은 흐름(journey, 없으면 session)의 앞선 검색·로드와 이어졌는지.
         //    검색 요청 수는 결과 줄마다 한 행인 skill_events 대신 요청마다 한 행인 감사 로그에서 센다.
-        //    흐름 ID가 없는 이벤트는 판정 불가라 unlinkable로 따로 둔다.
+        //    흐름 ID가 없는 로드는 판정 불가(unlinkable)로 둔다. 검색은 프롬프트마다 자동으로 돌기 때문에
+        //    시간이 가깝다는 이유만으로 검색과 이었다고 볼 수 없다.
+        //    적용은 다르다. 명시적인 보고이고 같은 사람이 같은 스킬을 최근에 로드했다면 그 로드의 결과로 보는 것이
+        //    합리적이다. 구버전 CLI가 흐름 ID를 보내지 않는 동안 로드 후 적용이 실제보다 훨씬 적게 보이므로,
+        //    24시간 안의 로드가 있으면 추정 연결(after_load_inferred)로 따로 센다.
         db.execute(sql`
           WITH loads AS (
             SELECT e.skill_id, COALESCE(e.journey_id, e.session_id) AS flow_id, e.created_at
@@ -209,7 +213,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             INNER JOIN catalog_items c ON c.id = e.skill_id
             WHERE e.action = 'load' AND e.created_at >= ${since}
           ), applies AS (
-            SELECT e.skill_id, COALESCE(e.journey_id, e.session_id) AS flow_id, e.created_at
+            SELECT e.skill_id, COALESCE(e.journey_id, e.session_id) AS flow_id, e.user_id, e.created_at
             FROM skill_events e
             INNER JOIN catalog_items c ON c.id = e.skill_id
             WHERE e.action = 'apply' AND e.created_at >= ${since}
@@ -226,20 +230,27 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             FROM loads
           ), apply_origin AS (
             SELECT CASE
-              WHEN flow_id IS NULL THEN 'unlinkable'
-              WHEN EXISTS (
+              WHEN flow_id IS NOT NULL AND EXISTS (
                 SELECT 1 FROM skill_events s
                 WHERE COALESCE(s.journey_id, s.session_id) = applies.flow_id
                   AND s.skill_id = applies.skill_id AND s.action = 'search'
                   AND s.created_at <= applies.created_at
               ) THEN 'from_search'
-              WHEN EXISTS (
+              WHEN flow_id IS NOT NULL AND EXISTS (
                 SELECT 1 FROM skill_events l
                 WHERE COALESCE(l.journey_id, l.session_id) = applies.flow_id
                   AND l.skill_id = applies.skill_id AND l.action = 'load'
                   AND l.created_at <= applies.created_at
               ) THEN 'after_direct_load'
-              ELSE 'without_load' END AS origin
+              WHEN flow_id IS NOT NULL THEN 'without_load'
+              WHEN applies.user_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM skill_events l
+                WHERE l.user_id = applies.user_id
+                  AND l.skill_id = applies.skill_id AND l.action = 'load'
+                  AND l.created_at <= applies.created_at
+                  AND l.created_at >= applies.created_at - interval '24 hours'
+              ) THEN 'after_load_inferred'
+              ELSE 'unlinkable' END AS origin
             FROM applies
           )
           SELECT
@@ -253,6 +264,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             (SELECT count(*)::int FROM apply_origin WHERE origin = 'from_search') AS applies_from_search,
             (SELECT count(*)::int FROM apply_origin WHERE origin = 'after_direct_load') AS applies_after_direct_load,
             (SELECT count(*)::int FROM apply_origin WHERE origin = 'without_load') AS applies_without_load,
+            (SELECT count(*)::int FROM apply_origin WHERE origin = 'after_load_inferred') AS applies_after_load_inferred,
             (SELECT count(*)::int FROM apply_origin WHERE origin = 'unlinkable') AS applies_unlinkable
         `),
       ])
@@ -305,6 +317,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
               fromSearch: num(originRow.applies_from_search),
               afterDirectLoad: num(originRow.applies_after_direct_load),
               withoutLoad: num(originRow.applies_without_load),
+              afterLoadInferred: num(originRow.applies_after_load_inferred),
               unlinkable: num(originRow.applies_unlinkable),
             },
           },

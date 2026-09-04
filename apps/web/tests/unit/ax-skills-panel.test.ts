@@ -203,6 +203,7 @@ describe('skillUsagePanel', () => {
         applies_from_search: 2,
         applies_after_direct_load: 1,
         applies_without_load: 1,
+        applies_after_load_inferred: 3,
         applies_unlinkable: 2,
       }],
     } as never)
@@ -218,7 +219,7 @@ describe('skillUsagePanel', () => {
     expect(data.origins).toEqual({
       searchRequests: 12,
       loads: { fromSearch: 5, direct: 3, unlinkable: 21 },
-      applies: { fromSearch: 2, afterDirectLoad: 1, withoutLoad: 1, unlinkable: 2 },
+      applies: { fromSearch: 2, afterDirectLoad: 1, withoutLoad: 1, afterLoadInferred: 3, unlinkable: 2 },
     })
     expect(data.meaningfulUses).toBe(6)
     expect(data.activeUsers).toBe(5)
