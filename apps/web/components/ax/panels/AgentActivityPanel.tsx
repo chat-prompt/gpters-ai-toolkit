@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import type {
   AxAgentActivityAgentRow,
   AxAgentActivityData,
+  AxAgentEfficiency,
   AxAgentReporterRow,
   AxAgentSourceCoverageRow,
   AxAgentTelemetrySource,
@@ -16,6 +17,7 @@ import type { AxPanelViewProps } from './types'
 import {
   DefinitionRows,
   EMPTY_NOTE,
+  EmptyNote,
   META_LINE,
   SectionHeader,
   Stat,
@@ -44,11 +46,33 @@ const TD = `${BASE_TD} text-sm`
 
 type ActivityScope = AxAgentActivityData | AxAgentActivityAgentRow
 
+/** 효율 필드가 없는 구형 응답(세션 캐시)도 화면이 깨지지 않게 빈 값으로 읽는다 */
+const EMPTY_EFFICIENCY: AxAgentEfficiency = {
+  tokensPerVerifiedSuccess: null,
+  failingTools: [],
+  failingSkills: [],
+  skillLoadTotals: { loaded: 0, failed: 0, interrupted: 0 },
+}
+
+function efficiencyOf(scope: ActivityScope): AxAgentEfficiency {
+  return scope.efficiency ?? EMPTY_EFFICIENCY
+}
+
 function formatTokens(value: number): string {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`
   return String(value)
+}
+
+/**
+ * 검증 성공 1건당 처리 토큰 표기 — 성공이 최소 표본 미만이면 나눈 값 대신 `총량 / n건 · 참고`로 적는다.
+ * 검증 성공 1~2건으로 나눈 값은 그 자체로 그럴듯해 보여서 더 위험하다.
+ */
+function formatTokensPerSuccess(totalTokens: number, successes: number, perSuccess: number | null): string {
+  if (successes <= 0 || perSuccess === null) return '—'
+  if (successes < RATE_MIN_SAMPLE) return `${formatTokens(totalTokens)} / ${formatCount(successes)}건 · 참고`
+  return formatTokens(perSuccess)
 }
 
 
@@ -93,6 +117,8 @@ export function AgentActivityPanel({
     return !latest || reporter.lastCollectedAt > latest ? reporter.lastCollectedAt : latest
   }, null)
 
+  // 위계: 수집이 끊겼으면 아래 숫자가 전부 하한선이므로 가장 먼저 보이고, 그다음 규모 → 효율 → 분모(실행 결과) →
+  // 구성 상세 → 운영(소스·수집기) 순서다. 새 지표를 붙이기만 하지 않고 운영 정보는 아래로 내렸다.
   return (
     <div className="space-y-10">
       <AgentSelector
@@ -101,6 +127,8 @@ export function AgentActivityPanel({
         value={activeAgentId}
         onChange={selectAgent}
       />
+
+      <CollectionGaps reporters={reporters} />
 
       <section aria-labelledby="agent-summary-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -141,8 +169,8 @@ export function AgentActivityPanel({
           <Metric
             label="도구 호출"
             value={formatCount(scope.toolCalls)}
-            hint={`실패 ${formatSampledRate(scope.toolFailures, scope.toolCalls)}`}
-            explanation="쉘·파일 읽기·편집·검색처럼 런타임이 기록한 도구 호출입니다. OpenClaw 요약 소스처럼 도구를 제공하지 않는 소스는 포함되지 않습니다."
+            hint={`실패 ${formatCount(scope.toolFailures)}건`}
+            explanation="쉘·파일 읽기·편집·검색처럼 런타임이 기록한 도구 호출입니다. OpenClaw 요약 소스처럼 도구를 제공하지 않는 소스는 포함되지 않습니다. 실패율은 아래 효율 칸에 있습니다."
           />
           <Metric
             label="수집 레코드"
@@ -154,9 +182,68 @@ export function AgentActivityPanel({
         </div>
       </section>
 
+      <EfficiencySection scope={scope} available={data.verifiedExecutionsAvailable} />
+
       <SkillImpactSummary scope={scope} available={data.verifiedExecutionsAvailable} />
 
+      <ExecutionSection scope={scope} available={data.verifiedExecutionsAvailable} />
+
+      {activeAgentId === 'all' && (
+        <AgentEfficiencyTable
+          agents={data.agents}
+          available={data.verifiedExecutionsAvailable}
+          onSelectAgent={selectAgent}
+        />
+      )}
+
       <TokenBreakdown usage={scope.totalUsage} />
+
+      {/* 두 표의 1위 막대가 한 줄로 이어져 보이지 않게 가운데 구분선을 둔다 */}
+      <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-0">
+        <div className="lg:pr-10">
+        <RankTable
+          title="도구 호출·실패"
+          rows={scope.tools.map((row) => ({
+            name: row.name,
+            value: formatCount(row.calls),
+            hint: `실패 ${formatSampledRate(row.failures, row.calls)}`,
+            magnitude: row.calls,
+          }))}
+        />
+        </div>
+        <div className="lg:border-l lg:border-[var(--border-subtle)] lg:pl-10">
+        <SkillLoadSection scope={scope} />
+        </div>
+      </div>
+
+      {/* 긴 목록(도구 호출·스킬 로드)끼리, 짧은 목록(실패 도구·모델)끼리 짝지어 한쪽만 길게 비지 않게 한다 */}
+      <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-0">
+        <div className="lg:pr-10">
+        <RankTable
+          title="실패가 많은 도구"
+          empty={scope.toolCalls > 0
+            ? '선택 기간에 관측된 도구 실패가 없습니다.'
+            : '이 수집 소스에서 도구 호출이 관측되지 않았습니다.'}
+          rows={efficiencyOf(scope).failingTools.map((row) => ({
+            name: row.name,
+            value: `${formatCount(row.failures)}건`,
+            hint: `${formatSampledRate(row.failures, row.calls)} · 호출 ${formatCount(row.calls)}`,
+            magnitude: row.failures,
+          }))}
+        />
+        </div>
+        <div className="lg:border-l lg:border-[var(--border-subtle)] lg:pl-10">
+        <RankTable
+          title="모델별 처리 토큰"
+          rows={scope.models.map((row) => ({
+            name: row.model,
+            value: formatTokens(row.processedTokens),
+            hint: `${formatCount(row.turns)}턴`,
+            magnitude: row.processedTokens,
+          }))}
+        />
+        </div>
+      </div>
 
       <section>
         <SectionTitle
@@ -185,33 +272,189 @@ export function AgentActivityPanel({
         showAgentLinks={activeAgentId === 'all'}
         onSelectAgent={selectAgent}
       />
+    </div>
+  )
+}
 
-      {/* 두 표의 1위 막대가 한 줄로 이어져 보이지 않게 가운데 구분선을 둔다 */}
-      <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-0">
-        <div className="lg:pr-10">
-        <RankTable
-          title="모델별 처리 토큰"
-          rows={scope.models.map((row) => ({
-            name: row.model,
-            value: formatTokens(row.processedTokens),
-            hint: `${formatCount(row.turns)}턴`,
-            magnitude: row.processedTokens,
-          }))}
+/**
+ * 수집이 끊긴 수집기만 이름과 마지막 정상 보고 시각을 앞에 세운다.
+ * 아래 `수집기 상태` 표는 전체 목록이고, 여기는 "지금 숫자를 믿어도 되는가"만 답한다. 문제가 없으면 아무것도 그리지 않는다.
+ */
+function CollectionGaps({ reporters }: { reporters: AxAgentReporterRow[] }) {
+  const gaps = reporters.filter((row) => row.freshness !== 'fresh' || row.healthStatus === 'blocked')
+  if (gaps.length === 0) return null
+  return (
+    <section aria-labelledby="collection-gaps-title">
+      <SectionHeader
+        id="collection-gaps-title"
+        label="수집 끊김"
+        aside={`${formatCount(gaps.length)}개 수집기`}
+        description="아래 수치는 이 수집기의 마지막 정상 보고까지만 반영합니다. 빠진 구간은 0이 아니라 미관측입니다."
+      />
+      <DefinitionRows
+        rows={gaps.map((row) => {
+          const lastHealthy = row.lastHealthyAt ?? null
+          const status = row.healthStatus === 'blocked'
+            ? `수집 차단 · 경고 ${formatCount(row.healthWarnings.length)}건`
+            : row.freshness === 'waiting'
+              ? '설치됐지만 아직 첫 배치가 없습니다'
+              : `${formatCount(row.freshnessHours ?? 0)}시간째 새 배치 없음`
+          const detail = lastHealthy
+            ? `마지막 정상 보고 ${formatDateTime(lastHealthy)} · ${status}`
+            : row.lastCollectedAt
+              ? `정상 보고 기록 없음 · 마지막 배치 ${formatDateTime(row.lastCollectedAt)} · ${status}`
+              : status
+          return {
+            title: row.agentId,
+            badge: SOURCE_LABELS[row.source],
+            detail,
+            warning: row.freshness === 'stale' || row.healthStatus === 'blocked',
+          }
+        })}
+      />
+    </section>
+  )
+}
+
+/**
+ * 효율 — 검증 성공 1건에 든 토큰과 세 가지 실패 신호. 비율마다 분모를 힌트에 함께 적는다.
+ * 비용은 넣지 않는다 (모델 가격표·구독 대표성 미확보).
+ */
+function EfficiencySection({ scope, available }: { scope: ActivityScope; available: boolean }) {
+  const execution = scope.verifiedExecutions
+  const efficiency = efficiencyOf(scope)
+  const verifiedSuccesses = execution.verifiedSuccesses ?? 0
+  const verifiedAttempts = execution.verifiedAttempts ?? 0
+  const skillTotals = efficiency.skillLoadTotals
+  const skillDenominator = skillTotals.loaded + skillTotals.failed + skillTotals.interrupted
+  const unavailableHint = '실행 결과 계측 준비 중'
+  return (
+    <section>
+      <SectionTitle title="효율" hint="비율은 분모와 함께 · 비용은 표시하지 않습니다" />
+      <div className="mt-4">
+        <StatGrid columns={4}>
+        <Metric
+          label="검증 성공 1건당 처리 토큰"
+          value={available
+            ? formatTokensPerSuccess(scope.totalProcessedTokens, verifiedSuccesses, efficiency.tokensPerVerifiedSuccess)
+            : '미관측'}
+          hint={!available
+            ? unavailableHint
+            : verifiedSuccesses === 0
+              ? '검증 성공 0건'
+              : verifiedSuccesses < RATE_MIN_SAMPLE
+                ? `검증 성공 ${formatCount(verifiedSuccesses)}건 · 표본 ${RATE_MIN_SAMPLE}건 미만`
+                : `검증 성공 ${formatCount(verifiedSuccesses)}건`}
+          explanation={`기간 내 총 처리 토큰을 success이면서 검증을 통과한 실행 건수로 나눈 값입니다. 스킬 실행에 쓴 토큰만 골라낸 것이 아니라 에이전트 전체 처리량을 검증된 성과 단위로 정규화한 값이며, 검증 성공이 ${RATE_MIN_SAMPLE}건 미만이면 나눈 값 대신 총량과 건수를 참고로 보여줍니다.`}
         />
-        </div>
-        <div className="lg:border-l lg:border-[var(--border-subtle)] lg:pl-10">
-        <RankTable
-          title="도구 호출·실패"
-          rows={scope.tools.map((row) => ({
-            name: row.name,
-            value: formatCount(row.calls),
-            hint: `실패 ${formatSampledRate(row.failures, row.calls)}`,
-            magnitude: row.calls,
-          }))}
+        <Metric
+          label="검증 성공률"
+          value={available ? formatSampledRate(verifiedSuccesses, verifiedAttempts) : '미관측'}
+          hint={!available
+            ? unavailableHint
+            : verifiedAttempts === 0
+              ? '검증 결과가 기록된 완료 시도 없음'
+              : `${formatCount(verifiedSuccesses)} / ${formatCount(verifiedAttempts)}건`}
+          explanation="탐색·결과 분석과 같은 정의입니다. success·partial·failed로 끝났고 검증 결과가 기록된 시도를 분모로, success이면서 검증을 통과한 시도를 분자로 삼습니다. 실행 보고에는 모델이 없어 모델별 성공률은 계산하지 않습니다."
         />
-        </div>
+        <Metric
+          label="도구 실패율"
+          value={formatSampledRate(scope.toolFailures, scope.toolCalls)}
+          hint={scope.toolCalls > 0
+            ? `실패 ${formatCount(scope.toolFailures)} / 호출 ${formatCount(scope.toolCalls)}`
+            : '도구 호출 미관측'}
+          explanation="런타임이 실패로 기록한 도구 결과의 비율입니다. Hermes의 실패 판정은 아직 실제 실패 사례로 검증되지 않아 0이 실제 0건이 아닐 수 있습니다."
+        />
+        <Metric
+          label="스킬 로드 실패율"
+          value={scope.skillLoadsObserved ? formatSampledRate(skillTotals.failed + skillTotals.interrupted, skillDenominator) : '미관측'}
+          hint={!scope.skillLoadsObserved
+            ? '스킬 신호 없는 소스'
+            : skillDenominator === 0
+              ? '관측된 스킬 로드 없음'
+              : `실패 ${formatCount(skillTotals.failed)} / 로드 ${formatCount(skillDenominator)}`}
+          explanation="텔레메트리가 관측한 스킬 로드 시도 중 실패로 끝난 비율입니다. 중단(interrupted)은 계약에 있지만 현재 수집기가 기록하지 않아 0을 중단 없음으로 읽지 않습니다."
+        />
+        </StatGrid>
       </div>
+    </section>
+  )
+}
 
+/**
+ * 에이전트별 효율 비교 표 — 전체 보기에서만 그린다.
+ * 표를 화면 끝까지 늘리면 이름과 숫자 사이가 멀어져 행을 눈으로 잇기 어려우므로 최대 폭을 둔다.
+ */
+function AgentEfficiencyTable({
+  agents,
+  available,
+  onSelectAgent,
+}: {
+  agents: AxAgentActivityAgentRow[]
+  available: boolean
+  onSelectAgent: (agentId: string) => void
+}) {
+  if (agents.length === 0) return null
+  const cell = (value: string) => (available ? value : '미관측')
+  return (
+    <section>
+      <SectionTitle title="에이전트별 효율" hint="같은 정의를 에이전트 단위로 나눈 값" />
+      <div className="mt-3 max-w-[64rem] overflow-x-auto">
+        <table className="w-full min-w-[44rem]">
+          <thead><tr className="border-b border-[var(--border-subtle)]">
+            <th scope="col" className={`text-left ${TH}`}>에이전트</th>
+            <th scope="col" className={`text-right ${TH}`}>처리 토큰</th>
+            <th scope="col" className={`text-right ${TH}`}>검증 성공 / 시도</th>
+            <th scope="col" className={`text-right ${TH}`}>검증 성공률</th>
+            <th scope="col" className={`text-right ${TH}`}>토큰 / 검증 성공</th>
+            <th scope="col" className={`text-right ${TH}`}>도구 실패율</th>
+          </tr></thead>
+          <tbody className="divide-y divide-[var(--border-subtle)]">
+            {agents.map((agent) => {
+              const execution = agent.verifiedExecutions
+              const successes = execution.verifiedSuccesses ?? 0
+              const attempts = execution.verifiedAttempts ?? 0
+              const efficiency = efficiencyOf(agent)
+              return (
+                <tr key={agent.agentId} className="transition-colors hover:bg-[var(--bg-secondary)]">
+                  <th scope="row" className={`${TD} text-left font-mono font-normal text-[var(--text-primary)]`}>
+                    <button
+                      type="button"
+                      translate="no"
+                      className="rounded-sm underline decoration-[var(--border-hover)] underline-offset-4 hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
+                      onClick={() => onSelectAgent(agent.agentId)}
+                    >
+                      {agent.agentId}
+                    </button>
+                  </th>
+                  <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-primary)]`}>{formatTokens(agent.totalProcessedTokens)}</td>
+                  <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
+                    {cell(`${formatCount(successes)} / ${formatCount(attempts)}`)}
+                  </td>
+                  <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
+                    {cell(formatSampledRate(successes, attempts))}
+                  </td>
+                  <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
+                    {cell(formatTokensPerSuccess(agent.totalProcessedTokens, successes, efficiency.tokensPerVerifiedSuccess))}
+                  </td>
+                  <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
+                    {formatSampledRate(agent.toolFailures, agent.toolCalls)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+/** 관측된 스킬 로드 순위와, 실패·중단이 있는 스킬만 따로 모은 목록 */
+function SkillLoadSection({ scope }: { scope: ActivityScope }) {
+  const failing = efficiencyOf(scope).failingSkills
+  return (
+    <div className="space-y-6">
       <RankTable
         title="관측된 스킬 로드"
         empty={scope.skillLoadsObserved
@@ -220,12 +463,33 @@ export function AgentActivityPanel({
         rows={scope.skills.map((row) => ({
           name: row.skillId,
           value: formatCount(row.loaded),
-          hint: `실패 ${formatCount(row.failed)} · 중단 ${formatCount(row.interrupted)}`,
+          hint: `실패 ${formatCount(row.failed)}${row.interrupted > 0 ? ` · 중단 ${formatCount(row.interrupted)}` : ''}`,
           magnitude: row.loaded,
         }))}
       />
-
-      <ExecutionSection scope={scope} available={data.verifiedExecutionsAvailable} />
+      {scope.skillLoadsObserved && (
+        <div>
+          <SectionTitle title="실패·중단이 있는 스킬" hint={`${formatCount(failing.length)}개`} />
+          {failing.length === 0 ? (
+            <EmptyNote>선택 기간에 실패나 중단으로 끝난 스킬 로드가 없습니다.</EmptyNote>
+          ) : (
+            <div className="mt-3 divide-y divide-[var(--border-subtle)]">
+              {failing.map((row) => {
+                const total = row.loaded + row.failed + row.interrupted
+                return (
+                  <div key={row.skillId} className="grid grid-cols-[minmax(0,58%)_auto] items-center gap-4 py-2.5">
+                    <p translate="no" className="truncate px-3 font-mono text-sm text-[var(--text-primary)]">{row.skillId}</p>
+                    <p className="text-right font-mono text-sm tabular-nums text-[var(--accent-orange)]">
+                      {formatSampledRate(row.failed + row.interrupted, total)}
+                      <span className={`ml-2 ${META_LINE}`}>실패 {formatCount(row.failed)}{row.interrupted > 0 ? ` · 중단 ${formatCount(row.interrupted)}` : ''} / {formatCount(total)}</span>
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

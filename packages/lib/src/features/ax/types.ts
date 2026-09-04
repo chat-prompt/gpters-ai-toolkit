@@ -802,6 +802,13 @@ export interface AxAgentReporterRow {
   toolCalls: number
   toolFailures: number
   healthWarnings: string[]
+  /**
+   * 마지막으로 `healthy` 상태로 보고된 시각. 기간 내 batch의 healthStatus와 수집기의 lastHealthStatus 중
+   * 최신값이다. `lastCollectedAt`과 달리 경고로 차단된 배치는 세지 않아 "언제까지 정상이었나"를 답한다.
+   */
+  lastHealthyAt: string | null
+  /** 수집기가 마지막으로 서버에 접촉한 시각(heartbeat). 등록된 수집기가 없으면 null */
+  lastSeenAt: string | null
 }
 
 export interface AxAgentSourceCoverageRow {
@@ -810,6 +817,73 @@ export interface AxAgentSourceCoverageRow {
   lastCollectedAt: string | null
   capabilities: { usage: boolean; tools: boolean; skills: boolean }
   note: string
+}
+
+/**
+ * 서버에 명시적으로 보고된 스킬 실행 결과 집계.
+ *
+ * `verifiedAttempts`·`verifiedSuccesses`는 탐색·결과 분석 패널(`journey-insights`)과 같은 정의를 쓴다.
+ * 두 화면의 검증 성공률이 다른 분모로 갈리지 않게 하기 위해서다.
+ */
+export interface AxAgentVerifiedExecutions {
+  attempts: number
+  success: number
+  partial: number
+  failed: number
+  abandoned: number
+  running: number
+  /** 검증 방법이 none이 아니고 검증 결과가 기록된 시도 수 (진행·중단 포함) */
+  withEvidence: number
+  /** 실행 시작을 보고한 고유 스킬 수 */
+  uniqueSkills: number
+  /** success이면서 검증을 통과한 고유 스킬 수 */
+  verifiedSkills: number
+  /** 같은 journey/session의 선행 load와 연결된 실행 시도 수 */
+  linkedLoads: number
+  /** 선행 load와 연결되고 success·검증 통과한 실행 시도 수 */
+  linkedVerifiedSuccesses: number
+  /** 검증 성공률의 분모 — success·partial·failed로 끝났고 검증 결과가 기록된 시도 수 */
+  verifiedAttempts: number
+  /** 검증 성공률의 분자 — success이면서 검증을 통과한 시도 수 */
+  verifiedSuccesses: number
+}
+
+/** 도구 하나의 호출·실패 집계. failureRate는 화면 표시용 백분율이며 분모 신뢰도는 calls로 판단한다. */
+export interface AxAgentToolRow {
+  name: string
+  calls: number
+  failures: number
+  failureRate: number
+}
+
+/**
+ * 스킬 로드 집계. `interrupted`는 계약에 있지만 현재 수집기(claude-code·hermes) 어느 쪽도 값을 기록하지
+ * 않으므로 0을 "중단 없음"으로 읽지 않는다.
+ */
+export interface AxAgentSkillLoadRow {
+  skillId: string
+  loaded: number
+  failed: number
+  interrupted: number
+}
+
+/**
+ * 에이전트 효율 — 검증 성공 1건에 든 처리 토큰과 실패 신호의 분모.
+ *
+ * 비용은 넣지 않는다. 모델 가격표와 구독 사용량의 대표성이 확보되기 전에는 토큰만으로 비용처럼 표현하지 않는다.
+ */
+export interface AxAgentEfficiency {
+  /**
+   * 기간 내 총 처리 토큰 ÷ 검증 성공 건수. 스킬 실행에 쓴 토큰만 골라낸 값이 아니라 에이전트 전체 처리량을
+   * 검증된 성과 단위로 정규화한 값이다. 검증 성공이 0건이면 null (0으로 꾸미지 않는다).
+   */
+  tokensPerVerifiedSuccess: number | null
+  /** 실패가 1건 이상인 도구를 실패 건수 내림차순으로. 호출 상위 목록에서 잘리는 소수 호출·전량 실패 도구를 놓치지 않는다. */
+  failingTools: AxAgentToolRow[]
+  /** 실패 또는 중단이 1건 이상인 스킬을 실패+중단 내림차순으로 */
+  failingSkills: AxAgentSkillLoadRow[]
+  /** skills 배열의 화면 상한과 무관한 스킬 로드 전체 합계 — 실패율 분모 */
+  skillLoadTotals: { loaded: number; failed: number; interrupted: number }
 }
 
 /** 에이전트 한 명의 기간 내 활동 집계. 원문·세션 식별자는 포함하지 않는다. */
@@ -822,30 +896,15 @@ export interface AxAgentActivityAgentRow {
   toolCalls: number
   toolFailures: number
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
-  tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
-  skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  tools: AxAgentToolRow[]
+  skills: AxAgentSkillLoadRow[]
   /** 기간 내 텔레메트리에서 관측한 고유 스킬 로드 수. skills 배열의 화면 상한과 무관한 전체 값. */
   uniqueLoadedSkills: number
   /** false면 0건이 아니라 해당 소스가 스킬 로드 신호를 제공하지 않는 미관측 상태다. */
   skillLoadsObserved: boolean
   observedExecutionReports: Array<{ status: string; evidence: string; count: number }>
-  verifiedExecutions: {
-    attempts: number
-    success: number
-    partial: number
-    failed: number
-    abandoned: number
-    running: number
-    withEvidence: number
-    /** 실행 시작을 보고한 고유 스킬 수 */
-    uniqueSkills: number
-    /** success이면서 검증을 통과한 고유 스킬 수 */
-    verifiedSkills: number
-    /** 같은 journey/session의 선행 load와 연결된 실행 시도 수 */
-    linkedLoads: number
-    /** 선행 load와 연결되고 success·검증 통과한 실행 시도 수 */
-    linkedVerifiedSuccesses: number
-  }
+  verifiedExecutions: AxAgentVerifiedExecutions
+  efficiency: AxAgentEfficiency
   collection: {
     batches: number
     recordsRead: number
@@ -871,8 +930,8 @@ export interface AxAgentActivityData {
   reporters: AxAgentReporterRow[]
   sourceCoverage: AxAgentSourceCoverageRow[]
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
-  tools: Array<{ name: string; calls: number; failures: number; failureRate: number }>
-  skills: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
+  tools: AxAgentToolRow[]
+  skills: AxAgentSkillLoadRow[]
   /** 기간 내 전체 에이전트에서 관측한 고유 스킬 로드 수 */
   uniqueLoadedSkills: number
   /** false면 스킬 로드 0이 아니라 현재 수집 소스에서 미관측 */
@@ -885,19 +944,9 @@ export interface AxAgentActivityData {
    */
   verifiedExecutionsAvailable: boolean
   /** 명시적으로 보고되고 서버 DB에 저장된 실행 결과 정본. */
-  verifiedExecutions: {
-    attempts: number
-    success: number
-    partial: number
-    failed: number
-    abandoned: number
-    running: number
-    withEvidence: number
-    uniqueSkills: number
-    verifiedSkills: number
-    linkedLoads: number
-    linkedVerifiedSuccesses: number
-  }
+  verifiedExecutions: AxAgentVerifiedExecutions
+  /** 전체 에이전트 합산 효율. 사람 사용량은 섞지 않는다. */
+  efficiency: AxAgentEfficiency
   collection: {
     batches: number
     recordsRead: number

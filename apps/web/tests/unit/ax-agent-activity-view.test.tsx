@@ -36,6 +36,8 @@ function reporter(agentId: string, source: AxAgentReporterRow['source'], multipl
     toolCalls: 5 * multiplier,
     toolFailures: 0,
     healthWarnings: [],
+    lastHealthyAt: '2026-09-01T04:00:00.000Z',
+    lastSeenAt: '2026-09-01T04:05:00.000Z',
   }
 }
 
@@ -72,6 +74,14 @@ function agent(
       verifiedSkills: 1,
       linkedLoads: multiplier,
       linkedVerifiedSuccesses: multiplier,
+      verifiedAttempts: multiplier,
+      verifiedSuccesses: multiplier,
+    },
+    efficiency: {
+      tokensPerVerifiedSuccess: 100,
+      failingTools: [],
+      failingSkills: [],
+      skillLoadTotals: { loaded: skill ? multiplier : 0, failed: 0, interrupted: 0 },
     },
     collection: { batches: multiplier, recordsRead: 100 * multiplier, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   }
@@ -118,6 +128,14 @@ const DATA: AxAgentActivityData = {
     verifiedSkills: 2,
     linkedLoads: 3,
     linkedVerifiedSuccesses: 3,
+    verifiedAttempts: 3,
+    verifiedSuccesses: 3,
+  },
+  efficiency: {
+    tokensPerVerifiedSuccess: 100,
+    failingTools: [{ name: 'lsp_diagnostics', calls: 3, failures: 3, failureRate: 100 }],
+    failingSkills: [],
+    skillLoadTotals: { loaded: 2, failed: 0, interrupted: 0 },
   },
   collection: { batches: 3, recordsRead: 300, parseFailures: 0, unsupportedRecordsSkipped: 0 },
   insights: [],
@@ -140,13 +158,56 @@ describe('AgentActivityPanel', () => {
     expect(screen.getByText('hermes-3')).toBeTruthy()
     expect(screen.getByText('shell')).toBeTruthy()
     expect(screen.getByText('이 수집 소스는 스킬 로드 신호를 제공하지 않아 미관측입니다.')).toBeTruthy()
-    expect(screen.getByText('미관측', { selector: 'p' })).toBeTruthy()
-    // 연결 가능한 로드가 1회뿐이라 백분율 대신 분수를 참고 수치로 보여준다.
+    // 고유 로드 스킬과 스킬 로드 실패율 두 칸이 0이 아니라 미관측이다.
+    expect(screen.getAllByText('미관측', { selector: 'p' })).toHaveLength(2)
+    // 연결 가능한 로드·검증 시도가 1회뿐이라 백분율 대신 분수를 참고 수치로 보여준다.
     expect(screen.queryByText('100.0%')).toBeNull()
-    expect(screen.getByText('1/1 · 참고')).toBeTruthy()
+    expect(screen.getAllByText('1/1 · 참고').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('표본 10회 미만')).toBeTruthy()
+    // 에이전트 하나를 고르면 에이전트별 비교 표는 사라진다.
+    expect(screen.queryByText('에이전트별 효율')).toBeNull()
     expect(screen.getAllByText('Hermes')).toHaveLength(2)
     expect(screen.queryByText('Claude Code')).toBeNull()
+  })
+
+  it('효율 지표는 표본이 작으면 나눈 값 대신 총량·건수를 참고로 보여주고 분모를 함께 적는다', () => {
+    render(<AgentActivityPanel data={DATA} days={7} />)
+
+    // 검증 성공 3건 < 10건: 300 ÷ 3 = 100을 그대로 쓰지 않는다.
+    expect(screen.getByText('300 / 3건 · 참고', { selector: 'p' })).toBeTruthy()
+    expect(screen.getByText('검증 성공 3건 · 표본 10건 미만')).toBeTruthy()
+    // 검증 성공률도 분수, 힌트에 분모.
+    expect(screen.getByText('3 / 3건')).toBeTruthy()
+    // 도구 실패율은 호출 15건 ≥ 10이라 백분율.
+    expect(screen.getByText('0.0%', { selector: 'p' })).toBeTruthy()
+    expect(screen.getByText('실패 0 / 호출 15')).toBeTruthy()
+    // 실패가 많은 도구는 호출 상위 목록에 없는 소수 호출 도구도 올린다.
+    expect(screen.getByText('lsp_diagnostics')).toBeTruthy()
+    expect(screen.getByText('3/3 · 참고 · 호출 3')).toBeTruthy()
+    // 전체 보기에서는 에이전트별 비교 표가 있고, 행 버튼으로 에이전트를 고를 수 있다.
+    const table = screen.getByText('에이전트별 효율').closest('section')!
+    expect(within(table).getByRole('button', { name: 'bbokeoter' })).toBeTruthy()
+    expect(within(table).getByText('200 / 2건 · 참고')).toBeTruthy()
+    // 수집이 모두 정상이면 수집 끊김 섹션은 그리지 않는다.
+    expect(screen.queryByText('수집 끊김')).toBeNull()
+    // 금액은 어디에도 없다 (토큰만으로 비용처럼 표현하지 않는다).
+    expect(screen.queryByText(/₩|\$|USD|KRW|원\b/)).toBeNull()
+  })
+
+  it('수집이 끊긴 수집기는 마지막 정상 보고와 함께 맨 앞에 세운다', () => {
+    const stale: AxAgentReporterRow = {
+      ...reporter('bbokeoter', 'hermes', 1),
+      lastCollectedAt: '2026-08-31T04:00:00.000Z',
+      lastHealthyAt: '2026-08-30T04:00:00.000Z',
+      freshnessHours: 26,
+      freshness: 'stale',
+    }
+    render(<AgentActivityPanel data={{ ...DATA, reporters: [REPORTERS[0], stale] }} days={7} />)
+
+    const section = screen.getByText('수집 끊김').closest('section')!
+    expect(within(section).getByText('bbokeoter')).toBeTruthy()
+    expect(within(section).getByText(/마지막 정상 보고 .*26시간째 새 배치 없음/)).toBeTruthy()
+    expect(within(section).queryByText('bbodoong')).toBeNull()
   })
 
   it('실행 결과 테이블이 없으면 검증 지표를 0이 아니라 미관측으로 보여준다', () => {

@@ -141,13 +141,14 @@ export function DefinitionRows({
 }) {
   return (
     <div className="mt-3 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
+      {/* 도구·에이전트 ID처럼 띄어쓰기 없는 긴 제목이 좁은 화면에서 페이지를 가로로 늘리지 않게 줄바꿈을 허용한다 */}
       {rows.map((row, index) => (
         <div key={`${row.title}-${index}`} className="grid gap-1 py-3.5 md:grid-cols-[11rem_1fr] md:gap-6">
-          <div className="flex items-start justify-between gap-2 md:block">
-            <p className={`text-sm ${row.warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>{row.title}</p>
-            {row.badge && <span className="md:mt-1 md:block font-mono text-[10px] text-[var(--text-muted)]">{row.badge}</span>}
+          <div className="flex min-w-0 items-start justify-between gap-2 md:block">
+            <p className={`min-w-0 break-words text-sm ${row.warning ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}`}>{row.title}</p>
+            {row.badge && <span className="shrink-0 md:mt-1 md:block font-mono text-[10px] text-[var(--text-muted)]">{row.badge}</span>}
           </div>
-          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{row.detail}</p>
+          <p className="min-w-0 break-words text-sm leading-relaxed text-[var(--text-secondary)]">{row.detail}</p>
         </div>
       ))}
     </div>
