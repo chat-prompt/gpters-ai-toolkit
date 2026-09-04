@@ -5,16 +5,28 @@
  * 인벤토리를 GitHub API로 조회해 보여준다. AI Toolkit 카탈로그에 없다는 이유로
  * 사내 스킬 집계에서 빠지면 안 된다는 요구(DEV-4140)의 1단계 구현이다.
  *
- * 지금은 **인벤토리만** 연결돼 있다. 실행 이벤트 수집은 아직 계약이 없으므로
- * `eventsConnected: false`로 내려보내고 화면이 그 사실을 명시한다.
+ * 인벤토리에 **에이전트 스킬 로드 실측**을 붙인다(DEV-4221). 로드는 각 호스트의 텔레메트리
+ * 수집기가 보낸 배치(`ax_agent_telemetry_batches.skill_loads`)에서 오며, 에이전트가 서버로
+ * 이벤트를 직접 쓰는 별도 경로는 만들지 않았다.
+ *
+ * 스킬 신호를 관측할 수 있는 수집기의 배치가 하나도 없으면 `eventsConnected: false`로 내려보내
+ * 화면이 0 대신 "미관측"을 적게 한다.
  * 수집 계약 설계는 docs/plans/ax-shared-skills.md 참고.
  */
 
-import { db, catalogItems } from '@gpters/db'
-import { and, eq, isNull, or } from 'drizzle-orm'
+import { db, catalogItems, axAgentTelemetryBatches } from '@gpters/db'
+import { and, eq, gte, isNull, or } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelError, panelNotConfigured, panelOk } from './panel'
-import type { AxPanel, AxPanelMeta, AxPanelResult, AxSharedSkillRow, AxSharedSkillsData } from './types'
+import { batchObservesSkills } from './agent-activity'
+import type {
+  AxAgentTelemetrySource,
+  AxPanel,
+  AxPanelMeta,
+  AxPanelResult,
+  AxSharedSkillRow,
+  AxSharedSkillsData,
+} from './types'
 
 const log = createLogger('ax-shared-skills')
 
@@ -30,6 +42,117 @@ const META: AxPanelMeta = {
 
 /** 캐시 TTL — 5분. 저장소 인벤토리는 분 단위로 바뀌지 않는다 */
 const CACHE_TTL_MS = 5 * 60 * 1000
+
+/**
+ * 에이전트 스킬 로드 집계 창(일)
+ *
+ * 이 패널은 상단 기간 필터를 쓰지 않는 스냅숏이라 창을 코드에 고정하고 화면이 그 값을 적는다.
+ * 30일은 수집기 두 대의 현재 표본에서 스킬별 로드가 한 자릿수를 넘는 최소 구간이다.
+ */
+const USAGE_WINDOW_DAYS = 30
+
+/** 저장소 밖 로드 목록에 내려보내는 최대 줄 수 — 화면에서 판단에 쓰는 만큼만 */
+const UNMATCHED_LIMIT = 15
+
+/** 배치가 담고 있는 수집 소스 값 */
+const TELEMETRY_SOURCES: readonly AxAgentTelemetrySource[] = ['openclaw', 'claude-code', 'codex', 'hermes']
+
+/**
+ * 수집기가 보낸 스킬 ID를 저장소 디렉터리 이름에 맞춘다.
+ *
+ * 에이전트 런타임은 `openclaw-skills:session-cleanup`처럼 플러그인 네임스페이스를 붙여 보고하는데
+ * 저장소 인벤토리는 디렉터리 이름뿐이다. 마지막 `:` 뒤 조각으로 맞추되, 이렇게 이어진 항목은
+ * 같은 이름의 다른 스킬일 수 있으므로 화면에서 이름 매칭임을 밝힌다.
+ *
+ * @param raw - 배치의 `skillLoads[].skillId`
+ * @returns 네임스페이스를 뗀 이름
+ */
+export function normalizeSharedSkillId(raw: string): string {
+  const tail = raw.includes(':') ? raw.slice(raw.lastIndexOf(':') + 1) : raw
+  return tail.trim()
+}
+
+/** 스킬 하나에 대한 에이전트 로드 집계 */
+interface SkillUsage {
+  loads: number
+  agents: Set<string>
+  /** 마지막 로드가 담긴 수집 창의 끝 (epoch ms) */
+  lastAt: number
+  /** 네임스페이스를 뗀 이름으로 맞춘 로드가 섞여 있는지 */
+  byName: boolean
+}
+
+/** 텔레메트리 배치에서 모은 스킬 로드 */
+interface AgentSkillLoads {
+  /** 스킬 신호를 관측할 수 있는 배치가 하나라도 있었는지 */
+  observed: boolean
+  /** 그 배치를 보낸 에이전트 수 */
+  agents: number
+  /** 정규화한 스킬 이름 → 집계 */
+  byName: Map<string, SkillUsage>
+  /** 원본 skillId → 로드 수 (저장소 밖 판정에 쓴다) */
+  rawLoads: Map<string, number>
+}
+
+/**
+ * 최근 창의 에이전트 스킬 로드를 모은다.
+ *
+ * 한 배치는 내부 시간 분포를 보존하지 않는 집계 단위라, 기간 경계에 걸친 배치는 에이전트 활동
+ * 패널과 같은 규칙으로 통째로 제외한다(부분 배분은 사용량이 균등했다는 거짓 가정이다).
+ *
+ * 실패해도 패널을 죽이지 않는다 — 인벤토리는 그대로 쓸모가 있으므로 사용량만 포기한다.
+ * 구형 DB에 테이블이 없는 경우도 같은 경로다.
+ *
+ * @returns 조회하지 못했으면 null — 그때는 사용량을 0이 아니라 미관측으로 둔다
+ */
+async function loadAgentSkillLoads(): Promise<AgentSkillLoads | null> {
+  const cutoff = new Date(Date.now() - USAGE_WINDOW_DAYS * 86_400_000)
+  let rows: Array<typeof axAgentTelemetryBatches.$inferSelect>
+  try {
+    rows = await db.select().from(axAgentTelemetryBatches)
+      .where(gte(axAgentTelemetryBatches.windowEnd, cutoff))
+  } catch (error) {
+    log.warn('에이전트 스킬 로드 조회 실패 — 사용량 없이 인벤토리만 보여준다', { error })
+    return null
+  }
+
+  const result: AgentSkillLoads = { observed: false, agents: 0, byName: new Map(), rawLoads: new Map() }
+  const agents = new Set<string>()
+
+  for (const row of rows) {
+    if (new Date(row.windowStart).getTime() < cutoff.getTime()) continue
+
+    const collection = row.collection as Record<string, unknown> | null
+    const sourceValue = collection && typeof collection.source === 'string' ? collection.source : ''
+    if (!TELEMETRY_SOURCES.includes(sourceValue as AxAgentTelemetrySource)) continue
+    const source = sourceValue as AxAgentTelemetrySource
+    if (!batchObservesSkills(source, row.runtime)) continue
+
+    result.observed = true
+    agents.add(row.agentId)
+    const windowEnd = new Date(row.windowEnd).getTime()
+
+    for (const raw of row.skillLoads ?? []) {
+      const skillId = typeof raw.skillId === 'string' ? raw.skillId : ''
+      const loaded = Number(raw.loaded)
+      if (!skillId || !Number.isFinite(loaded) || loaded <= 0) continue
+
+      result.rawLoads.set(skillId, (result.rawLoads.get(skillId) ?? 0) + loaded)
+
+      const name = normalizeSharedSkillId(skillId)
+      if (!name) continue
+      const usage = result.byName.get(name) ?? { loads: 0, agents: new Set<string>(), lastAt: 0, byName: false }
+      usage.loads += loaded
+      usage.agents.add(row.agentId)
+      usage.lastAt = Math.max(usage.lastAt, windowEnd)
+      if (name !== skillId) usage.byName = true
+      result.byName.set(name, usage)
+    }
+  }
+
+  result.agents = agents.size
+  return result
+}
 
 /**
  * 커밋 일별 시리즈의 별도 캐시 TTL — 1시간
@@ -144,7 +267,8 @@ async function fetchCatalogSkillIds(): Promise<Set<string> | null> {
 export function extractSkills(
   tree: Array<{ path?: string; type?: string }>,
   skillsPath: string
-): Array<Omit<AxSharedSkillRow, 'inAitk'>> {
+  // 인벤토리 조회는 저장소만 본다. 겹침·사용량은 load()가 따로 붙인다
+): Array<Pick<AxSharedSkillRow, 'id' | 'path' | 'hasSkillDoc'>> {
   const prefix = `${skillsPath}/`
   const dirs = new Set<string>()
   const withDoc = new Set<string>()
@@ -402,21 +526,59 @@ export const sharedSkillsPanel: AxPanel<AxSharedSkillsData> = {
         log.warn('에이전트 스킬 저장소 트리가 잘려 일부만 표시된다', { repo, shown: inventory.length })
       }
 
-      // 팀 스킬(aitk)과 id가 겹치는 항목을 표시만 한다 — 수치 합산은 하지 않는다
-      const catalogIds = await fetchCatalogSkillIds()
-      const skills: AxSharedSkillRow[] = inventory.map((skill) => ({
-        ...skill,
-        inAitk: catalogIds !== null && catalogIds.has(skill.id),
-      }))
+      // 팀 스킬(aitk) 겹침과 에이전트 로드는 서로 독립이라 동시에 조회한다
+      const [catalogIds, usage] = await Promise.all([
+        fetchCatalogSkillIds(),
+        loadAgentSkillLoads(),
+      ])
+      const observed = usage?.observed === true
+
+      const skills: AxSharedSkillRow[] = inventory.map((skill) => {
+        const hit = usage?.byName.get(skill.id)
+        return {
+          ...skill,
+          inAitk: catalogIds !== null && catalogIds.has(skill.id),
+          // 관측 자체가 없으면 0이 아니라 null — 화면이 "미관측"으로 적는다
+          agentLoads: observed ? (hit?.loads ?? 0) : null,
+          agentCount: hit?.agents.size ?? 0,
+          lastLoadedAt: hit && hit.lastAt > 0 ? new Date(hit.lastAt).toISOString() : null,
+          matchedByName: hit?.byName === true,
+        }
+      })
       const aitkOverlap =
         catalogIds === null ? null : skills.filter((skill) => skill.inAitk).length
 
-      // 에이전트 활동 잔디 — 실행 이벤트가 붙기 전까지의 프록시(저장소 커밋)
+      // 저장소 밖 로드 — 감추면 저장소 스킬의 0이 계측 누락처럼 읽힌다
+      const inventoryIds = new Set(inventory.map((skill) => skill.id))
+      const unmatchedLoads = observed
+        ? [...(usage?.rawLoads ?? new Map<string, number>())]
+            .filter(([id]) => !inventoryIds.has(normalizeSharedSkillId(id)))
+            .map(([id, loads]) => ({ id, loads }))
+            .sort((a, b) => b.loads - a.loads || a.id.localeCompare(b.id))
+        : []
+      const totalObservedLoads = observed
+        ? [...(usage?.rawLoads.values() ?? [])].reduce((sum, loads) => sum + loads, 0)
+        : 0
+      const matchedLoads = totalObservedLoads - unmatchedLoads.reduce((sum, row) => sum + row.loads, 0)
+
+      // 에이전트 활동 잔디 — 저장소 커밋 리듬(스킬 실행 횟수가 아니다)
       const commitDaily = await fetchCommitActivity(repo, token)
 
       const result = panelOk(
         META,
-        { repo, skills, aitkOverlap, commitDaily, eventsConnected: false, truncated },
+        {
+          repo,
+          skills,
+          aitkOverlap,
+          commitDaily,
+          eventsConnected: observed,
+          usageWindowDays: USAGE_WINDOW_DAYS,
+          observedAgents: usage?.agents ?? 0,
+          matchedLoads,
+          totalObservedLoads,
+          unmatchedLoads: unmatchedLoads.slice(0, UNMATCHED_LIMIT),
+          truncated,
+        },
         [{ label: '에이전트 스킬', value: skills.length.toLocaleString('ko-KR'), hint: '개' }]
       )
       // 커밋 시리즈 실패는 시리즈 캐시가 1시간 부정 캐시로 관리한다 — 패널 캐시는 단순하게 둔다
