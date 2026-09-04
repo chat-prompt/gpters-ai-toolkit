@@ -1,4 +1,12 @@
 // @vitest-environment node
+
+/**
+ * 카탈로그 CRUD API 통합 테스트.
+ *
+ * 이 스위트는 실제 서버에 항목을 **생성한다.** 격리된 일회용 DB를 보는 서버에만 돌린다
+ * (`TEST_API_URL`·`TEST_DATABASE_URL`·`CONFIRM_ISOLATED_API_TESTS`). 운영·공유 DB에 돌리면
+ * 만든 항목이 카탈로그에 남는다.
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
@@ -12,9 +20,53 @@ async function isServerRunning(): Promise<boolean> {
   }
 }
 
+/**
+ * 이 스위트가 만든 항목 id 전부.
+ *
+ * 개별 it 안의 정리는 그 위의 expect가 하나라도 실패하면 실행되지 않는다. 2026-08-19에 그렇게
+ * 30건(skill 21 · agent 6 · command 3)이 운영 카탈로그에 남았다. 그래서 정리는 개별 블록이 아니라
+ * afterAll 한 곳에서 책임진다.
+ */
+const createdItemIds = new Set<string>()
+
+/**
+ * 만든 항목을 정리 목록에 올린다.
+ *
+ * 요청을 보내기 **전에** id를 등록해야 한다. 응답을 본 뒤에 등록하면 그 사이 assertion이 실패했을 때
+ * 이미 만들어진 항목을 놓친다.
+ *
+ * @param id - 만들려는 카탈로그 항목 id
+ * @returns 그대로 돌려준 id (payload에 인라인으로 쓰기 위해)
+ */
+function trackTestItem(id: string): string {
+  createdItemIds.add(id)
+  return id
+}
+
+/**
+ * 항목 하나를 지우고 정말 사라졌는지 확인한다.
+ *
+ * DELETE 응답만 믿지 않는다 — 조직 소유 검사에 걸리면 404가 오는데, 그건 "없다"와 구분되지 않는다.
+ * 그래서 GET으로 부재를 직접 확인한다.
+ *
+ * @param id - 지울 카탈로그 항목 id
+ * @returns 카탈로그에서 사라졌으면 true
+ */
+async function removeTestItem(id: string): Promise<boolean> {
+  try {
+    await fetch(`${API_BASE_URL}/api/catalog/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-test-user-role': 'admin' },
+    })
+    const check = await fetch(`${API_BASE_URL}/api/catalog/${id}`)
+    return check.status === 404
+  } catch {
+    return false
+  }
+}
+
 describe('Catalog CRUD API', () => {
   let serverAvailable = false
-  let testItemId: string | null = null
 
   beforeAll(async () => {
     serverAvailable = await isServerRunning()
@@ -24,18 +76,20 @@ describe('Catalog CRUD API', () => {
   })
 
   afterAll(async () => {
-    // Cleanup: delete test item if it exists
-    if (serverAvailable && testItemId) {
-      try {
-        await fetch(`${API_BASE_URL}/api/catalog/${testItemId}`, {
-          method: 'DELETE',
-          headers: {
-            'x-test-user-role': 'admin',
-          },
-        })
-      } catch (error) {
-        console.log('Failed to cleanup test item:', error)
-      }
+    if (!serverAvailable) return
+
+    const leaked: string[] = []
+    for (const id of createdItemIds) {
+      if (!(await removeTestItem(id))) leaked.push(id)
+    }
+    createdItemIds.clear()
+
+    // 조용히 넘기지 않는다. 여기서 남은 항목은 운영 카탈로그에 그대로 쌓이고,
+    // 지표 분모(전체 스킬 수)까지 오염시킨다.
+    if (leaked.length > 0) {
+      throw new Error(
+        `테스트 항목 ${leaked.length}건이 카탈로그에 남았다. 직접 지워야 한다: ${leaked.join(', ')}`
+      )
     }
   })
 
@@ -44,7 +98,7 @@ describe('Catalog CRUD API', () => {
       if (!serverAvailable) return
 
       const newItem = {
-        id: `test-skill-${Date.now()}`,
+        id: trackTestItem(`test-skill-${Date.now()}`),
         type: 'skill',
         name: 'Test Skill',
         description: 'A test skill for API testing',
@@ -72,16 +126,13 @@ describe('Catalog CRUD API', () => {
       expect(data.name).toBe(newItem.name)
       expect(data.type).toBe(newItem.type)
       expect(data.description).toBe(newItem.description)
-
-      // Store test item ID for cleanup
-      testItemId = newItem.id
     })
 
     it('should fail to create item without admin password', async () => {
       if (!serverAvailable) return
 
       const newItem = {
-        id: `test-skill-unauthorized-${Date.now()}`,
+        id: trackTestItem(`test-skill-unauthorized-${Date.now()}`),
         type: 'skill',
         name: 'Unauthorized Test',
         content: 'Test content',
@@ -104,7 +155,7 @@ describe('Catalog CRUD API', () => {
       if (!serverAvailable) return
 
       const newItem = {
-        id: `test-skill-wrong-password-${Date.now()}`,
+        id: trackTestItem(`test-skill-wrong-password-${Date.now()}`),
         type: 'skill',
         name: 'Wrong Password Test',
         content: 'Test content',
@@ -149,7 +200,7 @@ describe('Catalog CRUD API', () => {
       if (!serverAvailable) return
 
       const agentItem = {
-        id: `test-agent-${Date.now()}`,
+        id: trackTestItem(`test-agent-${Date.now()}`),
         type: 'agent',
         name: 'Test Agent',
         description: 'A test agent',
@@ -190,7 +241,7 @@ describe('Catalog CRUD API', () => {
       if (!serverAvailable) return
 
       const commandItem = {
-        id: `test-command-${Date.now()}`,
+        id: trackTestItem(`test-command-${Date.now()}`),
         type: 'command',
         name: 'Test Command',
         description: 'A test command',
@@ -234,7 +285,7 @@ describe('Catalog CRUD API', () => {
 
       // Create a test item for GET tests
       const newItem = {
-        id: `test-get-skill-${Date.now()}`,
+        id: trackTestItem(`test-get-skill-${Date.now()}`),
         type: 'skill',
         name: 'Test GET Skill',
         description: 'Test item for GET operation',
@@ -298,7 +349,7 @@ describe('Catalog CRUD API', () => {
 
       // Create a test item for PUT tests
       const newItem = {
-        id: `test-put-skill-${Date.now()}`,
+        id: trackTestItem(`test-put-skill-${Date.now()}`),
         type: 'skill',
         name: 'Test PUT Skill',
         description: 'Original description',
@@ -452,7 +503,7 @@ describe('Catalog CRUD API', () => {
 
       // Create an item to delete
       const newItem = {
-        id: `test-delete-skill-${Date.now()}`,
+        id: trackTestItem(`test-delete-skill-${Date.now()}`),
         type: 'skill',
         name: 'Test DELETE Skill',
         content: '# Test Content',
@@ -492,7 +543,7 @@ describe('Catalog CRUD API', () => {
 
       // Create an item first
       const newItem = {
-        id: `test-delete-unauthorized-${Date.now()}`,
+        id: trackTestItem(`test-delete-unauthorized-${Date.now()}`),
         type: 'skill',
         name: 'Test Unauthorized DELETE',
         content: '# Test Content',
@@ -550,7 +601,7 @@ describe('Catalog CRUD API', () => {
 
       // Create test items with different types and authors
       const skillItem = {
-        id: `test-filter-skill-${Date.now()}`,
+        id: trackTestItem(`test-filter-skill-${Date.now()}`),
         type: 'skill',
         name: 'Test Filter Skill',
         author: 'test-author',
@@ -559,7 +610,7 @@ describe('Catalog CRUD API', () => {
       }
 
       const agentItem = {
-        id: `test-filter-agent-${Date.now()}`,
+        id: trackTestItem(`test-filter-agent-${Date.now()}`),
         type: 'agent',
         name: 'Test Filter Agent',
         author: 'test-author',
@@ -568,7 +619,7 @@ describe('Catalog CRUD API', () => {
       }
 
       const authorItem = {
-        id: `test-filter-author-${Date.now()}`,
+        id: trackTestItem(`test-filter-author-${Date.now()}`),
         type: 'skill',
         name: 'Test Author Filter Skill',
         author: 'primadonna',
