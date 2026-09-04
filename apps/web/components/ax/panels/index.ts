@@ -15,6 +15,7 @@ import { RetentionPanel } from './RetentionPanel'
 import { JourneyInsightsPanel } from './JourneyInsightsPanel'
 import { SharedSkillsPanel } from './SharedSkillsPanel'
 import { SkillDiffPanel } from './SkillDiffPanel'
+import { SkillDuplicatesPanel } from './SkillDuplicatesPanel'
 import { VercelProjectsPanel } from './VercelProjectsPanel'
 import { SubscriptionsPanel } from './SubscriptionsPanel'
 import { ClientUsagePanel } from './ClientUsagePanel'
@@ -38,6 +39,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   'journey-insights': JourneyInsightsPanel,
   'shared-skills': SharedSkillsPanel,
   'skill-diff': SkillDiffPanel,
+  'skill-duplicates': SkillDuplicatesPanel,
   'vercel-deployments': VercelProjectsPanel,
   subscriptions: SubscriptionsPanel,
   'client-usage': ClientUsagePanel,
@@ -63,6 +65,7 @@ export {
   JourneyInsightsPanel,
   SharedSkillsPanel,
   SkillDiffPanel,
+  SkillDuplicatesPanel,
   VercelProjectsPanel,
   SubscriptionsPanel,
   ClientUsagePanel,

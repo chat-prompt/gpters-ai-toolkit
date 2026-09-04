@@ -15,6 +15,14 @@ export { skillRetentionPanel, buildRetentionData } from './retention'
 export { journeyInsightsPanel } from './journey-insights'
 export { sharedSkillsPanel } from './shared-skills'
 export { skillDiffPanel } from './skill-diff'
+export {
+  skillDuplicatesPanel,
+  findDuplicatePairs,
+  groupDuplicates,
+  bottomKSketch,
+  sketchOverlap,
+  __resetSkillDuplicateCache,
+} from './skill-duplicates'
 export { vercelDeploymentsPanel } from './vercel'
 export { subscriptionsPanel } from './subscriptions'
 export { clientUsagePanel } from './usage'

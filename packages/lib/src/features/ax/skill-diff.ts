@@ -72,13 +72,18 @@ export function normalizeSkillDoc(text: string | null | undefined): string {
  * difflib류 시퀀스 비교보다 훨씬 싸고, "드리프트된 같은 문서 vs 완전 다른 문서"를
  * 가르는 데는 충분하다. 화면에는 지표 이름을 그대로 밝힌다.
  *
+ * 기본 절단(8,000자)은 이 패널의 교차 비교 비용을 잡기 위한 것이다. 절단은 오탐을 만든다 —
+ * 도입부가 비슷하고 본론이 다른 긴 문서가 동일해 보인다. 절단 없이 비교해야 하는 쪽은
+ * `cap`에 `Infinity`를 넘긴다 (카탈로그 내부 중복 패널이 그렇게 쓴다).
+ *
  * @param a - 정규화된 본문 A
  * @param b - 정규화된 본문 B
+ * @param cap - 비교에 쓸 최대 길이 (기본 8,000자)
  * @returns 유사도 0~1
  */
-export function trigramSimilarity(a: string, b: string): number {
-  const textA = a.slice(0, SIMILARITY_TEXT_CAP)
-  const textB = b.slice(0, SIMILARITY_TEXT_CAP)
+export function trigramSimilarity(a: string, b: string, cap: number = SIMILARITY_TEXT_CAP): number {
+  const textA = a.slice(0, cap)
+  const textB = b.slice(0, cap)
   if (textA === textB) return 1
   if (textA.length < 3 || textB.length < 3) return 0
 

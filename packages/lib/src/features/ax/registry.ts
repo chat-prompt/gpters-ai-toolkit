@@ -20,6 +20,7 @@ import { skillRetentionPanel } from './retention'
 import { journeyInsightsPanel } from './journey-insights'
 import { sharedSkillsPanel } from './shared-skills'
 import { skillDiffPanel } from './skill-diff'
+import { skillDuplicatesPanel } from './skill-duplicates'
 import { vercelDeploymentsPanel } from './vercel'
 import { subscriptionsPanel } from './subscriptions'
 import { clientUsagePanel } from './usage'
@@ -36,6 +37,7 @@ export const AX_PANELS: AxPanel[] = [
   agentActivityPanel,
   sharedSkillsPanel,
   skillDiffPanel,
+  skillDuplicatesPanel,
   clientUsagePanel,
   subscriptionsPanel,
   vercelDeploymentsPanel,
