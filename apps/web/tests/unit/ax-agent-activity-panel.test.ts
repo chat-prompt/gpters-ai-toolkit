@@ -137,7 +137,17 @@ describe('agentActivityPanel', () => {
       verifiedSkills: 1,
       linkedLoads: 1,
       linkedVerifiedSuccesses: 1,
+      // 탐색·결과 분석과 같은 정의: 검증 결과가 null인 failed는 분모에 들어가지 않는다.
+      verifiedAttempts: 1,
+      verifiedSuccesses: 1,
     })
+    // 검증 성공 1건당 처리 토큰 = 총 처리 토큰 ÷ 검증 성공. thinking은 이미 중복 제거된 110이다.
+    expect(result.data!.efficiency).toMatchObject({
+      tokensPerVerifiedSuccess: 110,
+      skillLoadTotals: { loaded: 2, failed: 1, interrupted: 0 },
+      failingSkills: [{ skillId: 'broken-load', loaded: 0, failed: 1, interrupted: 0 }],
+    })
+    expect(result.data!.efficiency.failingTools.map((row) => row.name)).toEqual(['Bash', 'CommandExecution'])
     expect(result.data!.reporters).toHaveLength(2)
     expect(result.data!.agents).toEqual([
       expect.objectContaining({
@@ -163,11 +173,67 @@ describe('agentActivityPanel', () => {
     ])
   })
 
-  it('12시간 넘은 reporter를 stale로 표시한다', async () => {
+  it('12시간 넘은 reporter를 stale로 표시하고 지연 인사이트에 에이전트 이름을 적는다', async () => {
     queueRows([row({ collectedAt: new Date('2026-08-26T00:00:00Z') })])
     const result = await agentActivityPanel.load({ days: 7, isAdmin: true })
     expect(result.data!.reporters[0]).toMatchObject({ freshness: 'stale', freshnessHours: 24 })
-    expect(result.data!.insights.some((item) => item.title === '수집 지연')).toBe(true)
+    const insight = result.data!.insights.find((item) => item.title === '수집 지연')
+    expect(insight?.detail).toContain('bbodoong')
+  })
+
+  it('실패가 많은 도구는 호출 상위 목록과 별개로 실패 건수 순으로 세운다', async () => {
+    queueRows([row({
+      tools: [
+        { name: 'Bash', calls: 100, failures: 2 },
+        { name: 'lsp_diagnostics', calls: 3, failures: 3 },
+        { name: 'Read', calls: 50, failures: 0 },
+      ],
+      skillLoads: [
+        { skillId: 'browse', loaded: 8, failed: 0, interrupted: 0 },
+        { skillId: 'flaky', loaded: 1, failed: 2, interrupted: 0 },
+      ],
+    })])
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+    expect(result.data!.tools[0].name).toBe('Bash')
+    expect(result.data!.efficiency.failingTools).toEqual([
+      { name: 'lsp_diagnostics', calls: 3, failures: 3, failureRate: 100 },
+      { name: 'Bash', calls: 100, failures: 2, failureRate: 2 },
+    ])
+    expect(result.data!.efficiency.failingSkills).toEqual([{ skillId: 'flaky', loaded: 1, failed: 2, interrupted: 0 }])
+    expect(result.data!.efficiency.skillLoadTotals).toEqual({ loaded: 9, failed: 2, interrupted: 0 })
+    // 검증 성공이 없으면 1건당 토큰은 0이 아니라 null이다.
+    expect(result.data!.efficiency.tokensPerVerifiedSuccess).toBeNull()
+    expect(result.data!.agents[0].efficiency.failingTools[0].name).toBe('lsp_diagnostics')
+  })
+
+  it('마지막 정상 보고는 healthy 배치·수집기 성공만 세고 차단 배치는 앞당기지 않는다', async () => {
+    queueRows([
+      row({
+        collectedAt: new Date('2026-08-26T20:00:00Z'),
+        collection: { source: 'claude-code', recordsRead: 100, parseFailures: 0, unsupportedRecordsSkipped: 0, healthStatus: 'healthy', healthWarnings: [] },
+      }),
+      row({
+        collectedAt: new Date('2026-08-26T23:00:00Z'),
+        collection: { source: 'claude-code', recordsRead: 10, parseFailures: 0, unsupportedRecordsSkipped: 0, healthStatus: 'blocked', healthWarnings: ['no-turns-from-records'] },
+      }),
+    ], [], [{
+      collectorId: 'col-1',
+      agentId: 'bbodoong',
+      source: 'claude-code',
+      intervalSeconds: 3600,
+      lastSuccessAt: new Date('2026-08-26T23:00:00Z'),
+      lastSeenAt: new Date('2026-08-26T23:30:00Z'),
+      lastHealthStatus: 'blocked',
+      lastHealthWarnings: ['no-turns-from-records'],
+      createdAt: new Date('2026-08-20T00:00:00Z'),
+    }])
+    const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+    expect(result.data!.reporters[0]).toMatchObject({
+      lastCollectedAt: '2026-08-26T23:00:00.000Z',
+      lastHealthyAt: '2026-08-26T20:00:00.000Z',
+      lastSeenAt: '2026-08-26T23:30:00.000Z',
+      healthStatus: 'blocked',
+    })
   })
 
   it('기간 경계에 걸친 초기 backfill batch는 합계에서 보수적으로 제외한다', async () => {

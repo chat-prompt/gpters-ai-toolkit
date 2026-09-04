@@ -5,10 +5,14 @@ import { eq, gte, sql } from 'drizzle-orm'
 import type {
   AxAgentActivityAgentRow,
   AxAgentActivityData,
+  AxAgentEfficiency,
   AxAgentReporterRow,
+  AxAgentSkillLoadRow,
   AxAgentSourceCoverageRow,
   AxAgentTelemetrySource,
   AxAgentTokenUsage,
+  AxAgentToolRow,
+  AxAgentVerifiedExecutions,
   AxPanel,
   AxPanelContext,
   AxPanelMeta,
@@ -46,7 +50,7 @@ const SOURCE_INFO: Record<AxAgentTelemetrySource, Omit<AxAgentSourceCoverageRow,
   },
   hermes: {
     capabilities: { usage: true, tools: true, skills: true },
-    note: 'SQLite 누적 사용량의 증분·사용자 턴·도구 호출을 수집하고, skill_view가 SKILL.md를 연 호출을 스킬 로드로 셉니다. 추론 토큰 포함 관계는 아직 미확정입니다',
+    note: 'SQLite 누적 사용량의 증분·사용자 턴·도구 호출을 수집하고, skill_view가 SKILL.md를 연 호출을 스킬 로드로 셉니다. 추론 토큰 포함 관계는 아직 미확정이고, 도구 실패 판정은 실제 실패 사례로 검증되지 않았습니다',
   },
 }
 
@@ -164,13 +168,13 @@ interface AgentAccumulator {
   skills: Map<string, { loaded: number; failed: number; interrupted: number }>
   skillLoadsObserved: boolean
   observedExecutions: Map<string, { status: string; evidence: string; count: number }>
-  verifiedExecutions: AxAgentActivityAgentRow['verifiedExecutions']
+  verifiedExecutions: AxAgentVerifiedExecutions
   executionSkillIds: Set<string>
   verifiedSkillIds: Set<string>
   collection: AxAgentActivityAgentRow['collection']
 }
 
-function emptyVerifiedExecutions(): AxAgentActivityAgentRow['verifiedExecutions'] {
+function emptyVerifiedExecutions(): AxAgentVerifiedExecutions {
   return {
     attempts: 0,
     success: 0,
@@ -183,7 +187,49 @@ function emptyVerifiedExecutions(): AxAgentActivityAgentRow['verifiedExecutions'
     verifiedSkills: 0,
     linkedLoads: 0,
     linkedVerifiedSuccesses: 0,
+    verifiedAttempts: 0,
+    verifiedSuccesses: 0,
   }
+}
+
+/** 도구 목록을 실패 건수 순으로 — 호출 상위 20개에서 잘리는 소수 호출·전량 실패 도구가 빠지지 않는다. */
+function rankFailingTools(tools: Map<string, { calls: number; failures: number }>): AxAgentToolRow[] {
+  return [...tools.entries()]
+    .filter(([, metric]) => metric.failures > 0)
+    .map(([name, metric]) => ({
+      name,
+      ...metric,
+      failureRate: metric.calls > 0 ? Math.round((metric.failures / metric.calls) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.failures - a.failures || b.failureRate - a.failureRate || a.name.localeCompare(b.name))
+    .slice(0, 12)
+}
+
+/** 실패·중단이 있는 스킬만 실패+중단 내림차순으로 */
+function rankFailingSkills(skills: Map<string, { loaded: number; failed: number; interrupted: number }>): AxAgentSkillLoadRow[] {
+  return [...skills.entries()]
+    .filter(([, metric]) => metric.failed + metric.interrupted > 0)
+    .map(([skillId, metric]) => ({ skillId, ...metric }))
+    .sort((a, b) => (b.failed + b.interrupted) - (a.failed + a.interrupted) || a.skillId.localeCompare(b.skillId))
+    .slice(0, 12)
+}
+
+function skillLoadTotals(skills: Map<string, { loaded: number; failed: number; interrupted: number }>): AxAgentEfficiency['skillLoadTotals'] {
+  const totals = { loaded: 0, failed: 0, interrupted: 0 }
+  for (const metric of skills.values()) {
+    totals.loaded += metric.loaded
+    totals.failed += metric.failed
+    totals.interrupted += metric.interrupted
+  }
+  return totals
+}
+
+/**
+ * 검증 성공 1건당 처리 토큰 — 성공이 0건이면 null. thinking 중복 합산은 `processedTokens`가 이미 뺐다.
+ * 검증 성공은 서버 실행 보고에서만 오고 토큰은 텔레메트리에서만 오지만, 둘 다 같은 agentId로 묶인 값이다.
+ */
+function tokensPerVerifiedSuccess(totalProcessed: number, verifiedSuccesses: number): number | null {
+  return verifiedSuccesses > 0 ? Math.round(totalProcessed / verifiedSuccesses) : null
 }
 
 function createAgentAccumulator(agentId: string): AgentAccumulator {
@@ -233,12 +279,21 @@ function finalizeAgent(accumulator: AgentAccumulator): AxAgentActivityAgentRow {
     observedExecutionReports: [...accumulator.observedExecutions.values()]
       .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status)),
     verifiedExecutions: accumulator.verifiedExecutions,
+    efficiency: {
+      tokensPerVerifiedSuccess: tokensPerVerifiedSuccess(
+        processedTokens(accumulator.totalUsage),
+        accumulator.verifiedExecutions.verifiedSuccesses,
+      ),
+      failingTools: rankFailingTools(accumulator.tools),
+      failingSkills: rankFailingSkills(accumulator.skills),
+      skillLoadTotals: skillLoadTotals(accumulator.skills),
+    },
     collection: accumulator.collection,
   }
 }
 
 function addVerifiedExecution(
-  target: AxAgentActivityAgentRow['verifiedExecutions'],
+  target: AxAgentVerifiedExecutions,
   execution: {
     skillId: string
     status: string
@@ -257,7 +312,13 @@ function addVerifiedExecution(
   }
   if (execution.validationMethod !== 'none' && execution.validationPassed !== null) target.withEvidence += 1
   if (execution.linkedLoad) target.linkedLoads += 1
+  // 탐색·결과 분석과 같은 정의: 끝난 시도(success·partial·failed) 중 검증 결과가 기록된 것만 분모로 삼는다.
+  if ((execution.status === 'success' || execution.status === 'partial' || execution.status === 'failed') &&
+    execution.validationPassed !== null) {
+    target.verifiedAttempts += 1
+  }
   if (execution.status === 'success' && execution.validationPassed === true) {
+    target.verifiedSuccesses += 1
     verifiedSkillIds.add(execution.skillId)
     if (execution.linkedLoad) target.linkedVerifiedSuccesses += 1
   }
@@ -318,6 +379,7 @@ async function loadCollectors(): Promise<{
     source: string
     intervalSeconds: number
     lastSuccessAt: Date | null
+    lastSeenAt: Date | null
     lastHealthStatus: string | null
     lastHealthWarnings: string[]
     createdAt: Date
@@ -330,6 +392,7 @@ async function loadCollectors(): Promise<{
       source: axAgentTelemetryCollectors.source,
       intervalSeconds: axAgentTelemetryCollectors.intervalSeconds,
       lastSuccessAt: axAgentTelemetryCollectors.lastSuccessAt,
+      lastSeenAt: axAgentTelemetryCollectors.lastSeenAt,
       lastHealthStatus: axAgentTelemetryCollectors.lastHealthStatus,
       lastHealthWarnings: axAgentTelemetryCollectors.lastHealthWarnings,
       createdAt: axAgentTelemetryCollectors.createdAt,
@@ -440,12 +503,18 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         toolCalls: 0,
         toolFailures: 0,
         healthWarnings: [],
+        lastHealthyAt: null,
+        lastSeenAt: null,
       }
       reporter.sessions += number(row.sessions)
       reporter.turns += number(row.turns)
       addUsage(reporter.usage, usage)
       if (!reporter.lastCollectedAt || collectedAt > new Date(reporter.lastCollectedAt).getTime()) {
         reporter.lastCollectedAt = new Date(collectedAt).toISOString()
+      }
+      if (collection.healthStatus === 'healthy' &&
+        (!reporter.lastHealthyAt || collectedAt > new Date(reporter.lastHealthyAt).getTime())) {
+        reporter.lastHealthyAt = new Date(collectedAt).toISOString()
       }
       const warnings = Array.isArray(collection.healthWarnings)
         ? collection.healthWarnings.filter((item): item is string => typeof item === 'string')
@@ -557,14 +626,22 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         toolCalls: 0,
         toolFailures: 0,
         healthWarnings: [],
+        lastHealthyAt: null,
+        lastSeenAt: null,
       }
       reporter.collectorId = collector.collectorId
       reporter.managed = true
       reporter.intervalSeconds = collector.intervalSeconds
+      if (collector.lastSeenAt) reporter.lastSeenAt = new Date(collector.lastSeenAt).toISOString()
       if (collector.lastSuccessAt) {
         const lastSuccess = new Date(collector.lastSuccessAt).getTime()
         if (!reporter.lastCollectedAt || lastSuccess > new Date(reporter.lastCollectedAt).getTime()) {
           reporter.lastCollectedAt = new Date(lastSuccess).toISOString()
+        }
+        // 수집기의 마지막 성공이 healthy였다면 그 시각이 마지막 정상 보고다. blocked였다면 기간 내 healthy batch만 남는다.
+        if (collector.lastHealthStatus === 'healthy' &&
+          (!reporter.lastHealthyAt || lastSuccess > new Date(reporter.lastHealthyAt).getTime())) {
+          reporter.lastHealthyAt = new Date(lastSuccess).toISOString()
         }
         sourceLatest.set(collectorSource, Math.max(sourceLatest.get(collectorSource) ?? 0, lastSuccess))
         syncedAt = Math.max(syncedAt, lastSuccess)
@@ -622,7 +699,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20)
     const observedExecutionReports = [...observedExecutionMap.values()]
       .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status))
-    const verifiedExecutions: AxAgentActivityData['verifiedExecutions'] = emptyVerifiedExecutions()
+    const verifiedExecutions: AxAgentVerifiedExecutions = emptyVerifiedExecutions()
     const executionSkillIds = new Set<string>()
     const verifiedSkillIds = new Set<string>()
     let excludedUnregisteredExecutions = 0
@@ -643,6 +720,12 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const agents = [...agentMap.values()].map(finalizeAgent)
       .sort((a, b) => b.totalProcessedTokens - a.totalProcessedTokens || a.agentId.localeCompare(b.agentId))
     const total = processedTokens(totalUsage)
+    const efficiency: AxAgentEfficiency = {
+      tokensPerVerifiedSuccess: tokensPerVerifiedSuccess(total, verifiedExecutions.verifiedSuccesses),
+      failingTools: rankFailingTools(toolMap),
+      failingSkills: rankFailingSkills(skillMap),
+      skillLoadTotals: skillLoadTotals(skillMap),
+    }
     const insights: AxAgentActivityData['insights'] = []
 
     if (excludedBoundaryBatches > 0) {
@@ -670,13 +753,17 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     }
     const stale = reporters.filter((row) => row.freshness === 'stale')
     if (stale.length > 0) {
-      insights.push({ severity: 'warning', title: '수집 지연', detail: `${stale.length}개 수집기가 허용된 두 번의 수집 주기 안에 새 배치를 보내지 않았습니다.` })
+      insights.push({
+        severity: 'warning',
+        title: '수집 지연',
+        detail: `${stale.map((row) => row.agentId).join(', ')} — ${stale.length}개 수집기가 허용된 두 번의 수집 주기 안에 새 배치를 보내지 않았습니다. 해당 에이전트의 수치는 마지막 정상 보고까지만 반영합니다.`,
+      })
     }
     const waiting = reporters.filter((row) => row.freshness === 'waiting')
     if (waiting.length > 0) {
       insights.push({ severity: 'info', title: '첫 수집 대기', detail: `${waiting.length}개 수집기가 설치됐지만 아직 첫 정상 배치를 보내지 않았습니다.` })
     }
-    const failureHotspot = tools.find((row) => row.calls >= 10 && row.failureRate >= 5)
+    const failureHotspot = efficiency.failingTools.find((row) => row.calls >= 10 && row.failureRate >= 5)
     if (failureHotspot) {
       insights.push({
         severity: 'opportunity',
@@ -747,6 +834,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       observedExecutionReports,
       verifiedExecutionsAvailable: executionResult.available,
       verifiedExecutions,
+      efficiency,
       collection: { batches: rows.length, recordsRead, parseFailures, unsupportedRecordsSkipped },
       insights,
     }, [
