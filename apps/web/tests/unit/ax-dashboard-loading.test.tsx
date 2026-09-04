@@ -358,7 +358,7 @@ describe('AxDashboard 패널 요청', () => {
       origins: {
         searchRequests: 4,
         loads: { fromSearch: 6, direct: 4, unlinkable: 10 },
-        applies: { fromSearch: 20, afterDirectLoad: 10, withoutLoad: 15, unlinkable: 20 },
+        applies: { fromSearch: 20, afterDirectLoad: 10, withoutLoad: 15, afterLoadInferred: 0, unlinkable: 20 },
       },
       skills: [],
       daily: [
@@ -555,7 +555,7 @@ describe('AxDashboard 패널 요청', () => {
       origins: {
         searchRequests: 2,
         loads: { fromSearch: 1, direct: 1, unlinkable: 0 },
-        applies: { fromSearch: 1, afterDirectLoad: 1, withoutLoad: 2, unlinkable: 0 },
+        applies: { fromSearch: 1, afterDirectLoad: 1, withoutLoad: 2, afterLoadInferred: 0, unlinkable: 0 },
       },
       skills: [], daily: [], totalUnusedSkills: 0, unusedSkills: [],
     }

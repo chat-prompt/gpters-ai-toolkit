@@ -75,6 +75,9 @@ const FUNNEL_APPLY_COLOR = 'var(--accent-orange)'
  * 각 칸의 비율은 직전 단계 대비 전환율이고, 막대 길이도 그 비율이다. 경로의 첫 칸은 기준선이라
  * 값이 있으면 꽉 차고 0이면 비어 있다. 흐름(journey, 없으면 session) ID가 없어 경로를 판정할
  * 수 없는 로드·적용은 막대 없이 마지막 줄에 따로 적고 비율에서 뺀다.
+ *
+ * 직접 경로의 적용에는 흐름 ID 없이 온 보고 중 같은 사람이 24시간 안에 그 스킬을 로드한 건이 함께 들어간다.
+ * 구버전 CLI가 흐름 ID를 보내지 않아 생기는 과소 집계를 줄이려는 것이며, 힌트와 툴팁에서 직접 연결과 구분한다.
  */
 export function SkillEventSummary({
   origins,
@@ -126,9 +129,18 @@ export function SkillEventSummary({
         },
         {
           label: '적용 보고',
-          value: applies.afterDirectLoad,
+          value: applies.afterDirectLoad + applies.afterLoadInferred,
           color: FUNNEL_APPLY_COLOR,
           previous: { label: '검색 없는 로드', value: loads.direct },
+          ...(applies.afterLoadInferred > 0
+            ? {
+                hint: `직접 연결 ${formatCount(applies.afterDirectLoad)}건 · 추정 ${formatCount(applies.afterLoadInferred)}건`,
+                extraRows: [
+                  { label: '흐름 ID로 직접 연결', value: `${formatCount(applies.afterDirectLoad)}건` },
+                  { label: '24시간 내 로드로 추정', value: `${formatCount(applies.afterLoadInferred)}건` },
+                ],
+              }
+            : {}),
         },
       ],
     },
@@ -230,7 +242,7 @@ export function SkillEventSummary({
           연결 불가 · 로드 {formatCount(loads.unlinkable)}건 · 적용 {formatCount(applies.unlinkable)}건
           {applies.withoutLoad > 0 && ` · 로드 없이 적용 ${formatCount(applies.withoutLoad)}건`}
         </span>
-        {' '}세션 ID가 없어 경로를 판정할 수 없는 보고라 위 비율에서 뺐습니다.
+        {' '}흐름 ID가 없고 적용은 최근 로드 기록도 없어 경로를 판정할 수 없는 보고라 위 비율에서 뺐습니다.
       </p>
     </div>
   )

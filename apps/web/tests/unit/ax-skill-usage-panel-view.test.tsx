@@ -15,7 +15,7 @@ const DATA: AxSkillUsageData = {
   origins: {
     searchRequests: 12,
     loads: { fromSearch: 5, direct: 3, unlinkable: 12 },
-    applies: { fromSearch: 2, afterDirectLoad: 1, withoutLoad: 3, unlinkable: 4 },
+    applies: { fromSearch: 2, afterDirectLoad: 1, withoutLoad: 3, afterLoadInferred: 6, unlinkable: 4 },
   },
   skills: [
     {
@@ -60,7 +60,10 @@ describe('AX 스킬 사용 패널 화면', () => {
     const searchLoad = screen.getByLabelText('검색 경로 · 로드 5건 · 직전 검색 요청 12건 중 41.7%')
     expect(screen.getByLabelText('검색 경로 · 적용 보고 2건 · 직전 로드 5건 중 2/5 · 참고')).toBeTruthy()
     expect(screen.getByLabelText('직접 경로 · 검색 없는 로드 3건')).toBeTruthy()
-    expect(screen.getByLabelText('직접 경로 · 적용 보고 1건 · 직전 검색 없는 로드 3건 중 1/3 · 참고')).toBeTruthy()
+    // 흐름 ID 없이 온 보고 중 24시간 내 로드가 있는 6건을 더해 7건으로 세되 힌트에서 구분한다
+    expect(screen.getByLabelText(
+      '직접 경로 · 적용 보고 7건 · 직전 검색 없는 로드 3건 중 7/3 · 참고 · 직접 연결 1건 · 추정 6건 · 흐름 ID로 직접 연결 1건 · 24시간 내 로드로 추정 6건'
+    )).toBeTruthy()
     // 막대는 두 경로가 한 자를 공유한다 — 검색 요청 12건이 100%, 로드 5건은 그 5/12, 적용은 로드 막대 안쪽으로 줄어든다
     const bars = Array.from(document.querySelectorAll<HTMLElement>('[data-funnel-bar]'))
     expect(bars.map((bar) => bar.style.width)).toEqual([
@@ -68,7 +71,7 @@ describe('AX 스킬 사용 패널 화면', () => {
       `${(5 / 12) * 100}%`,
       `${(2 / 12) * 100}%`,
       `${(3 / 12) * 100}%`,
-      `${(1 / 12) * 100}%`,
+      `${(7 / 12) * 100}%`,
     ])
     expect(bars.every((bar) => bar.style.minWidth === '2px')).toBe(true)
     // 연결 불가는 막대 없이 따로 적고 비율에서 뺀다

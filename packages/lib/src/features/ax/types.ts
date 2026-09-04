@@ -321,7 +321,14 @@ export interface AxSkillUsageData {
       afterDirectLoad: number
       /** 흐름은 있지만 앞선 검색·로드가 모두 없는 적용 (로컬 저장 스킬 재사용 등) */
       withoutLoad: number
-      /** 흐름 ID가 없어 판정할 수 없는 적용 */
+      /**
+       * 흐름 ID는 없지만 같은 사용자가 24시간 안에 그 스킬을 로드한 적용.
+       *
+       * 구버전 CLI는 흐름 ID를 보내지 않는다. 그 보고를 전부 버리면 로드 후 적용이 실제보다 훨씬 적어 보이므로,
+       * 같은 사람·같은 스킬의 최근 로드에 이어진 것으로 추정해 따로 센다. 직접 연결과 합치지 않는다.
+       */
+      afterLoadInferred: number
+      /** 흐름 ID도 없고 최근 로드 기록도 없어 판정할 수 없는 적용 */
       unlinkable: number
     }
   }
