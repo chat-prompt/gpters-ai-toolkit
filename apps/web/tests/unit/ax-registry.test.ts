@@ -41,7 +41,7 @@ describe('AX 패널 레지스트리', () => {
       '요약', '스킬', '클라이언트', '배포 사이트',
     ])
     expect(metas.filter((meta) => meta.parentId === 'skill-usage').map((meta) => meta.id)).toEqual([
-      'journey-insights', 'agent-activity', 'shared-skills', 'skill-diff',
+      'skill-opportunities', 'journey-insights', 'agent-activity', 'shared-skills', 'skill-diff',
     ])
     expect(metas.filter((meta) => meta.parentId === 'client-usage').map((meta) => meta.id)).toEqual([
       'subscriptions',

@@ -98,6 +98,61 @@ export interface AxPanel<T = unknown> {
 // 패널별 데이터 타입
 // ============================================
 
+/** 스킬 개선 기회 분류 */
+export type AxSkillOpportunityCategory =
+  /** 검색 결과에 자주 뜨는데 로드가 적다 — 이름·설명이 고를 만하게 보이지 않는다 */
+  | 'low_load'
+  /** 로드는 되는데 적용 보고가 적다 — 열어 봤지만 그대로 쓰기 어려웠다 */
+  | 'low_apply'
+  /** 적용은 여러 번인데 쓰는 사람이 한 명뿐이다 — 사내에 알릴 후보 */
+  | 'single_user'
+  /** 로드 뒤 적용·건너뜀 어느 쪽도 보고되지 않았다 — 계측이 빠졌거나 판단이 미뤄졌다 */
+  | 'no_outcome'
+
+/** 개선 기회 목록의 스킬 한 줄 */
+export interface AxSkillOpportunityRow {
+  skillId: string
+  /** 카탈로그 표시 이름 */
+  name: string
+  /** 검색 결과에 노출된 횟수 */
+  shown: number
+  loaded: number
+  applied: number
+  skipped: number
+  /** 적용을 보고한 서로 다른 사용자 수 */
+  appliers: number
+}
+
+/** 한 분류의 결과 */
+export interface AxSkillOpportunityGroup {
+  category: AxSkillOpportunityCategory
+  /** 이 분류에 걸린 전체 스킬 수. 목록은 상위 일부만 담는다 */
+  total: number
+  skills: AxSkillOpportunityRow[]
+}
+
+/** 스킬 개선 기회 패널 데이터 */
+export interface AxSkillOpportunitiesData {
+  groups: AxSkillOpportunityGroup[]
+  /** 기간 내 성공한 검색 요청 수 */
+  searchRequests: number
+  /** 그중 결과가 한 줄도 없던 요청 수 — 없는 스킬을 찾고 있다는 신호 */
+  zeroResultSearches: number
+  /** 분류에 쓴 기준값. 화면이 그대로 적어 판단 근거를 남긴다 */
+  thresholds: {
+    /** low_load·no_outcome 판정에 필요한 최소 노출 */
+    minShown: number
+    /** low_apply·no_outcome 판정에 필요한 최소 로드 */
+    minLoaded: number
+    /** single_user 판정에 필요한 최소 적용 */
+    minApplied: number
+    /** low_load: 로드 ÷ 노출이 이 값 미만 */
+    loadRate: number
+    /** low_apply: 적용 ÷ 로드가 이 값 미만 */
+    applyRate: number
+  }
+}
+
 /** 사용자별 사용량 한 줄 (관리자에게만 내려간다) */
 export interface AxOverviewMemberRow {
   /** 계정 표시 이름. 프로필에 이름이 없으면 "이름 미설정" */

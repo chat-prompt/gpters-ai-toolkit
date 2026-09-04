@@ -15,6 +15,7 @@ import type { AxViewer } from './access'
 import { canViewPanel } from './access'
 import { overviewPanel } from './overview'
 import { skillUsagePanel } from './skills'
+import { skillOpportunitiesPanel } from './skill-opportunities'
 import { journeyInsightsPanel } from './journey-insights'
 import { sharedSkillsPanel } from './shared-skills'
 import { skillDiffPanel } from './skill-diff'
@@ -28,6 +29,7 @@ import { activityGrassPanel } from './activity-grass'
 export const AX_PANELS: AxPanel[] = [
   overviewPanel,
   skillUsagePanel,
+  skillOpportunitiesPanel,
   journeyInsightsPanel,
   agentActivityPanel,
   sharedSkillsPanel,
