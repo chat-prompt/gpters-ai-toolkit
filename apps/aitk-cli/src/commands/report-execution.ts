@@ -21,6 +21,8 @@ export interface ReportExecutionOptions {
   status: ExecutionStatus
   agent: 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent'
   agentId?: string
+  /** 이 시도를 실행한 모델 식별자. 모르면 보내지 않는다 (추측값은 실측이 아니다). */
+  model?: string
   source?: 'aitk' | 'bbopters-shared'
   attemptId?: string
   journeyId?: string
@@ -39,6 +41,8 @@ export interface ReportExecutionStartOptions {
   skillId: string
   agent: 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent'
   agentId?: string
+  /** 이 시도를 실행한 모델 식별자. 모르면 보내지 않는다 (추측값은 실측이 아니다). */
+  model?: string
   source?: 'aitk' | 'bbopters-shared'
   attemptId?: string
   journeyId?: string
@@ -85,6 +89,7 @@ export async function runReportExecutionStart(opts: ReportExecutionStartOptions)
         skillVersion: opts.skillVersion ?? null,
         agent: opts.agent,
         agentId,
+        model: opts.model ?? null,
         occurredAt: opts.occurredAt ?? new Date().toISOString(),
       },
     },
@@ -122,6 +127,7 @@ export async function runReportExecution(opts: ReportExecutionOptions): Promise<
         skillVersion: opts.skillVersion ?? null,
         agent: opts.agent,
         agentId,
+        model: opts.model ?? null,
         status: opts.status,
         failureStage: opts.failureStage ?? null,
         errorCode: opts.errorCode ?? null,

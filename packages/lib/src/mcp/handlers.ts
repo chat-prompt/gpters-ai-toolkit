@@ -1882,6 +1882,7 @@ export async function executeTool(
           journeyId: args.journeyId ?? null,
           skillVersion: args.skillVersion ?? null,
           agentId: args.agentId ?? agent,
+          model: args.model ?? null,
           occurredAt: args.occurredAt ?? new Date().toISOString(),
         }
         const validation = validateSkillExecutionStart(normalizedArgs)
@@ -1922,6 +1923,7 @@ export async function executeTool(
           journeyId: args.journeyId ?? null,
           skillVersion: args.skillVersion ?? null,
           agentId: args.agentId ?? agent,
+          model: args.model ?? null,
           failureStage: args.failureStage ?? null,
           errorCode: args.errorCode ?? null,
           validation: {

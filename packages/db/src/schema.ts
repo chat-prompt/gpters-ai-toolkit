@@ -1294,6 +1294,8 @@ export const axSkillExecutionAttempts = pgTable('ax_skill_execution_attempts', {
   skillVersion: text('skill_version'),
   agent: text('agent').notNull(),
   agentId: text('agent_id').notNull(),
+  /** 보고자가 밝힌 모델 식별자. 미보고는 NULL이며 추정으로 채우지 않는다. */
+  model: text('model'),
   status: axExecutionStatusEnum('status').notNull(),
   failureStage: axExecutionFailureStageEnum('failure_stage'),
   errorCode: text('error_code'),

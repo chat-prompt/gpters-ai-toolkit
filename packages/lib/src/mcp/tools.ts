@@ -747,6 +747,10 @@ get_plugin_content로 스킬을 로드한 후, 실제로 적용했는지와 결�
         skillVersion: { type: ['string', 'null'] },
         agent: { type: 'string', enum: ['claude-code', 'codex', 'openclaw', 'hermes', 'test-agent'] },
         agentId: { type: 'string', description: '봇을 구분하는 안정적인 소문자 식별자 (생략 시 runtime 이름)' },
+        model: {
+          type: ['string', 'null'],
+          description: '이 시도를 실행한 모델 식별자 (예: claude-opus-5). 모르면 생략하고 추측하지 않습니다.',
+        },
         occurredAt: { type: 'string', description: 'ISO 8601 시작 시각 (생략 시 서버 시각)' },
       },
       required: ['skillId', 'agent'],
@@ -772,6 +776,10 @@ test/command/artifact/user_confirmation/none 중 하나입니다.`,
         skillVersion: { type: ['string', 'null'] },
         agent: { type: 'string', enum: ['claude-code', 'codex', 'openclaw', 'hermes', 'test-agent'] },
         agentId: { type: 'string', description: '봇을 구분하는 안정적인 소문자 식별자 (생략 시 runtime 이름)' },
+        model: {
+          type: ['string', 'null'],
+          description: '이 시도를 실행한 모델 식별자 (예: claude-opus-5). 모르면 생략하고 추측하지 않습니다.',
+        },
         status: { type: 'string', enum: ['success', 'partial', 'failed', 'abandoned'] },
         failureStage: {
           type: ['string', 'null'],

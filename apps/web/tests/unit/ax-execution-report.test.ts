@@ -69,6 +69,27 @@ describe('validateSkillExecutionReport', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('모델은 선택값이고, 미보고는 추정하지 않고 null로 남는다', () => {
+    const unreported = validateSkillExecutionReport(VALID)
+    expect(unreported.ok && unreported.data.model).toBeNull()
+
+    const reported = validateSkillExecutionReport({ ...VALID, model: 'Claude-Opus-5' })
+    // 대소문자만 정규화한다. 값 자체는 보고된 그대로 남겨야 나중에 대조가 된다.
+    expect(reported.ok && reported.data.model).toBe('claude-opus-5')
+
+    const namespaced = validateSkillExecutionReport({ ...VALID, model: 'anthropic/claude-sonnet-4-5-20250929' })
+    expect(namespaced.ok && namespaced.data.model).toBe('anthropic/claude-sonnet-4-5-20250929')
+  })
+
+  it('모델 자리에 자유 문장이나 과도하게 긴 값을 받지 않는다', () => {
+    const prose = validateSkillExecutionReport({ ...VALID, model: '아마 오퍼스일 것 같음' })
+    expect(prose.ok).toBe(false)
+    if (!prose.ok) expect(prose.errors.join(' ')).toContain('model must be a model identifier')
+
+    const tooLong = validateSkillExecutionReport({ ...VALID, model: 'a'.repeat(65) })
+    expect(tooLong.ok).toBe(false)
+  })
+
   it('실행 시작 payload를 완료와 같은 attemptId 계약으로 검증한다', async () => {
     const { validateSkillExecutionStart } = await import(
       '../../../../packages/lib/src/features/ax/execution-report'
@@ -81,8 +102,10 @@ describe('validateSkillExecutionReport', () => {
       skillVersion: VALID.skillVersion,
       agent: VALID.agent,
       agentId: VALID.agentId,
+      model: 'gpt-5-codex',
       occurredAt: VALID.occurredAt,
     })
     expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.model).toBe('gpt-5-codex')
   })
 })

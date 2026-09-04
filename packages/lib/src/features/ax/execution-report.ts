@@ -26,6 +26,12 @@ export type AxExecutionStatus = (typeof EXECUTION_STATUSES)[number]
 export type AxExecutionFailureStage = (typeof EXECUTION_FAILURE_STAGES)[number]
 export type AxExecutionValidationMethod = (typeof EXECUTION_VALIDATION_METHODS)[number]
 
+/**
+ * 모델 식별자 최대 길이. `claude-sonnet-4-5-20250929` 류의 날짜 접미사와
+ * `anthropic/claude-opus-5` 류의 제공자 접두사를 모두 담는다.
+ */
+export const EXECUTION_MODEL_MAX_LENGTH = 64
+
 export interface AxSkillExecutionReport {
   eventId: string
   attemptId: string
@@ -35,6 +41,7 @@ export interface AxSkillExecutionReport {
   skillVersion: string | null
   agent: AxExecutionAgent
   agentId: string
+  model: string | null
   status: AxExecutionStatus
   failureStage: AxExecutionFailureStage | null
   errorCode: string | null
@@ -56,6 +63,7 @@ export interface AxSkillExecutionStartReport {
   skillVersion: string | null
   agent: AxExecutionAgent
   agentId: string
+  model: string | null
   occurredAt: string
 }
 
@@ -66,6 +74,9 @@ export type AxSkillExecutionValidation =
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SAFE_CODE = /^[A-Z0-9_:-]{1,64}$/
 const SAFE_AGENT_ID = /^[a-z0-9][a-z0-9._:-]{0,79}$/
+// 모델 이름은 enum으로 못 박지 않는다. 새 모델이 나올 때마다 보고가 조용히 거절되면
+// 미보고와 구분되지 않아 실측이 아니라 누락이 된다. 형태만 검사하고 값은 그대로 받는다.
+const SAFE_MODEL = /^[a-z0-9][a-z0-9._:/-]*$/
 const SECRET_LIKE = /(bearer\s+[a-z0-9._-]+|(?:password|token|secret)\s*[:=]|postgres(?:ql)?:\/\/|sk-[a-z0-9_-]{12,})/i
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -102,6 +113,11 @@ function commonExecutionFields(input: Record<string, unknown>, errors: string[])
   const skillId = typeof input.skillId === 'string' ? input.skillId.trim() : ''
   if (!skillId || skillId.length > 160) errors.push('skillId must be 1-160 characters')
   const skillVersion = optionalText(input.skillVersion, 80, 'skillVersion', errors)
+  const rawModel = optionalText(input.model, EXECUTION_MODEL_MAX_LENGTH, 'model', errors)
+  const model = rawModel === null ? null : rawModel.toLowerCase()
+  if (model !== null && !SAFE_MODEL.test(model)) {
+    errors.push('model must be a model identifier (letters, numbers, . _ : / -)')
+  }
   const occurred = typeof input.occurredAt === 'string' ? new Date(input.occurredAt) : new Date(Number.NaN)
   const occurredIsInvalid = Number.isNaN(occurred.getTime())
   if (occurredIsInvalid) errors.push('occurredAt must be an ISO 8601 timestamp')
@@ -115,6 +131,7 @@ function commonExecutionFields(input: Record<string, unknown>, errors: string[])
     skillVersion,
     agent: agent as AxExecutionAgent,
     agentId,
+    model,
     occurredAt: occurredIsInvalid ? '' : occurred.toISOString(),
   }
 }

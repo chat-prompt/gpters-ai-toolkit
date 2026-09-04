@@ -108,13 +108,16 @@ Bash("aitk report-skip --query '검색어' --reason '스킵 사유 한 줄' --re
 
 MCP 모드:
 ```
-mcp__gpters-ai-toolkit__report_skill_execution_started(skillId="스킬ID", agent="claude-code")
+mcp__gpters-ai-toolkit__report_skill_execution_started(skillId="스킬ID", agent="claude-code", model="현재 모델 ID")
 ```
 
 CLI 모드:
 ```
-Bash("aitk report-execution-start --skill-id '스킬ID' --agent claude-code")
+Bash("aitk report-execution-start --skill-id '스킬ID' --agent claude-code --model '현재 모델 ID'")
 ```
+
+`model`은 지금 이 시도를 실행하는 모델의 ID입니다(예: `claude-opus-5`). **자기 모델 ID를 확실히 알 때만**
+보내고, 모르면 통째로 생략합니다 — 추측값이 들어가면 모델별 비교가 실측이 아니라 추정이 됩니다.
 
 응답의 `attemptId`를 기억합니다. 뽀둥이처럼 공유 머신의 봇을 구분해야 하면 시작·완료 모두에
 `agentId="안정적인-봇-id"` 또는 `--agent-id '안정적인-봇-id'`를 추가합니다. 생략하면
@@ -145,6 +148,7 @@ mcp__gpters-ai-toolkit__report_skill_execution(
   attemptId="시작 응답의 attemptId",
   skillId="스킬ID",
   agent="claude-code",
+  model="현재 모델 ID",
   status="success",
   validation={"method":"test","passed":true,"summary":"단위 테스트 통과"}
 )
@@ -152,7 +156,7 @@ mcp__gpters-ai-toolkit__report_skill_execution(
 
 CLI 모드:
 ```
-Bash("aitk report-execution --skill-id '스킬ID' --agent claude-code --attempt-id '시작 응답의 attemptId' --status success --validation-method test --validation-passed true --validation-summary '단위 테스트 통과'")
+Bash("aitk report-execution --skill-id '스킬ID' --agent claude-code --attempt-id '시작 응답의 attemptId' --model '현재 모델 ID' --status success --validation-method test --validation-passed true --validation-summary '단위 테스트 통과'")
 ```
 
 - 실패하면 `failureStage`(`load | instruction | dependency | execution | validation`)와 짧은

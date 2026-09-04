@@ -1474,6 +1474,7 @@ describe('MCP Handlers', () => {
         skillVersion: '1.0.0',
         agent: 'codex',
         agentId: 'codex-reviewer',
+        model: 'gpt-5-codex',
         status: 'success',
         failureStage: null,
         errorCode: null,
@@ -1518,6 +1519,7 @@ describe('MCP Handlers', () => {
         skillVersion: '1.0.0',
         agent: 'codex',
         agentId: 'codex-reviewer',
+        model: 'gpt-5-codex',
         occurredAt: '2026-08-25T00:00:00.000Z',
       }
       const result = await executeTool('report_skill_execution_started', payload)
@@ -1538,6 +1540,7 @@ describe('MCP Handlers', () => {
         skillVersion: null,
         agent: 'hermes',
         agentId: 'hermes',
+        model: null,
       })
       expect(start?.attemptId).toMatch(/^[0-9a-f-]{36}$/)
       expect(start?.eventId).toMatch(/^[0-9a-f-]{36}$/)

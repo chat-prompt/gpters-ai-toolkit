@@ -249,6 +249,7 @@ Usage: aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id
 Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
   --agent-id <stable-id>        Stable bot ID (default: AITK_AGENT_ID/config agentId/runtime)
+  --model <id>                  Model that ran this attempt (omit if unknown; never guess)
   --attempt-id <uuid>           Stable attempt identifier (generated if omitted)
   --journey-id <uuid>           Search/load journey (normally inferred automatically)
   --event-id <uuid>             Idempotency identifier (generated if omitted)
@@ -260,6 +261,7 @@ Usage: aitk report-execution --skill-id <id> --status success|partial|failed|aba
 Options:
   --source <source>             aitk|bbopters-shared (default: aitk)
   --agent-id <stable-id>        Stable bot ID shared with start (default: AITK_AGENT_ID/config agentId/runtime)
+  --model <id>                 Model that ran this attempt (omit if unknown; never guess)
   --attempt-id <uuid>          Stable attempt identifier (generated if omitted)
   --journey-id <uuid>          Search/load journey (normally inferred automatically)
   --event-id <uuid>            Idempotency identifier (generated if omitted)
@@ -517,6 +519,7 @@ async function main(): Promise<void> {
         skillId,
         agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent',
         agentId,
+        model: flags['model'],
         source: source as 'aitk' | 'bbopters-shared',
         attemptId: flags['attempt-id'],
         journeyId: flags['journey-id'],
@@ -549,6 +552,7 @@ async function main(): Promise<void> {
         status: status as 'success' | 'partial' | 'failed' | 'abandoned',
         agent: agent as 'claude-code' | 'codex' | 'openclaw' | 'hermes' | 'test-agent',
         agentId,
+        model: flags['model'],
         source: source as 'aitk' | 'bbopters-shared',
         attemptId: flags['attempt-id'],
         journeyId: flags['journey-id'],

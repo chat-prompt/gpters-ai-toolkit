@@ -148,6 +148,23 @@ describe('aitk report-execution', () => {
     expect(args.arguments.agentId).toBe('bbodoong')
   })
 
+  it('모델은 밝힌 그대로 보내고, 생략하면 null로 보낸다', async () => {
+    await runReportExecutionStart({ skillId: 'review-helper', agent: 'codex', model: 'gpt-5-codex' })
+    const started = vi.mocked(jsonRpcCall).mock.calls[0][1] as { arguments: { model: string | null } }
+    expect(started.arguments.model).toBe('gpt-5-codex')
+
+    vi.clearAllMocks()
+    // 모델을 모르는 에이전트는 자리를 비운다. 여기에 런타임 이름을 대신 넣으면 추정이 된다.
+    await runReportExecutionStart({ skillId: 'review-helper', agent: 'codex' })
+    const anonymous = vi.mocked(jsonRpcCall).mock.calls[0][1] as { arguments: { model: string | null } }
+    expect(anonymous.arguments.model).toBeNull()
+
+    vi.clearAllMocks()
+    await runReportExecution({ skillId: 'review-helper', status: 'success', agent: 'codex', model: 'claude-opus-5' })
+    const completed = vi.mocked(jsonRpcCall).mock.calls[0][1] as { arguments: { model: string | null } }
+    expect(completed.arguments.model).toBe('claude-opus-5')
+  })
+
   it('환경변수의 안정 ID를 로컬 설정보다 우선한다', async () => {
     process.env.AITK_AGENT_ID = 'bbokeoter'
     vi.mocked(readConfig).mockReturnValue({
