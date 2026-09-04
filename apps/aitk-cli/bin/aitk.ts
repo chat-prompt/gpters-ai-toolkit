@@ -317,6 +317,8 @@ Install options:
   --interval <seconds>         launchd interval (default: 3600; laptop-hosted agents may use 21600)
   --no-schedule                Save the collector without registering launchd
   --cli-path <path>            Built aitk.js path (normally inferred)
+  --node-path <path>           node executable to pin in the launchd job
+                               (default: the node running this command; symlinks are kept)
 
 Authentication:
   install uses the existing AITK OAuth login and stores a collector-only token in Keychain.
@@ -612,12 +614,17 @@ async function main(): Promise<void> {
           collectorVersion: VERSION,
           collectorId: flags['collector-id'],
           cliScriptPath: flags['cli-path'],
+          nodePath: flags['node-path'],
           noSchedule: flags['no-schedule'] === 'true',
         })
       } else if (sub === 'upgrade' || sub === 'doctor' || sub === 'status' || sub === 'run' || sub === 'uninstall') {
         if (!flags['source']) error(`--source required: aitk agent-telemetry ${sub} --source <source>`)
         const lifecycleOptions = { agentId: flags['agent'], source: flags['source'] }
-        const cliIdentity = { collectorVersion: VERSION, cliScriptPath: flags['cli-path'] }
+        const cliIdentity = {
+          collectorVersion: VERSION,
+          cliScriptPath: flags['cli-path'],
+          nodePath: flags['node-path'],
+        }
         if (sub === 'upgrade') await runAgentTelemetryUpgrade({ ...lifecycleOptions, ...cliIdentity })
         else if (sub === 'doctor') await runAgentTelemetryDoctor({ ...lifecycleOptions, ...cliIdentity })
         else if (sub === 'status') runAgentTelemetryStatus(lifecycleOptions)

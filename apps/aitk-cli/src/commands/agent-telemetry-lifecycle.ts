@@ -94,14 +94,39 @@ function samePath(left: string, right: string): boolean {
   }
 }
 
-/** 설치 기록의 CLI 경로·버전이 지금 실행 중인 CLI와 같은지. 설치 뒤 CLI만 새로 깔면 launchd는 계속 옛 파일을 실행한다. */
-function cliMatchesInstallation(installation: AgentTelemetryInstallation, identity: AgentTelemetryCliIdentity): boolean {
+/**
+ * 설치 기록의 CLI 경로·버전이 지금 실행 중인 CLI와 같은지.
+ * 설치 뒤 CLI만 새로 깔면 launchd는 계속 옛 파일을 실행한다.
+ *
+ * `compareNode`는 호출부에 따라 다르다.
+ * - `upgrade`: 포함한다. node 재지정도 해야 할 일이므로, 다르면 plist를 다시 써야 한다.
+ * - `doctor`: **제외한다.** 점검을 어떤 node로 실행했는지는 설치의 건강과 무관한데, 포함하면
+ *   래퍼(PATH의 node)로 doctor를 돌렸다는 이유만으로 정상 설치가 `ok: false`로 보인다.
+ *   기록된 node가 실제로 존재하는지는 doctor의 `cliExists`가 따로 확인한다.
+ */
+function cliMatchesInstallation(
+  installation: AgentTelemetryInstallation,
+  identity: AgentTelemetryCliIdentity,
+  { compareNode = true }: { compareNode?: boolean } = {}
+): boolean {
   const scriptPath = resolve(identity.cliScriptPath ?? process.argv[1] ?? '')
-  const nodePath = resolve(identity.nodePath ?? process.execPath)
   const version = identity.collectorVersion ?? installation.cli.collectorVersion
+  if (compareNode && !nodeMatches(installation.cli.nodePath, identity)) return false
   return samePath(installation.cli.scriptPath, scriptPath) &&
-    samePath(installation.cli.nodePath, nodePath) &&
     installation.cli.collectorVersion === version
+}
+
+/**
+ * 기록된 node를 그대로 둬도 되는지.
+ *
+ * `--node-path`를 **명시**했으면 그 철자 그대로 비교한다. symlink와 실경로는 `samePath`가 같다고
+ * 보는데, 이 명령의 목적 자체가 둘 중 어느 쪽을 박을지 고르는 것이라 realpath로 비교하면
+ * `/opt/homebrew/opt/node@24/...` → `/opt/homebrew/Cellar/node@24/24.16.0/...` 재지정이 no-op이 된다.
+ * 생략했으면 실행 중인 node를 뜻하므로 별칭·symlink 차이는 무시한다.
+ */
+function nodeMatches(recorded: string, identity: AgentTelemetryCliIdentity): boolean {
+  if (identity.nodePath) return recorded === resolve(identity.nodePath)
+  return samePath(recorded, resolve(process.execPath))
 }
 
 /** 기록과 실제 예약이 모두 최신인지. 기록만 최신이고 plist가 옛것이면 고칠 것이 남아 있다. */
@@ -421,7 +446,9 @@ export async function runAgentTelemetryDoctor(
   const cliExists = existsSync(installation.cli.scriptPath) && existsSync(installation.cli.nodePath)
   // 설치 기록이 지금 실행 중인 CLI와 다르거나 plist가 기록과 어긋나면 예약 수집은 옛 버전으로 돈다.
   // `agent-telemetry upgrade`로 맞춘다.
-  const cliUpToDate = cliMatchesInstallation(installation, options)
+  // node는 비교에서 뺀다 — 점검을 어떤 node로 돌렸는지는 설치의 건강이 아니다. 기록된 node의
+  // 존재 여부는 위 `cliExists`가 보고, 무엇이 박혀 있는지는 아래 `scheduledNodePath`로 드러낸다.
+  const cliUpToDate = cliMatchesInstallation(installation, options, { compareNode: false })
   const scheduleMatchesRecord = installation.schedule.provider !== 'launchd' || launchdPlistMatches(installation)
   let credentialAvailable = false
   try {
@@ -449,6 +476,9 @@ export async function runAgentTelemetryDoctor(
       cliUpToDate,
       scheduleMatchesRecord,
       installedCollectorVersion: installation.cli.collectorVersion,
+      // 예약 수집이 실제로 쓰는 node. 런타임 번들 node(예: ~/.hermes/node/bin/node)가 박혀 있으면
+      // 그 런타임이 정리되는 순간 수집이 조용히 멈추므로, 점검할 때 눈으로 확인할 수 있어야 한다.
+      scheduledNodePath: installation.cli.nodePath,
       credentialAvailable,
       scheduleConfigured: installation.schedule.provider !== 'none',
       scheduleLoaded,

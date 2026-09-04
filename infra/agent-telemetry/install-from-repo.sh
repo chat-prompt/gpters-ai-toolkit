@@ -13,10 +13,17 @@ Usage: install-from-repo.sh [options]
 Options:
   --repo-root <path>  gpters-ai-toolkit checkout (default: inferred from script)
   --prefix <path>     install prefix (default: $HOME/.local)
+  --node <path>       node executable to pin in the wrapper (default: command -v node)
   --skip-build        use the existing apps/aitk-cli/dist/bin/aitk.js
   --allow-dirty       allow building with telemetry-related source changes
   --force             replace an unmanaged wrapper or changed same-version binary
   --help              show this help
+
+The wrapper pins this node by absolute path instead of resolving `node` from
+PATH at run time. Whichever shell later invokes `aitk agent-telemetry upgrade`
+would otherwise decide which node the scheduled collection runs under, and a
+runtime-bundled node can disappear from under launchd. Pass a stable path such
+as a Homebrew symlink; symlinks are kept as given, not resolved.
 
 The installed CLI lives at:
   <prefix>/share/gpters-aitk/<version>/aitk.js
@@ -27,6 +34,7 @@ EOF
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 prefix=${HOME:?HOME must be set}/.local
+node_bin=
 skip_build=0
 allow_dirty=0
 force=0
@@ -41,6 +49,11 @@ while [ "$#" -gt 0 ]; do
     --prefix)
       [ "$#" -ge 2 ] || { echo "error: --prefix requires a path" >&2; exit 2; }
       prefix=$2
+      shift 2
+      ;;
+    --node)
+      [ "$#" -ge 2 ] || { echo "error: --node requires a path" >&2; exit 2; }
+      node_bin=$2
       shift 2
       ;;
     --skip-build)
@@ -73,6 +86,19 @@ source_cli=$repo_root/apps/aitk-cli/dist/bin/aitk.js
 
 [ -f "$package_json" ] || { echo "error: AITK package not found under $repo_root" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "error: node is required" >&2; exit 1; }
+
+# 래퍼에 박을 node를 지금 확정한다. 런타임에 PATH에서 찾게 두면 `aitk`를 어떤 셸에서
+# 부르느냐가 예약 수집의 node를 정해버린다 (실제로 Hermes 런타임 node가 launchd plist에
+# 박힌 적이 있다). symlink는 풀지 않는다 — Homebrew의 opt 심링크처럼 패치 업그레이드를
+# 견디는 형태가 Cellar 실경로보다 오래간다.
+if [ -z "$node_bin" ]; then
+  node_bin=$(command -v node)
+fi
+case "$node_bin" in
+  /*) ;;
+  *) echo "error: --node must be an absolute path: $node_bin" >&2; exit 1 ;;
+esac
+[ -x "$node_bin" ] || { echo "error: node executable not found: $node_bin" >&2; exit 1; }
 
 version=$(node -e 'const p = require(process.argv[1]); process.stdout.write(String(p.version || ""))' "$package_json")
 case "$version" in
@@ -188,7 +214,7 @@ cat > "$wrapper_tmp" <<EOF
 #!/bin/sh
 # $marker
 prefix_dir=\$(CDPATH= cd -- "\$(dirname -- "\$0")/.." && pwd)
-exec node "\$prefix_dir/share/gpters-aitk/$version/aitk.js" "\$@"
+exec "$node_bin" "\$prefix_dir/share/gpters-aitk/$version/aitk.js" "\$@"
 EOF
 chmod 755 "$wrapper_tmp"
 mv -f "$wrapper_tmp" "$wrapper"
@@ -198,6 +224,7 @@ trap - EXIT HUP INT TERM
 echo "installed: aitk v$version"
 echo "binary: $target_cli"
 echo "command: $wrapper"
+echo "node: $node_bin"
 echo "source commit: $source_commit"
 case ":${PATH:-}:" in
   *":$bin_dir:"*) ;;

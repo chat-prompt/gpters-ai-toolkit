@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -226,6 +226,58 @@ describe('agent telemetry lifecycle commands', () => {
     await runAgentTelemetryDoctor({ ...later, collectorVersion: '0.7.6', cliScriptPath: newCliPath, nodePath })
     const freshDoctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { checks: Record<string, unknown> }
     expect(freshDoctor.checks).toMatchObject({ cliUpToDate: true, installedCollectorVersion: '0.7.6' })
+  })
+
+  it('doctor는 실행 중인 node가 기록과 달라도 cliUpToDate를 뒤집지 않고, 기록된 node를 드러낸다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.1',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+    })
+
+    // 래퍼가 PATH의 node를 쓰면 doctor는 기록과 다른 node로 실행된다.
+    // 그건 설치의 결함이 아니므로 판정을 뒤집으면 안 된다 — 정상 수집기를 고장으로 오판한다.
+    const otherNode = join(root, 'node-from-path')
+    writeFileSync(otherNode, '')
+    await runAgentTelemetryDoctor({
+      ...lifecycle(), collectorVersion: '0.7.1', cliScriptPath: cliPath, nodePath: otherNode,
+    })
+
+    const doctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { checks: Record<string, unknown> }
+    expect(doctor.checks).toMatchObject({
+      cliUpToDate: true,
+      // 무엇이 박혀 있는지는 눈으로 확인할 수 있어야 한다
+      scheduledNodePath: nodePath,
+    })
+  })
+
+  it('upgrade는 --node-path를 철자 그대로 박는다 — symlink ↔ 실경로 재지정이 no-op이 되면 안 된다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.1',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+    })
+
+    // 같은 파일을 가리키는 다른 철자(symlink). realpath로 비교하면 "이미 최신"이 되어
+    // Homebrew opt 심링크로의 재지정이 조용히 무시된다.
+    const nodeSymlink = join(root, 'node-symlink')
+    symlinkSync(nodePath, nodeSymlink)
+
+    await runAgentTelemetryUpgrade({
+      ...lifecycle(), collectorVersion: '0.7.1', cliScriptPath: cliPath,
+      nodePath: nodeSymlink, platform: 'darwin',
+    })
+
+    expect(vi.mocked(jsonOut).mock.calls.at(-1)?.[0]).toMatchObject({ ok: true, upgraded: true })
+    const installation = readAgentTelemetryInstallation('test-agent', 'openclaw', root)
+    expect(installation.cli.nodePath).toBe(nodeSymlink)
+
+    // 같은 철자로 다시 부르면 바꿀 것이 없다
+    await runAgentTelemetryUpgrade({
+      ...lifecycle(), collectorVersion: '0.7.1', cliScriptPath: cliPath,
+      nodePath: nodeSymlink, platform: 'darwin',
+    })
+    expect(vi.mocked(jsonOut).mock.calls.at(-1)?.[0]).toMatchObject({ ok: true, upgraded: false })
   })
 
   it('기록만 새 CLI이고 plist가 옛것이면 upgrade가 no-op하지 않고 plist를 다시 쓴다', async () => {
