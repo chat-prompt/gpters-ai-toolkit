@@ -180,9 +180,37 @@ next run repairs it. A pending (unsent) batch blocks the upgrade — run
 `agent-telemetry run` first so the health gate can actually re-read the source.
 `doctor` reports `cliUpToDate=false` while the record points at another CLI and
 `scheduleMatchesRecord=false` while the installed plist differs from the
-record; either makes `ok=false`. The dashboard
+record; either makes `ok=false`. `cliUpToDate` compares the script path and
+version but **not** the node — which node you happened to invoke `doctor` with
+says nothing about the installation, and comparing it reported a healthy
+collector as `ok=false` whenever `doctor` ran through the wrapper. Whether the
+recorded node still exists is covered by `cliExists`, and `scheduledNodePath`
+reports which node the scheduled job actually runs. The dashboard
 differentiates a registered collector waiting for its first batch, a healthy
 reporter, a stale reporter, and a health-blocked reporter.
+
+### Which node the scheduled job runs
+
+`install` and `upgrade` pin an absolute node path into the launchd job, and the
+plist carries no `PATH`, so that path is the only one launchd will try. By
+default it is the node running the command — which means **the shell you run
+`upgrade` from decides what the scheduled collection uses.** A node bundled
+inside an agent runtime can be cleaned up later, and collection then stops
+silently.
+
+Pass `--node-path` to choose deliberately. It is taken literally, so a symlink
+stays a symlink:
+
+```sh
+"$HOME/.local/bin/aitk" agent-telemetry upgrade --agent <id> --source <source> \
+  --node-path /opt/homebrew/opt/node@24/bin/node
+```
+
+Prefer a path that survives patch upgrades (`/opt/homebrew/opt/node@24/...`)
+over a version-pinned one (`/opt/homebrew/Cellar/node@24/24.16.0/...`). Without
+`--node-path`, `process.execPath` resolves symlinks and the version-pinned form
+is what gets recorded. `install-from-repo.sh` pins the wrapper's node the same
+way and takes the same choice as `--node`.
 
   Hermes skill-load counting (skill_view) requires 0.7.5 or newer, and the
   `upgrade` subcommand itself requires 0.7.6 or newer. Batches from an older
