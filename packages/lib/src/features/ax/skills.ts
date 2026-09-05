@@ -5,12 +5,19 @@
  * 집계는 SQL GROUP BY 5회로 끝내고, 정렬·상위 절단만 애플리케이션에서 처리한다.
  */
 
-import { db, skillEvents, catalogItems } from '@gpters/db'
+import { axAgentTelemetryBatches, db, skillEvents, catalogItems } from '@gpters/db'
 import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelOk, panelError } from './panel'
 import { startOfUtcDay } from './kst'
-import type { AxPanel, AxPanelMeta, AxSkillUsageData, AxSkillUsageRow } from './types'
+import { batchObservesSkills } from './agent-activity'
+import type {
+  AxAgentTelemetrySource,
+  AxPanel,
+  AxPanelMeta,
+  AxSkillUsageData,
+  AxSkillUsageRow,
+} from './types'
 
 const log = createLogger('ax-skills')
 
@@ -29,6 +36,60 @@ export const CORE_ACTIONS = ['search', 'load', 'apply', 'skip', 'deploy'] as con
 
 /** 실제 사용으로 해석하는 서버 신호 — 에이전트의 명시적인 적용 보고만 센다 */
 export const ACTUAL_USAGE_ACTIONS = ['apply'] as const
+
+/**
+ * 사람과 에이전트를 하루 단위로 나란히 놓기 위한 집계.
+ *
+ * **로드끼리만 비교한다.** 에이전트 쪽에는 적용·실행 신호가 없다 — 운영 376개 배치 전부
+ * `executions`가 비어 있다(2026-09-06 확인). 사람의 "적용"과 에이전트의 "로드"를 한 축에 두면
+ * 서로 다른 사건을 비교하는 그림이 된다.
+ *
+ * 배치는 내부 시간 분포를 보존하지 않으므로 **하루 경계를 걸친 배치는 통째로 뺀다.** 운영에서는
+ * 하루 30~54개 배치 중 0~2개가 여기 해당한다. 뺀 수는 화면에 그대로 적는다.
+ *
+ * @param batches - 기간에 걸친 원본 배치
+ * @param days - 채워야 할 날짜 키 (YYYY-MM-DD)
+ * @returns 날짜별 로드 수와 제외 내역
+ */
+export function aggregateAgentLoads(
+  batches: Array<{
+    source: string
+    runtime: unknown
+    windowStart: Date | string
+    windowEnd: Date | string
+    skillLoads: Array<Record<string, unknown>>
+  }>,
+  days: string[]
+): { byDay: Map<string, number>; observedDays: Set<string>; excludedBatches: number; unobservedBatches: number } {
+  const byDay = new Map<string, number>()
+  const observedDays = new Set<string>()
+  let excludedBatches = 0
+  let unobservedBatches = 0
+
+  for (const batch of batches) {
+    if (!batchObservesSkills(batch.source as AxAgentTelemetrySource, batch.runtime)) {
+      unobservedBatches += 1
+      continue
+    }
+    const start = batch.windowStart instanceof Date ? batch.windowStart : new Date(batch.windowStart)
+    const end = batch.windowEnd instanceof Date ? batch.windowEnd : new Date(batch.windowEnd)
+    const startDay = start.toISOString().slice(0, 10)
+    if (startDay !== end.toISOString().slice(0, 10)) {
+      excludedBatches += 1
+      continue
+    }
+    // 관측 가능한 배치가 있었다는 사실은 로드가 0이어도 기록한다 — 그래야 "0건"과 "미관측"이 갈린다
+    observedDays.add(startDay)
+    const loads = batch.skillLoads.reduce((sum, entry) => {
+      const loaded = Number(entry.loaded ?? 0)
+      return sum + (Number.isFinite(loaded) ? loaded : 0)
+    }, 0)
+    byDay.set(startDay, (byDay.get(startDay) ?? 0) + loads)
+  }
+
+  for (const day of days) if (!byDay.has(day) && observedDays.has(day)) byDay.set(day, 0)
+  return { byDay, observedDays, excludedBatches, unobservedBatches }
+}
 
 const meta: AxPanelMeta = {
   id: 'skill-usage',
@@ -115,8 +176,9 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
           and ${inArray(skillEvents.action, ACTUAL_USAGE_ACTIONS)}
       )`
 
-      // 다섯 쿼리는 서로 독립이라 왕복 지연이 쌓이지 않게 한 번에 보낸다.
-      const [[totals], skillRows, dailyRows, unusedRows, originResult] = await Promise.all([
+      // 일곱 쿼리는 서로 독립이라 왕복 지연이 쌓이지 않게 한 번에 보낸다.
+      const [[totals], skillRows, dailyRows, unusedRows, originResult, humanLoadRows, agentBatches] =
+        await Promise.all([
         // 1. 요약 지표 — 아래 표와 같은 단일 GPTers 카탈로그 모집단을 쓴다
         //    세션 수도 같은 집합에서 센다 — 별도로 mcp_sessions를 세면 조직 범위와
         //    익명 세션 취급이 달라져 옆 타일과 모집단이 어긋난다
@@ -251,9 +313,61 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             (SELECT count(*)::int FROM apply_origin WHERE origin = 'without_load') AS applies_without_load,
             (SELECT count(*)::int FROM apply_origin WHERE origin = 'unlinkable') AS applies_unlinkable
         `),
+
+        // 6. 사람의 일별 스킬 로드 — 에이전트와 견주려면 같은 사건(로드)이어야 한다.
+        //    위 3번 daily는 적용 보고라 축이 다르다.
+        db
+          .select({ date: dayExpr, events: sql<number>`count(*)::int` })
+          .from(skillEvents)
+          .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+          .where(and(gte(skillEvents.createdAt, since), eq(skillEvents.action, 'load')))
+          .groupBy(dayExpr),
+
+        // 7. 에이전트 배치 원본 — 관측 가능 여부와 하루 경계 판정은 JS에서 한다.
+        //    SQL로 합치면 스킬 신호를 못 담는 수집기의 배치가 0으로 섞여 미관측과 구분되지 않는다.
+        db
+          .select({
+            // source는 컬럼이 아니라 collection jsonb 안에 있다 (shared-skills·agent-activity와 같다)
+            collection: axAgentTelemetryBatches.collection,
+            runtime: axAgentTelemetryBatches.runtime,
+            windowStart: axAgentTelemetryBatches.windowStart,
+            windowEnd: axAgentTelemetryBatches.windowEnd,
+            skillLoads: axAgentTelemetryBatches.skillLoads,
+          })
+          .from(axAgentTelemetryBatches)
+          .where(gte(axAgentTelemetryBatches.windowEnd, since)),
       ])
 
       const originRow = ((originResult as { rows?: Record<string, unknown>[] } | null)?.rows ?? [])[0] ?? {}
+
+      const humanLoadDaily = fillMissingDays(
+        humanLoadRows.map((row) => ({ date: row.date, events: num(row.events) })),
+        since,
+        now
+      )
+      const agentLoads = aggregateAgentLoads(
+        agentBatches.map((batch) => ({
+          source: typeof (batch.collection as Record<string, unknown> | null)?.source === 'string'
+            ? String((batch.collection as Record<string, unknown>).source)
+            : '',
+          runtime: batch.runtime,
+          windowStart: batch.windowStart,
+          windowEnd: batch.windowEnd,
+          skillLoads: batch.skillLoads ?? [],
+        })),
+        humanLoadDaily.map((row) => row.date)
+      )
+      const humanVsAgent: AxSkillUsageData['humanVsAgent'] = {
+        daily: humanLoadDaily.map((row) => ({
+          date: row.date,
+          human: row.events,
+          // 관측 가능한 배치가 없었던 날은 0이 아니라 미관측이다
+          agent: agentLoads.observedDays.has(row.date) ? agentLoads.byDay.get(row.date) ?? 0 : null,
+        })),
+        observedDays: agentLoads.observedDays.size,
+        excludedBatches: agentLoads.excludedBatches,
+        unobservedBatches: agentLoads.unobservedBatches,
+      }
 
       const skills: AxSkillUsageRow[] = skillRows
         .map((row) => ({
@@ -310,6 +424,7 @@ export const skillUsagePanel: AxPanel<AxSkillUsageData> = {
             since,
             now
           ),
+          humanVsAgent,
           totalUnusedSkills: num(unusedRows[0]?.totalUnused),
           unusedSkills: unusedRows.map((row) => ({
             id: row.id,

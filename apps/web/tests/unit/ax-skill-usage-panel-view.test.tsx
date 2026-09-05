@@ -42,6 +42,7 @@ const DATA: AxSkillUsageData = {
     },
   ],
   daily: [],
+  humanVsAgent: { daily: [], observedDays: 0, excludedBatches: 0, unobservedBatches: 0 },
   totalUnusedSkills: 0,
   unusedSkills: [],
 }

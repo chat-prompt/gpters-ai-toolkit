@@ -84,7 +84,10 @@ function versionAtLeast(actual: unknown, minimum: string): boolean {
  * @param runtime - 배치의 `runtime` (collectorVersion을 읽는다)
  */
 export function batchObservesSkills(source: AxAgentTelemetrySource, runtime: unknown): boolean {
-  if (!SOURCE_INFO[source].capabilities.skills) return false
+  // 모르는 소스는 "관측하지 않음"이다. 호출자마다 소스 목록을 복제하면 새 소스가 생겼을 때
+  // 한 곳만 고쳐지고 나머지는 조용히 0으로 센다.
+  const info = SOURCE_INFO[source] as (typeof SOURCE_INFO)[AxAgentTelemetrySource] | undefined
+  if (!info?.capabilities.skills) return false
   const minimum = SKILL_SIGNAL_MIN_VERSION[source]
   if (!minimum) return true
   const version = runtime && typeof runtime === 'object' && !Array.isArray(runtime)

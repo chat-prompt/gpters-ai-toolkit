@@ -19,6 +19,13 @@ vi.mock('@gpters/db', () => ({
   },
   mcpSessions: { startedAt: 'mcp_sessions.started_at', userId: 'mcp_sessions.user_id' },
   orgMemberships: { userId: 'org_memberships.user_id', orgId: 'org_memberships.org_id' },
+  axAgentTelemetryBatches: {
+    collection: 'ax_agent_telemetry_batches.collection',
+    runtime: 'ax_agent_telemetry_batches.runtime',
+    windowStart: 'ax_agent_telemetry_batches.window_start',
+    windowEnd: 'ax_agent_telemetry_batches.window_end',
+    skillLoads: 'ax_agent_telemetry_batches.skill_loads',
+  },
   catalogItems: {
     id: 'catalog_items.id',
     name: 'catalog_items.name',
@@ -71,13 +78,19 @@ function builder(result: unknown) {
   return stub
 }
 
-/** 패널이 실행하는 4개 쿼리의 결과를 순서대로 큐에 넣는다 */
+/**
+ * 패널이 실행하는 select 쿼리의 결과를 순서대로 큐에 넣는다.
+ *
+ * 큐를 넘어선 호출은 빈 결과로 받는다. 각 테스트는 자기가 단언하는 쿼리까지만 채우면 되고,
+ * 패널에 쿼리가 하나 늘 때마다 모든 호출부를 고치지 않아도 된다.
+ */
 function queueQueries(results: unknown[]) {
   const select = vi.mocked(db.select)
   select.mockReset()
   for (const result of results) {
     select.mockReturnValueOnce(builder(result) as never)
   }
+  select.mockReturnValue(builder([]) as never)
 }
 
 /**
@@ -383,8 +396,8 @@ describe('skillUsagePanel', () => {
 
       // leftJoin이면 카탈로그에 없는(= 가시성 판정 불가) skill_id가 집계에 섞인다
       expect(leftJoinCalls).toHaveLength(0)
-      // 요약 · 스킬 피벗 · 일자별
-      expect(innerJoinCalls).toHaveLength(3)
+      // 요약 · 스킬 피벗 · 일자별 적용 · 일자별 로드
+      expect(innerJoinCalls).toHaveLength(4)
     })
 
     it('카탈로그를 읽는 모든 쿼리가 legacy scope 필드를 무시한다', async () => {
@@ -404,8 +417,9 @@ describe('skillUsagePanel', () => {
 
       // 세션을 mcp_sessions에서 따로 세면 조직 범위·익명 세션 취급이 달라져
       // 옆 타일과 모집단이 어긋난다. 요약 쿼리 안에서 함께 센다.
-      expect(whereConditions).toHaveLength(4)
-      expect(innerJoinCalls).toHaveLength(3)
+      // 쿼리 개수 대신 불변식 자체를 잰다 — 개수로 재면 무관한 쿼리가 늘 때마다 깨진다.
+      const allValues = whereConditions.flatMap((condition) => collectValues(condition))
+      expect(allValues.filter((value) => String(value).startsWith('mcp_sessions.'))).toHaveLength(0)
     })
 
     it('일자별 실제 사용 추이는 적용 보고만 센다', async () => {

@@ -29,7 +29,8 @@ import { EMPTY_NOTE, META_LINE, SECTION_LABEL, TD, TH, TIP_BOX, TipContent, type
  */
 export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageData>) {
   return (
-    <div>
+    <div className="space-y-10">
+      <HumanVsAgentLoads data={data.humanVsAgent} />
       {data.skills.length > 0 ? (
         // 기간을 바꾸면 표를 통째로 다시 태워 첫 장으로 돌린다
         <SkillTable
@@ -42,6 +43,114 @@ export function SkillUsagePanel({ data, days }: AxPanelViewProps<AxSkillUsageDat
         <p className={EMPTY_NOTE}>이 기간에 사용된 스킬이 없습니다.</p>
       )}
     </div>
+  )
+}
+
+
+/**
+ * 막대 축에 놓을 날짜 라벨 — 처음·가운데·끝만.
+ *
+ * 날짜를 전부 적으면 좁은 폭에서 겹친다. 시간대별 막대가 0·6·12·18·23시만 적는 것과 같은 방식이다.
+ *
+ * @param dates - YYYY-MM-DD 오름차순
+ * @returns M.D 형식 라벨 (중복은 접는다)
+ */
+function axisLabels(dates: string[]): string[] {
+  if (dates.length === 0) return []
+  const pick = [dates[0], dates[Math.floor((dates.length - 1) / 2)], dates[dates.length - 1]]
+  const short = pick.map((date) => {
+    const [, month, day] = date.split('-')
+    return `${Number(month)}.${Number(day)}`
+  })
+  return [...new Set(short)]
+}
+
+/**
+ * 사람 대 에이전트 스킬 로드 — 하루씩 나란히.
+ *
+ * **로드끼리만 비교한다.** 에이전트 쪽에는 적용·실행 신호가 없어(수집 배치의 `executions`가 전부 비어 있다)
+ * 사람의 "적용"과 견주면 서로 다른 사건을 한 축에 놓는 그림이 된다.
+ *
+ * 선이 아니라 묶음 막대인 이유: 이 대시보드에 선 차트 관례가 없고, **미관측인 날을 0과 구분해서**
+ * 그려야 하는데 선으로는 그 구분이 사라진다.
+ */
+function HumanVsAgentLoads({ data }: { data: AxSkillUsageData['humanVsAgent'] }) {
+  const max = Math.max(1, ...data.daily.map((row) => Math.max(row.human, row.agent ?? 0)))
+  const humanTotal = data.daily.reduce((sum, row) => sum + row.human, 0)
+  const agentTotal = data.daily.reduce((sum, row) => sum + (row.agent ?? 0), 0)
+
+  return (
+    <section>
+      <p className={SECTION_LABEL}>사람 대 에이전트 스킬 로드</p>
+      <p className="mt-3 text-sm text-[var(--text-secondary)]">
+        같은 사건(로드)끼리만 견준다. 에이전트 쪽에는 적용·실행 신호가 없어 사람의 적용과는 비교하지 않는다.
+      </p>
+
+      {data.observedDays === 0 ? (
+        <p className={`mt-3 ${EMPTY_NOTE}`}>
+          이 기간에 스킬 로드를 관측할 수 있는 에이전트 수집기가 없습니다.
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 flex h-28 items-end gap-[6px] overflow-x-auto">
+            {data.daily.map((row) => (
+              // 미관측인 날은 칸 전체를 옅게 칠한다. 막대로 그리면 높이가 곧 값으로 읽혀
+              // "관측하지 못했다"가 "이만큼 있었다"로 뒤바뀐다 — 실제 에이전트 값이 하루 0~6이라
+              // 어떤 높이를 줘도 진짜 값보다 커 보인다.
+              <div
+                key={row.date}
+                className={`flex h-full min-w-[14px] flex-1 items-end gap-[2px] rounded-t-[2px] ${
+                  row.agent === null ? 'bg-[var(--bg-secondary)]' : ''
+                }`}
+                title={row.agent === null ? `${row.date} · 에이전트 미관측` : undefined}
+              >
+                <div
+                  className="flex-1 rounded-t-[2px] bg-[var(--text-muted)]"
+                  style={{ height: `${Math.max(row.human > 0 ? 2 : 0, (row.human / max) * 100)}%` }}
+                  title={`${row.date} · 사람 ${formatCount(row.human)}`}
+                />
+                {row.agent !== null && (
+                  <div
+                    className="flex-1 rounded-t-[2px] bg-[var(--accent-orange)]"
+                    style={{ height: `${Math.max(row.agent > 0 ? 2 : 0, (row.agent / max) * 100)}%` }}
+                    title={`${row.date} · 에이전트 ${formatCount(row.agent)}`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className={`mt-2 flex justify-between border-t border-[var(--border-subtle)] pt-2 ${META_LINE}`}>
+            {axisLabels(data.daily.map((row) => row.date)).map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+
+          <div className={`mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 ${META_LINE}`}>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-[1px] bg-[var(--text-muted)]" />
+              사람 {formatCount(humanTotal)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-[1px] bg-[var(--accent-orange)]" />
+              에이전트 {formatCount(agentTotal)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-[1px] bg-[var(--bg-secondary)]" />
+              에이전트 미관측
+            </span>
+          </div>
+
+          {(data.excludedBatches > 0 || data.unobservedBatches > 0) && (
+            <p className={`mt-2 ${META_LINE}`}>
+              {data.excludedBatches > 0 && `하루 경계를 걸친 배치 ${formatCount(data.excludedBatches)}건 제외`}
+              {data.excludedBatches > 0 && data.unobservedBatches > 0 && ' · '}
+              {data.unobservedBatches > 0 && `스킬을 못 보는 수집기 배치 ${formatCount(data.unobservedBatches)}건 제외`}
+            </p>
+          )}
+        </>
+      )}
+    </section>
   )
 }
 
