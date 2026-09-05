@@ -27,6 +27,31 @@ describe('client', () => {
     process.env = originalEnv
   })
 
+  describe('User-Agent', () => {
+    it('세 호출 경로 모두 aitk 버전을 실어 보낸다', async () => {
+      // 이걸 안 보내면 서버에는 `node`로만 남아 누가 어떤 버전을 쓰는지 알 방법이 없다.
+      const seen: string[] = []
+      globalThis.fetch = vi.fn(async (_url: unknown, init: { headers?: Record<string, string> }) => {
+        seen.push(init.headers?.['User-Agent'] ?? '(none)')
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'session-1' },
+          json: async () => ({ jsonrpc: '2.0', id: 1, result: {} }),
+        }
+      }) as unknown as typeof fetch
+
+      await apiCall('search', { query: 'x' }, 'token')
+      await jsonRpcCall('tools/call', { name: 'noop' }, 'token')
+      await jsonRpcSessionCall('tools/call', { name: 'noop' }, 'token')
+
+      const pkg = await import('../package.json', { with: { type: 'json' } })
+      const expected = `aitk/${pkg.default.version}`
+      expect(seen.length).toBeGreaterThanOrEqual(3)
+      for (const agent of seen) expect(agent).toBe(expected)
+    })
+  })
+
   describe('apiCall', () => {
     it('올바른 URL과 헤더로 POST 요청', async () => {
       let capturedUrl = ''

@@ -3,6 +3,35 @@
  */
 
 import { readConfig } from './config.js'
+import pkg from '../package.json' with { type: 'json' }
+
+/**
+ * 모든 요청에 붙는 User-Agent.
+ *
+ * 서버는 이 값을 `mcp_audit_logs.user_agent`에 그대로 남긴다. 이걸 안 보내면 CLI 호출이
+ * 전부 `node`로 들어와 **누가 어떤 버전을 쓰는지 알 방법이 없다** — 2026-09-06에 팀의
+ * 업그레이드 여부를 확인하려다 관측 수단 자체가 없다는 것을 발견했다.
+ * 새 스키마 없이 기존 컬럼으로 답할 수 있으므로 여기서만 바꾼다.
+ */
+const USER_AGENT = `aitk/${pkg.version}`
+
+/**
+ * 공통 요청 헤더
+ *
+ * 세 호출 경로(REST · JSON-RPC · 세션 JSON-RPC)가 같은 헤더를 쓰도록 한곳에서 만든다.
+ * 따로 만들면 한 곳만 고쳐져 버전이 일부 요청에만 실리는 상태가 된다.
+ *
+ * @param token - 인증 토큰 (없으면 Authorization 생략)
+ * @returns fetch에 넘길 헤더 맵
+ */
+function buildHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': USER_AGENT,
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return headers
+}
 
 /** API 응답 결과 */
 export interface ApiResult<T = unknown> {
@@ -63,8 +92,7 @@ export async function apiCall<T = unknown>(
   token?: string
 ): Promise<ApiResult<T>> {
   const url = `${getServerUrl()}/api/mcp?action=${encodeURIComponent(action)}`
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  const headers = buildHeaders(token)
 
   try {
     const response = await fetch(url, {
@@ -114,8 +142,7 @@ export async function jsonRpcCall<T = unknown>(
   token?: string
 ): Promise<ApiResult<T>> {
   const url = `${getServerUrl()}/api/mcp`
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  const headers = buildHeaders(token)
 
   try {
     const response = await fetch(url, {
@@ -164,8 +191,7 @@ export async function jsonRpcSessionCall<T = unknown>(
   clientInfo: { name: string; version: string } = { name: 'aitk-cli', version: 'local' }
 ): Promise<ApiResult<T>> {
   const url = `${getServerUrl()}/api/mcp`
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  const headers = buildHeaders(token)
 
   try {
     const initializeResponse = await fetch(url, {
