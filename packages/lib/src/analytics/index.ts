@@ -30,6 +30,12 @@ export {
   recordExerciseApplyEvent,
 } from './skill-events'
 export { recordSkillExecutionAttempt, recordSkillExecutionStart } from './skill-execution'
+export {
+  redactOldSkillText,
+  SKILL_TEXT_RETENTION_DAYS,
+  AUTO_CONTEXT_MARKER,
+  type SkillTextRedactionResult,
+} from './skill-text-retention'
 export { recordAgentTelemetryBatch } from './agent-telemetry'
 export {
   AgentTelemetryCollectorConflictError,
