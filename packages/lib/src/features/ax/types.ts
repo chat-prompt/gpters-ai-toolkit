@@ -978,3 +978,61 @@ export interface AxSubscriptionData {
    */
   members: AxSubscriptionMemberRow[] | null
 }
+
+/** 중복 후보 쌍의 한쪽 스킬 */
+export interface AxSkillDuplicateSide {
+  /** 카탈로그 id */
+  id: string
+  /** 표시 이름 */
+  name: string
+  /** 등록자 이름. 작성자가 비어 있으면 null */
+  authorName: string | null
+  /** 적용 보고 수 — 묶음에서 무엇을 남길지 고르는 근거 */
+  applies: number
+}
+
+/** 카탈로그 안에서 본문이 겹치는 스킬 한 쌍 */
+export interface AxSkillDuplicatePair {
+  left: AxSkillDuplicateSide
+  right: AxSkillDuplicateSide
+  /** 본문 전체(절단 없음) 3-그램 자카드 정확값 */
+  similarity: number
+  /** 정규화 후 사실상 같은 문서 */
+  identical: boolean
+}
+
+/** 셋 이상이 같은 문서인 경우를 한 판단 단위로 묶은 것 */
+export interface AxSkillDuplicateGroup {
+  /** 묶음에 속한 스킬 id */
+  ids: string[]
+  /** 그중 적용 이력이 있는 id — 남길 후보 */
+  appliedIds: string[]
+}
+
+/** 카탈로그 내부 중복 패널 데이터 */
+export interface AxSkillDuplicateData {
+  /** 계산 기준 */
+  basis: {
+    /** 카탈로그의 스킬 수 */
+    skills: number
+    /** 그중 본문이 있어 실제로 비교한 수 */
+    compared: number
+    /** 후보로 올리는 유사도 경계 */
+    threshold: number
+    /** 묶음으로 이어 붙이는 유사도 경계 — 후보 경계보다 높다 */
+    groupThreshold: number
+  }
+  /** 경계 이상인 쌍의 수 */
+  pairCount: number
+  /** 그중 내용이 사실상 동일한 쌍의 수 */
+  identicalCount: number
+  /** 한 쌍에라도 걸린 스킬 수 */
+  involvedSkills: number
+  /** 판단 단위 묶음 (큰 것부터) */
+  groups: AxSkillDuplicateGroup[]
+  /** 화면에 내려보낸 쌍 (유사도 내림차순) */
+  pairs: AxSkillDuplicatePair[]
+  /** 상한에 걸려 잘린 쌍 수 */
+  truncated: number
+}
+
