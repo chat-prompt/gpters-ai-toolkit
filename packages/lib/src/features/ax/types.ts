@@ -527,6 +527,22 @@ export interface AxSkillUsageData {
   skills: AxSkillUsageRow[]
   /** 일자별 적용 보고 추이 */
   daily: Array<{ date: string; events: number }>
+  /**
+   * 사람과 에이전트를 하루 단위로 나란히 둔 비교.
+   *
+   * **로드끼리만 비교한다.** 에이전트 쪽에는 적용·실행 신호가 없다 —
+   * 운영 376개 배치 전부 `executions`가 비어 있다(2026-09-06 확인).
+   */
+  humanVsAgent: {
+    /** 날짜별 로드 수. `agent`가 null이면 그날 관측 가능한 배치가 없었다는 뜻이다 (0건이 아니다) */
+    daily: Array<{ date: string; human: number; agent: number | null }>
+    /** 에이전트 로드를 관측할 수 있었던 날 수 */
+    observedDays: number
+    /** 하루 경계를 걸쳐 통째로 제외한 배치 수 */
+    excludedBatches: number
+    /** 스킬 신호를 담을 수 없는 수집기에서 온 배치 수 */
+    unobservedBatches: number
+  }
   /** 카탈로그에는 있으나 기간 내 apply가 0인 스킬의 전체 수 */
   totalUnusedSkills: number
   /** 정리 우선순위 상위 장기 미관측 스킬 */
