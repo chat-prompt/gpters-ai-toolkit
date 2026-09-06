@@ -5,6 +5,7 @@
 import { jsonRpcCall } from '../client.js'
 import { resolveToken } from '../auth.js'
 import { jsonOut, error } from '../output.js'
+import pkg from '../../package.json' with { type: 'json' }
 
 /** report-session 명령어 옵션 */
 export interface ReportSessionOptions {
@@ -33,7 +34,9 @@ export async function runReportSession(opts: ReportSessionOptions): Promise<void
       arguments: {
         eventType: 'session_end',
         promptCount: opts.count,
-        pluginVersion: opts.version ?? 'unknown',
+        // 호출자가 안 넘기면 실제 CLI 버전을 쓴다. 예전 기본값 'unknown'은 운영에 105건 쌓였고
+        // 그 필드로는 아무것도 판정할 수 없었다.
+        pluginVersion: opts.version ?? pkg.version,
       },
     },
     token

@@ -65,6 +65,9 @@ const USER_AGENT_PATTERNS: Array<{ pattern: RegExp; type: ClientType }> = [
   { pattern: /cursor/i, type: 'cursor' },
   { pattern: /codex/i, type: 'codex' },
   { pattern: /mozilla|chrome|safari|firefox|edge/i, type: 'web_browser' },
+  // aitk CLI는 지금 OAuth 클라이언트 이름 덕에 우연히 cli로 잡힌다. UA에 버전을 싣기 시작했으므로
+  // 판정도 명시적으로 둔다 — 토큰 경로가 바뀌어도 분류가 흔들리지 않게.
+  { pattern: /\baitk\//i, type: 'cli' },
   { pattern: /curl|httpie|wget|postman|insomnia/i, type: 'cli' },
 ]
 
