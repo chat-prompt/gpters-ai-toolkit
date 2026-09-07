@@ -1420,3 +1420,38 @@ export const axAgentTelemetryCollectors = pgTable('ax_agent_telemetry_collectors
 
 export type AxAgentTelemetryCollectorRecord = typeof axAgentTelemetryCollectors.$inferSelect
 export type NewAxAgentTelemetryCollectorRecord = typeof axAgentTelemetryCollectors.$inferInsert
+
+/**
+ * 카탈로그 위생 지표의 일별 스냅숏.
+ *
+ * 중복·미사용은 **추세로 봐야 의미가 있다.** "지금 중복 묶음이 8개"만으로는 정리가 먹히는지
+ * 알 수 없고, 카탈로그는 과거 상태를 보존하지 않아(스킬이 지워지면 흔적이 없다) 나중에
+ * 소급해 계산할 수도 없다. 그래서 매일 찍어 둔다.
+ *
+ * (snapshot_date, item_type) 복합 기본키라 같은 날 다시 돌려도 덮어쓰기로 끝난다.
+ */
+export const axCatalogHealthSnapshots = pgTable('ax_catalog_health_snapshots', {
+  /** 스냅숏 기준 날짜 (UTC) */
+  snapshotDate: text('snapshot_date').notNull(),
+  itemType: itemTypeEnum('item_type').notNull(),
+  /** 발행된 항목 수 */
+  totalItems: integer('total_items').notNull().default(0),
+  /** 한 번도 로드되지 않은 수 */
+  neverLoaded: integer('never_loaded').notNull().default(0),
+  /** 한 번도 적용되지 않은 수 */
+  neverApplied: integer('never_applied').notNull().default(0),
+  /** 적용됐지만 쓴 사람이 한 명뿐인 수 */
+  singleUserApplied: integer('single_user_applied').notNull().default(0),
+  /** 본문 유사도로 이어 붙인 중복 묶음 수 */
+  duplicateGroups: integer('duplicate_groups').notNull().default(0),
+  /** 그 묶음에 속한 항목 수 */
+  duplicateItems: integer('duplicate_items').notNull().default(0),
+  /** 정규화 후 사실상 동일한 쌍의 수 */
+  nearIdenticalPairs: integer('near_identical_pairs').notNull().default(0),
+  capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.snapshotDate, table.itemType] }),
+])
+
+export type AxCatalogHealthSnapshotRecord = typeof axCatalogHealthSnapshots.$inferSelect
+export type NewAxCatalogHealthSnapshotRecord = typeof axCatalogHealthSnapshots.$inferInsert

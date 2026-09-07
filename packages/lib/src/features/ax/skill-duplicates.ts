@@ -25,10 +25,11 @@
  */
 
 import { catalogItems, db, skillEvents, users } from '@gpters/db'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelError, panelOk } from './panel'
 import { normalizeSkillDoc, trigramSimilarity } from './skill-diff'
+import { readCatalogHealthTrend, summarizeCatalogTrend } from './catalog-health'
 import type {
   AxPanel,
   AxPanelMeta,
@@ -69,6 +70,8 @@ const SKETCH_THRESHOLD = 0.4
  * 대상으로 하므로 훨씬 높게 잡고, 그 아래는 묶지 않고 쌍으로만 보여준다.
  */
 const GROUP_THRESHOLD = 0.9
+/** 추세로 읽어 오는 스냅숏 일수 */
+const TREND_DAYS = 30
 /** 화면에 내려보내는 최대 쌍 수 */
 const PAIR_LIMIT = 60
 /** 캐시 TTL — 무거운 계산이고 스킬 본문은 분 단위로 바뀌지 않는다 */
@@ -272,7 +275,14 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
         })
         .from(catalogItems)
         .leftJoin(users, eq(users.id, catalogItems.authorId))
-        .where(eq(catalogItems.type, 'skill'))
+        // 발행된 적 없는 초안은 정리 대상이 아니다. 추세 스냅숏과 같은 모집단을 써야
+        // 화면 머리말의 개수와 추세의 개수가 갈리지 않는다.
+        .where(
+          and(
+            eq(catalogItems.type, 'skill'),
+            or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+          )
+        )
 
       const candidates: DuplicateCandidate[] = rows
         .map((row) => ({
@@ -288,6 +298,11 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
       const pairs = findDuplicatePairs(candidates)
       const groups = groupDuplicates(pairs)
       const involved = new Set(pairs.flatMap((pair) => [pair.left.id, pair.right.id]))
+
+      // 추세는 크론이 매일 찍어 둔 스냅숏에서 온다. 카탈로그가 과거 상태를 보존하지 않아
+      // 여기서 소급 계산할 수 없다. 스냅숏이 없으면 화면은 "아직 추세 없음"을 적는다.
+      const trend = await readCatalogHealthTrend('skill', TREND_DAYS).catch(() => [])
+      const trendSummary = summarizeCatalogTrend(trend)
 
       const data: AxSkillDuplicateData = {
         basis: {
@@ -309,6 +324,13 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
         })),
         pairs: pairs.slice(0, PAIR_LIMIT),
         truncated: Math.max(0, pairs.length - PAIR_LIMIT),
+        trend: trend.map((row) => ({
+          date: row.snapshotDate,
+          duplicateGroups: row.duplicateGroups,
+          neverLoaded: row.neverLoaded,
+          totalItems: row.totalItems,
+        })),
+        trendSummary,
       }
 
       const result = panelOk(meta, data, [

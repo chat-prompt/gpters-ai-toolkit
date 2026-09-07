@@ -365,6 +365,7 @@ describe('AxDashboard 패널 요청', () => {
         { date: '2026-08-30', events: 20 },
         { date: '2026-08-31', events: 45 },
       ],
+      humanVsAgent: { daily: [], observedDays: 0, excludedBatches: 0, unobservedBatches: 0 },
       totalUnusedSkills: 0,
       unusedSkills: [],
     }
@@ -558,6 +559,7 @@ describe('AxDashboard 패널 요청', () => {
         applies: { fromSearch: 1, afterDirectLoad: 1, withoutLoad: 2, unlinkable: 0 },
       },
       skills: [], daily: [], totalUnusedSkills: 0, unusedSkills: [],
+      humanVsAgent: { daily: [], observedDays: 0, excludedBatches: 0, unobservedBatches: 0 },
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)

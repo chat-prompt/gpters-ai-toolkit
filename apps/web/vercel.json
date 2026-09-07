@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/redact-skill-text",
       "schedule": "20 3 * * *"
+    },
+    {
+      "path": "/api/cron/catalog-health-snapshot",
+      "schedule": "20 4 * * *"
     }
   ]
 }

@@ -1050,5 +1050,20 @@ export interface AxSkillDuplicateData {
   pairs: AxSkillDuplicatePair[]
   /** 상한에 걸려 잘린 쌍 수 */
   truncated: number
+  /**
+   * 일별 스냅숏 추세 (날짜 오름차순).
+   *
+   * 크론이 매일 찍어 둔 것이다. 카탈로그는 과거 상태를 보존하지 않아 소급 계산이 불가능하므로,
+   * 스냅숏이 쌓이기 전에는 비어 있다 — 그건 "0"이 아니라 "아직 모른다"이다.
+   */
+  trend: Array<{ date: string; duplicateGroups: number; neverLoaded: number; totalItems: number }>
+  /** 처음 대비 마지막 변화. 스냅숏이 두 줄 미만이면 null */
+  trendSummary: {
+    from: string
+    to: string
+    duplicateGroupsDelta: number
+    neverLoadedDelta: number
+    worsening: boolean
+  } | null
 }
 

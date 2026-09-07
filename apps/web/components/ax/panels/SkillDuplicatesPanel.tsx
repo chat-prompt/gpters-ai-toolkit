@@ -13,7 +13,7 @@
 import type { AxSkillDuplicateData, AxSkillDuplicateGroup, AxSkillDuplicatePair } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount } from '../format'
-import { EMPTY_NOTE, SECTION_LABEL, TD, TH } from './primitives'
+import { EMPTY_NOTE, META_LINE, SECTION_LABEL, TD, TH } from './primitives'
 
 /**
  * 카탈로그 중복 패널 화면
@@ -30,6 +30,8 @@ export function SkillDuplicatesPanel({ data }: AxPanelViewProps<AxSkillDuplicate
         서로 비교 · 유사도 {data.basis.threshold.toFixed(2)} 이상을 후보로 올린다 ·
         본문 전체를 자르지 않고 비교한다
       </p>
+
+      <TrendSection data={data} />
 
       <section className="space-y-4">
         <h3 className={SECTION_LABEL}>판단 단위 묶음</h3>
@@ -90,6 +92,69 @@ export function SkillDuplicatesPanel({ data }: AxPanelViewProps<AxSkillDuplicate
       </section>
     </div>
   )
+}
+
+
+/**
+ * 정리가 먹히고 있나 — 일별 스냅숏 추세.
+ *
+ * 스냅숏이 없으면 0을 그리지 않고 "아직 모른다"고 적는다. 카탈로그는 과거 상태를 보존하지 않아
+ * 소급 계산이 불가능하므로, 비어 있는 것은 진짜로 관측 이전이라는 뜻이다.
+ */
+function TrendSection({ data }: { data: AxSkillDuplicateData }) {
+  const { trend, trendSummary } = data
+
+  if (trend.length === 0) {
+    return (
+      <section className="space-y-3">
+        <h3 className={SECTION_LABEL}>추세</h3>
+        <p className={EMPTY_NOTE}>
+          아직 스냅숏이 없습니다. 매일 한 번 찍히며, 이틀치가 쌓이면 늘고 있는지 줄고 있는지 나옵니다.
+        </p>
+      </section>
+    )
+  }
+
+  const max = Math.max(1, ...trend.map((row) => row.duplicateGroups))
+
+  return (
+    <section className="space-y-3">
+      <h3 className={SECTION_LABEL}>추세</h3>
+      <p className="text-sm text-[var(--text-secondary)]">
+        중복 묶음이 늘고 있는지 본다. 한 번 치우고 끝나는 일이 아니라, 새로 쌓이는 속도가 더 중요하다.
+      </p>
+
+      <div className="flex h-16 items-end gap-[3px] overflow-x-auto">
+        {trend.map((row) => (
+          <div
+            key={row.date}
+            className="min-w-[6px] flex-1 rounded-t-[2px] bg-[var(--accent-orange)]"
+            style={{ height: `${Math.max(row.duplicateGroups > 0 ? 4 : 0, (row.duplicateGroups / max) * 100)}%` }}
+            title={`${row.date} · 중복 묶음 ${row.duplicateGroups} · 로드 0건 ${row.neverLoaded}/${row.totalItems}`}
+          />
+        ))}
+      </div>
+
+      {trendSummary === null ? (
+        <p className={META_LINE}>
+          스냅숏 {formatCount(trend.length)}일치 — 늘고 있는지 줄고 있는지는 이틀치부터 판정한다
+        </p>
+      ) : (
+        <p className={META_LINE}>
+          {trendSummary.from} → {trendSummary.to} · 중복 묶음{' '}
+          <span className="text-[var(--text-primary)]">{signed(trendSummary.duplicateGroupsDelta)}</span> · 로드 0건{' '}
+          <span className="text-[var(--text-primary)]">{signed(trendSummary.neverLoadedDelta)}</span>
+          {trendSummary.worsening ? ' · 늘고 있다' : ' · 늘지 않았다'}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/** 증감을 부호와 함께. 0은 변화 없음으로 읽히게 둔다 */
+function signed(value: number): string {
+  if (value === 0) return '변화 없음'
+  return value > 0 ? `+${formatCount(value)}` : `−${formatCount(Math.abs(value))}`
 }
 
 /** 묶음 한 줄 — 소속 id와 적용 이력 표시 */
