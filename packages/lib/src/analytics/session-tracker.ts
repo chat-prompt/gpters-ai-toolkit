@@ -228,6 +228,15 @@ export async function upsertSessionSummary(input: SessionUpsertInput): Promise<v
           clientName: sql`COALESCE(${mcpSessions.clientName}, ${input.clientName ?? null})`,
           clientVersion: sql`COALESCE(${mcpSessions.clientVersion}, ${input.clientVersion ?? null})`,
           ipHash: sql`COALESCE(${mcpSessions.ipHash}, ${input.ipHash ?? null})`,
+          // 마감된 뒤에 다시 활동이 오면 되살린다.
+          //
+          // 30분 무활동으로 마감하는 것은 "끝났다고 치자"는 추정이지 사실이 아니다.
+          // 실제로 이어서 쓰면 마감이 틀린 것이므로 되돌려야 한다. 이 줄이 없으면
+          // `finalizeStaleSessions`가 status='active'만 고르기 때문에 다시 마감되지 않고,
+          // 마감 시점에 계산한 지속 시간·전환 플래그가 **그 뒤 활동을 반영하지 못한 채 굳는다.**
+          //
+          // 2026-09-07 운영 실측: 마감 후 활동이 이어진 세션 69건, 최대 어긋남 4.1일.
+          status: 'active',
           updatedAt: now,
         },
       })
