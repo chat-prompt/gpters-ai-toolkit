@@ -1065,5 +1065,39 @@ export interface AxSkillDuplicateData {
     neverLoadedDelta: number
     worsening: boolean
   } | null
+  /** 한 번도 열리지 않은 스킬의 정리 후보 (중복 묶음에 걸린 것은 뺀다) */
+  unused: AxUnusedSkillsData
+}
+
+/** 정리 후보 한 줄 */
+export interface AxUnusedSkillRow {
+  id: string
+  name: string
+  /** 등록자 이름. 작성자가 비어 있으면 null */
+  authorName: string | null
+  /** 등록일 (YYYY-MM-DD) */
+  createdAt: string
+  /** 검색 결과에 노출된 횟수 — 많을수록 급하다 */
+  shown: number
+  /** 등록 후 지난 일수 */
+  ageDays: number
+}
+
+/** 정리 후보 집계 */
+export interface AxUnusedSkillsData {
+  totalItems: number
+  /** 로드 0건인 스킬 수 (유예 기간 포함) */
+  neverLoaded: number
+  /** 유예 기간이 지나 실제 후보가 되는 수 */
+  candidates: number
+  /** 그중 검색에 한 번이라도 뜬 적 있는 수 */
+  shownButUnused: number
+  /** 중복 묶음에 이미 걸려 여기서 뺀 수 */
+  excludedAsDuplicate: number
+  /** 유예 기간(일) */
+  graceDays: number
+  rows: AxUnusedSkillRow[]
+  /** 등록자별 후보 수 — 누구에게 묶어서 물을지 정하는 근거 */
+  byAuthor: Array<{ authorName: string | null; count: number }>
 }
 

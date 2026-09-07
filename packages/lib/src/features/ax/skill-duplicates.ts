@@ -30,6 +30,7 @@ import { createLogger } from '../../core/logger'
 import { panelError, panelOk } from './panel'
 import { normalizeSkillDoc, trigramSimilarity } from './skill-diff'
 import { readCatalogHealthTrend, summarizeCatalogTrend } from './catalog-health'
+import { computeUnusedSkills } from './unused-skills'
 import type {
   AxPanel,
   AxPanelMeta,
@@ -78,9 +79,11 @@ const PAIR_LIMIT = 60
 const CACHE_TTL_MS = 60 * 60 * 1000
 
 const meta: AxPanelMeta = {
+  // id는 `skill-duplicates` 그대로 둔다 — 이미 배포된 API 경로이고, 바꿔서 얻을 것이 없다.
+  // 화면에 보이는 것은 제목이고, 이 탭이 답하는 질문은 "이번 주에 뭘 정리할까"로 넓어졌다.
   id: 'skill-duplicates',
-  title: '카탈로그 중복',
-  description: '같은 문서가 여러 id로 등록된 후보 — 본문 전체 3-그램 자카드',
+  title: '정리 후보',
+  description: '중복 묶음과 한 번도 열리지 않은 스킬 — 정리 우선순위와 추세',
   source: 'aitk DB (catalog_items)',
   visibility: 'org',
   parentId: 'skill-usage',
@@ -304,6 +307,9 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
       const trend = await readCatalogHealthTrend('skill', TREND_DAYS).catch(() => [])
       const trendSummary = summarizeCatalogTrend(trend)
 
+      // 중복 묶음에 이미 걸린 것은 미사용 후보에서 뺀다 — 같은 항목을 두 번 처리하지 않게
+      const unused = await computeUnusedSkills(involved)
+
       const data: AxSkillDuplicateData = {
         basis: {
           skills: rows.length,
@@ -331,11 +337,12 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
           totalItems: row.totalItems,
         })),
         trendSummary,
+        unused,
       }
 
       const result = panelOk(meta, data, [
         { label: '중복 후보 묶음', value: String(data.groups.length), hint: `스킬 ${data.involvedSkills}개` },
-        { label: '내용 동일', value: String(data.identicalCount), hint: '쌍 · 정규화 후 일치' },
+        { label: '미사용 정리 후보', value: String(unused.candidates), hint: `로드 0건 ${unused.neverLoaded}개 중` },
       ])
       cache = { result, expiresAt: Date.now() + CACHE_TTL_MS }
       return result
