@@ -114,3 +114,37 @@ ALTER TABLE skill_events ADD CONSTRAINT skill_events_session_id_mcp_sessions_ses
 ```sh
 pnpm --filter @gpters/db test:ax-child-guard
 ```
+
+## 운영 적용 기록 (2026-09-07)
+
+적용 완료.
+
+| 항목 | 값 |
+| -- | -- |
+| Neon 프로젝트 | `floral-wave-70284131` |
+| 운영 브랜치 | `br-muddy-sea-a1znovvl` |
+| 복구 브랜치 | `pre-ax-0037-prod-20260907` (`br-fragrant-thunder-a1h7yg1l`, Auto-delete After 1 day) |
+| 확인 문자열 | `apply-ax-0037` |
+
+```
+AX 0037 preflight:    migrations=26, skill_events=CASCADE(1),  ax_skill_execution_attempts=CASCADE(1),  skillEvents=13022, attempts=20
+AX 0037 verification: migrations=27, skill_events=SET NULL(1), ax_skill_execution_attempts=SET NULL(1), skillEvents=13022, attempts=20
+```
+
+러너와 별개로 `pg_constraint`를 직접 조회해 확인했다. 두 제약 모두 `SET NULL`이고 테이블당 하나씩이다.
+`ax_skill_execution_attempts` 쪽 이름은 Postgres 식별자 63자 제한에 걸려
+`ax_skill_execution_attempts_session_id_mcp_sessions_session_id_`로 잘렸다. 동작에는 영향이 없다.
+
+### 마지막 연쇄 삭제는 적용 22분 전에 일어났다
+
+오늘 03:00 UTC `finalize-sessions` 실행이 캐스케이드가 남아 있는 마지막 회차였다. 적용 전후로
+가장 오래된 행이 이렇게 움직였다.
+
+| | 2026-09-06 기준 | 적용 시점(2026-09-07 03:22 UTC) |
+| -- | -- | -- |
+| `mcp_sessions` 가장 오래된 행 | 2026-06-08 03:18 | 2026-06-09 03:19 |
+| `skill_events` 가장 오래된 행 | 2026-06-08 07:43 | **2026-06-14 11:44** |
+| 세션이 붙은 이벤트 | 442건 | **432건** |
+
+예고했던 10건이 그대로 사라졌다. 내일 03:00 UTC부터는 세션만 지워지고 이벤트는 `session_id`가
+NULL이 된 채 남는다.
