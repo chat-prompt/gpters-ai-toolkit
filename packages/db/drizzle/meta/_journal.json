@@ -190,6 +190,13 @@
       "when": 1788745000000,
       "tag": "0036_ax_catalog_health_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788751000000,
+      "tag": "0037_session_delete_keeps_events",
+      "breakpoints": true
     }
   ]
 }

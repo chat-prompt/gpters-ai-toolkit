@@ -921,8 +921,12 @@ export const skillEvents = pgTable('skill_events', {
   /**
    * MCP 대화 세션. 단발성 AITK CLI REST/JSON-RPC 호출은 정식 세션이 없으므로 nullable이다.
    * 세션이 없다는 이유로 사건 자체를 버리지는 않되, 퍼널·세션 수에는 포함하지 않는다.
+   *
+   * **세션이 지워져도 이벤트는 남는다**(`set null`). `mcp_sessions`는 90일 보관이지만
+   * "누가 언제 무슨 스킬을 열었나"는 그보다 오래 봐야 한다 — 365일 잔디와 미사용 판정의
+   * 원천이 이 테이블이다. `cascade`였던 탓에 2026-03~06월 이벤트가 이미 사라졌다.
    */
-  sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'set null' }),
   /** 원천 감사 로그 — 세션 없는 호출과 백필을 멱등하게 연결한다. */
   sourceAuditLogId: text('source_audit_log_id').references(() => mcpAuditLogs.id, { onDelete: 'set null' }),
   /** 검색→로드→실행을 잇는 개인정보 비포함 UUID. transport session과 독립적이다. */
@@ -1301,8 +1305,11 @@ export const axExecutionEventPhaseEnum = pgEnum('ax_execution_event_phase', ['st
 export const axSkillExecutionAttempts = pgTable('ax_skill_execution_attempts', {
   attemptId: text('attempt_id').primaryKey(),
   eventId: text('event_id').notNull().unique(),
-  /** MCP transport session. 단발 CLI 보고는 정식 session이 없으므로 nullable이다. */
-  sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'cascade' }),
+  /**
+   * MCP transport session. 단발 CLI 보고는 정식 session이 없으므로 nullable이다.
+   * 세션이 지워져도 시도 기록은 남는다(`set null`) — `skill_events`와 같은 이유다.
+   */
+  sessionId: text('session_id').references(() => mcpSessions.sessionId, { onDelete: 'set null' }),
   /** 탐색·로드와 실제 실행 시도를 연결한다. */
   journeyId: text('journey_id'),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
