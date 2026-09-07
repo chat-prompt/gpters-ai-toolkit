@@ -40,6 +40,8 @@ export {
   compactDescription,
   firstSentence,
   normalizeChangeNote,
+  parseBatchResponse,
+  summarizeBatch,
   summarizeChangeNote,
   summarizeSkillContent,
 } from './change-note'
