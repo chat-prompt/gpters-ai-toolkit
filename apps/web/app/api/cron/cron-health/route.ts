@@ -40,7 +40,13 @@ export async function GET(request: NextRequest) {
     const removed = await cleanupCronRuns()
     return {
       stats: { checked: report.checked, issues: report.issues.length, removed },
-      body: { issues: report.issues, checkedAt: report.checkedAt },
+      // observingSince를 함께 내보낸다 — 문제가 0건일 때 "정상"인지 "아직 판정을 미룬 것"인지
+      // 이 값 없이는 구분할 수 없다
+      body: {
+        issues: report.issues,
+        checkedAt: report.checkedAt,
+        observingSince: report.observingSince,
+      },
     }
   })
 
