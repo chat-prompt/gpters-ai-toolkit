@@ -10,10 +10,15 @@
  * 높게 나오므로, 유사도는 사람이 볼 순서를 정하는 값이고 결정은 처리 절차 문서가 맡는다.
  */
 
-import type { AxSkillDuplicateData, AxSkillDuplicateGroup, AxSkillDuplicatePair } from '@/lib/features/ax'
+import type {
+  AxSkillDuplicateData,
+  AxSkillDuplicateGroup,
+  AxSkillDuplicatePair,
+  AxUnusedSkillsData,
+} from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount } from '../format'
-import { EMPTY_NOTE, SECTION_LABEL, TD, TH } from './primitives'
+import { EMPTY_NOTE, META_LINE, SECTION_LABEL, TD, TH } from './primitives'
 
 /**
  * 카탈로그 중복 패널 화면
@@ -30,6 +35,8 @@ export function SkillDuplicatesPanel({ data }: AxPanelViewProps<AxSkillDuplicate
         서로 비교 · 유사도 {data.basis.threshold.toFixed(2)} 이상을 후보로 올린다 ·
         본문 전체를 자르지 않고 비교한다
       </p>
+
+      <TrendSection data={data} />
 
       <section className="space-y-4">
         <h3 className={SECTION_LABEL}>판단 단위 묶음</h3>
@@ -56,6 +63,8 @@ export function SkillDuplicatesPanel({ data }: AxPanelViewProps<AxSkillDuplicate
           </p>
         )}
       </section>
+
+      <UnusedSection data={data.unused} />
 
       <section className="space-y-4">
         <h3 className={SECTION_LABEL}>유사도 높은 쌍</h3>
@@ -89,6 +98,153 @@ export function SkillDuplicatesPanel({ data }: AxPanelViewProps<AxSkillDuplicate
         )}
       </section>
     </div>
+  )
+}
+
+
+/**
+ * 정리가 먹히고 있나 — 일별 스냅숏 추세.
+ *
+ * 스냅숏이 없으면 0을 그리지 않고 "아직 모른다"고 적는다. 카탈로그는 과거 상태를 보존하지 않아
+ * 소급 계산이 불가능하므로, 비어 있는 것은 진짜로 관측 이전이라는 뜻이다.
+ */
+function TrendSection({ data }: { data: AxSkillDuplicateData }) {
+  const { trend, trendSummary } = data
+
+  if (trend.length === 0) {
+    return (
+      <section className="space-y-3">
+        <h3 className={SECTION_LABEL}>추세</h3>
+        <p className={EMPTY_NOTE}>
+          아직 스냅숏이 없습니다. 매일 한 번 찍히며, 이틀치가 쌓이면 늘고 있는지 줄고 있는지 나옵니다.
+        </p>
+      </section>
+    )
+  }
+
+  const max = Math.max(1, ...trend.map((row) => row.duplicateGroups))
+
+  return (
+    <section className="space-y-3">
+      <h3 className={SECTION_LABEL}>추세</h3>
+      <p className="text-sm text-[var(--text-secondary)]">
+        중복 묶음이 늘고 있는지 본다. 한 번 치우고 끝나는 일이 아니라, 새로 쌓이는 속도가 더 중요하다.
+      </p>
+
+      <div className="flex h-16 items-end gap-[3px] overflow-x-auto">
+        {trend.map((row) => (
+          <div
+            key={row.date}
+            className="min-w-[6px] flex-1 rounded-t-[2px] bg-[var(--accent-orange)]"
+            style={{ height: `${Math.max(row.duplicateGroups > 0 ? 4 : 0, (row.duplicateGroups / max) * 100)}%` }}
+            title={`${row.date} · 중복 묶음 ${row.duplicateGroups} · 로드 0건 ${row.neverLoaded}/${row.totalItems}`}
+          />
+        ))}
+      </div>
+
+      {trendSummary === null ? (
+        <p className={META_LINE}>
+          스냅숏 {formatCount(trend.length)}일치 — 늘고 있는지 줄고 있는지는 이틀치부터 판정한다
+        </p>
+      ) : (
+        <p className={META_LINE}>
+          {trendSummary.from} → {trendSummary.to} · 중복 묶음{' '}
+          <span className="text-[var(--text-primary)]">{signed(trendSummary.duplicateGroupsDelta)}</span> · 로드 0건{' '}
+          <span className="text-[var(--text-primary)]">{signed(trendSummary.neverLoadedDelta)}</span>
+          {trendSummary.worsening ? ' · 늘고 있다' : ' · 늘지 않았다'}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/** 증감을 부호와 함께. 0은 변화 없음으로 읽히게 둔다 */
+function signed(value: number): string {
+  if (value === 0) return '변화 없음'
+  return value > 0 ? `+${formatCount(value)}` : `−${formatCount(Math.abs(value))}`
+}
+
+
+/**
+ * 한 번도 열리지 않은 스킬 — 정리 우선순위와 함께.
+ *
+ * 총계만으로는 아무도 손대지 못한다. **검색에 뜨는데 안 열리는 것**부터 보여준다 —
+ * 검색 자리를 차지하면서 아무 값도 못 주기 때문이다.
+ */
+function UnusedSection({ data }: { data: AxUnusedSkillsData }) {
+  return (
+    <section className="space-y-4">
+      <h3 className={SECTION_LABEL}>한 번도 열리지 않은 스킬</h3>
+      <p className="text-sm text-[var(--text-secondary)]">
+        로드 0건이 {formatCount(data.neverLoaded)}개다. 그중 만든 지 {data.graceDays}일이 안 된 것과
+        위 중복 묶음에 이미 걸린 것을 빼면 <span className="text-[var(--text-primary)]">{formatCount(data.candidates)}개</span>가 남는다.
+        <span className="text-[var(--text-muted)]">
+          {' '}새 스킬이 안 쓰인 것은 당연하고, 중복은 위에서 판단한다.
+        </span>
+      </p>
+
+      <p className={META_LINE}>
+        검색에 뜬 적 있는 후보 {formatCount(data.shownButUnused)}개 — 이쪽이 급하다 ·
+        중복으로 빠진 것 {formatCount(data.excludedAsDuplicate)}개
+      </p>
+
+      {data.rows.length === 0 ? (
+        <p className={EMPTY_NOTE}>정리할 후보가 없습니다.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full max-w-[56rem] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border-subtle)] text-left">
+                <th scope="col" className={TH}>스킬</th>
+                <th scope="col" className={`${TH} text-right`}>검색 노출</th>
+                <th scope="col" className={`${TH} text-right`}>등록 후</th>
+                <th scope="col" className={TH}>등록자</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((row) => (
+                <tr key={row.id} className="border-b border-[var(--border-subtle)]">
+                  <td className={TD}>
+                    <div className="font-mono text-[12px] text-[var(--text-primary)]">{row.id}</div>
+                    {/* 이름이 id와 같은 항목이 절반이라 그대로 두면 같은 글자가 두 줄로 겹친다 */}
+                    {row.name !== row.id && (
+                      <div className="text-[11px] text-[var(--text-muted)]">{row.name}</div>
+                    )}
+                  </td>
+                  <td className={`${TD} text-right font-mono tabular-nums`}>
+                    {row.shown > 0 ? (
+                      <span className="text-[var(--text-primary)]">{formatCount(row.shown)}</span>
+                    ) : (
+                      <span className="text-[var(--text-muted)]">0</span>
+                    )}
+                  </td>
+                  <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
+                    {formatCount(row.ageDays)}일
+                  </td>
+                  <td className={`${TD} text-[var(--text-secondary)]`}>{row.authorName ?? '작성자 없음'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {data.byAuthor.length > 0 && (
+        <div className="space-y-2">
+          <p className={META_LINE}>
+            등록자별 후보 수 — 한 사람에게 한꺼번에 묻지 말고 이 단위로 끊어서 확인한다
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {data.byAuthor.map((entry) => (
+              <span key={entry.authorName ?? 'none'} className={META_LINE}>
+                {entry.authorName ?? '작성자 없음'}{' '}
+                <span className="text-[var(--text-primary)]">{formatCount(entry.count)}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 

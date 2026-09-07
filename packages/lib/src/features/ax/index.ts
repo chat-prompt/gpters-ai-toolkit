@@ -16,6 +16,14 @@ export { journeyInsightsPanel } from './journey-insights'
 export { sharedSkillsPanel } from './shared-skills'
 export { skillDiffPanel } from './skill-diff'
 export {
+  captureCatalogHealth,
+  computeCatalogHealth,
+  readCatalogHealthTrend,
+  summarizeCatalogTrend,
+  type CatalogHealthMetrics,
+  type CatalogHealthSnapshot,
+} from './catalog-health'
+export {
   skillDuplicatesPanel,
   findDuplicatePairs,
   groupDuplicates,

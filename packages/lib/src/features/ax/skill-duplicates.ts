@@ -25,10 +25,12 @@
  */
 
 import { catalogItems, db, skillEvents, users } from '@gpters/db'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../../core/logger'
 import { panelError, panelOk } from './panel'
 import { normalizeSkillDoc, trigramSimilarity } from './skill-diff'
+import { readCatalogHealthTrend, summarizeCatalogTrend } from './catalog-health'
+import { computeUnusedSkills } from './unused-skills'
 import type {
   AxPanel,
   AxPanelMeta,
@@ -69,15 +71,19 @@ const SKETCH_THRESHOLD = 0.4
  * 대상으로 하므로 훨씬 높게 잡고, 그 아래는 묶지 않고 쌍으로만 보여준다.
  */
 const GROUP_THRESHOLD = 0.9
+/** 추세로 읽어 오는 스냅숏 일수 */
+const TREND_DAYS = 30
 /** 화면에 내려보내는 최대 쌍 수 */
 const PAIR_LIMIT = 60
 /** 캐시 TTL — 무거운 계산이고 스킬 본문은 분 단위로 바뀌지 않는다 */
 const CACHE_TTL_MS = 60 * 60 * 1000
 
 const meta: AxPanelMeta = {
+  // id는 `skill-duplicates` 그대로 둔다 — 이미 배포된 API 경로이고, 바꿔서 얻을 것이 없다.
+  // 화면에 보이는 것은 제목이고, 이 탭이 답하는 질문은 "이번 주에 뭘 정리할까"로 넓어졌다.
   id: 'skill-duplicates',
-  title: '카탈로그 중복',
-  description: '같은 문서가 여러 id로 등록된 후보 — 본문 전체 3-그램 자카드',
+  title: '정리 후보',
+  description: '중복 묶음과 한 번도 열리지 않은 스킬 — 정리 우선순위와 추세',
   source: 'aitk DB (catalog_items)',
   visibility: 'org',
   parentId: 'skill-usage',
@@ -272,7 +278,14 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
         })
         .from(catalogItems)
         .leftJoin(users, eq(users.id, catalogItems.authorId))
-        .where(eq(catalogItems.type, 'skill'))
+        // 발행된 적 없는 초안은 정리 대상이 아니다. 추세 스냅숏과 같은 모집단을 써야
+        // 화면 머리말의 개수와 추세의 개수가 갈리지 않는다.
+        .where(
+          and(
+            eq(catalogItems.type, 'skill'),
+            or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+          )
+        )
 
       const candidates: DuplicateCandidate[] = rows
         .map((row) => ({
@@ -288,6 +301,14 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
       const pairs = findDuplicatePairs(candidates)
       const groups = groupDuplicates(pairs)
       const involved = new Set(pairs.flatMap((pair) => [pair.left.id, pair.right.id]))
+
+      // 추세는 크론이 매일 찍어 둔 스냅숏에서 온다. 카탈로그가 과거 상태를 보존하지 않아
+      // 여기서 소급 계산할 수 없다. 스냅숏이 없으면 화면은 "아직 추세 없음"을 적는다.
+      const trend = await readCatalogHealthTrend('skill', TREND_DAYS).catch(() => [])
+      const trendSummary = summarizeCatalogTrend(trend)
+
+      // 중복 묶음에 이미 걸린 것은 미사용 후보에서 뺀다 — 같은 항목을 두 번 처리하지 않게
+      const unused = await computeUnusedSkills(involved)
 
       const data: AxSkillDuplicateData = {
         basis: {
@@ -309,11 +330,19 @@ export const skillDuplicatesPanel: AxPanel<AxSkillDuplicateData> = {
         })),
         pairs: pairs.slice(0, PAIR_LIMIT),
         truncated: Math.max(0, pairs.length - PAIR_LIMIT),
+        trend: trend.map((row) => ({
+          date: row.snapshotDate,
+          duplicateGroups: row.duplicateGroups,
+          neverLoaded: row.neverLoaded,
+          totalItems: row.totalItems,
+        })),
+        trendSummary,
+        unused,
       }
 
       const result = panelOk(meta, data, [
         { label: '중복 후보 묶음', value: String(data.groups.length), hint: `스킬 ${data.involvedSkills}개` },
-        { label: '내용 동일', value: String(data.identicalCount), hint: '쌍 · 정규화 후 일치' },
+        { label: '미사용 정리 후보', value: String(unused.candidates), hint: `로드 0건 ${unused.neverLoaded}개 중` },
       ])
       cache = { result, expiresAt: Date.now() + CACHE_TTL_MS }
       return result

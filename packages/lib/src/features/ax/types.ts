@@ -1050,5 +1050,54 @@ export interface AxSkillDuplicateData {
   pairs: AxSkillDuplicatePair[]
   /** 상한에 걸려 잘린 쌍 수 */
   truncated: number
+  /**
+   * 일별 스냅숏 추세 (날짜 오름차순).
+   *
+   * 크론이 매일 찍어 둔 것이다. 카탈로그는 과거 상태를 보존하지 않아 소급 계산이 불가능하므로,
+   * 스냅숏이 쌓이기 전에는 비어 있다 — 그건 "0"이 아니라 "아직 모른다"이다.
+   */
+  trend: Array<{ date: string; duplicateGroups: number; neverLoaded: number; totalItems: number }>
+  /** 처음 대비 마지막 변화. 스냅숏이 두 줄 미만이면 null */
+  trendSummary: {
+    from: string
+    to: string
+    duplicateGroupsDelta: number
+    neverLoadedDelta: number
+    worsening: boolean
+  } | null
+  /** 한 번도 열리지 않은 스킬의 정리 후보 (중복 묶음에 걸린 것은 뺀다) */
+  unused: AxUnusedSkillsData
+}
+
+/** 정리 후보 한 줄 */
+export interface AxUnusedSkillRow {
+  id: string
+  name: string
+  /** 등록자 이름. 작성자가 비어 있으면 null */
+  authorName: string | null
+  /** 등록일 (YYYY-MM-DD) */
+  createdAt: string
+  /** 검색 결과에 노출된 횟수 — 많을수록 급하다 */
+  shown: number
+  /** 등록 후 지난 일수 */
+  ageDays: number
+}
+
+/** 정리 후보 집계 */
+export interface AxUnusedSkillsData {
+  totalItems: number
+  /** 로드 0건인 스킬 수 (유예 기간 포함) */
+  neverLoaded: number
+  /** 유예 기간이 지나 실제 후보가 되는 수 */
+  candidates: number
+  /** 그중 검색에 한 번이라도 뜬 적 있는 수 */
+  shownButUnused: number
+  /** 중복 묶음에 이미 걸려 여기서 뺀 수 */
+  excludedAsDuplicate: number
+  /** 유예 기간(일) */
+  graceDays: number
+  rows: AxUnusedSkillRow[]
+  /** 등록자별 후보 수 — 누구에게 묶어서 물을지 정하는 근거 */
+  byAuthor: Array<{ authorName: string | null; count: number }>
 }
 
