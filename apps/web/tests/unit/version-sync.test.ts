@@ -1,47 +1,11 @@
 /**
- * Version sync and stale detection tests (DEV-3067)
+ * 구버전 라이브러리 참조 탐지 테스트 (DEV-3067의 잔여)
  *
  * Tests pure functions from version-sync module directly.
  */
 
 import { describe, it, expect } from 'vitest'
-import { isNewerVersion, detectStaleLibraryVersions } from '@gpters/lib/mcp'
-
-describe('isNewerVersion', () => {
-  it('should detect newer major version', () => {
-    expect(isNewerVersion('6.1.0', '7.0.0')).toBe(true)
-  })
-
-  it('should detect newer minor version', () => {
-    expect(isNewerVersion('6.1.0', '6.2.0')).toBe(true)
-  })
-
-  it('should detect newer patch version', () => {
-    expect(isNewerVersion('6.1.0', '6.1.1')).toBe(true)
-  })
-
-  it('should return false for same version', () => {
-    expect(isNewerVersion('6.1.0', '6.1.0')).toBe(false)
-  })
-
-  it('should return false for older version', () => {
-    expect(isNewerVersion('7.0.0', '6.1.0')).toBe(false)
-  })
-
-  it('should handle v-prefixed versions', () => {
-    expect(isNewerVersion('v6.1.0', 'v7.0.0')).toBe(true)
-  })
-
-  it('should handle different length versions', () => {
-    expect(isNewerVersion('6.1', '6.1.1')).toBe(true)
-    expect(isNewerVersion('6.1.1', '6.2')).toBe(true)
-  })
-
-  it('should handle two-segment versions', () => {
-    expect(isNewerVersion('22.14', '23.0')).toBe(true)
-    expect(isNewerVersion('23.0', '22.14')).toBe(false)
-  })
-})
+import { detectStaleLibraryVersions } from '@gpters/lib/mcp'
 
 describe('detectStaleLibraryVersions', () => {
   const versionMap = new Map([
