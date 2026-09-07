@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// 개별 승인 외부 계정 조회는 조직·유저 조회 큐와 분리해서 추적한다
+const approvals = vi.hoisted(() => ({
+  table: { email: 'allowedExternalAccounts.email' },
+  emails: [] as string[],
+  queried: [] as string[],
+}))
+
 // Mock the db module
 const mockSelect = vi.fn()
 const mockInsert = vi.fn()
@@ -44,37 +51,42 @@ function pushSelectResult(result: unknown[]) {
 function resetSelectResults() {
   selectCallCount = 0
   selectResults.length = 0
+  approvals.emails.length = 0
+  approvals.queried.length = 0
 }
 
 vi.mock('@gpters/db', () => ({
   db: {
-    select: (...args: unknown[]) => {
-      const idx = selectCallCount++
-      const resolver = selectResults[idx] || (() => Promise.resolve([]))
-      mockSelect()
-      // Make result thenable so both .where() and .where().limit() work
-      const makeResult = () => {
-        const promise = resolver()
-        // Return a thenable that also has .limit()
-        return {
-          then: (res: (v: unknown) => void, rej: (e: unknown) => void) => promise.then(res, rej),
-          limit: () => resolver(),
+    select: () => ({
+      from: (table?: unknown) => {
+        // 승인 목록 조회는 조직·유저 조회 큐를 소비하지 않는다
+        if (table === approvals.table) {
+          return {
+            where: (condition: { value: string }) => ({
+              limit: () => {
+                approvals.queried.push(condition.value)
+                return Promise.resolve(
+                  approvals.emails.includes(condition.value) ? [{ email: condition.value }] : []
+                )
+              },
+            }),
+          }
         }
-      }
-      if (args.length > 0) {
-        // select({ fields }) pattern
-        return {
-          from: () => ({
-            where: makeResult,
-          }),
+
+        const idx = selectCallCount++
+        const resolver = selectResults[idx] || (() => Promise.resolve([]))
+        mockSelect()
+        // Make result thenable so both .where() and .where().limit() work
+        const makeResult = () => {
+          const promise = resolver()
+          return {
+            then: (res: (v: unknown) => void, rej: (e: unknown) => void) => promise.then(res, rej),
+            limit: () => resolver(),
+          }
         }
-      }
-      return {
-        from: () => ({
-          where: makeResult,
-        }),
-      }
-    },
+        return { where: makeResult }
+      },
+    }),
     insert: () => ({
       values: (data: unknown) => {
         mockValues(data)
@@ -93,6 +105,7 @@ vi.mock('@gpters/db', () => ({
   users: { email: 'users.email', id: 'users.id', role: 'users.role', accountStatus: 'users.accountStatus' },
   organizations: { allowedDomains: 'organizations.allowedDomains', isActive: 'organizations.isActive' },
   orgMemberships: { userId: 'orgMemberships.userId', orgId: 'orgMemberships.orgId', role: 'orgMemberships.role', status: 'orgMemberships.status' },
+  allowedExternalAccounts: approvals.table,
 }))
 
 vi.mock('drizzle-orm', async (importOriginal) => {
@@ -212,6 +225,7 @@ describe('Auth Module', () => {
       })
 
       expect(result).toBe(false)
+      expect(approvals.queried).toEqual(['test@gmail.com'])
       expect(mockSelect).not.toHaveBeenCalled()
     })
 
@@ -444,6 +458,7 @@ describe('Auth Module', () => {
       const result = await mockJwtCallback({ token, user: undefined })
 
       expect(result).toBeNull()
+      expect(approvals.queried).toEqual(['jwhyun2215@gmail.com'])
       expect(mockSelect).not.toHaveBeenCalled()
     })
 

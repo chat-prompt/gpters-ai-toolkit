@@ -1,20 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const tokenRecord = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
+const approvedEmails = vi.hoisted(() => ({ current: [] as string[] }))
 const execute = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const insertValues = vi.hoisted(() => vi.fn())
+
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('drizzle-orm')>()),
+  eq: (column: unknown, value: unknown) => ({ column, value }),
+}))
+
+const APPROVALS_TABLE = vi.hoisted(() => ({ email: 'allowed_external_accounts.email' }))
 
 vi.mock('@gpters/db', () => {
   const where = vi.fn(async () => tokenRecord.current ? [tokenRecord.current] : [])
   return {
     db: {
       select: vi.fn((fields?: Record<string, unknown>) => ({
-        from: vi.fn(() => ({
-          where: fields?.email
-            ? vi.fn(async () => [{ email: tokenRecord.current?.userEmail }])
-            : where,
-          leftJoin: vi.fn(() => ({ leftJoin: vi.fn(() => ({ where })) })),
-        })),
+        from: vi.fn((table?: unknown) => {
+          if (table === APPROVALS_TABLE) {
+            return {
+              where: vi.fn((condition: { value: string }) => ({
+                limit: vi.fn(async () =>
+                  approvedEmails.current.includes(condition.value) ? [{ email: condition.value }] : []
+                ),
+              })),
+            }
+          }
+          return {
+            where: fields?.email
+              ? vi.fn(async () => [{ email: tokenRecord.current?.userEmail }])
+              : where,
+            leftJoin: vi.fn(() => ({ leftJoin: vi.fn(() => ({ where })) })),
+          }
+        }),
       })),
       insert: vi.fn(() => ({
         values: insertValues.mockReturnValue({
@@ -35,6 +54,7 @@ vi.mock('@gpters/db', () => {
     oauthClients: { id: 'client.id', name: 'client.name' },
     oauthRefreshTokens: {},
     users: { id: 'user.id', email: 'user.email', role: 'user.role' },
+    allowedExternalAccounts: APPROVALS_TABLE,
   }
 })
 
@@ -51,6 +71,7 @@ const VALID_TOKEN = `mcp_${'a'.repeat(32)}`
 describe('OAuth access token domain enforcement', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    approvedEmails.current = []
     tokenRecord.current = {
       id: 'token-1',
       clientId: 'client-1',
@@ -73,6 +94,7 @@ describe('OAuth access token domain enforcement', () => {
 
   it('accepts a token owned by the individually approved external account', async () => {
     tokenRecord.current = { ...tokenRecord.current, userEmail: 'zeusajm@yonsei.ac.kr' }
+    approvedEmails.current = ['zeusajm@yonsei.ac.kr']
 
     const result = await validateAccessToken(VALID_TOKEN)
 
@@ -100,6 +122,7 @@ describe('OAuth access token domain enforcement', () => {
 
   it('issues CLI and MCP tokens to the individually approved external account', async () => {
     tokenRecord.current = { ...tokenRecord.current, userEmail: 'zeusajm@yonsei.ac.kr' }
+    approvedEmails.current = ['zeusajm@yonsei.ac.kr']
 
     await expect(createAccessToken({ clientId: 'client-1', userId: 'user-1' })).resolves.toBeDefined()
     expect(insertValues).toHaveBeenCalled()
