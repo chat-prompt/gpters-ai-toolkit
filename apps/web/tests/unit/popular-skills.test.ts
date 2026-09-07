@@ -7,8 +7,12 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  formatCreatedLines,
   formatDigestLines,
+  formatUpdatedLines,
+  hasAnythingToSay,
   rankSkills,
+  type CatalogChange,
   type PopularSkill,
   type PopularSkillDigest,
 } from '../../../../packages/lib/src/notifications/popular-skills'
@@ -66,6 +70,8 @@ describe('formatDigestLines', () => {
       distinctSkills: top.length,
       top,
       firstTimers: top.filter((entry) => entry.isFirstTime),
+      created: [],
+      updated: [],
     }
   }
 
@@ -105,5 +111,84 @@ describe('formatDigestLines', () => {
 
   it('적용이 없으면 줄도 없다 — 보낼 것이 없으면 안 보낸다', () => {
     expect(formatDigestLines(digest([]), 'https://example.test')).toEqual([])
+  })
+})
+
+describe('새로 올라온·업데이트된 스킬 구역', () => {
+  /**
+   * 세 구역을 채운 집계
+   *
+   * @param created - 새로 올라온 항목
+   * @param updated - 갱신된 항목
+   */
+  function digest(created: CatalogChange[], updated: CatalogChange[]): PopularSkillDigest {
+    return {
+      since: '2026-08-31T00:00:00.000Z',
+      until: '2026-09-07T00:00:00.000Z',
+      totalApplies: 0,
+      distinctSkills: 0,
+      top: [],
+      firstTimers: [],
+      created,
+      updated,
+    }
+  }
+
+  const NEW: CatalogChange = { id: 'beusable', name: '뷰저블 페이지 등록', authorName: '윤누리', version: '1.0.0' }
+  const BUMPED: CatalogChange = { id: 'gpters-newsletter-v2', name: '뉴스레터 v2', authorName: '강지인', version: '2.2.1', bumps: 11 }
+
+  it('새로 올라온 것은 만든 사람을 함께 적는다', () => {
+    const [line] = formatCreatedLines(digest([NEW], []), 'https://example.test')
+    expect(line).toContain('<https://example.test/skill/beusable|뷰저블 페이지 등록>')
+    expect(line).toContain('윤누리')
+  })
+
+  it('업데이트된 것은 현재 버전을 적는다', () => {
+    const [line] = formatUpdatedLines(digest([], [BUMPED]), 'https://example.test')
+    expect(line).toContain('v2.2.1')
+  })
+
+  it('한 주에 여러 번 고쳤으면 횟수를 적는다 — 같은 스킬로 목록을 채우지 않는다', () => {
+    const [line] = formatUpdatedLines(digest([], [BUMPED]), 'https://example.test')
+    expect(line).toContain('11회 수정')
+  })
+
+  it('한 번만 고쳤으면 횟수를 적지 않는다', () => {
+    const once = { ...BUMPED, bumps: 1 }
+    const [line] = formatUpdatedLines(digest([], [once]), 'https://example.test')
+    expect(line).not.toContain('회 수정')
+  })
+
+  it('저자가 없으면 이름 자리를 비운다 — "null"이라고 쓰지 않는다', () => {
+    const [line] = formatCreatedLines(digest([{ ...NEW, authorName: null }], []), 'https://example.test')
+    expect(line).not.toContain('null')
+  })
+})
+
+describe('hasAnythingToSay', () => {
+  /** 세 구역이 모두 빈 집계 */
+  const EMPTY: PopularSkillDigest = {
+    since: '2026-08-31T00:00:00.000Z',
+    until: '2026-09-07T00:00:00.000Z',
+    totalApplies: 0,
+    distinctSkills: 0,
+    top: [],
+    firstTimers: [],
+    created: [],
+    updated: [],
+  }
+
+  it('세 구역이 전부 비면 보내지 않는다', () => {
+    expect(hasAnythingToSay(EMPTY)).toBe(false)
+  })
+
+  it('쓴 사람이 없어도 새 스킬이 올라왔으면 보낸다', () => {
+    const withNew = { ...EMPTY, created: [{ id: 'a', name: 'a', authorName: null, version: '1.0.0' }] }
+    expect(hasAnythingToSay(withNew)).toBe(true)
+  })
+
+  it('업데이트만 있어도 보낸다', () => {
+    const withUpdate = { ...EMPTY, updated: [{ id: 'a', name: 'a', authorName: null, version: '1.1.0', bumps: 1 }] }
+    expect(hasAnythingToSay(withUpdate)).toBe(true)
   })
 })

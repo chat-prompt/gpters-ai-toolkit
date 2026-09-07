@@ -23,13 +23,13 @@
  * 되고, 그러면 진짜 알림도 같이 묻힌다 — evo가 매일 "생성 0건"을 보내며 그렇게 됐다.
  */
 
-import { catalogItems, db, skillEvents } from '@gpters/db'
-import { and, eq, gte, sql } from 'drizzle-orm'
+import { catalogItems, db, itemVersions, skillEvents, users } from '@gpters/db'
+import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 
 const log = createLogger('popular-skills')
 
-/** 알림에 싣는 최대 스킬 수 */
+/** 알림에 싣는 최대 항목 수 (구역마다) */
 const TOP_LIMIT = 5
 
 /** 이 인원 이상이 쓴 스킬은 "여러 사람이 쓴다"고 말할 수 있다 */
@@ -47,6 +47,18 @@ export interface PopularSkill {
   isFirstTime: boolean
 }
 
+/** 카탈로그에 새로 올라왔거나 갱신된 항목 */
+export interface CatalogChange {
+  id: string
+  name: string
+  /** 표시용 저자 이름. 없으면 null */
+  authorName: string | null
+  /** 현재 버전 */
+  version: string
+  /** 갱신본에만 채운다 — 창 안에서 버전이 올라간 횟수 */
+  bumps?: number
+}
+
 /** 한 주의 집계 */
 export interface PopularSkillDigest {
   since: string
@@ -59,6 +71,90 @@ export interface PopularSkillDigest {
   top: PopularSkill[]
   /** 이번 창에서 처음 적용된 스킬 */
   firstTimers: PopularSkill[]
+  /** 창 안에 새로 올라온 항목 */
+  created: CatalogChange[]
+  /** 창 안에 새 버전이 올라간 항목 (새로 올라온 것은 뺀다) */
+  updated: CatalogChange[]
+}
+
+
+/**
+ * 창 안에 새로 올라온 발행 항목을 읽는다.
+ *
+ * 초안은 뺀다 — 아직 팀에 권할 상태가 아니다.
+ *
+ * @param since - 창 시작
+ * @returns 최근 등록 순
+ */
+async function collectCreated(since: Date): Promise<CatalogChange[]> {
+  const rows = await db
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      version: catalogItems.version,
+      authorName: users.name,
+    })
+    .from(catalogItems)
+    .leftJoin(users, eq(users.id, catalogItems.authorId))
+    .where(
+      and(
+        gte(catalogItems.createdAt, since),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
+    .orderBy(desc(catalogItems.createdAt))
+    .limit(TOP_LIMIT)
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    authorName: row.authorName ?? null,
+    version: row.version ?? '1.0.0',
+  }))
+}
+
+/**
+ * 창 안에 새 버전이 올라간 항목을 읽는다.
+ *
+ * `item_versions`가 버전마다 한 줄을 남기므로 그것을 센다. 한 주에 열 번 고친 스킬도
+ * **한 줄로 묶고 횟수만 적는다** — 같은 스킬이 목록을 채우면 나머지가 안 보인다.
+ *
+ * @param since - 창 시작
+ * @param excludeIds - 이미 "새로 올라옴"에 실린 id. 두 구역에 겹쳐 싣지 않는다
+ * @returns 갱신 횟수 순
+ */
+async function collectUpdated(since: Date, excludeIds: Set<string>): Promise<CatalogChange[]> {
+  const rows = await db
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      version: catalogItems.version,
+      authorName: users.name,
+      bumps: sql<number>`count(${itemVersions.id})::int`,
+      lastBumpAt: sql<Date>`max(${itemVersions.createdAt})`,
+    })
+    .from(itemVersions)
+    .innerJoin(catalogItems, eq(catalogItems.id, itemVersions.itemId))
+    .leftJoin(users, eq(users.id, catalogItems.authorId))
+    .where(
+      and(
+        gte(itemVersions.createdAt, since),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+      )
+    )
+    .groupBy(catalogItems.id, catalogItems.name, catalogItems.version, users.name)
+
+  return rows
+    .filter((row) => !excludeIds.has(row.id))
+    .sort((a, b) => Number(b.bumps) - Number(a.bumps) || a.id.localeCompare(b.id))
+    .slice(0, TOP_LIMIT)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      authorName: row.authorName ?? null,
+      version: row.version ?? '1.0.0',
+      bumps: Number(row.bumps ?? 0),
+    }))
 }
 
 /**
@@ -101,6 +197,9 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
       isFirstTime: Number(row.earlierApplies ?? 0) === 0,
     }))
 
+  const created = await collectCreated(since)
+  const updated = await collectUpdated(since, new Set(created.map((item) => item.id)))
+
   const digest: PopularSkillDigest = {
     since: since.toISOString(),
     until: now.toISOString(),
@@ -108,12 +207,16 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
     distinctSkills: skills.length,
     top: rankSkills(skills).slice(0, TOP_LIMIT),
     firstTimers: rankSkills(skills.filter((skill) => skill.isFirstTime)).slice(0, TOP_LIMIT),
+    created,
+    updated,
   }
 
-  log.info('Collected popular skills', {
+  log.info('Collected weekly skill digest', {
     days,
     totalApplies: digest.totalApplies,
     distinctSkills: digest.distinctSkills,
+    created: created.length,
+    updated: updated.length,
   })
   return digest
 }
@@ -134,7 +237,18 @@ export function rankSkills(skills: PopularSkill[]): PopularSkill[] {
 }
 
 /**
- * 집계를 Slack 본문 줄로 바꾼다.
+ * 스킬 상세로 가는 Slack 링크
+ *
+ * @param baseUrl - 사이트 주소
+ * @param id - 카탈로그 id
+ * @param name - 표시 이름
+ */
+function skillLink(baseUrl: string, id: string, name: string): string {
+  return `<${baseUrl}/skill/${id}|${name}>`
+}
+
+/**
+ * 많이 쓴 스킬 구역.
  *
  * 비율을 쓰지 않는다 — 표본이 작을 때 백분율은 실제보다 강한 주장을 한다.
  *
@@ -144,9 +258,54 @@ export function rankSkills(skills: PopularSkill[]): PopularSkill[] {
  */
 export function formatDigestLines(digest: PopularSkillDigest, baseUrl: string): string[] {
   return digest.top.map((skill) => {
-    const link = `<${baseUrl}/skill/${skill.skillId}|${skill.name}>`
+    const link = skillLink(baseUrl, skill.skillId, skill.name)
     const shared = skill.users >= SHARED_MIN_USERS ? `${skill.users}명` : '1명'
     const badge = skill.isFirstTime ? ' · 이번 주 첫 사용' : ''
     return `• ${link} — 적용 ${skill.applies}회 · ${shared}${badge}`
   })
+}
+
+/**
+ * 새로 올라온 스킬 구역.
+ *
+ * @param digest - 집계 결과
+ * @param baseUrl - 스킬 상세 링크의 앞부분
+ * @returns 사람이 읽는 줄들
+ */
+export function formatCreatedLines(digest: PopularSkillDigest, baseUrl: string): string[] {
+  return digest.created.map((item) => {
+    const by = item.authorName ? ` · ${item.authorName}` : ''
+    return `• ${skillLink(baseUrl, item.id, item.name)}${by}`
+  })
+}
+
+/**
+ * 업데이트된 스킬 구역.
+ *
+ * 한 주에 여러 번 고친 스킬은 횟수를 함께 적는다 — 같은 스킬이 목록을 채우지 않게
+ * 이미 한 줄로 묶었으므로, 얼마나 손봤는지는 숫자로만 남긴다.
+ *
+ * @param digest - 집계 결과
+ * @param baseUrl - 스킬 상세 링크의 앞부분
+ * @returns 사람이 읽는 줄들
+ */
+export function formatUpdatedLines(digest: PopularSkillDigest, baseUrl: string): string[] {
+  return digest.updated.map((item) => {
+    const by = item.authorName ? ` · ${item.authorName}` : ''
+    const times = (item.bumps ?? 0) > 1 ? ` · ${item.bumps}회 수정` : ''
+    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${by}${times}`
+  })
+}
+
+/**
+ * 이번 주에 알릴 것이 하나라도 있는가.
+ *
+ * 세 구역이 전부 비면 보내지 않는다. 조용한 주에 "0건"을 보내면 그 채널을 아무도 안 읽게 되고,
+ * 그러면 진짜 알림도 같이 묻힌다.
+ *
+ * @param digest - 집계 결과
+ * @returns 보낼 내용이 있으면 true
+ */
+export function hasAnythingToSay(digest: PopularSkillDigest): boolean {
+  return digest.top.length > 0 || digest.created.length > 0 || digest.updated.length > 0
 }

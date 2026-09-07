@@ -23,8 +23,12 @@ export type { SlackDeployParams, SlackPayload, EvoAnalyzeParams, EvoActionParams
 
 export {
   collectPopularSkills,
+  formatCreatedLines,
   formatDigestLines,
+  formatUpdatedLines,
+  hasAnythingToSay,
   rankSkills,
+  type CatalogChange,
   type PopularSkill,
   type PopularSkillDigest,
 } from './popular-skills'

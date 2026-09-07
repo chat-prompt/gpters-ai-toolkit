@@ -11,7 +11,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   collectPopularSkills,
+  formatCreatedLines,
   formatDigestLines,
+  formatUpdatedLines,
   notifySlackPopularSkills,
 } from '@gpters/lib/notifications'
 import { runCronJob } from '@gpters/lib/ops'
@@ -42,6 +44,8 @@ export async function GET(request: NextRequest) {
     const digest = await collectPopularSkills(days)
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? FALLBACK_BASE_URL
     const lines = formatDigestLines(digest, baseUrl)
+    const createdLines = formatCreatedLines(digest, baseUrl)
+    const updatedLines = formatUpdatedLines(digest, baseUrl)
 
     if (!quiet) {
       await notifySlackPopularSkills({
@@ -49,13 +53,26 @@ export async function GET(request: NextRequest) {
         totalApplies: digest.totalApplies,
         distinctSkills: digest.distinctSkills,
         lines,
+        createdLines,
+        updatedLines,
       })
     }
 
     return {
-      // totalApplies가 0인 주는 알림을 건너뛰므로, 감시는 이 값이 아니라 실행 여부만 본다
-      stats: { days, totalApplies: digest.totalApplies, distinctSkills: digest.distinctSkills },
-      body: { top: digest.top, firstTimers: digest.firstTimers },
+      // 조용한 주는 알림을 건너뛰므로, 감시는 이 값이 아니라 실행 여부만 본다
+      stats: {
+        days,
+        totalApplies: digest.totalApplies,
+        distinctSkills: digest.distinctSkills,
+        created: digest.created.length,
+        updated: digest.updated.length,
+      },
+      body: {
+        top: digest.top,
+        firstTimers: digest.firstTimers,
+        created: digest.created,
+        updated: digest.updated,
+      },
     }
   })
 
