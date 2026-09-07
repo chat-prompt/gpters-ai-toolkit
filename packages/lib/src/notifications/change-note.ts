@@ -1,5 +1,5 @@
 /**
- * 한 주의 변경 기록을 명사형 한 마디로 줄인다 (예: "버그 수정", "문체 개선").
+ * 알림에 실을 짧은 문구를 만든다 — 변경 요약과 설명 압축.
  *
  * ## 왜 규칙이 아니라 모델인가
  *
@@ -90,5 +90,63 @@ export async function summarizeChangeNote(changelogs: string[]): Promise<string 
     // 요약이 없다고 알림 자체를 실패시키지 않는다
     log.error('Failed to summarize change note', error)
     return null
+  }
+}
+
+/** 압축한 설명의 최대 길이 — 알림 한 줄에 들어가야 한다 */
+const SUMMARY_MAX = 45
+
+/**
+ * 설명을 첫 문장만 남겨 줄인다.
+ *
+ * 모델을 못 쓸 때 쓰는 결정적 대안이다. **원문에서 잘라 오기만 하고 새로 쓰지 않는다.**
+ *
+ * @param description - 카탈로그 설명
+ * @returns 줄인 문구. 재료가 없으면 null
+ */
+export function firstSentence(description: string | null | undefined): string | null {
+  const text = (description ?? '').replace(/\s+/g, ' ').trim()
+  if (text === '') return null
+  // 마침표·물음표·느낌표에서 끊되, 없으면 통째로 본다
+  const cut = text.search(/[.!?。](\s|$)/)
+  const head = cut > 0 ? text.slice(0, cut) : text
+  return head.length > SUMMARY_MAX ? `${head.slice(0, SUMMARY_MAX)}…` : head
+}
+
+/**
+ * 설명을 알림 한 줄에 들어가게 압축한다.
+ *
+ * 자세한 내용은 링크를 눌러 보면 되므로, 여기서는 **무엇을 하는 스킬인지**만 남긴다.
+ * 운영 설명의 중앙값이 90자라 그대로 실으면 잘려서 뜻이 끊긴다.
+ *
+ * 모델을 못 쓰면 첫 문장으로 물러난다. 둘 다 안 되면 null이고, 알림은 그 줄을 만들지 않는다.
+ *
+ * @param description - 카탈로그 설명
+ * @returns 압축한 한 줄. 재료가 없으면 null
+ */
+export async function compactDescription(description: string | null | undefined): Promise<string | null> {
+  const text = (description ?? '').replace(/\s+/g, ' ').trim()
+  if (text === '') return null
+  if (text.length <= SUMMARY_MAX) return text
+
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return firstSentence(text)
+
+  try {
+    const client = new GoogleGenAI({ apiKey })
+    const response = await client.models.generateContent({
+      model: MODEL,
+      contents:
+        '다음 스킬 설명을 25자 이내 한 줄로 압축하라. 무엇을 하는 스킬인지만 남기고 ' +
+        '방법·조건·예시는 버려라. 문장 부호로 끝내지 말고 다른 말도 붙이지 마라.\n\n' +
+        text.slice(0, INPUT_CAP),
+    })
+    const compact = (response.text ?? '').replace(/\s+/g, ' ').replace(/^["\'`\s]+|["\'`.\s]+$/g, '').trim()
+    // 부탁한 것보다 길게 오면 쓰지 않는다 — 자르면 뜻이 바뀐다
+    if (compact === '' || compact.length > SUMMARY_MAX) return firstSentence(text)
+    return compact
+  } catch (error) {
+    log.error('Failed to compact description', error)
+    return firstSentence(text)
   }
 }

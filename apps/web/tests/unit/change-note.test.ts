@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { normalizeChangeNote } from '../../../../packages/lib/src/notifications/change-note'
+import { firstSentence, normalizeChangeNote } from '../../../../packages/lib/src/notifications/change-note'
 
 describe('normalizeChangeNote', () => {
   it('명사형 한 마디는 그대로 쓴다', () => {
@@ -31,5 +31,23 @@ describe('normalizeChangeNote', () => {
     expect(normalizeChangeNote('   ')).toBeNull()
     expect(normalizeChangeNote(null)).toBeNull()
     expect(normalizeChangeNote(undefined)).toBeNull()
+  })
+})
+
+describe('firstSentence', () => {
+  it('첫 문장만 남긴다', () => {
+    expect(firstSentence('앞 문장이다. 뒤 문장은 버린다.')).toBe('앞 문장이다')
+  })
+
+  it('문장 부호가 없으면 통째로 보되 길면 자른다', () => {
+    const long = '가'.repeat(80)
+    const result = firstSentence(long)
+    expect(result).toHaveLength(46)
+    expect(result?.endsWith('…')).toBe(true)
+  })
+
+  it('비어 있으면 null이다 — 없는 설명을 지어내지 않는다', () => {
+    expect(firstSentence('')).toBeNull()
+    expect(firstSentence(null)).toBeNull()
   })
 })

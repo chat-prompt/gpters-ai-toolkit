@@ -25,13 +25,20 @@ export {
   collectPopularSkills,
   formatCreatedLines,
   formatDigestLines,
+  formatMissingDescriptionLines,
   formatUpdatedLines,
   hasAnythingToSay,
   shortSummary,
   rankSkills,
   type CatalogChange,
+  type MissingDescription,
   type PopularSkill,
   type PopularSkillDigest,
 } from './popular-skills'
 
-export { normalizeChangeNote, summarizeChangeNote } from './change-note'
+export {
+  compactDescription,
+  firstSentence,
+  normalizeChangeNote,
+  summarizeChangeNote,
+} from './change-note'

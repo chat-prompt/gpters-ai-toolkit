@@ -10,10 +10,12 @@ import {
   formatCreatedLines,
   formatDigestLines,
   formatUpdatedLines,
+  formatMissingDescriptionLines,
   hasAnythingToSay,
   rankSkills,
   shortSummary,
   type CatalogChange,
+  type MissingDescription,
   type PopularSkill,
   type PopularSkillDigest,
 } from '../../../../packages/lib/src/notifications/popular-skills'
@@ -73,6 +75,8 @@ describe('formatDigestLines', () => {
       firstTimers: top.filter((entry) => entry.isFirstTime),
       created: [],
       updated: [],
+      missingDescriptions: [],
+      missingDescriptionTotal: 0,
     }
   }
 
@@ -183,6 +187,8 @@ describe('hasAnythingToSay', () => {
     firstTimers: [],
     created: [],
     updated: [],
+    missingDescriptions: [],
+    missingDescriptionTotal: 0,
   }
 
   it('세 구역이 전부 비면 보내지 않는다', () => {
@@ -207,6 +213,7 @@ describe('설명과 변경 요약', () => {
       since: '2026-08-31T00:00:00.000Z',
       until: '2026-09-07T00:00:00.000Z',
       totalApplies: 0, distinctSkills: 0, top: [], firstTimers: [], created, updated,
+      missingDescriptions: [], missingDescriptionTotal: 0,
     }
   }
 
@@ -246,10 +253,65 @@ describe('shortSummary', () => {
     expect(shortSummary('앞\n\n  뒤')).toBe('앞 뒤')
   })
 
-  it('길면 자르고 말줄임을 붙인다', () => {
+  it('길어도 여기서는 자르지 않는다 — 줄이는 것은 compactDescription이 맡는다', () => {
     const long = '가'.repeat(100)
-    const result = shortSummary(long)
-    expect(result).toHaveLength(61)
-    expect(result?.endsWith('…')).toBe(true)
+    expect(shortSummary(long)).toHaveLength(100)
+  })
+})
+
+describe('설명 채우기 요청 구역', () => {
+  /**
+   * 요청 목록만 채운 집계
+   *
+   * @param rows - 목록에 실을 항목
+   * @param total - 전체 수
+   */
+  function digest(rows: MissingDescription[], total = rows.length): PopularSkillDigest {
+    return {
+      since: '2026-08-31T00:00:00.000Z',
+      until: '2026-09-07T00:00:00.000Z',
+      totalApplies: 0, distinctSkills: 0, top: [], firstTimers: [], created: [], updated: [],
+      missingDescriptions: rows,
+      missingDescriptionTotal: total,
+    }
+  }
+
+  it('만든 사람을 적는다 — 누가 채워야 하는지가 요점이다', () => {
+    const [line] = formatMissingDescriptionLines(
+      digest([{ id: 'a', name: '스킬', authorName: '현진우', recentApplies: 0 }]),
+      'https://example.test'
+    )
+    expect(line).toContain('현진우')
+    expect(line).toContain('<https://example.test/skill/a|스킬>')
+  })
+
+  it('쓰이고 있으면 그것을 숫자로 보인다 — 더 급하다', () => {
+    const [line] = formatMissingDescriptionLines(
+      digest([{ id: 'a', name: '스킬', authorName: null, recentApplies: 12 }]),
+      'https://example.test'
+    )
+    expect(line).toContain('최근 30일 12회 사용')
+  })
+
+  it('안 쓰이면 사용 횟수를 적지 않는다 — 0회를 굳이 보이지 않는다', () => {
+    const [line] = formatMissingDescriptionLines(
+      digest([{ id: 'a', name: '스킬', authorName: null, recentApplies: 0 }]),
+      'https://example.test'
+    )
+    expect(line).not.toContain('회 사용')
+  })
+
+  it('잘라 실었으면 남은 수를 알린다', () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({
+      id: `s${i}`, name: `스킬${i}`, authorName: null, recentApplies: 0,
+    }))
+    const lines = formatMissingDescriptionLines(digest(rows, 8), 'https://example.test')
+    expect(lines[lines.length - 1]).toContain('외 3개')
+  })
+
+  it('전부 실었으면 남은 수를 적지 않는다', () => {
+    const rows = [{ id: 'a', name: '스킬', authorName: null, recentApplies: 0 }]
+    const lines = formatMissingDescriptionLines(digest(rows, 1), 'https://example.test')
+    expect(lines).toHaveLength(1)
   })
 })
