@@ -97,3 +97,33 @@ DROP TABLE "ax_catalog_health_snapshots";
 ```sh
 pnpm --filter @gpters/db test:ax-child-guard
 ```
+
+## 운영 적용 기록 (2026-09-07)
+
+적용 완료. 실행한 순서와 실측값이다.
+
+| 항목 | 값 |
+| -- | -- |
+| Neon 프로젝트 | `floral-wave-70284131` |
+| 운영 브랜치 | `br-muddy-sea-a1znovvl` |
+| 복구 브랜치 | `pre-ax-0036-prod-20260907` (`br-snowy-pine-a136lh1q`, Auto-delete After 1 day) |
+| 확인 문자열 | `apply-ax-0036` |
+
+```
+AX 0036 preflight:    branch=br-muddy-sea-a1znovvl, migrations=25, snapshotTable=absent,  catalogItems=501
+AX 0036 verification: branch=br-muddy-sea-a1znovvl, migrations=26, snapshotTable=present, catalogItems=501
+```
+
+`catalog_items`가 501로 같다 — 0036은 새 테이블만 만든다는 전제가 실제로 지켜졌다.
+`--env-file`은 런북에 적힌 `.env.production.local`이 아니라 **`../../apps/web/.env.local`**을 썼다.
+이 레포에는 `.env.production.local`이 없고 `.env.local`의 `DATABASE_URL`이 운영을 가리킨다.
+
+### 크론이 아직 안 돈다 — PR #95
+
+적용 직후 확인해 보니 `ax_catalog_health_snapshots`가 비어 있고, 크론 라우트 파일이
+`apps/web` 밖(`packages/db/apps/web/app/api/cron/catalog-health-snapshot/route.ts`)에 있었다.
+`vercel.json`에는 경로가 등록돼 있으므로 **배포는 성공하고 크론만 매일 404**를 받는다.
+
+PR #95에서 라우트를 제자리로 옮기고, `vercel.json`의 크론 경로마다 라우트 파일이 있는지
+확인하는 테스트(`apps/web/tests/unit/cron-routes.test.ts`)를 넣었다. 첫 스냅숏은 #95 머지 후
+04:20 UTC 크론이 찍는다. 추세 판정(`summarizeCatalogTrend`)은 두 줄부터 나온다.
