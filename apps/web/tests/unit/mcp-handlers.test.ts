@@ -98,7 +98,8 @@ vi.mock('../../../../packages/lib/src/plugin/dependency-resolver', () => ({
   resolveAgentsAsConfig: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('../../../../packages/lib/src/security/rbac', () => ({
+vi.mock('../../../../packages/lib/src/security/rbac', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../packages/lib/src/security/rbac')>()),
   isSuperAdmin: vi.fn().mockReturnValue(false),
 }))
 

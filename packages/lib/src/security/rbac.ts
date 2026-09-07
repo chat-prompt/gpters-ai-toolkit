@@ -365,11 +365,11 @@ export async function getUserRole(): Promise<UserRole | null> {
 }
 
 /**
- * Check if the current user is an admin (server-side)
+ * Check if the current user is an admin or higher (server-side)
  */
 export async function isAdmin(): Promise<boolean> {
   const role = await getUserRole()
-  return role === 'admin'
+  return hasRoleOrHigher(role, 'admin')
 }
 
 /**

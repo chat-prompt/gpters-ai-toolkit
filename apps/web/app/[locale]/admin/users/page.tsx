@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
-import type { UserRole } from '@/lib/security/rbac'
+import { canManageUsers, type UserRole } from '@/lib/security/rbac'
 import { useToast } from '@/components/ui/Toast'
 import { AllowedAccountsPanel } from '@/components/admin'
 
@@ -56,7 +56,7 @@ export default function UsersPage() {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
 
   const currentUserRole = session?.user?.role as UserRole | undefined
-  const canManageUsers = currentUserRole === 'admin'
+  const canManageRoles = canManageUsers(currentUserRole)
   const canManageExternalAccess = currentUserRole === 'super_admin'
 
   const fetchUsers = useCallback(async () => {
@@ -84,7 +84,7 @@ export default function UsersPage() {
   }, [fetchUsers])
 
   async function handleRoleChange(userId: string, newRole: UserRole) {
-    if (!canManageUsers) return
+    if (!canManageRoles) return
 
     setUpdatingUserId(userId)
     try {
@@ -137,7 +137,7 @@ export default function UsersPage() {
         <h1 className="page-title">Users</h1>
         <p className="page-subtitle">
           {users.filter(user => user.accountStatus === 'active').length} active · {users.length} registered users
-          {!canManageUsers && (
+          {!canManageRoles && (
             <span className="ml-2 text-[var(--accent-orange)]">
               (View only - Admin role required to manage roles)
             </span>
@@ -195,7 +195,7 @@ export default function UsersPage() {
                     </code>
                   </td>
                   <td className="px-3 py-2.5">
-                    {canManageUsers && !isCurrentUser ? (
+                    {canManageRoles && !isCurrentUser ? (
                       <select
                         value={user.role}
                         onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}

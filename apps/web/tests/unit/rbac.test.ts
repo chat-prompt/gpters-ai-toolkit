@@ -245,6 +245,25 @@ describe('RBAC Utilities', () => {
         expect(canManageUsers('viewer')).toBe(false)
       })
     })
+
+    // super_admin은 admin의 상위 역할이므로, admin이 통과하는 문은 전부 통과해야 한다.
+    // 이 규칙이 깨져 어드민 화면과 MCP에서 super_admin이 배제된 적이 있다.
+    describe('super_admin covers admin', () => {
+      it('holds every permission admin holds', () => {
+        for (const permission of getPermissionsForRole('admin')) {
+          expect(hasPermission('super_admin', permission)).toBe(true)
+        }
+      })
+
+      it('passes every convenience gate admin passes', () => {
+        const gates = { canCreate, canEdit, canDelete, canManageUsers }
+
+        for (const [name, gate] of Object.entries(gates)) {
+          if (!gate('admin')) continue
+          expect(`${name}:${gate('super_admin')}`).toBe(`${name}:true`)
+        }
+      })
+    })
   })
 
   describe('isValidRole', () => {

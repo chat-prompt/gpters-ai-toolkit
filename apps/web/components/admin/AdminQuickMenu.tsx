@@ -10,7 +10,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { usePathname } from '@/i18n/navigation'
-import type { UserRole } from '@/lib/security/rbac'
+import { canEdit, canManageUsers, type UserRole } from '@/lib/security/rbac'
 
 /**
  * Props for AdminQuickMenu component
@@ -18,15 +18,6 @@ import type { UserRole } from '@/lib/security/rbac'
 interface AdminQuickMenuProps {
   /** Current user's role for permission checks */
   userRole?: UserRole | null
-}
-
-// Permission check functions (client-side versions)
-function canEdit(role: UserRole | undefined | null): boolean {
-  return role === 'admin' || role === 'editor'
-}
-
-function canAdmin(role: UserRole | undefined | null): boolean {
-  return role === 'admin'
 }
 
 // Item type icons and colors
@@ -239,7 +230,7 @@ export function AdminQuickMenu({ userRole }: AdminQuickMenuProps) {
             </div>
             <div className="p-2 space-y-0.5">
               {managementLinks
-                .filter(link => !link.requireAdmin || canAdmin(userRole))
+                .filter(link => !link.requireAdmin || canManageUsers(userRole))
                 .map(({ icon, label, href }) => (
                   <Link
                     key={href}

@@ -12,7 +12,7 @@ import { useSession } from 'next-auth/react'
 import { useAdminAuth } from '@/components/admin/AdminAuthProvider'
 import { useOrgContext } from '@/lib/hooks/useOrgContext'
 import { useToast } from '@/components/ui/Toast'
-import type { UserRole } from '@/lib/security/rbac'
+import { canCreate, canEdit, type UserRole } from '@/lib/security/rbac'
 
 interface Stats {
   total: number
@@ -58,15 +58,6 @@ interface DashboardData {
   recentActivity: RecentItem[]
   popularItems: PopularItem[]
   draftItems: DraftItem[]
-}
-
-// RBAC helper functions
-function canCreate(role: UserRole | undefined): boolean {
-  return role === 'admin' || role === 'editor'
-}
-
-function canEdit(role: UserRole | undefined): boolean {
-  return role === 'admin' || role === 'editor'
 }
 
 function formatRelativeTime(dateString: string): string {

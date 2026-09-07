@@ -13,7 +13,7 @@ import { validateSkillExecutionReport, validateSkillExecutionStart } from '../fe
 import { validateOptionalJourneyId } from '../features/ax/journey'
 import { resolveAgentsAsConfig } from '../plugin/dependency-resolver'
 import { checkMetadataQuality } from '../plugin/skill-validator'
-import { isSuperAdmin, type UserRole } from '../security/rbac'
+import { hasRoleOrHigher, isSuperAdmin, type UserRole } from '../security/rbac'
 import { notifySlackDeploy } from '../notifications/slack'
 
 const log = createLogger('mcp-handler')
@@ -940,8 +940,7 @@ export async function undeploySkill(
   }
 
   // Admin can delete any plugin, others can only delete their own
-  const hasAdminRole = userRole === 'admin'
-  if (plugin.authorId !== userId && !hasAdminRole) {
+  if (plugin.authorId !== userId && !isAdmin(userRole)) {
     return {
       success: false,
       id,
@@ -953,7 +952,7 @@ export async function undeploySkill(
   // Delete the plugin
   await db.delete(catalogItems).where(eq(catalogItems.id, id))
 
-  const adminNote = hasAdminRole && plugin.authorId !== userId ? ' (관리자 권한으로 삭제)' : ''
+  const adminNote = plugin.authorId !== userId ? ' (관리자 권한으로 삭제)' : ''
   return {
     success: true,
     id,
@@ -1015,8 +1014,7 @@ export async function addFiles(
     }
   }
 
-  const hasAdminRole = userRole === 'admin'
-  if (item.authorId !== userId && !hasAdminRole) {
+  if (item.authorId !== userId && !isAdmin(userRole)) {
     return {
       success: false,
       id,
@@ -1145,8 +1143,7 @@ export async function removeFiles(
     }
   }
 
-  const hasAdminRole = userRole === 'admin'
-  if (item.authorId !== userId && !hasAdminRole) {
+  if (item.authorId !== userId && !isAdmin(userRole)) {
     return {
       success: false,
       id,
@@ -1388,10 +1385,10 @@ function toUsageRow(record: AxUsageReportRecord, userId: string, memberName: str
 }
 
 /**
- * Check if the user has admin role
+ * Check if the user has admin role or higher
  */
 function isAdmin(userRole?: string): boolean {
-  return userRole === 'admin'
+  return hasRoleOrHigher(userRole as UserRole | undefined, 'admin')
 }
 
 export async function executeTool(
