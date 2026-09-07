@@ -41,6 +41,7 @@ export {
   firstSentence,
   normalizeChangeNote,
   parseBatchResponse,
+  retryDelayMs,
   summarizeBatch,
   summarizeChangeNote,
   summarizeSkillContent,

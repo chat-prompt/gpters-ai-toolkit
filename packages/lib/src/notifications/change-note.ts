@@ -195,6 +195,41 @@ export async function summarizeSkillContent(content: string | null | undefined):
   }
 }
 
+
+/** 429가 알려준 대기 시간을 못 읽었을 때 쓸 기본값(ms) */
+const DEFAULT_RETRY_MS = 20_000
+
+/** 재시도 대기의 상한(ms). 이보다 오래 기다리느니 그 구역을 비운다 */
+const MAX_RETRY_MS = 70_000
+
+/**
+ * 오류 메시지에서 재시도 대기 시간을 읽는다.
+ *
+ * Gemini는 429 본문에 `"retryDelay":"33s"`와 `Please retry in 33.33s`를 함께 준다.
+ * 우리가 임의로 정한 값보다 서버가 알려준 값이 정확하다.
+ *
+ * @param error - 잡은 오류
+ * @returns 기다릴 밀리초. 429가 아니면 null
+ */
+export function retryDelayMs(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  if (!message.includes('429')) return null
+  const tagged = message.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)
+  const prose = message.match(/retry in (\d+(?:\.\d+)?)s/)
+  const seconds = Number(tagged?.[1] ?? prose?.[1] ?? 0)
+  const ms = seconds > 0 ? Math.ceil(seconds * 1000) + 1_000 : DEFAULT_RETRY_MS
+  return Math.min(ms, MAX_RETRY_MS)
+}
+
+/**
+ * 잠시 기다린다.
+ *
+ * @param ms - 기다릴 밀리초
+ */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /** 한 번에 묶어 보낼 항목 */
 export interface BatchEntry {
   /** 결과를 되찾을 키 */
@@ -260,16 +295,25 @@ export async function summarizeBatch(
     .map((entry) => `### ${entry.key}\n${entry.text.slice(0, INPUT_CAP)}`)
     .join('\n\n')
 
+  const client = new GoogleGenAI({ apiKey })
+  const contents =
+    `${instruction}\n\n` +
+    '결과를 **JSON 객체 하나로만** 답하라. 키는 각 항목의 ### 뒤에 적힌 id를 그대로 쓰고, ' +
+    '값은 문구 하나다. 다른 말은 붙이지 마라.\n\n' +
+    payload
+
   try {
-    const client = new GoogleGenAI({ apiKey })
-    const response = await client.models.generateContent({
-      model: MODEL,
-      contents:
-        `${instruction}\n\n` +
-        '결과를 **JSON 객체 하나로만** 답하라. 키는 각 항목의 ### 뒤에 적힌 id를 그대로 쓰고, ' +
-        '값은 문구 하나다. 다른 말은 붙이지 마라.\n\n' +
-        payload,
-    })
+    let response
+    try {
+      response = await client.models.generateContent({ model: MODEL, contents })
+    } catch (error) {
+      // 429는 서버가 얼마나 기다리라고 알려준다. 주 1회 잡이라 그만큼 기다려도 된다
+      const delay = retryDelayMs(error)
+      if (delay === null) throw error
+      log.warn('Rate limited; retrying batch summary', { delayMs: delay })
+      await wait(delay)
+      response = await client.models.generateContent({ model: MODEL, contents })
+    }
 
     const parsed = parseBatchResponse(response.text)
     const result = new Map<string, string>()

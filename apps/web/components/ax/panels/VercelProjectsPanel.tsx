@@ -5,13 +5,14 @@
  *
  * 화면 전체 폭을 쓰는 본문만 그린다. 제목·설명·출처는 껍데기가 그린다.
  * 사이트가 수십~수백 개라 최근 배포 순으로 한 표에 세우고 25개씩 끊어 넘긴다.
- * 상태는 알약 배지 대신 점 하나와 글자로 조용히 표시한다.
+ * 상태는 점으로 표시하고, 호버·키보드 포커스에서 이름을 보여준다.
  */
 
 import type { AxVercelData, AxVercelProject } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDateTime } from '../format'
 import { TablePager, usePagedRows } from './TablePager'
+import { TIP_BOX } from './primitives'
 
 /** 한 장에 실을 사이트 수 */
 const PROJECT_PAGE_SIZE = 25
@@ -87,11 +88,16 @@ function ProjectTable({ projects }: { projects: AxVercelProject[] }) {
 
   return (
     <div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
+      <div
+        role="region"
+        aria-label="배포 사이트 목록"
+        tabIndex={0}
+        className="h-[60vh] min-h-80 max-h-[52rem] overflow-auto [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
+      >
+        <table className="w-full min-w-[720px] table-fixed text-sm">
+          <thead className="sticky top-0 z-10 bg-[var(--bg-primary)]">
             <tr className="border-b border-[var(--border-subtle)]">
-              <th className={`text-left ${TD} ${TH} w-24`}>상태</th>
+              <th className={`text-left ${TD} ${TH} w-16`}>상태</th>
               <th className={`text-left ${TD} ${TH} w-[26%]`}>사이트</th>
               <th className={`text-left ${TD} ${TH}`}>도메인</th>
               <th className={`text-right ${TD} ${TH} w-36`}>최근 배포</th>
@@ -104,16 +110,11 @@ function ProjectTable({ projects }: { projects: AxVercelProject[] }) {
                 className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
               >
                 <td className={TD}>
-                  <span className="flex items-center gap-2">
-                    <StateDot state={project.lastDeploymentState} />
-                    <span className="text-[var(--text-secondary)] whitespace-nowrap">
-                      {stateLabel(project.lastDeploymentState)}
-                    </span>
-                  </span>
+                  <StateDot state={project.lastDeploymentState} />
                 </td>
                 <td className={TD}>
                   {/* 사이트 이름은 사람 말이 아니라 식별자라 모노스페이스로 둔다 */}
-                  <span className="block font-mono text-sm text-[var(--text-primary)]">
+                  <span title={project.name} className="block truncate font-mono text-sm text-[var(--text-primary)]">
                     {project.name}
                   </span>
                   <SiteNote name={project.name} />
@@ -156,7 +157,7 @@ function SiteNote({ name }: { name: string }) {
   const note = SITE_NOTES[name]
   if (!note) return null
 
-  return <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{note}</span>
+  return <span title={note} className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{note}</span>
 }
 
 /**
@@ -193,7 +194,20 @@ function StateDot({ state }: { state: AxVercelProject['lastDeploymentState'] }) 
   const tone = (state !== null ? STATE_DOTS[state] : null) ?? 'bg-[var(--text-muted)]'
   const pulse = state !== null && IN_FLIGHT_STATES.has(state) ? 'animate-pulse' : ''
 
-  return <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${tone} ${pulse}`} />
+  const label = stateLabel(state)
+  return (
+    <span
+      tabIndex={0}
+      role="img"
+      aria-label={`배포 상태: ${label}`}
+      className="group relative flex size-6 items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
+    >
+      <span aria-hidden className={`size-2 shrink-0 rounded-full ${tone} ${pulse}`} />
+      <span aria-hidden className={`${TIP_BOX} absolute left-full top-1/2 z-20 ml-1 hidden -translate-y-1/2 whitespace-nowrap group-hover:block group-focus:block`}>
+        {label}
+      </span>
+    </span>
+  )
 }
 
 /**
@@ -203,6 +217,6 @@ function StateDot({ state }: { state: AxVercelProject['lastDeploymentState'] }) 
  * @returns 사람이 읽는 상태 이름. 상태가 없으면 빈 값 기호
  */
 function stateLabel(state: AxVercelProject['lastDeploymentState']): string {
-  if (state === null) return '—'
+  if (state === null) return '배포 정보 없음'
   return STATE_LABELS[state] ?? state
 }

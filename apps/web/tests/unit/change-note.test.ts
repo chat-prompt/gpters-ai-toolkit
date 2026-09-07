@@ -6,7 +6,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { NOTE_MAX, firstSentence, normalizeChangeNote, parseBatchResponse } from '../../../../packages/lib/src/notifications/change-note'
+import {
+  NOTE_MAX,
+  firstSentence,
+  normalizeChangeNote,
+  parseBatchResponse,
+  retryDelayMs,
+} from '../../../../packages/lib/src/notifications/change-note'
 
 describe('normalizeChangeNote', () => {
   it('명사형 한 마디는 그대로 쓴다', () => {
@@ -74,5 +80,33 @@ describe('parseBatchResponse', () => {
     expect(parseBatchResponse('[1,2,3]')).toEqual({})
     expect(parseBatchResponse('')).toEqual({})
     expect(parseBatchResponse(null)).toEqual({})
+  })
+})
+
+describe('retryDelayMs', () => {
+  it('429가 알려준 retryDelay를 읽는다', () => {
+    const error = new Error('got status: 429 Too Many Requests. {"error":{"details":[{"retryDelay":"33s"}]}}')
+    // 서버가 준 값에 1초를 더해 경계에 딱 붙지 않게 한다
+    expect(retryDelayMs(error)).toBe(34_000)
+  })
+
+  it('산문 형태(`retry in 56.4s`)도 읽는다', () => {
+    const error = new Error('got status: 429. Please retry in 56.411102098s.')
+    expect(retryDelayMs(error)).toBe(57_412)
+  })
+
+  it('429가 아니면 재시도하지 않는다', () => {
+    expect(retryDelayMs(new Error('got status: 404 Not Found'))).toBeNull()
+    expect(retryDelayMs(new Error('got status: 503 Service Unavailable'))).toBeNull()
+    expect(retryDelayMs(null)).toBeNull()
+  })
+
+  it('대기 시간을 못 읽으면 기본값을 쓴다', () => {
+    expect(retryDelayMs(new Error('got status: 429 Too Many Requests'))).toBe(20_000)
+  })
+
+  it('너무 오래 기다리라고 하면 상한에서 자른다 — 그만큼 기다리느니 그 구역을 비운다', () => {
+    const error = new Error('got status: 429. {"retryDelay":"600s"}')
+    expect(retryDelayMs(error)).toBe(70_000)
   })
 })
