@@ -19,8 +19,14 @@ import { createLogger } from '../core/logger'
 
 const log = createLogger('change-note')
 
-/** 요약에 쓰는 모델 — 슬랙 요약과 같은 급을 쓴다 */
-const MODEL = 'gemini-2.5-flash'
+/**
+ * 요약에 쓰는 모델.
+ *
+ * 배포 알림 요약(`slack.ts`의 `SUMMARY_MODEL`)과 **같은 이름을 쓴다.** 그쪽은 운영에서 실제로
+ * 돌고 있는 것이 확인된 값이다. 다른 이름을 쓰면 호출이 조용히 실패하고, 이 함수는 실패를
+ * null로 삼키므로 **요약이 그냥 안 나오는 것처럼 보인다.**
+ */
+const MODEL = 'gemini-2.0-flash'
 
 /** 모델에 넘기는 changelog 총 길이 상한 */
 const INPUT_CAP = 1500
@@ -58,7 +64,10 @@ export async function summarizeChangeNote(changelogs: string[]): Promise<string 
   if (material === '') return null
 
   const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return null
+  if (!apiKey) {
+    log.warn('GEMINI_API_KEY is not set; skipping change note')
+    return null
+  }
 
   try {
     const client = new GoogleGenAI({ apiKey })
@@ -70,7 +79,10 @@ export async function summarizeChangeNote(changelogs: string[]): Promise<string 
         '문장으로 쓰지 말고 다른 말도 붙이지 마라.\n\n' +
         material.slice(0, INPUT_CAP),
     })
-    return normalizeChangeNote(response.text)
+    const note = normalizeChangeNote(response.text)
+    // 응답은 왔는데 쓸 수 없는 모양이면 그것도 남긴다 — 조용히 비면 원인을 못 찾는다
+    if (note === null) log.warn('Change note unusable', { raw: response.text?.slice(0, 80) })
+    return note
   } catch (error) {
     // 요약이 없다고 알림 자체를 실패시키지 않는다
     log.error('Failed to summarize change note', error)
