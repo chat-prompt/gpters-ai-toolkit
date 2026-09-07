@@ -52,6 +52,7 @@ import { determineVersion, generateIdFromName, hasUpdate, incrementVersion } fro
 import { analyzeChanges, createVersionSnapshot } from '../versioning/skill-version'
 import { getBaseUrl } from '../utils'
 import { generateEmbedding, prepareTextForEmbedding } from '../search/embedding'
+import { checkDeployDuplicates } from '../features/ax/deploy-duplicate-guard'
 import { semanticSearch as semanticSearchImpl } from '../search/vector-search'
 
 async function updateItemEmbedding(id: string, item: { name: string; description: string; content?: string | null; tags?: string[] | null; readme?: string | null }): Promise<void> {
@@ -702,6 +703,12 @@ export async function deploySkill(
     effectiveChangelog = 'Initial release'
   }
 
+  // 새 배포일 때만 중복을 본다. 업데이트는 자기 자신과 비교할 일이 없다.
+  // 막지 않고 경고만 한다 — 차단하면 의도적으로 갈라놓는 경우까지 막힌다.
+  const duplicateWarning = isUpdate
+    ? null
+    : await checkDeployDuplicates({ id, type, content: resolvedContent ?? '' })
+
   // Run non-blocking metadata quality check
   const qualityWarnings = checkMetadataQuality({
     description,
@@ -805,6 +812,7 @@ export async function deploySkill(
     status,
     webUrl: `${BASE_URL}/${type}/${id}`,
     ...(qualityWarnings.length > 0 ? { qualityWarnings } : {}),
+    ...(duplicateWarning ? { duplicateWarning } : {}),
   }
 
   // Fire-and-forget Slack notification

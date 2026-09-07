@@ -103,6 +103,16 @@ export interface DeploySkillResponse {
     message: string
     suggestion: string
   }>
+  /**
+   * 이미 있는 항목과 본문이 닮았을 때의 경고 (새 배포에서만, 닮은 것이 있을 때만).
+   *
+   * 배포를 막지 않는다 — 의도적으로 갈라놓는 경우까지 막히기 때문이다.
+   * 대신 무엇과 얼마나 닮았는지와 업데이트하는 방법을 알려준다.
+   */
+  duplicateWarning?: {
+    message: string
+    matches: Array<{ id: string; name: string; similarity: number; nearIdentical: boolean }>
+  }
 }
 
 export interface CheckUpdatesInput {
