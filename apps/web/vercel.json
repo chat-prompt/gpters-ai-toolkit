@@ -17,10 +17,6 @@
       "schedule": "0 17 * * *"
     },
     {
-      "path": "/api/cron/import-community-skills",
-      "schedule": "0 5 * * 0"
-    },
-    {
       "path": "/api/cron/evo-analyze",
       "schedule": "0 6 * * *"
     },
