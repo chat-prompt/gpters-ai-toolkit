@@ -86,15 +86,8 @@ export {
   type CuratedSkillItem,
 } from './skills-curate'
 
-// Export version sync (DEV-3067)
-export {
-  fetchLatestVersion,
-  isNewerVersion,
-  detectStaleLibraryVersions,
-  syncCliToolVersions,
-  type VersionCheckResult,
-  type VersionSyncSummary,
-} from './version-sync'
+// Export stale library version detection (DEV-3067의 잔여 — Context7 동기화는 제거됨)
+export { detectStaleLibraryVersions } from './version-sync'
 
 // Export model docs sync (EDU-6875)
 export {
