@@ -77,6 +77,15 @@ export const CRON_EXPECTATIONS: CronExpectation[] = [
     zeroStreakLimit: 0,
   },
   {
+    jobName: 'popular-skills',
+    label: '주간 인기 스킬 알림',
+    // 월요일 01:00 UTC
+    maxSilentHours: 8 * 24,
+    // 적용이 0인 주가 있을 수 있다 — 팀이 안 쓴 것이지 잡이 고장난 것이 아니다
+    outputKeys: [],
+    zeroStreakLimit: 0,
+  },
+  {
     jobName: 'weekly-report',
     label: '주간·월간 리포트',
     // 월요일 00:00 UTC + 매월 1일. 주간 쪽 기준으로 여유를 둔다
