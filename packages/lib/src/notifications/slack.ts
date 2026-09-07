@@ -458,3 +458,56 @@ export async function notifySlackCronHealth(params: CronHealthParams): Promise<v
     console.error('[slack] cron health notification failed:', error)
   }
 }
+
+/** 인기 스킬 주간 알림 인자 */
+export interface PopularSkillsParams {
+  /** 집계 창 (일) */
+  days: number
+  /** 창 안의 전체 적용 건수 */
+  totalApplies: number
+  /** 창 안에 한 번이라도 적용된 스킬 수 */
+  distinctSkills: number
+  /** 사람이 읽는 상위 스킬 줄 */
+  lines: string[]
+}
+
+/**
+ * 지난 주 실제로 쓰인 스킬을 알린다 (DEV-4280).
+ *
+ * **적용이 한 건도 없으면 아무것도 보내지 않는다.** 매주 "0건"을 보내면 그 채널을 아무도 안 읽게
+ * 되고, 그러면 진짜 알림도 같이 묻힌다.
+ *
+ * @param params - 집계 결과와 표시할 줄
+ */
+export async function notifySlackPopularSkills(params: PopularSkillsParams): Promise<void> {
+  try {
+    if (params.totalApplies === 0 || params.lines.length === 0) return
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    await sendSlackWebhook(webhookUrl, {
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: `⭐ 지난 ${params.days}일 많이 쓴 스킬`, emoji: true },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: params.lines.join('\n') },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              // 비율 대신 실측 건수만 적는다
+              text: `적용 ${params.totalApplies}회 · 스킬 ${params.distinctSkills}종. 검색 노출이나 열람이 아니라 적용 보고만 셌다`,
+            },
+          ],
+        },
+      ],
+    })
+  } catch (error) {
+    console.error('[slack] popular skills notification failed:', error)
+  }
+}
