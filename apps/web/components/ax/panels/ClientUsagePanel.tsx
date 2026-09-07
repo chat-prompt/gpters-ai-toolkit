@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * AX 대시보드 — 클라이언트 사용량 패널 본문
  *
@@ -7,6 +9,7 @@
  * 한도 캐시를 얻지 못한 값은 0%가 아니라 "미수집"으로 명확히 밝힌다.
  */
 
+import { useId } from 'react'
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
@@ -108,6 +111,7 @@ const PARTICIPATION_SOURCE: Record<AxUsageParticipationRow['source'], string> = 
 
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
+  const helpId = useId()
   const active = rows.filter((row) => row.status === 'reporting').length
   // pill과 표 모두 나쁜 상태부터 좋은 상태 순이다.
   const statusCounts = AX_USAGE_PARTICIPATION_STATUS_ORDER
@@ -116,15 +120,28 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
 
   return (
     <div>
-      <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        수집 참여 상태 · 사내 계정 중 정상 보고 {formatCount(active)}/{formatCount(rows.length)}명
-      </p>
-      <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
-        정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는
-        않습니다. 자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번
-        시도하며, 로그인과 로컬 사용 기록이 필요합니다. 승인 후 수집 미확인은 아직 보고가 없다는
-        뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.
-      </p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        <div className="group relative">
+          <button
+            type="button"
+            aria-describedby={helpId}
+            className="flex items-center gap-1.5 rounded focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
+          >
+            수집 참여 상태
+            <span aria-hidden className="flex size-4 items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px]">?</span>
+          </button>
+          <div
+            id={helpId}
+            role="tooltip"
+            className="invisible absolute left-0 top-full z-30 mt-2 w-96 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 font-sans text-xs leading-relaxed text-[var(--text-primary)] opacity-0 shadow-lg group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+          >
+            <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
+            <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
+            <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
+          </div>
+        </div>
+        <p>· 사내 계정 중 정상 보고 {formatCount(active)}/{formatCount(rows.length)}명</p>
+      </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {statusCounts.map(({ status, count }) => (
           <span
@@ -168,7 +185,7 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
                       : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
-                    {row.lastReportedAt ? formatDate(row.lastReportedAt) : EMPTY}
+                    {row.lastReportedAt ? formatDateTime(row.lastReportedAt) : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastLoginAt ? formatDate(row.lastLoginAt) : EMPTY}
@@ -265,7 +282,8 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
         <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
           Claude Code의 토큰·세션 사용량은 수집되고 있습니다. 미수집은 주간 한도와 리셋 시각을
           받지 못했다는 뜻입니다. 이 값은 로컬 상태 표시줄의 한도 캐시가 최근 15분 안에 갱신된
-          경우에만 보고됩니다. AITK는 이 캐시를 직접 만들지 않으므로 업그레이드만으로 채워지지는 않습니다.
+          경우에만 보고됩니다. 캐시의 리셋 시각이 이미 지난 값도 제외합니다. AITK는 이 캐시를 직접
+          만들지 않으므로 업그레이드만으로 채워지지는 않습니다.
         </p>
       )}
     </div>

@@ -4,18 +4,22 @@
  * AX 대시보드 — 배포 사이트 패널 본문
  *
  * 화면 전체 폭을 쓰는 본문만 그린다. 제목·설명·출처는 껍데기가 그린다.
- * 사이트가 수십~수백 개라 최근 배포 순으로 한 표에 세우고 25개씩 끊어 넘긴다.
+ * 확인이 필요한 상태부터, 같은 단계에서는 최근 배포 순으로 세운다. 행 수는 창 높이에 맞춘다.
  * 상태는 점으로 표시하고, 호버·키보드 포커스에서 이름을 보여준다.
  */
 
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AxVercelData, AxVercelProject } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDateTime } from '../format'
-import { TablePager, usePagedRows } from './TablePager'
+import { TablePager } from './TablePager'
 import { TIP_BOX } from './primitives'
 
-/** 한 장에 실을 사이트 수 */
-const PROJECT_PAGE_SIZE = 25
+/** 제목 아래 남은 높이에 표와 페이지 이동을 맞춘다. */
+const ROW_HEIGHT = 56
+const HEADER_HEIGHT = 40
+const FOOTER_SPACE = 88
+const SCROLLBAR_SPACE = 16
 
 /**
  * 사이트 설명 — 손으로 관리한다
@@ -34,16 +38,19 @@ const SITE_NOTES: Record<string, string> = {
   'ax-lab-board': '사내 AX 실험 보드',
 }
 
-/** 상태별 점 색 — 성공은 초록, 실패는 주황, 그 외 진행 상태는 무채색 */
+/** 상태별 점 색 — 정상은 초록, 실패는 주황, 확인 필요는 황토색, 진행 중은 무채색 */
 const STATE_DOTS: Record<string, string> = {
   READY: 'bg-[var(--accent-green)]',
   ERROR: 'bg-[var(--accent-orange)]',
+  BLOCKED: 'bg-[var(--accent-orange)]',
+  CANCELED: 'bg-amber-600',
 }
 
 /** 상태 코드를 사람이 읽는 말로 */
 const STATE_LABELS: Record<string, string> = {
   READY: '정상',
   ERROR: '실패',
+  BLOCKED: '차단됨',
   BUILDING: '빌드 중',
   QUEUED: '대기 중',
   CANCELED: '취소됨',
@@ -57,7 +64,7 @@ const IN_FLIGHT_STATES = new Set(['BUILDING', 'QUEUED', 'INITIALIZING'])
 const TH = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)] font-normal'
 
 /** 표 본문칸 공통 여백 */
-const TD = 'py-2.5 px-3'
+const TD = 'py-2 px-3'
 
 /**
  * 배포 사이트 패널 화면
@@ -78,25 +85,70 @@ export function VercelProjectsPanel({ data, days }: AxPanelViewProps<AxVercelDat
   return <ProjectTable key={`${days}:${data.projects.length}`} projects={data.projects} />
 }
 
-/**
- * 사이트 표 — 25개씩 끊어 넘긴다
- *
- * @param projects - 최근 배포 순으로 정렬된 사이트 목록 (비어 있지 않다)
- */
+/** 확인 우선순위. 취소는 실패와 구분하고, 배포 정보가 없는 사이트도 먼저 확인한다. */
+function statePriority(state: AxVercelProject['lastDeploymentState']): number {
+  if (state === 'ERROR' || state === 'BLOCKED') return 0
+  if (state !== null && IN_FLIGHT_STATES.has(state)) return 2
+  if (state === 'READY') return 3
+  return 1
+}
+
+/** 사이트 표 — 화면 높이에 맞춰 페이지를 나누고 마지막 장에도 같은 높이를 유지한다. */
 function ProjectTable({ projects }: { projects: AxVercelProject[] }) {
-  const { rows: shown, pager } = usePagedRows(projects, PROJECT_PAGE_SIZE)
+  const listRef = useRef<HTMLDivElement>(null)
+  const [pageSize, setPageSize] = useState(10)
+  // 행 번호를 기억하면 창 크기가 바뀌어도 보던 첫 항목이 새 페이지 안에 남는다.
+  const [anchor, setAnchor] = useState(0)
+  const sorted = useMemo(() => [...projects].sort((a, b) => {
+    const priority = statePriority(a.lastDeploymentState) - statePriority(b.lastDeploymentState)
+    const timestamp = (value: string | null) => value ? Date.parse(value) || 0 : 0
+    return priority || timestamp(b.lastDeployedAt) - timestamp(a.lastDeployedAt)
+  }), [projects])
+
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    const measure = () => {
+      // 문서 기준 위치라 스크롤한 뒤 창 크기를 바꿔도 행 수가 갑자기 늘지 않는다.
+      const top = list.getBoundingClientRect().top + window.scrollY
+      const available = window.innerHeight - top - HEADER_HEIGHT - FOOTER_SPACE - SCROLLBAR_SPACE
+      setPageSize(Math.max(3, Math.floor(available / ROW_HEIGHT)))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(list)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const page = Math.min(Math.floor(anchor / pageSize) + 1, pageCount)
+  const start = (page - 1) * pageSize
+  const shown = sorted.slice(start, start + pageSize)
+  const pager = {
+    page, pageCount, from: start + 1, to: start + shown.length, total: sorted.length,
+    onChange: (next: number) => setAnchor((next - 1) * pageSize),
+  }
 
   return (
     <div>
+      <p className="mb-3 text-xs text-[var(--text-muted)]">
+        실패·차단 → 취소·정보 없음 → 진행 중 → 정상 · 같은 단계에서는 최근 배포순
+      </p>
       <div
+        ref={listRef}
         role="region"
         aria-label="배포 사이트 목록"
         tabIndex={0}
-        className="h-[60vh] min-h-80 max-h-[52rem] overflow-auto [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
+        style={{ height: HEADER_HEIGHT + Math.min(pageSize, projects.length) * ROW_HEIGHT + SCROLLBAR_SPACE }}
+        className="overflow-auto focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
       >
         <table className="w-full min-w-[720px] table-fixed text-sm">
           <thead className="sticky top-0 z-10 bg-[var(--bg-primary)]">
-            <tr className="border-b border-[var(--border-subtle)]">
+            <tr style={{ height: HEADER_HEIGHT }} className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH} w-16`}>상태</th>
               <th className={`text-left ${TD} ${TH} w-[26%]`}>사이트</th>
               <th className={`text-left ${TD} ${TH}`}>도메인</th>
@@ -107,6 +159,7 @@ function ProjectTable({ projects }: { projects: AxVercelProject[] }) {
             {shown.map((project) => (
               <tr
                 key={project.id}
+                style={{ height: ROW_HEIGHT }}
                 className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
               >
                 <td className={TD}>
@@ -133,10 +186,13 @@ function ProjectTable({ projects }: { projects: AxVercelProject[] }) {
         </table>
       </div>
 
-      {/* 전체 개수는 페이지 정보(1–25 / 109)가 이미 말하므로, 한 장뿐일 때만 따로 밝힌다 */}
+      {/* 전체 개수는 페이지 정보가 이미 말하므로, 한 장뿐일 때만 따로 밝힌다 */}
       <div className="mt-3">
         {pager.pageCount > 1 ? (
-          <TablePager {...pager} />
+          <TablePager {...pager} onChange={(page) => {
+            pager.onChange(page)
+            if (listRef.current) listRef.current.scrollTop = 0
+          }} />
         ) : (
           <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
             전체 {formatCount(projects.length)}개
@@ -191,7 +247,7 @@ function ProjectLink({ url }: { url: AxVercelProject['productionUrl'] }) {
  * @param state - 배포 상태 코드
  */
 function StateDot({ state }: { state: AxVercelProject['lastDeploymentState'] }) {
-  const tone = (state !== null ? STATE_DOTS[state] : null) ?? 'bg-[var(--text-muted)]'
+  const tone = (state !== null ? STATE_DOTS[state] : null) ?? (state !== null && IN_FLIGHT_STATES.has(state) ? 'bg-[var(--text-muted)]' : 'bg-amber-600')
   const pulse = state !== null && IN_FLIGHT_STATES.has(state) ? 'animate-pulse' : ''
 
   const label = stateLabel(state)
