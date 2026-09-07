@@ -57,7 +57,10 @@ export function TablePager({ page, pageCount, from, to, total, onChange }: Table
       >
         이전
       </button>
-      <span className="font-mono text-xs tabular-nums text-[var(--text-muted)]">
+      <span
+        className="shrink-0 text-center font-mono text-xs tabular-nums text-[var(--text-muted)]"
+        style={{ width: `${String(total).length * 3 + 6}ch` }}
+      >
         {from}–{to} / {total}
       </span>
       <button

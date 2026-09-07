@@ -4,7 +4,7 @@
  * 위는 클라이언트별 요약, 가운데는 모델별 사용량, 아래는 팀원별 상세다.
  *
  * Codex는 롤아웃, Claude Code는 statusline usage cache에서 주간 한도 스냅샷을 수집한다.
- * 아직 새 수집기로 보고되지 않은 값은 0%가 아니라 "미수집"으로 명확히 밝힌다.
+ * 한도 캐시를 얻지 못한 값은 0%가 아니라 "미수집"으로 명확히 밝힌다.
  */
 
 import type {
@@ -117,13 +117,13 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
   return (
     <div>
       <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        수집 참여 상태 · 주간 활성 {formatCount(active)}/{formatCount(rows.length)}명
+        수집 참여 상태 · 사내 계정 중 정상 보고 {formatCount(active)}/{formatCount(rows.length)}명
       </p>
       <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
-        상태는 수집기 점검 신호, 기존 보고, OAuth 승인 기록을 순서대로 대조한 결과입니다. 승인됐지만
-        점검 신호가 없는 계정은 승인 후 수집 미확인으로 분류합니다. 최근 사용 기록 없음은 수집기가
-        정상 응답했지만 해당 기간의 사용량이 0건이라는 뜻입니다. 표는 챙겨야 할 상태부터 정상 보고
-        순으로 묶고, 같은 상태 안에서는 이름순입니다.
+        정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는
+        않습니다. 자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번
+        시도하며, 로그인과 로컬 사용 기록이 필요합니다. 승인 후 수집 미확인은 아직 보고가 없다는
+        뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {statusCounts.map(({ status, count }) => (
@@ -263,8 +263,9 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
       */}
       {rows.some((row) => row.client === 'claude-code' && !row.reportsLimit) && (
         <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
-          Claude Code의 주간 한도와 리셋 시각은 로컬 statusline usage cache에서 수집합니다.
-          기존 보고는 미수집으로 남으며, 새 수집기가 보고한 뒤부터 표시됩니다.
+          Claude Code의 토큰·세션 사용량은 수집되고 있습니다. 미수집은 주간 한도와 리셋 시각을
+          받지 못했다는 뜻입니다. 이 값은 로컬 상태 표시줄의 한도 캐시가 최근 15분 안에 갱신된
+          경우에만 보고됩니다. AITK는 이 캐시를 직접 만들지 않으므로 업그레이드만으로 채워지지는 않습니다.
         </p>
       )}
     </div>

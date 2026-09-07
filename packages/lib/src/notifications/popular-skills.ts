@@ -242,24 +242,25 @@ async function resolveSummaries(
   const toDerive = items.filter((item) => item.summary === null)
   const toNote = items.filter((item) => (item.changelogs?.length ?? 0) > 0)
 
-  const [compacted, derived, notes] = await Promise.all([
-    summarizeBatch(
-      toCompact.map((item) => ({ key: item.id, text: item.summary ?? '' })),
-      '각 항목의 스킬 설명을 25자 이내 한 줄로 압축하라. 무엇을 하는 스킬인지만 남기고 방법·조건·예시는 버려라.',
-      SUMMARY_MAX
-    ),
-    summarizeBatch(
-      toDerive.map((item) => ({ key: item.id, text: item.content ?? '' })),
-      '각 항목의 스킬 문서를 읽고 무엇을 하는 스킬인지 25자 이내 한 줄로 답하라. 목적만 남겨라.',
-      SUMMARY_MAX
-    ),
-    summarizeBatch(
-      toNote.map((item) => ({ key: item.id, text: (item.changelogs ?? []).join('\n') })),
-      '각 항목의 변경 기록을 읽고 무엇이 바뀌었는지 명사형 한 마디(10자 이내)로 답하라. ' +
-        '예: 버그 수정, 문체 개선, 파일 추가, 문서 보강, 규칙 정리.',
-      NOTE_MAX
-    ),
-  ])
+  // **동시에 쏘지 않는다.** 무료 티어 한도가 분당 5회라 셋을 한꺼번에 보내면 뒤의 둘이 429로
+  // 떨어진다. 실제로 그렇게 만들어 실행마다 다른 구역이 비었다(2026-09-07).
+  // 주 1회 잡이라 줄 세워도 손해가 없다.
+  const compacted = await summarizeBatch(
+    toCompact.map((item) => ({ key: item.id, text: item.summary ?? '' })),
+    '각 항목의 스킬 설명을 25자 이내 한 줄로 압축하라. 무엇을 하는 스킬인지만 남기고 방법·조건·예시는 버려라.',
+    SUMMARY_MAX
+  )
+  const derived = await summarizeBatch(
+    toDerive.map((item) => ({ key: item.id, text: item.content ?? '' })),
+    '각 항목의 스킬 문서를 읽고 무엇을 하는 스킬인지 25자 이내 한 줄로 답하라. 목적만 남겨라.',
+    SUMMARY_MAX
+  )
+  const notes = await summarizeBatch(
+    toNote.map((item) => ({ key: item.id, text: (item.changelogs ?? []).join('\n') })),
+    '각 항목의 변경 기록을 읽고 무엇이 바뀌었는지 명사형 한 마디(10자 이내)로 답하라. ' +
+      '예: 버그 수정, 문체 개선, 파일 추가, 문서 보강, 규칙 정리.',
+    NOTE_MAX
+  )
 
   const result = new Map<string, { summary: string | null; summaryIsAuto: boolean; changeNote: string | null }>()
   for (const item of items) {
