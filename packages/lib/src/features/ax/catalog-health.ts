@@ -26,6 +26,7 @@ const log = createLogger('ax-catalog-health')
 /** 사실상 같은 문서로 보는 경계 — 중복 패널과 같은 값 */
 const NEAR_IDENTICAL = 0.99
 
+
 /** 한 줄의 스냅숏 값 */
 export interface CatalogHealthMetrics {
   totalItems: number
@@ -43,31 +44,50 @@ export interface CatalogHealthSnapshot extends CatalogHealthMetrics {
 }
 
 /**
- * 오늘 기준 카탈로그 위생 지표를 계산한다.
+ * 위생 지표의 원천 행을 읽는 질의를 만든다.
  *
- * 중복 계산은 중복 패널과 **같은 함수**를 쓴다. 따로 구현하면 화면 숫자와 추세 숫자가 갈린다.
+ * 실행하지 않고 만들기만 하는 이유는 **생성된 SQL을 테스트가 검사할 수 있게** 하기 위해서다.
+ * 여기서 틀리면 오류 없이 조용히 0이 나오므로, 숫자가 아니라 SQL의 모양을 봐야 잡힌다.
  *
- * @param itemType - 대상 타입 (기본 skill)
- * @returns 계산된 지표
+ * @param itemType - 대상 타입
+ * @returns 실행 전 질의
  */
-export async function computeCatalogHealth(itemType = 'skill'): Promise<CatalogHealthMetrics> {
-  const rows = await db
+export function buildCatalogHealthQuery(itemType = 'skill') {
+  // 상관 서브쿼리에서 쓸 **테이블을 한정한** 컬럼 참조.
+  //
+  // drizzle은 조인이 없는 select에서 컬럼을 접두 없이 렌더한다 — `catalogItems.id`가 그냥
+  // `"id"`가 된다. 그 조각을 `FROM "skill_events"` 서브쿼리 안에 넣으면 `"id"`가 바깥
+  // catalog_items.id가 아니라 **skill_events.id(이벤트 자신의 UUID)로 해석된다.**
+  // 조건이 `skill_events.skill_id = skill_events.id`가 되어 절대 참이 되지 않고,
+  // 모든 스킬이 "로드 0건"으로 나온다. 오류 없이 조용히 틀린 숫자를 낸다.
+  //
+  // `unused-skills.ts`·`skill-duplicates.ts`는 leftJoin이 있어 drizzle이 컬럼을 한정하므로
+  // 같은 코드가 정상 동작한다. 그 차이 때문에 여기서만 틀렸다.
+  //
+  // 모듈 최상단이 아니라 함수 안에서 만든다 — 최상단이면 import 시점에 평가되어
+  // `@gpters/db`를 부분 모킹하는 테스트가 이 모듈을 끌어올 때 깨진다.
+  const catalogId = sql`${catalogItems}."id"`
+  const eventSkillId = sql`${skillEvents}."skill_id"`
+  const eventAction = sql`${skillEvents}."action"`
+  const eventUserId = sql`${skillEvents}."user_id"`
+
+  return db
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
       content: catalogItems.content,
       loads: sql<number>`(
         SELECT count(*)::int FROM ${skillEvents}
-        WHERE ${skillEvents.skillId} = ${catalogItems.id} AND ${skillEvents.action} = 'load'
+        WHERE ${eventSkillId} = ${catalogId} AND ${eventAction} = 'load'
       )`,
       applies: sql<number>`(
         SELECT count(*)::int FROM ${skillEvents}
-        WHERE ${skillEvents.skillId} = ${catalogItems.id} AND ${skillEvents.action} = 'apply'
+        WHERE ${eventSkillId} = ${catalogId} AND ${eventAction} = 'apply'
       )`,
       appliers: sql<number>`(
-        SELECT count(DISTINCT ${skillEvents.userId})::int FROM ${skillEvents}
-        WHERE ${skillEvents.skillId} = ${catalogItems.id} AND ${skillEvents.action} = 'apply'
-          AND ${skillEvents.userId} IS NOT NULL
+        SELECT count(DISTINCT ${eventUserId})::int FROM ${skillEvents}
+        WHERE ${eventSkillId} = ${catalogId} AND ${eventAction} = 'apply'
+          AND ${eventUserId} IS NOT NULL
       )`,
     })
     .from(catalogItems)
@@ -78,6 +98,18 @@ export async function computeCatalogHealth(itemType = 'skill'): Promise<CatalogH
         or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
       )
     )
+}
+
+/**
+ * 오늘 기준 카탈로그 위생 지표를 계산한다.
+ *
+ * 중복 계산은 중복 패널과 **같은 함수**를 쓴다. 따로 구현하면 화면 숫자와 추세 숫자가 갈린다.
+ *
+ * @param itemType - 대상 타입 (기본 skill)
+ * @returns 계산된 지표
+ */
+export async function computeCatalogHealth(itemType = 'skill'): Promise<CatalogHealthMetrics> {
+  const rows = await buildCatalogHealthQuery(itemType)
 
   const candidates: DuplicateCandidate[] = rows
     .map((row) => ({
