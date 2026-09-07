@@ -1128,6 +1128,49 @@ export type NewAiModelDocRecord = typeof aiModelDocs.$inferInsert
  * Each row records one execution of an evo cron job, including
  * timing, outcomes, and any errors encountered.
  */
+/**
+ * 크론 실행 기록 — 돌았는지, 성공했는지, 무엇을 했는지.
+ *
+ * ## 왜 필요한가
+ *
+ * 2026-09-07까지 실행 기록이 남는 크론은 evo 계열뿐이었고, 나머지는 실패해도 흔적이 없었다.
+ * 그래서 세 건의 무증상 실패를 전부 몇 달 뒤에야 DB 부산물로 역추적해 발견했다.
+ *
+ * - 커뮤니티 스킬 임포트: 업스트림 디렉터리 구조가 바뀌어 6개월간 0건을 가져오며 **성공으로 끝났다**
+ * - `evo-promote`: SQL 오류로 20주 연속 실패했는데 알림도 라우트 응답도 아무도 안 봤다
+ * - `catalog-health-snapshot`: 라우트가 앱 밖에 있어 매일 404를 받았고 표는 계속 비어 있었다
+ *
+ * 셋의 실패 모양이 다 다르다 — 예외, 404, 그리고 **"성공인데 결과가 0"**. 그래서 성공 여부만으로는
+ * 부족하고 산출량(`stats`)까지 남겨야 한다.
+ *
+ * 같은 잡이 하루에 여러 번 돌 수 있으므로 실행마다 한 줄이다.
+ */
+export const cronRunStatusEnum = pgEnum('cron_run_status', ['success', 'failure'])
+
+export const cronRuns = pgTable('cron_runs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** 크론 경로에서 딴 잡 이름 (예: `catalog-health-snapshot`) */
+  jobName: text('job_name').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }).notNull(),
+  durationMs: integer('duration_ms').notNull(),
+  status: cronRunStatusEnum('status').notNull(),
+  /**
+   * 잡이 실제로 무엇을 했는지. 예: `{ "finalized": 12, "deleted": 97 }`
+   *
+   * **이 값이 핵심이다.** 성공했지만 계속 0을 내는 잡을 잡아내는 유일한 근거다.
+   */
+  stats: jsonb('stats').$type<Record<string, number>>().notNull().default({}),
+  /** 실패했을 때의 메시지. 성공이면 null */
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('cron_runs_job_started_idx').on(table.jobName, table.startedAt),
+  index('cron_runs_started_at_idx').on(table.startedAt),
+])
+
+export type CronRunRecord = typeof cronRuns.$inferSelect
+
 export const evoRunLogs = pgTable('evo_run_logs', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   runType: evoRunTypeEnum('run_type').notNull(),

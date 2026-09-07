@@ -359,3 +359,102 @@ export async function notifySlackEvoPromote(params: EvoPromoteParams): Promise<v
     log.error('Failed to send EvoSkill promote notification', error)
   }
 }
+
+/** 크론 실패 알림 인자 */
+export interface CronFailureParams {
+  /** `vercel.json` 경로에서 딴 잡 이름 */
+  jobName: string
+  /** 실패 메시지 */
+  error: string
+}
+
+/**
+ * 크론이 예외로 실패했을 때 그 자리에서 알린다.
+ *
+ * 이 알림이 없던 시절 `evo-promote`가 20주 연속 실패했는데 아무도 몰랐다.
+ *
+ * @param params - 잡 이름과 실패 메시지
+ */
+export async function notifySlackCronFailure(params: CronFailureParams): Promise<void> {
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    // 메시지가 길면 Slack이 잘라내므로 앞부분만 보낸다. 전문은 실행 기록에 남는다.
+    const detail = params.error.length > 500 ? `${params.error.slice(0, 500)}…` : params.error
+    await sendSlackWebhook(webhookUrl, {
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '🚨 크론 실패', emoji: true },
+        },
+        {
+          type: 'section',
+          fields: [{ type: 'mrkdwn', text: `*잡:*\n\`${params.jobName}\`` }],
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `\`\`\`${detail}\`\`\`` },
+        },
+      ],
+    })
+  } catch (error) {
+    console.error('[slack] cron failure notification failed:', error)
+  }
+}
+
+/** 크론 감시 결과 알림 인자 */
+export interface CronHealthParams {
+  /** 감시한 잡 수 */
+  checked: number
+  /** 발견한 문제 */
+  issues: Array<{ jobName: string; label: string; kind: string; detail: string }>
+}
+
+/**
+ * 크론 감시에서 문제를 찾았을 때 알린다.
+ *
+ * **문제가 없으면 아무것도 보내지 않는다.** 매일 "이상 없음"을 보내면 그 채널을 아무도 안 읽게 되고,
+ * 그러면 진짜 알림도 같이 묻힌다 — evo가 매일 "생성 0건"을 보내며 그렇게 됐다.
+ *
+ * @param params - 감시 결과
+ */
+export async function notifySlackCronHealth(params: CronHealthParams): Promise<void> {
+  try {
+    if (params.issues.length === 0) return
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    const KIND_LABELS: Record<string, string> = {
+      never: '실행 기록 없음',
+      silent: '멈춤',
+      zero_output: '산출 0 지속',
+    }
+
+    await sendSlackWebhook(webhookUrl, {
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '⏰ 크론 점검', emoji: true },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: params.issues
+              .map((issue) =>
+                `• *${issue.label}* (\`${issue.jobName}\`) — ${KIND_LABELS[issue.kind] ?? issue.kind}\n  ${issue.detail}`
+              )
+              .join('\n'),
+          },
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `감시 대상 ${params.checked}개 중 ${params.issues.length}개` }],
+        },
+      ],
+    })
+  } catch (error) {
+    console.error('[slack] cron health notification failed:', error)
+  }
+}

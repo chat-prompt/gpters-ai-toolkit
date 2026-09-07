@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { CRON_EXPECTATIONS } from '../../../../packages/lib/src/ops'
 
 /** 앱 루트 — 이 테스트 파일 기준 `apps/web` */
 const APP_ROOT = join(__dirname, '..', '..')
@@ -40,6 +41,31 @@ describe('vercel cron 등록', () => {
       .map((entry) => entry.path.split('?')[0])
       .filter((path) => !existsSync(join(APP_ROOT, 'app', `${path}`, 'route.ts')))
 
+    expect(missing).toEqual([])
+  })
+})
+
+describe('크론 감시 레지스트리', () => {
+  // 감시 자신은 스스로를 볼 수 없으므로 기대치 목록에 없다
+  const SELF = '/api/cron/cron-health'
+
+  it('등록된 크론이 전부 감시 대상이다', async () => {
+    const entries = await readCronEntries()
+    const registered = new Set(CRON_EXPECTATIONS.map((entry) => entry.jobName))
+    const unwatched = entries
+      .map((entry) => entry.path.split('?')[0])
+      .filter((path) => path !== SELF)
+      .map((path) => path.replace('/api/cron/', ''))
+      .filter((jobName) => !registered.has(jobName))
+
+    expect([...new Set(unwatched)]).toEqual([])
+  })
+
+  it('감시 대상이 전부 실제로 등록된 크론이다 — 사라진 잡을 계속 기다리지 않는다', () => {
+    const entries = CRON_EXPECTATIONS.map((entry) => entry.jobName)
+    const missing = entries.filter(
+      (jobName) => !existsSync(join(APP_ROOT, 'app', 'api', 'cron', jobName, 'route.ts'))
+    )
     expect(missing).toEqual([])
   })
 })
