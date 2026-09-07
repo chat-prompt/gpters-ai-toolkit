@@ -26,7 +26,7 @@
 import { catalogItems, db, itemVersions, skillEvents, users } from '@gpters/db'
 import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
-import { summarizeChangeNote } from './change-note'
+import { compactDescription, summarizeChangeNote, summarizeSkillContent } from './change-note'
 
 const log = createLogger('popular-skills')
 
@@ -58,8 +58,15 @@ export interface CatalogChange {
   version: string
   /** 갱신본에만 채운다 — 창 안에서 버전이 올라간 횟수 */
   bumps?: number
-  /** 카탈로그에 적힌 한 줄 설명. 비어 있으면 null */
+  /** 알림에 실을 한 줄 설명. 비어 있으면 null */
   summary: string | null
+  /**
+   * 설명이 비어 있어 **본문에서 뽑아낸** 요약인가.
+   *
+   * 사람이 쓴 설명과 기계가 요약한 것을 섞어 보이면 안 된다 — 읽는 사람이 그 차이를 알아야
+   * "채워 주세요"가 뜻을 갖는다.
+   */
+  summaryIsAuto?: boolean
   /**
    * 갱신본에만 채운다 — 이번 주 변경을 명사형 한 마디로 (예: "버그 수정", "문체 개선").
    *
@@ -67,6 +74,16 @@ export interface CatalogChange {
    * 지어내지 않는다.
    */
   changeNote?: string | null
+}
+
+/** 설명이 비어 있어 채워 달라고 알릴 스킬 */
+export interface MissingDescription {
+  id: string
+  name: string
+  /** 채워 줄 사람. 없으면 null */
+  authorName: string | null
+  /** 최근 30일 적용 건수 — 쓰이는데 설명이 없는 것이 더 급하다 */
+  recentApplies: number
 }
 
 /** 한 주의 집계 */
@@ -85,24 +102,25 @@ export interface PopularSkillDigest {
   created: CatalogChange[]
   /** 창 안에 새 버전이 올라간 항목 (새로 올라온 것은 뺀다) */
   updated: CatalogChange[]
+  /** 설명이 비어 있는 발행 스킬 */
+  missingDescriptions: MissingDescription[]
+  /** 설명이 빈 스킬의 전체 수 — 목록은 잘라 싣는다 */
+  missingDescriptionTotal: number
 }
 
 
-/** 알림에 싣는 설명의 최대 길이 — 한 줄을 넘기면 목록이 안 읽힌다 */
-const SUMMARY_MAX = 60
-
 /**
- * 카탈로그 설명을 한 줄로 줄인다.
+ * 카탈로그 설명의 공백을 정리한다.
  *
- * 비어 있으면 null이다. **없는 설명을 지어내지 않는다.**
+ * 줄이는 것은 `compactDescription`이 맡는다. 여기서는 **비었는지만 가른다** —
+ * 없는 설명을 지어내지 않고, 빈 것은 `missingDescriptions`로 따로 모은다.
  *
  * @param description - 카탈로그에 적힌 설명
- * @returns 한 줄 요약. 없으면 null
+ * @returns 정리한 원문. 비어 있으면 null
  */
 export function shortSummary(description: string | null | undefined): string | null {
   const text = (description ?? '').replace(/\s+/g, ' ').trim()
-  if (text === '') return null
-  return text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX)}…` : text
+  return text === '' ? null : text
 }
 
 /**
@@ -113,13 +131,14 @@ export function shortSummary(description: string | null | undefined): string | n
  * @param since - 창 시작
  * @returns 최근 등록 순
  */
-async function collectCreated(since: Date): Promise<CatalogChange[]> {
+async function collectCreated(since: Date): Promise<Array<CatalogChange & { content: string | null }>> {
   const rows = await db
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
       version: catalogItems.version,
       description: catalogItems.description,
+      content: catalogItems.content,
       authorName: users.name,
     })
     .from(catalogItems)
@@ -139,6 +158,7 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
     authorName: row.authorName ?? null,
     version: row.version ?? '1.0.0',
     summary: shortSummary(row.description),
+    content: row.content,
   }))
 }
 
@@ -155,13 +175,14 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
 async function collectUpdated(
   since: Date,
   excludeIds: Set<string>
-): Promise<Array<CatalogChange & { changelogs: string[] }>> {
+): Promise<Array<CatalogChange & { changelogs: string[]; content: string | null }>> {
   const rows = await db
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
       version: catalogItems.version,
       description: catalogItems.description,
+      content: catalogItems.content,
       authorName: users.name,
       bumps: sql<number>`count(${itemVersions.id})::int`,
       // 이번 주 변경 기록을 모아 한 마디로 줄일 재료로 쓴다
@@ -189,8 +210,77 @@ async function collectUpdated(
       version: row.version ?? '1.0.0',
       bumps: Number(row.bumps ?? 0),
       summary: shortSummary(row.description),
+      content: row.content,
       changelogs: (row.changelogs ?? []).filter((entry) => typeof entry === 'string' && entry.trim() !== ''),
     }))
+}
+
+
+
+/**
+ * 알림에 실을 한 줄 설명을 만든다.
+ *
+ * 사람이 쓴 설명이 있으면 그것을 압축하고, 없으면 **본문에서 뽑되 자동 요약이라고 표시한다.**
+ * 둘을 섞어 보이면 "설명을 채워 주세요"가 뜻을 잃는다.
+ *
+ * @param item - 설명과 본문을 가진 항목
+ * @returns 표시할 설명과 자동 여부
+ */
+async function resolveSummary(
+  item: { summary: string | null; content: string | null }
+): Promise<{ summary: string | null; summaryIsAuto: boolean }> {
+  if (item.summary !== null) {
+    return { summary: await compactDescription(item.summary), summaryIsAuto: false }
+  }
+  return { summary: await summarizeSkillContent(item.content), summaryIsAuto: true }
+}
+
+/**
+ * 설명이 비어 있는 발행 스킬을 읽는다.
+ *
+ * 설명이 없으면 검색 결과에서도 목록에서도 무엇을 하는 스킬인지 알 수 없다. **없는 설명을
+ * 대신 지어내지 않고 만든 사람에게 채워 달라고 한다** — 무엇을 하는 스킬인지는 그 사람이 안다.
+ *
+ * 쓰이는데 설명이 없는 것이 더 급하므로 최근 적용 순으로 줄 세운다.
+ *
+ * @returns 목록(잘라서)과 전체 수
+ */
+async function collectMissingDescriptions(): Promise<{ rows: MissingDescription[]; total: number }> {
+  const rows = await db
+    .select({
+      id: catalogItems.id,
+      name: catalogItems.name,
+      authorName: users.name,
+      recentApplies: sql<number>`(
+        SELECT count(*)::int FROM ${skillEvents}
+        WHERE ${skillEvents}."skill_id" = ${catalogItems}."id"
+          AND ${skillEvents}."action" = 'apply'
+          AND ${skillEvents}."created_at" > now() - interval '30 days'
+      )`,
+    })
+    .from(catalogItems)
+    .leftJoin(users, eq(users.id, catalogItems.authorId))
+    .where(
+      and(
+        eq(catalogItems.type, 'skill'),
+        or(eq(catalogItems.status, 'published'), isNull(catalogItems.status)),
+        sql`coalesce(${catalogItems.description}, '') = ''`
+      )
+    )
+
+  const sorted = rows
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      authorName: row.authorName ?? null,
+      recentApplies: Number(row.recentApplies ?? 0),
+    }))
+    .sort((a, b) => b.recentApplies - a.recentApplies || a.id.localeCompare(b.id))
+
+  // 안 쓰이는 스킬까지 매주 부탁하면 목록이 길어지고 아무도 안 본다.
+  // 실제로 쓰이는데 설명이 없는 것만 남긴다 — 검색에서 못 찾는 손해가 지금 나고 있는 것들이다.
+  const used = sorted.filter((row) => row.recentApplies > 0)
+  return { rows: used.slice(0, TOP_LIMIT), total: used.length }
 }
 
 /**
@@ -233,12 +323,21 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
       isFirstTime: Number(row.earlierApplies ?? 0) === 0,
     }))
 
-  const created = await collectCreated(since)
-  const updatedRaw = await collectUpdated(since, new Set(created.map((item) => item.id)))
-  // 목록에 실을 것만 요약한다 — 잘려 나갈 항목까지 모델을 부를 이유가 없다
-  const updated: CatalogChange[] = await Promise.all(
-    updatedRaw.map(async ({ changelogs, ...item }) => ({
+  const createdRaw = await collectCreated(since)
+  const updatedRaw = await collectUpdated(since, new Set(createdRaw.map((item) => item.id)))
+  const missing = await collectMissingDescriptions()
+
+  // 목록에 실을 것만 압축·요약한다 — 잘려 나갈 항목까지 모델을 부를 이유가 없다
+  const created: CatalogChange[] = await Promise.all(
+    createdRaw.map(async ({ content, ...item }) => ({
       ...item,
+      ...(await resolveSummary({ summary: item.summary, content })),
+    }))
+  )
+  const updated: CatalogChange[] = await Promise.all(
+    updatedRaw.map(async ({ changelogs, content, ...item }) => ({
+      ...item,
+      ...(await resolveSummary({ summary: item.summary, content })),
       changeNote: await summarizeChangeNote(changelogs),
     }))
   )
@@ -252,6 +351,8 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
     firstTimers: rankSkills(skills.filter((skill) => skill.isFirstTime)).slice(0, TOP_LIMIT),
     created,
     updated,
+    missingDescriptions: missing.rows,
+    missingDescriptionTotal: missing.total,
   }
 
   log.info('Collected weekly skill digest', {
@@ -260,6 +361,7 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
     distinctSkills: digest.distinctSkills,
     created: created.length,
     updated: updated.length,
+    missingDescriptions: missing.total,
   })
   return digest
 }
@@ -291,6 +393,20 @@ function skillLink(baseUrl: string, id: string, name: string): string {
 }
 
 /**
+ * 설명 줄. 설명은 둘째 줄로 내린다 — 한 줄에 몰면 이름과 설명이 섞여 안 읽힌다.
+ *
+ * 자동 요약은 그렇다고 표시한다. 사람이 쓴 것처럼 보이면 아무도 채우지 않는다.
+ *
+ * @param item - 표시할 항목
+ * @returns 둘째 줄. 설명이 없으면 빈 문자열
+ */
+function summaryLine(item: CatalogChange): string {
+  if (!item.summary) return ''
+  const mark = item.summaryIsAuto ? ' _(자동 요약)_' : ''
+  return `\n   ${item.summary}${mark}`
+}
+
+/**
  * 많이 쓴 스킬 구역.
  *
  * 비율을 쓰지 않는다 — 표본이 작을 때 백분율은 실제보다 강한 주장을 한다.
@@ -318,9 +434,7 @@ export function formatDigestLines(digest: PopularSkillDigest, baseUrl: string): 
 export function formatCreatedLines(digest: PopularSkillDigest, baseUrl: string): string[] {
   return digest.created.map((item) => {
     const by = item.authorName ? ` · ${item.authorName}` : ''
-    // 설명은 둘째 줄로 내린다 — 한 줄에 몰면 이름과 설명이 섞여 안 읽힌다
-    const desc = item.summary ? `\n   ${item.summary}` : ''
-    return `• ${skillLink(baseUrl, item.id, item.name)}${by}${desc}`
+    return `• ${skillLink(baseUrl, item.id, item.name)}${by}${summaryLine(item)}`
   })
 }
 
@@ -340,9 +454,32 @@ export function formatUpdatedLines(digest: PopularSkillDigest, baseUrl: string):
     const times = (item.bumps ?? 0) > 1 ? ` · ${item.bumps}회` : ''
     // 무엇이 바뀌었는지가 버전 숫자보다 먼저 읽혀야 한다. 요약이 없으면 그 자리를 비운다
     const note = item.changeNote ? ` — ${item.changeNote}` : ''
-    const desc = item.summary ? `\n   ${item.summary}` : ''
-    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${note}${by}${times}${desc}`
+    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${note}${by}${times}${summaryLine(item)}`
   })
+}
+
+/**
+ * 설명을 채워 달라고 부탁하는 구역.
+ *
+ * 만든 사람 이름을 함께 적는다 — 누가 채워야 하는지가 목록의 요점이다.
+ *
+ * @param digest - 집계 결과
+ * @param baseUrl - 스킬 상세 링크의 앞부분
+ * @returns 사람이 읽는 줄들
+ */
+export function formatMissingDescriptionLines(
+  digest: PopularSkillDigest,
+  baseUrl: string
+): string[] {
+  const lines = digest.missingDescriptions.map((item) => {
+    const by = item.authorName ? ` · ${item.authorName}` : ''
+    // 쓰이고 있는데 설명이 없으면 더 급하다는 것을 숫자로 보인다
+    const used = item.recentApplies > 0 ? ` · 최근 30일 ${item.recentApplies}회 사용` : ''
+    return `• ${skillLink(baseUrl, item.id, item.name)}${by}${used}`
+  })
+  const hidden = digest.missingDescriptionTotal - digest.missingDescriptions.length
+  if (hidden > 0) lines.push(`  …외 ${hidden}개`)
+  return lines
 }
 
 /**

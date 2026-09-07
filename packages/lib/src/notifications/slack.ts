@@ -480,6 +480,8 @@ export interface PopularSkillsParams {
   createdLines: string[]
   /** 업데이트된 스킬 줄 */
   updatedLines: string[]
+  /** 설명을 채워 달라고 부탁할 줄 */
+  missingLines: string[]
 }
 
 /**
@@ -499,6 +501,7 @@ export async function notifySlackPopularSkills(params: PopularSkillsParams): Pro
       { title: `⭐ 지난 ${params.days}일 많이 쓴 스킬`, lines: params.lines },
       { title: '🆕 새로 올라온 스킬', lines: params.createdLines },
       { title: '🔄 업데이트된 스킬', lines: params.updatedLines },
+      { title: '✏️ 설명이 비어 있어요 — 만든 분이 한 줄만 채워 주세요', lines: params.missingLines },
     ].filter((section) => section.lines.length > 0)
 
     if (sections.length === 0) return

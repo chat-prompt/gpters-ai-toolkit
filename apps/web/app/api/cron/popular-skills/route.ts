@@ -13,6 +13,7 @@ import {
   collectPopularSkills,
   formatCreatedLines,
   formatDigestLines,
+  formatMissingDescriptionLines,
   formatUpdatedLines,
   notifySlackPopularSkills,
 } from '@gpters/lib/notifications'
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
     const lines = formatDigestLines(digest, baseUrl)
     const createdLines = formatCreatedLines(digest, baseUrl)
     const updatedLines = formatUpdatedLines(digest, baseUrl)
+    const missingLines = formatMissingDescriptionLines(digest, baseUrl)
 
     if (!quiet) {
       await notifySlackPopularSkills({
@@ -55,6 +57,7 @@ export async function GET(request: NextRequest) {
         lines,
         createdLines,
         updatedLines,
+        missingLines,
       })
     }
 
@@ -66,12 +69,14 @@ export async function GET(request: NextRequest) {
         distinctSkills: digest.distinctSkills,
         created: digest.created.length,
         updated: digest.updated.length,
+        missingDescriptions: digest.missingDescriptionTotal,
       },
       body: {
         top: digest.top,
         firstTimers: digest.firstTimers,
         created: digest.created,
         updated: digest.updated,
+        missingDescriptions: digest.missingDescriptions,
       },
     }
   })
