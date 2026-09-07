@@ -8,7 +8,7 @@ import type {
   AxPanelResult,
   AxSkillUsageData,
 } from '../../../../packages/lib/src/features/ax/types'
-import { AxDashboard } from '../../components/ax/AxDashboard'
+import { AxDashboard, requiredPanelIds } from '../../components/ax/AxDashboard'
 
 const PANELS: AxPanelMeta[] = [
   {
@@ -147,6 +147,74 @@ describe('AxDashboard 패널 요청', () => {
     release90!()
     await screen.findByLabelText('10시 · 90명')
     expect(screen.getByRole('tabpanel', { name: '요약' }).querySelector('[aria-busy="true"]')).toBeNull()
+  })
+
+  it('첫 진입에는 활성 탭이 그리는 패널만 먼저 요청하고, 안 받은 탭을 열면 그 자리에서 받는다', async () => {
+    const allPanels: AxPanelMeta[] = [
+      { id: 'overview', title: '요약', description: '요약', source: 'test', visibility: 'org', usesPeriod: true },
+      { id: 'skill-usage', title: '스킬', description: '스킬', source: 'test', visibility: 'org', usesPeriod: true },
+      { id: 'journey-insights', title: '탐색·결과 분석', description: '탐색', source: 'test', visibility: 'org', parentId: 'skill-usage', usesPeriod: true },
+      { id: 'agent-activity', title: '에이전트 활동', description: '활동', source: 'test', visibility: 'org', parentId: 'skill-usage', usesPeriod: true },
+      { id: 'shared-skills', title: '에이전트 스킬', description: '목록', source: 'test', visibility: 'org', parentId: 'skill-usage', usesPeriod: false },
+      { id: 'skill-diff', title: '팀 스킬과 비교', description: '비교', source: 'test', visibility: 'org', parentId: 'skill-usage', usesPeriod: false },
+      { id: 'client-usage', title: '클라이언트', description: '사용량', source: 'test', visibility: 'org', usesPeriod: false },
+      { id: 'subscriptions', title: '구독 현황', description: '구독', source: 'test', visibility: 'org', parentId: 'client-usage', usesPeriod: false },
+      { id: 'vercel-deployments', title: '배포 사이트', description: '사이트', source: 'test', visibility: 'org', usesPeriod: false },
+      GRASS_PANEL,
+    ]
+    // 우선군 응답을 붙잡아 두면, 그 사이에 다른 패널 요청이 뜨는지로 "먼저 받는다"를 판별할 수 있다.
+    const pending: Array<() => void> = []
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const panel = allPanels.find((item) => url.includes(`/api/ax/${item.id}?`))!
+      await new Promise<void>((resolve) => { pending.push(resolve) })
+      return {
+        ok: true,
+        json: async () => ({
+          meta: panel,
+          status: 'not_configured',
+          message: '테스트 응답',
+          data: null,
+          highlights: [],
+          generatedAt: '2026-08-24T00:00:00.000Z',
+        } satisfies AxPanelResult),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const requestedIds = () => fetchMock.mock.calls.map(([url]) =>
+      new URL(String(url), 'http://test').pathname.replace('/api/ax/', '')
+    )
+
+    render(<AxDashboard panels={allPanels} isAdmin />)
+
+    // 요약 화면은 자기 패널 외에 구성원 활동 요약(skill-usage)과 365일 잔디(activity-grass)를 그린다.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    expect(requestedIds()).toEqual(['overview', 'skill-usage', 'activity-grass'])
+    // 우선군이 아직 안 끝났으니 보이지 않는 탭의 패널은 하나도 요청되지 않는다.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+
+    // 아직 받지 않은 탭을 열면 지연 조회를 기다리지 않고 바로 받는다.
+    fireEvent.click(screen.getByRole('tab', { name: '클라이언트' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    expect(requestedIds()[3]).toBe('client-usage')
+
+    // 우선군이 도착한 뒤에야 나머지를 받되, 방금 직접 받은 패널은 다시 요청하지 않는다.
+    pending.splice(0).forEach((release) => release())
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(allPanels.length))
+    const ids = requestedIds()
+    expect(new Set(ids).size).toBe(allPanels.length)
+    expect(ids.filter((id) => id === 'client-usage')).toHaveLength(1)
+    pending.splice(0).forEach((release) => release())
+  })
+
+  it('requiredPanelIds는 활성 탭과 그 화면이 의존하는 패널만, 볼 수 있는 것 중에서 고른다', () => {
+    const all = ['overview', 'skill-usage', 'agent-activity', 'client-usage', 'activity-grass']
+    expect(requiredPanelIds('overview', 'overview', all)).toEqual(['overview', 'skill-usage', 'activity-grass'])
+    expect(requiredPanelIds('skill-usage', 'agent-activity', all)).toEqual(['skill-usage', 'activity-grass', 'agent-activity'])
+    expect(requiredPanelIds('client-usage', 'client-usage', all)).toEqual(['client-usage'])
+    // 잔디 패널을 볼 수 없는 사용자라면 의존 패널도 요청하지 않는다.
+    expect(requiredPanelIds('overview', 'overview', ['overview', 'skill-usage'])).toEqual(['overview', 'skill-usage'])
   })
 
   it('데이터 패널을 네 업무 영역의 세부 보기로 묶고 키보드로 이동한다', async () => {
