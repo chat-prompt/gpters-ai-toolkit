@@ -26,7 +26,7 @@
 import { catalogItems, db, itemVersions, skillEvents, users } from '@gpters/db'
 import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
-import { compactDescription, summarizeChangeNote } from './change-note'
+import { compactDescription, summarizeChangeNote, summarizeSkillContent } from './change-note'
 
 const log = createLogger('popular-skills')
 
@@ -58,8 +58,15 @@ export interface CatalogChange {
   version: string
   /** 갱신본에만 채운다 — 창 안에서 버전이 올라간 횟수 */
   bumps?: number
-  /** 카탈로그에 적힌 한 줄 설명. 비어 있으면 null */
+  /** 알림에 실을 한 줄 설명. 비어 있으면 null */
   summary: string | null
+  /**
+   * 설명이 비어 있어 **본문에서 뽑아낸** 요약인가.
+   *
+   * 사람이 쓴 설명과 기계가 요약한 것을 섞어 보이면 안 된다 — 읽는 사람이 그 차이를 알아야
+   * "채워 주세요"가 뜻을 갖는다.
+   */
+  summaryIsAuto?: boolean
   /**
    * 갱신본에만 채운다 — 이번 주 변경을 명사형 한 마디로 (예: "버그 수정", "문체 개선").
    *
@@ -124,13 +131,14 @@ export function shortSummary(description: string | null | undefined): string | n
  * @param since - 창 시작
  * @returns 최근 등록 순
  */
-async function collectCreated(since: Date): Promise<CatalogChange[]> {
+async function collectCreated(since: Date): Promise<Array<CatalogChange & { content: string | null }>> {
   const rows = await db
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
       version: catalogItems.version,
       description: catalogItems.description,
+      content: catalogItems.content,
       authorName: users.name,
     })
     .from(catalogItems)
@@ -150,6 +158,7 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
     authorName: row.authorName ?? null,
     version: row.version ?? '1.0.0',
     summary: shortSummary(row.description),
+    content: row.content,
   }))
 }
 
@@ -166,13 +175,14 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
 async function collectUpdated(
   since: Date,
   excludeIds: Set<string>
-): Promise<Array<CatalogChange & { changelogs: string[] }>> {
+): Promise<Array<CatalogChange & { changelogs: string[]; content: string | null }>> {
   const rows = await db
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
       version: catalogItems.version,
       description: catalogItems.description,
+      content: catalogItems.content,
       authorName: users.name,
       bumps: sql<number>`count(${itemVersions.id})::int`,
       // 이번 주 변경 기록을 모아 한 마디로 줄일 재료로 쓴다
@@ -200,10 +210,30 @@ async function collectUpdated(
       version: row.version ?? '1.0.0',
       bumps: Number(row.bumps ?? 0),
       summary: shortSummary(row.description),
+      content: row.content,
       changelogs: (row.changelogs ?? []).filter((entry) => typeof entry === 'string' && entry.trim() !== ''),
     }))
 }
 
+
+
+/**
+ * 알림에 실을 한 줄 설명을 만든다.
+ *
+ * 사람이 쓴 설명이 있으면 그것을 압축하고, 없으면 **본문에서 뽑되 자동 요약이라고 표시한다.**
+ * 둘을 섞어 보이면 "설명을 채워 주세요"가 뜻을 잃는다.
+ *
+ * @param item - 설명과 본문을 가진 항목
+ * @returns 표시할 설명과 자동 여부
+ */
+async function resolveSummary(
+  item: { summary: string | null; content: string | null }
+): Promise<{ summary: string | null; summaryIsAuto: boolean }> {
+  if (item.summary !== null) {
+    return { summary: await compactDescription(item.summary), summaryIsAuto: false }
+  }
+  return { summary: await summarizeSkillContent(item.content), summaryIsAuto: true }
+}
 
 /**
  * 설명이 비어 있는 발행 스킬을 읽는다.
@@ -247,7 +277,10 @@ async function collectMissingDescriptions(): Promise<{ rows: MissingDescription[
     }))
     .sort((a, b) => b.recentApplies - a.recentApplies || a.id.localeCompare(b.id))
 
-  return { rows: sorted.slice(0, TOP_LIMIT), total: sorted.length }
+  // 안 쓰이는 스킬까지 매주 부탁하면 목록이 길어지고 아무도 안 본다.
+  // 실제로 쓰이는데 설명이 없는 것만 남긴다 — 검색에서 못 찾는 손해가 지금 나고 있는 것들이다.
+  const used = sorted.filter((row) => row.recentApplies > 0)
+  return { rows: used.slice(0, TOP_LIMIT), total: used.length }
 }
 
 /**
@@ -296,12 +329,15 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
 
   // 목록에 실을 것만 압축·요약한다 — 잘려 나갈 항목까지 모델을 부를 이유가 없다
   const created: CatalogChange[] = await Promise.all(
-    createdRaw.map(async (item) => ({ ...item, summary: await compactDescription(item.summary) }))
+    createdRaw.map(async ({ content, ...item }) => ({
+      ...item,
+      ...(await resolveSummary({ summary: item.summary, content })),
+    }))
   )
   const updated: CatalogChange[] = await Promise.all(
-    updatedRaw.map(async ({ changelogs, ...item }) => ({
+    updatedRaw.map(async ({ changelogs, content, ...item }) => ({
       ...item,
-      summary: await compactDescription(item.summary),
+      ...(await resolveSummary({ summary: item.summary, content })),
       changeNote: await summarizeChangeNote(changelogs),
     }))
   )
@@ -357,6 +393,20 @@ function skillLink(baseUrl: string, id: string, name: string): string {
 }
 
 /**
+ * 설명 줄. 설명은 둘째 줄로 내린다 — 한 줄에 몰면 이름과 설명이 섞여 안 읽힌다.
+ *
+ * 자동 요약은 그렇다고 표시한다. 사람이 쓴 것처럼 보이면 아무도 채우지 않는다.
+ *
+ * @param item - 표시할 항목
+ * @returns 둘째 줄. 설명이 없으면 빈 문자열
+ */
+function summaryLine(item: CatalogChange): string {
+  if (!item.summary) return ''
+  const mark = item.summaryIsAuto ? ' _(자동 요약)_' : ''
+  return `\n   ${item.summary}${mark}`
+}
+
+/**
  * 많이 쓴 스킬 구역.
  *
  * 비율을 쓰지 않는다 — 표본이 작을 때 백분율은 실제보다 강한 주장을 한다.
@@ -384,9 +434,7 @@ export function formatDigestLines(digest: PopularSkillDigest, baseUrl: string): 
 export function formatCreatedLines(digest: PopularSkillDigest, baseUrl: string): string[] {
   return digest.created.map((item) => {
     const by = item.authorName ? ` · ${item.authorName}` : ''
-    // 설명은 둘째 줄로 내린다 — 한 줄에 몰면 이름과 설명이 섞여 안 읽힌다
-    const desc = item.summary ? `\n   ${item.summary}` : ''
-    return `• ${skillLink(baseUrl, item.id, item.name)}${by}${desc}`
+    return `• ${skillLink(baseUrl, item.id, item.name)}${by}${summaryLine(item)}`
   })
 }
 
@@ -406,8 +454,7 @@ export function formatUpdatedLines(digest: PopularSkillDigest, baseUrl: string):
     const times = (item.bumps ?? 0) > 1 ? ` · ${item.bumps}회` : ''
     // 무엇이 바뀌었는지가 버전 숫자보다 먼저 읽혀야 한다. 요약이 없으면 그 자리를 비운다
     const note = item.changeNote ? ` — ${item.changeNote}` : ''
-    const desc = item.summary ? `\n   ${item.summary}` : ''
-    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${note}${by}${times}${desc}`
+    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${note}${by}${times}${summaryLine(item)}`
   })
 }
 

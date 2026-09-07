@@ -41,4 +41,5 @@ export {
   firstSentence,
   normalizeChangeNote,
   summarizeChangeNote,
+  summarizeSkillContent,
 } from './change-note'

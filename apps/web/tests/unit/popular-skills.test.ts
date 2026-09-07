@@ -315,3 +315,43 @@ describe('설명 채우기 요청 구역', () => {
     expect(lines).toHaveLength(1)
   })
 })
+
+describe('자동 요약 표시', () => {
+  /** 세 구역을 채운 집계 */
+  function digest(created: CatalogChange[], updated: CatalogChange[] = []): PopularSkillDigest {
+    return {
+      since: '2026-08-31T00:00:00.000Z',
+      until: '2026-09-07T00:00:00.000Z',
+      totalApplies: 0, distinctSkills: 0, top: [], firstTimers: [], created, updated,
+      missingDescriptions: [], missingDescriptionTotal: 0,
+    }
+  }
+
+  it('사람이 쓴 설명에는 표식을 붙이지 않는다', () => {
+    const item: CatalogChange = {
+      id: 'a', name: '스킬', authorName: null, version: '1.0.0',
+      summary: '사람이 쓴 설명', summaryIsAuto: false,
+    }
+    const [line] = formatCreatedLines(digest([item]), 'https://example.test')
+    expect(line).toContain('사람이 쓴 설명')
+    expect(line).not.toContain('자동 요약')
+  })
+
+  it('본문에서 뽑은 것은 자동 요약이라고 밝힌다 — 사람이 쓴 것처럼 보이면 아무도 안 채운다', () => {
+    const item: CatalogChange = {
+      id: 'a', name: '스킬', authorName: null, version: '1.0.0',
+      summary: '본문에서 뽑은 요약', summaryIsAuto: true,
+    }
+    const [line] = formatCreatedLines(digest([item]), 'https://example.test')
+    expect(line).toContain('_(자동 요약)_')
+  })
+
+  it('요약이 아예 없으면 둘째 줄을 만들지 않는다', () => {
+    const item: CatalogChange = {
+      id: 'a', name: '스킬', authorName: null, version: '1.0.0',
+      summary: null, summaryIsAuto: true,
+    }
+    const [line] = formatCreatedLines(digest([item]), 'https://example.test')
+    expect(line).not.toContain('\n')
+  })
+})
