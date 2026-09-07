@@ -11,6 +11,7 @@ import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import type { UserRole } from '@/lib/security/rbac'
 import { useToast } from '@/components/ui/Toast'
+import { AllowedAccountsPanel } from '@/components/admin'
 
 interface User {
   id: string
@@ -56,6 +57,7 @@ export default function UsersPage() {
 
   const currentUserRole = session?.user?.role as UserRole | undefined
   const canManageUsers = currentUserRole === 'admin'
+  const canManageExternalAccess = currentUserRole === 'super_admin'
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -234,6 +236,8 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {canManageExternalAccess && <AllowedAccountsPanel />}
 
       {/* Role descriptions */}
       <div className="mt-8">

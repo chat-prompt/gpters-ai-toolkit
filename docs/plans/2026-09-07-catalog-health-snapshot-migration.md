@@ -1,6 +1,6 @@
-# AX 0035 카탈로그 위생 스냅숏 마이그레이션
+# AX 0036 카탈로그 위생 스냅숏 마이그레이션
 
-`0035_ax_catalog_health_snapshots.sql`은 **새 테이블 하나를 만든다.** 기존 테이블을 건드리지 않는다.
+`0036_ax_catalog_health_snapshots.sql`은 **새 테이블 하나를 만든다.** 기존 테이블을 건드리지 않는다.
 
 ## 왜 저장해야 하나
 
@@ -31,19 +31,25 @@
 **0을 그리지 않는다** — 비어 있는 것은 0건이 아니라 관측 이전이다.
 따라서 마이그레이션 적용 전에 배포해도 안전하다.
 
+## 번호가 0035 → 0036으로 밀렸다
+
+작업 중에 `0035_allowed_external_accounts`(외부 허용 계정 관리)가 먼저 main에 들어왔다.
+그래서 이 마이그레이션은 **0036**이고, 가드 기준선도 0034가 아니라 **0035**다.
+2026-09-07 기준 운영에는 그 0035까지 적용돼 있다(25건).
+
 ## 가드
 
 `packages/db/src/migration/catalog-health-snapshot-guard.ts`가 적용 전후를 검증한다.
 
 적용 전 요구 조건:
 
-- 마이그레이션 정확히 24건, 마지막이 0034(`1788414275714`)
+- 마이그레이션 정확히 25건, 마지막이 0035(`1788742341706`, `allowed_external_accounts`)
 - `ax_catalog_health_snapshots`가 아직 없음
 - child 모드는 운영 브랜치를 거부하고, production 모드는 운영과 다른 recovery 브랜치를 요구
 
 적용 후 요구 조건:
 
-- 마이그레이션 25건, 마지막이 0035(`1788742000000`)
+- 마이그레이션 26건, 마지막이 0036(`1788745000000`)
 - 테이블이 존재
 - `catalog_items` 행 수가 적용 전과 동일 (새 테이블만 만들어야 한다)
 
@@ -75,7 +81,7 @@ pnpm --filter @gpters/db db:migrate:catalog-snapshot-production -- \
 읽기 전용 결과를 검토한 뒤 다음을 덧붙인다.
 
 ```sh
-  --apply --confirm-production-migration apply-ax-0035
+  --apply --confirm-production-migration apply-ax-0036
 ```
 
 ## 되돌리기

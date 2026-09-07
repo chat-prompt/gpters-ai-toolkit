@@ -129,7 +129,7 @@ export async function createAccessToken(
     .from(users)
     .where(eq(users.id, options.userId))
 
-  if (!isAllowedAccountEmail(tokenOwner?.email)) {
+  if (!(await isAllowedAccountEmail(tokenOwner?.email))) {
     log.warn('Access token issuance denied: account is not authorized', {
       userId: options.userId,
       clientId: options.clientId,
@@ -202,7 +202,7 @@ export async function validateAccessToken(
       return { valid: false, error: 'Invalid token' }
     }
 
-    if (!isAllowedAccountEmail(tokenRecord.userEmail)) {
+    if (!(await isAllowedAccountEmail(tokenRecord.userEmail))) {
       log.warn('Access token validation failed: account is not authorized', {
         accessTokenId: tokenRecord.id,
       })

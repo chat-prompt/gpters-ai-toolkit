@@ -180,8 +180,15 @@
     {
       "idx": 25,
       "version": "7",
-      "when": 1788742000000,
-      "tag": "0035_ax_catalog_health_snapshots",
+      "when": 1788742341706,
+      "tag": "0035_allowed_external_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788745000000,
+      "tag": "0036_ax_catalog_health_snapshots",
       "breakpoints": true
     }
   ]

@@ -1,4 +1,4 @@
-/** Guarded AX 0035 catalog-health-snapshot table migration runner for Neon. */
+/** Guarded AX 0036 catalog-health-snapshot table migration runner for Neon. */
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -13,7 +13,7 @@ import {
   validateCatalogSnapshotBeforeMigration,
 } from '../src/migration/catalog-health-snapshot-guard'
 
-const PRODUCTION_CONFIRMATION = 'apply-ax-0035'
+const PRODUCTION_CONFIRMATION = 'apply-ax-0036'
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name)
@@ -115,12 +115,12 @@ async function main(): Promise<void> {
 
   const db = drizzle(neon(databaseUrl))
   const before = await inspect(db, expectedProjectId, expectedBranchId, productionBranchId, recoveryBranchId)
-  summary('AX 0035 preflight', before)
-  assertSafe('AX 0035 preflight', validateCatalogSnapshotBeforeMigration(before, production))
+  summary('AX 0036 preflight', before)
+  assertSafe('AX 0036 preflight', validateCatalogSnapshotBeforeMigration(before, production))
   if (!apply) {
     console.log(production
       ? `Ready. Re-run with --apply --confirm-production-migration ${PRODUCTION_CONFIRMATION}.`
-      : 'Ready. Re-run the same command with --apply to execute migration 0035.')
+      : 'Ready. Re-run the same command with --apply to execute migration 0036.')
     return
   }
 
@@ -134,9 +134,9 @@ async function main(): Promise<void> {
     recoveryBranchId,
     before.catalogItemCount,
   )
-  summary('AX 0035 verification', after)
-  assertSafe('AX 0035 verification', validateCatalogSnapshotAfterMigration(after, production))
-  console.log('AX 0035 catalog health snapshot table applied and verified.')
+  summary('AX 0036 verification', after)
+  assertSafe('AX 0036 verification', validateCatalogSnapshotAfterMigration(after, production))
+  console.log('AX 0036 catalog health snapshot table applied and verified.')
 }
 
 main().catch((error) => {

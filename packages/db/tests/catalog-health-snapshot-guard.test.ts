@@ -33,17 +33,17 @@ function applied(production = false): CatalogSnapshotMigrationState {
   return state
 }
 
-test('accepts the exact AX 0034 child baseline', () => {
+test('accepts the exact AX 0035 child baseline', () => {
   assert.deepEqual(validateCatalogSnapshotBeforeMigration(baseline(), false), [])
 })
 
-test('rejects a database that has not reached the AX 0034 baseline', () => {
+test('rejects a database that has not reached the AX 0035 baseline', () => {
   const input = baseline()
   input.migrationCount = CATALOG_SNAPSHOT_BASELINE_COUNT - 1
-  input.latestMigrationTimestamp = '1788141600000'
+  input.latestMigrationTimestamp = '1788414275714'
   const errors = validateCatalogSnapshotBeforeMigration(input, false)
   assert.ok(errors.some((error) => error.includes('recorded migrations before apply')))
-  assert.ok(errors.some((error) => error.includes('AX 0034 baseline')))
+  assert.ok(errors.some((error) => error.includes('AX 0035 baseline')))
 })
 
 test('refuses to run the child migration against the production branch', () => {
@@ -86,11 +86,11 @@ test('rejects a post-migration state that applied more than one migration', () =
   assert.ok(errors.some((error) => error.includes('recorded migrations after apply')))
 })
 
-test('rejects a post-migration state whose latest migration is not 0035', () => {
+test('rejects a post-migration state whose latest migration is not 0036', () => {
   const input = applied()
   input.latestMigrationTimestamp = CATALOG_SNAPSHOT_BASELINE_TIMESTAMP
   const errors = validateCatalogSnapshotAfterMigration(input, false)
-  assert.ok(errors.some((error) => error.includes('not AX 0035')))
+  assert.ok(errors.some((error) => error.includes('not AX 0036')))
 })
 
 test('rejects a post-migration state where the table is missing', () => {

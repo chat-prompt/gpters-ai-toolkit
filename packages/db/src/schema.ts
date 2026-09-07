@@ -185,6 +185,23 @@ export const users = pgTable('users', {
 export type UserRecord = typeof users.$inferSelect
 export type NewUserRecord = typeof users.$inferInsert
 
+/**
+ * 개별 승인된 외부 계정 — GPTers 도메인 밖이지만 로그인을 허용한 이메일.
+ * 슈퍼 어드민이 어드민 화면에서 추가·삭제하며, 삭제하면 즉시 접근이 끊긴다.
+ */
+export const allowedExternalAccounts = pgTable('allowed_external_accounts', {
+  /** 소문자로 정규화된 전체 이메일 주소 */
+  email: text('email').primaryKey(),
+  /** 왜 열어줬는지 남기는 메모 */
+  note: text('note'),
+  /** 승인한 슈퍼 어드민. 계정이 지워져도 승인 기록은 남긴다 */
+  addedByUserId: text('added_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+})
+
+export type AllowedExternalAccountRecord = typeof allowedExternalAccounts.$inferSelect
+export type NewAllowedExternalAccountRecord = typeof allowedExternalAccounts.$inferInsert
+
 // ============================================
 // Organizations & Memberships
 // ============================================

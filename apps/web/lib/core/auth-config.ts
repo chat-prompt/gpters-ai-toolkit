@@ -3,7 +3,7 @@ import Google from 'next-auth/providers/google'
 import { db, users, organizations, orgMemberships } from '@gpters/db'
 import { eq, sql, and } from 'drizzle-orm'
 import { createLogger } from '@gpters/lib/core'
-import { accessDomainOf, isAllowedAccountEmail } from '@gpters/lib/account-access'
+import { GPTTERS_EMAIL_DOMAIN, isAllowedAccountEmail } from '@gpters/lib/account-access'
 import type { UserRole, OrgRole } from '@gpters/lib/security'
 
 const log = createLogger('auth')
@@ -22,14 +22,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      if (!isAllowedAccountEmail(user.email)) {
+      const email = user.email?.trim().toLowerCase()
+      if (!email || !(await isAllowedAccountEmail(email))) {
         log.warn('Login denied: account is not authorized')
         return false
       }
 
-      const email = user.email.trim().toLowerCase()
       user.email = email
-      const domain = accessDomainOf(email)
+      const domain = GPTTERS_EMAIL_DOMAIN
 
       try {
         const matchingOrgs = await db
@@ -172,7 +172,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session
     },
     async jwt({ token, user }) {
-      if (!isAllowedAccountEmail(token.email)) {
+      if (!(await isAllowedAccountEmail(token.email))) {
         return null
       }
 
@@ -193,7 +193,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       try {
-        const email = token.email.trim().toLowerCase()
+        const email = token.email?.trim().toLowerCase()
         if (email) {
           const [dbUser] = await db
             .select({
