@@ -20,13 +20,16 @@ import { createLogger } from '../core/logger'
 const log = createLogger('change-note')
 
 /**
- * 요약에 쓰는 모델.
+ * 요약에 쓰는 모델. `slack.ts`의 `SUMMARY_MODEL`과 같은 값을 쓴다.
  *
- * 배포 알림 요약(`slack.ts`의 `SUMMARY_MODEL`)과 **같은 이름을 쓴다.** 그쪽은 운영에서 실제로
- * 돌고 있는 것이 확인된 값이다. 다른 이름을 쓰면 호출이 조용히 실패하고, 이 함수는 실패를
- * null로 삼키므로 **요약이 그냥 안 나오는 것처럼 보인다.**
+ * **이름이 낡으면 404가 나고 요약이 조용히 사라진다.** 2026-09-07에 `gemini-2.0-flash`와
+ * `gemini-2.5-flash`가 둘 다 폐기된 것을 운영 로그로 확인했다 — API가 응답 본문에
+ * 대체 모델을 알려준다.
+ *
+ * 모델 이름은 우리가 통제하지 못하는 값이라 언젠가 또 낡는다. 그때 조용히 사라지지 않도록
+ * 실패를 로그로 남긴다.
  */
-const MODEL = 'gemini-2.0-flash'
+const MODEL = 'gemini-3.6-flash'
 
 /** 모델에 넘기는 changelog 총 길이 상한 */
 const INPUT_CAP = 1500

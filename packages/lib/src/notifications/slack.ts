@@ -10,7 +10,14 @@ import { createLogger } from '../core/logger'
 
 const log = createLogger('slack-notification')
 
-const SUMMARY_MODEL = 'gemini-2.0-flash'
+/**
+ * 배포 알림 요약에 쓰는 모델.
+ *
+ * 2026-09-07 확인: `gemini-2.0-flash`가 폐기돼 이 요약이 **얼마간 조용히 비어 있었다.**
+ * `summarizeContent`가 실패를 null로 삼키고, 호출부는 요약이 없으면 그냥 생략하기 때문에
+ * 알림은 정상으로 보였다.
+ */
+const SUMMARY_MODEL = 'gemini-3.6-flash'
 
 /** Type-to-emoji/label mapping for Slack messages */
 const TYPE_LABELS: Record<string, { emoji: string; label: string }> = {
