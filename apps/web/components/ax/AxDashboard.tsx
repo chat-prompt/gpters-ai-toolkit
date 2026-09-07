@@ -40,6 +40,53 @@ const DAY_OPTIONS = [7, 30, 90] as const
 /** 첫 화면이 안정된 뒤 나머지 기간을 미리 받기 시작할 때까지의 여유 */
 const PREFETCH_DELAY_MS = 1500
 
+/**
+ * 활성 탭 패널이 도착한 뒤, 보이지 않는 탭의 패널을 받기 시작할 때까지의 여유
+ *
+ * 우선군 응답이 화면에 그려지는 동안 뒤 요청의 JSON 파싱·상태 갱신이 끼어들지 않게 한 박자 띄운다.
+ * 운영은 Vercel(미국 동부)에서 Neon(싱가포르)을 부르므로 왕복 하나가 짧지 않고, 첫 화면에
+ * 필요 없는 요청이 대역폭과 DB 커넥션을 같이 잡아먹는다.
+ */
+const DEFERRED_PANELS_DELAY_MS = 250
+
+/**
+ * 어떤 패널을 화면에 그릴 때 함께 있어야 하는 다른 패널
+ *
+ * 탭 하나가 자기 패널 하나만 쓰지 않는다 — 요약 화면의 구성원 활동 요약은 `skill-usage`의
+ * 활성 구성원·적용 호출 수를 쓰고, 요약 하단의 365일 잔디와 스킬 탭의 일별 스킬 활동 차트는
+ * 숨김 패널 `activity-grass`를 읽는다. 여기 적힌 패널은 활성 탭과 같은 우선군으로 받는다.
+ */
+const PANEL_VIEW_DEPENDENCIES: Record<string, readonly string[]> = {
+  overview: ['skill-usage', 'activity-grass'],
+  'skill-usage': ['activity-grass'],
+}
+
+/**
+ * 현재 화면을 그리는 데 필요한 패널 ID를 순서대로 모은다
+ *
+ * 최상위 탭, 그 안의 활성 세부 탭, 그리고 둘이 의존하는 패널 순이다. 사용자가 볼 수 없는
+ * 패널(서버가 내려주지 않은 것)은 뺀다.
+ *
+ * @param activeRootId - 활성 최상위 탭 패널 ID
+ * @param activePanelId - 활성 세부 탭 패널 ID (세부 탭이 없으면 최상위와 같다)
+ * @param availableIds - 이 사용자가 볼 수 있는 패널 ID 목록
+ * @returns 중복을 제거한 필요 패널 ID 목록
+ */
+export function requiredPanelIds(
+  activeRootId: string,
+  activePanelId: string,
+  availableIds: readonly string[]
+): string[] {
+  const available = new Set(availableIds)
+  const ordered: string[] = []
+  for (const id of [activeRootId, activePanelId]) {
+    for (const candidate of [id, ...(PANEL_VIEW_DEPENDENCIES[id] ?? [])]) {
+      if (available.has(candidate) && !ordered.includes(candidate)) ordered.push(candidate)
+    }
+  }
+  return ordered
+}
+
 /** 조회 기간 타입 */
 type AxDays = (typeof DAY_OPTIONS)[number]
 
@@ -97,6 +144,9 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   const cacheRef = useRef(new Map<string, AxPanelResult>())
   // 같은 패널×기간 요청이 겹치지 않게(선요청 중 사용자가 그 기간을 누르는 경우) 진행 중인 약속을 공유한다.
   const inflightRef = useRef(new Map<string, Promise<AxPanelResult>>())
+  // 이번 패널 구성에서 한 번이라도 화면에 실은 패널. 보이지 않는 탭의 패널은 뒤로 미루므로,
+  // 사용자가 그 탭을 먼저 열면 즉시 받고 뒤이은 지연 조회에서는 건너뛰기 위해 기억한다.
+  const requestedRef = useRef(new Set<string>())
 
   /** 패널 하나를 받아 캐시에 넣는다. 같은 키의 요청이 진행 중이면 그 약속을 같이 기다린다. */
   const fetchPanel = useCallback((panelId: string, targetDays: number, forceRefresh = false) => {
@@ -133,6 +183,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     requestsRef.current.get(panelId)?.abort()
     const request = new AbortController()
     requestsRef.current.set(panelId, request)
+    requestedRef.current.add(panelId)
 
     const cached = forceRefresh ? undefined : cacheRef.current.get(`${panelId}:${targetDays}`)
     setStates((prev) => ({
@@ -167,32 +218,60 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   // 패널 구성 변경 효과는 days 변경만으로 재실행되면 안 되므로 최신 값은 ref에서 읽는다.
   const selectedDaysRef = useRef<AxDays>(days)
   const previousPeriodContextRef = useRef({ panelRequestKey, days })
+  // 탭 전환도 마찬가지 — 초기 조회 효과는 탭이 바뀔 때 다시 돌면 안 되므로 활성 탭은 ref로 읽는다.
+  const activeIdsRef = useRef({ rootId: activeRootId, panelId: activePanelId })
+  const previousActiveIdsRef = useRef({ rootId: activeRootId, panelId: activePanelId })
 
-  // 아래 패널 구성 효과보다 먼저 선언해, 두 값이 한 렌더에서 함께 바뀌어도 최신 기간을 쓴다.
+  // 아래 패널 구성 효과보다 먼저 선언해, 두 값이 한 렌더에서 함께 바뀌어도 최신 기간·탭을 쓴다.
   useEffect(() => {
     selectedDaysRef.current = days
   }, [days])
+  useEffect(() => {
+    activeIdsRef.current = { rootId: activeRootId, panelId: activePanelId }
+  }, [activeRootId, activePanelId])
 
-  // 최초 진입이나 볼 수 있는 패널 구성이 바뀌면 전체를 한 번 조회한다.
-  // 첫 화면이 안정된 뒤에는 기간 연동 패널의 나머지 기간을 뒤에서 미리 받아 두어
-  // 7일·30일·90일 전환이 즉시 되게 한다.
+  // 최초 진입이나 볼 수 있는 패널 구성이 바뀌면 활성 탭 패널을 먼저 받고, 보이지 않는 탭의
+  // 패널은 첫 화면이 그려진 뒤에 받는다. 그 다음 기간 연동 패널의 나머지 기간을 뒤에서 미리
+  // 받아 두어 7일·30일·90일 전환이 즉시 되게 한다.
   useEffect(() => {
     const panelConfigs = JSON.parse(panelRequestKey) as Array<{
       id: string
       usesPeriod: boolean
     }>
     const initialDays = selectedDaysRef.current
+    const { rootId, panelId } = activeIdsRef.current
+    const priorityIds = requiredPanelIds(rootId, panelId, panelConfigs.map((panel) => panel.id))
+    const deferredIds = panelConfigs
+      .map((panel) => panel.id)
+      .filter((id) => !priorityIds.includes(id))
+    // 구성이 바뀌면 이전 구성에서 받은 기록은 뜻이 없다 — 지연 조회가 전부를 다시 받게 비운다.
+    requestedRef.current = new Set()
 
     let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let deferredTimer: ReturnType<typeof setTimeout> | undefined
+    let prefetchTimer: ReturnType<typeof setTimeout> | undefined
+    const wait = (ms: number, assign: (timer: ReturnType<typeof setTimeout>) => void) =>
+      new Promise<void>((resolve) => { assign(setTimeout(resolve, ms)) })
+
     // 효과 본문에서 동기적으로 상태를 바꾸지 않도록 요청 시작을 다음 마이크로태스크로 미룬다.
     void Promise.resolve().then(() => {
       if (cancelled) return
       // 패널마다 독립 요청 — 하나가 느리거나 실패해도 나머지를 막지 않는다
-      return Promise.allSettled(panelConfigs.map((panel) => loadPanel(panel.id, initialDays)))
+      return Promise.allSettled(priorityIds.map((id) => loadPanel(id, initialDays)))
+    }).then(async () => {
+      if (cancelled || deferredIds.length === 0) return
+      await wait(DEFERRED_PANELS_DELAY_MS, (timer) => { deferredTimer = timer })
+      if (cancelled) return
+      // 미루는 사이 사용자가 열어 이미 받은 탭은 건너뛴다. 기간은 그 사이 바뀌었을 수 있으니 지금 값을 쓴다.
+      const targetDays = selectedDaysRef.current
+      await Promise.allSettled(
+        deferredIds
+          .filter((id) => !requestedRef.current.has(id))
+          .map((id) => loadPanel(id, targetDays))
+      )
     }).then(() => {
       if (cancelled) return
-      timer = setTimeout(() => {
+      prefetchTimer = setTimeout(() => {
         if (cancelled) return
         const periodPanels = panelConfigs.filter((panel) => panel.usesPeriod)
         const otherDays = DAY_OPTIONS.filter((option) => option !== initialDays)
@@ -208,9 +287,30 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
 
     return () => {
       cancelled = true
-      if (timer !== undefined) clearTimeout(timer)
+      if (deferredTimer !== undefined) clearTimeout(deferredTimer)
+      if (prefetchTimer !== undefined) clearTimeout(prefetchTimer)
     }
   }, [panelRequestKey, loadPanel, fetchPanel])
+
+  // 아직 받지 않은 탭을 열면 지연 조회를 기다리지 않고 그 자리에서 받는다.
+  // 첫 렌더는 위 효과가 우선군을 받으므로 활성 탭이 실제로 바뀐 경우만 본다.
+  useEffect(() => {
+    const previous = previousActiveIdsRef.current
+    previousActiveIdsRef.current = { rootId: activeRootId, panelId: activePanelId }
+    if (previous.rootId === activeRootId && previous.panelId === activePanelId) return
+
+    const panelConfigs = JSON.parse(panelRequestKey) as Array<{ id: string }>
+    const missing = requiredPanelIds(activeRootId, activePanelId, panelConfigs.map((panel) => panel.id))
+      .filter((id) => !requestedRef.current.has(id))
+    if (missing.length === 0) return
+    // 효과 본문에서 동기적으로 상태를 바꾸지 않도록 다음 마이크로태스크에서 요청한다.
+    queueMicrotask(() => {
+      const targetDays = selectedDaysRef.current
+      for (const id of missing) {
+        if (!requestedRef.current.has(id)) void loadPanel(id, targetDays)
+      }
+    })
+  }, [activeRootId, activePanelId, panelRequestKey, loadPanel])
 
   // 기간만 바뀌면 usesPeriod=true 패널만 갱신한다.
   // 고정 스냅샷을 재요청하면 기간과 무관한 값이 토글 직후 달라질 수 있고,
