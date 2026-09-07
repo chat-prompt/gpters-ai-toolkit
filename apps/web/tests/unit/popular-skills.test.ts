@@ -12,6 +12,7 @@ import {
   formatUpdatedLines,
   hasAnythingToSay,
   rankSkills,
+  shortSummary,
   type CatalogChange,
   type PopularSkill,
   type PopularSkillDigest,
@@ -134,8 +135,14 @@ describe('새로 올라온·업데이트된 스킬 구역', () => {
     }
   }
 
-  const NEW: CatalogChange = { id: 'beusable', name: '뷰저블 페이지 등록', authorName: '윤누리', version: '1.0.0' }
-  const BUMPED: CatalogChange = { id: 'gpters-newsletter-v2', name: '뉴스레터 v2', authorName: '강지인', version: '2.2.1', bumps: 11 }
+  const NEW: CatalogChange = {
+    id: 'beusable', name: '뷰저블 페이지 등록', authorName: '윤누리', version: '1.0.0',
+    summary: '뷰저블에 페이지를 등록하고 방문 기록을 남긴다',
+  }
+  const BUMPED: CatalogChange = {
+    id: 'gpters-newsletter-v2', name: '뉴스레터 v2', authorName: '강지인', version: '2.2.1', bumps: 11,
+    summary: '지피터스 뉴스레터 제작·발송·웹발행', changeNote: '문구 정정',
+  }
 
   it('새로 올라온 것은 만든 사람을 함께 적는다', () => {
     const [line] = formatCreatedLines(digest([NEW], []), 'https://example.test')
@@ -150,13 +157,13 @@ describe('새로 올라온·업데이트된 스킬 구역', () => {
 
   it('한 주에 여러 번 고쳤으면 횟수를 적는다 — 같은 스킬로 목록을 채우지 않는다', () => {
     const [line] = formatUpdatedLines(digest([], [BUMPED]), 'https://example.test')
-    expect(line).toContain('11회 수정')
+    expect(line).toContain('11회')
   })
 
-  it('한 번만 고쳤으면 횟수를 적지 않는다', () => {
+  it('한 번만 고쳤으면 횟수를 적지 않는다 — 당연한 것을 적으면 줄만 길어진다', () => {
     const once = { ...BUMPED, bumps: 1 }
     const [line] = formatUpdatedLines(digest([], [once]), 'https://example.test')
-    expect(line).not.toContain('회 수정')
+    expect(line).not.toMatch(/\d+회/)
   })
 
   it('저자가 없으면 이름 자리를 비운다 — "null"이라고 쓰지 않는다', () => {
@@ -183,12 +190,66 @@ describe('hasAnythingToSay', () => {
   })
 
   it('쓴 사람이 없어도 새 스킬이 올라왔으면 보낸다', () => {
-    const withNew = { ...EMPTY, created: [{ id: 'a', name: 'a', authorName: null, version: '1.0.0' }] }
+    const withNew = { ...EMPTY, created: [{ id: 'a', name: 'a', authorName: null, version: '1.0.0', summary: null }] }
     expect(hasAnythingToSay(withNew)).toBe(true)
   })
 
   it('업데이트만 있어도 보낸다', () => {
-    const withUpdate = { ...EMPTY, updated: [{ id: 'a', name: 'a', authorName: null, version: '1.1.0', bumps: 1 }] }
+    const withUpdate = { ...EMPTY, updated: [{ id: 'a', name: 'a', authorName: null, version: '1.1.0', bumps: 1, summary: null, changeNote: null }] }
     expect(hasAnythingToSay(withUpdate)).toBe(true)
+  })
+})
+
+describe('설명과 변경 요약', () => {
+  /** 세 구역을 채운 집계 */
+  function digest(created: CatalogChange[], updated: CatalogChange[]): PopularSkillDigest {
+    return {
+      since: '2026-08-31T00:00:00.000Z',
+      until: '2026-09-07T00:00:00.000Z',
+      totalApplies: 0, distinctSkills: 0, top: [], firstTimers: [], created, updated,
+    }
+  }
+
+  it('새 스킬에 설명을 함께 보여준다', () => {
+    const item: CatalogChange = { id: 'a', name: '스킬', authorName: null, version: '1.0.0', summary: '무엇을 하는 스킬인지' }
+    const [line] = formatCreatedLines(digest([item], []), 'https://example.test')
+    expect(line).toContain('무엇을 하는 스킬인지')
+  })
+
+  it('설명이 없으면 그 줄을 만들지 않는다 — 빈 자리를 남기지 않는다', () => {
+    const item: CatalogChange = { id: 'a', name: '스킬', authorName: null, version: '1.0.0', summary: null }
+    const [line] = formatCreatedLines(digest([item], []), 'https://example.test')
+    expect(line).not.toContain('\n')
+  })
+
+  it('업데이트는 변경 요약을 버전 바로 뒤에 놓는다', () => {
+    const item: CatalogChange = { id: 'a', name: '스킬', authorName: null, version: '1.1.0', summary: null, changeNote: '버그 수정' }
+    const [line] = formatUpdatedLines(digest([], [item]), 'https://example.test')
+    expect(line).toContain('v1.1.0 — 버그 수정')
+  })
+
+  it('변경 요약이 없으면 지어내지 않고 비운다', () => {
+    const item: CatalogChange = { id: 'a', name: '스킬', authorName: null, version: '1.1.0', summary: null, changeNote: null }
+    const [line] = formatUpdatedLines(digest([], [item]), 'https://example.test')
+    expect(line).not.toContain('—')
+  })
+})
+
+describe('shortSummary', () => {
+  it('비어 있으면 null이다 — 없는 설명을 지어내지 않는다', () => {
+    expect(shortSummary('')).toBeNull()
+    expect(shortSummary('   ')).toBeNull()
+    expect(shortSummary(null)).toBeNull()
+  })
+
+  it('줄바꿈과 연속 공백을 한 칸으로 만든다', () => {
+    expect(shortSummary('앞\n\n  뒤')).toBe('앞 뒤')
+  })
+
+  it('길면 자르고 말줄임을 붙인다', () => {
+    const long = '가'.repeat(100)
+    const result = shortSummary(long)
+    expect(result).toHaveLength(61)
+    expect(result?.endsWith('…')).toBe(true)
   })
 })

@@ -26,6 +26,7 @@
 import { catalogItems, db, itemVersions, skillEvents, users } from '@gpters/db'
 import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
+import { summarizeChangeNote } from './change-note'
 
 const log = createLogger('popular-skills')
 
@@ -57,6 +58,15 @@ export interface CatalogChange {
   version: string
   /** 갱신본에만 채운다 — 창 안에서 버전이 올라간 횟수 */
   bumps?: number
+  /** 카탈로그에 적힌 한 줄 설명. 비어 있으면 null */
+  summary: string | null
+  /**
+   * 갱신본에만 채운다 — 이번 주 변경을 명사형 한 마디로 (예: "버그 수정", "문체 개선").
+   *
+   * changelog를 요약한 값이다. 요약에 실패하거나 changelog가 비면 **null로 둔다.**
+   * 지어내지 않는다.
+   */
+  changeNote?: string | null
 }
 
 /** 한 주의 집계 */
@@ -78,6 +88,23 @@ export interface PopularSkillDigest {
 }
 
 
+/** 알림에 싣는 설명의 최대 길이 — 한 줄을 넘기면 목록이 안 읽힌다 */
+const SUMMARY_MAX = 60
+
+/**
+ * 카탈로그 설명을 한 줄로 줄인다.
+ *
+ * 비어 있으면 null이다. **없는 설명을 지어내지 않는다.**
+ *
+ * @param description - 카탈로그에 적힌 설명
+ * @returns 한 줄 요약. 없으면 null
+ */
+export function shortSummary(description: string | null | undefined): string | null {
+  const text = (description ?? '').replace(/\s+/g, ' ').trim()
+  if (text === '') return null
+  return text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX)}…` : text
+}
+
 /**
  * 창 안에 새로 올라온 발행 항목을 읽는다.
  *
@@ -92,6 +119,7 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
       id: catalogItems.id,
       name: catalogItems.name,
       version: catalogItems.version,
+      description: catalogItems.description,
       authorName: users.name,
     })
     .from(catalogItems)
@@ -110,6 +138,7 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
     name: row.name,
     authorName: row.authorName ?? null,
     version: row.version ?? '1.0.0',
+    summary: shortSummary(row.description),
   }))
 }
 
@@ -123,15 +152,20 @@ async function collectCreated(since: Date): Promise<CatalogChange[]> {
  * @param excludeIds - 이미 "새로 올라옴"에 실린 id. 두 구역에 겹쳐 싣지 않는다
  * @returns 갱신 횟수 순
  */
-async function collectUpdated(since: Date, excludeIds: Set<string>): Promise<CatalogChange[]> {
+async function collectUpdated(
+  since: Date,
+  excludeIds: Set<string>
+): Promise<Array<CatalogChange & { changelogs: string[] }>> {
   const rows = await db
     .select({
       id: catalogItems.id,
       name: catalogItems.name,
       version: catalogItems.version,
+      description: catalogItems.description,
       authorName: users.name,
       bumps: sql<number>`count(${itemVersions.id})::int`,
-      lastBumpAt: sql<Date>`max(${itemVersions.createdAt})`,
+      // 이번 주 변경 기록을 모아 한 마디로 줄일 재료로 쓴다
+      changelogs: sql<string[]>`array_remove(array_agg(${itemVersions.changelog}), NULL)`,
     })
     .from(itemVersions)
     .innerJoin(catalogItems, eq(catalogItems.id, itemVersions.itemId))
@@ -154,6 +188,8 @@ async function collectUpdated(since: Date, excludeIds: Set<string>): Promise<Cat
       authorName: row.authorName ?? null,
       version: row.version ?? '1.0.0',
       bumps: Number(row.bumps ?? 0),
+      summary: shortSummary(row.description),
+      changelogs: (row.changelogs ?? []).filter((entry) => typeof entry === 'string' && entry.trim() !== ''),
     }))
 }
 
@@ -198,7 +234,14 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
     }))
 
   const created = await collectCreated(since)
-  const updated = await collectUpdated(since, new Set(created.map((item) => item.id)))
+  const updatedRaw = await collectUpdated(since, new Set(created.map((item) => item.id)))
+  // 목록에 실을 것만 요약한다 — 잘려 나갈 항목까지 모델을 부를 이유가 없다
+  const updated: CatalogChange[] = await Promise.all(
+    updatedRaw.map(async ({ changelogs, ...item }) => ({
+      ...item,
+      changeNote: await summarizeChangeNote(changelogs),
+    }))
+  )
 
   const digest: PopularSkillDigest = {
     since: since.toISOString(),
@@ -275,7 +318,9 @@ export function formatDigestLines(digest: PopularSkillDigest, baseUrl: string): 
 export function formatCreatedLines(digest: PopularSkillDigest, baseUrl: string): string[] {
   return digest.created.map((item) => {
     const by = item.authorName ? ` · ${item.authorName}` : ''
-    return `• ${skillLink(baseUrl, item.id, item.name)}${by}`
+    // 설명은 둘째 줄로 내린다 — 한 줄에 몰면 이름과 설명이 섞여 안 읽힌다
+    const desc = item.summary ? `\n   ${item.summary}` : ''
+    return `• ${skillLink(baseUrl, item.id, item.name)}${by}${desc}`
   })
 }
 
@@ -292,8 +337,11 @@ export function formatCreatedLines(digest: PopularSkillDigest, baseUrl: string):
 export function formatUpdatedLines(digest: PopularSkillDigest, baseUrl: string): string[] {
   return digest.updated.map((item) => {
     const by = item.authorName ? ` · ${item.authorName}` : ''
-    const times = (item.bumps ?? 0) > 1 ? ` · ${item.bumps}회 수정` : ''
-    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${by}${times}`
+    const times = (item.bumps ?? 0) > 1 ? ` · ${item.bumps}회` : ''
+    // 무엇이 바뀌었는지가 버전 숫자보다 먼저 읽혀야 한다. 요약이 없으면 그 자리를 비운다
+    const note = item.changeNote ? ` — ${item.changeNote}` : ''
+    const desc = item.summary ? `\n   ${item.summary}` : ''
+    return `• ${skillLink(baseUrl, item.id, item.name)} v${item.version}${note}${by}${times}${desc}`
   })
 }
 

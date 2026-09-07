@@ -27,8 +27,11 @@ export {
   formatDigestLines,
   formatUpdatedLines,
   hasAnythingToSay,
+  shortSummary,
   rankSkills,
   type CatalogChange,
   type PopularSkill,
   type PopularSkillDigest,
 } from './popular-skills'
+
+export { normalizeChangeNote, summarizeChangeNote } from './change-note'
