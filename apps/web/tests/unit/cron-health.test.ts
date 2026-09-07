@@ -19,6 +19,9 @@ import {
 
 const NOW = new Date('2026-09-07T05:00:00.000Z')
 
+/** 충분히 오래 지켜본 상태 — 기대 주기보다 훨씬 전부터 기록이 있다 */
+const WATCHING_SINCE = new Date('2026-08-01T00:00:00.000Z')
+
 /** 산출량을 감시하는 잡의 기대치 */
 const WATCHED: CronExpectation = {
   jobName: 'catalog-health-snapshot',
@@ -51,34 +54,49 @@ function observed(hoursAgo: number, stats: Array<Record<string, number>> = [{ to
 }
 
 describe('diagnose', () => {
-  it('한 번도 안 돌았으면 "기록 없음"이라고 한다 — 0건 처리가 아니다', () => {
-    const issue = diagnose(WATCHED, { lastSuccessAt: null, recentSuccessStats: [] }, NOW)
+  it('관측을 막 시작했으면 판정하지 않는다 — 표를 만든 다음 날 전부 빨개지면 안 된다', () => {
+    const justStarted = new Date(NOW.getTime() - 2 * 3_600_000)
+    expect(diagnose(WATCHED, { lastSuccessAt: null, recentSuccessStats: [] }, NOW, justStarted)).toBeNull()
+  })
+
+  it('기록이 아예 없으면 아무것도 판정하지 않는다', () => {
+    expect(diagnose(WATCHED, { lastSuccessAt: null, recentSuccessStats: [] }, NOW, null)).toBeNull()
+  })
+
+  it('주간 잡은 하루 지켜본 것으로 판정하지 않는다 — 아직 돌 차례가 아니다', () => {
+    const weekly = { ...WATCHED, jobName: 'weekly-report', maxSilentHours: 8 * 24 }
+    const oneDay = new Date(NOW.getTime() - 24 * 3_600_000)
+    expect(diagnose(weekly, { lastSuccessAt: null, recentSuccessStats: [] }, NOW, oneDay)).toBeNull()
+  })
+
+  it('충분히 지켜봤는데도 기록이 없으면 그때 말한다', () => {
+    const issue = diagnose(WATCHED, { lastSuccessAt: null, recentSuccessStats: [] }, NOW, WATCHING_SINCE)
     expect(issue).toMatchObject({ kind: 'never' })
-    expect(issue?.detail).toContain('한 번도 없다')
+    expect(issue?.detail).toContain('성공한 실행이 없다')
   })
 
   it('기대 주기 안에 성공했으면 문제로 보지 않는다', () => {
-    expect(diagnose(WATCHED, observed(20), NOW)).toBeNull()
+    expect(diagnose(WATCHED, observed(20), NOW, WATCHING_SINCE)).toBeNull()
   })
 
   it('기대 주기를 넘겨 조용하면 몇 시간째인지 알린다', () => {
-    const issue = diagnose(WATCHED, observed(40), NOW)
+    const issue = diagnose(WATCHED, observed(40), NOW, WATCHING_SINCE)
     expect(issue).toMatchObject({ kind: 'silent' })
     expect(issue?.detail).toContain('40시간 전')
   })
 
   it('성공했지만 산출이 0이면 잡는다 — 커뮤니티 임포트가 이 모양으로 6개월 숨었다', () => {
-    const issue = diagnose(WATCHED, observed(2, [{ totalItems: 0 }]), NOW)
+    const issue = diagnose(WATCHED, observed(2, [{ totalItems: 0 }]), NOW, WATCHING_SINCE)
     expect(issue).toMatchObject({ kind: 'zero_output' })
     expect(issue?.detail).toContain('1회 연속 0')
   })
 
   it('0이 정상인 잡은 산출량으로 문제 삼지 않는다', () => {
-    expect(diagnose(UNWATCHED, observed(2, [{ queries: 0 }, { queries: 0 }]), NOW)).toBeNull()
+    expect(diagnose(UNWATCHED, observed(2, [{ queries: 0 }, { queries: 0 }]), NOW, WATCHING_SINCE)).toBeNull()
   })
 
   it('멈춤이 산출 0보다 먼저다 — 안 돌고 있으면 산출량은 볼 필요가 없다', () => {
-    const issue = diagnose(WATCHED, observed(100, [{ totalItems: 0 }]), NOW)
+    const issue = diagnose(WATCHED, observed(100, [{ totalItems: 0 }]), NOW, WATCHING_SINCE)
     expect(issue?.kind).toBe('silent')
   })
 })

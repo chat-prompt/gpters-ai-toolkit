@@ -35,11 +35,13 @@ export interface CronHealthReport {
   checkedAt: string
   /** 감시 대상 잡 수 */
   checked: number
+  /** 실행 기록을 처음 남긴 시각. 짧으면 판정을 보류한 잡이 있다는 뜻이다 */
+  observingSince: string | null
   issues: CronHealthIssue[]
 }
 
 /** 한 잡의 최근 실행 요약 */
-interface JobObservation {
+export interface JobObservation {
   lastSuccessAt: Date | null
   /** 최근 것부터의 성공 실행들 (최대 STREAK_LOOKBACK) */
   recentSuccessStats: Array<Record<string, number>>
@@ -63,6 +65,22 @@ async function observe(jobName: string): Promise<JobObservation> {
     lastSuccessAt: rows[0] ? new Date(rows[0].startedAt) : null,
     recentSuccessStats: rows.map((row) => row.stats ?? {}),
   }
+}
+
+/**
+ * 실행 기록을 처음 남긴 시각.
+ *
+ * "기록이 없다"가 잡의 문제인지 우리가 아직 안 본 것인지 가르는 기준이다.
+ *
+ * @returns 가장 오래된 실행 기록의 시각. 기록이 하나도 없으면 null
+ */
+async function readObservationStart(): Promise<Date | null> {
+  const [row] = await db
+    .select({ startedAt: cronRuns.startedAt })
+    .from(cronRuns)
+    .orderBy(cronRuns.startedAt)
+    .limit(1)
+  return row ? new Date(row.startedAt) : null
 }
 
 /**
@@ -91,23 +109,40 @@ export function countZeroStreak(
  *
  * 순수 함수라 테스트에서 DB 없이 검증한다.
  *
+ * ## 관측을 시작한 지 얼마 안 됐으면 판정하지 않는다
+ *
+ * 기록 자체가 방금 시작됐으면 "기록이 없다"는 잡의 상태가 아니라 **우리가 아직 안 봤다**는 뜻이다.
+ * 그 둘을 같게 다루면 표를 만든 다음 날 아침에 모든 잡이 빨갛게 뜬다. 주간 잡은 일주일 내내
+ * 그렇게 뜬다. 첫 알림이 전부 오탐이면 그 뒤로 아무도 안 읽는다.
+ *
+ * 미관측과 0을 구분하는 원칙을 **감시 장치 자신에게도** 적용한 것이다.
+ *
  * @param expectation - 이 잡의 기대치
  * @param observation - 실제로 관측한 최근 실행
  * @param now - 판정 기준 시각
+ * @param observationStart - 실행 기록을 처음 남긴 시각. 없으면 아직 아무것도 관측하지 못했다
  * @returns 문제. 없으면 null
  */
 export function diagnose(
   expectation: CronExpectation,
   observation: JobObservation,
-  now: Date
+  now: Date,
+  observationStart: Date | null
 ): CronHealthIssue | null {
   const base = { jobName: expectation.jobName, label: expectation.label }
 
+  // 이 잡이 한 번은 돌았어야 할 만큼 지켜봤는가
+  const watchedHours = observationStart === null
+    ? 0
+    : (now.getTime() - observationStart.getTime()) / 3_600_000
+  const watchedLongEnough = watchedHours >= expectation.maxSilentHours
+
   if (observation.lastSuccessAt === null) {
+    if (!watchedLongEnough) return null
     return {
       ...base,
       kind: 'never',
-      detail: '성공한 실행 기록이 한 번도 없다',
+      detail: `기록을 남기기 시작한 ${Math.floor(watchedHours)}시간 동안 성공한 실행이 없다`,
     }
   }
 
@@ -141,10 +176,11 @@ export function diagnose(
  * @returns 발견한 문제들
  */
 export async function checkCronHealth(now = new Date()): Promise<CronHealthReport> {
+  const observationStart = await readObservationStart()
   const issues: CronHealthIssue[] = []
   for (const expectation of CRON_EXPECTATIONS) {
     const observation = await observe(expectation.jobName)
-    const issue = diagnose(expectation, observation, now)
+    const issue = diagnose(expectation, observation, now, observationStart)
     if (issue) issues.push(issue)
   }
 
@@ -152,6 +188,7 @@ export async function checkCronHealth(now = new Date()): Promise<CronHealthRepor
   return {
     checkedAt: now.toISOString(),
     checked: CRON_EXPECTATIONS.length,
+    observingSince: observationStart?.toISOString() ?? null,
     issues,
   }
 }
