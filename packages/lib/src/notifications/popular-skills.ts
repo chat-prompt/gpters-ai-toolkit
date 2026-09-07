@@ -26,7 +26,7 @@
 import { catalogItems, db, itemVersions, skillEvents, users } from '@gpters/db'
 import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
-import { compactDescription, summarizeChangeNote, summarizeSkillContent } from './change-note'
+import { NOTE_MAX, SUMMARY_MAX, firstSentence, summarizeBatch } from './change-note'
 
 const log = createLogger('popular-skills')
 
@@ -218,21 +218,63 @@ async function collectUpdated(
 
 
 /**
- * 알림에 실을 한 줄 설명을 만든다.
+ * 알림에 실을 한 줄 설명과 변경 요약을 **묶어서** 만든다.
  *
- * 사람이 쓴 설명이 있으면 그것을 압축하고, 없으면 **본문에서 뽑되 자동 요약이라고 표시한다.**
- * 둘을 섞어 보이면 "설명을 채워 주세요"가 뜻을 잃는다.
+ * ## 왜 한 번에 묶는가
  *
- * @param item - 설명과 본문을 가진 항목
- * @returns 표시할 설명과 자동 여부
+ * 항목마다 모델을 부르면 무료 티어의 분당 5회 제한에 바로 걸린다. 2026-09-07에 한 번 실행이
+ * 13번을 불러 대부분이 429로 떨어졌고, 실패를 null로 삼키는 설계라 **요약이 그냥 비어 보였다.**
+ * 종류별로 한 번씩, 최대 세 번만 부른다.
+ *
+ * ## 사람이 쓴 설명과 기계가 뽑은 것을 섞지 않는다
+ *
+ * 설명이 있으면 그것을 압축하고, 없으면 본문에서 뽑되 자동이라고 표시한다.
+ * 섞어 보이면 "설명을 채워 주세요"가 뜻을 잃는다.
+ *
+ * @param items - 설명·본문·변경 기록을 가진 항목들
+ * @returns 항목별 표시값
  */
-async function resolveSummary(
-  item: { summary: string | null; content: string | null }
-): Promise<{ summary: string | null; summaryIsAuto: boolean }> {
-  if (item.summary !== null) {
-    return { summary: await compactDescription(item.summary), summaryIsAuto: false }
+async function resolveSummaries(
+  items: Array<{ id: string; summary: string | null; content: string | null; changelogs?: string[] }>
+): Promise<Map<string, { summary: string | null; summaryIsAuto: boolean; changeNote: string | null }>> {
+  // 이미 짧은 설명은 부를 이유가 없다
+  const toCompact = items.filter((item) => (item.summary?.length ?? 0) > SUMMARY_MAX)
+  const toDerive = items.filter((item) => item.summary === null)
+  const toNote = items.filter((item) => (item.changelogs?.length ?? 0) > 0)
+
+  const [compacted, derived, notes] = await Promise.all([
+    summarizeBatch(
+      toCompact.map((item) => ({ key: item.id, text: item.summary ?? '' })),
+      '각 항목의 스킬 설명을 25자 이내 한 줄로 압축하라. 무엇을 하는 스킬인지만 남기고 방법·조건·예시는 버려라.',
+      SUMMARY_MAX
+    ),
+    summarizeBatch(
+      toDerive.map((item) => ({ key: item.id, text: item.content ?? '' })),
+      '각 항목의 스킬 문서를 읽고 무엇을 하는 스킬인지 25자 이내 한 줄로 답하라. 목적만 남겨라.',
+      SUMMARY_MAX
+    ),
+    summarizeBatch(
+      toNote.map((item) => ({ key: item.id, text: (item.changelogs ?? []).join('\n') })),
+      '각 항목의 변경 기록을 읽고 무엇이 바뀌었는지 명사형 한 마디(10자 이내)로 답하라. ' +
+        '예: 버그 수정, 문체 개선, 파일 추가, 문서 보강, 규칙 정리.',
+      NOTE_MAX
+    ),
+  ])
+
+  const result = new Map<string, { summary: string | null; summaryIsAuto: boolean; changeNote: string | null }>()
+  for (const item of items) {
+    const isAuto = item.summary === null
+    // 압축에 실패하면 원문의 첫 문장으로 물러난다. 본문 요약은 대안이 없어 비워 둔다
+    const summary = isAuto
+      ? derived.get(item.id) ?? null
+      : compacted.get(item.id) ?? firstSentence(item.summary)
+    result.set(item.id, {
+      summary,
+      summaryIsAuto: isAuto,
+      changeNote: notes.get(item.id) ?? null,
+    })
   }
-  return { summary: await summarizeSkillContent(item.content), summaryIsAuto: true }
+  return result
 }
 
 /**
@@ -328,19 +370,28 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
   const missing = await collectMissingDescriptions()
 
   // 목록에 실을 것만 압축·요약한다 — 잘려 나갈 항목까지 모델을 부를 이유가 없다
-  const created: CatalogChange[] = await Promise.all(
-    createdRaw.map(async ({ content, ...item }) => ({
-      ...item,
-      ...(await resolveSummary({ summary: item.summary, content })),
-    }))
-  )
-  const updated: CatalogChange[] = await Promise.all(
-    updatedRaw.map(async ({ changelogs, content, ...item }) => ({
-      ...item,
-      ...(await resolveSummary({ summary: item.summary, content })),
-      changeNote: await summarizeChangeNote(changelogs),
-    }))
-  )
+  // 새로 올라온 것과 갱신된 것을 한 번에 넘겨, 종류별로 한 번씩만 모델을 부른다
+  const resolved = await resolveSummaries([
+    ...createdRaw.map((item) => ({ id: item.id, summary: item.summary, content: item.content })),
+    ...updatedRaw.map((item) => ({
+      id: item.id,
+      summary: item.summary,
+      content: item.content,
+      changelogs: item.changelogs,
+    })),
+  ])
+
+  const created: CatalogChange[] = createdRaw.map(({ content: _content, ...item }) => ({
+    ...item,
+    summary: resolved.get(item.id)?.summary ?? null,
+    summaryIsAuto: resolved.get(item.id)?.summaryIsAuto ?? false,
+  }))
+  const updated: CatalogChange[] = updatedRaw.map(({ changelogs: _c, content: _content, ...item }) => ({
+    ...item,
+    summary: resolved.get(item.id)?.summary ?? null,
+    summaryIsAuto: resolved.get(item.id)?.summaryIsAuto ?? false,
+    changeNote: resolved.get(item.id)?.changeNote ?? null,
+  }))
 
   const digest: PopularSkillDigest = {
     since: since.toISOString(),

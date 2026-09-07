@@ -34,8 +34,8 @@ const MODEL = 'gemini-3.6-flash'
 /** 모델에 넘기는 changelog 총 길이 상한 */
 const INPUT_CAP = 1500
 
-/** 돌려받을 한 마디의 최대 길이 */
-const NOTE_MAX = 20
+/** 변경 요약 한 마디의 최대 길이 */
+export const NOTE_MAX = 20
 
 /**
  * 모델이 돌려준 문자열을 알림에 쓸 수 있게 다듬는다.
@@ -52,7 +52,7 @@ export function normalizeChangeNote(raw: string | null | undefined): string | nu
     .replace(/^["'`\s]+|["'`.\s]+$/g, '')
     .trim()
   if (text === '') return null
-  if (text.length > NOTE_MAX) return null
+  // 길이 판정은 호출부가 한다 — 변경 요약과 설명 압축의 상한이 다르다
   return text
 }
 
@@ -84,7 +84,10 @@ export async function summarizeChangeNote(changelogs: string[]): Promise<string 
     })
     const note = normalizeChangeNote(response.text)
     // 응답은 왔는데 쓸 수 없는 모양이면 그것도 남긴다 — 조용히 비면 원인을 못 찾는다
-    if (note === null) log.warn('Change note unusable', { raw: response.text?.slice(0, 80) })
+    if (note === null || note.length > NOTE_MAX) {
+      log.warn('Change note unusable', { raw: response.text?.slice(0, 80) })
+      return null
+    }
     return note
   } catch (error) {
     // 요약이 없다고 알림 자체를 실패시키지 않는다
@@ -94,7 +97,7 @@ export async function summarizeChangeNote(changelogs: string[]): Promise<string 
 }
 
 /** 압축한 설명의 최대 길이 — 알림 한 줄에 들어가야 한다 */
-const SUMMARY_MAX = 45
+export const SUMMARY_MAX = 45
 
 /**
  * 설명을 첫 문장만 남겨 줄인다.
@@ -189,5 +192,96 @@ export async function summarizeSkillContent(content: string | null | undefined):
   } catch (error) {
     log.error('Failed to summarize skill content', error)
     return null
+  }
+}
+
+/** 한 번에 묶어 보낼 항목 */
+export interface BatchEntry {
+  /** 결과를 되찾을 키 */
+  key: string
+  /** 요약할 원문 */
+  text: string
+}
+
+/**
+ * 모델 응답에서 JSON 객체를 꺼낸다.
+ *
+ * 코드 울타리를 붙여 오는 경우가 있어 걷어낸다. 파싱에 실패하면 빈 것으로 본다 —
+ * **못 읽은 응답을 억지로 해석하지 않는다.**
+ *
+ * @param raw - 모델 응답
+ * @returns 키→문구. 실패하면 빈 객체
+ */
+export function parseBatchResponse(raw: string | null | undefined): Record<string, string> {
+  const text = (raw ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
+  if (text === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'string') result[key] = value
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 여러 항목을 **한 번의 호출로** 요약한다.
+ *
+ * ## 왜 묶는가
+ *
+ * 항목마다 부르면 무료 티어의 분당 5회 제한에 바로 걸린다. 2026-09-07에 한 번 실행이
+ * 13번을 불러 대부분이 429로 떨어졌다 — 실패를 null로 삼키는 설계라 **요약이 그냥
+ * 비어 보였다.** 묶으면 구역당 한 번이면 된다.
+ *
+ * @param entries - 요약할 항목들
+ * @param instruction - 각 항목을 어떻게 줄일지
+ * @param maxLength - 이보다 길게 온 값은 버린다
+ * @returns 키→문구. 실패하거나 못 읽은 것은 빠진다
+ */
+export async function summarizeBatch(
+  entries: BatchEntry[],
+  instruction: string,
+  maxLength: number
+): Promise<Map<string, string>> {
+  const usable = entries.filter((entry) => entry.text.trim() !== '')
+  if (usable.length === 0) return new Map()
+
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    log.warn('GEMINI_API_KEY is not set; skipping batch summary')
+    return new Map()
+  }
+
+  const payload = usable
+    .map((entry) => `### ${entry.key}\n${entry.text.slice(0, INPUT_CAP)}`)
+    .join('\n\n')
+
+  try {
+    const client = new GoogleGenAI({ apiKey })
+    const response = await client.models.generateContent({
+      model: MODEL,
+      contents:
+        `${instruction}\n\n` +
+        '결과를 **JSON 객체 하나로만** 답하라. 키는 각 항목의 ### 뒤에 적힌 id를 그대로 쓰고, ' +
+        '값은 문구 하나다. 다른 말은 붙이지 마라.\n\n' +
+        payload,
+    })
+
+    const parsed = parseBatchResponse(response.text)
+    const result = new Map<string, string>()
+    for (const entry of usable) {
+      const value = normalizeChangeNote(parsed[entry.key])
+      // 부탁한 것보다 길게 오면 쓰지 않는다 — 자르면 뜻이 바뀐다
+      if (value !== null && value.length <= maxLength) result.set(entry.key, value)
+    }
+    if (result.size === 0) log.warn('Batch summary returned nothing usable', { asked: usable.length })
+    return result
+  } catch (error) {
+    log.error('Failed to summarize batch', error)
+    return new Map()
   }
 }
