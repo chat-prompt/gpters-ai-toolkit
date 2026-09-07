@@ -1,22 +1,22 @@
 /**
- * Vercel Cron endpoint for syncing AI model documentation (EDU-6875)
+ * AI 모델 문서를 동기화하는 Vercel Cron 엔드포인트 (EDU-6875).
  *
- * Runs daily at 17:00 UTC (02:00 KST). Fetches latest model info from
- * Anthropic, Google, and OpenAI official pages and updates ai_model_docs table.
+ * 매일 17:00 UTC (02:00 KST)에 돈다. Anthropic · Google · OpenAI 공식 페이지에서 모델 목록을
+ * 가져와 `ai_model_docs`를 갱신한다.
  *
- * SDK docs sync is handled separately by GitHub Actions + chub CLI (EDU-6880).
+ * SDK 문서 동기화는 GitHub Actions + chub CLI가 따로 맡는다 (EDU-6880).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { syncModelDocs } from '@gpters/lib/mcp'
+import { runCronJob } from '@gpters/lib/ops'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
 
 /**
- * GET handler for model docs sync cron job
+ * 크론 실행 진입점
  *
- * Validates CRON_SECRET header, then runs sync against official provider pages.
+ * `CRON_SECRET`이 설정돼 있으면 Bearer 토큰을 확인한다.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -26,19 +26,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  try {
+  const result = await runCronJob('sync-model-docs', async () => {
     const summary = await syncModelDocs()
+    return {
+      stats: { synced: summary.synced, failed: summary.failed, unchanged: summary.unchanged },
+      body: { results: summary.results },
+    }
+  })
 
-    return NextResponse.json({
-      success: true,
-      ...summary,
-      timestamp: new Date().toISOString(),
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json(
+    { success: result.ok, ...result.stats, ...result.body, ...(result.error ? { error: result.error } : {}), timestamp: new Date().toISOString() },
+    { status: result.ok ? 200 : 500 }
+  )
 }

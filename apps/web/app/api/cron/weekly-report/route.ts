@@ -1,18 +1,34 @@
 /**
- * Vercel Cron endpoint for weekly Slack report
+ * 주간·월간 Slack 리포트 Vercel Cron 엔드포인트.
  *
- * Runs every Monday at 00:00 UTC (09:00 KST).
- * Generates analytics data, renders an image, and sends to Slack.
+ * 월요일 00:00 UTC (09:00 KST), 그리고 매월 1일에 30일치로 한 번 더 돈다.
+ *
+ * ## 지금은 Slack으로 나가지 않는다 (2026-09-07 확인)
+ *
+ * 이 코드가 읽는 `SLACK_WEEKLY_REPORT_WEBHOOK_URL`이 운영에 없다. 운영에 있는 이름은
+ * `SLACK_WEBHOOK_URL`이고 레포의 다른 Slack 코드는 전부 그쪽을 쓴다.
+ *
+ * **환경변수 이름만 맞추면 살아나지만 일부러 그러지 않았다.** 내용이 확정 원칙과 어긋나기 때문이다 —
+ * 고정 목표치 대비 달성/미달 판정은 표본 크기를 무시한 백분율이고, `조회→배포`는 `deploy_skill`
+ * 기준이라 우리가 정의한 "적용" 퍼널이 아니다. DEV-4276의 "주간 점검 동선 15분"이 정해진 뒤
+ * 그 동선을 밀어주는 형태로 다시 설계한다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { generateWeeklyReport, type WeeklyReportData } from '@/lib/analytics'
 import { renderWeeklyImage } from '@gpters/lib/reports'
+import { runCronJob } from '@gpters/lib/ops'
 import { put } from '@vercel/blob'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+/**
+ * 크론 실행 진입점
+ *
+ * `CRON_SECRET`이 설정돼 있으면 Bearer 토큰을 확인한다.
+ * `?days=30`으로 월간 집계를 만든다.
+ */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -21,7 +37,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  try {
+  const result = await runCronJob('weekly-report', async () => {
     const days = Number(request.nextUrl.searchParams.get('days')) || 7
     const data = await generateWeeklyReport(days)
     const slackUrl = process.env.SLACK_WEEKLY_REPORT_WEBHOOK_URL
@@ -44,29 +60,41 @@ export async function GET(request: NextRequest) {
       imageFailed = true
     }
 
+    // 웹훅 URL이 없으면 조용히 건너뛴다. 아래 stats의 slackSent가 그 사실을 기록에 남긴다 —
+    // 예전 응답은 URL 유무만 보고 slackSent를 참으로 찍어서, 실제로 보냈는지 알 수 없었다.
+    let slackSent = false
     if (slackUrl) {
       if (imageUrl) {
         await sendSlackWithImage(slackUrl, data, imageUrl)
       } else {
         await sendSlackText(slackUrl, data)
       }
+      slackSent = true
     }
 
-    return NextResponse.json({
-      success: true,
-      achievedCount: data.achievedCount,
-      totalTargets: data.totalTargets,
-      uniqueUsers: data.summary.uniqueUsers,
-      imageUrl,
-      imageFailed,
-      slackSent: !!slackUrl,
-      timestamp: data.period.generatedAt,
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    console.error('[weekly-report] Failed:', message)
-    return NextResponse.json({ success: false, error: message }, { status: 500 })
-  }
+    return {
+      stats: {
+        days,
+        achievedCount: data.achievedCount,
+        totalTargets: data.totalTargets,
+        uniqueUsers: data.summary.uniqueUsers,
+        slackSent: slackSent ? 1 : 0,
+        imageFailed: imageFailed ? 1 : 0,
+      },
+      body: { imageUrl, generatedAt: data.period.generatedAt },
+    }
+  })
+
+  return NextResponse.json(
+    {
+      success: result.ok,
+      ...result.stats,
+      ...result.body,
+      ...(result.error ? { error: result.error } : {}),
+      timestamp: new Date().toISOString(),
+    },
+    { status: result.ok ? 200 : 500 }
+  )
 }
 
 /** 이미지 첨부 Slack 발송 */

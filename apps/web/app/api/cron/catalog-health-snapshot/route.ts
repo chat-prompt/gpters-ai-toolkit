@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { captureCatalogHealth } from '@/lib/features/ax'
+import { runCronJob } from '@gpters/lib/ops'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,11 +24,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  try {
+  const result = await runCronJob('catalog-health-snapshot', async () => {
     const snapshot = await captureCatalogHealth()
-    return NextResponse.json({ success: true, ...snapshot, timestamp: new Date().toISOString() })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json({ success: false, error: message }, { status: 500 })
-  }
+    return {
+      // totalItems가 0이면 카탈로그를 못 읽은 것이다 — 감시가 이 값을 본다
+      stats: {
+        totalItems: snapshot.totalItems,
+        duplicateGroups: snapshot.duplicateGroups,
+        neverLoaded: snapshot.neverLoaded,
+      },
+      body: { snapshotDate: snapshot.snapshotDate },
+    }
+  })
+
+  return NextResponse.json(
+    { success: result.ok, ...result.stats, ...result.body, ...(result.error ? { error: result.error } : {}), timestamp: new Date().toISOString() },
+    { status: result.ok ? 200 : 500 }
+  )
 }
