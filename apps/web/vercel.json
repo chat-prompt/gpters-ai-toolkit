@@ -17,18 +17,6 @@
       "schedule": "0 17 * * *"
     },
     {
-      "path": "/api/cron/evo-analyze",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/evo-generate",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/evo-promote",
-      "schedule": "0 8 * * 1"
-    },
-    {
       "path": "/api/cron/weekly-report",
       "schedule": "0 0 * * 1"
     },
