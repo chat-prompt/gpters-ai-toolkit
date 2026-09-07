@@ -14,7 +14,17 @@ export {
   notifySlackEvoPromote,
   notifySlackCronFailure,
   notifySlackCronHealth,
+  notifySlackPopularSkills,
   type CronFailureParams,
   type CronHealthParams,
+  type PopularSkillsParams,
 } from './slack'
 export type { SlackDeployParams, SlackPayload, EvoAnalyzeParams, EvoActionParams, EvoPromoteParams } from './slack'
+
+export {
+  collectPopularSkills,
+  formatDigestLines,
+  rankSkills,
+  type PopularSkill,
+  type PopularSkillDigest,
+} from './popular-skills'
