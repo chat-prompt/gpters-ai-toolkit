@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { parseOptions, verify, saveReceipt } from './verify-installation.mjs'
 const sha = 'a'.repeat(40)
 function fixture(t) {
@@ -56,4 +57,16 @@ test('requires explicit scope and a full revision, and rejects unknown flags', (
   assert.throws(() => parseOptions([...args, '--token', 'secret']))
   assert.throws(() => parseOptions(args.map(x => x === sha ? 'main' : x)))
   assert.throws(() => parseOptions(args.map(x => x === 'example-agent' ? '../other' : x)))
+})
+
+// The real CLI info() writes --version to stderr, whereas JSON commands use stdout.
+test('accepts the real CLI stderr version convention without treating stderr as JSON', t => {
+  const f = fixture(t)
+  f.options.node = process.execPath
+  f.doctor.checks.scheduledNodePath = process.execPath
+  writeFileSync(f.options.cli, `if (process.argv[2] === '--version') console.error('aitk v0.7.13'); else console.log(${JSON.stringify(JSON.stringify(f.doctor))});`)
+  const result = spawnSync(process.execPath, ['infra/agent-telemetry/verify-installation.mjs', '--cli', f.options.cli, '--node', process.execPath,
+    '--agent', f.options.agent, '--source', 'codex', '--revision', sha, '--output', f.options.output], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(JSON.parse(result.stdout).localVerified, true)
 })
