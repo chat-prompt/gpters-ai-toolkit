@@ -66,8 +66,14 @@ export interface DormantAccount {
   role: string
   /** ISO. 로그인 기록이 없으면 null — "오래됐다"와 구분한다 */
   lastLoginAt: string | null
-  /** 마지막 로그인 후 지난 일수. 기록이 없으면 null */
-  daysSinceLogin: number | null
+  /**
+   * 마지막 활동 — 웹 로그인과 스킬 이벤트 중 최근 것. 둘 다 없으면 null.
+   * 웹에 안 들어오고 CLI로만 쓰는 사람은 로그인 기록이 오래돼도 활동 중이다 — 첫 운영 실행에서
+   * 그날 스킬을 쓴 사람이 휴면으로 잡힌 적이 있다(로그인 6/1, 이벤트 9/8).
+   */
+  lastActivityAt: string | null
+  /** 마지막 활동 후 지난 일수. 기록이 없으면 null */
+  daysSinceActivity: number | null
   liveAccessTokens: number
   activeCollectors: number
   ownedItems: number
@@ -118,23 +124,30 @@ export function buildAccountAuditReport(
   const dormantDays = options.dormantDays ?? DEFAULT_DORMANT_DAYS
   const cutoff = now.getTime() - dormantDays * DAY_MS
 
+  const lastActivity = (row: AccountAuditInput): Date | null => {
+    const times = [row.lastLoginAt, row.lastEventAt].filter((d): d is Date => d !== null)
+    return times.length > 0 ? new Date(Math.max(...times.map((d) => d.getTime()))) : null
+  }
+
   const dormant: DormantAccount[] = inputs
     .filter((row) => row.accountStatus === 'active')
-    .filter((row) => row.lastLoginAt === null || row.lastLoginAt.getTime() < cutoff)
-    .map((row) => ({
+    .map((row) => ({ row, activity: lastActivity(row) }))
+    .filter(({ activity }) => activity === null || activity.getTime() < cutoff)
+    .map(({ row, activity }) => ({
       userId: row.userId,
       name: row.name,
       email: row.email,
       role: row.role,
       lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
-      daysSinceLogin: row.lastLoginAt ? Math.floor((now.getTime() - row.lastLoginAt.getTime()) / DAY_MS) : null,
+      lastActivityAt: activity?.toISOString() ?? null,
+      daysSinceActivity: activity ? Math.floor((now.getTime() - activity.getTime()) / DAY_MS) : null,
       liveAccessTokens: row.liveAccessTokens,
       activeCollectors: row.activeCollectors,
       ownedItems: row.ownedItems,
       lastEventAt: row.lastEventAt?.toISOString() ?? null,
     }))
     // 기록 없음 → 가장 오래된 순. 사람이 위에서부터 보게 한다
-    .sort((a, b) => (a.lastLoginAt ?? '').localeCompare(b.lastLoginAt ?? ''))
+    .sort((a, b) => (a.lastActivityAt ?? '').localeCompare(b.lastActivityAt ?? ''))
 
   const inconsistentSuspended: InconsistentSuspension[] = inputs
     .filter((row) => row.accountStatus === 'suspended')
