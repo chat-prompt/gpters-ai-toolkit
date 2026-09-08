@@ -5,13 +5,27 @@ import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AgentTelemetryCheckpoint } from './types.js'
 
+/** Old checkpoints have no usage snapshot. A corrupt new baseline must never trigger a recount. */
+function validSnapshots(state: AgentTelemetryCheckpoint['committed']): boolean {
+  return Array.isArray(state.seenMessages) && state.seenMessages.every(seen => {
+    const snapshot = seen?.usageSnapshot
+    if (snapshot === undefined) return true
+    if (!snapshot || typeof snapshot.model !== 'string' || !snapshot.usage) return false
+    const usage = snapshot.usage
+    return ['inputTokens', 'outputTokens', 'cacheCreationInputTokens', 'cacheReadInputTokens', 'thinkingTokens']
+      .every(key => Number.isSafeInteger(usage[key as keyof typeof usage]) && (usage[key as keyof typeof usage] as number) >= 0)
+      && ['unknown', 'included-in-output', 'separate-from-output'].includes(usage.thinkingTokensRelation)
+  })
+}
+
 function isCheckpoint(value: unknown): value is AgentTelemetryCheckpoint {
   if (!value || typeof value !== 'object') return false
   const row = value as Partial<AgentTelemetryCheckpoint>
   return row.version === 1 && typeof row.agentId === 'string' &&
     typeof row.collectorInstanceId === 'string' && !!row.committed &&
     typeof row.committed === 'object' && typeof row.committed.lastWindowEndUtc !== 'undefined' &&
-    !!row.committed.files && Array.isArray(row.committed.seenMessages)
+    !!row.committed.files && validSnapshots(row.committed) &&
+    (!row.pending || (!!row.pending.nextCommitted && validSnapshots(row.pending.nextCommitted)))
 }
 
 export async function readAgentTelemetryCheckpoint(path: string): Promise<AgentTelemetryCheckpoint | null> {

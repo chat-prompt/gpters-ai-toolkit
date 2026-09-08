@@ -1,3 +1,4 @@
+import { cumulativeUsageIdentity } from '../usage/codex-usage.js'
 /** Codex rollout JSONL을 원문 없이 PII-free delta 집계로 바꾼다. */
 
 import { createHash } from 'node:crypto'
@@ -48,7 +49,8 @@ export interface CollectCodexOptions {
   committed: AgentTelemetryCommittedState
   category: AgentTaskCategory
   source: 'codex'
-  projectSlugs: string[]
+  projectSlugs?: string[]
+  codexThreadSource?: string
 }
 
 function toCount(value: unknown): number {
@@ -94,21 +96,6 @@ function usageFromTokenCount(payload: Record<string, unknown>): AgentTokenUsage 
   }
 }
 
-function cumulativeUsageIdentity(payload: Record<string, unknown>): string | null {
-  const info = payload.info
-  if (!info || typeof info !== 'object' || Array.isArray(info)) return null
-  const raw = (info as Record<string, unknown>).total_token_usage
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const usage = raw as Record<string, unknown>
-  return JSON.stringify({
-    inputTokens: toCount(usage.input_tokens),
-    outputTokens: toCount(usage.output_tokens),
-    cacheCreationInputTokens: toCount(usage.cache_write_input_tokens),
-    cacheReadInputTokens: toCount(usage.cached_input_tokens),
-    thinkingTokens: toCount(usage.reasoning_output_tokens),
-    totalTokens: toCount(usage.total_tokens),
-  })
-}
 
 function entryTimestamp(entry: CodexEntry): number | null {
   if (typeof entry.timestamp !== 'string') return null
@@ -148,7 +135,8 @@ async function firstEntry(filePath: string): Promise<CodexEntry | null> {
 
 async function listCodexFiles(
   root: string,
-  projectSlugs: string[]
+  projectSlugs: string[] | undefined,
+  codexThreadSource?: string
 ): Promise<{ files: string[]; discovered: number; excludedByScope: number }> {
   let entries: string[]
   try {
@@ -163,7 +151,10 @@ async function listCodexFiles(
   for (const entry of jsonlEntries) {
     const filePath = resolve(root, entry)
     const first = await firstEntry(filePath)
-    if (first?.type === 'session_meta' && allowed.has(scopeName(first.payload?.cwd) ?? '')) files.push(filePath)
+    if (first?.type !== 'session_meta') continue
+    if (codexThreadSource && first.payload?.thread_source !== codexThreadSource) continue
+    if (allowed.size > 0 ? !allowed.has(scopeName(first.payload?.cwd) ?? '') : !codexThreadSource) continue
+    files.push(filePath)
   }
   return { files: files.sort(), discovered: jsonlEntries.length, excludedByScope: jsonlEntries.length - files.length }
 }
@@ -208,7 +199,7 @@ function toolInfo(item: Record<string, unknown>): { name: string; failed: boolea
 
 export async function collectCodexAgent(options: CollectCodexOptions): Promise<OpenClawCollection> {
   const root = resolve(options.sessionsDir)
-  const listed = await listCodexFiles(root, options.projectSlugs)
+  const listed = await listCodexFiles(root, options.projectSlugs, options.codexThreadSource)
   const startMs = options.window.start.getTime()
   const endMs = options.window.end.getTime()
   const allowed = new Set(options.projectSlugs)
@@ -246,6 +237,7 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
     healthStatus: 'healthy' as 'healthy' | 'blocked',
     healthWarnings: [] as AgentTelemetryHealthWarning[],
   }
+  let completedTurnsMissingTools = 0
   let turns = 0
   let latestIncludedAt = 0
 
@@ -269,6 +261,8 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
     let currentModel = 'unknown-model'
     let currentInScope = true
     let currentTurnId: string | null = null
+    let currentTurnHasRawTools = false
+    let currentTurnHasSupportedTools = false
     const sessionHash = hashIdentity(fileKey)
     try {
       const nextOffset = await scanCompleteLines(filePath, offset, (line) => {
@@ -285,9 +279,11 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
 
         if (entry.type === 'turn_context') {
           currentModel = safeLabel(payload.model, currentModel)
-          currentInScope = allowed.has(scopeName(payload.cwd) ?? '')
+          currentInScope = allowed.size > 0 ? allowed.has(scopeName(payload.cwd) ?? '') : Boolean(options.codexThreadSource)
         } else if (entry.type === 'event_msg' && payloadType === 'task_started') {
           currentTurnId = typeof payload.turn_id === 'string' ? payload.turn_id : null
+          currentTurnHasRawTools = false
+          currentTurnHasSupportedTools = false
         }
 
         const at = entryTimestamp(entry)
@@ -350,6 +346,7 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
             collection.metadataSkipped++
             return
           }
+          currentTurnHasSupportedTools = true
           const itemId = itemRecord.id
           if (typeof itemId !== 'string' || itemId.length === 0) {
             collection.missingIdentitySkipped++
@@ -387,6 +384,9 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
           batchSeen.add(turnHash)
           retainedSeen.set(turnHash, { hash: turnHash, atUtc: new Date(at).toISOString() })
           const model = modelMetrics.get(currentModel) ?? { turns: 0, usage: emptyAgentUsage() }
+          if (currentTurnHasRawTools && !currentTurnHasSupportedTools) completedTurnsMissingTools++
+          currentTurnHasRawTools = false
+          currentTurnHasSupportedTools = false
           model.turns++
           modelMetrics.set(currentModel, model)
           turns++
@@ -398,6 +398,9 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
           return
         }
 
+        // Only completed turns can establish missing tool evidence; a live tail is not a failure.
+        if (entry.type === 'response_item' &&
+          ['custom_tool_call', 'function_call', 'local_shell_call'].includes(payloadType)) currentTurnHasRawTools = true
         if (entry.type === 'response_item' || entry.type === 'event_msg') {
           collection.metadataSkipped++
           return
@@ -426,7 +429,7 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
     collection.unsupportedRecordsSkipped / collection.recordsRead >= MAX_UNSUPPORTED_RATIO) {
     healthWarnings.push('high-unsupported-rate')
   }
-  if (turns > 0 && toolMetrics.size === 0) healthWarnings.push('codex-tools-missing')
+  if (completedTurnsMissingTools > 0) healthWarnings.push('codex-tools-missing')
   collection.healthWarnings = healthWarnings
   collection.healthStatus = healthWarnings.length > 0 ? 'blocked' : 'healthy'
 

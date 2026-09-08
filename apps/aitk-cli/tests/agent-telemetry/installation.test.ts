@@ -209,3 +209,13 @@ describe('agent telemetry installation', () => {
     expect(bbokeoter.credential.service).not.toBe(namedAgent.credential.service)
   })
 })
+
+it('persists the Codex tag and rejects a tampered owner tag on reload', () => {
+  const value = createInstallation({ agentId: 'test-agent', collectorId: 'collector-test', source: 'codex',
+    codexThreadSource: 'aitk-agent:test-agent', sessionsDir, serverUrl: 'https://ai-toolkit.gpters.org',
+    backfillDays: 7, nodePath, scriptPath: cliPath, collectorVersion: '0.7.13', account: 'tester', schedule: 'none', home: root })
+  const path = writeAgentTelemetryInstallation(value, root)
+  expect(readAgentTelemetryInstallation('test-agent', 'codex', root).codexThreadSource).toBe('aitk-agent:test-agent')
+  writeFileSync(path, JSON.stringify({ ...value, codexThreadSource: 'aitk-agent:someone-else' }))
+  expect(() => readAgentTelemetryInstallation('test-agent', 'codex', root)).toThrow()
+})

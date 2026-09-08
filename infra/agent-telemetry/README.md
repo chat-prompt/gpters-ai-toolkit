@@ -1,5 +1,8 @@
 # Agent telemetry continuous collection
 
+For adding agents or updating a fleet from GitHub, follow the
+[rollout protocol](PROTOCOL.md). Keep real ownership and host inventory private.
+
 `aitk agent-telemetry install` is the canonical setup path. One installation
 owns exactly one `(agentId, source)` stream, collector credential, checkpoint,
 and scheduler. The default launchd interval is one hour.
@@ -315,3 +318,43 @@ After revoking the collector from its owner's machine, remove the local schedule
 and credential with `uninstall --agent <id> --source <source> --local-only`.
 This needs no personal login, performs no server revocation, and reports
 `revoked: false` plus `revocationRequired: true`.
+
+### Codex invoked by an agent
+
+Choose the source from the runtime that writes usage. Hermes using the
+`openai-codex` provider is covered by its Hermes collector; do not collect the
+same work again as Codex CLI usage. OpenClaw's Codex app-server integration may
+write rollouts under its private agent-scoped home. Verify the integration's
+actual home and point the collector at that sessions directory explicitly.
+
+For a shared Codex home, cwd alone cannot identify an agent running in `/tmp`.
+Mark new `codex exec` calls with `--thread-source aitk-agent:<agent-id>` (verified
+with CLI 0.151.0) and select the matching local scope:
+
+```sh
+aitk agent-telemetry collect --agent example-agent --source codex \
+  --sessions-dir "$HOME/.codex/sessions" \
+  --codex-thread-source aitk-agent:example-agent --days 7 --dry-run
+```
+
+Only files with exactly matching `session_meta.thread_source` are collected.
+Untagged history and other agents' tags are excluded even when cwd is shared.
+Project slugs are optional with a tag; if supplied, both restrictions apply,
+including the per-turn cwd check. Installation persists the tag and isolates its
+checkpoint from legacy cwd-only scopes. A tag is a local attribution convention,
+not authentication or protection against a malicious local process.
+
+The `codex-agent-bin/codex` wrapper can be copied to a private agent directory.
+Set `AITK_CODEX_AGENT_ID`, the absolute `AITK_CODEX_REAL_BIN`, and prepend that
+directory to PATH only for that agent's command and child processes. Existing
+scripts calling `codex exec` by name then inherit attribution. Do not modify
+global PATH or hard-code one identity in shared skills. Absolute Codex paths
+bypass the wrapper; route those through the agent runner. Resuming pre-existing
+shared sessions does not migrate their attribution.
+
+Tool-free completed turns are healthy. The `codex-tools-missing` guard is retained
+when an observed completed turn contains raw tool calls without supported
+completed tool evidence. Live calls are deferred until turn completion. This is not
+a guarantee of complete tool coverage: mixed formats and call/result correlation
+across windows still require separate verification. These changes require an
+updated AITK build on the agent host, not just a dashboard deployment.

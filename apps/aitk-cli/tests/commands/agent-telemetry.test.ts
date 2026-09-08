@@ -10,7 +10,7 @@ vi.mock('../../src/output.js', () => ({
   error: vi.fn((message: string) => { throw new Error(message) }),
 }))
 
-import { runAgentTelemetryCollect } from '../../src/commands/agent-telemetry.js'
+import { checkpointName, runAgentTelemetryCollect } from '../../src/commands/agent-telemetry.js'
 import { jsonOut } from '../../src/output.js'
 
 const NOW = new Date('2026-08-27T00:00:00.000Z')
@@ -166,5 +166,29 @@ describe('aitk agent-telemetry collect', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(() => readFileSync(join(checkpointDir, 'bbodoong-openclaw.json'))).toThrow()
+  })
+})
+
+
+describe('Codex attribution command boundary', () => {
+  it('rejects a different agent tag or a tag on another runtime', async () => {
+    await expect(runAgentTelemetryCollect({ ...options(true), agentId: 'test-agent', source: 'codex', codexThreadSource: 'aitk-agent:other' }))
+      .rejects.toThrow('--codex-thread-source')
+    await expect(runAgentTelemetryCollect({ ...options(true), agentId: 'test-agent', source: 'openclaw', codexThreadSource: 'aitk-agent:test-agent' }))
+      .rejects.toThrow('--codex-thread-source')
+  })
+  it('isolates tagged checkpoints from legacy directory scopes', () => {
+    const legacy = checkpointName('test-agent', 'codex', ['shared'], undefined)
+    const tagged = checkpointName('test-agent', 'codex', ['shared'], undefined, 'aitk-agent:test-agent')
+    expect(tagged).not.toBe(legacy)
+    expect(tagged).not.toBe(checkpointName('test-agent', 'codex', undefined, undefined, 'aitk-agent:test-agent'))
+  })
+  it('collects a tagged tool-free session without a project directory allowlist', async () => {
+    writeFileSync(join(sessionsDir, 'tagged.jsonl'), [
+      { type: 'session_meta', payload: { cwd: '/tmp', thread_source: 'aitk-agent:test-agent' } },
+      { type: 'event_msg', payload: { type: 'task_complete', turn_id: 'tagged-turn' } },
+    ].map(x => JSON.stringify({ ...x, timestamp: '2026-08-26T10:00:00Z' })).join('\n') + '\n')
+    const result = await runAgentTelemetryCollect({ ...options(true), agentId: 'test-agent', source: 'codex', codexThreadSource: 'aitk-agent:test-agent' })
+    expect(result.batch).toMatchObject({ turns: 1, collection: { healthStatus: 'healthy' } })
   })
 })

@@ -26,6 +26,7 @@ export interface AgentTelemetryInstallation {
   source: AgentTelemetrySource
   sessionsDir: string
   projectSlugs?: string
+  codexThreadSource?: string
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir: string
@@ -115,6 +116,8 @@ function isInstallation(value: unknown): value is AgentTelemetryInstallation {
   if (item.version !== 1 || typeof item.agentId !== 'string' || typeof item.collectorId !== 'string') return false
   if (typeof item.source !== 'string' || !SAFE_SOURCE.has(item.source as AgentTelemetrySource)) return false
   if (typeof item.sessionsDir !== 'string' || typeof item.checkpointDir !== 'string') return false
+  if (item.codexThreadSource !== undefined &&
+    (item.source !== 'codex' || item.codexThreadSource !== `aitk-agent:${item.agentId}`)) return false
   if (item.projectSlugs !== undefined && typeof item.projectSlugs !== 'string') return false
   if (item.openclawAgent !== undefined && typeof item.openclawAgent !== 'string') return false
   if (item.hermesProfile !== undefined && typeof item.hermesProfile !== 'string') return false
@@ -441,6 +444,7 @@ export function createInstallation(input: {
   source: AgentTelemetrySource
   sessionsDir: string
   projectSlugs?: string
+  codexThreadSource?: string
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
@@ -479,6 +483,7 @@ export function createInstallation(input: {
     collectorId,
     source: input.source,
     sessionsDir,
+    ...(input.codexThreadSource ? { codexThreadSource: input.codexThreadSource } : {}),
     ...(input.projectSlugs ? { projectSlugs: input.projectSlugs } : {}),
     ...(input.openclawAgent ? { openclawAgent: input.openclawAgent } : {}),
     ...(input.hermesProfile ? { hermesProfile: input.hermesProfile } : {}),
