@@ -16,3 +16,5 @@ export * from './org-context'
 export * from './client-type'
 export * from './service-token'
 export * from '../account-access'
+
+export * from './agent-identity'

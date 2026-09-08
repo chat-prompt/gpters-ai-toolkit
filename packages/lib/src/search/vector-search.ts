@@ -83,8 +83,8 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
   }
 
   // Platform compatibility filtering
-  // web_browser, cli, unknown은 필터링하지 않음 (모든 스킬 노출)
-  if (clientType && !['web_browser', 'unknown', 'cli', 'openclaw'].includes(clientType)) {
+  // web_browser, cli, unknown, agent는 필터링하지 않음 (모든 스킬 노출)
+  if (clientType && !['web_browser', 'unknown', 'cli', 'openclaw', 'agent'].includes(clientType)) {
     conditions.push(
       or(
         sql`${catalogItems.platforms} IS NULL`,
@@ -154,7 +154,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     }
 
     // Apply same platform compatibility filtering
-    if (clientType && !['web_browser', 'unknown', 'cli', 'openclaw'].includes(clientType)) {
+    if (clientType && !['web_browser', 'unknown', 'cli', 'openclaw', 'agent'].includes(clientType)) {
       keywordConditions.push(
         or(
           sql`${catalogItems.platforms} IS NULL`,

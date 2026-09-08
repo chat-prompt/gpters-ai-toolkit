@@ -1,3 +1,4 @@
+import { localCredentialPath } from '../../src/credential-store.js'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +21,7 @@ import {
 import { agentTelemetryInstallPath, readAgentTelemetryInstallation } from '../../src/agent-telemetry/installation.js'
 import { writeAgentTelemetryCheckpoint } from '../../src/agent-telemetry/checkpoint.js'
 import { jsonOut } from '../../src/output.js'
+import { resolveToken } from '../../src/auth.js'
 
 let root = ''
 let sessionsDir = ''
@@ -96,6 +98,60 @@ function lifecycle() {
 }
 
 describe('agent telemetry lifecycle commands', () => {
+  it('installs, reports and removes file credentials without personal auth or Keychain', async () => {
+    const noKeychainRunner: CommandRunner = (command, args) => {
+      if (command === '/usr/bin/security') throw new Error('Must not use Keychain')
+      return runner(command, args)
+    }
+    await runAgentTelemetryInstall({
+      ...lifecycle(), runner: noKeychainRunner, sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.12',
+      collectorId: 'collector-file', cliScriptPath: cliPath, nodePath, platform: 'darwin', credentialStore: 'file',
+      enrollment: { version: 1, agentId: 'test-agent', source: 'openclaw', collectorId: 'collector-file',
+        intervalSeconds: 3600, serverUrl: 'https://ai-toolkit.gpters.org', collectorToken: COLLECTOR_TOKEN },
+    })
+    expect(resolveToken).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    const configPath = agentTelemetryInstallPath('test-agent', 'openclaw', root)
+    expect(readFileSync(configPath, 'utf8')).not.toContain(COLLECTOR_TOKEN)
+    await runAgentTelemetryRun({ ...lifecycle(), runner: noKeychainRunner })
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).toMatchObject({ Authorization: `Bearer ${COLLECTOR_TOKEN}` })
+    vi.mocked(fetch).mockClear()
+    await runAgentTelemetryUninstall({ ...lifecycle(), runner: noKeychainRunner, localOnly: true })
+    expect(resolveToken).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(existsSync(configPath)).toBe(false)
+    expect(existsSync(localCredentialPath('collector', 'collector-file', root))).toBe(false)
+    expect(jsonOut).toHaveBeenLastCalledWith(expect.objectContaining({ revoked: false, revocationRequired: true }))
+  })
+  it('외부 등록 토큰으로 설치할 때 개인 인증을 읽거나 서버 등록을 재실행하지 않는다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.11',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+      enrollment: { version: 1, agentId: 'test-agent', source: 'openclaw', collectorId: 'collector-test',
+        intervalSeconds: 3600, serverUrl: 'https://ai-toolkit.gpters.org', collectorToken: COLLECTOR_TOKEN },
+    })
+    expect(resolveToken).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(storedCollectorToken).toBe(COLLECTOR_TOKEN)
+    expect(readFileSync(agentTelemetryInstallPath('test-agent', 'openclaw', root), 'utf8')).not.toContain(COLLECTOR_TOKEN)
+  })
+
+  it.each(['agentId', 'source', 'collectorId', 'serverUrl', 'intervalSeconds'] as const)('외부 등록의 %s 범위가 다르면 저장 전에 거부한다', async (field) => {
+    const enrollment = { version: 1 as const, agentId: 'test-agent', source: 'openclaw' as const, collectorId: 'collector-test',
+      intervalSeconds: 3600, serverUrl: 'https://ai-toolkit.gpters.org', collectorToken: COLLECTOR_TOKEN }
+    const wrong = { agentId: 'other', source: 'codex', collectorId: 'other', serverUrl: 'https://example.com', intervalSeconds: 7200 }
+    await expect(runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.11',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester', enrollment: { ...enrollment, [field]: wrong[field] },
+    })).rejects.toThrow('Enrollment does not match')
+    expect(resolveToken).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(storedCollectorToken).toBe('')
+  })
+
+
   it('dry-run 검증 후 enrollment·Keychain·설정을 만들고 토큰은 파일에 쓰지 않는다', async () => {
     await runAgentTelemetryInstall({
       ...lifecycle(),

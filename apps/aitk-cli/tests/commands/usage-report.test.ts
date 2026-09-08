@@ -11,6 +11,7 @@ const collected = vi.hoisted(() => ({ claude: null as UsageRecord | null, codex:
 vi.mock('../../src/usage/claude-code.js', () => ({ collectClaudeCode: async () => collected.claude }))
 vi.mock('../../src/usage/codex.js', () => ({ collectCodex: async () => collected.codex }))
 vi.mock('../../src/client.js', () => ({ jsonRpcCall: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }) }))
+vi.mock('../../src/agent-auth.js', () => ({ readAgentConfig: vi.fn(() => null) }))
 vi.mock('../../src/auth.js', () => ({ resolveToken: vi.fn(() => 'tok') }))
 vi.mock('../../src/output.js', () => ({
   jsonOut: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('../../src/output.js', () => ({
 
 import { runUsageReport } from '../../src/commands/usage-report.js'
 import { jsonRpcCall } from '../../src/client.js'
+import { readAgentConfig } from '../../src/agent-auth.js'
 import { resolveToken } from '../../src/auth.js'
 import { jsonOut, error } from '../../src/output.js'
 
@@ -47,6 +49,12 @@ beforeEach(() => {
 })
 
 describe('aitk usage report', () => {
+  it('agent mode does not transmit personal usage or resolve a human token', async () => {
+    vi.mocked(readAgentConfig).mockReturnValueOnce({ version: 1, agentId: 'example-agent', serverUrl: 'https://test.example.com' })
+    await runUsageReport({ days: 7, dryRun: false })
+    expect(jsonRpcCall).not.toHaveBeenCalled()
+    expect(resolveToken).not.toHaveBeenCalled()
+  })
   it('수집한 레코드를 report_usage 툴로 보낸다', async () => {
     await runUsageReport({ days: 7, dryRun: false })
 

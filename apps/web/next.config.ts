@@ -110,6 +110,11 @@ const nextConfig: NextConfig = {
         },
       ],
     },
+    {
+      // Agent credentials and owner inventories must never enter a shared cache.
+      source: '/api/agents/:path*',
+      headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+    },
   ],
 };
 

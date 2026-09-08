@@ -3,6 +3,7 @@
  */
 
 import { readConfig } from './config.js'
+import { readAgentConfig } from './agent-auth.js'
 import pkg from '../package.json' with { type: 'json' }
 
 /**
@@ -50,8 +51,12 @@ export interface ApiResult<T = unknown> {
  *
  * @returns 설정된 서버 URL
  */
+function mcpEndpoint(token?: string): string {
+  return `${getServerUrl()}${token?.startsWith('aia_') ? '/api/agents/mcp' : '/api/mcp'}`
+}
+
 function getServerUrl(): string {
-  return process.env.AITK_SERVER_URL ?? readConfig().serverUrl
+  return readAgentConfig()?.serverUrl ?? process.env.AITK_SERVER_URL ?? readConfig().serverUrl
 }
 
 /**
@@ -91,7 +96,7 @@ export async function apiCall<T = unknown>(
   params: Record<string, unknown>,
   token?: string
 ): Promise<ApiResult<T>> {
-  const url = `${getServerUrl()}/api/mcp?action=${encodeURIComponent(action)}`
+  const url = `${mcpEndpoint(token)}?action=${encodeURIComponent(action)}`
   const headers = buildHeaders(token)
 
   try {
@@ -141,7 +146,7 @@ export async function jsonRpcCall<T = unknown>(
   params: Record<string, unknown>,
   token?: string
 ): Promise<ApiResult<T>> {
-  const url = `${getServerUrl()}/api/mcp`
+  const url = mcpEndpoint(token)
   const headers = buildHeaders(token)
 
   try {
@@ -190,7 +195,7 @@ export async function jsonRpcSessionCall<T = unknown>(
   token?: string,
   clientInfo: { name: string; version: string } = { name: 'aitk-cli', version: 'local' }
 ): Promise<ApiResult<T>> {
-  const url = `${getServerUrl()}/api/mcp`
+  const url = mcpEndpoint(token)
   const headers = buildHeaders(token)
 
   try {

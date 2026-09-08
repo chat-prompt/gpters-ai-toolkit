@@ -27,6 +27,16 @@ describe('client', () => {
     process.env = originalEnv
   })
 
+  it('routes agent tokens to the agent-only endpoint for REST and JSON-RPC', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ result: {} }), { status: 200 }))
+    const token = `aia_${'a'.repeat(64)}`
+    await apiCall('whoami', {}, token)
+    await jsonRpcCall('tools/call', { name: 'semantic_search' }, token)
+    expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+      'https://test.example.com/api/agents/mcp?action=whoami', 'https://test.example.com/api/agents/mcp',
+    ])
+  })
+
   describe('User-Agent', () => {
     it('세 호출 경로 모두 aitk 버전을 실어 보낸다', async () => {
       // 이걸 안 보내면 서버에는 `node`로만 남아 누가 어떤 버전을 쓰는지 알 방법이 없다.

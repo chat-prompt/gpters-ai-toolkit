@@ -1,9 +1,13 @@
 #!/usr/bin/env node
+import { parseCredentialStore } from '../src/credential-store.js'
+import { readCollectorEnrollment, runAuthorizeCollector } from '../src/agent-telemetry/enrollment.js'
 
 /**
  * aitk CLI 진입점 - GPTers AI Toolkit MCP fallback CLI
  */
 
+import { runAgent } from '../src/commands/agent.js'
+import { readAgentConfig } from '../src/agent-auth.js'
 import { runSearch } from '../src/commands/search.js'
 import { runGet } from '../src/commands/get.js'
 import { runDeploy } from '../src/commands/deploy.js'
@@ -111,6 +115,7 @@ Commands:
   report-execution-start Report actual skill application start
   report-execution Report validated skill execution outcome
   usage           Report local Claude Code / Codex token usage
+  agent           Manage a separate agent identity (authorize/import/status/disconnect/revoke)
   agent-telemetry Collect PII-free agent delta usage
   login           Save auth token (browser, --device, or --token)
   whoami          Show current authenticated user
@@ -288,6 +293,18 @@ Examples:
   aitk usage report
   aitk usage report --days 30 --dry-run`,
 
+  agent: `aitk agent - Separate human ownership from agent activity
+
+Owner: aitk agent authorize --agent <id> --output <private-file> [--allow-deploy] [--org <id>]
+Owner inventory: aitk agent list
+Agent: aitk agent import --credential-stdin [--credential-store file|macos-keychain]
+Verify: aitk whoami / aitk agent status
+Owner revocation: aitk agent revoke --agent <id> / aitk agent revoke --all
+Local removal: aitk agent disconnect
+
+Agent mode never falls back to personal OAuth. Personal usage/session reports and
+admin/deletion tools are denied. The owner remains responsible for catalog assets.`,
+
   'agent-telemetry': `aitk agent-telemetry - Collect PII-free agent usage
 
 Usage:
@@ -296,7 +313,7 @@ Usage:
   aitk agent-telemetry upgrade|doctor|status|run|uninstall --agent <id> --source <source>
 
 Required:
-  --agent <id>                 Stable agent ID (for example bbodoong)
+  --agent <id>                 Stable agent ID (for example example-openclaw-agent)
 
 Options:
   --source <source>            openclaw|claude-code|codex|hermes (default: openclaw)
@@ -316,6 +333,14 @@ Options:
 Install options:
   --interval <seconds>         launchd interval (default: 3600; laptop-hosted agents may use 21600)
   --no-schedule                Save the collector without registering launchd
+  --local-only                Uninstall local collector; server revocation remains an owner action
+  --credential-store <store>  macos-keychain (default) or file (private local credential)
+  --enrollment-stdin           Install using an owner-issued grant from stdin; no personal login
+
+Owner machine (keeps personal authentication on this machine):
+  aitk agent-telemetry authorize --agent <id> --source <source> --collector-id <id> --output <private-file>
+Transfer this grant privately to the matching install command over stdin.
+If install fails, revoke its collector from the owner account; do not paste the grant in chat.
   --cli-path <path>            Built aitk.js path (normally inferred)
   --node-path <path>           node executable to pin in the launchd job
                                (default: the node running this command; symlinks are kept)
@@ -325,9 +350,9 @@ Authentication:
   collect is the legacy/manual path and reads AX_AGENT_TELEMETRY_TOKEN from the environment.
 
 Examples:
-  aitk agent-telemetry collect --agent bbodoong --source openclaw --sessions-dir /explicit/openclaw/agent/root --openclaw-agent main --days 7 --dry-run
+  aitk agent-telemetry collect --agent example-openclaw-agent --source openclaw --sessions-dir /explicit/openclaw/agent/root --openclaw-agent main --days 7 --dry-run
   aitk agent-telemetry install --agent my-codex --source codex --sessions-dir /explicit/codex/sessions --project-slugs my-workspace
-  aitk agent-telemetry collect --agent bbokeoter --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile default --category qa-verify --dry-run
+  aitk agent-telemetry collect --agent example-hermes-agent --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile default --category qa-verify --dry-run
   aitk agent-telemetry collect --agent named-agent --source hermes --sessions-dir /explicit/hermes.sqlite --hermes-profile named-profile --category qa-verify --dry-run`,
 
   login: `aitk login - Authenticate with AI Toolkit
@@ -579,7 +604,13 @@ async function main(): Promise<void> {
     case 'agent-telemetry': {
       const sub = positional[0]
       if (!flags['agent']) error(`--agent required: aitk agent-telemetry ${sub ?? ''} --agent <id>`)
-      if (sub === 'collect') {
+      if (sub === 'authorize') {
+        await runAuthorizeCollector({
+          agentId: flags['agent'], source: flags['source'], collectorId: flags['collector-id'],
+          serverUrl: flags['server-url'], intervalSeconds: flags['interval'] ? Number(flags['interval']) : 3600,
+          output: flags['output'],
+        })
+      } else if (sub === 'collect') {
         await runAgentTelemetryCollect({
           agentId: flags['agent'],
           source: flags['source'],
@@ -615,7 +646,9 @@ async function main(): Promise<void> {
           collectorId: flags['collector-id'],
           cliScriptPath: flags['cli-path'],
           nodePath: flags['node-path'],
+          credentialStore: parseCredentialStore(flags['credential-store']),
           noSchedule: flags['no-schedule'] === 'true',
+          enrollment: flags['enrollment-stdin'] === 'true' ? await readCollectorEnrollment(process.stdin) : undefined,
         })
       } else if (sub === 'upgrade' || sub === 'doctor' || sub === 'status' || sub === 'run' || sub === 'uninstall') {
         if (!flags['source']) error(`--source required: aitk agent-telemetry ${sub} --source <source>`)
@@ -629,14 +662,20 @@ async function main(): Promise<void> {
         else if (sub === 'doctor') await runAgentTelemetryDoctor({ ...lifecycleOptions, ...cliIdentity })
         else if (sub === 'status') runAgentTelemetryStatus(lifecycleOptions)
         else if (sub === 'run') await runAgentTelemetryRun(lifecycleOptions)
-        else await runAgentTelemetryUninstall(lifecycleOptions)
+        else await runAgentTelemetryUninstall({ ...lifecycleOptions, localOnly: flags['local-only'] === 'true' })
       } else {
-        error(`Unknown subcommand: aitk agent-telemetry ${sub ?? ''}\nUsage: aitk agent-telemetry collect|install|upgrade|doctor|status|run|uninstall`)
+        error(`Unknown subcommand: aitk agent-telemetry ${sub ?? ''}\nUsage: aitk agent-telemetry authorize|collect|install|upgrade|doctor|status|run|uninstall`)
       }
       break
     }
 
+    case 'agent': {
+      await runAgent(positional[0], flags)
+      break
+    }
+
     case 'login': {
+      if (readAgentConfig()) error('Personal login is disabled in agent mode; authorize on the owner machine')
       if (flags['device'] === 'true') {
         await runDeviceLogin()
       } else {

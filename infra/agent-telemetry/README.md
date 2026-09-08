@@ -70,7 +70,7 @@ but internal collector rollout does not depend on it.
 The user must approve the install command. It runs a PII-free dry run first and
 stops if collection health is blocked. It then exchanges the existing user
 login for a collector-only credential, stores that credential in macOS
-Keychain, writes a token-free local config, and registers launchd.
+the selected credential store, writes a token-free local config, and registers launchd.
 
 ```sh
 "$HOME/.local/bin/aitk" whoami
@@ -162,9 +162,9 @@ backfill into a bot identity.
 "$HOME/.local/bin/aitk" agent-telemetry run --agent <id> --source <source>
 ```
 
-- `status` checks local configuration, Keychain presence, and scheduler state.
+- `status` checks local configuration, credential availability, and scheduler state.
 - `doctor` performs a dry run without uploading or advancing the checkpoint.
-- `run` performs one immediate upload using the Keychain credential.
+- `run` performs one immediate upload using the configured credential store.
 - Success is the JSON response body with `ok: true`, not exit code alone.
 
 After a CLI upgrade (for example `install-from-repo.sh` at a newer approved
@@ -228,7 +228,7 @@ recovery.
 
 ## Security model
 
-- The raw collector credential exists only in macOS Keychain and is returned by
+- By default the raw collector credential exists only in macOS Keychain and is returned by
   the enrollment API once. The server stores a SHA-256 hash.
 - The credential is bound to `agentId`, `collectorInstanceId`, and `source`.
   Changing any of the three causes the ingestion request to be rejected.
@@ -269,3 +269,49 @@ recovery.
 `collect-macos.zsh` and `com.gpters.agent-telemetry.example.plist` remain only
 for existing pilot installations until they are migrated. New agents should not
 copy the plist or share `AX_AGENT_TELEMETRY_TOKEN`; use `install` instead.
+
+## Register on an owner's machine without logging the agent into a personal account
+
+Use a fixed collector ID for both commands. First validate the scoped source on
+its machine with `collect --dry-run --collector-id <id>`.
+
+On the owner's already authenticated machine:
+
+```sh
+aitk whoami
+aitk agent-telemetry authorize --agent example-agent --source claude-code \
+  --collector-id <id> --output /private/path/enrollment.json
+```
+
+The output file is created exclusively with mode 0600 and contains only a
+collector credential, never the owner's user token. Transfer its contents over a
+private SSH stdin pipe into the agent machine's command:
+
+```sh
+aitk agent-telemetry install --agent example-agent --source claude-code \
+  --collector-id <id> --sessions-dir /explicit/claude/projects \
+  --project-slugs <approved-project-slug> --days 1 --enrollment-stdin --credential-store file
+```
+
+The receiving command validates agent, source, collector, server and interval
+against the grant. It never resolves local personal credentials or repeats
+owner enrollment. The credential is stored in a private local file with this command; the scheduler runs
+independently of personal login. Delete the transfer file after a verified
+installation. If remote installation fails, revoke the newly issued collector
+from the owner machine via `DELETE /api/ax/agent-telemetry/enroll` with its
+collectorId; the unauthenticated agent cannot perform owner revocation. Never
+paste the transfer file into chat or pass its credential as a command argument.
+
+### Explicit local credential files
+
+For unattended machines, `install --credential-store file` stores only the scoped
+collector token under `~/.config/aitk/credentials/` (directory 0700, file 0600).
+It does not require an Apple account or Keychain password. The same OS user and
+root can read the file; protect that account and disk accordingly. No token is
+placed in the installation config, launchd plist, output, or command arguments.
+Keychain remains the default; failures never silently switch storage providers.
+
+After revoking the collector from its owner's machine, remove the local schedule
+and credential with `uninstall --agent <id> --source <source> --local-only`.
+This needs no personal login, performs no server revocation, and reports
+`revoked: false` plus `revocationRequired: true`.

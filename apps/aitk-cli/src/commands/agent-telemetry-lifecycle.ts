@@ -1,6 +1,8 @@
+import { parseCredentialStore, type CredentialStore } from '../credential-store.js'
 /** 설치형 agent telemetry collector의 install/upgrade/doctor/status/run/uninstall 명령. */
 
 import { existsSync, realpathSync } from 'node:fs'
+import { validateCollectorEnrollment, type CollectorEnrollment } from '../agent-telemetry/enrollment.js'
 import { homedir, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { readAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
@@ -10,14 +12,14 @@ import {
   createInstallation,
   defaultCommandRunner,
   deleteAgentTelemetryInstallation,
-  deleteMacOSKeychainCredential,
+  deleteCollectorCredential,
   installLaunchdSchedule,
   launchdPlistMatches,
   launchdScheduleLoaded,
   readAgentTelemetryInstallation,
-  readMacOSKeychainCredential,
+  readCollectorCredential,
   removeLaunchdSchedule,
-  storeMacOSKeychainCredential,
+  storeCollectorCredential,
   writeAgentTelemetryInstallation,
   type AgentTelemetryInstallation,
   type CommandRunner,
@@ -57,6 +59,9 @@ export interface AgentTelemetryInstallOptions {
   cliScriptPath?: string
   nodePath?: string
   noSchedule?: boolean
+  credentialStore?: CredentialStore
+  /** Owner-authorized collector credential; never a personal OAuth token. */
+  enrollment?: CollectorEnrollment
   home?: string
   platform?: NodeJS.Platform
   keychainAccount?: string
@@ -242,10 +247,15 @@ function collectOptions(installation: AgentTelemetryInstallation, dryRun: boolea
 
 export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOptions): Promise<void> {
   const selectedSource = source(options.source)
+  if (options.enrollment) {
+    validateCollectorEnrollment(options.enrollment)
+    if (!options.collectorId) error('--collector-id is required with --enrollment-stdin')
+  }
   if (!options.sessionsDir) error('--sessions-dir is required')
   const home = options.home ?? homedir()
   const runner = options.runner ?? defaultCommandRunner
   const platform = options.platform ?? process.platform
+  parseCredentialStore(options.credentialStore)
   if (platform !== 'darwin') error('Automatic telemetry installation currently supports macOS only')
 
   const scriptPath = resolve(options.cliScriptPath ?? process.argv[1] ?? '')
@@ -302,22 +312,30 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     nodePath,
     scriptPath,
     collectorVersion: options.collectorVersion,
+    credentialStore: options.credentialStore,
     account: options.keychainAccount ?? userInfo().username,
     schedule: options.noSchedule ? 'none' : 'launchd',
     home,
     now: options.now,
   })
 
-  const userToken = resolveToken()
-  if (!userToken) error('Collector enrollment requires `aitk login --device`', 2)
+  const supplied = options.enrollment
+  if (supplied && (supplied.agentId !== installation.agentId ||
+    supplied.collectorId !== installation.collectorId || supplied.source !== installation.source ||
+    supplied.serverUrl !== installation.serverUrl || supplied.intervalSeconds !== installation.schedule.intervalSeconds)) {
+    error('Enrollment does not match this agent, source, collector, server, or interval')
+  }
+  // A supplied grant must never read or fall back to the machine user's OAuth credentials.
+  const userToken = supplied ? undefined : resolveToken()
+  if (!supplied && !userToken) error('Collector enrollment requires owner authorization', 2)
 
   let collectorToken: string | undefined
   let credentialStored = false
   let configStored = false
   let scheduleAttempted = false
   try {
-    collectorToken = await enrollCollector(installation, userToken!)
-    storeMacOSKeychainCredential(installation, collectorToken, runner)
+    collectorToken = supplied?.collectorToken ?? await enrollCollector(installation, userToken!)
+    storeCollectorCredential(installation, collectorToken, runner, home)
     credentialStored = true
     writeAgentTelemetryInstallation(installation, home)
     configStored = true
@@ -328,8 +346,9 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
   } catch (cause) {
     if (scheduleAttempted) removeLaunchdSchedule(installation, runner, options.uid)
     if (configStored) deleteAgentTelemetryInstallation(installation.agentId, installation.source, home)
-    if (credentialStored) deleteMacOSKeychainCredential(installation, runner)
-    if (collectorToken) await revokeCollector(installation, userToken!).catch(() => undefined)
+    if (credentialStored) deleteCollectorCredential(installation, runner, options.home)
+    if (collectorToken && userToken) await revokeCollector(installation, userToken).catch(() => undefined)
+    // External authorization is revoked on the owner's machine if installation fails.
     throw cause
   }
 
@@ -353,7 +372,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
 
 export async function runAgentTelemetryRun(options: AgentTelemetryLifecycleOptions): Promise<void> {
   const installation = readAgentTelemetryInstallation(options.agentId, source(options.source), options.home)
-  const token = readMacOSKeychainCredential(installation, options.runner ?? defaultCommandRunner)
+  const token = readCollectorCredential(installation, options.runner ?? defaultCommandRunner, options.home)
   const result = await runAgentTelemetryCollect({
     ...collectOptions(installation, false, token, options.now),
     emitOutput: true,
@@ -452,7 +471,7 @@ export async function runAgentTelemetryDoctor(
   const scheduleMatchesRecord = installation.schedule.provider !== 'launchd' || launchdPlistMatches(installation)
   let credentialAvailable = false
   try {
-    credentialAvailable = readMacOSKeychainCredential(installation, runner).length > 0
+    credentialAvailable = readCollectorCredential(installation, runner, options.home).length > 0
   } catch {
     credentialAvailable = false
   }
@@ -480,6 +499,7 @@ export async function runAgentTelemetryDoctor(
       // 그 런타임이 정리되는 순간 수집이 조용히 멈추므로, 점검할 때 눈으로 확인할 수 있어야 한다.
       scheduledNodePath: installation.cli.nodePath,
       credentialAvailable,
+    credentialStore: installation.credential.provider,
       scheduleConfigured: installation.schedule.provider !== 'none',
       scheduleLoaded,
       collectionHealth: dryRun?.batch.collection.healthStatus ?? 'not-run',
@@ -496,7 +516,7 @@ export function runAgentTelemetryStatus(options: AgentTelemetryLifecycleOptions)
   const runner = options.runner ?? defaultCommandRunner
   let credentialAvailable = false
   try {
-    credentialAvailable = readMacOSKeychainCredential(installation, runner).length > 0
+    credentialAvailable = readCollectorCredential(installation, runner, options.home).length > 0
   } catch {
     credentialAvailable = false
   }
@@ -508,6 +528,7 @@ export function runAgentTelemetryStatus(options: AgentTelemetryLifecycleOptions)
     installedAtUtc: installation.installedAtUtc,
     sourceExists: existsSync(installation.sessionsDir),
     credentialAvailable,
+    credentialStore: installation.credential.provider,
     schedule: installation.schedule.provider,
     intervalSeconds: installation.schedule.intervalSeconds,
     scheduleLoaded: installation.schedule.provider === 'launchd'
@@ -516,18 +537,20 @@ export function runAgentTelemetryStatus(options: AgentTelemetryLifecycleOptions)
   })
 }
 
-export async function runAgentTelemetryUninstall(options: AgentTelemetryLifecycleOptions): Promise<void> {
+export async function runAgentTelemetryUninstall(options: AgentTelemetryLifecycleOptions & { localOnly?: boolean }): Promise<void> {
   const selectedSource = source(options.source)
   const installation = readAgentTelemetryInstallation(options.agentId, selectedSource, options.home)
-  const userToken = resolveToken()
-  if (!userToken) error('Collector revocation requires `aitk login --device`', 2)
+  const userToken = options.localOnly ? undefined : resolveToken()
+  if (!options.localOnly && (!userToken || userToken.startsWith('aia_'))) {
+    error('Revoke on the owner machine, then use uninstall --local-only on the agent machine', 2)
+  }
 
   const runner = options.runner ?? defaultCommandRunner
   // 서버가 일시적으로 닫혀 있어도 먼저 로컬 timer를 멈춰 추가 전송을 막는다.
   // revoke가 실패하면 config와 Keychain은 보존되어 같은 명령으로 재시도할 수 있다.
   const scheduleRemoved = removeLaunchdSchedule(installation, runner, options.uid)
-  await revokeCollector(installation, userToken!)
-  const credentialRemoved = deleteMacOSKeychainCredential(installation, runner)
+  if (!options.localOnly) await revokeCollector(installation, userToken!)
+  const credentialRemoved = deleteCollectorCredential(installation, runner, options.home)
   const configRemoved = deleteAgentTelemetryInstallation(installation.agentId, installation.source, options.home)
   jsonOut({
     ok: true,
@@ -535,7 +558,8 @@ export async function runAgentTelemetryUninstall(options: AgentTelemetryLifecycl
     agentId: installation.agentId,
     collectorId: installation.collectorId,
     source: installation.source,
-    revoked: true,
+    revoked: !options.localOnly,
+    ...(options.localOnly && { revocationRequired: true }),
     scheduleRemoved,
     credentialRemoved,
     configRemoved,
