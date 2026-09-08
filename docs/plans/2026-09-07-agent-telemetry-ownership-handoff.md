@@ -89,7 +89,10 @@ aitk agent-telemetry     → Unknown command  (CLI가 옛 버전, upgrade 필요
 LaunchAgents             → 없음
 ```
 
-### 남은 단계
+### 남은 단계 (9/8: **실행되지 않았다** — 실제 등록은 아래 §3-1)
+
+> 이 절차는 `login --device`(진저님 승인) 기준으로 짠 것인데, 그날 밤 #116의 새 흐름(`aitk agent`
+> 전용 자격증명)으로 등록이 끝났다. 기록으로만 남긴다.
 
 1. `aitk upgrade` — `agent-telemetry` 서브커맨드가 생겨야 한다.
    ⚠️ 메모리 `agent-telemetry-upgrade-path`·`bbokeoter-slack-protocol` 참고. launchd plist에
@@ -104,14 +107,28 @@ LaunchAgents             → 없음
    --project-slugs -Users-dahtmad--openclaw-workspace-bbojjak --days 1`
 6. AX 「에이전트 활동」 패널에 `bbojjak`이 뜨는지 확인.
 
-### 아직 답을 기다리는 것
+### 3-1. 실제 등록 결과 (9/7 밤 ~ 9/8, `#024` 스레드 기준)
 
-`#024` 스레드(https://gpters-org.slack.com/archives/C0BUF7RC2SD/p1788771018745779)에서 뽀짝이에게
-물어둔 5개 — 143건이 뽀짝이 활동이 맞는지, 언제부터인지, `upgrade`를 돌아가는 중에 해도 되는지,
-진저님 호출 타이밍, 순서에 빠진 게 있는지.
+하영님이 SSH로 직접(코덱스 세션) 진행했다. 뽀짝이는 읽기 전용 진단만 했다.
 
-뽀케터에게도 DM(`D0BNWKWKXTM`)으로 `aitk whoami`·`agent-telemetry status`를 물어뒀다.
-뽀케터 수집기는 하영님 계정에 묶여 있는데 머신은 지인님 쪽일 수 있어서 확인 중이다.
+| 시각 | 한 것 |
+|---|---|
+| 9/7 저녁 | 미니의 개인 토큰 연결 해제 — 서버에서 aitk-cli 토큰 비활성화, `config.json`의 token 제거. `whoami → No token found` |
+| 9/7 저녁 | CLI 0.4.0 → 0.7.10 (main 4777e323 저장소 빌드) |
+| 9/7 22:57 | **#116 새 흐름으로 등록** — `aitk_agent_credentials` `bbojjak`(소유자 하영, 12/7 만료, deploy 불허), 수집기 `claude-code`, launchd 1시간(`org.gpters.aitk.agent-telemetry.bbojjak-claude-code.plist`), `credentialStore: file`(의도된 구성) |
+| 9/8 | 저장소 빌드 `0.7.13-collector.1` → `.2`. **Codex 수집기 추가**(`source=codex`) — 공용 `~/.codex` 기록 631건 중 뽀짝이 것만 고르려고 `--thread-source aitk-agent:bbojjak` 표시를 붙이는 전용 실행기 `~/.openclaw/workspace-bbojjak/.aitk-codex/run`을 두고 AGENTS.md 맨 앞에 호출 지침. 서버 대조 healthy, AX에 'Codex 자동 / 정상' |
+
+미니 쪽 실측(뽀짝이, 9/8): `aitk whoami → Authenticated agent: bbojjak`, `agent status` org `f31f5a73…`,
+`agent-telemetry status --agent bbojjak --source claude-code` installed·scheduleLoaded true.
+
+**§2의 "진저님 소유" 결정은 실행되지 않았다.** #116 구조에서 소유자는 발급·해지 권한일 뿐이고 활동은
+`bbojjak` 이름으로 집계되므로 지표엔 영향이 없다. 바꾸려면 하영님이 `aitk agent revoke` 후 진저님 머신에서
+`aitk agent authorize`(현재 CLI `0.7.13`에 있음) → 미니에서 `agent import`.
+
+뽀짝이가 짚은 남은 수집 공백: 수집 경계를 넘는 도구 결과 연결 · 작업 ID 연결 · read-guard 이벤트 ·
+실제 Slack 전달 결과(출력 생성과 발송 성공은 다르다). 도구 실패는 collector가 `tool_result.is_error`로 이미 센다.
+
+뽀케터 DM(`D0BNWKWKXTM`)의 `whoami`·`agent-telemetry status` 질문은 답을 못 받았다.
 
 ---
 
