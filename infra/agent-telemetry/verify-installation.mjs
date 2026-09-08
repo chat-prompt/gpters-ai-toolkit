@@ -32,7 +32,7 @@ function execute(node, cli, args) {
   const result = spawnSync(node, [cli, ...args], { encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024 })
   // Do not echo arbitrary CLI stdout/stderr into Slack-ready evidence.
   if (result.error || result.status !== 0) throw new Error(`CLI step failed: ${args[1] ?? args[0]}`)
-  return result.stdout
+  return args[0] === '--version' ? (result.stdout.trim() || result.stderr.trim()) : result.stdout
 }
 function jsonStep(options, run, action) {
   let result
