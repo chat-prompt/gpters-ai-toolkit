@@ -86,6 +86,15 @@ export const CRON_EXPECTATIONS: CronExpectation[] = [
     zeroStreakLimit: 0,
   },
   {
+    jobName: 'account-audit',
+    label: '계정 점검 (휴면·반쪽 정지·이름 중복)',
+    // 매일 05:30 UTC
+    maxSilentHours: 30,
+    // 문제가 0인 날이 정상이다 — 산출량을 감시하지 않는다
+    outputKeys: [],
+    zeroStreakLimit: 0,
+  },
+  {
     jobName: 'weekly-report',
     label: '주간·월간 리포트',
     // 월요일 00:00 UTC + 매월 1일. 주간 쪽 기준으로 여유를 둔다

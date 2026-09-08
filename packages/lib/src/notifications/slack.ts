@@ -466,6 +466,131 @@ export async function notifySlackCronHealth(params: CronHealthParams): Promise<v
   }
 }
 
+/** 계정 점검 알림 인자 — `ops/account-audit`의 결과와 모양이 같다 (순환 import를 피하려고 따로 둔다) */
+export interface AccountAuditParams {
+  /** 휴면 기준(일) */
+  dormantDays: number
+  /** 점검한 계정 수 */
+  checked: number
+  dormant: Array<{
+    name: string | null
+    email: string
+    lastLoginAt: string | null
+    daysSinceLogin: number | null
+    liveAccessTokens: number
+    activeCollectors: number
+    ownedItems: number
+  }>
+  inconsistentSuspended: Array<{
+    name: string | null
+    email: string
+    activeMemberships: number
+    liveAccessTokens: number
+    liveRefreshTokens: number
+  }>
+  duplicateNames: Array<{
+    name: string
+    accounts: Array<{ email: string; lastLoginAt: string | null }>
+  }>
+}
+
+/** 휴면 목록이 길면 앞에서 자른다 — 채널에 한 화면이면 충분하다 */
+const AUDIT_DORMANT_LIMIT = 15
+
+function auditWho(name: string | null, email: string): string {
+  return name ? `${name} (${email})` : email
+}
+
+function auditDate(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : '기록 없음'
+}
+
+/**
+ * 계정 점검 결과를 알린다.
+ *
+ * **문제가 없으면 아무것도 보내지 않는다.** 퇴사 여부는 앱이 판정할 수 없으므로 이 알림은 결론이
+ * 아니라 **물어볼 목록**이다 — 조직 멤버 제거는 사람이 admin 화면에서 한다.
+ *
+ * @param params - 점검 결과
+ */
+export async function notifySlackAccountAudit(params: AccountAuditParams): Promise<void> {
+  try {
+    const total = params.dormant.length + params.inconsistentSuspended.length + params.duplicateNames.length
+    if (total === 0) return
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) return
+
+    const sections: Array<{ type: 'section'; text: { type: 'mrkdwn'; text: string } }> = []
+
+    if (params.inconsistentSuspended.length > 0) {
+      const lines = params.inconsistentSuspended.map((row) => {
+        const left = [
+          row.activeMemberships > 0 ? `소속 ${row.activeMemberships}` : null,
+          row.liveAccessTokens > 0 ? `access 토큰 ${row.liveAccessTokens}` : null,
+          row.liveRefreshTokens > 0 ? `refresh 토큰 ${row.liveRefreshTokens}` : null,
+        ].filter(Boolean).join(' · ')
+        return `• ${auditWho(row.name, row.email)} — ${left}`
+      })
+      sections.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*반쪽 정지 ${params.inconsistentSuspended.length}건* — 정지인데 남아 있는 것이 있다. 조직 멤버 제거로 마무리해야 한다\n${lines.join('\n')}`,
+        },
+      })
+    }
+
+    if (params.dormant.length > 0) {
+      const shown = params.dormant.slice(0, AUDIT_DORMANT_LIMIT)
+      const lines = shown.map((row) => {
+        const since = row.daysSinceLogin === null
+          ? '로그인 기록 없음'
+          : `마지막 로그인 ${auditDate(row.lastLoginAt)} (${row.daysSinceLogin}일 전)`
+        const holds = [
+          row.liveAccessTokens > 0 ? `토큰 ${row.liveAccessTokens}` : null,
+          row.activeCollectors > 0 ? `수집기 ${row.activeCollectors}` : null,
+          row.ownedItems > 0 ? `스킬 ${row.ownedItems}` : null,
+        ].filter(Boolean).join(' · ')
+        return `• ${auditWho(row.name, row.email)} — ${since}${holds ? ` · ${holds}` : ''}`
+      })
+      const more = params.dormant.length > shown.length ? `\n… 외 ${params.dormant.length - shown.length}명` : ''
+      sections.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*휴면 ${params.dormant.length}명* — ${params.dormantDays}일 넘게 로그인이 없는 활성 계정. 퇴사면 조직 멤버 제거\n${lines.join('\n')}${more}`,
+        },
+      })
+    }
+
+    if (params.duplicateNames.length > 0) {
+      const lines = params.duplicateNames.map((group) =>
+        `• *${group.name}* — ${group.accounts.map((a) => `${a.email} (${auditDate(a.lastLoginAt)})`).join(', ')}`
+      )
+      sections.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*이름 중복 ${params.duplicateNames.length}건* — 같은 이름의 활성 계정. 옛 계정이 남은 것일 수 있다\n${lines.join('\n')}`,
+        },
+      })
+    }
+
+    await sendSlackWebhook(webhookUrl, {
+      blocks: [
+        { type: 'header', text: { type: 'plain_text', text: '👤 계정 점검', emoji: true } },
+        ...sections,
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `계정 ${params.checked}개 점검 · 처리는 admin → 조직 → 멤버 제거` }],
+        },
+      ],
+    })
+  } catch (error) {
+    console.error('[slack] account audit notification failed:', error)
+  }
+}
+
 /** 주간 스킬 소식 알림 인자 */
 export interface PopularSkillsParams {
   /** 집계 창 (일) */

@@ -25,3 +25,15 @@ export {
   type CronHealthIssue,
   type CronHealthReport,
 } from './cron-health'
+
+export {
+  buildAccountAuditReport,
+  checkAccountHygiene,
+  DEFAULT_DORMANT_DAYS,
+  loadAccountAuditInputs,
+  type AccountAuditInput,
+  type AccountAuditReport,
+  type DormantAccount,
+  type DuplicateName,
+  type InconsistentSuspension,
+} from './account-audit'

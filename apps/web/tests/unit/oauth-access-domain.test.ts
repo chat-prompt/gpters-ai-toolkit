@@ -53,7 +53,7 @@ vi.mock('@gpters/db', () => {
     },
     oauthClients: { id: 'client.id', name: 'client.name' },
     oauthRefreshTokens: {},
-    users: { id: 'user.id', email: 'user.email', role: 'user.role' },
+    users: { id: 'user.id', email: 'user.email', role: 'user.role', accountStatus: 'user.account_status' },
     allowedExternalAccounts: APPROVALS_TABLE,
   }
 })
@@ -108,6 +108,16 @@ describe('OAuth access token domain enforcement', () => {
     const result = await validateAccessToken(VALID_TOKEN)
 
     expect(result).toEqual({ valid: false, error: 'Account is not authorized' })
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('rejects a live token whose account has been suspended', async () => {
+    // 오프보딩을 안 타고 정지만 된 계정 — 토큰은 아직 살아 있다
+    tokenRecord.current = { ...tokenRecord.current, userStatus: 'suspended' }
+
+    const result = await validateAccessToken(VALID_TOKEN)
+
+    expect(result).toEqual({ valid: false, error: 'Account is suspended' })
     expect(execute).not.toHaveBeenCalled()
   })
 
