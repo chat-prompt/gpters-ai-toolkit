@@ -162,9 +162,10 @@ async function listCodexFiles(
 async function scanCompleteLines(
   filePath: string,
   offset: number,
-  onLine: (line: string) => void
+  onLine: (line: string) => void | boolean,
+  endOffset?: number
 ): Promise<number> {
-  const stream = createReadStream(filePath, { start: offset })
+  const stream = createReadStream(filePath, { start: offset, ...(endOffset === undefined ? {} : { end: endOffset - 1 }) })
   let carry = Buffer.alloc(0)
   let bytesRead = 0
   for await (const rawChunk of stream) {
@@ -175,7 +176,7 @@ async function scanCompleteLines(
     for (let index = 0; index < buffer.length; index++) {
       if (buffer[index] !== 0x0a) continue
       const line = buffer.subarray(start, index).toString('utf8').replace(/\r$/, '')
-      if (line.length > 0) onLine(line)
+      if (line.length > 0 && onLine(line) === false) return offset + bytesRead - buffer.length + start
       start = index + 1
     }
     carry = buffer.subarray(start)
@@ -258,13 +259,33 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
     if (info.size <= offset) continue
 
     collection.filesRead++
-    let currentModel = 'unknown-model'
-    let currentInScope = true
-    let currentTurnId: string | null = null
-    let currentTurnHasRawTools = false
-    let currentTurnHasSupportedTools = false
+    const saved = sameFile ? previous.codexContext : undefined
+    let currentModel = saved?.model ?? 'unknown-model'
+    let currentInScope = saved?.inScope ?? true
+    let currentTurnId: string | null = saved?.turnHash ?? null
+    let currentTurnHasRawTools = saved?.rawTools ?? false
+    let currentTurnHasSupportedTools = saved?.supportedTools ?? false
     const sessionHash = hashIdentity(fileKey)
     try {
+      // Legacy offsets have no context. Replay metadata only once, without counting usage.
+      if (offset > 0 && !saved) await scanCompleteLines(filePath, 0, line => {
+        let entry: CodexEntry
+        try { entry = JSON.parse(line) } catch { return }
+        const payload = entry.payload ?? {}
+        if (entry.type === 'turn_context') {
+          currentModel = safeLabel(payload.model, currentModel)
+          currentInScope = allowed.size > 0 ? allowed.has(scopeName(payload.cwd) ?? '') : Boolean(options.codexThreadSource)
+        }
+        if (entry.type === 'event_msg' && payload.type === 'task_started') {
+          currentTurnId = typeof payload.turn_id === 'string' ? hashIdentity(`${fileKey}\u0000turn\u0000${payload.turn_id}`) : null
+          currentTurnHasRawTools = false; currentTurnHasSupportedTools = false
+        }
+        if (entry.type === 'response_item' && ['custom_tool_call', 'function_call', 'local_shell_call'].includes(String(payload.type))) currentTurnHasRawTools = true
+        if (entry.type === 'event_msg' && payload.type === 'item_completed' && payload.item && typeof payload.item === 'object' && toolInfo(payload.item as Record<string, unknown>)) currentTurnHasSupportedTools = true
+        if (entry.type === 'event_msg' && payload.type === 'task_complete') {
+          currentTurnId = null; currentTurnHasRawTools = false; currentTurnHasSupportedTools = false
+        }
+      }, offset)
       const nextOffset = await scanCompleteLines(filePath, offset, (line) => {
         collection.recordsRead++
         let entry: CodexEntry
@@ -274,6 +295,8 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
           collection.malformedSkipped++
           return
         }
+        if (!entry || typeof entry !== 'object') { collection.malformedSkipped++; return }
+        if ((entryTimestamp(entry) ?? -Infinity) >= endMs) { collection.recordsRead--; return false }
         const payload = entry.payload ?? {}
         const payloadType = String(payload.type ?? '')
 
@@ -281,7 +304,7 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
           currentModel = safeLabel(payload.model, currentModel)
           currentInScope = allowed.size > 0 ? allowed.has(scopeName(payload.cwd) ?? '') : Boolean(options.codexThreadSource)
         } else if (entry.type === 'event_msg' && payloadType === 'task_started') {
-          currentTurnId = typeof payload.turn_id === 'string' ? payload.turn_id : null
+          currentTurnId = typeof payload.turn_id === 'string' ? hashIdentity(`${fileKey}\u0000turn\u0000${payload.turn_id}`) : null
           currentTurnHasRawTools = false
           currentTurnHasSupportedTools = false
         }
@@ -370,13 +393,13 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
         }
 
         if (entry.type === 'event_msg' && payloadType === 'task_complete') {
-          const turnId = typeof payload.turn_id === 'string' ? payload.turn_id : currentTurnId
+          const turnId = typeof payload.turn_id === 'string' ? hashIdentity(`${fileKey}\u0000turn\u0000${payload.turn_id}`) : currentTurnId
           currentTurnId = null
           if (!turnId) {
             collection.missingIdentitySkipped++
             return
           }
-          const turnHash = hashIdentity(`${fileKey}\u0000turn\u0000${turnId}`)
+          const turnHash = turnId
           if (retainedSeen.has(turnHash) || batchSeen.has(turnHash)) {
             collection.duplicatesSkipped++
             return
@@ -407,7 +430,10 @@ export async function collectCodexAgent(options: CollectCodexOptions): Promise<O
         }
         collection.unsupportedRecordsSkipped++
       })
-      nextFiles[fileKey] = { dev: String(info.dev), ino: String(info.ino), offset: nextOffset }
+      nextFiles[fileKey] = { dev: String(info.dev), ino: String(info.ino), offset: nextOffset, codexContext: {
+        model: currentModel, inScope: currentInScope, turnHash: currentTurnId,
+        rawTools: currentTurnHasRawTools, supportedTools: currentTurnHasSupportedTools,
+      } }
     } catch {
       collection.parseFailures++
     }

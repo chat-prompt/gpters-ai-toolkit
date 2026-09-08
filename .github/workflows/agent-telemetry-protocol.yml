@@ -3,11 +3,17 @@ on:
   pull_request:
     paths:
       - 'infra/agent-telemetry/**'
+      - 'apps/aitk-cli/**'
+      - 'packages/lib/src/features/ax/agent-*.ts'
+      - 'apps/web/components/ax/panels/Agent*.tsx'
       - '.github/workflows/agent-telemetry-protocol.yml'
   push:
     branches: [main]
     paths:
       - 'infra/agent-telemetry/**'
+      - 'apps/aitk-cli/**'
+      - 'packages/lib/src/features/ax/agent-*.ts'
+      - 'apps/web/components/ax/panels/Agent*.tsx'
       - '.github/workflows/agent-telemetry-protocol.yml'
 permissions:
   contents: read
@@ -20,3 +26,18 @@ jobs:
         with:
           node-version: '22'
       - run: node --test infra/agent-telemetry/verify-installation.test.mjs
+
+  collector:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gpters/aitk test
+      - run: pnpm --filter @gpters/aitk typecheck
+      - run: pnpm --filter @gpters/web exec vitest run tests/unit/ax-agent-activity-panel.test.ts tests/unit/ax-agent-activity-view.test.tsx tests/unit/ax-agent-task-events.test.ts tests/unit/ax-agent-task-timeline.test.tsx tests/unit/ax-agent-telemetry-contract.test.ts tests/unit/ax-agent-telemetry-route.test.ts

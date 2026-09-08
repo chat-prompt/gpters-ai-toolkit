@@ -149,7 +149,7 @@ describe('collectOpenClawAgent', () => {
       inputTokens: 7, outputTokens: 11, cacheCreationInputTokens: 5,
       cacheReadInputTokens: 13, thinkingTokens: 3,
     })
-    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
+    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0, results: 1 }])
     expect(result.skillLoads).toEqual([{ skillId: 'browse', loaded: 1, failed: 0, interrupted: 0 }])
     expect(result.collection).toMatchObject({ filesDiscovered: 1, filesRead: 1, recordsRead: 2 })
     expect(result.nextCommitted.files).toEqual({})
@@ -336,7 +336,7 @@ describe('collectOpenClawAgent', () => {
     expect(result.sessions).toBe(1)
     expect(result.turns).toBe(2)
     expect(result.models).toEqual([{ model: 'claude-opus-5', turns: 2, usage: result.usage }])
-    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
+    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0, results: 1 }])
     expect(result.skillLoads).toEqual([{ skillId: 'browse', loaded: 1, failed: 0, interrupted: 0 }])
     expect(result.taskCategories[0]).toMatchObject({ category: 'qa-verify', sessions: 1, turns: 2 })
     const serialized = JSON.stringify(result)
@@ -418,7 +418,7 @@ describe('collectOpenClawAgent', () => {
 
     expect(result.collection.malformedSkipped).toBe(1)
     expect(result.collection.outsideWindowSkipped).toBe(1)
-    expect(result.tools).toEqual([{ name: 'Skill', calls: 1, failures: 1 }])
+    expect(result.tools).toEqual([{ name: 'Skill', calls: 1, failures: 1, results: 1 }])
     expect(result.skillLoads).toEqual([{ skillId: 'session-cleanup', loaded: 0, failed: 1, interrupted: 0 }])
   })
 
@@ -512,7 +512,7 @@ describe('collectOpenClawAgent', () => {
     expect(result.models).toEqual([{
       model: 'claude-opus-5', turns: 1, usage: result.usage,
     }])
-    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0 }])
+    expect(result.tools).toEqual([{ name: 'Read', calls: 1, failures: 0, results: 1 }])
     expect(result.skillLoads).toEqual([{ skillId: 'qa-verify', loaded: 1, failed: 0, interrupted: 0 }])
     expect(result.collection).toMatchObject({
       source: 'claude-code', includedRecords: 2, metadataSkipped: 2, nonAssistantSkipped: 1,
@@ -626,4 +626,26 @@ it('OpenClaw SQLite도 수집 구간을 넘어 도착한 동일 응답의 증가
   const second = await collectOpenClawAgent({ ...options, window: { start: middle, end: END }, committed: JSON.parse(JSON.stringify(first.nextCommitted)) })
   expect(second.usage.outputTokens).toBe(98)
   expect(second.turns).toBe(0)
+})
+
+it('matches multiple late results across checkpoints without counting calls twice', async () => {
+  const path = writeSession('late.jsonl', [entry({ type: 'session', id: 'private-session' }), assistant({ id: 'calls', content: [
+    { type: 'toolCall', id: 'private-call-a', name: 'Read', arguments: {} },
+    { type: 'toolCall', id: 'private-call-b', name: 'Read', arguments: {} },
+  ] })])
+  const base = { sessionsDir: root, source: 'openclaw' as const, category: 'qa-verify' as const }
+  const first = await collectOpenClawAgent({ ...base, committed: committed(), window: { start: START, end: END } })
+  expect(first.tools).toMatchObject([{ calls: 2, results: 0, failures: 0 }])
+  expect(JSON.stringify(first.nextCommitted)).not.toContain('private-call')
+  const late = entry({ type: 'message', timestamp: '2026-08-27T01:00:00Z', message: { role: 'user', content: [
+    { type: 'tool_result', tool_use_id: 'private-call-a', is_error: true },
+    { type: 'tool_result', tool_use_id: 'private-call-b', is_error: false },
+  ] } })
+  appendFileSync(path, late + '\n' + late + '\n')
+  const second = await collectOpenClawAgent({ ...base, committed: first.nextCommitted, window: { start: END, end: new Date('2026-08-28T00:00:00Z') } })
+  expect(second.tools).toEqual([{ name: 'Read', calls: 0, failures: 1, results: 2 }])
+  expect(second.collection.orphanToolResultsSkipped).toBe(0)
+  expect(second.nextCommitted.pendingToolCalls).toEqual([])
+  expect(second.collection.recordsRead).toBe(second.collection.includedRecords + second.collection.duplicatesSkipped)
+  expect(second.collection.healthStatus).toBe('healthy')
 })

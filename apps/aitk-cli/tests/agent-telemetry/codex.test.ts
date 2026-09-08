@@ -209,3 +209,33 @@ describe('Codex explicit agent attribution', () => {
     expect(result.collection.healthStatus).toBe('blocked')
   })
 })
+
+it.each([false, true])('restores model, hashed turn and out-of-scope state across offsets (legacy=%s)', async legacy => {
+  const path = join(root, 'resume.jsonl')
+  const prefix = [line('2026-08-26T01:00:00Z', 'session_meta', { cwd: '/workspace/allowed' }),
+    line('2026-08-26T01:00:01Z', 'turn_context', { cwd: '/workspace/allowed', model: 'gpt-test' }),
+    line('2026-08-26T01:00:02Z', 'event_msg', { type: 'task_started', turn_id: 'private-turn' })].join('\n') + '\n'
+  writeFileSync(path, prefix)
+  const options = { sessionsDir: root, source: 'codex' as const, category: 'qa-verify' as const, projectSlugs: ['allowed'] }
+  const first = await collectCodexAgent({ ...options, committed: committed(), window: { start: START, end: new Date('2026-08-26T02:00:00Z') } })
+  expect(JSON.stringify(first.nextCommitted)).not.toContain('private-turn')
+  if (legacy) for (const file of Object.values(first.nextCommitted.files)) delete file.codexContext
+  writeFileSync(path, prefix + [line('2026-08-26T03:00:00Z', 'event_msg', { type: 'token_count', info: { last_token_usage: { input_tokens: 42 } } }),
+    line('2026-08-26T03:00:01Z', 'event_msg', { type: 'task_complete' }),
+    line('2026-08-26T03:00:02Z', 'turn_context', { cwd: '/private/other', model: 'private-model' })].join('\n') + '\n')
+  const second = await collectCodexAgent({ ...options, committed: first.nextCommitted, window: { start: new Date('2026-08-26T02:00:00Z'), end: new Date('2026-08-26T04:00:00Z') } })
+  expect(second.models).toMatchObject([{ model: 'gpt-test', turns: 1, usage: { inputTokens: 42 } }])
+  writeFileSync(path, readFileSync(path, 'utf8') + line('2026-08-26T05:00:00Z', 'event_msg', { type: 'token_count', info: { last_token_usage: { input_tokens: 999 } } }) + '\n')
+  const third = await collectCodexAgent({ ...options, committed: second.nextCommitted, window: { start: new Date('2026-08-26T04:00:00Z'), end: END } })
+  expect(third.usage.inputTokens).toBe(0)
+})
+
+it('does not consume a complete line appended after the collection boundary', async()=>{
+ const path=join(root,'future.jsonl')
+ writeFileSync(path,[line('2026-08-26T01:00:00Z','session_meta',{cwd:'/workspace/allowed'}),line('2026-08-26T03:00:00Z','event_msg',{type:'token_count',info:{last_token_usage:{input_tokens:77}}})].join('\n')+'\n')
+ const options={sessionsDir:root,source:'codex' as const,category:'qa-verify' as const,projectSlugs:['allowed']}
+ const first=await collectCodexAgent({...options,committed:committed(),window:{start:START,end:new Date('2026-08-26T02:00:00Z')}})
+ expect(first.usage.inputTokens).toBe(0)
+ const second=await collectCodexAgent({...options,committed:first.nextCommitted,window:{start:new Date('2026-08-26T02:00:00Z'),end:END}})
+ expect(second.usage.inputTokens).toBe(77)
+})

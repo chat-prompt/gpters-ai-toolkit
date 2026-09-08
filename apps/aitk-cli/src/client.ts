@@ -1,3 +1,4 @@
+import { traceTaskApi, type TaskPhase } from './agent-telemetry/task-events.js'
 /**
  * API 클라이언트 - Simple REST 및 JSON-RPC 2.0 호출
  */
@@ -91,7 +92,7 @@ async function readServerError(response: Response): Promise<string | undefined> 
  * @param token - 인증 토큰
  * @returns API 응답 결과
  */
-export async function apiCall<T = unknown>(
+async function apiCallUntraced<T = unknown>(
   action: string,
   params: Record<string, unknown>,
   token?: string
@@ -141,7 +142,7 @@ export async function apiCall<T = unknown>(
  * @param token - 인증 토큰
  * @returns API 응답 결과
  */
-export async function jsonRpcCall<T = unknown>(
+async function jsonRpcCallUntraced<T = unknown>(
   method: string,
   params: Record<string, unknown>,
   token?: string
@@ -256,4 +257,14 @@ export async function jsonRpcSessionCall<T = unknown>(
     }
     return { ok: false, error: message }
   }
+}
+
+export function apiCall<T = unknown>(action: string, params: Record<string, unknown>, token?: string): Promise<ApiResult<T>> {
+  const phase: TaskPhase | undefined = action === 'get' ? 'skill-load' : action === 'search' ? 'search' : undefined
+  return traceTaskApi(phase, () => apiCallUntraced<T>(action, params, token))
+}
+export function jsonRpcCall<T = unknown>(method: string, params: Record<string, unknown>, token?: string): Promise<ApiResult<T>> {
+  const phases: Record<string, TaskPhase> = { semantic_search: 'search', get_plugin_content: 'skill-load', report_search_skip: 'search-skip', report_skill_execution: 'execution-report', report_skill_execution_started: 'execution-report' }
+  const phase = typeof params.name === 'string' ? phases[params.name] : undefined
+  return traceTaskApi(phase, () => jsonRpcCallUntraced<T>(method, params, token))
 }

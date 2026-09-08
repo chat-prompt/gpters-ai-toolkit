@@ -6,6 +6,7 @@ import { readCollectorEnrollment, runAuthorizeCollector } from '../src/agent-tel
  * aitk CLI 진입점 - GPTers AI Toolkit MCP fallback CLI
  */
 
+import { runAgentTask } from '../src/commands/agent-task.js'
 import { runAgent } from '../src/commands/agent.js'
 import { readAgentConfig } from '../src/agent-auth.js'
 import { runSearch } from '../src/commands/search.js'
@@ -415,6 +416,8 @@ Examples:
  */
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
+  if (args[0] === 'agent-task' && (args.includes('--help') || args.length === 1)) { info('Usage: aitk agent-task run|start|event --agent <id> --source <source> [-- command ...]\nProtocol: infra/agent-telemetry/TASK_TRACING.md'); return }
+  if (args[0] === 'agent-task') { await runAgentTask(args.slice(1)); return }
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     info(HELP)

@@ -1,3 +1,4 @@
+import { collectTaskEvents } from '../agent-telemetry/task-events.js'
 /** 에이전트 delta telemetry 수집·전송 명령 */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -263,6 +264,8 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       : source === 'hermes'
         ? await collectHermesAgent({ ...collectOptions, source: 'hermes', profileName: hermesProfile! })
         : await collectOpenClawAgent(collectOptions)
+    const taskJournal = collectTaskEvents(agentId, source, state.committed.taskJournal, undefined, now)
+    collected.nextCommitted.taskJournal = taskJournal.checkpoint
     const batch: AgentTelemetryBatch = {
       schemaVersion: '1.0.0',
       batchId: randomUUID(),
@@ -283,7 +286,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       skillLoads: collected.skillLoads,
       taskCategories: collected.taskCategories,
       executions: collected.executions,
-      collection: collected.collection,
+      collection: { ...collected.collection, taskEvents: taskJournal.events },
     }
     state = { ...state, pending: { batch, nextCommitted: collected.nextCommitted } }
   }
