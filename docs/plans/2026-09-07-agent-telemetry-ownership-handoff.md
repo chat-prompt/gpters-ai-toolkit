@@ -137,6 +137,9 @@ admin 화면의 멤버 제거는 하영님이 GPTers 조직 안에서 `org_viewe
 요구, 둘 다 진우님뿐). 라우트와 같은 5개 쓰기를 한 트랜잭션으로 하는 스크립트를 하영님이 직접 실행했다 —
 소속 offboarded 8 · 계정 suspended 8 · access 토큰 45 비활성 · refresh 2 폐기 · 인가 코드 4 삭제.
 복구는 admin 화면에서 같은 이메일로 멤버 재추가(POST 라우트가 소속·계정을 되살린다). 토큰은 재로그인.
+이어서 그 8명이 소유하던 카탈로그 29개(skill 26 · command 3)의 `author_id`를 하영님 계정으로 옮겼다 —
+정지 계정 소유 항목은 admin만 고칠 수 있어서다. 담당자가 정해지면 그때 넘긴다. §5-1의 "31개"는 이 시점
+기준으로 정리됐다(송다혜님 16개는 재직 중이라 그대로).
 
 ```
 dahye@gpters.org  (송다혜)  active → suspended   deactivated_at=2026-09-07 17:53 KST
