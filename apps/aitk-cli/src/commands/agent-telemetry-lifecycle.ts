@@ -47,6 +47,7 @@ export interface AgentTelemetryInstallOptions {
   source: string
   sessionsDir?: string
   projectSlugs?: string
+  codexThreadSource?: string
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
@@ -218,7 +219,7 @@ async function hasPendingBatch(installation: AgentTelemetryInstallation): Promis
     : undefined
   const path = join(
     installation.checkpointDir,
-    checkpointName(installation.agentId, installation.source, projectSlugs, installation.hermesProfile)
+    checkpointName(installation.agentId, installation.source, projectSlugs, installation.hermesProfile, installation.codexThreadSource)
   )
   const checkpoint = await readAgentTelemetryCheckpoint(path)
   return Boolean(checkpoint?.pending)
@@ -233,6 +234,7 @@ function collectOptions(installation: AgentTelemetryInstallation, dryRun: boolea
     collectorVersion: installation.cli.collectorVersion,
     sessionsDir: installation.sessionsDir,
     projectSlugs: installation.projectSlugs,
+    codexThreadSource: installation.codexThreadSource,
     openclawAgent: installation.openclawAgent,
     hermesProfile: installation.hermesProfile,
     checkpointDir: installation.checkpointDir,
@@ -283,6 +285,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     collectorVersion: options.collectorVersion,
     sessionsDir: options.sessionsDir,
     projectSlugs: options.projectSlugs,
+    codexThreadSource: options.codexThreadSource,
     openclawAgent: options.openclawAgent,
     hermesProfile: options.hermesProfile,
     checkpointDir: options.checkpointDir,
@@ -302,6 +305,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     source: selectedSource,
     sessionsDir: options.sessionsDir,
     projectSlugs: options.projectSlugs,
+    codexThreadSource: options.codexThreadSource,
     openclawAgent: options.openclawAgent,
     hermesProfile: options.hermesProfile,
     checkpointDir: options.checkpointDir,

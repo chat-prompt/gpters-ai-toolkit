@@ -90,6 +90,8 @@ export interface AgentTelemetryFileCheckpoint {
 export interface AgentTelemetrySeenMessage {
   hash: string
   atUtc: string
+  /** Local-only baseline for streaming increases; no content or raw message ID. */
+  usageSnapshot?: { model: string; usage: AgentTokenUsage }
 }
 
 export interface AgentTelemetryCommittedState {

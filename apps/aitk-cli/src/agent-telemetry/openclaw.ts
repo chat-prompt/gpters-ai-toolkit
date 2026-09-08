@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
+import { open, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import type {
   AgentTaskCategory,
@@ -477,6 +477,21 @@ async function resolveOpenClawInput(path: string, projectSlugs?: string[]): Prom
   return { kind: 'jsonl', root: jsonlRoot, ...listed, internalAgentId }
 }
 
+/** Resume OpenClaw's header identity without persisting the raw session ID in a checkpoint. */
+async function sessionHeader(filePath: string, fallback: string): Promise<string> {
+  const file = await open(filePath, 'r')
+  try {
+    const buffer = Buffer.alloc(64 * 1024)
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+    const firstLineEnd = buffer.subarray(0, bytesRead).indexOf(0x0a)
+    if (firstLineEnd < 0) return fallback
+    try {
+      const entry = JSON.parse(buffer.subarray(0, firstLineEnd).toString('utf8')) as OpenClawEntry
+      return entry.type === 'session' && typeof entry.id === 'string' ? entry.id : fallback
+    } catch { return fallback }
+  } finally { await file.close() }
+}
+
 async function scanCompleteLines(
   filePath: string,
   offset: number,
@@ -557,7 +572,13 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   const retainedSeen = new Map<string, AgentTelemetrySeenMessage>()
   const retentionCutoff = endMs - SEEN_RETENTION_MS
   for (const seen of options.committed.seenMessages) {
-    if (Date.parse(seen.atUtc) >= retentionCutoff) retainedSeen.set(seen.hash, seen)
+    if (Date.parse(seen.atUtc) >= retentionCutoff) {
+      retainedSeen.set(seen.hash, { ...seen })
+      if (seen.usageSnapshot) messageUsageMetrics.set(seen.hash, {
+        model: seen.usageSnapshot.model,
+        usage: cloneUsage(seen.usageSnapshot.usage),
+      })
+    }
   }
   const nextFiles: Record<string, AgentTelemetryFileCheckpoint> = input.kind === 'sqlite'
     ? {}
@@ -698,9 +719,16 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         const merged = maxUsage(previous.usage, usageFromMessage(message))
         const increase = usageIncrease(previous.usage, merged)
         addUsage(totalUsage, increase)
-        const modelMetric = modelMetrics.get(previous.model)
-        if (modelMetric) addUsage(modelMetric.usage, increase)
+        const modelMetric = modelMetrics.get(previous.model) ?? { turns: 0, usage: emptyAgentUsage() }
+        if (Object.values(increase).some(value => typeof value === 'number' && value > 0)) {
+          addUsage(modelMetric.usage, increase)
+          modelMetrics.set(previous.model, modelMetric)
+        }
         previous.usage = merged
+        retainedSeen.set(messageHash, {
+          hash: messageHash, atUtc: new Date(at).toISOString(),
+          usageSnapshot: { model: previous.model, usage: cloneUsage(merged) },
+        })
         latestIncludedAt = Math.max(latestIncludedAt, at)
       }
       return sessionIdentity
@@ -716,6 +744,10 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     addUsage(modelMetric.usage, usage)
     modelMetrics.set(model, modelMetric)
     messageUsageMetrics.set(messageHash, { model, usage: cloneUsage(usage) })
+    retainedSeen.set(messageHash, {
+      hash: messageHash, atUtc: new Date(at).toISOString(),
+      usageSnapshot: { model, usage: cloneUsage(usage) },
+    })
     sessions.add(hashIdentity(sessionIdentity))
     turns++
     collection.includedRecords++
@@ -743,6 +775,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
       collection.filesRead++
       let sessionIdentity = fileKey
       try {
+        if (offset > 0 && options.source === 'openclaw') sessionIdentity = await sessionHeader(filePath, fileKey)
         const nextOffset = await scanCompleteLines(filePath, offset, (line) => {
           collection.recordsRead++
           let entry: OpenClawEntry
@@ -822,7 +855,8 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   if (options.projectSlugs && input.kind === 'jsonl' && input.files.length === 0) {
     healthWarnings.push('no-files-in-scope')
   }
-  if (windowRecords > 0 && turns === 0) healthWarnings.push('no-turns-from-records')
+  const hasUsage = Object.values(totalUsage).some(value => typeof value === 'number' && value > 0)
+  if (windowRecords > 0 && turns === 0 && !hasUsage) healthWarnings.push('no-turns-from-records')
   if (
     windowRecords >= MIN_HEALTH_SAMPLE_RECORDS &&
     collection.unsupportedRecordsSkipped / windowRecords >= MAX_UNSUPPORTED_RATIO
@@ -854,7 +888,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
       .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name)),
     skillLoads: [...skillMetrics.entries()].map(([skillId, metric]) => ({ skillId, ...metric }))
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)),
-    taskCategories: turns > 0 ? [{
+    taskCategories: turns > 0 || hasUsage ? [{
       category: options.category,
       sessions: sessions.size,
       turns,

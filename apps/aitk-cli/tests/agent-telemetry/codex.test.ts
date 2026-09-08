@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -137,5 +137,75 @@ describe('collectCodexAgent', () => {
     expect(result.collection).toMatchObject({
       healthStatus: 'blocked', healthWarnings: ['no-files-in-scope'], filesExcludedByScope: 1,
     })
+  })
+})
+
+
+describe('Codex explicit agent attribution', () => {
+  function session(name: string, tag?: string, tools = false) {
+    writeFileSync(join(root, `${name}.jsonl`), [
+      line('2026-08-26T01:00:00Z', 'session_meta', { cwd: '/workspace/shared', thread_source: tag }),
+      line('2026-08-26T01:00:01Z', 'turn_context', { cwd: '/tmp', model: 'gpt-5.6-codex' }),
+      line('2026-08-26T01:00:02Z', 'event_msg', { type: 'token_count', info: { last_token_usage: { input_tokens: 12, output_tokens: 3 } } }),
+      ...(tools ? [line('2026-08-26T01:00:03Z', 'response_item', { type: 'function_call', name: 'exec', arguments: 'private' })] : []),
+      line('2026-08-26T01:00:04Z', 'event_msg', { type: 'task_complete', turn_id: name }),
+    ].join('\n') + '\n')
+  }
+  const opts = () => ({ sessionsDir: root, window: { start: START, end: END }, committed: committed(),
+    category: 'unclassified' as const, source: 'codex' as const, codexThreadSource: 'aitk-agent:test-agent' })
+
+  it('only includes the tagged agent, even when humans and other agents share its cwd', async () => {
+    session('agent', 'aitk-agent:test-agent')
+    session('human')
+    session('other', 'aitk-agent:other')
+    const result = await collectCodexAgent(opts())
+    expect(result).toMatchObject({ sessions: 1, turns: 1, usage: { inputTokens: 12, outputTokens: 3 },
+      collection: { filesExcludedByScope: 2, healthStatus: 'healthy', healthWarnings: [] } })
+    expect(JSON.stringify(result)).not.toContain('aitk-agent:')
+    expect(JSON.stringify(result.nextCommitted.files)).not.toContain('human')
+    const again = await collectCodexAgent({ ...opts(), committed: result.nextCommitted })
+    expect(again).toMatchObject({ turns: 0, usage: { inputTokens: 0 }, collection: { healthStatus: 'healthy' } })
+  })
+
+  it('requires both filters when a directory restriction is also specified', async () => {
+    session('agent', 'aitk-agent:test-agent')
+    const result = await collectCodexAgent({ ...opts(), projectSlugs: ['shared'] })
+    expect(result.turns).toBe(0) // tagged session moved outside the additional cwd restriction
+    const excluded = await collectCodexAgent({ ...opts(), projectSlugs: ['elsewhere'] })
+    expect(excluded.collection.healthWarnings).toContain('no-files-in-scope')
+  })
+
+  it('does not silently collect the whole home when neither scope is supplied', async () => {
+    session('human')
+    const result = await collectCodexAgent({ ...opts(), codexThreadSource: undefined })
+    expect(result.collection.healthWarnings).toContain('no-files-in-scope')
+    expect(result.turns).toBe(0)
+  })
+
+  it('does not block a live tool call before its turn completes', async () => {
+    session('agent', 'aitk-agent:test-agent', true)
+    const path = join(root, 'agent.jsonl')
+    const lines = readFileSync(path, 'utf8').trimEnd().split('\n')
+    writeFileSync(path, lines.slice(0, -1).join('\n') + '\n')
+    const result = await collectCodexAgent(opts())
+    expect(result).toMatchObject({ turns: 0, collection: { healthStatus: 'healthy', healthWarnings: [] } })
+  })
+
+  it('does not use an earlier completed turn to judge a later live tool call', async () => {
+    session('agent', 'aitk-agent:test-agent')
+    const path = join(root, 'agent.jsonl')
+    writeFileSync(path, readFileSync(path, 'utf8') + [
+      line('2026-08-26T01:00:05Z', 'event_msg', { type: 'task_started', turn_id: 'next' }),
+      line('2026-08-26T01:00:06Z', 'response_item', { type: 'custom_tool_call', name: 'exec' }),
+    ].join('\n') + '\n')
+    const result = await collectCodexAgent(opts())
+    expect(result).toMatchObject({ turns: 1, collection: { healthStatus: 'healthy', healthWarnings: [] } })
+  })
+
+  it('keeps the missing-tools guard for a real tool call without parsed tool evidence', async () => {
+    session('agent', 'aitk-agent:test-agent', true)
+    const result = await collectCodexAgent(opts())
+    expect(result.collection.healthWarnings).toContain('codex-tools-missing')
+    expect(result.collection.healthStatus).toBe('blocked')
   })
 })

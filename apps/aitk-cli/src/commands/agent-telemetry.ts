@@ -35,6 +35,7 @@ export interface AgentTelemetryOptions {
   collectorVersion: string
   sessionsDir?: string
   projectSlugs?: string
+  codexThreadSource?: string
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
@@ -109,11 +110,12 @@ function resolveSource(value: string | undefined): AgentTelemetrySource {
   return source as AgentTelemetrySource
 }
 
-function resolveProjectSlugs(source: AgentTelemetrySource, value: string | undefined): string[] | undefined {
+function resolveProjectSlugs(source: AgentTelemetrySource, value: string | undefined, codexThreadSource?: string): string[] | undefined {
   if (source === 'openclaw' || source === 'hermes') {
     if (value) error('--project-slugs is only supported with --source claude-code or codex')
     return undefined
   }
+  if (!value && source === 'codex' && codexThreadSource) return undefined
   if (!value) error(`--project-slugs is required when --source ${source} is used`)
   const slugs = [...new Set(value!.split(',').map((item) => item.trim()))].sort()
   if (
@@ -151,9 +153,12 @@ export function checkpointName(
   agentId: string,
   source: AgentTelemetrySource,
   projectSlugs: string[] | undefined,
-  hermesProfile: string | undefined
+  hermesProfile: string | undefined,
+  codexThreadSource?: string
 ): string {
-  const scope = projectSlugs?.join('\u0000') ?? hermesProfile
+  const scope = codexThreadSource
+    ? JSON.stringify({ codexThreadSource, projectSlugs: projectSlugs ?? [] })
+    : projectSlugs?.join('\u0000') ?? hermesProfile
   if (!scope) return `${agentId}-${source}.json`
   const scopeHash = createHash('sha256').update(scope).digest('hex').slice(0, 12)
   return `${agentId}-${source}-${scopeHash}.json`
@@ -215,12 +220,17 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   if (options.collectorInstanceId) safeId(options.collectorInstanceId, '--collector-id')
   const category = resolveCategory(options.category)
   if (!options.sessionsDir) error('--sessions-dir is required for every telemetry source')
-  const projectSlugs = resolveProjectSlugs(source, options.projectSlugs)
+  const codexThreadSource = options.codexThreadSource
+  if (codexThreadSource !== undefined &&
+    (source !== 'codex' || codexThreadSource !== `aitk-agent:${agentId}`)) {
+    error('--codex-thread-source must be aitk-agent:<agent ID> and requires --source codex')
+  }
+  const projectSlugs = resolveProjectSlugs(source, options.projectSlugs, codexThreadSource)
   const openclawAgent = resolveOpenClawAgent(source, options.openclawAgent)
   const hermesProfile = resolveHermesProfile(source, options.hermesProfile)
   const sessionsDir = resolve(options.sessionsDir!)
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
-  const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs, hermesProfile))
+  const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs, hermesProfile, codexThreadSource))
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
 
   if (state.agentId !== agentId) error('Checkpoint belongs to a different agent')
@@ -249,7 +259,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       openclawAgent,
     }
     const collected = source === 'codex'
-      ? await collectCodexAgent({ ...collectOptions, source: 'codex', projectSlugs: projectSlugs! })
+      ? await collectCodexAgent({ ...collectOptions, source: 'codex', projectSlugs, codexThreadSource })
       : source === 'hermes'
         ? await collectHermesAgent({ ...collectOptions, source: 'hermes', profileName: hermesProfile! })
         : await collectOpenClawAgent(collectOptions)

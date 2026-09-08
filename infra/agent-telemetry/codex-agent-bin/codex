@@ -1,0 +1,22 @@
+#!/bin/sh
+# Put this directory on PATH only for an agent's process tree.
+set -eu
+: "${AITK_CODEX_AGENT_ID:?AITK_CODEX_AGENT_ID is required}"
+: "${AITK_CODEX_REAL_BIN:?AITK_CODEX_REAL_BIN is required}"
+[ "${#AITK_CODEX_AGENT_ID}" -le 100 ] || { echo 'Invalid agent ID' >&2; exit 2; }
+case "$AITK_CODEX_AGENT_ID" in ''|[!a-z0-9]*|*[!a-z0-9._:-]*) echo 'Invalid agent ID' >&2; exit 2;; esac
+case "$AITK_CODEX_REAL_BIN" in /*) ;; *) echo 'Codex executable must be an absolute path' >&2; exit 2;; esac
+case "${1:-}" in
+  exec|e)
+    shift
+    # Reject a conflicting override. Prompt text after -- is never inspected.
+    for arg in "$@"; do
+      case "$arg" in
+        --) break;;
+        --thread-source|--thread-source=*) echo 'Thread source is managed by this agent wrapper' >&2; exit 2;;
+      esac
+    done
+    exec "$AITK_CODEX_REAL_BIN" exec --thread-source "aitk-agent:$AITK_CODEX_AGENT_ID" "$@"
+    ;;
+  *) exec "$AITK_CODEX_REAL_BIN" "$@";;
+esac

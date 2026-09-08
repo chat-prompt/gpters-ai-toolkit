@@ -580,3 +580,50 @@ describe('collectOpenClawAgent', () => {
     expect(emptyScope.collection.healthWarnings).toContain('no-files-in-scope')
   })
 })
+
+
+it.each(['claude-code', 'openclaw'] as const)('%s의 스트리밍 증가분을 checkpoint 왕복 후에도 한 번만 보고한다', async source => {
+  const midpoint = new Date('2026-08-26T11:00:00Z')
+  const snapshot = (at: string, output: number) => entry({
+    type: source === 'claude-code' ? 'assistant' : 'message', id: 'private-message',
+    ...(source === 'claude-code' ? { sessionId: 'private-session' } : {}), timestamp: at,
+    message: { id: 'private-message', role: 'assistant', model: 'test-model', content: [],
+      usage: { input_tokens: 10, input: 10, output_tokens: output, output },
+    },
+  })
+  const file = writeSession('stream.jsonl', [entry({ type: 'session', id: 'private-header' }), snapshot(IN_WINDOW, 2)])
+  const first = await collectOpenClawAgent({ sessionsDir: root, source, category: 'qa-verify',
+    window: { start: START, end: midpoint }, committed: committed() })
+  const state = JSON.parse(JSON.stringify(first.nextCommitted))
+  appendFileSync(file, snapshot('2026-08-26T12:00:00Z', 100) + '\n')
+  const second = await collectOpenClawAgent({ sessionsDir: root, source, category: 'qa-verify',
+    window: { start: midpoint, end: END }, committed: state })
+  expect(first.usage.outputTokens).toBe(2)
+  expect(second.usage.outputTokens).toBe(98)
+  expect(second.turns).toBe(0)
+  expect(second.models).toMatchObject([{ model: 'test-model', turns: 0, usage: { outputTokens: 98 } }])
+  expect(second.taskCategories).toMatchObject([{ turns: 0, usage: { outputTokens: 98 } }])
+  expect(second.collection.healthStatus).toBe('healthy')
+  expect(state).toEqual(first.nextCommitted)
+  expect(JSON.stringify(second.nextCommitted)).not.toContain('private-message')
+  appendFileSync(file, snapshot('2026-08-27T00:00:01Z', 100) + '\n')
+  const third = await collectOpenClawAgent({ sessionsDir: root, source, category: 'qa-verify',
+    window: { start: END, end: new Date('2026-08-28T00:00:00Z') }, committed: second.nextCommitted })
+  expect(third.usage.outputTokens).toBe(0)
+})
+
+
+it('OpenClaw SQLite도 수집 구간을 넘어 도착한 동일 응답의 증가분을 보존한다', async () => {
+  const path = join(root, 'agent.sqlite')
+  const middle = new Date('2026-08-26T11:00:00Z')
+  createOpenClawDatabase(path, 'main', [{ sessionId: 'private-session', event: assistant({ id: 'stream', usage: { input: 10, output: 2 } }) }])
+  const options = { sessionsDir: path, source: 'openclaw' as const, category: 'qa-verify' as const, openclawAgent: 'main' }
+  const first = await collectOpenClawAgent({ ...options, window: { start: START, end: middle }, committed: committed() })
+  const database = new DatabaseSync(path)
+  database.prepare('INSERT INTO transcript_events (session_id, seq, event_json, created_at) VALUES (?, ?, ?, ?)')
+    .run('private-session', 2, assistant({ id: 'stream', timestamp: '2026-08-26T12:00:00Z', usage: { input: 10, output: 100 } }), '2026-08-26T12:00:00Z')
+  database.close()
+  const second = await collectOpenClawAgent({ ...options, window: { start: middle, end: END }, committed: JSON.parse(JSON.stringify(first.nextCommitted)) })
+  expect(second.usage.outputTokens).toBe(98)
+  expect(second.turns).toBe(0)
+})

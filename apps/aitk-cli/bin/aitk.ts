@@ -318,7 +318,8 @@ Required:
 Options:
   --source <source>            openclaw|claude-code|codex|hermes (default: openclaw)
   --sessions-dir <path>        Transcript directory, OpenClaw agent root/SQLite, or Hermes SQLite
-  --project-slugs <a,b>        Allowed project directory names (required for claude-code/codex)
+  --project-slugs <a,b>        Allowed project directories (required unless Codex thread scope is set)
+  --codex-thread-source <tag>  Codex attribution tag: aitk-agent:<agent ID>
   --openclaw-agent <id>        Verify the selected internal OpenClaw agent ID
   --hermes-profile <name>      sessions.profile_name scope; use default for the root profile
   --checkpoint-dir <path>      Per-agent checkpoint directory
@@ -619,6 +620,7 @@ async function main(): Promise<void> {
           collectorVersion: VERSION,
           sessionsDir: flags['sessions-dir'],
           projectSlugs: flags['project-slugs'],
+          codexThreadSource: flags['codex-thread-source'],
           openclawAgent: flags['openclaw-agent'],
           hermesProfile: flags['hermes-profile'],
           checkpointDir: flags['checkpoint-dir'],
@@ -635,6 +637,7 @@ async function main(): Promise<void> {
           source: flags['source'],
           sessionsDir: flags['sessions-dir'],
           projectSlugs: flags['project-slugs'],
+          codexThreadSource: flags['codex-thread-source'],
           openclawAgent: flags['openclaw-agent'],
           hermesProfile: flags['hermes-profile'],
           checkpointDir: flags['checkpoint-dir'],
