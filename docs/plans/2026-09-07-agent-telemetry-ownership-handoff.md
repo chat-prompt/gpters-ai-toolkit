@@ -118,8 +118,12 @@ LaunchAgents             → 없음
 | 9/7 22:57 | **#116 새 흐름으로 등록** — `aitk_agent_credentials` `bbojjak`(소유자 하영, 12/7 만료, deploy 불허), 수집기 `claude-code`, launchd 1시간(`org.gpters.aitk.agent-telemetry.bbojjak-claude-code.plist`), `credentialStore: file`(의도된 구성) |
 | 9/8 | 저장소 빌드 `0.7.13-collector.1` → `.2`. **Codex 수집기 추가**(`source=codex`) — 공용 `~/.codex` 기록 631건 중 뽀짝이 것만 고르려고 `--thread-source aitk-agent:bbojjak` 표시를 붙이는 전용 실행기 `~/.openclaw/workspace-bbojjak/.aitk-codex/run`을 두고 AGENTS.md 맨 앞에 호출 지침. 서버 대조 healthy, AX에 'Codex 자동 / 정상' |
 
-미니 쪽 실측(뽀짝이, 9/8): `aitk whoami → Authenticated agent: bbojjak`, `agent status` org `f31f5a73…`,
-`agent-telemetry status --agent bbojjak --source claude-code` installed·scheduleLoaded true.
+미니 쪽 실측(뽀짝이, 9/8 17:32 재확인 — 하영님이 내부를 직접 손본 뒤): CLI `0.7.13-collector.3`,
+`aitk whoami → bbojjak`(deploy 불허), `agent status` org `f31f5a73…` · `credentialStore: file`,
+`agent-telemetry doctor` `claude-code`·`codex` 둘 다 ok/healthy/scheduleLoaded, warnings 0, LaunchAgents 2개.
+AGENTS.md 맨 앞 「Codex 사용량 귀속 (AITK)」 절과 `.aitk-codex/run` 실행기 그대로. 뽀짝이가 마지막 확인(14:04) 대비
+달라졌다고 짚은 것은 CLI `collector.2 → .3`과 codex LaunchAgent 추가 둘뿐, 스스로 바꾼 건 없음.
+AGENTS.md 권한 표에는 하영님이 9/7 타타 확정으로 전체 관리자로 들어가 있다(뽀짝이 9/7 "관리자 아님" 답은 그 이전 기준).
 
 **§2의 "진저님 소유" 결정은 실행되지 않았다.** #116 구조에서 소유자는 발급·해지 권한일 뿐이고 활동은
 `bbojjak` 이름으로 집계되므로 지표엔 영향이 없다. 바꾸려면 하영님이 `aitk agent revoke` 후 진저님 머신에서
@@ -128,7 +132,10 @@ LaunchAgents             → 없음
 뽀짝이가 짚은 남은 수집 공백: 수집 경계를 넘는 도구 결과 연결 · 작업 ID 연결 · read-guard 이벤트 ·
 실제 Slack 전달 결과(출력 생성과 발송 성공은 다르다). 도구 실패는 collector가 `tool_result.is_error`로 이미 센다.
 
-뽀케터 DM(`D0BNWKWKXTM`)의 `whoami`·`agent-telemetry status` 질문은 답을 못 받았다.
+뽀케터(9/8 17:32 답, DM `D0BNWKWKXTM`): aitk `0.7.8`, **인증 계정 `hayoung.choi@gpters.org`** — §1의 신원 상속 그대로다.
+`bbokeoter/hermes` 수집기 installed·scheduleLoaded true(마지막 성공 시각은 status 출력에 없음). `aitk agent status`는 명령 자체가 없어
+에이전트 전용 인증 없음. 즉 뽀케터는 아직 #116 흐름 이전 상태이며, 지인님 머신에서 CLI 업그레이드 → `agent authorize`(소유자는 지인님)
+→ 옛 개인 토큰 제거가 남아 있다. 뽀케터 활동은 지금 하영 개인 이름으로 집계될 수 있으므로 그 전까지 사람 지표에서 걸러 봐야 한다.
 
 ---
 
