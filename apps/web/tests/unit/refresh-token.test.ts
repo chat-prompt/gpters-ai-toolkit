@@ -193,6 +193,37 @@ describe('Refresh Token', () => {
       expect(result.error).toContain('reuse')
     })
 
+    it('should refuse a live token whose owner account is suspended', async () => {
+      // 첫 조회는 리프레시 토큰, 두 번째 조회는 소유 계정 상태
+      const mockWhere = vi.fn()
+        .mockResolvedValueOnce([{
+          id: 'rt-1',
+          tokenHash: 'hash',
+          clientId: 'client-1',
+          userId: 'user-1',
+          accessTokenId: 'at-1',
+          scope: null,
+          familyId: 'family-1',
+          generation: 0,
+          expiresAt: new Date(Date.now() + 86400000),
+          isActive: true,
+          revokedAt: null,
+          revokeReason: null,
+          createdAt: new Date(),
+        }])
+        .mockResolvedValueOnce([{ accountStatus: 'suspended' }])
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({ where: mockWhere }),
+      } as unknown as ReturnType<typeof db.select>)
+
+      const result = await validateRefreshToken('mrt_' + 'a'.repeat(32))
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Account is suspended')
+      // 재사용 공격이 아니라 계정 상태 문제다 — 패밀리를 폐기하지 않는다
+      expect(db.update).not.toHaveBeenCalled()
+    })
+
     it('should reject expired token', async () => {
       vi.mocked(db.select).mockReturnValue({
         from: vi.fn().mockReturnValue({

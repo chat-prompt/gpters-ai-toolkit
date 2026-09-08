@@ -190,6 +190,7 @@ export async function validateAccessToken(
         expiresAt: oauthAccessTokens.expiresAt,
         userEmail: users.email,
         userRole: users.role,
+        userStatus: users.accountStatus,
         clientName: oauthClients.name,
       })
       .from(oauthAccessTokens)
@@ -200,6 +201,15 @@ export async function validateAccessToken(
     if (!tokenRecord) {
       log.warn('Access token validation failed: token not found')
       return { valid: false, error: 'Invalid token' }
+    }
+
+    // 정지된 계정은 토큰이 살아 있어도 거부한다. 오프보딩(조직 멤버 제거)은 토큰까지 끄지만,
+    // 그 경로를 안 탄 정지(관리자 수동 처리 등)에서도 "정지"가 API 앞에서 뜻을 가져야 한다.
+    if (tokenRecord.userStatus === 'suspended') {
+      log.warn('Access token validation failed: account is suspended', {
+        accessTokenId: tokenRecord.id,
+      })
+      return { valid: false, error: 'Account is suspended' }
     }
 
     if (!(await isAllowedAccountEmail(tokenRecord.userEmail))) {
@@ -476,6 +486,17 @@ export async function validateRefreshToken(
     if (record.expiresAt < new Date()) {
       log.warn('Refresh token expired', { refreshTokenId: record.id })
       return { valid: false, error: 'Refresh token expired' }
+    }
+
+    // 정지된 계정에는 새 access 토큰을 내주지 않는다. 재사용 공격이 아니라 계정 상태 문제이므로
+    // 패밀리는 폐기하지 않는다 — 계정이 복구되면 그대로 이어 쓸 수 있어야 한다.
+    const [owner] = await db
+      .select({ accountStatus: users.accountStatus })
+      .from(users)
+      .where(eq(users.id, record.userId))
+    if (owner?.accountStatus === 'suspended') {
+      log.warn('Refresh token rejected: account is suspended', { refreshTokenId: record.id })
+      return { valid: false, error: 'Account is suspended' }
     }
 
     return {
