@@ -1,6 +1,6 @@
 # 에이전트 텔레메트리 소유권과 뽀짝이 등록 — 인수인계 (2026-09-07 저녁)
 
-**한 줄**: 뽀짝이를 AX 텔레메트리에 붙이려다 **미니의 aitk가 퇴사자 계정으로 조용히 동작 중**인 것을
+**한 줄**: 뽀짝이를 AX 텔레메트리에 붙이려다 **미니의 aitk가 다른 사람(파트타임 직원)의 개인 계정으로 조용히 동작 중**인 것을
 발견했다. 등록은 아직 안 했고, 진저님 계정으로 붙이기로 정해졌다. 이 문서만 읽고 이어받을 수 있다.
 
 같이 읽을 것: `2026-09-07-agent-ops-context-handoff.md`(§7이 이번 교차검증 결과) ·
@@ -28,7 +28,7 @@
 ### 실측된 피해 (뽀짝이 미니)
 
 ```
-aitk whoami → dahye@gpters.org (송다혜, 퇴사자)
+aitk whoami → dahye@gpters.org (송다혜 — 파트타임 재직 중. 9/7엔 퇴사자로 오인했다)
 skill_events: 8/19~9/6 사이 143건이 이 계정으로 기록됨 (9/1 54건, 9/3 32건)
 그 사람의 마지막 로그인: 8/11
 ```
@@ -84,7 +84,7 @@ skill_events: 8/19~9/6 사이 143건이 이 계정으로 기록됨 (9/1 54건, 9
 
 ```
 which aitk               → /opt/homebrew/bin/aitk  (있음)
-aitk whoami              → dahye@gpters.org  (퇴사자, ⚠️)
+aitk whoami              → dahye@gpters.org  (봇 것이 아닌 개인 계정, ⚠️)
 aitk agent-telemetry     → Unknown command  (CLI가 옛 버전, upgrade 필요)
 LaunchAgents             → 없음
 ```
@@ -128,7 +128,9 @@ LaunchAgents             → 없음
 
 ### 운영 DB 변경 (사용자 승인 후 실행)
 
-퇴사자 계정 2건을 `suspended`로 바꿨다.
+퇴사자로 본 계정 2건을 `suspended`로 바꿨다. **9/8 정정: 송다혜님은 파트타임으로 재직 중이라 `active`로
+복구했다**(`deactivated_at`·사유 null). 실제 정지 대상은 김소연 1건이다. 미니가 송다혜님 개인 토큰을
+물려받았던 문제 자체는 재직 여부와 무관하게 맞다 — 봇은 개인 계정으로 돌면 안 된다.
 
 ```
 dahye@gpters.org  (송다혜)  active → suspended   deactivated_at=2026-09-07 17:53 KST
