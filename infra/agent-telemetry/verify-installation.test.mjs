@@ -70,3 +70,18 @@ test('accepts the real CLI stderr version convention without treating stderr as 
   assert.equal(result.status, 0, result.stderr)
   assert.equal(JSON.parse(result.stdout).localVerified, true)
 })
+
+test('ignores Node warnings around the version line and rejects ambiguous versions', t => {
+  for (const ambiguous of [false, true]) {
+    const f = fixture(t)
+    f.doctor.checks.scheduledNodePath = process.execPath
+    writeFileSync(f.options.cli, `console.error('(node:123) [MODULE_TYPELESS_PACKAGE_JSON] Warning: module type is not specified.');
+      if (process.argv[2] === '--version') { console.error('aitk v0.7.13'); ${ambiguous ? "console.log('aitk v0.7.12');" : ''} }
+      else console.log(${JSON.stringify(JSON.stringify(f.doctor))});
+      console.error('(Use node --trace-warnings to show where the warning was created)');`)
+    const result = spawnSync(process.execPath, ['infra/agent-telemetry/verify-installation.mjs', '--cli', f.options.cli, '--node', process.execPath,
+      '--agent', f.options.agent, '--source', 'codex', '--revision', sha, '--output', f.options.output], { encoding: 'utf8' })
+    assert.equal(result.status, ambiguous ? 1 : 0, result.stderr)
+    if (!ambiguous) assert.equal(JSON.parse(result.stdout).localVerified, true)
+  }
+})
