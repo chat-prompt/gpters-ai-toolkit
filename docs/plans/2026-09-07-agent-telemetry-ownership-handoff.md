@@ -132,6 +132,12 @@ LaunchAgents             → 없음
 복구했다**(`deactivated_at`·사유 null). 실제 정지 대상은 김소연 1건이다. 미니가 송다혜님 개인 토큰을
 물려받았던 문제 자체는 재직 여부와 무관하게 맞다 — 봇은 개인 계정으로 돌면 안 된다.
 
+**9/8 오프보딩 완료 (DEV-4347)**: 김소연 + 5월 이전 마지막 로그인 6명 + 홍지연 옛 계정(`chloe@`) = 8명.
+admin 화면의 멤버 제거는 하영님이 GPTers 조직 안에서 `org_viewer`라 안 먹었다(라우트는 org_admin/super_admin
+요구, 둘 다 진우님뿐). 라우트와 같은 5개 쓰기를 한 트랜잭션으로 하는 스크립트를 하영님이 직접 실행했다 —
+소속 offboarded 8 · 계정 suspended 8 · access 토큰 45 비활성 · refresh 2 폐기 · 인가 코드 4 삭제.
+복구는 admin 화면에서 같은 이메일로 멤버 재추가(POST 라우트가 소속·계정을 되살린다). 토큰은 재로그인.
+
 ```
 dahye@gpters.org  (송다혜)  active → suspended   deactivated_at=2026-09-07 17:53 KST
 soyeon@gpters.org (김소연)  active → suspended   deactivated_at=2026-09-07 17:53 KST
