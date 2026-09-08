@@ -475,8 +475,8 @@ export interface AccountAuditParams {
   dormant: Array<{
     name: string | null
     email: string
-    lastLoginAt: string | null
-    daysSinceLogin: number | null
+    lastActivityAt: string | null
+    daysSinceActivity: number | null
     liveAccessTokens: number
     activeCollectors: number
     ownedItems: number
@@ -543,9 +543,9 @@ export async function notifySlackAccountAudit(params: AccountAuditParams): Promi
     if (params.dormant.length > 0) {
       const shown = params.dormant.slice(0, AUDIT_DORMANT_LIMIT)
       const lines = shown.map((row) => {
-        const since = row.daysSinceLogin === null
-          ? '로그인 기록 없음'
-          : `마지막 로그인 ${auditDate(row.lastLoginAt)} (${row.daysSinceLogin}일 전)`
+        const since = row.daysSinceActivity === null
+          ? '활동 기록 없음'
+          : `마지막 활동 ${auditDate(row.lastActivityAt)} (${row.daysSinceActivity}일 전)`
         const holds = [
           row.liveAccessTokens > 0 ? `토큰 ${row.liveAccessTokens}` : null,
           row.activeCollectors > 0 ? `수집기 ${row.activeCollectors}` : null,
@@ -558,7 +558,7 @@ export async function notifySlackAccountAudit(params: AccountAuditParams): Promi
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*휴면 ${params.dormant.length}명* — ${params.dormantDays}일 넘게 로그인이 없는 활성 계정. 퇴사면 조직 멤버 제거\n${lines.join('\n')}${more}`,
+          text: `*휴면 ${params.dormant.length}명* — ${params.dormantDays}일 넘게 로그인도 스킬 활동도 없는 활성 계정. 퇴사면 조직 멤버 제거\n${lines.join('\n')}${more}`,
         },
       })
     }

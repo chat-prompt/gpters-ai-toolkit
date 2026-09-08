@@ -52,7 +52,7 @@ describe('buildAccountAuditReport', () => {
     )
     expect(report.dormant.map((row) => row.email)).toEqual(['older@gpters.org', 'old@gpters.org'])
     expect(report.dormant[1].ownedItems).toBe(9)
-    expect(report.dormant[1].daysSinceLogin).toBe(236)
+    expect(report.dormant[1].daysSinceActivity).toBe(236)
   })
 
   it('로그인 기록이 없는 계정은 "기록 없음"으로 맨 앞에 두고 일수를 만들지 않는다', () => {
@@ -61,8 +61,25 @@ describe('buildAccountAuditReport', () => {
       { now: NOW }
     )
     expect(report.dormant).toHaveLength(1)
-    expect(report.dormant[0].lastLoginAt).toBeNull()
-    expect(report.dormant[0].daysSinceLogin).toBeNull()
+    expect(report.dormant[0].lastActivityAt).toBeNull()
+    expect(report.dormant[0].daysSinceActivity).toBeNull()
+  })
+
+  it('웹 로그인은 오래됐어도 최근 스킬 이벤트가 있으면 휴면이 아니다 — CLI로만 쓰는 사람', () => {
+    // 첫 운영 실행에서 실제로 잡혔던 오탐: 로그인 6/1, 스킬 이벤트 당일
+    const report = buildAccountAuditReport(
+      [account({ email: 'cli@gpters.org', lastLoginAt: new Date('2026-06-01T00:00:00Z'), lastEventAt: new Date('2026-09-08T00:00:00Z') })],
+      { now: NOW, dormantDays: 90 }
+    )
+    expect(report.dormant).toEqual([])
+  })
+
+  it('스킬 이벤트가 로그인보다 오래됐으면 로그인을 마지막 활동으로 본다', () => {
+    const report = buildAccountAuditReport(
+      [account({ email: 'x@gpters.org', lastLoginAt: new Date('2026-01-01T00:00:00Z'), lastEventAt: new Date('2025-12-01T00:00:00Z') })],
+      { now: NOW, dormantDays: 90 }
+    )
+    expect(report.dormant[0].lastActivityAt).toBe('2026-01-01T00:00:00.000Z')
   })
 
   it('정지된 계정은 휴면 목록에 넣지 않는다 — 이미 처리된 사람이다', () => {
