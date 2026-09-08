@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { readConfig } from './config.js'
+import { readAgentConfig, readAgentToken } from './agent-auth.js'
 
 /**
  * Claude Code MCP OAuth 자격증명에서 gpters-ai-toolkit 토큰 탐색
@@ -43,6 +44,7 @@ export function findClaudeCredentialToken(): string | undefined {
  * @returns 토큰 문자열 또는 undefined
  */
 export function resolveToken(): string | undefined {
+  if (readAgentConfig()) return readAgentToken()
   // 1. 환경변수
   const envToken = process.env.GPTERS_TOKEN
   if (envToken && envToken.length > 0) return envToken

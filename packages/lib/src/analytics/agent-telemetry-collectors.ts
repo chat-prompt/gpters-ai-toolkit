@@ -1,3 +1,4 @@
+import { claimAgentOwnership } from '../security/agent-ownership'
 /** 설치형 agent telemetry collector의 등록·인증·freshness 기록. */
 
 import { createHash, randomBytes } from 'node:crypto'
@@ -66,6 +67,10 @@ export async function enrollAgentTelemetryCollector(
   }
   if (byScope && (byScope.collectorId !== input.collectorId || byScope.userId !== input.userId)) {
     throw new AgentTelemetryCollectorConflictError()
+  }
+
+  try { await claimAgentOwnership(input.agentId, input.userId) } catch {
+    throw new AgentTelemetryCollectorConflictError('Agent identity belongs to another owner or ownership could not be verified')
   }
 
   const rawToken = collectorToken()

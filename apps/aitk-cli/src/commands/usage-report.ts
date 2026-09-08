@@ -1,3 +1,4 @@
+import { readAgentConfig } from '../agent-auth.js'
 /**
  * usage report 명령어 - 로컬 사용량을 집계해 서버로 보고
  */
@@ -39,6 +40,10 @@ export interface UsageReportOptions {
  * @param opts - 집계 옵션
  */
 export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
+  if (readAgentConfig()) {
+    info('Personal usage reporting is disabled in agent mode; use agent-telemetry')
+    return
+  }
   if (!Number.isFinite(opts.days) || opts.days < 1 || opts.days > MAX_DAYS) {
     error(`--days must be between 1 and ${MAX_DAYS}`)
   }

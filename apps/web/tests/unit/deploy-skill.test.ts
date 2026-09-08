@@ -165,6 +165,29 @@ function createMockChain(result: unknown[] = []) {
 describe('deploySkill — author check removed (EDU-7987 D1)', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('denies an agent updating another owner asset even in the same organization', async () => {
+    vi.mocked(db.select).mockReturnValue(createMockChain([
+      { id: 'sample-skill', content: 'old', version: '1.0.0', authorId: 'other-owner', orgId: 'org-1' },
+    ]) as never)
+    const result = await deploySkill({ id: 'sample-skill', type: 'skill', name: 'Sample', content: 'new' }, 'agent-owner', 'viewer', 'org-1', true)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('limited to assets owned by its owner')
+    expect(db.update).not.toHaveBeenCalled()
+  })
+
+  it('fails an agent ownership race before snapshots or deployment side effects', async () => {
+    vi.mocked(db.select).mockReturnValue(createMockChain([
+      { id: 'sample-skill', content: 'old', version: '1.0.0', authorId: 'agent-owner', orgId: 'org-1' },
+    ]) as never)
+    const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([]) }
+    vi.mocked(db.update).mockReturnValue(updateChain as never)
+    const result = await deploySkill({ id: 'sample-skill', type: 'skill', name: 'Sample', content: 'new', changelog: 'Update' }, 'agent-owner', 'viewer', 'org-1', true)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ownership changed')
+    expect(db.select).toHaveBeenCalledTimes(1)
+    expect(db.insert).not.toHaveBeenCalled()
+  })
+
   it('lets a non-author org member update an existing skill', async () => {
     // Existing skill owned by 'original-author' in org-1
     const mockSelectChain = createMockChain([

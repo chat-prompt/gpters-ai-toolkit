@@ -10,6 +10,7 @@ import { info, error } from '../output.js'
 interface WhoamiResponse {
   /** 성공 여부 */
   success: boolean
+  actor?: { type: string; id: string; allowDeploy: boolean }
   /** 사용자 정보 */
   user?: {
     /** 사용자 ID */
@@ -42,6 +43,11 @@ export async function runWhoami(): Promise<void> {
   }
 
   const data = result.data
+  if (data?.success && data.actor?.type === 'agent') {
+    info(`Authenticated agent: ${data.actor.id}`)
+    info(`Deploy permission: ${data.actor.allowDeploy ? 'enabled' : 'disabled'}`)
+    return
+  }
   if (!data?.success || !data.user) {
     error(data?.error ?? 'Failed to get user info')
   }

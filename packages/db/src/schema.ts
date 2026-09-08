@@ -1522,3 +1522,33 @@ export const axCatalogHealthSnapshots = pgTable('ax_catalog_health_snapshots', {
 
 export type AxCatalogHealthSnapshotRecord = typeof axCatalogHealthSnapshots.$inferSelect
 export type NewAxCatalogHealthSnapshotRecord = typeof axCatalogHealthSnapshots.$inferInsert
+
+/** AITK agent principals: a human owns the credential, but is never the activity actor. */
+export const aitkAgentOwners = pgTable('aitk_agent_owners', {
+  agentId: text('agent_id').primaryKey(),
+  ownerUserId: text('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+})
+
+export const aitkAgentCredentials = pgTable('aitk_agent_credentials', {
+  agentId: text('agent_id').primaryKey(),
+  ownerUserId: text('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  allowDeploy: boolean('allow_deploy').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Agent-only request receipts; deliberately separate from human skill/session/usage events. */
+export const aitkAgentEvents = pgTable('aitk_agent_events', {
+  requestId: text('request_id').notNull(),
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agentId: text('agent_id').notNull(),
+  tool: text('tool').notNull(),
+  skillId: text('skill_id'),
+  status: text('status').notNull(),
+  details: jsonb('details').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index('aitk_agent_events_agent_created_idx').on(table.agentId, table.createdAt)])

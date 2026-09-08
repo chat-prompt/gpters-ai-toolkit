@@ -1,5 +1,6 @@
 /** 설치형 agent telemetry collector의 로컬 설정·Keychain·launchd 수명주기. */
 
+import { parseCredentialStore, readLocalCredential, storeLocalCredential, deleteLocalCredential, type CredentialStore } from '../credential-store.js'
 import { randomUUID } from 'node:crypto'
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import {
@@ -38,7 +39,7 @@ export interface AgentTelemetryInstallation {
     collectorVersion: string
   }
   credential: {
-    provider: 'macos-keychain'
+    provider: CredentialStore
     service: string
     account: string
   }
@@ -123,7 +124,7 @@ function isInstallation(value: unknown): value is AgentTelemetryInstallation {
     item.backfillDays < 1 || item.backfillDays > 90) return false
   if (!item.cli || typeof item.cli.nodePath !== 'string' || typeof item.cli.scriptPath !== 'string' ||
     typeof item.cli.collectorVersion !== 'string') return false
-  if (!item.credential || item.credential.provider !== 'macos-keychain' ||
+  if (!item.credential || !['macos-keychain', 'file'].includes(item.credential.provider) ||
     typeof item.credential.service !== 'string' || typeof item.credential.account !== 'string') return false
   if (!item.schedule || (item.schedule.provider !== 'launchd' && item.schedule.provider !== 'none') ||
     typeof item.schedule.intervalSeconds !== 'number' || typeof item.schedule.label !== 'string' ||
@@ -262,6 +263,21 @@ export function deleteMacOSKeychainCredential(
     '-s', installation.credential.service,
   ])
   return result.status === 0
+}
+
+export function storeCollectorCredential(installation: AgentTelemetryInstallation, token: string, runner = defaultCommandRunner, home = homedir()): void {
+  if (installation.credential.provider === 'file') storeLocalCredential('collector', installation.collectorId, token, home)
+  else storeMacOSKeychainCredential(installation, token, runner)
+}
+export function readCollectorCredential(installation: AgentTelemetryInstallation, runner = defaultCommandRunner, home = homedir()): string {
+  return installation.credential.provider === 'file'
+    ? readLocalCredential('collector', installation.collectorId, home)
+    : readMacOSKeychainCredential(installation, runner)
+}
+export function deleteCollectorCredential(installation: AgentTelemetryInstallation, runner = defaultCommandRunner, home = homedir()): boolean {
+  return installation.credential.provider === 'file'
+    ? deleteLocalCredential('collector', installation.collectorId, home)
+    : deleteMacOSKeychainCredential(installation, runner)
 }
 
 function escapeXml(value: string): string {
@@ -436,6 +452,7 @@ export function createInstallation(input: {
   scriptPath: string
   collectorVersion: string
   account: string
+  credentialStore?: CredentialStore
   schedule: 'launchd' | 'none'
   home?: string
   now?: Date
@@ -472,7 +489,7 @@ export function createInstallation(input: {
     installedAtUtc: (input.now ?? new Date()).toISOString(),
     cli: { nodePath, scriptPath, collectorVersion: input.collectorVersion },
     credential: {
-      provider: 'macos-keychain',
+      provider: parseCredentialStore(input.credentialStore),
       service: keychainServiceFor(collectorId),
       account: input.account,
     },

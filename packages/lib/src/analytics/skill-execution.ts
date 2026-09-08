@@ -46,6 +46,11 @@ export async function recordSkillExecutionStart(params: {
       })
       .where(and(
         eq(axSkillExecutionAttempts.attemptId, report.attemptId),
+        params.userId ? eq(axSkillExecutionAttempts.userId, params.userId) : isNull(axSkillExecutionAttempts.userId),
+        eq(axSkillExecutionAttempts.source, report.source),
+        eq(axSkillExecutionAttempts.skillId, report.skillId),
+        eq(axSkillExecutionAttempts.agent, report.agent),
+        eq(axSkillExecutionAttempts.agentId, report.agentId),
         eq(axSkillExecutionAttempts.startObserved, false),
       ))
 
@@ -54,6 +59,7 @@ export async function recordSkillExecutionStart(params: {
       .from(axSkillExecutionAttempts)
       .where(and(
         eq(axSkillExecutionAttempts.attemptId, report.attemptId),
+        params.userId ? eq(axSkillExecutionAttempts.userId, params.userId) : isNull(axSkillExecutionAttempts.userId),
         eq(axSkillExecutionAttempts.source, report.source),
         eq(axSkillExecutionAttempts.skillId, report.skillId),
         eq(axSkillExecutionAttempts.agent, report.agent),
@@ -129,6 +135,7 @@ export async function recordSkillExecutionAttempt(params: {
         .set({ completedAt })
         .where(and(
           eq(axSkillExecutionAttempts.attemptId, report.attemptId),
+          params.userId ? eq(axSkillExecutionAttempts.userId, params.userId) : isNull(axSkillExecutionAttempts.userId),
           eq(axSkillExecutionAttempts.source, report.source),
           eq(axSkillExecutionAttempts.skillId, report.skillId),
           eq(axSkillExecutionAttempts.agent, report.agent),
@@ -159,6 +166,7 @@ export async function recordSkillExecutionAttempt(params: {
       })
       .where(and(
         eq(axSkillExecutionAttempts.attemptId, report.attemptId),
+        params.userId ? eq(axSkillExecutionAttempts.userId, params.userId) : isNull(axSkillExecutionAttempts.userId),
         eq(axSkillExecutionAttempts.source, report.source),
         eq(axSkillExecutionAttempts.skillId, report.skillId),
         eq(axSkillExecutionAttempts.agent, report.agent),

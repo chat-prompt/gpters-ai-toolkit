@@ -559,7 +559,8 @@ export async function deploySkill(
   input: DeploySkillInput,
   authorId?: string,
   userRole?: string,
-  orgId?: string
+  orgId?: string,
+  agentOwnerOnly = false
 ): Promise<DeploySkillResponse> {
   const {
     type,
@@ -611,6 +612,12 @@ export async function deploySkill(
 
   const isUpdate = existing.length > 0
   const existingItem = isUpdate ? existing[0] : null
+
+  if (agentOwnerOnly && (!authorId || !orgId || (existingItem &&
+    (existingItem.authorId !== authorId || existingItem.orgId !== orgId)))) {
+    return { success: false, id, version: existingItem?.version || '0.0.0', changelog: '',
+      status: 'published', webUrl: '', error: 'Agent deployment is limited to assets owned by its owner in the authorized organization' }
+  }
 
   // Validate required metadata for new deployments
   if (!isUpdate) {
@@ -727,7 +734,7 @@ export async function deploySkill(
 
   if (isUpdate) {
     // Update existing item - only update provided fields, preserve existing for omitted ones
-    await db
+    const update = db
       .update(catalogItems)
       .set({
         name,
@@ -748,10 +755,20 @@ export async function deploySkill(
         visibility: 'public',
         updatedAt: now,
       })
-      .where(eq(catalogItems.id, id))
+      .where(and(eq(catalogItems.id, id), ...(agentOwnerOnly
+        ? [eq(catalogItems.authorId, authorId!), eq(catalogItems.orgId, orgId!)] : [])))
 
-    // Create version snapshot for tracking updates
-    const [updatedItem] = await db
+    let agentUpdatedItem: typeof catalogItems.$inferSelect | undefined
+    if (agentOwnerOnly) {
+      ;[agentUpdatedItem] = await update.returning()
+      if (!agentUpdatedItem) return { success: false, id, version: existingItem?.version || '0.0.0', changelog: '',
+        status: 'published', webUrl: '', error: 'Agent asset ownership changed during deployment; no update was applied' }
+    } else {
+      await update
+    }
+
+    // Use the guarded UPDATE result for agent snapshots; never read a newly transferred asset by ID.
+    const [updatedItem] = agentOwnerOnly ? [agentUpdatedItem] : await db
       .select()
       .from(catalogItems)
       .where(eq(catalogItems.id, id))
@@ -1679,7 +1696,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await deploySkill(input, userId, userRole, orgId)
+        const result = await deploySkill(input, userId, userRole, orgId, clientType === 'agent')
 
         return {
           content: [
