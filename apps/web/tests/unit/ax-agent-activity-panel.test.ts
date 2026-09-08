@@ -196,8 +196,8 @@ describe('agentActivityPanel', () => {
     const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
     expect(result.data!.tools[0].name).toBe('Bash')
     expect(result.data!.efficiency.failingTools).toEqual([
-      { name: 'lsp_diagnostics', calls: 3, failures: 3, failureRate: 100 },
-      { name: 'Bash', calls: 100, failures: 2, failureRate: 2 },
+      { name: 'lsp_diagnostics', calls: 3, failures: 3, results: 3, failureRate: 100 },
+      { name: 'Bash', calls: 100, failures: 2, results: 100, failureRate: 2 },
     ])
     expect(result.data!.efficiency.failingSkills).toEqual([{ skillId: 'flaky', loaded: 1, failed: 2, interrupted: 0 }])
     expect(result.data!.efficiency.skillLoadTotals).toEqual({ loaded: 9, failed: 2, interrupted: 0 })
@@ -397,4 +397,14 @@ describe('agentActivityPanel', () => {
     vi.mocked(db.select).mockImplementationOnce(() => { throw new Error('db down') })
     expect((await agentActivityPanel.load({ days: 7, isAdmin: false })).status).toBe('error')
   })
+})
+
+
+it('uses completed outcomes as the denominator for delayed failures', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-27T00:00:00Z'))
+  queueRows([row({ tools: [{ name: 'Read', calls: 0, failures: 1, results: 2 }] })])
+  const result = await agentActivityPanel.load({ days: 7, isAdmin: false })
+  expect(result.data!.tools[0]).toMatchObject({ calls: 0, failures: 1, results: 2, failureRate: 50 })
+  expect(result.data!.agents[0].toolResults).toBe(2)
+  vi.useRealTimers()
 })

@@ -1,0 +1,4 @@
+.success { color: #34d399; }
+.failure { color: #f87171; }
+:global([data-theme='light']) .success { color: #047857; }
+:global([data-theme='light']) .failure { color: #b91c1c; }

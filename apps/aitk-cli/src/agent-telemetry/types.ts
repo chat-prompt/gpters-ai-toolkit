@@ -1,3 +1,4 @@
+import type { AgentTaskEvent } from './task-events.js'
 /** OpenClaw 에이전트 telemetry v1의 CLI 측 계약 사본 */
 
 export const AGENT_TASK_CATEGORIES = [
@@ -44,7 +45,7 @@ export interface AgentTelemetryBatch {
   sessions: number
   turns: number
   models: Array<{ model: string; turns: number; usage: AgentTokenUsage }>
-  tools: Array<{ name: string; calls: number; failures: number }>
+  tools: Array<{ name: string; calls: number; failures: number; results?: number }>
   skillLoads: Array<{ skillId: string; loaded: number; failed: number; interrupted: number }>
   taskCategories: Array<{
     category: AgentTaskCategory
@@ -58,6 +59,7 @@ export interface AgentTelemetryBatch {
     count: number
   }>
   collection: {
+    taskEvents?: AgentTaskEvent[]
     source: AgentTelemetrySource
     filesDiscovered: number
     filesExcludedByScope: number
@@ -85,6 +87,13 @@ export interface AgentTelemetryFileCheckpoint {
   dev: string
   ino: string
   offset: number
+  codexContext?: {
+    model: string
+    inScope: boolean
+    turnHash: string | null
+    rawTools: boolean
+    supportedTools: boolean
+  }
 }
 
 export interface AgentTelemetrySeenMessage {
@@ -98,6 +107,8 @@ export interface AgentTelemetryCommittedState {
   lastWindowEndUtc: string | null
   files: Record<string, AgentTelemetryFileCheckpoint>
   seenMessages: AgentTelemetrySeenMessage[]
+  taskJournal?: AgentTelemetryFileCheckpoint
+  pendingToolCalls?: Array<{ hash: string; name: string; skillId: string | null; atUtc: string }>
   /** OpenClaw 내부 agent 경계를 원문 ID 없이 고정하고 저장소 전환을 추적한다. */
   openclawSource?: {
     agentHash: string

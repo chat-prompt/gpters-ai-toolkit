@@ -2,6 +2,7 @@
 
 /** AX 대시보드 — 에이전트 활동 패널 본문 */
 
+import { AgentTaskTimeline } from './AgentTaskTimeline'
 import { useMemo, useState } from 'react'
 import type {
   AxAgentActivityAgentRow,
@@ -182,6 +183,8 @@ export function AgentActivityPanel({
         </div>
       </section>
 
+      <AgentTaskTimeline traces={data.taskTraces ?? []} agentId={activeAgentId} />
+
       <EfficiencySection scope={scope} available={data.verifiedExecutionsAvailable} />
 
       <SkillImpactSummary scope={scope} available={data.verifiedExecutionsAvailable} />
@@ -206,7 +209,7 @@ export function AgentActivityPanel({
           rows={scope.tools.map((row) => ({
             name: row.name,
             value: formatCount(row.calls),
-            hint: `실패 ${formatSampledRate(row.failures, row.calls)}`,
+            hint: `실패 ${formatSampledRate(row.failures, row.results ?? row.calls)}`,
             magnitude: row.calls,
           }))}
         />
@@ -227,7 +230,7 @@ export function AgentActivityPanel({
           rows={efficiencyOf(scope).failingTools.map((row) => ({
             name: row.name,
             value: `${formatCount(row.failures)}건`,
-            hint: `${formatSampledRate(row.failures, row.calls)} · 호출 ${formatCount(row.calls)}`,
+            hint: `${formatSampledRate(row.failures, row.results ?? row.calls)} · 호출 ${formatCount(row.calls)}`,
             magnitude: row.failures,
           }))}
         />
@@ -359,11 +362,11 @@ function EfficiencySection({ scope, available }: { scope: ActivityScope; availab
         />
         <Metric
           label="도구 실패율"
-          value={formatSampledRate(scope.toolFailures, scope.toolCalls)}
-          hint={scope.toolCalls > 0
-            ? `실패 ${formatCount(scope.toolFailures)} / 호출 ${formatCount(scope.toolCalls)}`
-            : '도구 호출 미관측'}
-          explanation="런타임이 실패로 기록한 도구 결과의 비율입니다. Hermes의 실패 판정은 아직 실제 실패 사례로 검증되지 않아 0이 실제 0건이 아닐 수 있습니다."
+          value={formatSampledRate(scope.toolFailures, scope.toolResults ?? scope.toolCalls)}
+          hint={(scope.toolResults ?? scope.toolCalls) > 0
+            ? `실패 ${formatCount(scope.toolFailures)} / 결과 ${formatCount(scope.toolResults ?? scope.toolCalls)}`
+            : '도구 결과 미관측'}
+          explanation="관측된 도구 결과 중 실패 비율입니다. 구형 수집기는 호출 수를 분모로 사용합니다. Hermes의 실패 판정은 아직 실제 실패 사례로 검증되지 않아 0이 실제 0건이 아닐 수 있습니다."
         />
         <Metric
           label="스킬 로드 실패율"
@@ -438,7 +441,7 @@ function AgentEfficiencyTable({
                     {cell(formatTokensPerSuccess(agent.totalProcessedTokens, successes, efficiency.tokensPerVerifiedSuccess))}
                   </td>
                   <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>
-                    {formatSampledRate(agent.toolFailures, agent.toolCalls)}
+                    {formatSampledRate(agent.toolFailures, agent.toolResults ?? agent.toolCalls)}
                   </td>
                 </tr>
               )
@@ -714,11 +717,11 @@ function AgentNotices({ reporters, scope }: { reporters: AxAgentReporterRow[]; s
     if (blocked.length > 0) rows.push({ title: '수집 차단', detail: `${blocked.length}개 소스가 수집기 경고로 차단됐습니다.`, warning: true })
     if (stale.length > 0) rows.push({ title: '수집 지연', detail: `${stale.length}개 소스가 예정된 두 번의 주기 안에 보고하지 않았습니다.`, warning: true })
     if (waiting.length > 0) rows.push({ title: '첫 수집 대기', detail: `${waiting.length}개 소스가 설치됐지만 아직 첫 배치를 보내지 않았습니다.`, warning: false })
-    if (scope.toolCalls >= 10 && scope.toolFailures / scope.toolCalls >= 0.05) {
-      rows.push({ title: `도구 실패 ${formatSampledRate(scope.toolFailures, scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
+    if ((scope.toolResults ?? scope.toolCalls) >= 10 && scope.toolFailures / (scope.toolResults ?? scope.toolCalls) >= 0.05) {
+      rows.push({ title: `도구 실패 ${formatSampledRate(scope.toolFailures, scope.toolResults ?? scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
     }
     return rows
-  }, [reporters, scope.toolCalls, scope.toolFailures])
+  }, [reporters, scope.toolCalls, scope.toolFailures, scope.toolResults])
   if (notices.length === 0) return null
   return (
     <section>
@@ -791,7 +794,7 @@ function ReporterSection({
                 </td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(row.turns)}</td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-primary)]`}>{formatTokens(processedTokens(row.usage))}</td>
-                <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatSampledRate(row.toolFailures, row.toolCalls)}</td>
+                <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatSampledRate(row.toolFailures, row.toolResults ?? row.toolCalls)}</td>
               </tr>
             ))}
           </tbody>

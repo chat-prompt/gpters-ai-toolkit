@@ -182,9 +182,11 @@ Keep host paths, owner identities, grant contents and raw logs private.
   Codex home isolation, profile name, execution wrapper or auth model.
 - Unknown model names, missing skill signals and absent delivery evidence remain
   unknown; do not turn them into zero failures or verified skill successes.
-- Codex currently does not restore the previous model at every checkpoint offset;
-  some incremental tokens are stored under `unknown-model`. Token collection and
-  complete per-model attribution are separate checks.
+- Collector 0.7.14 restores Codex model, turn and cwd-scope context across offsets.
+  Legacy offsets replay metadata once without recounting tokens. Already stored
+  unknown-model history is not rewritten.
+- Follow [task tracing](TASK_TRACING.md) to instrument individual jobs. Installing
+  a collector alone does not attach task context to gateway tool processes.
 
 Run the protocol verifier tests without a server or production data:
 

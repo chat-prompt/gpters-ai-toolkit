@@ -180,7 +180,7 @@ describe('AgentActivityPanel', () => {
     expect(screen.getByText('3 / 3건')).toBeTruthy()
     // 도구 실패율은 호출 15건 ≥ 10이라 백분율.
     expect(screen.getByText('0.0%', { selector: 'p' })).toBeTruthy()
-    expect(screen.getByText('실패 0 / 호출 15')).toBeTruthy()
+    expect(screen.getByText('실패 0 / 결과 15')).toBeTruthy()
     // 실패가 많은 도구는 호출 상위 목록에 없는 소수 호출 도구도 올린다.
     expect(screen.getByText('lsp_diagnostics')).toBeTruthy()
     expect(screen.getByText('3/3 · 참고 · 호출 3')).toBeTruthy()

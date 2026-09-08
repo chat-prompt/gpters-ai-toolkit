@@ -1,3 +1,4 @@
+import type { AxAgentTaskTrace } from './agent-task-events'
 /**
  * AX Dashboard — 공용 타입
  *
@@ -816,6 +817,7 @@ export interface AxAgentReporterRow {
   turns: number
   usage: AxAgentTokenUsage
   toolCalls: number
+  toolResults?: number
   toolFailures: number
   healthWarnings: string[]
   /**
@@ -864,8 +866,10 @@ export interface AxAgentVerifiedExecutions {
   verifiedSuccesses: number
 }
 
-/** 도구 하나의 호출·실패 집계. failureRate는 화면 표시용 백분율이며 분모 신뢰도는 calls로 판단한다. */
+/** 도구 하나의 호출·실패 집계. failureRate는 결과 수를 분모로 하는 백분율이며 구형 데이터는 calls를 사용한다. */
 export interface AxAgentToolRow {
+  /** Completed outcomes; legacy collectors fall back to calls. */
+  results?: number
   name: string
   calls: number
   failures: number
@@ -910,6 +914,7 @@ export interface AxAgentActivityAgentRow {
   sessions: number
   turns: number
   toolCalls: number
+  toolResults?: number
   toolFailures: number
   models: Array<{ model: string; turns: number; usage: AxAgentTokenUsage; processedTokens: number }>
   tools: AxAgentToolRow[]
@@ -931,6 +936,7 @@ export interface AxAgentActivityAgentRow {
 
 /** 에이전트 활동 패널 — 원문·세션 ID·경로 없이 집계값만 담는다. */
 export interface AxAgentActivityData {
+  taskTraces?: AxAgentTaskTrace[]
   syncedAt: string
   windowStart: string
   windowEnd: string
@@ -940,6 +946,7 @@ export interface AxAgentActivityData {
   sessions: number
   turns: number
   toolCalls: number
+  toolResults?: number
   toolFailures: number
   /** 화면에서 전체 합계와 에이전트별 상세를 같은 계약으로 전환하기 위한 집계. */
   agents: AxAgentActivityAgentRow[]

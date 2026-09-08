@@ -1,3 +1,4 @@
+import { buildAgentTaskTraces } from './agent-task-events'
 /** AX Dashboard — 에이전트 활동·수집 건강도 패널 */
 
 import { axAgentTelemetryBatches, axAgentTelemetryCollectors, axSkillExecutionAttempts, db } from '@gpters/db'
@@ -167,7 +168,7 @@ interface AgentAccumulator {
   toolCalls: number
   toolFailures: number
   models: Map<string, { turns: number; usage: AxAgentTokenUsage }>
-  tools: Map<string, { calls: number; failures: number }>
+  tools: Map<string, { calls: number; failures: number; results: number }>
   skills: Map<string, { loaded: number; failed: number; interrupted: number }>
   skillLoadsObserved: boolean
   observedExecutions: Map<string, { status: string; evidence: string; count: number }>
@@ -196,13 +197,13 @@ function emptyVerifiedExecutions(): AxAgentVerifiedExecutions {
 }
 
 /** 도구 목록을 실패 건수 순으로 — 호출 상위 20개에서 잘리는 소수 호출·전량 실패 도구가 빠지지 않는다. */
-function rankFailingTools(tools: Map<string, { calls: number; failures: number }>): AxAgentToolRow[] {
+function rankFailingTools(tools: Map<string, { calls: number; failures: number; results: number }>): AxAgentToolRow[] {
   return [...tools.entries()]
     .filter(([, metric]) => metric.failures > 0)
     .map(([name, metric]) => ({
       name,
       ...metric,
-      failureRate: metric.calls > 0 ? Math.round((metric.failures / metric.calls) * 1000) / 10 : 0,
+      failureRate: metric.results > 0 ? Math.round((metric.failures / metric.results) * 1000) / 10 : 0,
     }))
     .sort((a, b) => b.failures - a.failures || b.failureRate - a.failureRate || a.name.localeCompare(b.name))
     .slice(0, 12)
@@ -263,6 +264,7 @@ function finalizeAgent(accumulator: AgentAccumulator): AxAgentActivityAgentRow {
     sessions: accumulator.sessions,
     turns: accumulator.turns,
     toolCalls: accumulator.toolCalls,
+    toolResults: [...accumulator.tools.values()].reduce((sum, row) => sum + row.results, 0),
     toolFailures: accumulator.toolFailures,
     models: [...accumulator.models.entries()].map(([model, metric]) => ({
       model,
@@ -273,7 +275,7 @@ function finalizeAgent(accumulator: AgentAccumulator): AxAgentActivityAgentRow {
     tools: [...accumulator.tools.entries()].map(([name, metric]) => ({
       name,
       ...metric,
-      failureRate: metric.calls > 0 ? Math.round((metric.failures / metric.calls) * 1000) / 10 : 0,
+      failureRate: metric.results > 0 ? Math.round((metric.failures / metric.results) * 1000) / 10 : 0,
     })).sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name)).slice(0, 20),
     skills: [...accumulator.skills.entries()].map(([skillId, metric]) => ({ skillId, ...metric }))
       .sort((a, b) => b.loaded - a.loaded || a.skillId.localeCompare(b.skillId)).slice(0, 20),
@@ -430,7 +432,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const totalUsage = emptyUsage()
     const reporterMap = new Map<string, AxAgentReporterRow>()
     const modelMap = new Map<string, { turns: number; usage: AxAgentTokenUsage }>()
-    const toolMap = new Map<string, { calls: number; failures: number }>()
+    const toolMap = new Map<string, { calls: number; failures: number; results: number }>()
     const skillMap = new Map<string, { loaded: number; failed: number; interrupted: number }>()
     const observedExecutionMap = new Map<string, { status: string; evidence: string; count: number }>()
     const agentMap = new Map<string, AgentAccumulator>()
@@ -544,18 +546,21 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
         if (!raw || typeof raw !== 'object') continue
         const item = raw as Record<string, unknown>
         if (typeof item.name !== 'string') continue
-        const metric = toolMap.get(item.name) ?? { calls: 0, failures: 0 }
+        const metric = toolMap.get(item.name) ?? { calls: 0, failures: 0, results: 0 }
         const calls = number(item.calls)
         const failures = number(item.failures)
+        metric.results += number(item.results ?? item.calls)
         metric.calls += calls
         metric.failures += failures
         toolMap.set(item.name, metric)
-        const agentMetric = agent.tools.get(item.name) ?? { calls: 0, failures: 0 }
+        const agentMetric = agent.tools.get(item.name) ?? { calls: 0, failures: 0, results: 0 }
+        agentMetric.results += number(item.results ?? item.calls)
         agentMetric.calls += calls
         agentMetric.failures += failures
         agent.tools.set(item.name, agentMetric)
         agent.toolCalls += calls
         agent.toolFailures += failures
+        reporter.toolResults = (reporter.toolResults ?? 0) + number(item.results ?? item.calls)
         reporter.toolCalls += calls
         reporter.toolFailures += failures
       }
@@ -690,7 +695,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const tools = [...toolMap.entries()].map(([name, metric]) => ({
       name,
       ...metric,
-      failureRate: metric.calls > 0 ? Math.round((metric.failures / metric.calls) * 1000) / 10 : 0,
+      failureRate: metric.results > 0 ? Math.round((metric.failures / metric.results) * 1000) / 10 : 0,
     })).sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name)).slice(0, 20)
     const models = [...modelMap.entries()].map(([model, metric]) => ({
       model,
@@ -822,9 +827,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       windowEnd: new Date(rows.length > 0 ? windowEnd : now).toISOString(),
       totalUsage,
       totalProcessedTokens: total,
+      taskTraces: buildAgentTaskTraces(candidateRows, cutoff, new Date(now)),
       sessions,
       turns,
       toolCalls,
+      toolResults: [...toolMap.values()].reduce((sum, row) => sum + row.results, 0),
       toolFailures,
       agents,
       reporters,

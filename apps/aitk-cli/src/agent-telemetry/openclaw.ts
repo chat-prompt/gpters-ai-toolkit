@@ -74,6 +74,7 @@ interface MutableMetric {
 interface ToolCallMetric {
   name: string
   skillId: string | null
+  atUtc: string
 }
 
 interface MessageUsageMetric {
@@ -495,7 +496,7 @@ async function sessionHeader(filePath: string, fallback: string): Promise<string
 async function scanCompleteLines(
   filePath: string,
   offset: number,
-  onLine: (line: string) => void
+  onLine: (line: string) => void | boolean
 ): Promise<number> {
   const stream = createReadStream(filePath, { start: offset })
   let carry = Buffer.alloc(0)
@@ -508,7 +509,7 @@ async function scanCompleteLines(
     for (let index = 0; index < buffer.length; index++) {
       if (buffer[index] !== 0x0a) continue
       const line = buffer.subarray(start, index).toString('utf8').replace(/\r$/, '')
-      if (line.length > 0) onLine(line)
+      if (line.length > 0 && onLine(line) === false) return offset + bytesRead - buffer.length + start
       start = index + 1
     }
     carry = buffer.subarray(start)
@@ -516,25 +517,17 @@ async function scanCompleteLines(
   return offset + bytesRead - carry.length
 }
 
-function resultInfo(entry: OpenClawEntry): { id: string | null; failed: boolean } | null {
+function resultInfo(entry: OpenClawEntry): Array<{ id: string | null; failed: boolean }> {
   const message = entry.message
-  if (!message) return null
+  if (!message) return []
   const role = String(message.role ?? '')
   if (role === 'toolResult' || role === 'tool_result') {
     const id = message.toolCallId ?? message.tool_call_id
-    return {
-      id: typeof id === 'string' ? id : null,
-      failed: message.isError === true || message.is_error === true,
-    }
+    return [{ id: typeof id === 'string' ? id : null, failed: message.isError === true || message.is_error === true }]
   }
-  for (const block of contentBlocks(message.content)) {
-    if (!['tool_result', 'toolResult'].includes(String(block.type ?? ''))) continue
-    return {
-      id: callId(block),
-      failed: block.is_error === true || block.isError === true,
-    }
-  }
-  return null
+  return contentBlocks(message.content)
+    .filter(block => ['tool_result', 'toolResult'].includes(String(block.type ?? '')))
+    .map(block => ({ id: callId(block), failed: block.is_error === true || block.isError === true }))
 }
 
 export async function collectOpenClawAgent(options: CollectOpenClawOptions): Promise<OpenClawCollection> {
@@ -563,7 +556,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
   const endMs = options.window.end.getTime()
   const totalUsage = emptyAgentUsage()
   const modelMetrics = new Map<string, MutableMetric>()
-  const toolMetrics = new Map<string, { calls: number; failures: number }>()
+  const toolMetrics = new Map<string, { calls: number; failures: number; results: number }>()
   const skillMetrics = new Map<string, { loaded: number; failed: number; interrupted: number }>()
   const toolCalls = new Map<string, ToolCallMetric>()
   const messageUsageMetrics = new Map<string, MessageUsageMetric>()
@@ -605,6 +598,9 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     healthStatus: 'healthy' as 'healthy' | 'blocked',
     healthWarnings: [] as AgentTelemetryHealthWarning[],
   }
+  for (const call of options.committed.pendingToolCalls ?? []) {
+    if (Date.parse(call.atUtc) >= retentionCutoff) toolCalls.set(call.hash, { name: call.name, skillId: call.skillId, atUtc: call.atUtc })
+  }
   let turns = 0
   let latestIncludedAt = 0
   let windowRecords = 0
@@ -641,14 +637,15 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     }
     windowRecords++
 
-    const result = resultInfo(entry)
-    if (result) {
+    const results = resultInfo(entry)
+    let matchedResults = 0, duplicateResults = 0
+    for (const result of results) {
       const resultIdentity = result.id ?? entry.message?.id ?? entry.id ?? entry.uuid
       if (typeof resultIdentity === 'string' && resultIdentity.length > 0) {
         const resultHash = hashIdentity(`${sessionIdentity}\u0000tool-result\u0000${resultIdentity}`)
         if (retainedSeen.has(resultHash) || batchSeen.has(resultHash)) {
-          collection.duplicatesSkipped++
-          return sessionIdentity
+          duplicateResults++
+          continue
         }
         batchSeen.add(resultHash)
         retainedSeen.set(resultHash, { hash: resultHash, atUtc: new Date(at).toISOString() })
@@ -658,18 +655,28 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         : null
       const call = resultCallHash ? toolCalls.get(resultCallHash) : undefined
       if (!call) {
-        collection.orphanToolResultsSkipped++
-        return sessionIdentity
+        continue
       }
-      if (result.failed) toolMetrics.get(call.name)!.failures++
+      const metric = toolMetrics.get(call.name) ?? { calls: 0, failures: 0, results: 0 }
+      metric.results++
+      if (result.failed) metric.failures++
+      toolMetrics.set(call.name, metric)
+      if (resultCallHash) toolCalls.delete(resultCallHash)
       if (call.skillId) {
         const skill = skillMetrics.get(call.skillId) ?? { loaded: 0, failed: 0, interrupted: 0 }
         if (result.failed) skill.failed++
         else skill.loaded++
         skillMetrics.set(call.skillId, skill)
       }
-      collection.includedRecords++
+      matchedResults++
       latestIncludedAt = Math.max(latestIncludedAt, at)
+      continue
+    }
+
+    if (results.length > 0) {
+      if (matchedResults > 0) collection.includedRecords++
+      else if (duplicateResults === results.length) collection.duplicatesSkipped++
+      else collection.orphanToolResultsSkipped++
       return sessionIdentity
     }
 
@@ -704,9 +711,9 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
         if (retainedSeen.has(toolCallHash) || batchSeen.has(toolCallHash)) continue
         batchSeen.add(toolCallHash)
         retainedSeen.set(toolCallHash, { hash: toolCallHash, atUtc: new Date(at).toISOString() })
-        toolCalls.set(toolCallHash, { name, skillId: skillFromCall(name, callArguments(block)) })
+        toolCalls.set(toolCallHash, { name, skillId: skillFromCall(name, callArguments(block)), atUtc: new Date(at).toISOString() })
       }
-      const metric = toolMetrics.get(name) ?? { calls: 0, failures: 0 }
+      const metric = toolMetrics.get(name) ?? { calls: 0, failures: 0, results: 0 }
       metric.calls++
       toolMetrics.set(name, metric)
     }
@@ -785,6 +792,8 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
             collection.malformedSkipped++
             return
           }
+          if (!entry || typeof entry !== 'object') { collection.malformedSkipped++; return }
+          if ((entryTimestamp(entry) ?? -Infinity) >= endMs) { collection.recordsRead--; return false }
           sessionIdentity = processEntry(entry, sessionIdentity)
         })
         nextFiles[fileKey] = { dev: String(info.dev), ino: String(info.ino), offset: nextOffset }
@@ -856,7 +865,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
     healthWarnings.push('no-files-in-scope')
   }
   const hasUsage = Object.values(totalUsage).some(value => typeof value === 'number' && value > 0)
-  if (windowRecords > 0 && turns === 0 && !hasUsage) healthWarnings.push('no-turns-from-records')
+  if (windowRecords > 0 && turns === 0 && !hasUsage && collection.includedRecords === 0) healthWarnings.push('no-turns-from-records')
   if (
     windowRecords >= MIN_HEALTH_SAMPLE_RECORDS &&
     collection.unsupportedRecordsSkipped / windowRecords >= MAX_UNSUPPORTED_RATIO
@@ -900,6 +909,7 @@ export async function collectOpenClawAgent(options: CollectOpenClawOptions): Pro
       lastWindowEndUtc: options.window.end.toISOString(),
       files: nextFiles,
       seenMessages,
+      pendingToolCalls: [...toolCalls.entries()].map(([hash, call]) => ({ hash, ...call })).slice(-100_000),
       ...(options.source === 'openclaw' && internalAgentHash ? {
         openclawSource: { agentHash: internalAgentHash, backend: input.kind },
       } : {}),

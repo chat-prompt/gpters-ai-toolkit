@@ -1,3 +1,4 @@
+import { agentTaskEventSchema } from './agent-task-events'
 /** 개인정보를 받지 않는 에이전트 delta telemetry v1 계약 */
 
 import { z } from 'zod'
@@ -29,7 +30,8 @@ const toolSchema = z.object({
   name: safeLabel,
   calls: nonNegativeInt,
   failures: nonNegativeInt,
-}).strict().refine((row) => row.failures <= row.calls, { message: 'tool failures cannot exceed calls' })
+  results: nonNegativeInt.optional(),
+}).strict().refine((row) => row.failures <= (row.results ?? row.calls), { message: 'tool failures cannot exceed observed results (or legacy calls)' })
 const skillLoadSchema = z.object({
   skillId: safeId,
   loaded: nonNegativeInt,
@@ -79,6 +81,7 @@ export const axAgentTelemetryBatchSchema = z.object({
   taskCategories: z.array(taskCategorySchema).max(100),
   executions: z.array(executionSchema).max(20),
   collection: z.object({
+    taskEvents: z.array(agentTaskEventSchema).max(500).optional(),
     source: sourceSchema,
     filesDiscovered: nonNegativeInt,
     filesExcludedByScope: nonNegativeInt,
@@ -101,6 +104,9 @@ export const axAgentTelemetryBatchSchema = z.object({
     healthWarnings: z.array(healthWarningSchema).max(4),
   }).strict(),
 }).strict().superRefine((batch, ctx) => {
+  for (const event of batch.collection.taskEvents ?? []) {
+    if (Date.parse(event.atUtc) > Date.parse(batch.collectedAtUtc)) ctx.addIssue({ code: 'custom', path: ['collection','taskEvents'], message: 'Task event cannot be in the future' })
+  }
   const start = new Date(batch.window.startUtc).getTime()
   const end = new Date(batch.window.endUtc).getTime()
   const collected = new Date(batch.collectedAtUtc).getTime()

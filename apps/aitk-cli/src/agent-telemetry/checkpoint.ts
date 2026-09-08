@@ -7,6 +7,17 @@ import type { AgentTelemetryCheckpoint } from './types.js'
 
 /** Old checkpoints have no usage snapshot. A corrupt new baseline must never trigger a recount. */
 function validSnapshots(state: AgentTelemetryCheckpoint['committed']): boolean {
+  if (state.taskJournal !== undefined && (!state.taskJournal || !Number.isSafeInteger(state.taskJournal.offset) || state.taskJournal.offset < 0 ||
+    typeof state.taskJournal.dev !== 'string' || typeof state.taskJournal.ino !== 'string')) return false
+  const hash = (value: unknown) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+  if (state.pendingToolCalls !== undefined && (!Array.isArray(state.pendingToolCalls) || state.pendingToolCalls.some(call =>
+    !call || !hash(call.hash) || typeof call.name !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+<> -]{0,119}$/.test(call.name) ||
+    (call.skillId !== null && (typeof call.skillId !== 'string' || !/^[a-z0-9][a-z0-9._:-]{0,99}$/.test(call.skillId))) || !Number.isFinite(Date.parse(call.atUtc))))) return false
+  if (Object.values(state.files ?? {}).some(file => {
+    const context = file.codexContext
+    return context !== undefined && (!context || typeof context.model !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+<> -]{0,119}$/.test(context.model) || typeof context.inScope !== 'boolean' ||
+      (context.turnHash !== null && !hash(context.turnHash)) || typeof context.rawTools !== 'boolean' || typeof context.supportedTools !== 'boolean')
+  })) return false
   return Array.isArray(state.seenMessages) && state.seenMessages.every(seen => {
     const snapshot = seen?.usageSnapshot
     if (snapshot === undefined) return true
