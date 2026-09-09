@@ -810,6 +810,7 @@ export interface AxAgentReporterRow {
   managed: boolean
   intervalSeconds: number | null
   lastCollectedAt: string | null
+  staleAfterHours?: number
   freshnessHours: number | null
   freshness: 'fresh' | 'stale' | 'waiting'
   healthStatus: 'healthy' | 'blocked' | 'unknown'
@@ -937,6 +938,10 @@ export interface AxAgentActivityAgentRow {
 /** 에이전트 활동 패널 — 원문·세션 ID·경로 없이 집계값만 담는다. */
 export interface AxAgentActivityData {
   taskTraces?: AxAgentTaskTrace[]
+  taskTraceCoverage?: {
+    limitPerStream: number
+    truncatedStreams: Array<{ agentId: string; source: string; total: number; returned: number }>
+  }
   syncedAt: string
   windowStart: string
   windowEnd: string

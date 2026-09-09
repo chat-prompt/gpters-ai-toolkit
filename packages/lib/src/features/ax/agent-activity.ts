@@ -1,4 +1,4 @@
-import { buildAgentTaskTraces } from './agent-task-events'
+import { buildAgentTaskTraces, limitAgentTaskTraces } from './agent-task-events'
 /** AX Dashboard — 에이전트 활동·수집 건강도 패널 */
 
 import { axAgentTelemetryBatches, axAgentTelemetryCollectors, axSkillExecutionAttempts, db } from '@gpters/db'
@@ -24,6 +24,11 @@ import { createLogger } from '../../core/logger'
 
 const log = createLogger('ax-agent-activity')
 const FRESH_HOURS = 12
+/** Registered schedules: two intervals, at least five minutes for transport jitter. */
+export function collectorStaleAfterHours(intervalSeconds?: number | null): number {
+  return intervalSeconds && Number.isFinite(intervalSeconds) && intervalSeconds > 0
+    ? Math.max(5 / 60, intervalSeconds * 2 / 3600) : FRESH_HOURS
+}
 const ALL_SOURCES: AxAgentTelemetrySource[] = ['openclaw', 'claude-code', 'codex', 'hermes']
 
 const meta: AxPanelMeta = {
@@ -437,7 +442,6 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
     const observedExecutionMap = new Map<string, { status: string; evidence: string; count: number }>()
     const agentMap = new Map<string, AgentAccumulator>()
     const sourceLatest = new Map<AxAgentTelemetrySource, number>()
-    const sourceStaleAfterHours = new Map<AxAgentTelemetrySource, number>()
     let sessions = 0
     let turns = 0
     let recordsRead = 0
@@ -609,14 +613,6 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       const collectorSource = collector.source as AxAgentTelemetrySource
       if (!agentMap.has(collector.agentId)) agentMap.set(collector.agentId, createAgentAccumulator(collector.agentId))
       installedSources.add(collectorSource)
-      sourceStaleAfterHours.set(
-        collectorSource,
-        Math.max(
-          sourceStaleAfterHours.get(collectorSource) ?? FRESH_HOURS,
-          FRESH_HOURS,
-          collector.intervalSeconds * 2 / 3600,
-        ),
-      )
       const reporterKey = `${collector.agentId}\u0000${collectorSource}`
       const reporter = reporterMap.get(reporterKey) ?? {
         agentId: collector.agentId,
@@ -667,10 +663,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
 
     const now = Date.now()
     const reporters = [...reporterMap.values()].map((reporter) => {
-      if (!reporter.lastCollectedAt) return { ...reporter, freshnessHours: null, freshness: 'waiting' as const }
+      if (!reporter.lastCollectedAt) return { ...reporter, freshnessHours: null, staleAfterHours: collectorStaleAfterHours(reporter.intervalSeconds), freshness: 'waiting' as const }
       const freshnessHours = Math.max(0, Math.round(((now - new Date(reporter.lastCollectedAt).getTime()) / 3_600_000) * 10) / 10)
-      const staleAfterHours = reporter.intervalSeconds ? Math.max(FRESH_HOURS, reporter.intervalSeconds * 2 / 3600) : FRESH_HOURS
-      return { ...reporter, freshnessHours, freshness: freshnessHours <= staleAfterHours ? 'fresh' as const : 'stale' as const }
+      const staleAfterHours = collectorStaleAfterHours(reporter.intervalSeconds)
+      return { ...reporter, freshnessHours, staleAfterHours, freshness: (now - new Date(reporter.lastCollectedAt).getTime()) / 3_600_000 <= staleAfterHours ? 'fresh' as const : 'stale' as const }
     }).sort((a, b) => a.agentId.localeCompare(b.agentId) || a.source.localeCompare(b.source))
 
     const sourceCoverage = ALL_SOURCES.map((source): AxAgentSourceCoverageRow => {
@@ -679,9 +675,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       if (source === 'openclaw' && !last && sourceLatest.has('claude-code')) status = 'alternate'
       else if (!last && installedSources.has(source)) status = 'installed'
       else if (!last) status = 'missing'
-      else status = (now - last) / 3_600_000 <= (sourceStaleAfterHours.get(source) ?? FRESH_HOURS)
-        ? 'reporting'
-        : 'stale'
+      else status = reporters.some(reporter => reporter.source === source && reporter.freshness === 'stale')
+        ? 'stale' : 'reporting'
       return {
         source,
         status,
@@ -764,7 +759,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       insights.push({
         severity: 'warning',
         title: '수집 지연',
-        detail: `${stale.map((row) => row.agentId).join(', ')} — ${stale.length}개 수집기가 허용된 두 번의 수집 주기 안에 새 배치를 보내지 않았습니다. 해당 에이전트의 수치는 마지막 정상 보고까지만 반영합니다.`,
+        detail: `${stale.map((row) => row.agentId).join(', ')} — ${stale.length}개 수집기가 보고 유예 시간을 넘겼습니다(예약 주기 2회, 최소 5분 · 주기 미등록 시 12시간). 해당 에이전트의 수치는 마지막 정상 보고까지만 반영합니다.`,
       })
     }
     const waiting = reporters.filter((row) => row.freshness === 'waiting')
@@ -821,13 +816,15 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxAgentActivityD
       })
     }
 
+    const taskView = limitAgentTaskTraces(buildAgentTaskTraces(candidateRows, cutoff, new Date(now)))
     return panelOk(meta, {
       syncedAt: new Date(syncedAt || now).toISOString(),
       windowStart: new Date(rows.length > 0 ? windowStart : cutoff.getTime()).toISOString(),
       windowEnd: new Date(rows.length > 0 ? windowEnd : now).toISOString(),
       totalUsage,
       totalProcessedTokens: total,
-      taskTraces: buildAgentTaskTraces(candidateRows, cutoff, new Date(now)),
+      taskTraces: taskView.traces,
+      taskTraceCoverage: taskView.coverage,
       sessions,
       turns,
       toolCalls,

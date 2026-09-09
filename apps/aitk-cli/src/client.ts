@@ -264,7 +264,7 @@ export function apiCall<T = unknown>(action: string, params: Record<string, unkn
   return traceTaskApi(phase, () => apiCallUntraced<T>(action, params, token))
 }
 export function jsonRpcCall<T = unknown>(method: string, params: Record<string, unknown>, token?: string): Promise<ApiResult<T>> {
-  const phases: Record<string, TaskPhase> = { semantic_search: 'search', get_plugin_content: 'skill-load', report_search_skip: 'search-skip', report_skill_execution: 'execution-report', report_skill_execution_started: 'execution-report' }
+  const phases: Record<string, TaskPhase> = { semantic_search: 'search', get_plugin_content: 'skill-load', report_search_skip: 'search-skip', report_skill_execution: 'execution-report', report_skill_execution_started: 'execution-report', report_skill_outcome: 'execution-report' }
   const phase = typeof params.name === 'string' ? phases[params.name] : undefined
   return traceTaskApi(phase, () => jsonRpcCallUntraced<T>(method, params, token))
 }

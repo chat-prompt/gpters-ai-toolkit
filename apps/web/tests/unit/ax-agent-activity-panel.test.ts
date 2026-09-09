@@ -30,7 +30,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-const { agentActivityPanel } = await import('../../../../packages/lib/src/features/ax/agent-activity')
+const { agentActivityPanel, collectorStaleAfterHours } = await import('../../../../packages/lib/src/features/ax/agent-activity')
 const { db } = await import('@gpters/db')
 
 function builder(result: unknown) {
@@ -407,4 +407,23 @@ it('uses completed outcomes as the denominator for delayed failures', async () =
   expect(result.data!.tools[0]).toMatchObject({ calls: 0, failures: 1, results: 2, failureRate: 50 })
   expect(result.data!.agents[0].toolResults).toBe(2)
   vi.useRealTimers()
+})
+
+it('marks a one-hour registered collector stale immediately after two hours, without rounding grace', async () => {
+ vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-27T00:00:00Z'))
+ queueRows([row({agentId:'fixture',collectedAt:new Date('2026-08-26T21:59:59Z')})],[],[{
+  collectorId:'fixture',agentId:'fixture',source:'claude-code',intervalSeconds:3600,
+  lastSuccessAt:new Date('2026-08-26T21:59:59Z'),lastHealthStatus:'healthy',lastHealthWarnings:[],createdAt:new Date('2026-08-20T00:00:00Z')
+ }])
+ const result=await agentActivityPanel.load({days:7,isAdmin:false})
+ expect(result.data!.reporters[0]).toMatchObject({freshness:'stale',staleAfterHours:2})
+ expect(result.data!.sourceCoverage.find(r=>r.source==='claude-code')?.status).toBe('stale')
+ vi.useRealTimers()
+})
+
+it('uses a five-minute minimum grace and a 12-hour fallback only for unknown schedules',()=>{
+ expect(collectorStaleAfterHours(30)).toBe(5/60)
+ expect(collectorStaleAfterHours(3600)).toBe(2)
+ expect(collectorStaleAfterHours(86400)).toBe(48)
+ expect(collectorStaleAfterHours(null)).toBe(12)
 })

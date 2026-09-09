@@ -22,6 +22,27 @@ export interface AxAgentTaskTrace {
   /** No attribution from overlapping batch time ranges. */
   tokens: null
 }
+/** Timestamp ties respect causal links. UUID lexical order is never chronology.
+ * Unlinked ties keep received order, with starts before terminal states in an attempt.
+ * Cycles are invalid causality; retain those records deterministically without looping.
+ */
+export function orderTaskEvents(events: AxAgentTaskEvent[]): AxAgentTaskEvent[] {
+  const pending = [...events].sort((a, b) => Date.parse(a.atUtc) - Date.parse(b.atUtc))
+  const result: AxAgentTaskEvent[] = []
+  const remaining = new Set(pending.map(event => event.eventId))
+  while (pending.length) {
+    let index = pending.findIndex(event =>
+      (!event.parentEventId || !remaining.has(event.parentEventId)) &&
+      !(event.status !== 'started' && pending.some(other =>
+        other.attemptId === event.attemptId && other.phase === event.phase &&
+        other.status === 'started' && Date.parse(other.atUtc) === Date.parse(event.atUtc) && other.parentEventId !== event.eventId)))
+    if (index < 0) index = 0
+    const [event] = pending.splice(index, 1)
+    remaining.delete(event.eventId)
+    result.push(event)
+  }
+  return result
+}
 /** Replayed event IDs are counted once within the authenticated agent/source stream. */
 export function buildAgentTaskTraces(rows: Array<{ agentId: string; runtime: unknown; collection: unknown }>, cutoff: Date, now: Date): AxAgentTaskTrace[] {
   const tasks = new Map<string, AxAgentTaskTrace>()
@@ -44,11 +65,27 @@ export function buildAgentTaskTraces(rows: Array<{ agentId: string; runtime: unk
       const version = typeof runtime?.collectorVersion === 'string' ? runtime.collectorVersion : 'unknown'
       if (!trace.versions.includes(version)) trace.versions.push(version)
       trace.events.push(event)
-      if (event.atUtc < trace.startedAt) trace.startedAt = event.atUtc
-      if (event.atUtc > trace.updatedAt) trace.updatedAt = event.atUtc
+      if (at < Date.parse(trace.startedAt)) trace.startedAt = event.atUtc
+      if (at > Date.parse(trace.updatedAt)) trace.updatedAt = event.atUtc
       tasks.set(key, trace)
     }
   }
-  return [...tasks.values()].map(trace => ({ ...trace, events: trace.events.sort((a,b) => a.atUtc.localeCompare(b.atUtc) || a.eventId.localeCompare(b.eventId)) }))
-    .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 100)
+  return [...tasks.values()].map(trace => ({ ...trace, events: orderTaskEvents(trace.events) }))
+    .sort((a,b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+}
+
+/** Bound the response per authenticated agent/source, so a busy stream cannot hide another. */
+export function limitAgentTaskTraces(traces: AxAgentTaskTrace[]) {
+  const limitPerStream = 100
+  const streams = new Map<string, { agentId: string; source: string; total: number; returned: number }>()
+  const selected = traces.filter(trace => {
+    const key = `${trace.agentId}:${trace.source}`
+    const stream = streams.get(key) ?? {agentId: trace.agentId, source: trace.source, total: 0, returned: 0}
+    streams.set(key, stream)
+    stream.total++
+    if (stream.returned >= limitPerStream) return false
+    stream.returned++
+    return true
+  })
+  return { traces: selected, coverage: { limitPerStream, truncatedStreams: [...streams.values()].filter(stream => stream.returned < stream.total) } }
 }

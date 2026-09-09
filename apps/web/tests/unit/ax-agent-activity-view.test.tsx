@@ -241,3 +241,14 @@ describe('AgentActivityPanel', () => {
     expect(tooltip.className).toContain('group-focus:visible')
   })
 })
+
+it('distinguishes uncollected tools from observed zero for a waiting collector', () => {
+ const waiting={...BBODOONG,toolCalls:0,collection:{...BBODOONG.collection,batches:0}}
+ const data={...DATA,agents:[waiting],reporters:[{...REPORTERS[0],lastCollectedAt:null,freshness:'waiting' as const}]}
+ render(<AgentActivityPanel data={data} days={7} selection={waiting.agentId} />)
+ expect(screen.getAllByText('미수집').length).toBeGreaterThan(0)
+})
+it('labels metrics incomplete when a source has parse failures', () => {
+ render(<AgentActivityPanel data={{...DATA,collection:{...DATA.collection,parseFailures:1}}} days={7} />)
+ expect(screen.getByText(/불완전 · 확인된 실패/)).toBeTruthy()
+})
