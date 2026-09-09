@@ -118,6 +118,12 @@ export function AgentActivityPanel({
     return !latest || reporter.lastCollectedAt > latest ? reporter.lastCollectedAt : latest
   }, null)
 
+  const toolSources = reporters.filter(reporter => data.sourceCoverage.some(row => row.source === reporter.source && row.capabilities.tools))
+  const toolsState = reporters.length > 0 && toolSources.length === 0 ? '미지원'
+    : !toolSources.some(reporter => reporter.lastCollectedAt) || scope.collection.batches === 0 ? '미수집'
+    : scope.collection.parseFailures > 0 || reporters.some(reporter => !reporter.lastCollectedAt || reporter.healthStatus !== 'healthy' || reporter.freshness === 'stale' || reporter.healthWarnings.length > 0) ? '불완전'
+    : null
+
   // 위계: 수집이 끊겼으면 아래 숫자가 전부 하한선이므로 가장 먼저 보이고, 그다음 규모 → 효율 → 분모(실행 결과) →
   // 구성 상세 → 운영(소스·수집기) 순서다. 새 지표를 붙이기만 하지 않고 운영 정보는 아래로 내렸다.
   return (
@@ -169,8 +175,8 @@ export function AgentActivityPanel({
           />
           <Metric
             label="도구 호출"
-            value={formatCount(scope.toolCalls)}
-            hint={`실패 ${formatCount(scope.toolFailures)}건`}
+            value={toolsState === '미지원' || toolsState === '미수집' ? toolsState : formatCount(scope.toolCalls)}
+            hint={toolsState === '미지원' || toolsState === '미수집' ? '관측된 0건과 구분합니다' : toolsState === '불완전' ? `불완전 · 확인된 실패 ${formatCount(scope.toolFailures)}건` : `실패 ${formatCount(scope.toolFailures)}건`}
             explanation="쉘·파일 읽기·편집·검색처럼 런타임이 기록한 도구 호출입니다. OpenClaw 요약 소스처럼 도구를 제공하지 않는 소스는 포함되지 않습니다. 실패율은 아래 효율 칸에 있습니다."
           />
           <Metric
@@ -183,7 +189,7 @@ export function AgentActivityPanel({
         </div>
       </section>
 
-      <AgentTaskTimeline traces={data.taskTraces ?? []} agentId={activeAgentId} />
+      <AgentTaskTimeline traces={data.taskTraces ?? []} coverage={data.taskTraceCoverage} agentId={activeAgentId} />
 
       <EfficiencySection scope={scope} available={data.verifiedExecutionsAvailable} />
 
@@ -262,6 +268,7 @@ export function AgentActivityPanel({
               coverage={row}
               reporter={reporters.find((reporter) => reporter.source === row.source)}
               scoped={activeAgentId !== 'all'}
+              incomplete={scope.collection.parseFailures > 0 || reporters.some(reporter => reporter.source === row.source && (reporter.healthStatus !== 'healthy' || reporter.freshness !== 'fresh' || reporter.healthWarnings.length > 0))}
             />
           ))}
         </div>
@@ -666,10 +673,12 @@ function SourceCard({
   coverage,
   reporter,
   scoped,
+  incomplete,
 }: {
   coverage: AxAgentSourceCoverageRow
   reporter?: AxAgentReporterRow
   scoped: boolean
+  incomplete: boolean
 }) {
   return (
     <div className="border-b border-[var(--border-subtle)] py-4">
@@ -681,7 +690,7 @@ function SourceCard({
       </div>
       <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">{coverage.note}</p>
       <p className={`mt-2 ${META_LINE}`}>
-        토큰 <Capability supported={coverage.capabilities.usage} /> · 도구 <Capability supported={coverage.capabilities.tools} /> · 스킬 <Capability supported={coverage.capabilities.skills} />
+        토큰 <Capability supported={coverage.capabilities.usage} observed={!!(scoped ? reporter?.lastCollectedAt : coverage.lastCollectedAt)} incomplete={incomplete} /> · 도구 <Capability supported={coverage.capabilities.tools} observed={!!(scoped ? reporter?.lastCollectedAt : coverage.lastCollectedAt)} incomplete={incomplete} /> · 스킬 <Capability supported={coverage.capabilities.skills} observed={!!(scoped ? reporter?.lastCollectedAt : coverage.lastCollectedAt)} incomplete={incomplete} />
         {(reporter?.lastCollectedAt ?? coverage.lastCollectedAt) ? ` · ${formatDateTime(reporter?.lastCollectedAt ?? coverage.lastCollectedAt!)}` : ''}
       </p>
     </div>
@@ -689,8 +698,9 @@ function SourceCard({
 }
 
 /** 소스가 신호를 제공하는지 — 스크린리더에는 글리프 대신 말로 읽힌다 */
-function Capability({ supported }: { supported: boolean }) {
-  return <span role="img" aria-label={supported ? '지원' : '미지원'}>{supported ? '✓' : '–'}</span>
+function Capability({ supported, observed, incomplete }: { supported: boolean; observed: boolean; incomplete: boolean }) {
+  const label = !supported ? '미지원' : !observed ? '미수집' : incomplete ? '불완전' : '지원'
+  return <span title="지원은 이 소스의 수집 기능을 뜻합니다. 개별 작업의 성공 판정은 아닙니다.">{label}</span>
 }
 
 function Insights({ insights }: { insights: AxAgentActivityData['insights'] }) {
@@ -715,7 +725,7 @@ function AgentNotices({ reporters, scope }: { reporters: AxAgentReporterRow[]; s
     const blocked = reporters.filter((row) => row.healthStatus === 'blocked')
     const waiting = reporters.filter((row) => row.freshness === 'waiting')
     if (blocked.length > 0) rows.push({ title: '수집 차단', detail: `${blocked.length}개 소스가 수집기 경고로 차단됐습니다.`, warning: true })
-    if (stale.length > 0) rows.push({ title: '수집 지연', detail: `${stale.length}개 소스가 예정된 두 번의 주기 안에 보고하지 않았습니다.`, warning: true })
+    if (stale.length > 0) rows.push({ title: '수집 지연', detail: `${stale.length}개 소스가 보고 유예 시간을 넘겼습니다(예약 주기 2회, 최소 5분 · 주기 미등록 시 12시간).`, warning: true })
     if (waiting.length > 0) rows.push({ title: '첫 수집 대기', detail: `${waiting.length}개 소스가 설치됐지만 아직 첫 배치를 보내지 않았습니다.`, warning: false })
     if ((scope.toolResults ?? scope.toolCalls) >= 10 && scope.toolFailures / (scope.toolResults ?? scope.toolCalls) >= 0.05) {
       rows.push({ title: `도구 실패 ${formatSampledRate(scope.toolFailures, scope.toolResults ?? scope.toolCalls)}`, detail: '반복되는 권한·입력·재시도 문제를 점검할 만합니다.', warning: true })
@@ -789,7 +799,7 @@ function ReporterSection({
                   <span className="ml-2 font-mono text-[11px] text-[var(--text-muted)]">{row.managed ? '자동' : '기존 방식'}</span>
                 </td>
                 <td className={TD}><CollectorStatus freshness={row.freshness} health={row.healthStatus} warnings={row.healthWarnings.length} /></td>
-                <td className={`${TD} text-right font-mono ${row.freshness === 'stale' || row.healthStatus === 'blocked' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
+                <td title={row.staleAfterHours === undefined ? undefined : `보고 유예 ${row.staleAfterHours * 60}분 · 마지막 보고 시각 기준`} className={`${TD} text-right font-mono ${row.freshness === 'stale' || row.healthStatus === 'blocked' ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
                   {row.freshnessHours === null ? '첫 수집 대기' : `${row.freshnessHours}시간`}
                 </td>
                 <td className={`${TD} text-right font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(row.turns)}</td>

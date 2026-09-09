@@ -18,3 +18,21 @@ it('scopes tasks to the selected agent',()=>{
  expect(screen.getByText(/아직 연결된 작업 기록/)).toBeTruthy()
  expect(screen.queryByText(/11111111 ·/)).toBeNull()
 })
+
+it('shows self-reported evidence without opening details and does not infer task completion',()=>{
+ const own={...trace,events:[{...trace.events[0],phase:'verification' as const,evidence:'self-reported' as const}]}
+ const {container}=render(<AgentTaskTimeline traces={[own]} agentId="all" />)
+ expect(container.querySelector('summary')!.textContent).toContain('검증 성공(자체 보고)')
+ expect(container.querySelector('summary')!.textContent).toContain('작업 종료 미관측')
+})
+it('applies agent/source and failure filters before the visible 100-task limit',()=>{
+ const many=Array.from({length:101},(_,i)=>({...trace,agentId:i===100?'quiet':'busy',taskId:`task-${i}`}))
+ render(<AgentTaskTimeline traces={many} agentId="quiet" />)
+ expect(screen.getByText(/조회 기간 내 1개 중 최근 1개/)).toBeTruthy()
+})
+
+it('discloses truncation even when no failure in the retained window matches',()=>{
+ render(<AgentTaskTimeline traces={[trace]} agentId="all" coverage={{limitPerStream:100,truncatedStreams:[{agentId:trace.agentId,source:trace.source,total:101,returned:100}]}} />)
+ fireEvent.click(screen.getByLabelText('실패 포함 작업만'))
+ expect(screen.getByText(/이전 1개는 이 목록과 실패 필터에 포함되지 않습니다/)).toBeTruthy()
+})

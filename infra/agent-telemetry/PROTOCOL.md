@@ -193,3 +193,47 @@ Run the protocol verifier tests without a server or production data:
 ```sh
 node --test infra/agent-telemetry/verify-installation.test.mjs
 ```
+
+## Scheduled-task preflight and completion
+
+A collector's healthy report does not establish that a scheduled job has its
+execution tools. Before enabling a new or changed job, validate the exact
+scheduler entry point, job owner, model/backend, final tool catalogue and stored
+finite tool cap. An interactive session on the same host is not a substitute.
+
+1. List the minimal operations required by the job, then compare them with the
+   **resolved executable catalogue**, not just the saved `toolsAllow` names.
+   Model provider IDs must satisfy the configured model allowlist; a CLI harness
+   name is not necessarily an allowed model provider ID. CLI-native tools and
+   gateway MCP tools are different surfaces. In a restricted
+   Claude invocation, native tools may be empty while gateway tools are exposed
+   as `mcp__openclaw__<name>`. Use the actual catalogue names. Codex and Hermes must
+   use their own resolved names; do not copy Claude CLI switches to them.
+2. Use an inert probe through the same scheduler/backend/owner and tool cap,
+   with delivery disabled. Check an actual tool result and process exit, then
+   remove the probe. Do not replay a production send or change a job to `*` to
+   make a failing probe pass. A pure policy-function test verifies translation,
+   but does not prove live MCP connectivity or scheduled execution.
+3. A deterministic script can use the runtime's command-job path with an exact
+   approved command and execution scope. This avoids depending on an LLM choosing
+   a shell tool, but does not grant a missing permission or bypass approval.
+4. Preserve scheduler receipt, process outcome, verification and delivery receipt
+   separately. Scheduler `ok` may mean the agent turn ended, including an answer
+   reporting failure. Missing execution/delivery evidence stays unknown.
+
+`aitk agent-task start` records a task start. `run` additionally records the
+wrapped process's execution start and exit; neither automatically asserts the
+whole task's completion, verification or delivery. Record an explicit terminal
+`task` event only after the defined work is complete. Manual events remain
+`self-reported`. A process exit is not a delivery acknowledgment. Existing signal
+termination is recorded as failed; there is no distinct cancelled event status.
+
+Task summaries show evidence without opening the timeline. API acknowledgment
+for `report-outcome` is an `execution-report`, not proof of successful execution.
+The response retains the latest 100 tasks per agent/source within the reporting
+period, so a busy stream cannot hide another. The UI applies filters before its
+100-task display limit. If earlier tasks were omitted, it discloses that those
+records are also outside the failure filter; this is not an all-history incident list.
+Registered collectors become stale after two configured intervals, with a minimum
+five-minute transport grace. Unregistered schedules retain a 12-hour fallback.
+This is evaluated on server query; unattended UI refresh is a separate feature.
