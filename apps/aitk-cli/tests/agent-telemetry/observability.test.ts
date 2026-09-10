@@ -65,7 +65,7 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     const scriptPath = join(root, 'aitk.js'); writeFileSync(scriptPath, '')
     const installation = createInstallation({ agentId: 'example-agent', collectorId: 'example-collector', source: 'openclaw', sessionsDir: sessions, checkpointDir: checkpoints, serverUrl: 'https://example.invalid', backfillDays: 1, nodePath: process.execPath, scriptPath, collectorVersion: '1.0.0', account: 'example', schedule: 'none', home: root, now })
     writeAgentTelemetryInstallation(installation, root)
-    const options = { agentId: 'example-agent', source: 'openclaw', home: root, now, nodePath: process.execPath, cliScriptPath: scriptPath, collectorVersion: '1.0.0', runner: () => ({ status: 0, stdout: 'v24.0.0', stderr: '' }) }
+    const options = { agentId: 'example-agent', source: 'openclaw', platform: 'darwin' as const, home: root, now, nodePath: process.execPath, cliScriptPath: scriptPath, collectorVersion: '1.0.0', runner: () => ({ status: 0, stdout: 'v24.0.0', stderr: '' }) }
     await runAgentTelemetryUpgrade({ ...options, observabilityConfig: configPath })
     expect(readAgentTelemetryInstallation('example-agent', 'openclaw', root)).toMatchObject({ observabilityConfig: configPath, collectorId: 'example-collector' })
     rmSync(configPath); await runAgentTelemetryUpgrade({ ...options, disableObservability: true })
