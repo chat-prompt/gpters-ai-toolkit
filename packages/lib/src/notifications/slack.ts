@@ -651,6 +651,8 @@ export function buildPopularSkillsMessages(params: PopularSkillsParams): Popular
   }
 }
 
+const WEEKLY_SKILL_DIGEST_BOT_NAME = '뽀밋'
+
 /** Slack은 HTTP 200에도 ok:false를 반환할 수 있다. 수신 확인 없는 성공으로 처리하지 않는다. */
 async function postSkillDigestMessage(
   token: string,
@@ -661,6 +663,7 @@ async function postSkillDigestMessage(
   const body = JSON.stringify({
     ...payload,
     channel,
+    username: WEEKLY_SKILL_DIGEST_BOT_NAME,
     unfurl_links: false,
     unfurl_media: false,
     ...(threadTs ? { thread_ts: threadTs, reply_broadcast: false } : {}),

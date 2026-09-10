@@ -57,6 +57,7 @@ describe('주간 스킬 소식 본문·스레드', () => {
     expect(await notifySlackPopularSkills(params)).toEqual({ sent: true, repliesSent: 2, threadTs: '100.001' })
     const bodies = mockFetch.mock.calls.map(([, init]) => JSON.parse(init!.body as string))
     expect(bodies[0].thread_ts).toBeUndefined()
+    expect(bodies.every((body) => body.username === '뽀밋')).toBe(true)
     for (const reply of bodies.slice(1)) {
       expect(reply).toMatchObject({ channel: 'C_TEST', thread_ts: '100.001', reply_broadcast: false })
     }
@@ -107,4 +108,3 @@ describe('주간 스킬 소식 본문·스레드', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
-
