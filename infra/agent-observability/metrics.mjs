@@ -7,7 +7,28 @@ export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRea
 const integer = value => Number.isSafeInteger(value) && value >= 0
 // Same non-metric Claude metadata recognized by the existing agent collector.
 const claudeMetadata = new Set(['attachment','file-history-delta','last-prompt','atis-latch','mode','permission-mode','ai-title'])
-const textChars = value => typeof value === 'string' ? [...value].length : Array.isArray(value) ? value.reduce((n,b) => n + (b?.type === 'text' && typeof b.text === 'string' ? [...b.text].length : 0),0) : null
+function codePointLength(value) {
+  let count = 0
+  // String iteration counts astral characters once and preserves lone surrogates,
+  // without allocating an array proportional to a potentially large tool result.
+  for (const _ of value) count++
+  return count
+}
+function textChars(value) {
+  if (typeof value === 'string') return codePointLength(value)
+  if (!Array.isArray(value)) return null
+  let count = 0
+  for (const block of value) {
+    if (block?.type === 'text' || block?.type === 'input_text') {
+      if (typeof block.text !== 'string') return null
+      count += codePointLength(block.text)
+    } else if (block?.type !== 'image' && block?.type !== 'input_image') {
+      // An unknown or malformed block is not evidence of a zero-character result.
+      return null
+    }
+  }
+  return count
+}
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
 function assertCodexFileScope(records, scope) {
   const slugs = new Set(scope.projectSlugs ?? [])
@@ -171,7 +192,9 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
     session.usage.sort((a,b) => a.at-b.at)
     const observed = session.usage.filter(r => r.at >= start && r.at < end)
     if (!observed.length) continue
-    peaks.push(Math.max(...observed.map(r => r.value)))
+    let peak = 0
+    for (const usage of observed) peak = Math.max(peak, usage.value)
+    peaks.push(peak)
     if (!session.complete) unknownFirst = true
     else if (session.usage[0].at >= start && session.usage[0].at < end) first.push(session.usage[0].value)
   }

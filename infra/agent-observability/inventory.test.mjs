@@ -1,6 +1,6 @@
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, rm, utimes, symlink, realpath, rename } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, utimes, symlink, realpath, rename, open, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { discoverWindowFiles } from './inventory.mjs'
@@ -70,4 +70,33 @@ test('known Claude metadata does not poison measured capabilities; unknown forma
   assert.equal(result.metricCapabilities.peakContextTokens,'supported'); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete')
   await save(file,[...records,{type:'future-unknown'}]); result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root))})
   assert.equal(result.metricCapabilities.peakContextTokens,'incomplete'); assert.equal(result.provenance.unsupportedRecords,1)
+}))
+for(const change of ['foreign-append','foreign-header','foreign-replace','owned-append']) test(`Codex concurrent ${change} preserves scope isolation`,()=>fixture(async(root)=>{
+  const config={source:'codex',scope:{sessionsDir:root,codexThreadSource:'aitk-agent:example'},window}
+  const header=tag=>({type:'session_meta',timestamp:window.startUtc,payload:{thread_source:tag,cwd:'/private/tmp'}})
+  const foreign=join(root,'a-human.jsonl'),owned=join(root,'b-agent.jsonl')
+  await save(foreign,[header('human')]);await save(owned,[header('aitk-agent:example')])
+  const target=change==='owned-append'?owned:foreign,tag=change==='owned-append'?'aitk-agent:example':'human'
+  const handle=await open(target,'r'),prototype=Object.getPrototypeOf(handle),originalRead=prototype.read;await handle.close()
+  let changed=false
+  const patched=mock.method(prototype,'read',async function(...args){
+    const result=await originalRead.apply(this,args)
+    if(!changed&&args[3]===0&&args[0].subarray(0,result.bytesRead).toString().includes(`"thread_source":"${tag}"`)) {
+      changed=true
+      if(change==='foreign-replace'){await rename(target,target+'.bak');await save(target,[header('human')])}
+      else if(change==='foreign-header')await save(target,[header('aitk-agent:example')])
+      else await appendFile(target,JSON.stringify({type:'event_msg',timestamp:window.startUtc,payload:{type:'task_started'}})+'\n')
+    }
+    return result
+  })
+  try {
+    if(change==='foreign-append')assert.deepEqual((await discoverWindowFiles(config)).map(file=>file.path),[owned])
+    else await assert.rejects(discoverWindowFiles(config))
+    assert.equal(changed,true)
+  } finally {patched.mock.restore()}
+}))
+test('streaming discovery preserves long Unicode records across read chunks',()=>fixture(async(root,project)=>{
+  const path=join(project,'unicode.jsonl')
+  await save(path,[{type:'progress',padding:'a'.repeat(1024*1024-32)+'😀한글'.repeat(40)},row(window.startUtc)])
+  assert.deepEqual((await discoverWindowFiles(context(root))).map(file=>file.path),[path])
 }))
