@@ -15,6 +15,13 @@ describe('agent telemetry middleware boundary', () => {
     expect(isPublicRoute('/api/ax/agent-telemetry')).toBe(true)
     expect(isPublicRoute('/en/api/ax/agent-telemetry')).toBe(true)
     expect(isPublicRoute('/api/ax/agent-telemetry/enroll')).toBe(true)
+    expect(isPublicRoute('/api/ax/agent-reports')).toBe(true)
+    expect(isPublicRoute('/api/ax/agent-reports/report_'+'a'.repeat(32))).toBe(true)
+    expect(isPublicRoute('/api/ax/agent-reports/admin')).toBe(false)
+    expect(isPublicRoute('/api/ax/agent-reports/report_'+'a'.repeat(32)+'/extra')).toBe(false)
+    expect(isPublicRoute('/api/ax/agent-reports-extra')).toBe(false)
+    expect(isPublicRoute('/api/ax/incident-review')).toBe(false)
+    expect(isPublicRoute('/api/ax/agent-incidents')).toBe(false)
 
     expect(isPublicRoute('/api/agents/mcp')).toBe(true)
     expect(isPublicRoute('/api/agents/credentials')).toBe(true)
