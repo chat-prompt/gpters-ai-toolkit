@@ -27,6 +27,8 @@ import type {
 import { getAxPanelView, SkillEventSummary } from './panels'
 import { PointTip, SECTION_LABEL, tipText, usePointTip, type TipRow } from './panels/primitives'
 import { AxPanelBoundary } from './AxPanelBoundary'
+import { AX_REFRESH_INTERVAL_MS, useAxAutoRefresh } from './useAxAutoRefresh'
+import { AxRefreshStatus } from './AxRefreshStatus'
 import {
   formatCount,
   formatSampledRate,
@@ -99,7 +101,16 @@ const DEFAULT_DAYS: AxDays = 7
  */
 
 /** 패널 하나의 조회 상태 */
+interface PanelSnapshot {
+  result: AxPanelResult
+  queriedAt: number
+}
+
 interface PanelState {
+  refreshing: boolean
+  queriedAt: number | null
+  resultDays: number
+
   /** 조회 중 여부 */
   loading: boolean
   /** 네트워크·서버 오류 메시지. 패널 자체의 error 상태와는 구분된다 */
@@ -141,12 +152,14 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   const requestsRef = useRef(new Map<string, AbortController>())
   // 이미 받은 응답은 패널×기간 키로 보관한다. 같은 기간으로 돌아오면 즉시 보여주고
   // 뒤에서 조용히 다시 받아 갱신한다(stale-while-revalidate).
-  const cacheRef = useRef(new Map<string, AxPanelResult>())
+  const cacheRef = useRef(new Map<string, PanelSnapshot>())
   // 같은 패널×기간 요청이 겹치지 않게(선요청 중 사용자가 그 기간을 누르는 경우) 진행 중인 약속을 공유한다.
-  const inflightRef = useRef(new Map<string, Promise<AxPanelResult>>())
+  const inflightRef = useRef(new Map<string, Promise<PanelSnapshot>>())
   // 이번 패널 구성에서 한 번이라도 화면에 실은 패널. 보이지 않는 탭의 패널은 뒤로 미루므로,
   // 사용자가 그 탭을 먼저 열면 즉시 받고 뒤이은 지연 조회에서는 건너뛰기 위해 기억한다.
   const requestedRef = useRef(new Set<string>())
+
+  const networkRequestsRef = useRef(new Set<AbortController>())
 
   /** 패널 하나를 받아 캐시에 넣는다. 같은 키의 요청이 진행 중이면 그 약속을 같이 기다린다. */
   const fetchPanel = useCallback((panelId: string, targetDays: number, forceRefresh = false) => {
@@ -157,14 +170,31 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     const query = new URLSearchParams({ days: String(targetDays) })
     if (forceRefresh) query.set('refresh', '1')
     // 권한별로 내용이 다른 응답이라 브라우저 HTTP 캐시에는 남기지 않는다. 재사용은 위 cacheRef가 맡는다.
-    const promise = fetch(`/api/ax/${panelId}?${query.toString()}`, { cache: 'no-store' })
+    const controller = new AbortController()
+    networkRequestsRef.current.add(controller)
+    const timeout = setTimeout(() => controller.abort(), 30_000)
+    const promise = fetch(`/api/ax/${panelId}?${query.toString()}`, { cache: 'no-store', signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error('데이터를 불러오지 못했습니다')
+        if (!response.ok) {
+          const denied = response.status === 401 || response.status === 403
+          const error = new Error(denied ? '로그인 또는 조회 권한을 확인해 주세요' : '서버 조회에 실패했습니다')
+          if (denied) {
+            error.name = 'AccessError'
+            for (const cachedKey of cacheRef.current.keys()) {
+              if (cachedKey.startsWith(`${panelId}:`)) cacheRef.current.delete(cachedKey)
+            }
+          }
+          throw error
+        }
         const result = (await response.json()) as AxPanelResult
-        cacheRef.current.set(key, result)
-        return result
+        if (result.status === 'error') throw new Error(result.message ?? '원천 데이터를 조회하지 못했습니다')
+        const snapshot = { result, queriedAt: Date.now() }
+        cacheRef.current.set(key, snapshot)
+        return snapshot
       })
       .finally(() => {
+        clearTimeout(timeout)
+        networkRequestsRef.current.delete(controller)
         if (inflightRef.current.get(key) === promise) inflightRef.current.delete(key)
       })
     inflightRef.current.set(key, promise)
@@ -178,7 +208,8 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
   const loadPanel = useCallback(async (
     panelId: string,
     targetDays: number,
-    forceRefresh = false
+    forceRefresh = false,
+    background = false
   ) => {
     requestsRef.current.get(panelId)?.abort()
     const request = new AbortController()
@@ -188,25 +219,38 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     const cached = forceRefresh ? undefined : cacheRef.current.get(`${panelId}:${targetDays}`)
     setStates((prev) => ({
       ...prev,
-      [panelId]: cached
-        ? { loading: false, fetchError: null, result: cached }
-        : { loading: true, fetchError: null, result: prev[panelId]?.result ?? null },
+      [panelId]: {
+        loading: !cached && !background,
+        refreshing: true,
+        fetchError: prev[panelId]?.fetchError ?? null,
+        result: cached?.result ?? prev[panelId]?.result ?? null,
+        queriedAt: cached?.queriedAt ?? prev[panelId]?.queriedAt ?? null,
+        resultDays: cached ? targetDays : (prev[panelId]?.resultDays ?? targetDays),
+      },
     }))
 
     try {
-      const result = await fetchPanel(panelId, targetDays, forceRefresh)
+      const snapshot = await fetchPanel(panelId, targetDays, forceRefresh)
       if (request.signal.aborted) return
-      setStates((prev) => ({ ...prev, [panelId]: { loading: false, fetchError: null, result } }))
+      setStates((prev) => ({ ...prev, [panelId]: {
+        loading: false, refreshing: false, fetchError: null,
+        ...snapshot, resultDays: targetDays,
+      } }))
     } catch (error) {
-      // 우리가 끊은 요청은 오류가 아니다 — 뒤이은 요청이 화면을 채운다
       if (request.signal.aborted) return
-      // 캐시로 이미 보여주고 있었다면 재검증 실패는 조용히 넘긴다.
-      if (cached) return
-      const message = error instanceof Error ? error.message : '데이터를 불러오지 못했습니다'
+      const denied = error instanceof Error && error.name === 'AccessError'
+      const message = error instanceof Error && error.name !== 'AbortError'
+        ? error.message : '서버 응답 시간이 초과되었습니다'
       setStates((prev) => ({
         ...prev,
-        [panelId]: { loading: false, fetchError: message, result: null },
+        [panelId]: {
+          ...prev[panelId], loading: false, refreshing: false, fetchError: message,
+          result: denied ? null : (prev[panelId]?.result ?? null),
+          queriedAt: denied ? null : (prev[panelId]?.queriedAt ?? null),
+        },
       }))
+    } finally {
+      if (requestsRef.current.get(panelId) === request) requestsRef.current.delete(panelId)
     }
   }, [fetchPanel])
 
@@ -278,7 +322,7 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
         // 서버와 DB를 한꺼번에 때리지 않게 기간 하나씩, 그 안에서는 패널을 동시에 받는다.
         void otherDays.reduce(
           (chain, targetDays) => chain.then(() =>
-            Promise.allSettled(periodPanels.map((panel) => fetchPanel(panel.id, targetDays)))
+            cancelled ? undefined : Promise.allSettled(periodPanels.map((panel) => fetchPanel(panel.id, targetDays)))
           ),
           Promise.resolve<unknown>(undefined)
         )
@@ -301,13 +345,16 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
 
     const panelConfigs = JSON.parse(panelRequestKey) as Array<{ id: string }>
     const missing = requiredPanelIds(activeRootId, activePanelId, panelConfigs.map((panel) => panel.id))
-      .filter((id) => !requestedRef.current.has(id))
+      .filter((id) => {
+        const cached = cacheRef.current.get(`${id}:${selectedDaysRef.current}`)
+        return !requestedRef.current.has(id) || !cached || Date.now() - cached.queriedAt >= AX_REFRESH_INTERVAL_MS
+      })
     if (missing.length === 0) return
     // 효과 본문에서 동기적으로 상태를 바꾸지 않도록 다음 마이크로태스크에서 요청한다.
     queueMicrotask(() => {
       const targetDays = selectedDaysRef.current
       for (const id of missing) {
-        if (!requestedRef.current.has(id)) void loadPanel(id, targetDays)
+        void loadPanel(id, targetDays)
       }
     })
   }, [activeRootId, activePanelId, panelRequestKey, loadPanel])
@@ -334,12 +381,24 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
     })
   }, [panelRequestKey, days, loadPanel])
 
+  const refreshVisible = useCallback(() => {
+    const configs = JSON.parse(panelRequestKey) as Array<{ id: string }>
+    const { rootId, panelId } = activeIdsRef.current
+    for (const id of requiredPanelIds(rootId, panelId, configs.map(panel => panel.id))) {
+      // Never replace a pending foreground request with an automatic refresh.
+      if (!requestsRef.current.has(id)) void loadPanel(id, selectedDaysRef.current, false, true)
+    }
+  }, [panelRequestKey, loadPanel])
+  const refreshEnvironment = useAxAutoRefresh(refreshVisible)
+
   // 의존성 변경 때마다 전체 요청을 끊으면, 기간 전환 중인 고정 패널 요청이
   // 재시작되지 않은 채 사라진다. 실제로 화면을 떠날 때만 정리한다.
   useEffect(() => {
     const requests = requestsRef.current
+    const networkRequests = networkRequestsRef.current
     return () => {
       for (const request of requests.values()) request.abort()
+      for (const request of networkRequests) request.abort()
     }
   }, [])
 
@@ -445,6 +504,16 @@ export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
           onChange={setActivePanelId}
         />
       )}
+
+      <AxRefreshStatus
+        {...refreshEnvironment}
+        panels={requiredPanelIds(activeRoot.id, active.id, panels.map(panel => panel.id)).map(id => ({
+          title: panels.find(panel => panel.id === id)!.title,
+          ...states[id],
+          wrongPeriod: !!states[id]?.result && states[id].resultDays !== days && !!panels.find(panel => panel.id === id)?.usesPeriod,
+        }))}
+        onRefresh={refreshVisible}
+      />
 
       {activeRoot.id === 'overview' && (
         <MemberActivityHero
@@ -1290,7 +1359,7 @@ function AxPanelView({
         <AxPanelBody
           meta={meta}
           state={state}
-          days={days}
+          days={meta.usesPeriod ? (state?.resultDays ?? days) : days}
           onRetry={onRetry}
           selection={selection}
           onSelectionChange={onSelectionChange}
@@ -1357,7 +1426,7 @@ function AxPanelBody({
     return <PanelSkeleton />
   }
 
-  if (state.fetchError) {
+  if (state.fetchError && !state.result) {
     return <ErrorNotice message={state.fetchError} onRetry={onRetry} />
   }
 

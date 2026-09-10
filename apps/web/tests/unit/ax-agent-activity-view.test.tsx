@@ -252,3 +252,19 @@ it('labels metrics incomplete when a source has parse failures', () => {
  render(<AgentActivityPanel data={{...DATA,collection:{...DATA.collection,parseFailures:1}}} days={7} />)
  expect(screen.getByText(/불완전 · 확인된 실패/)).toBeTruthy()
 })
+
+it('수집 정상과 실행 실패를 동시에 표시하고 근거 부재를 정상으로 바꾸지 않는다', () => {
+  const taskId = '00000000-0000-4000-8000-000000000001'
+  const trace = {
+    taskId, agentId: BBODOONG.agentId, source: 'claude-code', versions: ['0.7.15'],
+    startedAt: '2026-09-01T04:00:00Z', updatedAt: '2026-09-01T04:00:05Z', tokens: null,
+    events: [{ taskId, eventId: '00000000-0000-4000-8000-000000000002', attemptId: '00000000-0000-4000-8000-000000000003', phase: 'execution' as const, status: 'failed' as const, evidence: 'process' as const, atUtc: '2026-09-01T04:00:05Z' }],
+  }
+  const view = render(<AgentActivityPanel data={{ ...DATA, taskTraces: [trace] }} days={7} />)
+  const status = screen.getByLabelText('수집과 업무 실행 상태')
+  expect(within(status).getByText('수집 정상 2/2개 소스')).toBeTruthy()
+  expect(within(status).getByText('실행 실패 관측 1개 작업')).toBeTruthy()
+  view.rerender(<AgentActivityPanel data={DATA} days={7} />)
+  expect(within(status).getByText('실행 근거 미수집')).toBeTruthy()
+  expect(within(status).queryByText('실행 정상')).toBeNull()
+})

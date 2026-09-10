@@ -137,6 +137,8 @@ export function AgentActivityPanel({
 
       <CollectionGaps reporters={reporters} />
 
+      <AgentObservationStatus data={data} agentId={activeAgentId} reporters={reporters} />
+
       <section aria-labelledby="agent-summary-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -152,7 +154,7 @@ export function AgentActivityPanel({
             </p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
               최근 {days}일 · {latestCollectedAt
-                ? `마지막 수집 ${formatDateTime(latestCollectedAt)}`
+                ? `마지막 원천 수집 ${formatDateTime(latestCollectedAt)}`
                 : '설치됨 · 첫 수집 대기'} · {formatCount(scope.collection.batches)}개 배치
             </p>
           </div>
@@ -874,6 +876,33 @@ function Status({ status }: { status: AxAgentSourceCoverageRow['status'] }) {
   )
 }
 
+/** Collection transport and observed task failures answer different questions. */
+function AgentObservationStatus({ data, agentId, reporters }: {
+  data: AxAgentActivityData
+  agentId: string
+  reporters: AxAgentReporterRow[]
+}) {
+  const normal = reporters.filter(row => row.freshness === 'fresh' && row.healthStatus === 'healthy' && row.healthWarnings.length === 0).length
+  const traces = (data.taskTraces ?? []).filter(trace => agentId === 'all' || trace.agentId === agentId)
+  const executions = traces.filter(trace => trace.events.some(event => event.phase === 'execution'))
+  const failed = executions.filter(trace => trace.events.some(event => event.phase === 'execution' && event.status === 'failed')).length
+  const label = failed > 0 ? `실행 실패 관측 ${formatCount(failed)}개 작업`
+    : executions.length > 0 ? '실행 실패 미관측' : '실행 근거 미수집'
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-[var(--border-subtle)] py-3 text-xs" aria-label="수집과 업무 실행 상태">
+      <span title="수집기의 보고 상태입니다. 에이전트의 작업 성공이나 사용 가능 여부를 뜻하지 않습니다."
+        className={normal < reporters.length ? 'text-[color-mix(in_srgb,var(--accent-orange)_75%,var(--text-primary))]' : 'text-[var(--text-secondary)]'}>
+        {reporters.length > 0 ? `수집 정상 ${formatCount(normal)}/${formatCount(reporters.length)}개 소스` : '수집 소스 미등록'}
+      </span>
+      <span title="최근 작업 목록에 기록된 실행 단계만 집계합니다. 재시도 전 실패도 포함하며, 미관측은 전체 업무의 성공을 뜻하지 않습니다. 실제 성공·전달 근거는 작업 상세에서 확인합니다."
+        className={failed > 0 ? 'text-[color-mix(in_srgb,var(--accent-orange)_75%,var(--text-primary))]' : 'text-[var(--text-secondary)]'}>
+        {label}
+      </span>
+      <span className="text-[var(--text-secondary)]">실행 상태는 최근 작업 목록 기준</span>
+    </div>
+  )
+}
+
 function CollectorStatus({
   freshness,
   health,
@@ -890,7 +919,7 @@ function CollectorStatus({
       : freshness === 'stale'
         ? '수집 지연'
         : health === 'healthy'
-          ? '정상'
+          ? '수집 정상'
           : '수집 중'
   const warning = health === 'blocked' || freshness === 'stale'
   return (
