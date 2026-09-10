@@ -36,6 +36,22 @@ beforeEach(() => {
   configPath = join(root, 'config.json'); helperPath = join(root, 'bridge.mjs'); writeFileSync(helperPath, bundle, { mode: 0o600 }); config(); vi.stubGlobal('fetch', vi.fn(async () => response()))
 })
 afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); Object.defineProperty(process.versions, 'node', { value: originalNode }); rmSync(root, { recursive: true, force: true }) })
+  it('discovers new scoped sessions each batch and retries dynamic pending without touching config/helper/source', async () => {
+    const project = join(sessions, 'project-a'); mkdirSync(project)
+    const record = (id: string, at: string) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id, role: 'assistant', model: 'example', stop_reason: 'end_turn', usage: { input_tokens: 42, output_tokens: 1 } } }) + '\n'
+    writeFileSync(join(project, 'old.jsonl'), record('old', '2026-01-01T12:00:00Z'))
+    config({ source: 'claude-code', cliInventory: 'installed-scope' })
+    const first = batch('claude-code'); await attachAgentObservability(first, configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })
+    expect(first.collection.observability).toMatchObject({ capabilities: { cliMetrics: 'uncollected' } })
+    writeFileSync(join(project, 'new.jsonl'), record('new', '2026-01-02T12:00:00Z'))
+    const next = batch('claude-code'); await attachAgentObservability(next, configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })
+    expect(next.collection.observability).toMatchObject({ metrics: { peakContextTokens: { count: 1, sum: 42 } } })
+    const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response(sent.length > 1) }))
+    const options = { ...opts(), source: 'claude-code', projectSlugs: 'project-a' }
+    await expect(runAgentTelemetryCollect(options)).rejects.toThrow('Pending batch was preserved')
+    rmSync(configPath); rmSync(helperPath); rmSync(project, { recursive: true }); Object.defineProperty(process.versions, 'node', { value: '22.0.0' })
+    await runAgentTelemetryCollect(options); expect(sent[1]).toBe(sent[0]); expect(JSON.parse(sent[0]).collection.observability.metrics.peakContextTokens.sum).toBe(42)
+  })
   it('freezes validated aggregates and replays unchanged after config/helper/source disappear', async () => {
     const guard = join(root, 'guard.jsonl'); writeFileSync(guard, JSON.stringify({ ts: '2026-01-02T01:00:00.000Z', decision: 'deny' }) + '\n'); config({ readGuardFiles: [{ path: guard, sessionKey: 'private-session', agentExclusive: true }] })
     const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response(sent.length > 1) }))

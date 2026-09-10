@@ -41,6 +41,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       checkScope(path)
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       const before = await handle.stat(), identity = `${before.dev}:${before.ino}`
+      if(file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(before[key])!==value : before[key]!==value)) throw scopeError()
       if (!before.isFile() || before.size > maxFileBytes) { counters.rotatedFiles++; continue }
       if (seenFiles.has(identity)) { counters.duplicates++; counters.filesExpected--; continue }
       seenFiles.add(identity)
@@ -48,7 +49,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       let offset = 0
       while (offset < bytes.length) { const read = await handle.read(bytes, offset, bytes.length-offset, offset); if (!read.bytesRead) break; offset += read.bytesRead }
       const after = await handle.stat()
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || offset !== before.size) { counters.rotatedFiles++; continue }
+      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || offset !== before.size) { if(file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
       const current = await realpath(file.path)
       checkScope(current)
       const check = await open(current, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)

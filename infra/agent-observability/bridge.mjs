@@ -17,7 +17,9 @@ try {
   const observation = agentObservabilitySchema.parse(await collectObservability(input))
   if (observation.agentId !== input.agentId || observation.source !== input.source || observation.window.startUtc !== input.window.startUtc || observation.window.endUtc !== input.window.endUtc) throw new Error('Scope changed')
   process.stdout.write(JSON.stringify(observation))
-} catch {
-  process.stderr.write('Observation bridge failed validation; no batch was sent.\n')
+} catch (cause) {
+  const reasons=['source-consistency','entry-limit','candidate-limit','file-limit','scan-limit','invalid-header','header-limit','invalid-record','session-identity','invalid-timestamp','line-limit','partial-tail','selection-limit']
+  const reason=reasons.includes(cause?.inventoryReason) ? ` Inventory: ${cause.inventoryReason}.` : ''
+  process.stderr.write(`Observation bridge failed validation; no batch was sent.${reason}\n`)
   process.exitCode = 1
 }

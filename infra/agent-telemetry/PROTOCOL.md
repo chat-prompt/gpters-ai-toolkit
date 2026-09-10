@@ -260,6 +260,11 @@ are independent of sidecar coverage.
 
 See [managed bridge setup and retry boundaries](../agent-observability/MANAGED-BRIDGE.md)
 for the opt-in configuration, Node24 requirement and local regression commands.
+Ongoing Claude/Codex observation requires the explicit `cliInventory:
+"installed-scope"` mode; a static file manifest cannot establish future-session
+coverage. Validate its bounded full timestamp scan on the actual approved source
+before activation. If limits or source changes prevent a safe scan, retain the
+working collector and report the observation rollout as unactivated.
 Configuring the bridge is an agent collection behavior change and requires the
 normal rollout notice before touching an installed collector. The offline format
 below is different from the versioned managed configuration.
