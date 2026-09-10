@@ -13,6 +13,32 @@ export const axIncidentReviews = pgTable('ax_incident_reviews', {
   revision: integer('revision').notNull(),
   record: jsonb('record').$type<Record<string, unknown>>().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, table=>[index('ax_incident_reviews_history_idx').on(table.updatedAt.desc(),table.id.desc())])
+
+/** Durable monitor state, committed-batch ledger and operator-only notification outbox. */
+export const axMonitorState = pgTable('ax_monitor_state', {
+  id: text('id').primaryKey(), revision: integer('revision').notNull().default(0),
+  record: jsonb('record').$type<Record<string, unknown>>().notNull(),
+  lastSuccessAt: timestamp('last_success_at', {withTimezone:true}),
+  updatedAt: timestamp('updated_at', {withTimezone:true}).notNull().defaultNow(),
+})
+export const axMonitorProcessedBatches = pgTable('ax_monitor_processed_batches', {
+  monitorId: text('monitor_id').notNull().references(()=>axMonitorState.id),
+  batchId: text('batch_id').notNull(), processedAt: timestamp('processed_at',{withTimezone:true}).notNull().defaultNow(),
+}, table=>[primaryKey({columns:[table.monitorId,table.batchId]})])
+export const axMonitorOutbox = pgTable('ax_monitor_outbox', {
+  id: text('id').primaryKey(), monitorId: text('monitor_id').notNull().references(()=>axMonitorState.id),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  status: text('status').notNull().default('pending'), attempts: integer('attempts').notNull().default(0),
+  availableAt: timestamp('available_at',{withTimezone:true}).notNull().defaultNow(),
+  claimedUntil: timestamp('claimed_until',{withTimezone:true}), claimId: text('claim_id'),
+  deliveredAt: timestamp('delivered_at',{withTimezone:true}), createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+}, table=>[index('ax_monitor_outbox_pending_idx').on(table.status,table.availableAt)])
+export const axReportInboxes = pgTable('ax_report_inboxes', {
+  id: text('id').primaryKey(), revision: integer('revision').notNull().default(0),
+  registration: jsonb('registration').$type<Record<string, unknown>>().notNull(),
+  record: jsonb('record').$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
 })
 
 export const itemTypeEnum = pgEnum('item_type', [
@@ -1560,3 +1586,5 @@ export const aitkAgentEvents = pgTable('aitk_agent_events', {
   details: jsonb('details').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('aitk_agent_events_agent_created_idx').on(table.agentId, table.createdAt)])
+
+export const axMonitorDeferredBatches=pgTable('ax_monitor_deferred_batches',{monitorId:text('monitor_id').notNull().references(()=>axMonitorState.id),batchId:text('batch_id').notNull(),reason:text('reason').notNull(),retryAfter:timestamp('retry_after',{withTimezone:true}).notNull()},table=>[primaryKey({columns:[table.monitorId,table.batchId]})])

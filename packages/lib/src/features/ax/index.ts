@@ -43,3 +43,10 @@ export * from './incident-review'
 export * from './incident-review-store'
 export * from './incident-report'
 export * from './incident-report-store'
+
+export * from './monitor-types'
+export { agentMonitoringPanel } from './monitor-panel'
+export { runAgentMonitor, readAgentMonitor, monitorConfiguration } from './monitor-store'
+export { flushMonitorOutbox } from './monitor-outbox'
+
+export * from './observation-trends'

@@ -6,7 +6,7 @@
  * 전용 화면이 필요해지면 그때 컴포넌트를 만들어 아래 맵에 한 줄 추가하면 된다.
  */
 
-import type { ComponentType } from 'react'
+import { createElement, type ComponentType } from 'react'
 import type { AxPanelViewProps } from './types'
 import { OverviewPanel } from './OverviewPanel'
 import { SkillEventSummary, SkillUsagePanel } from './SkillUsagePanel'
@@ -21,6 +21,9 @@ import { SubscriptionsPanel } from './SubscriptionsPanel'
 import { ClientUsagePanel } from './ClientUsagePanel'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { AgentIncidentPanel } from './AgentIncidentPanel'
+import { AgentMonitoringPanel } from './AgentMonitoringPanel'
+import { AgentObservationPanel } from './AgentObservationPanel'
+import { IncidentHistoryPanel } from './IncidentHistoryPanel'
 import { FallbackPanel } from './FallbackPanel'
 
 /**
@@ -46,6 +49,9 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   'client-usage': ClientUsagePanel,
   'agent-activity': AgentActivityPanel,
   'agent-incidents': AgentIncidentPanel,
+  'agent-monitoring': AgentMonitoringPanel,
+  'incident-history': IncidentHistoryPanel,
+  'agent-observations': ({ days }) => createElement(AgentObservationPanel, { days: days === 30 || days === 90 ? days : 7 }),
 }
 
 /**

@@ -237,3 +237,161 @@ records are also outside the failure filter; this is not an all-history incident
 Registered collectors become stale after two configured intervals, with a minimum
 five-minute transport grace. Unregistered schedules retain a 12-hour fallback.
 This is evaluated on server query; unattended UI refresh is a separate feature.
+
+## Optional runtime observations: preparation versus live collection
+
+The helpers in [agent-observability](../agent-observability/README.md) prepare an
+optional `collection.observability` sidecar. Availability in this repository or
+in a deployed dashboard does **not** enable it on an existing collector.
+
+| Capability | Current boundary |
+| --- | --- |
+| Claude/Codex JSONL metrics and ISO read-guard counters | Explicit private file inventory → read-only local helper → validated aggregate |
+| Scheduler/process/Slack API receipt normalization | An adapter must supply the exact runtime run/task/attempt binding and actual observed receipt |
+| Existing scheduled collector | Continues its installed collection path; there is no observation-config installation flag or automatic helper invocation |
+| Sidecar enrichment command | Creates an offline batch copy for review; does not send, authorize, or advance checkpoints |
+| New dashboard/monitor views | Can consume compatible stored sidecars; an empty view is not evidence that a live source was checked |
+
+Report separately: **helper ready**, **private adapter configured**,
+**local observation verified**, **server sidecar verified**, and
+**scheduled sidecar observed**. Do not promote any later state from an earlier
+one. Existing task-journal collection and successful ordinary telemetry batches
+are independent of sidecar coverage.
+
+### Private configuration and offline review
+
+An operator records the approved full commit SHA, stable Node path, existing
+agent/source/collector, exact source allowlist, rotation/session identity mapping,
+and adapter version in the private inventory. This adds no source or owner to an
+existing enrollment. New file paths or a shared runtime store require scope
+verification before reading them. Hermes/OpenClaw native CLI metrics are not
+implemented by these helpers; use `unsupported`, not a copied Codex label.
+
+Keep configuration, run bindings and raw receipts in a private directory
+(mode0700, files0600). A minimal **anonymous** helper config is:
+
+```json
+{
+  "agentId": "example-agent",
+  "source": "codex",
+  "window": {
+    "startUtc": "2026-01-02T00:00:00.000Z",
+    "endUtc": "2026-01-03T00:00:00.000Z"
+  },
+  "cliFiles": [
+    {"path":"/private/approved-source/session.jsonl","sessionKey":"opaque-local-session","completeFromStart":false}
+  ],
+  "readGuardFiles": [],
+  "runtimeBindings": [],
+  "runtimeRecords": []
+}
+```
+
+The sample dates and paths are placeholders. Use the exact proposed batch's
+`agentId`, `collection.source` and `[window.startUtc,window.endUtc)`; do not choose
+an independent wall-clock window. `sessionKey` maps rotated parts of one session
+and is never uploaded. Set `completeFromStart:true` only after verifying that all
+history required to identify the actual first turn is available. Missing guard
+inventory means uncollected; it does not mean zero denies. Do not manufacture
+runtime receipts to make an empty array nonempty.
+
+Local review commands, after substituting approved private inventory values:
+
+```sh
+# CHECKOUT is the clean approved commit, NODE is a stable Node24+ binary,
+# CLI is the existing repo-built AITK entry point, OBS_DIR is a private directory.
+umask 077
+mkdir -p "$OBS_DIR"
+
+# Use the existing approved source flags exactly; this example does not enroll
+# or change a schedule. Save the dry-run response as a separate private artifact.
+"$NODE" "$CLI" agent-telemetry collect --agent "$AGENT" --source "$SOURCE" \
+  <existing-approved-source-flags> --dry-run > "$OBS_DIR/dry-run.json"
+
+# Extract a review copy; never target the managed checkpoint/pending file.
+"$NODE" -e 'const fs=require("node:fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!data.dryRun||!data.batch)throw Error("Expected dry-run batch"); fs.writeFileSync(process.argv[2],JSON.stringify(data.batch),{mode:0o600,flag:"wx"})' \
+  "$OBS_DIR/dry-run.json" "$OBS_DIR/batch-copy.json"
+
+# The operator prepares observation-config.json from that exact batch window
+# and the approved private inventory before running these existing helpers.
+"$NODE" "$CHECKOUT/infra/agent-observability/collect.mjs" \
+  --config "$OBS_DIR/observation-config.json" > "$OBS_DIR/observation-output.json"
+"$NODE" "$CHECKOUT/infra/agent-observability/enrich-batch.mjs" \
+  --batch "$OBS_DIR/batch-copy.json" --observation "$OBS_DIR/observation-output.json" \
+  > "$OBS_DIR/batch-review.json"
+```
+
+`<existing-approved-source-flags>` is documentation notation, not a literal shell
+argument. Use a new private output directory for each review, so prior evidence
+is preserved. The enrichment helper validates scope/window/receipt times and
+strict aggregate fields, but the normal authenticated batch validator is still
+required. It does not certify the correctness of the entire copied batch or
+provide permission to upload it. Do not send this offline copy through a separate
+uploader with an existing or fabricated batch ID.
+
+### Requirements before connecting to the existing schedule
+
+The scheduling bridge is a further implementation and rollout step. These are
+its acceptance requirements, not an already available installation command:
+
+1. Preserve the existing collector identity, credential, stable Node, source
+   boundary and interval. Pin the adapter checkout as well as the CLI; a moving
+   branch or an unreviewed private script must not become a scheduled dependency.
+2. Read actual runtime receipts at the trusted adapter boundary. Persist the
+   exact run → task/attempt mapping when launching a bounded job, and pass that
+   mapping to receipt normalization. A timestamp overlap or a nearby message is
+   not a binding. A process wrapper alone does not intercept a gateway's Slack API.
+3. Generate observations for the collector's exact new batch window **before**
+   its first pending-batch persistence. Validate and freeze the full enriched
+   payload under one batch ID. On retry, resend those same persisted bytes rather
+   than rerunning helpers and changing the sidecar. Existing pending batches must
+   be flushed unchanged; do not append observations retroactively.
+4. Coordinate collection with the existing single-writer/checkpoint mechanism.
+   Commit collection progress only after the normal server acknowledgment.
+   Preserve pending state on a validation, read, network or acknowledgment
+   failure. Do not add a second scheduler or sender that races the current one.
+5. Record unsupported, missing, rotated, truncated and partially read sources
+   honestly. Verify that an invalid sidecar cannot silently produce complete
+   metrics or bypass the existing validation gate. Keep raw content, paths,
+   credentials and transport message identifiers out of the uploaded aggregate.
+6. Test the bridge against an isolated fixture/server before host rollout,
+   including restart after send, replay, conflicting receipt IDs, missing files,
+   rotated logs, partial trailing records and the exact window boundaries.
+   Shared/production API and E2E mutation tests remain prohibited.
+
+After a reviewed bridge exists and installation is authorized, use the ordinary
+fixed-SHA installation/upgrade procedure above. Then run one bounded real task
+and verify local metric samples and receipt bindings against the exact stored
+sidecar batch ID, authenticated agent/source, window and adapter version. Inspect
+the dashboard's missingness, sample counts and evidence labels. Finally observe
+a later natural collector interval without manually triggering it. Report the
+highest verified stage; until that last observation, continuous collection of
+these new fields remains unverified. A normal version upgrade alone cannot
+satisfy this procedure while the bridge is absent.
+
+### Delivery expectations not yet implemented in this release
+
+There is no independent expectation-registration input in this release. A task
+that never emits a receipt cannot currently create its own delivery deadline in
+the monitor. The implemented monitor can retain an explicit deadline carried by
+a Slack receipt, and can retain an earlier success fact for the same exact
+agent/source/task/attempt when its deadline arrives later. This is a limited path;
+it does not cover a dispatch that never ran or a Slack call that never occurred.
+A scheduler or process receipt's deadline is not automatically interpreted as a
+missing-delivery expectation. Independent task expectation creation/cancellation
+and its durable ingestion require a later protocol and implementation.
+
+Keep the meanings separate:
+
+- Scheduler completion establishes the scheduler result only.
+- Process success establishes an observed exit outcome only.
+- A Slack API success establishes API acceptance for that exact invocation. It
+  is neither a recipient read receipt nor independent proof of human delivery.
+- An operator's independent server check proves that a reported record was
+  stored; it does not upgrade the record into independently verified execution
+  or delivery. Human/agent statements remain self-reported.
+
+Do not label the present system as complete missing-delivery detection or
+independent delivery verification. Missing evidence stays unknown until the
+corresponding source and registration path have actually been implemented and
+verified.

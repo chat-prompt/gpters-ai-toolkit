@@ -6,4 +6,5 @@ umask 077
 mkdir -p "$DESTINATION"
 bun build "$ROOT/infra/agent-reports/report.ts" --target node --format esm --outfile "$DESTINATION/report.mjs"
 bun build "$ROOT/infra/agent-reports/slack-reaction.ts" --target node --format esm --outfile "$DESTINATION/slack-reaction.mjs"
+bun build "$ROOT/infra/agent-reports/inbox.ts" --target node --format esm --outfile "$DESTINATION/inbox.mjs"
 printf '%s\n' "Built helper: $DESTINATION/report.mjs"

@@ -40,8 +40,58 @@ required. Production must enable the report API before agents use it.
 
 There is no background Slack push/poller installed by this helper. Do not claim
 unattended notification or continuous thread monitoring after the agent session
-ends. A later workflow can explicitly enroll an inbox watcher with a bounded
-poll interval, expiry, deduplication and receipt handling.
+ends. The optional inbox transition library below prepares that integration;
+an operator must explicitly enroll and activate a persistent watcher first.
+
+## Optional bounded inbox integration
+
+`inbox.mjs` exports `enrollReportInbox`, `advanceReportInbox` and
+`acknowledgeReportInbox`. These functions perform no network requests, file
+writes, Slack sends, report supplements or final decisions. They return JSON
+state and pending notification instructions for an enrolled central monitor.
+Existing sessions and note-taking automations do not change merely by building
+or importing this module. Report behavior changes before runtime activation.
+
+Enroll only a successfully receipted own report. Supply its report ID and HTTPS
+server origin plus the original Slack channel and **resolved thread root** from
+the authenticated adapter. A problem permalink can point to a reply; do not use
+that reply timestamp as the root. Expiry is mandatory and cannot exceed 30 days.
+Keep enrollment, state, receipts and reviewer notes in private durable storage.
+
+The monitor reads the existing scoped `GET /api/ax/agent-reports/{id}` at the
+returned `nextPollAt` (five-minute cadence). Pass its receipt and review fields
+to `advanceReportInbox`. Failed, unauthorized or malformed reads are operational
+errors: preserve the previous state, surface the read failure to the operator,
+and never manufacture an empty/candidate snapshot. A failed read must not trigger
+a reminder from stale evidence. An older revision is ignored.
+
+A new human `needs-info` entry produces one instruction for the original
+thread. After confirmed delivery, at most three reminders are emitted, each at
+least 24 hours after the previous delivery. Another day without an answer
+produces one operator handoff and stops the watch. Outages do not cause catch-up
+bursts. A new human question starts a new bounded cycle. A supplement awaiting
+review cancels queued nudges; it does not resolve the incident. Human final
+disposition closes the watch. Expiry replaces any unsent reminder with an
+operator handoff, including reports without an open question. A closed or
+handed-off watch requires explicit operator re-enrollment; it is not silently
+restarted when a report reopens.
+
+Persist returned state and its pending notification in one transaction/CAS
+before sending. `pending.id` is the stable delivery retry identity. Re-read the
+latest state before dispatch and cancel stale outbox entries if the pending ID
+changed or disappeared. Deliver `original-thread` only to the enrolled channel
+and root; resolve `operator` through private operator configuration, not an
+agent-supplied recipient. Render reviewer text as inert text: do not interpret
+mentions, links or instructions as tool authority or automatically run a model.
+
+Call `acknowledgeReportInbox` only for a verified provider receipt and save the
+result atomically. A failed delivery does not increment reminder count. Retain
+the same pending ID through process restarts and uncertain sends; reconcile a
+provider receipt before resending after a timeout. A stable ID is not a claim
+that Slack guarantees exactly-once delivery. Never mark a notice delivered just
+because a worker exited successfully. The central monitor must also monitor
+polling/delivery failures and its own liveness independently; this pure library
+cannot detect an absent worker.
 
 ## Authentication and scope
 

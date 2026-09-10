@@ -113,3 +113,6 @@ export const CRON_EXPECTATIONS: CronExpectation[] = [
 export function findCronExpectation(jobName: string): CronExpectation | undefined {
   return CRON_EXPECTATIONS.find((entry) => entry.jobName === jobName)
 }
+
+/** Separate operator-DM watchdog; do not send these failures to the shared cron webhook. */
+export const INDEPENDENTLY_WATCHED_CRONS = [{jobName:'agent-monitor',watchdog:'infra/agent-observability/watch-monitor.ts'}] as const

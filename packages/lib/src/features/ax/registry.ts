@@ -27,6 +27,7 @@ import { clientUsagePanel } from './usage'
 import { agentActivityPanel } from './agent-activity'
 import { activityGrassPanel } from './activity-grass'
 import { agentIncidentsPanel } from './incident-review-store'
+import { agentMonitoringPanel, incidentHistoryPanel, agentObservationPanel } from './monitor-panel'
 
 /** 등록된 패널 — 배열 순서가 화면 표시 순서다 */
 export const AX_PANELS: AxPanel[] = [
@@ -37,6 +38,9 @@ export const AX_PANELS: AxPanel[] = [
   journeyInsightsPanel,
   agentActivityPanel,
   agentIncidentsPanel,
+  agentMonitoringPanel,
+  incidentHistoryPanel,
+  agentObservationPanel,
   sharedSkillsPanel,
   skillDiffPanel,
   skillDuplicatesPanel,

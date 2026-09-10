@@ -218,6 +218,13 @@
       "when": 1789000000000,
       "tag": "0040_ax_incident_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789017000000,
+      "tag": "0041_ax_agent_monitoring",
+      "breakpoints": true
     }
   ]
 }
