@@ -1,3 +1,4 @@
+import { monitorOperationalHealth } from '../../../../../../packages/lib/src/features/ax/monitor-health'
 import { timingSafeEqual } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { runAgentMonitor, readAgentMonitor, monitorConfiguration } from '@/lib/features/ax'
@@ -20,8 +21,8 @@ export async function GET(request:NextRequest) {
   try {
     if(heartbeat) {
       const data=await readAgentMonitor()
-      const age=data?.lastSuccessAt?Date.now()-Date.parse(data.lastSuccessAt):null
-      return NextResponse.json({lastSuccessAt:data?.lastSuccessAt??null,healthy:age!==null&&age>=0&&age<=900000&&data?.backlog===0,backlog:data?.backlog??null},{headers})
+      return NextResponse.json({lastSuccessAt:data?.lastSuccessAt??null,healthy:monitorOperationalHealth(data,new Date().toISOString()),backlog:data?.backlog??null,
+        oldestUnprocessedAt:data?.oldestUnprocessedAt??null,deferredBacklog:data?.deferredBacklog??null},{headers})
     }
     const result=await runAgentMonitor()
     const outbox=await flushMonitorOutbox()
