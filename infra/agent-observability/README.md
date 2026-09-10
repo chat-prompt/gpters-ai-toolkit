@@ -167,8 +167,11 @@ when changing the panel. The opt-in managed bridge is implemented, while actual
 scoped host activation and natural scheduled observations require separate verification.
 
 For the exact current readiness boundaries, private config/offline commands,
-managed bridge rollout acceptance criteria, and the missing independent deadline
+managed bridge rollout acceptance criteria, and the default-off independent deadline
 registration path, follow the rollout protocol's
 [optional runtime observations](../agent-telemetry/PROTOCOL.md#optional-runtime-observations-preparation-versus-live-collection)
 section. Helpers alone do not enable scheduled sidecars or complete
 missing-delivery detection.
+
+See [explicit task expectations](TASK-EXPECTATIONS.md) for pre-execution registration
+and missing-receipt detection when no runtime event is emitted.

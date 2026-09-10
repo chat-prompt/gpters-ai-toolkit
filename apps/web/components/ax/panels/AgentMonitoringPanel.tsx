@@ -64,6 +64,11 @@ export function AgentMonitoringPanel({ data }: AxPanelViewProps<MonitorDashboard
         </div>
         <p className="mt-2 break-all text-xs text-[var(--text-secondary)]">{item.agentId} · {item.source}{item.phase ? ` · ${PHASES[item.phase]}` : ''}{item.evidence ? ` · ${EVIDENCE[item.evidence]}` : ''}</p>
         <p className="mt-1 break-words text-xs text-[var(--text-secondary)]">처음 관측 {formatTime(item.firstObservedAt)} · 최근 확인 {formatTime(item.lastObservedAt)}{item.eventCount > 0 ? ` · 실패 이벤트 ${item.eventCount}건` : ''}</p>
+        {item.expectation && <p className="mt-1 break-words text-xs text-[var(--text-secondary)]">
+          예정 {formatTime(item.expectation.scheduledFor)} · 마감 {formatTime(item.expectation.deadlineAt)} · {item.expectation.state === 'cancelled' ? '예정 취소' : item.expectation.state === 'completed' ? '성공 영수증 관측' : '영수증 대기'}
+          {item.expectation.missedDeadlineAt && !item.expectation.receiptAt && ' · 마감 초과 이력 있음'}
+          {item.expectation.receiptAt && ` · 영수증 ${formatTime(item.expectation.receiptAt)}${Date.parse(item.expectation.receiptAt) > Date.parse(item.expectation.deadlineAt) ? ' (마감 이후)' : ''}`}
+        </p>}
         {item.taskId && <p className="mt-1 break-all font-mono text-[11px] text-[var(--text-secondary)]">작업 {item.taskId}</p>}
       </li>)}
     </ul>}

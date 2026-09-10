@@ -31,6 +31,12 @@ describe('agent monitoring panel', () => {
     expect(screen.queryByText(/example-agent · codex/)).toBeNull()
   })
 
+  it('shows explicit plan deadlines and late receipts without relabeling the human decision', () => {
+    render(<AgentMonitoringPanel data={data({ candidates: [{ ...candidate, kind: 'missing-receipt', state: 'confirmed', eventCount: 0, observationActive: false, expectation: { id: 'expect-example', revision: 2, scheduledFor: '2026-01-01T00:00:00Z', deadlineAt: '2026-01-02T00:00:00Z', originalDeadlineAt: '2026-01-02T00:00:00Z', state: 'completed', receiptAt: '2026-01-03T00:00:00Z' } }] })} days={7} />)
+    expect(screen.getByText(/예정 .*마감 .*성공 영수증 관측/)).toBeTruthy()
+    expect(screen.getByText(/마감 이후/)).toBeTruthy(); expect(screen.getByText('확정')).toBeTruthy()
+    expect(screen.queryByText(/실패 이벤트/)).toBeNull()
+  })
   it('does not describe absent observations as zero incidents', () => {
     render(<AgentMonitoringPanel data={data({ lastSuccessAt: null, candidates: [], backlog: 0 })} days={7} />)
     expect(screen.getByText('첫 점검 대기')).toBeTruthy()

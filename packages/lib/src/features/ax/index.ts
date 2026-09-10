@@ -50,3 +50,6 @@ export { runAgentMonitor, readAgentMonitor, monitorConfiguration } from './monit
 export { flushMonitorOutbox } from './monitor-outbox'
 
 export * from './observation-trends'
+
+export * from './task-expectations'
+export * from './task-expectation-store'
