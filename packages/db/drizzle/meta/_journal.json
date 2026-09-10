@@ -225,6 +225,13 @@
       "when": 1789017000000,
       "tag": "0041_ax_agent_monitoring",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789020000000,
+      "tag": "0042_ax_task_expectations",
+      "breakpoints": true
     }
   ]
 }

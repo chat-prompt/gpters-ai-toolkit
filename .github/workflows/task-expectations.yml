@@ -1,0 +1,58 @@
+name: Explicit task expectations
+on:
+  pull_request:
+    paths:
+      - 'packages/lib/src/features/ax/task-expect*.ts'
+      - 'packages/lib/src/features/ax/monitor-*.ts'
+      - 'packages/db/drizzle/0042_ax_task_expectations.sql'
+      - 'packages/db/src/schema.ts'
+      - 'apps/web/app/api/ax/task-expectations/**'
+      - 'apps/web/middleware.ts'
+      - 'apps/web/tests/unit/middleware-agent-telemetry.test.ts'
+      - 'apps/web/components/ax/panels/AgentMonitoringPanel.tsx'
+      - 'apps/web/tests/unit/ax-task-expect*'
+      - 'apps/web/tests/unit/ax-monitor-*'
+      - '.github/workflows/task-expectations.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/lib/src/features/ax/task-expect*.ts'
+      - 'packages/lib/src/features/ax/monitor-*.ts'
+      - 'packages/db/drizzle/0042_ax_task_expectations.sql'
+      - 'packages/db/src/schema.ts'
+      - 'apps/web/app/api/ax/task-expectations/**'
+      - 'apps/web/middleware.ts'
+      - 'apps/web/tests/unit/middleware-agent-telemetry.test.ts'
+      - 'apps/web/components/ax/panels/AgentMonitoringPanel.tsx'
+      - 'apps/web/tests/unit/ax-task-expect*'
+      - 'apps/web/tests/unit/ax-monitor-*'
+      - '.github/workflows/task-expectations.yml'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ax_task_expectations_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['55443:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ax_task_expectations_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gpters/web exec vitest run tests/unit/ax-task-expectations.test.ts tests/unit/ax-task-expectation-route.test.ts tests/unit/ax-monitor-engine.test.ts tests/unit/ax-monitor-presend.test.ts tests/unit/ax-monitor-panel.test.tsx tests/unit/middleware-agent-telemetry.test.ts
+      - run: pnpm --filter @gpters/web exec vitest run tests/unit/ax-task-expectation-store.postgres.test.ts
+        env:
+          RUN_ISOLATED_EXPECTATION_TESTS: 'true'
+          DATABASE_DRIVER: postgres-js
+          TEST_DATABASE_URL: postgres://postgres@127.0.0.1:55443/ax_task_expectations_test

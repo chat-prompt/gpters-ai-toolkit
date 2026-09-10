@@ -1,3 +1,4 @@
+import { readOwnTaskExpectation } from './task-expectation-store'
 import { randomUUID } from 'node:crypto'
 import { db } from '@gpters/db'
 import { sql } from 'drizzle-orm'
@@ -23,6 +24,15 @@ export async function monitorNoticeBeforeSend(notice:MonitorOutboxItem,noticeId:
   const condition=state?.conditions?.[notice.candidateId]
   const candidate=state?.candidates?.[notice.candidateId]
   if(!candidate||candidate.agentId!==notice.payload.agentId||candidate.source!==notice.payload.source||!condition||condition.episode!==notice.episode||(notice.kind==='recovery'?condition.active:!condition.active))return {status:'cancel',reason:'observation-changed'}
+  if(candidate.expectation) {
+    if(process.env.AX_TASK_EXPECTATIONS_ENABLED!=='true')return {status:'cancel',reason:'expectations-disabled'}
+    const current=await readOwnTaskExpectation({orgId:monitorId,agentId:candidate.agentId},candidate.expectation.id)
+    if(!current||current.source!==candidate.source||current.taskId!==candidate.taskId||current.attemptId!==candidate.attemptId)return {status:'cancel',reason:'expectation-scope-changed'}
+    // Cancellation or postponement may commit between the monitor tick and this send.
+    if(current.revision!==candidate.expectation.revision)return {status:'cancel',reason:'expectation-revised'}
+    const overdue=current.state==='active'&&!current.receipt&&Date.parse(current.deadlineAt)<Date.now()
+    if(notice.kind==='recovery'?overdue:!overdue)return {status:'cancel',reason:'expectation-condition-changed'}
+  }
   if(candidate.kind==='task-failure'&&candidate.phase&&candidate.evidence) {
     const id=incidentKey({agentId:candidate.agentId,source:candidate.source,phase:candidate.phase,evidence:candidate.evidence})
     const saved=await db.execute(sql`SELECT record FROM ax_incident_reviews WHERE id=${id}`)

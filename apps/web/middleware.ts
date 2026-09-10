@@ -68,6 +68,7 @@ export function isPublicRoute(pathname: string): boolean {
     // Agent reports authenticate their scoped Bearer credential inside the route.
     // Keep dashboard reads and human review writes behind the session boundary.
     strippedPath === '/api/ax/agent-reports' ||
+    strippedPath === '/api/ax/task-expectations' ||
     /^\/api\/ax\/agent-reports\/report_[a-f0-9]{32}$/.test(strippedPath) ||
     strippedPath === '/api/agents/credentials' ||
     strippedPath === '/api/agents/mcp' ||

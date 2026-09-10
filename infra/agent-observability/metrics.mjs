@@ -5,6 +5,8 @@ import { histogram } from './histogram.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
 export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 })
 const integer = value => Number.isSafeInteger(value) && value >= 0
+// Same non-metric Claude metadata recognized by the existing agent collector.
+const claudeMetadata = new Set(['attachment','file-history-delta','last-prompt','atis-latch','mode','permission-mode','ai-title'])
 const textChars = value => typeof value === 'string' ? [...value].length : Array.isArray(value) ? value.reduce((n,b) => n + (b?.type === 'text' && typeof b.text === 'string' ? [...b.text].length : 0),0) : null
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
 function assertCodexFileScope(records, scope) {
@@ -30,6 +32,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
     try {
       if (typeof file.path !== 'string' || typeof file.sessionKey !== 'string' || !file.sessionKey) throw new Error('Invalid private inventory')
       const path = await realpath(file.path)
+      if (file.expectedIdentity && path !== file.path) throw scopeError()
       const checkScope = candidate => {
         if (!scope) return
         const local = relative(scope.sessionsDir, candidate)
@@ -41,18 +44,23 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       checkScope(path)
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       const before = await handle.stat(), identity = `${before.dev}:${before.ino}`
-      if (!before.isFile() || before.size > maxFileBytes) { counters.rotatedFiles++; continue }
+      if(file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(before[key])!==value : before[key]!==value)) throw scopeError()
+      if (!before.isFile() || before.size > maxFileBytes) { if (file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
       if (seenFiles.has(identity)) { counters.duplicates++; counters.filesExpected--; continue }
       seenFiles.add(identity)
       const bytes = Buffer.alloc(before.size)
       let offset = 0
       while (offset < bytes.length) { const read = await handle.read(bytes, offset, bytes.length-offset, offset); if (!read.bytesRead) break; offset += read.bytesRead }
       const after = await handle.stat()
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || offset !== before.size) { counters.rotatedFiles++; continue }
+      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || offset !== before.size) { if(file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
       const current = await realpath(file.path)
       checkScope(current)
       const check = await open(current, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
-      try { const named = await check.stat(); if (named.ino !== before.ino || named.dev !== before.dev) { counters.rotatedFiles++; continue } } finally { await check.close() }
+      try {
+        const named = await check.stat()
+        if (file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(named[key])!==value : named[key]!==value)) throw scopeError()
+        if (named.ino !== before.ino || named.dev !== before.dev) { if (file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
+      } finally { await check.close() }
       counters.filesRead++
       const lines = bytes.toString('utf8').split('\n'), fileRecords = []
       if (source === 'codex' && scope) {
@@ -78,6 +86,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
         seenRows.add(item.key); records.push(item)
       }
     } catch (error) {
+      if (file.expectedIdentity) throw scopeError()
       if (error.scopeMismatch) throw new Error('Observation source scope changed')
       /* Private paths/errors never escape. filesRead mismatch makes missing source explicit. */
     }
@@ -117,7 +126,7 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
         resultItems = row.message.content.filter(b => b.type === 'tool_result')
         if (resultItems.length) entry = timed(item,'result')
       } else if (row.type === 'system' && row.subtype === 'compact_boundary') { compact = true; entry = timed(item,'compact') }
-      else if (!['user','assistant','system','progress','file-history-snapshot','queue-operation','summary'].includes(row.type)) { counters.unsupportedRecords++; continue }
+      else if (!claudeMetadata.has(row.type) && !['user','assistant','system','progress','file-history-snapshot','queue-operation','summary'].includes(row.type)) { counters.unsupportedRecords++; continue }
     } else {
       const payload = row.payload
       if (row.type === 'event_msg' && payload?.type === 'token_count') {

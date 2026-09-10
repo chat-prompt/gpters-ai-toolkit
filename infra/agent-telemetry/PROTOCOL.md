@@ -260,6 +260,11 @@ are independent of sidecar coverage.
 
 See [managed bridge setup and retry boundaries](../agent-observability/MANAGED-BRIDGE.md)
 for the opt-in configuration, Node24 requirement and local regression commands.
+Ongoing Claude/Codex observation requires the explicit `cliInventory:
+"installed-scope"` mode; a static file manifest cannot establish future-session
+coverage. Validate its bounded full timestamp scan on the actual approved source
+before activation. If limits or source changes prevent a safe scan, retain the
+working collector and report the observation rollout as unactivated.
 Configuring the bridge is an agent collection behavior change and requires the
 normal rollout notice before touching an installed collector. The offline format
 below is different from the versioned managed configuration.
@@ -376,17 +381,20 @@ highest verified stage; until that last observation, continuous collection of
 these new fields remains unverified. A normal version upgrade alone cannot
 satisfy this procedure without explicit bridge configuration and source verification.
 
-### Delivery expectations not yet implemented in this release
+### Independent expectation registration
 
-There is no independent expectation-registration input in this release. A task
-that never emits a receipt cannot currently create its own delivery deadline in
-the monitor. The implemented monitor can retain an explicit deadline carried by
-a Slack receipt, and can retain an earlier success fact for the same exact
-agent/source/task/attempt when its deadline arrives later. This is a limited path;
-it does not cover a dispatch that never ran or a Slack call that never occurred.
-A scheduler or process receipt's deadline is not automatically interpreted as a
-missing-delivery expectation. Independent task expectation creation/cancellation
-and its durable ingestion require a later protocol and implementation.
+The default-off [task expectations protocol](../agent-observability/TASK-EXPECTATIONS.md)
+registers an exact agent/task/attempt/phase and deadline before execution, including
+work that never emits a receipt. Its tenant-scoped API, durable state and monitor
+projection are implemented separately from collector batches. Applying migration
+0042 and enabling the approved identities are distinct rollout steps; no existing
+agent or scheduler starts registering plans automatically.
+
+Existing receipt-carried delivery deadlines remain compatible. An explicit plan
+can additionally require process/API evidence; neither scheduler success nor
+self-reported completion substitutes for that evidence. Cancellation, postponement,
+late receipts and idempotent retries retain their documented boundaries. Independent
+human read receipts and whole-business-task correctness are still not inferred.
 
 Keep the meanings separate:
 

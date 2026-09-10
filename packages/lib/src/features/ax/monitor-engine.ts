@@ -120,13 +120,24 @@ export function reduceMonitor(input: MonitorInput): MonitorResult {
       (expectation.requiredEvidence === 'reported' || (expectation.receipt.independentlyVerified && expectation.receipt.evidence !== 'self-reported'))
     const overdue = !expectation.cancelled && now > time(expectation.deadlineAt) && !received
     if (!input.caughtUp && overdue) continue
-    if (!overdue && !state.candidates[id]) continue
+    if (!overdue && !state.candidates[id] && !expectation.registration?.missedDeadlineAt) continue
     const candidate = ensureCandidate(id, { kind: 'missing-receipt', agentId: expectation.agentId,
       source: expectation.source, taskId: expectation.taskId, attemptId: expectation.attemptId,
       phase: expectation.phase, evidence: expectation.receipt?.evidence })
     candidate.lastObservedAt = input.now
+    if (expectation.registration) {
+      // A revised deadline is a new observation episode. The prior queued first
+      // may already have been cancelled by pre-send validation. Even if the new
+      // deadline expires between ticks, do not inherit its openingQueued marker
+      // and suppress the replacement alert until the next daily reminder.
+      if (candidate.expectation && candidate.expectation.deadlineAt !== expectation.deadlineAt) updateCondition(candidate, false)
+      candidate.expectation = { ...expectation.registration, deadlineAt: expectation.deadlineAt, receiptAt: expectation.receipt?.at ?? null }
+      candidate.lastEventAt = expectation.receipt?.at ?? null
+      candidate.evidence = expectation.receipt?.evidence
+      if (overdue && CLOSED_STATES.has(candidate.state) && candidate.lastReviewedAt && time(expectation.deadlineAt) > time(candidate.lastReviewedAt)) candidate.needsReview = true
+    }
     // Do not declare a missing receipt while the ingestion backlog may contain it.
-    updateCondition(candidate, overdue)
+    updateCondition(candidate, overdue && (!CLOSED_STATES.has(candidate.state) || candidate.needsReview))
   }
 
   // Human decisions suppress task symptoms without asserting execution success.

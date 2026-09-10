@@ -56,6 +56,21 @@ describe('latest pre-send decision',()=>{
       expect(await monitorNoticeBeforeSend(notice,notice.id,'claim-a','monitor-a')).toEqual({status:'allow'})
     }
   })
+  it('cancels an old missing-receipt alert after its expectation was cancelled or deferred', async () => {
+    vi.stubEnv('AX_TASK_EXPECTATIONS_ENABLED','true')
+    const expected = { ...candidate, kind: 'missing-receipt' as const, taskId: 'task-a', attemptId: 'attempt-a', expectation: { id: 'expect-example', revision: 1, scheduledFor: '2026-01-01T00:00:00Z', deadlineAt: '2026-01-02T00:00:00Z', originalDeadlineAt: '2026-01-02T00:00:00Z', state: 'active' as const, receiptAt: null } }
+    const alert = { ...notice, payload: { ...notice.payload, kind: 'missing-receipt' as const } }
+    let current: Record<string,unknown> = { id: 'expect-example', agentId: candidate.agentId, source: 'codex', taskId: 'task-a', attemptId: 'attempt-a', state: 'active', revision: 1, deadlineAt: '2026-01-02T00:00:00Z' }
+    let index=0
+    mocks.execute.mockImplementation(async()=>{const stage=index++%3;return {rows:stage===0?[{status:'sending',claim_id:'claim-a',claimed_until:'2099-01-01T00:00:00Z'}]:stage===1?[{record:{conditions:{[candidate.id]:{active:true,episode:1}},candidates:{[candidate.id]:expected}}}]:[{record:current}]}})
+    const check=()=>monitorNoticeBeforeSend(alert,notice.id,'claim-a','monitor-a')
+    expect(await check()).toEqual({status:'allow'})
+    const fetcher=vi.fn().mockImplementationOnce(async()=>{current={...current,revision:2,state:'cancelled'};return opened()})
+    expect(await deliverOperatorAlert(notice.id,'fixture',fetcher,env,{beforeSend:check})).toMatchObject({status:'cancelled',reason:'expectation-revised'})
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    current={...current,revision:1,state:'active',deadlineAt:'2099-01-01T00:00:00Z'}
+    expect(await check()).toMatchObject({status:'cancel',reason:'expectation-condition-changed'})
+  })
   it('cancels revoked scope, changed recipient and expired or replaced claims',async()=>{
     mocks.config.mockReturnValue({id:'monitor-a',agents:['another-agent']})
     expect((await monitorNoticeBeforeSend(notice,notice.id,'claim-a','monitor-a')).status).toBe('cancel')

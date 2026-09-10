@@ -3,7 +3,7 @@
 import { constants, closeSync, fstatSync, openSync, readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
-import { readAgentConfig, readAgentToken } from '../../apps/aitk-cli/src/agent-auth'
+import { privateIdentityHome, readReportAgentConfig, readReportAgentToken } from './identity-home'
 
 export function privateJson(path: string): unknown {
   const fd = openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK)
@@ -13,15 +13,17 @@ export function privateJson(path: string): unknown {
     try {return JSON.parse(readFileSync(fd,'utf8'))} catch {throw new Error('Invalid report JSON')}
   } finally {closeSync(fd)}
 }
-export async function runAgentReport(args:string[], deps={readAgentConfig,readAgentToken,fetch:globalThis.fetch}) {
-  const {values,positionals}=parseArgs({args,allowPositionals:true,options:{input:{type:'string'},id:{type:'string'},server:{type:'string',default:'https://ai-toolkit.gpters.org'}}})
+export async function runAgentReport(args:string[], deps={readAgentConfig:readReportAgentConfig,readAgentToken:readReportAgentToken,fetch:globalThis.fetch}) {
+  const {values,positionals}=parseArgs({args,allowPositionals:true,options:{input:{type:'string'},id:{type:'string'},'identity-home':{type:'string'},server:{type:'string',default:'https://ai-toolkit.gpters.org'}}})
   const command=positionals[0]
   if(positionals.length!==1 || !['submit','get','append'].includes(command)) throw new Error('Usage: report submit --input FILE | get --id ID | append --id ID --input FILE')
-  const config=deps.readAgentConfig()
+  const identityHome=values['identity-home']===undefined?undefined:privateIdentityHome(values['identity-home'])
+  const config=deps.readAgentConfig(identityHome)
   if(!config || config.serverUrl!==values.server) throw new Error('Agent identity must be configured for the requested server; no personal token fallback')
+  if(identityHome && config.credentialStore!=='file') throw new Error('Private report identity requires the file credential store')
   const origin=new URL(values.server!)
   if(origin.origin!==values.server || (origin.protocol!=='https:' && !(origin.protocol==='http:' && ['127.0.0.1','localhost'].includes(origin.hostname)))) throw new Error('Invalid server origin')
-  const token=deps.readAgentToken()
+  const token=deps.readAgentToken(identityHome,identityHome?config.agentId:undefined)
   if(!token || !/^aia_[a-f0-9]{64}$/.test(token)) throw new Error('Scoped agent credential unavailable')
   if(command!=='submit' && !/^report_[a-f0-9]{32}$/.test(values.id??'')) throw new Error('Valid report ID required')
   if(command==='get' && values.input) throw new Error('get does not accept an input file')

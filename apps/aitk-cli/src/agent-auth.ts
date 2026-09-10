@@ -53,7 +53,7 @@ export async function importAgentCredential(input: unknown, expectedServerUrl: s
   if (existsSync(agentAuthPath(home))) throw new Error('Agent identity already configured; disconnect explicitly before replacing it')
   const response = await fetch(`${grant.serverUrl}/api/agents/mcp?action=whoami`, {
     method: 'POST', headers: { Authorization: `Bearer ${grant.token}`, 'Content-Type': 'application/json' },
-    body: '{}', signal: AbortSignal.timeout(30_000),
+    body: '{}', redirect: 'error', signal: AbortSignal.timeout(30_000),
   })
   if (!response.ok) throw new Error('Agent credential verification failed')
   const identity = await response.json() as { success?: boolean; actor?: { type?: string; id?: string; allowDeploy?: boolean; orgId?: string } }

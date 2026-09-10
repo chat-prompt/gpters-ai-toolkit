@@ -23,6 +23,7 @@ export interface MonitorCandidate {
   observationActive: boolean
   needsReview: boolean
   lastReviewedAt?: string
+  expectation?: { id: string; revision: number; scheduledFor: string; deadlineAt: string; originalDeadlineAt: string; missedDeadlineAt?: string; state: 'active' | 'cancelled' | 'completed'; receiptAt: string | null }
 }
 export interface MonitorCondition {
   active: boolean
@@ -64,12 +65,13 @@ export interface MonitorReceiptExpectation {
   source: MonitorSource
   taskId: string
   attemptId: string
-  phase: 'verification' | 'delivery'
+  phase: 'execution' | 'verification' | 'delivery'
   /** Only explicit deadlines establish a missing-receipt condition. */
   deadlineAt: string
   requiredEvidence: 'reported' | 'independent'
   receipt: { at: string; evidence: AxAgentTaskEvent['evidence']; independentlyVerified: boolean } | null
   cancelled?: boolean
+  registration?: { id: string; revision: number; scheduledFor: string; state: 'active' | 'cancelled' | 'completed'; originalDeadlineAt: string; missedDeadlineAt?: string }
 }
 export interface MonitorPolicy {
   enabled: boolean

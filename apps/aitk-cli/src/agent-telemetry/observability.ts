@@ -13,6 +13,7 @@ interface ObservationConfig {
   helperPath: string
   helperSha256: string
   cliFiles?: unknown[]
+  cliInventory?: 'installed-scope'
   readGuardFiles?: unknown[]
   runtimeBindings?: unknown[]
   runtimeRecords?: unknown[]
@@ -41,13 +42,14 @@ function readOwned(path: string, maximum: number, privateMode: boolean): Buffer 
 }
 function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: ObservationScope): { config: ObservationConfig; helper: Buffer } {
   const config = JSON.parse(readOwned(path, 240000, true).toString('utf8')) as ObservationConfig
-  const keys = ['version', 'agentId', 'source', 'helperPath', 'helperSha256', 'cliFiles', 'readGuardFiles', 'runtimeBindings', 'runtimeRecords']
+  const keys = ['version', 'agentId', 'source', 'helperPath', 'helperSha256', 'cliFiles', 'cliInventory', 'readGuardFiles', 'runtimeBindings', 'runtimeRecords']
   if (!config || typeof config !== 'object' || Object.keys(config).some(key => !keys.includes(key)) || config.version !== 1
     || config.agentId !== batch.agentId || config.source !== batch.collection.source || typeof config.helperPath !== 'string'
     || !/^[a-f0-9]{64}$/.test(config.helperSha256)) throw new Error('Bridge scope mismatch')
   for (const key of ['cliFiles', 'readGuardFiles', 'runtimeBindings', 'runtimeRecords'] as const) {
     if (config[key] !== undefined && (!Array.isArray(config[key]) || config[key]!.length > 500)) throw new Error('Invalid bridge inventory')
   }
+  if (config.cliInventory !== undefined && (config.cliInventory !== 'installed-scope' || (config.cliFiles?.length ?? 0) > 0 || !['claude-code', 'codex'].includes(batch.collection.source))) throw new Error('Invalid dynamic inventory')
   for (const value of [...(config.cliFiles ?? []), ...(config.readGuardFiles ?? [])]) {
     const file = value as { path?: unknown; sessionKey?: unknown; completeFromStart?: unknown; agentExclusive?: unknown }
     if (!file || typeof file !== 'object' || Object.keys(file).some(key => !['path', 'sessionKey', 'completeFromStart', 'agentExclusive'].includes(key))
@@ -69,7 +71,7 @@ function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: 
 }
 async function runHelper(config: ObservationConfig, helper: Buffer, batch: AgentTelemetryBatch, scope: ObservationScope): Promise<string> {
   const input = JSON.stringify({ agentId: batch.agentId, source: batch.collection.source, window: batch.window,
-    cliFiles: config.cliFiles ?? [], readGuardFiles: config.readGuardFiles ?? [], runtimeBindings: config.runtimeBindings ?? [], runtimeRecords: config.runtimeRecords ?? [],
+    cliFiles: config.cliFiles ?? [], cliInventory: config.cliInventory, readGuardFiles: config.readGuardFiles ?? [], runtimeBindings: config.runtimeBindings ?? [], runtimeRecords: config.runtimeRecords ?? [],
     scope: { sessionsDir: realpathSync(scope.sessionsDir), projectSlugs: scope.projectSlugs, codexThreadSource: scope.codexThreadSource } })
   return new Promise((resolve, reject) => {
     // Do not inherit collector credentials, HOME, NODE_OPTIONS or runtime agent settings.

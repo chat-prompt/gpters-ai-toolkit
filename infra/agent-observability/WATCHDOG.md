@@ -96,3 +96,119 @@ backlog, clock rollback, write-before-send, restart uncertainty, daily bounds,
 distinct episodes and recovery retry. No real Slack call or scheduler mutation
 is part of these tests. A host installation and live end-to-end observation must
 be reported and verified separately.
+
+## Prepare a pinned host installation
+
+`build-watchdog.sh` requires a clean checkout at an approved full commit. Its
+output is an ESM bundle plus `build.json` containing the source revision and SHA256.
+The digest is an integrity check; the operator must still review and approve the
+source revision. The build does not install a scheduler or contact Slack.
+
+```sh
+sh infra/agent-observability/build-watchdog.sh "$PRIVATE_BUILD" "$REVISION"
+```
+
+Prepare an owned real mode0700 installation prefix and state directory. Create
+the configuration above as a mode0600 file through an approved private channel.
+Use an explicitly reusable Slack app bot credential with permission to open the
+approved operator DM and post messages (`im:write`, `chat:write`); do not extract a
+connector OAuth token or substitute a shared webhook. The separate health-only
+secret belongs in this configuration, never the execution cron secret. Confirm
+the app workspace and operator identity before activation.
+
+Create a mode0600 installation JSON with the following anonymous fields:
+
+```json
+{
+  "bundle": "/private/build/watch-monitor.mjs",
+  "sha256": "<64 lowercase hex digest from the reviewed build>",
+  "revision": "<40 lowercase hex approved source revision>",
+  "node": "/absolute/canonical/path/to/node",
+  "config": "/private/watchdog/config.json",
+  "prefix": "/private/watchdog/releases",
+  "platform": "darwin"
+}
+```
+
+Use Node22 or newer. Resolve the stable executable to its canonical path first;
+package-manager upgrades must not silently redirect a scheduled binary. Never
+use the package-manager's cleanup command to remove this binary while scheduled.
+`platform` accepts `darwin` or `linux`.
+
+```sh
+node infra/agent-observability/watchdog-service.mjs prepare "$PRIVATE_INSTALL_JSON"
+node infra/agent-observability/watchdog-service.mjs verify "$RELEASE_DIR"
+```
+
+Preparation copies the digest-checked bundle into a new immutable revision
+directory, writes a private manifest and renders schedule files. Existing release
+directories are never overwritten, including an interrupted installation. Verify
+checks bundle/schedule digests, private config permissions and the pinned Node
+path. Neither command reads runtime data, makes network requests, runs a bundle,
+enables schedules or proves live health. Treat verification as `prepared` only.
+Retain any interrupted release for inspection before manually removing it.
+
+## Activation and rollback after operator notice
+
+Before activation, report host, approved revision/digest, config location without
+values, explicit recipient, five-minute interval and these rollback commands.
+Run the bundle once only after this notice: an unhealthy check can immediately
+send a real DM. Verify a healthy observation and its private state first. A
+read-only app credential preflight and a healthy check do not prove DM delivery;
+any live test notification must be explicitly included in the rollout notice.
+Never simulate an outage in the production state just to force a test message.
+
+On macOS, the prepared plist uses the dedicated
+`org.gpters.ax-monitor-watchdog` label. After confirming no service already owns
+that label, use the current approved user's GUI domain:
+
+```sh
+launchctl bootstrap "gui/$(id -u)" "$RELEASE_DIR/org.gpters.ax-monitor-watchdog.plist"
+launchctl print "gui/$(id -u)/org.gpters.ax-monitor-watchdog"
+# Stop new checks/messages; retain release, config and state.
+launchctl bootout "gui/$(id -u)/org.gpters.ax-monitor-watchdog"
+```
+
+The plist is loaded from its private release; it is deliberately **not** copied
+into `~/Library/LaunchAgents`. This avoids silently promising restart persistence.
+A GUI LaunchAgent stops on logout and this manual bootstrap does not re-register
+it after reboot. A continuously logged-in host can verify the pilot's natural
+interval; a separately approved startup installation is needed before claiming
+restart persistence. Check host sleep settings and power/network availability.
+The generated stdout/stderr logs contain flags only; the operator must arrange
+log rotation and a separate host/scheduler-failure alert before declaring full
+unattended coverage. A persistent lock, exit code2 or an offline host cannot be
+reported by a watchdog that is no longer executing.
+
+For Linux, link the prepared `.service` and `.timer` into the approved user's
+systemd configuration and enable **only** the dedicated timer. Inspect existing
+unit ownership before linking; never overwrite another unit. Enabling user
+lingering is a separate privilege/host-lifecycle change and is not performed by
+the installer. The explicit start/stop commands are:
+
+```sh
+systemctl --user link "$RELEASE_DIR/org.gpters.ax-monitor-watchdog.service" "$RELEASE_DIR/org.gpters.ax-monitor-watchdog.timer"
+systemctl --user enable --now org.gpters.ax-monitor-watchdog.timer
+systemctl --user status org.gpters.ax-monitor-watchdog.timer
+# Stop timer first, then any running one-shot service.
+systemctl --user disable --now org.gpters.ax-monitor-watchdog.timer
+systemctl --user stop org.gpters.ax-monitor-watchdog.service
+```
+
+Stopping an in-flight invocation may leave `sending` or its lock; inspect and
+reconcile before restarting. It does not undo a message Slack already accepted.
+For binary rollback, stop the dedicated schedule, verify the prior release and
+re-register its schedule using the **same** state/config. Do not clear pending
+state or switch recipients to make a retry appear clean.
+
+After installation, wait at least one full five-minute interval without running
+an extra check. Independently match the persisted `checkedAt`, healthy flag and
+scheduler last exit with the central heartbeat. Report `scheduled-observed` only
+when that natural run is seen. Record DM API acceptance separately; never call a
+healthy no-message run a verified notification delivery.
+
+Offline installer tests (temporary files only):
+
+```sh
+node --test infra/agent-observability/watchdog-service.test.mjs
+```

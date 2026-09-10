@@ -1588,3 +1588,10 @@ export const aitkAgentEvents = pgTable('aitk_agent_events', {
 }, (table) => [index('aitk_agent_events_agent_created_idx').on(table.agentId, table.createdAt)])
 
 export const axMonitorDeferredBatches=pgTable('ax_monitor_deferred_batches',{monitorId:text('monitor_id').notNull().references(()=>axMonitorState.id),batchId:text('batch_id').notNull(),reason:text('reason').notNull(),retryAfter:timestamp('retry_after',{withTimezone:true}).notNull()},table=>[primaryKey({columns:[table.monitorId,table.batchId]})])
+
+/** Explicit scheduled work; tenant-scoped independently from ingestion. */
+export const axTaskExpectations = pgTable('ax_task_expectations', {
+  id: text('id').primaryKey(), orgId: text('org_id').notNull(), agentId: text('agent_id').notNull(),
+  revision: integer('revision').notNull(), record: jsonb('record').$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [index('ax_task_expectations_scope_idx').on(table.orgId, table.agentId)])

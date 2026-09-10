@@ -63,6 +63,33 @@ to 240000 bytes; helper source to 2000000 bytes; each inventory to 500 entries. 
 window comes from the collector's next batch and cannot be overridden by config.
 Agent/source must match the existing collector exactly.
 
+For ongoing Claude/Codex collection, replace `cliFiles` with
+`"cliInventory":"installed-scope"`. This explicit opt-in discovers new JSONL
+files on each new batch inside the installed sessions directory and the existing
+project/tag scope. It cannot specify a different root, owner, tag or project.
+Static `cliFiles` remain useful for bounded reviews but do not discover future
+sessions. Supplying both modes is invalid.
+
+Dynamic discovery scans actual record timestamps for `[startUtc,endUtc)`; old
+file mtimes do not suppress new or imported records. Each physical Codex file
+must independently pass its header and subsequent scope checks. The scanner
+streams source bytes, compares file identity/size/mtime/ctime before and after,
+rechecks the directory inventory, then pins selected identities for metric reads.
+Stable source session IDs deduplicate copied/rotated records; absent IDs fall
+back to file identity. Full first-turn history is not attested by discovery and
+therefore remains incomplete when samples would require that history.
+
+Limits are 50,000 directory entries, 10,000 candidate files, 4GiB scanned bytes
+(including Codex header reads), 256MiB per scanned file and 16MiB per line. At
+most 500 files/256MiB are selected for metrics, with a 64MiB selected-file limit.
+The existing 30-second process limit remains. Invalid JSON/timestamps, partial
+tails, unsafe paths, mixed identities, concurrent changes and limit overruns
+fail closed: no new pending batch, upload or checkpoint advancement. These are
+hard limits, never silent truncation. Verify runtime and memory against the
+approved real source before enabling; keep the original collector active if the
+inventory cannot be safely processed. Discovery adds no cache or source writes.
+Read-guard and runtime receipt inventories remain explicit and separate.
+
 CLI source files must stay inside the existing collector's sessions directory.
 Claude files must also belong to its approved project slug. Codex observations
 must contain matching `session_meta` thread source and/or approved cwd, with every
