@@ -12,7 +12,7 @@ describe('incident review form',()=>{
     fireEvent.click(screen.getByRole('button',{name:/example · 실행 사고 확정/}))
     fireEvent.click(screen.getByRole('button',{name:'수정 기록 저장'})); expect(fetch).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText('판정 이유'),{target:{value:'실패 재현과 수정'}})
-    fireEvent.change(screen.getByLabelText('비공개 근거 참조'),{target:{value:'private:receipt'}})
+    fireEvent.change(screen.getByLabelText('근거 링크 또는 기록 위치'),{target:{value:'private:receipt'}})
     fireEvent.change(screen.getByLabelText('수정 적용 시각'),{target:{value:'2026-01-03T12:00'}})
     fireEvent.change(screen.getByLabelText('변경 참조'),{target:{value:'commit:test'}})
     fireEvent.change(screen.getByLabelText('롤백 참조'),{target:{value:'private:rollback'}})

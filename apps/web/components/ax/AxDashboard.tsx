@@ -123,6 +123,8 @@ interface PanelState {
  * AxDashboard props
  */
 export interface AxDashboardProps {
+  initialPanelId?: string
+  initialSelection?: string
   /** 서버에서 판정한, 이 사용자가 볼 수 있는 패널 목록 */
   panels: AxPanelMeta[]
   /** 관리자 여부 — 개인 정보가 포함된 항목의 표시 기준 */
@@ -135,18 +137,19 @@ export interface AxDashboardProps {
  * @param panels - 서버에서 미리 구한 패널 메타 목록
  * @param isAdmin - 관리자 여부
  */
-export function AxDashboard({ panels, isAdmin }: AxDashboardProps) {
+export function AxDashboard({ panels, isAdmin, initialPanelId, initialSelection }: AxDashboardProps) {
   // parentId가 있는 패널은 독립 데이터 소스지만, 화면에서는 부모 패널 안의 보조 보기다.
   // hidden 패널은 탭으로 노출하지 않고 데이터만 가져다 쓴다.
   const topLevelPanels = panels.filter((panel) => !panel.parentId && !panel.hidden)
   const firstTopLevelId = topLevelPanels[0]?.id ?? ''
+  const initialPanel = panels.find(panel => panel.id === initialPanelId && !panel.hidden)
   const [days, setDays] = useState<AxDays>(DEFAULT_DAYS)
   const [states, setStates] = useState<Record<string, PanelState>>({})
   // 패널 본문이 기간 재조회 중 잠시 교체돼도 필터 선택은 대시보드 수준에서 유지한다.
-  const [panelSelections, setPanelSelections] = useState<Record<string, string>>({})
+  const [panelSelections, setPanelSelections] = useState<Record<string, string>>(initialPanel && initialSelection ? {[initialPanel.id]:initialSelection} : {})
   // 최상위 업무 영역과 그 안의 보조 보기를 따로 기억한다.
-  const [activeRootId, setActiveRootId] = useState<string>(firstTopLevelId)
-  const [activePanelId, setActivePanelId] = useState<string>(firstTopLevelId)
+  const [activeRootId, setActiveRootId] = useState<string>(initialPanel?.parentId ?? initialPanel?.id ?? firstTopLevelId)
+  const [activePanelId, setActivePanelId] = useState<string>(initialPanel?.id ?? firstTopLevelId)
   // 패널별 진행 중인 요청. 새 요청이 뜨면 이전 것을 끊어, 늦게 온 응답이
   // 이미 바뀐 기간의 화면에 얹히는 일을 막는다
   const requestsRef = useRef(new Map<string, AbortController>())

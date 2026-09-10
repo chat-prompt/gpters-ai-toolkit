@@ -5,6 +5,7 @@ import { applyIncidentAction, incidentStats, projectIncidentCases } from './inci
 import type { IncidentAction, IncidentCase, IncidentInput, IncidentReviewData } from './incident-review'
 import { panelError, panelNotConfigured, panelOk } from './panel'
 import type { AxPanel, AxPanelMeta } from './types'
+import { isIncidentReviewer } from './incident-report'
 
 const meta: AxPanelMeta = { id: 'agent-incidents', title: '문제 검토', description: '실패 후보를 검토하고 수정·재검증 근거를 남깁니다', source: '관측된 작업 이벤트 · 관리자 검토 기록', visibility: 'admin', parentId: 'skill-usage', usesPeriod: true }
 
@@ -21,10 +22,10 @@ function emptyInput(days: number): IncidentInput {
   return { traces: [], coverage: undefined, start: new Date(Date.parse(end) - days * 86400000).toISOString(), end }
 }
 export async function readIncidentReview(days: number): Promise<IncidentReviewData> {
-  const [input, rows] = await Promise.all([readInput(days), db.select().from(axIncidentReviews)])
+  const [input, rows] = await Promise.all([readInput(days).catch(() => null), db.select().from(axIncidentReviews)])
   const snapshot = input ?? emptyInput(days)
   const cases = projectIncidentCases(snapshot, rows.map(row => row.record as unknown as IncidentCase))
-  const evaluations = Object.fromEntries(cases.filter(c => c.change).map(c => [c.id, incidentStats(c, snapshot, c.change!.appliedAt)]))
+  const evaluations = Object.fromEntries(cases.filter(c => c.change && !c.report).map(c => [c.id, incidentStats(c, snapshot, c.change!.appliedAt)]))
   return { cases, evaluations, start: snapshot.start, end: snapshot.end, sourceAvailable: !!input,
     truncated: !snapshot.coverage || snapshot.coverage.truncatedStreams.length > 0, storageReady: true }
 }
@@ -33,7 +34,10 @@ export class IncidentConflict extends Error {}
 export class IncidentValidationError extends Error {}
 
 export async function saveIncidentReview(action: IncidentAction, actor: string): Promise<IncidentCase> {
-  const [input, rows] = await Promise.all([readInput(action.days), db.select().from(axIncidentReviews).where(eq(axIncidentReviews.id, action.id))])
+  const rows = await db.select().from(axIncidentReviews).where(eq(axIncidentReviews.id, action.id))
+  const stored = rows[0]?.record as unknown as IncidentCase | undefined
+  // A quality report must remain reviewable without any telemetry or a healthy collector.
+  const input = stored?.report ? emptyInput(action.days) : await readInput(action.days)
   // Never let a request manufacture a candidate or supply its own evidence/counters.
   if (!input) throw new IncidentValidationError('원천 작업 이벤트를 조회한 뒤 다시 시도하세요')
   const current = projectIncidentCases(input, rows.map(row => row.record as unknown as IncidentCase)).find(c => c.id === action.id)
@@ -55,6 +59,6 @@ export async function saveIncidentReview(action: IncidentAction, actor: string):
 export const agentIncidentsPanel: AxPanel<IncidentReviewData> = { meta, async load(ctx) {
   if (!ctx.isAdmin) return panelError(meta, '관리자만 조회할 수 있습니다')
   if (process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return panelNotConfigured(meta, '문제 검토 저장소를 준비 중입니다')
-  try { return panelOk(meta, await readIncidentReview(ctx.days)) }
+  try { return panelOk(meta, {...await readIncidentReview(ctx.days),canReview:isIncidentReviewer(ctx.viewerUserId)}) }
   catch { return panelError(meta, '문제 검토 데이터를 조회하지 못했습니다') }
 } }

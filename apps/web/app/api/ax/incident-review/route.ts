@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
-import { resolveAxViewer, incidentActionSchema, saveIncidentReview, IncidentConflict, IncidentValidationError } from '@/lib/features/ax'
+import { resolveAxViewer, incidentActionSchema, saveIncidentReview, IncidentConflict, IncidentValidationError, isIncidentReviewer } from '@/lib/features/ax'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import type { UserRole } from '@/lib/security/rbac'
 
@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
   const session = await auth()
   const viewer = resolveAxViewer({ email: session?.user?.email, role: session?.user?.role as UserRole })
   if (!viewer.canAccess || !viewer.isAdmin || !session?.user?.id) return failure('사내 관리자 로그인이 필요합니다', 403)
+  if (!isIncidentReviewer(session.user.id)) return failure('지정된 최종 검토자만 판정할 수 있습니다', 403)
   if (process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return failure('문제 검토 저장소를 준비 중입니다', 503)
   // Cookie-authenticated writes require a same-origin JSON request.
   if (request.headers.get('origin') !== new URL(request.url).origin || !request.headers.get('content-type')?.startsWith('application/json')) return failure('허용되지 않은 요청입니다', 403)
