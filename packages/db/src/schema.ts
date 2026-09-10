@@ -7,6 +7,14 @@
 import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, uniqueIndex, halfvec, real, numeric } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
+/** Internal operator decisions only. No transcripts or credentials belong here. */
+export const axIncidentReviews = pgTable('ax_incident_reviews', {
+  id: text('id').primaryKey(),
+  revision: integer('revision').notNull(),
+  record: jsonb('record').$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const itemTypeEnum = pgEnum('item_type', [
   'skill',
   'agent',
