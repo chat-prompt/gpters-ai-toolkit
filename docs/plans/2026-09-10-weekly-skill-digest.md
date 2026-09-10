@@ -81,18 +81,30 @@ Slack 봇은 입출력 창구이고 AI agent는 서버에서 실행한다. 대�
 - 구현 브랜치: `fix/dev-4280-weekly-skill-digest`
 - 구현 커밋: `6131d04a`
 - Draft PR: [#133](https://github.com/chat-prompt/gpters-ai-toolkit/pull/133)
-- Vercel Production의 `SLACK_SKILL_DIGEST_CHANNEL_ID`는 등록되어 있다.
-- 새 Slack 앱, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, 대화 이벤트 엔드포인트는 아직 없다.
+- 2026-09-10 새 Slack 앱 **뽀밋**을 GPTers 워크스페이스에 생성·설치했다.
+  - App ID: `A0C0Q9DB4J1`
+  - Bot user ID: `U0C0NKECXFD`
+  - Bot 표시 이름: `뽀밋`
+  - 기본 사용자명: `bbomit` — Slack 사용자명 제약에 맞춘 내부 이름이다.
+  - Bot scopes: `app_mentions:read`, `chat:write`, `im:history`
+- 뽀밋을 `#toolkit-알림`(`C0AEMKXRG4C`)에 추가했다.
+- Vercel Production에 `SLACK_SKILL_DIGEST_CHANNEL_ID`, `SLACK_BOT_TOKEN`,
+  `SLACK_SIGNING_SECRET`을 Secret으로 등록했다.
+- 설치 직후 자동화 화면에 노출된 최초 Bot Token은 즉시 전체 폐기했다. 재설치로 발급한 새 토큰만
+  Vercel에 직접 저장했으며 문서·Git·Slack 메시지에는 기록하지 않았다.
+- Slack Event Subscriptions는 아직 켜지 않았다. 검증 가능한 운영 `/api/slack/events`가 먼저 필요하다.
+- 대화 이벤트 엔드포인트와 agent session 저장은 아직 없다.
 - PR #133은 주간 알림 발송만 구현하며 AI 대화 수신은 후속 구현 범위다.
 
 재개할 때는 다음 순서로 진행한다.
 
-1. 새 Slack 앱을 만들고 이름·아이콘·권한·이벤트를 설정한다.
-2. 새 봇을 `#toolkit-알림`에 초대하고 Bot Token으로 테스트 메시지와 스레드 답글을 보낸다.
-3. 확인된 `SLACK_BOT_TOKEN`을 Vercel Production에 등록한다.
-4. PR #133의 quiet preview를 확인한 뒤 Ready 전환, 병합, 운영 배포한다.
-5. 운영에서 주간 알림 본문과 스레드가 새 봇 이름으로 발송되는지 한 차례 수동 실행으로 검증한다.
-6. `/api/slack/events`, 서명 검증, 중복 방지, agent session 연결을 별도 변경으로 구현한다.
+1. Slack 클라이언트 캐시 갱신 후 `#toolkit-알림`의 앱 목록과 실제 메시지에서 표시 이름이
+   `뽀밋`인지 확인한다.
+2. PR #133의 quiet preview를 확인한 뒤 Ready 전환, 병합, 운영 배포한다.
+3. 운영에서 테스트 메시지와 스레드 답글을 보내 Bot Token·채널 멤버십·표시 이름을 검증한다.
+4. 실제 주간 알림 본문과 스레드를 한 차례 수동 실행으로 검증한다.
+5. `/api/slack/events`, 서명 검증, 중복 방지, agent session 연결을 별도 변경으로 구현한다.
+6. 배포된 Request URL을 Slack Event Subscriptions에 등록하고 `app_mention`, `message.im`을 구독한다.
 7. 테스트 채널의 멘션과 DM에서 대화 연속성, 스레드 응답, 오류 처리를 확인한 뒤 사용할 채널 범위를 넓힌다.
 
 새 봇 생성과 토큰 등록이 끝나기 전에는 PR #133을 병합하지 않는다. 현재 상태만으로는 다음 월요일
