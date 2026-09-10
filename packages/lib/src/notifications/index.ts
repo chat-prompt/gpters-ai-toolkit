@@ -16,6 +16,8 @@ export {
   notifySlackCronHealth,
   notifySlackAccountAudit,
   notifySlackPopularSkills,
+  buildPopularSkillsMessages,
+  type PopularSkillsMessages,
   type CronFailureParams,
   type CronHealthParams,
   type AccountAuditParams,

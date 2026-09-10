@@ -19,12 +19,12 @@
  *
  * ## 조용할 땐 보내지 않는다
  *
- * 적용이 한 건도 없으면 아무것도 보내지 않는다. 매주 "0건"을 보내면 그 채널을 아무도 안 읽게
+ * 인기·신규 스킬이 모두 없으면 아무것도 보내지 않는다. 매주 "0건"을 보내면 그 채널을 아무도 안 읽게
  * 되고, 그러면 진짜 알림도 같이 묻힌다 — evo가 매일 "생성 0건"을 보내며 그렇게 됐다.
  */
 
 import { catalogItems, db, itemVersions, skillEvents, users } from '@gpters/db'
-import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { createLogger } from '../core/logger'
 import { NOTE_MAX, SUMMARY_MAX, firstSentence, summarizeBatch } from './change-note'
 
@@ -145,6 +145,7 @@ async function collectCreated(since: Date): Promise<Array<CatalogChange & { cont
     .leftJoin(users, eq(users.id, catalogItems.authorId))
     .where(
       and(
+        eq(catalogItems.type, 'skill'),
         gte(catalogItems.createdAt, since),
         or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
       )
@@ -193,6 +194,7 @@ async function collectUpdated(
     .leftJoin(users, eq(users.id, catalogItems.authorId))
     .where(
       and(
+        eq(catalogItems.type, 'skill'),
         gte(itemVersions.createdAt, since),
         or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
       )
@@ -327,16 +329,14 @@ async function collectMissingDescriptions(): Promise<{ rows: MissingDescription[
 }
 
 /**
- * 지난 `days`일 동안 실제로 적용된 스킬을 모은다.
+ * AITK 발행 스킬의 기간 내 적용 집계 질의를 만든다. toSQL() 검증 시에는 실행하지 않는다.
  *
- * @param days - 집계 창 (일)
- * @param now - 기준 시각. 테스트에서 고정한다
- * @returns 집계 결과
+ * @param since - 집계 시작 시각 (포함)
+ * @param until - 집계 종료 시각 (미포함)
+ * @returns 실행 가능한 집계 질의
  */
-export async function collectPopularSkills(days = 7, now = new Date()): Promise<PopularSkillDigest> {
-  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-
-  const rows = await db
+export function buildPopularSkillsQuery(since: Date, until: Date) {
+  return db
     .select({
       skillId: skillEvents.skillId,
       name: catalogItems.name,
@@ -351,16 +351,28 @@ export async function collectPopularSkills(days = 7, now = new Date()): Promise<
       )`,
     })
     .from(skillEvents)
-    .leftJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
-    .where(and(eq(skillEvents.action, 'apply'), gte(skillEvents.createdAt, since)))
+    // 카탈로그 밖·삭제된 스킬을 팀 추천에 섞지 않는다.
+    .innerJoin(catalogItems, eq(catalogItems.id, skillEvents.skillId))
+    .where(and(
+      eq(skillEvents.action, 'apply'),
+      gte(skillEvents.createdAt, since),
+      lt(skillEvents.createdAt, until),
+      eq(catalogItems.type, 'skill'),
+      or(eq(catalogItems.status, 'published'), isNull(catalogItems.status))
+    ))
     .groupBy(skillEvents.skillId, catalogItems.name)
+}
+
+/** AITK 카탈로그의 발행 스킬만 집계한다. 외부·삭제·초안·다른 항목 유형은 제외한다. */
+export async function collectPopularSkills(days = 7, now = new Date()): Promise<PopularSkillDigest> {
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  const rows = await buildPopularSkillsQuery(since, now)
 
   const skills: PopularSkill[] = rows
     .filter((row) => row.skillId !== null)
     .map((row) => ({
       skillId: row.skillId as string,
-      // 카탈로그에서 지워진 스킬의 이벤트가 남아 있을 수 있다 — id로라도 부른다
-      name: row.name ?? (row.skillId as string),
+      name: row.name,
       applies: Number(row.applies ?? 0),
       users: Number(row.users ?? 0),
       isFirstTime: Number(row.earlierApplies ?? 0) === 0,
@@ -537,12 +549,13 @@ export function formatMissingDescriptionLines(
 /**
  * 이번 주에 알릴 것이 하나라도 있는가.
  *
- * 세 구역이 전부 비면 보내지 않는다. 조용한 주에 "0건"을 보내면 그 채널을 아무도 안 읽게 되고,
+ * 본문에 실을 인기·신규 스킬이 모두 없으면 보내지 않는다. 업데이트·설명 요청은 답글 전용이다.
+ * 조용한 주에 "0건"을 보내면 그 채널을 아무도 안 읽게 되고,
  * 그러면 진짜 알림도 같이 묻힌다.
  *
  * @param digest - 집계 결과
  * @returns 보낼 내용이 있으면 true
  */
 export function hasAnythingToSay(digest: PopularSkillDigest): boolean {
-  return digest.top.length > 0 || digest.created.length > 0 || digest.updated.length > 0
+  return digest.top.length > 0 || digest.created.length > 0
 }

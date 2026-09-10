@@ -136,6 +136,8 @@ describe('새로 올라온·업데이트된 스킬 구역', () => {
       firstTimers: [],
       created,
       updated,
+      missingDescriptions: [],
+      missingDescriptionTotal: 0,
     }
   }
 
@@ -200,9 +202,9 @@ describe('hasAnythingToSay', () => {
     expect(hasAnythingToSay(withNew)).toBe(true)
   })
 
-  it('업데이트만 있어도 보낸다', () => {
+  it('업데이트만 있으면 본문을 새로 보내지 않는다', () => {
     const withUpdate = { ...EMPTY, updated: [{ id: 'a', name: 'a', authorName: null, version: '1.1.0', bumps: 1, summary: null, changeNote: null }] }
-    expect(hasAnythingToSay(withUpdate)).toBe(true)
+    expect(hasAnythingToSay(withUpdate)).toBe(false)
   })
 })
 
