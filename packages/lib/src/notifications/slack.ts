@@ -57,6 +57,8 @@ export interface SlackDeployParams {
  * Slack Block Kit message payload
  */
 export interface SlackPayload {
+  /** 알림·접근성용 대체 텍스트 */
+  text?: string
   blocks: SlackBlock[]
 }
 
@@ -609,56 +611,114 @@ export interface PopularSkillsParams {
   missingLines: string[]
 }
 
-/**
- * 한 주의 스킬 소식을 한 장으로 알린다 (DEV-4280).
- *
- * 많이 쓴 스킬 · 새로 올라온 스킬 · 업데이트된 스킬을 한 번에 보여준다. 배포 알림은 올릴 때마다
- * 그 자리에서 나가지만 흘러가 버리므로, 주에 한 번 묶어서 다시 보여주는 자리가 필요하다.
- *
- * **세 구역이 전부 비면 아무것도 보내지 않는다.** 조용한 주에 "0건"을 보내면 그 채널을 아무도
- * 안 읽게 되고, 그러면 진짜 알림도 같이 묻힌다.
- *
- * @param params - 집계 결과와 표시할 줄
- */
-export async function notifySlackPopularSkills(params: PopularSkillsParams): Promise<void> {
-  try {
-    const sections: Array<{ title: string; lines: string[] }> = [
-      { title: `⭐ 지난 ${params.days}일 많이 쓴 스킬`, lines: params.lines },
-      { title: '🆕 새로 올라온 스킬', lines: params.createdLines },
-      { title: '🔄 업데이트된 스킬', lines: params.updatedLines },
-      { title: '✏️ 설명이 비어 있어요 — 만든 분이 한 줄만 채워 주세요', lines: params.missingLines },
-    ].filter((section) => section.lines.length > 0)
+/** 전송 없이 검토할 수 있는 본문과 답글. 답글마다 같은 본문의 thread_ts를 사용한다. */
+export interface PopularSkillsMessages {
+  main: SlackPayload
+  replies: SlackPayload[]
+}
 
-    if (sections.length === 0) return
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL
-    if (!webhookUrl) return
+/** 인기·신규는 본문, 업데이트·설명 요청은 각각 별도의 스레드 답글로 만든다. */
+export function buildPopularSkillsMessages(params: PopularSkillsParams): PopularSkillsMessages | null {
+  const sections = [
+    { title: `⭐ 지난 ${params.days}일 많이 쓴 스킬`, lines: params.lines },
+    { title: '🆕 새로 올라온 스킬', lines: params.createdLines },
+  ].filter((section) => section.lines.length > 0)
+  if (sections.length === 0) return null
 
-    const blocks: SlackBlock[] = [
-      {
-        type: 'header',
-        text: { type: 'plain_text', text: `📬 이번 주 스킬 소식`, emoji: true },
-      },
-    ]
-    for (const [index, section] of sections.entries()) {
-      if (index > 0) blocks.push({ type: 'divider' })
-      blocks.push({
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*${section.title}*\n${section.lines.join('\n')}` },
-      })
-    }
-    blocks.push({
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          // 비율 대신 실측 건수만 적는다
-          text: `적용 ${params.totalApplies}회 · 스킬 ${params.distinctSkills}종. 검색 노출이나 열람이 아니라 적용 보고만 셌다`,
-        },
-      ],
-    })
-
-    await sendSlackWebhook(webhookUrl, { blocks })
-  } catch (error) {
-    console.error('[slack] weekly skill digest notification failed:', error)
+  const title = '📬 이번 주 스킬 소식'
+  const blocks: SlackBlock[] = [
+    { type: 'header', text: { type: 'plain_text', text: title, emoji: true } },
+  ]
+  const sectionText = (section: { title: string; lines: string[] }) =>
+    `*${section.title}*\n${section.lines.join('\n')}`
+  for (const [index, section] of sections.entries()) {
+    if (index > 0) blocks.push({ type: 'divider' })
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: sectionText(section) } })
   }
+
+  const replies: SlackPayload[] = [
+    { title: '🔄 업데이트된 스킬', lines: params.updatedLines },
+    { title: '✏️ 설명이 비어 있어요 — 만든 분이 한 줄만 채워 주세요', lines: params.missingLines },
+  ]
+    .filter((section) => section.lines.length > 0)
+    .map((section) => ({
+      text: sectionText(section),
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: sectionText(section) } }],
+    }))
+  return {
+    main: { text: [title, ...sections.map(sectionText)].join('\n\n'), blocks },
+    replies,
+  }
+}
+
+/** Slack은 HTTP 200에도 ok:false를 반환할 수 있다. 수신 확인 없는 성공으로 처리하지 않는다. */
+async function postSkillDigestMessage(
+  token: string,
+  channel: string,
+  payload: SlackPayload,
+  threadTs?: string
+): Promise<string> {
+  const body = JSON.stringify({
+    ...payload,
+    channel,
+    unfurl_links: false,
+    unfurl_media: false,
+    ...(threadTs ? { thread_ts: threadTs, reply_broadcast: false } : {}),
+  })
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    })
+    const retryAfter = Number(response.headers?.get('retry-after'))
+    if (response.status === 429 && attempt === 0 && retryAfter > 0 && retryAfter <= 10) {
+      await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000))
+      continue
+    }
+    if (!response.ok) throw new Error(`Slack skill digest HTTP ${response.status}`)
+    const result = (await response.json()) as { ok?: boolean; ts?: string; error?: string }
+    if (!result.ok || !result.ts) {
+      throw new Error(`Slack skill digest failed: ${result.error ?? 'missing message timestamp'}`)
+    }
+    return result.ts
+  }
+  throw new Error('Slack skill digest rate limit exceeded')
+}
+
+/**
+ * 본문 수신 ts를 받아 답글을 연결한다. Incoming Webhook은 ts를 반환하지 않아 Bot API를 쓴다.
+ * 설정 누락·전송 실패는 호출자에 전달해 크론 성공으로 오인하지 않게 한다.
+ * 네트워크 오류나 부분 발송 실패에 전체 메시지를 자동 재전송하지 않는다.
+ */
+export async function notifySlackPopularSkills(params: PopularSkillsParams): Promise<{
+  sent: boolean
+  repliesSent: number
+  threadTs?: string
+}> {
+  const messages = buildPopularSkillsMessages(params)
+  if (!messages) return { sent: false, repliesSent: 0 }
+  const token = process.env.SLACK_BOT_TOKEN
+  const channel = process.env.SLACK_SKILL_DIGEST_CHANNEL_ID
+  if (!token || !channel) {
+    throw new Error(
+      'Weekly skill digest requires SLACK_BOT_TOKEN and SLACK_SKILL_DIGEST_CHANNEL_ID'
+    )
+  }
+  const threadTs = await postSkillDigestMessage(token, channel, messages.main)
+  let repliesSent = 0
+  try {
+    for (const reply of messages.replies) {
+      await postSkillDigestMessage(token, channel, reply, threadTs)
+      repliesSent++
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(
+      `Weekly skill digest thread ${threadTs}: ${repliesSent}/${messages.replies.length} replies sent; ${reason}`,
+      { cause: error }
+    )
+  }
+  return { sent: true, repliesSent, threadTs }
 }
