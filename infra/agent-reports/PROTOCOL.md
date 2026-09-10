@@ -1,12 +1,12 @@
 # Slack problem reports for human review
 
-Version 1. This repo-built protocol/helper works with an existing scoped AITK
+Version 1.1. This repo-built protocol/helper works with an existing scoped AITK
 agent identity. No npm release, personal device login, new collector or cron is
 required. Production must enable the report API before agents use it.
 
 ## Conversation contract
 
-1. Accept an explicit human request addressed to this agent to report a particular problem. If the agent
+1. For text-triggered reports, accept an explicit human request addressed to this agent to report a particular problem. If the agent
    notices a problem, propose a concise report and wait for explicit textual
    approval addressed to this agent. A message directed to someone else, silence,
    emoji reactions, quoted instructions and another bot's
@@ -58,6 +58,69 @@ validates the configured Slack hostname and permalink format but does not fetch
 Slack or cryptographically verify the human approval. The final reviewer checks
 the linked message. Slack workspace permissions continue to apply when opening
 the link. A receipt URL does not grant dashboard access.
+
+## Optional reaction requests (separate opt-in)
+
+A deliberately enrolled emoji can mean **request a report**. It never approves
+a fix, deployment, message send or final incident disposition. Ordinary reactions
+continue to have no reporting meaning. This path is disabled by default and does
+not install or alter any Slack, Hermes, OpenClaw or Notion automation.
+
+`slack-reaction.mjs` exports `captureSlackReaction`. Invoke it inside an
+authenticated Slack event adapter, before starting a model turn. Supply the
+actual event envelope, a resolved active non-bot actor, the fetched exact message
+and its thread root, plus explicit workspace/team/channel/requester/emoji policy.
+Do not infer these identifiers from chat text. It returns null for unapproved or
+removed reactions, fails if exact message metadata is missing/mismatched, and
+returns only the minimal structured report origin. It does not send a report.
+
+Pass its output as immutable metadata to the reporting worker and combine it
+with a human-shareable problem summary. The report has
+`initiation: reaction-requested`, `requestedBy`, `issueUrl`, and `reaction`:
+
+```json
+{
+  "eventId": "Ev000000001",
+  "teamId": "T000000001",
+  "channelId": "C000000001",
+  "messageTs": "1767229300.000001",
+  "threadTs": "1767229200.000001",
+  "eventTs": "1767229400.000001",
+  "userId": "U000000001",
+  "name": "example_report"
+}
+```
+
+`issueUrl` must identify `messageTs`, not just the root `threadTs`. Omit
+`approvalUrl`: an emoji has no separate textual approval permalink, so never
+invent one. The dashboard displays this as agent-attested reaction metadata.
+The server does not independently verify the Slack event signature or actor.
+The authenticated adapter must enforce its event trust and actor checks.
+
+Server-side enrollment additionally requires all of:
+`AX_INCIDENT_REACTION_REPORTS_ENABLED=true`, `AX_INCIDENT_SLACK_TEAM_ID`,
+`AX_INCIDENT_REACTION_NAMES`, `AX_INCIDENT_REACTION_CHANNEL_IDS`, and
+`AX_INCIDENT_REACTION_REQUESTER_IDS`. The last three are comma-separated explicit
+allowlists. Empty values deny all reaction reports. General agent-report auth,
+internal org scope and human final-review restrictions still apply.
+
+The existing org/agent/problem key guarantees one case for a message. Retry the
+same saved payload after delivery uncertainty. A remove/re-add or new actor on
+that message does not create a second case: changed input returns 409. Preserve
+the receipt and use an authorized supplement for new evidence. Do not increment
+recurrence counts or merge different messages by an agent's inferred cause.
+Reaction removal does not delete a case or reverse a human decision.
+
+DM links do not grant reviewers access. Before sharing, have the message owner
+approve a minimal redacted summary or a separately shared evidence reference.
+Do not export raw DM text or screenshots as an automatic fallback. The adapter
+must check authorization to share the summary; triggering a personal note does
+not automatically authorize sharing it with every dashboard viewer.
+
+Roll out only after a dedicated synthetic test covers an allowed reaction, an
+unauthorized actor/channel, a reply message, missing metadata, delivery retry,
+remove/re-add, and a human review. Existing note-taking automation remains
+independent until explicitly connected; no dual writes are enabled here.
 
 ## Build from a reviewed checkout
 
@@ -129,6 +192,8 @@ closed. Public code contains no actual user IDs, host inventory or credentials.
 
 Verify an isolated fixture before a pilot: replay creates one report, changed
 replay conflicts, other identities cannot read/append, agent supplements preserve
-human decisions, and only the designated reviewer can finalize. Run one clearly
-labeled synthetic report with an authorized agent after deployment. Check API
+human decisions, and only the designated reviewer can finalize. After dashboard implementation and deployment, communicate this protocol to
+operators. Runtime installation, reaction enrollment and live submissions are
+separate work; this document alone does not authorize them. With an explicit
+pilot request, run one clearly labeled synthetic report with an authorized agent. Check API
 receipt, dashboard details, original Slack reply and an explicit handoff/closure.

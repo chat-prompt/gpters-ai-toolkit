@@ -2,10 +2,20 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentIncidentPanel } from '../../components/ax/panels/AgentIncidentPanel'
 import type { IncidentCase, IncidentReviewData } from '../../../../packages/lib/src/features/ax/incident-review'
+import { createReportCase } from '../../../../packages/lib/src/features/ax/incident-report-store'
+import { incidentReportSchema } from '../../../../packages/lib/src/features/ax/incident-report'
 const candidate: IncidentCase = {id:'case',revision:1,state:'confirmed',agentId:'example',source:'codex',phase:'execution',evidence:'process',createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z',lastFailureAt:'2026-01-01T00:00:00Z',lastFailureIds:['event'],failureCount:1,examples:[],history:[]}
 const data: IncidentReviewData = {cases:[candidate],evaluations:{},start:'2026-01-01T00:00:00Z',end:'2026-01-05T00:00:00Z',sourceAvailable:true,truncated:false,storageReady:true}
 afterEach(()=>{cleanup();vi.unstubAllGlobals()})
 describe('incident review form',()=>{
+  it('labels reaction metadata as a report request and does not invent an approval message',()=>{
+    const record=createReportCase({agentId:'example',orgId:'org-1'},incidentReportSchema.parse({title:'Synthetic reaction',summary:'Feedback',expected:'Correct',actual:'Incorrect',source:'unknown',category:'quality',occurredAt:'2026-01-01T00:00:00Z',requestedBy:'U000000001',initiation:'reaction-requested',issueUrl:'https://example.slack.com/archives/C000000001/p1767229200000000',reaction:{eventId:'Ev000000001',teamId:'T000000001',channelId:'C000000001',messageTs:'1767229200.000000',threadTs:'1767229200.000000',eventTs:'1767229260.000000',userId:'U000000001',name:'rage'}}),'2026-01-02T00:00:00Z')
+    render(<AgentIncidentPanel data={{...data,cases:[record],canReview:false}} days={7} selection={record.id}/>)
+    expect(screen.getByText(/접수 요청이며 해결 승인이 아닙니다/)).toBeTruthy()
+    expect(screen.queryByRole('link',{name:'보고 요청·승인 메시지 ↗'})).toBeNull()
+    expect(screen.getByRole('link',{name:'문제 대화 열기 ↗'})).toHaveAttribute('href',record.report!.issueUrl)
+    expect(screen.queryByRole('button',{name:'사고 확정'})).toBeNull()
+  })
   it('requires evidence, submits the actual date input and preserves a failed form',async()=>{
     const fetch = vi.fn().mockResolvedValue(Response.json({message:'다른 검토자가 변경했습니다'},{status:409})); vi.stubGlobal('fetch',fetch)
     render(<AgentIncidentPanel data={data} days={7}/>)
