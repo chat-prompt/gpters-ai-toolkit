@@ -32,6 +32,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
     try {
       if (typeof file.path !== 'string' || typeof file.sessionKey !== 'string' || !file.sessionKey) throw new Error('Invalid private inventory')
       const path = await realpath(file.path)
+      if (file.expectedIdentity && path !== file.path) throw scopeError()
       const checkScope = candidate => {
         if (!scope) return
         const local = relative(scope.sessionsDir, candidate)
@@ -44,7 +45,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       const before = await handle.stat(), identity = `${before.dev}:${before.ino}`
       if(file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(before[key])!==value : before[key]!==value)) throw scopeError()
-      if (!before.isFile() || before.size > maxFileBytes) { counters.rotatedFiles++; continue }
+      if (!before.isFile() || before.size > maxFileBytes) { if (file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
       if (seenFiles.has(identity)) { counters.duplicates++; counters.filesExpected--; continue }
       seenFiles.add(identity)
       const bytes = Buffer.alloc(before.size)
@@ -55,7 +56,11 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       const current = await realpath(file.path)
       checkScope(current)
       const check = await open(current, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
-      try { const named = await check.stat(); if (named.ino !== before.ino || named.dev !== before.dev) { counters.rotatedFiles++; continue } } finally { await check.close() }
+      try {
+        const named = await check.stat()
+        if (file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(named[key])!==value : named[key]!==value)) throw scopeError()
+        if (named.ino !== before.ino || named.dev !== before.dev) { if (file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
+      } finally { await check.close() }
       counters.filesRead++
       const lines = bytes.toString('utf8').split('\n'), fileRecords = []
       if (source === 'codex' && scope) {
@@ -81,6 +86,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
         seenRows.add(item.key); records.push(item)
       }
     } catch (error) {
+      if (file.expectedIdentity) throw scopeError()
       if (error.scopeMismatch) throw new Error('Observation source scope changed')
       /* Private paths/errors never escape. filesRead mismatch makes missing source explicit. */
     }

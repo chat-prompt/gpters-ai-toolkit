@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, rm, utimes, symlink, realpath } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, utimes, symlink, realpath, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { discoverWindowFiles } from './inventory.mjs'
@@ -35,6 +35,20 @@ test('rejects symlink sources and rotation after discovery before metrics',()=>f
   const path=join(project,'source.jsonl'); await save(path,[row(window.startUtc)]); await symlink(path,join(project,'alias.jsonl')); await assert.rejects(discoverWindowFiles(context(root)))
   await rm(join(project,'alias.jsonl')); const files=await discoverWindowFiles(context(root)); await save(path,[row(window.startUtc),row(window.startUtc)])
   await assert.rejects(collectCliMetrics({...context(root),files}))
+}))
+for (const change of ['delete','rename','replace','directory','symlink']) test(`dynamic ${change} between discovery and metrics fails closed; static missing stays incomplete`,()=>fixture(async(root,project)=>{
+  const path=join(project,'source.jsonl'); await save(path,[row(window.startUtc)])
+  const files=await discoverWindowFiles(context(root))
+  if (change==='delete') await rm(path)
+  else {
+    const moved=join(project,'moved.jsonl'); await rename(path,moved)
+    if (change==='replace') await save(path,[row(window.startUtc)])
+    if (change==='directory') await mkdir(path)
+    if (change==='symlink') await symlink(moved,path)
+  }
+  await assert.rejects(collectCliMetrics({...context(root),files}), /Observation source scope/)
+  const missing=await collectCliMetrics({...context(root),files:[{path:join(project,'missing.jsonl'),sessionKey:'static'}]})
+  assert.equal(missing.capability,'incomplete'); assert.equal(missing.provenance.filesRead,0)
 }))
 test('Codex selects only a matching first physical header and rejects later scope changes',()=>fixture(async(root)=>{
   const config={source:'codex',scope:{sessionsDir:root,codexThreadSource:'aitk-agent:example'},window}
