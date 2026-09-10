@@ -26,6 +26,8 @@ function statePath() { return join(checkpoints, 'example-agent-openclaw.json') }
 function state() { return JSON.parse(readFileSync(statePath(), 'utf8')) }
 function response(ok = true) { return new Response(JSON.stringify(ok ? { ok: true, inserted: true } : { error: 'fixture failure' }), { status: ok ? 200 : 500 }) }
 function fakeHelper(code: string) { writeFileSync(helperPath, code, { mode: 0o600 }); config() }
+// Legacy Node22 collectors are covered by the other suites; executable bridge coverage requires Node24.
+describe.skipIf(Number(originalNode.split('.')[0]) < 24)('managed observation bridge with the actual bundled helper', () => {
 beforeAll(() => { built = realpathSync(mkdtempSync(join(tmpdir(), 'observation-build-'))); execFileSync('bun', ['build', resolve('../../infra/agent-observability/bridge.mjs'), '--target', 'node', '--format', 'esm', '--outfile', join(built, 'bridge.mjs')], { stdio: 'pipe' }); bundle = readFileSync(join(built, 'bridge.mjs')) })
 afterAll(() => rmSync(built, { recursive: true, force: true }))
 beforeEach(() => {
@@ -34,7 +36,6 @@ beforeEach(() => {
   configPath = join(root, 'config.json'); helperPath = join(root, 'bridge.mjs'); writeFileSync(helperPath, bundle, { mode: 0o600 }); config(); vi.stubGlobal('fetch', vi.fn(async () => response()))
 })
 afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); Object.defineProperty(process.versions, 'node', { value: originalNode }); rmSync(root, { recursive: true, force: true }) })
-describe('managed observation bridge with the actual bundled helper', () => {
   it('freezes validated aggregates and replays unchanged after config/helper/source disappear', async () => {
     const guard = join(root, 'guard.jsonl'); writeFileSync(guard, JSON.stringify({ ts: '2026-01-02T01:00:00.000Z', decision: 'deny' }) + '\n'); config({ readGuardFiles: [{ path: guard, sessionKey: 'private-session', agentExclusive: true }] })
     const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response(sent.length > 1) }))

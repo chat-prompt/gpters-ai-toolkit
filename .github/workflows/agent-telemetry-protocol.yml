@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'infra/agent-telemetry/**'
+      - 'infra/agent-observability/**'
       - 'apps/aitk-cli/**'
       - 'packages/lib/src/features/ax/agent-*.ts'
       - 'apps/web/components/ax/panels/Agent*.tsx'
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'infra/agent-telemetry/**'
+      - 'infra/agent-observability/**'
       - 'apps/aitk-cli/**'
       - 'packages/lib/src/features/ax/agent-*.ts'
       - 'apps/web/components/ax/panels/Agent*.tsx'
@@ -28,16 +30,22 @@ jobs:
       - run: node --test infra/agent-telemetry/verify-installation.test.mjs
 
   collector:
+    name: Collector (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node }}
           cache: pnpm
       - uses: oven-sh/setup-bun@v2
       - run: pnpm install --frozen-lockfile
+      - run: node --test infra/agent-observability/*.test.mjs
       - run: pnpm --filter @gpters/aitk test
       - run: pnpm --filter @gpters/aitk typecheck
       - run: pnpm --filter @gpters/web exec vitest run tests/unit/ax-agent-activity-panel.test.ts tests/unit/ax-agent-activity-view.test.tsx tests/unit/ax-agent-task-events.test.ts tests/unit/ax-agent-task-timeline.test.tsx tests/unit/ax-agent-telemetry-contract.test.ts tests/unit/ax-agent-telemetry-route.test.ts
