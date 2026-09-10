@@ -1,11 +1,28 @@
+import { constants } from 'node:fs'
+import { relative, isAbsolute } from 'node:path'
 import { open, realpath } from 'node:fs/promises'
 import { histogram } from './histogram.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
 export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 })
 const integer = value => Number.isSafeInteger(value) && value >= 0
 const textChars = value => typeof value === 'string' ? [...value].length : Array.isArray(value) ? value.reduce((n,b) => n + (b?.type === 'text' && typeof b.text === 'string' ? [...b.text].length : 0),0) : null
+function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
+function assertCodexFileScope(records, scope) {
+  const slugs = new Set(scope.projectSlugs ?? [])
+  const allowedCwd = cwd => typeof cwd === 'string' && slugs.has(cwd.replaceAll('\\','/').replace(/\/$/,'').split('/').at(-1))
+  let identified = false
+  for (const { row } of records) {
+    if (row.type === 'session_meta') {
+      if ((scope.codexThreadSource && row.payload?.thread_source !== scope.codexThreadSource)
+        || (slugs.size ? !allowedCwd(row.payload?.cwd) : !scope.codexThreadSource)) throw scopeError()
+      identified = true
+    } else if (row.type === 'turn_context' && slugs.size && !allowedCwd(row.payload?.cwd)) throw scopeError()
+  }
+  // A different file with the same operator-provided sessionKey cannot lend its identity.
+  if (!identified) throw scopeError()
+}
 /** Explicit inventory only: no home discovery, no mtime window filtering, no writes/checkpoint resets. */
-export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024 } = {}) {
+export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scope, source } = {}) {
   const counters = emptyCounters(), records = [], seenFiles = new Set(), seenRows = new Set()
   counters.filesExpected = files.length
   for (const file of files) {
@@ -13,7 +30,16 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024 } = {
     try {
       if (typeof file.path !== 'string' || typeof file.sessionKey !== 'string' || !file.sessionKey) throw new Error('Invalid private inventory')
       const path = await realpath(file.path)
-      handle = await open(path, 'r')
+      const checkScope = candidate => {
+        if (!scope) return
+        const local = relative(scope.sessionsDir, candidate)
+        if (!local || local === '..' || local.startsWith('../') || isAbsolute(local)
+          || (source === 'claude-code' && !scope.projectSlugs?.includes(local.split('/')[0]))) {
+          throw scopeError()
+        }
+      }
+      checkScope(path)
+      handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       const before = await handle.stat(), identity = `${before.dev}:${before.ino}`
       if (!before.isFile() || before.size > maxFileBytes) { counters.rotatedFiles++; continue }
       if (seenFiles.has(identity)) { counters.duplicates++; counters.filesExpected--; continue }
@@ -24,25 +50,37 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024 } = {
       const after = await handle.stat()
       if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || offset !== before.size) { counters.rotatedFiles++; continue }
       const current = await realpath(file.path)
-      const check = await open(current,'r')
+      checkScope(current)
+      const check = await open(current, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       try { const named = await check.stat(); if (named.ino !== before.ino || named.dev !== before.dev) { counters.rotatedFiles++; continue } } finally { await check.close() }
       counters.filesRead++
-      const lines = bytes.toString('utf8').split('\n')
+      const lines = bytes.toString('utf8').split('\n'), fileRecords = []
+      if (source === 'codex' && scope) {
+        let first
+        try { first = JSON.parse(lines[0]) } catch { throw scopeError() }
+        if (Buffer.byteLength(lines[0]) >= 2 * 1024 * 1024 || first?.type !== 'session_meta') throw scopeError()
+      }
       // A tail without newline may be an in-progress writer; never silently count it as complete.
       if (lines.at(-1)) { counters.parseFailures++; lines.pop() }
       for (const line of lines) {
         if (!line.trim()) continue
         counters.recordsRead++
         const key = digest([file.sessionKey,line])
-        if (seenRows.has(key)) { counters.duplicates++; continue }
-        seenRows.add(key)
         try {
           const row = JSON.parse(line)
           if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Unknown JSONL shape')
-          records.push({ row, session: file.sessionKey, completeFromStart: file.completeFromStart === true, key })
+          fileRecords.push({ row, session: file.sessionKey, completeFromStart: file.completeFromStart === true, key })
         } catch { counters.parseFailures++ }
       }
-    } catch { /* Private paths/errors never escape. filesRead mismatch makes missing source explicit. */ }
+      if (source === 'codex' && scope) assertCodexFileScope(fileRecords, scope)
+      for (const item of fileRecords) {
+        if (seenRows.has(item.key)) { counters.duplicates++; continue }
+        seenRows.add(item.key); records.push(item)
+      }
+    } catch (error) {
+      if (error.scopeMismatch) throw new Error('Observation source scope changed')
+      /* Private paths/errors never escape. filesRead mismatch makes missing source explicit. */
+    }
     finally { if (handle) await handle.close() }
   }
   return { records, counters }
@@ -53,12 +91,12 @@ function state(counters, observed) {
   return observed ? 'supported' : 'uncollected'
 }
 /** First-turn samples are only sessions whose observed first usage is in-window and full history is explicitly attested. */
-export async function collectCliMetrics({ source, files = [], window }) {
+export async function collectCliMetrics({ source, files = [], window, scope }) {
   const [start,end] = windowBounds(window), supported = ['claude-code','codex'].includes(source)
   const metricCapabilities = { firstTurnTokens: 'unsupported', peakContextTokens: 'unsupported', toolResultChars: 'unsupported', compactionEvents: 'unsupported' }
   const metrics = { firstTurnTokens: null, peakContextTokens: null, toolResultChars: null, compactionEvents: null }
   if (!supported) return { metrics, metricCapabilities, capability: 'unsupported', provenance: { ...emptyCounters(),filesExpected:files.length } }
-  const { records,counters } = await readRecords(files), usages = new Map(), results = new Map(), compactions = new Map(), sessions = new Map()
+  const { records,counters } = await readRecords(files, { scope, source }), usages = new Map(), results = new Map(), compactions = new Map(), sessions = new Map()
   let recognized = 0
   function timed(item, type) {
     const value = item.row.timestamp

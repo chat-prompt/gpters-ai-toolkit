@@ -1,9 +1,11 @@
 import { collectTaskEvents } from '../agent-telemetry/task-events.js'
+import { attachAgentObservability } from '../agent-telemetry/observability.js'
 /** 에이전트 delta telemetry 수집·전송 명령 */
 
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { constants, closeSync, lstatSync, mkdirSync, openSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readConfig } from '../config.js'
 import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
@@ -40,6 +42,7 @@ export interface AgentTelemetryOptions {
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
+  observabilityConfig?: string
   collectorInstanceId?: string
   category?: string
   serverUrl?: string
@@ -212,6 +215,23 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
   }
 }
 
+/** Existing default collectors retain their behavior; opt-in work owns one state lock through acknowledgement. */
+function observationLock(path: string, directory: string): () => void {
+  try {
+    mkdirSync(directory, { recursive: true, mode: 0o700 })
+    const stat = lstatSync(directory)
+    if (!stat.isDirectory() || stat.uid !== process.getuid?.() || (stat.mode & 0o022) !== 0) throw new Error('Unsafe checkpoint directory')
+    const lock = path + '.observation.lock'
+    const fd = openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+    try { writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })) }
+    catch { closeSync(fd); unlinkSync(lock); throw new Error('Cannot record lock') }
+    return () => {
+      try { closeSync(fd); unlinkSync(lock) }
+      catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
+    }
+  } catch { throw new Error('Observation collector lock unavailable; inspect the private checkpoint and active process. No batch was sent. Never remove an active lock.') }
+}
+
 export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): Promise<AgentTelemetryCollectResult> {
   const agentId = safeId(options.agentId, '--agent')
   const source = resolveSource(options.source)
@@ -232,6 +252,8 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   const sessionsDir = resolve(options.sessionsDir!)
   const checkpointDir = resolve(options.checkpointDir ?? join(homedir(), '.cache', 'gpters-aitk', 'agent-telemetry'))
   const checkpointPath = join(checkpointDir, checkpointName(agentId, source, projectSlugs, hermesProfile, codexThreadSource))
+  const release = options.observabilityConfig ? observationLock(checkpointPath, checkpointDir) : () => {}
+  try {
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
 
   if (state.agentId !== agentId) error('Checkpoint belongs to a different agent')
@@ -288,6 +310,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       executions: collected.executions,
       collection: { ...collected.collection, taskEvents: taskJournal.events },
     }
+    if (options.observabilityConfig) await attachAgentObservability(batch, options.observabilityConfig, { sessionsDir, projectSlugs, codexThreadSource })
     state = { ...state, pending: { batch, nextCommitted: collected.nextCommitted } }
   }
   const pending = state.pending
@@ -344,4 +367,5 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
     const message = cause instanceof Error ? cause.message : 'Agent telemetry upload failed'
     error(`${message}. Pending batch was preserved for retry.`)
   }
+  } finally { release() }
 }

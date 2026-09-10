@@ -248,7 +248,7 @@ in a deployed dashboard does **not** enable it on an existing collector.
 | --- | --- |
 | Claude/Codex JSONL metrics and ISO read-guard counters | Explicit private file inventory → read-only local helper → validated aggregate |
 | Scheduler/process/Slack API receipt normalization | An adapter must supply the exact runtime run/task/attempt binding and actual observed receipt |
-| Existing scheduled collector | Continues its installed collection path; there is no observation-config installation flag or automatic helper invocation |
+| Existing scheduled collector | Unchanged by default; optional `--observability-config` enables a pinned helper only for new batches after explicit managed install/upgrade |
 | Sidecar enrichment command | Creates an offline batch copy for review; does not send, authorize, or advance checkpoints |
 | New dashboard/monitor views | Can consume compatible stored sidecars; an empty view is not evidence that a live source was checked |
 
@@ -257,6 +257,12 @@ Report separately: **helper ready**, **private adapter configured**,
 **scheduled sidecar observed**. Do not promote any later state from an earlier
 one. Existing task-journal collection and successful ordinary telemetry batches
 are independent of sidecar coverage.
+
+See [managed bridge setup and retry boundaries](../agent-observability/MANAGED-BRIDGE.md)
+for the opt-in configuration, Node24 requirement and local regression commands.
+Configuring the bridge is an agent collection behavior change and requires the
+normal rollout notice before touching an installed collector. The offline format
+below is different from the versioned managed configuration.
 
 ### Private configuration and offline review
 
@@ -331,8 +337,9 @@ uploader with an existing or fabricated batch ID.
 
 ### Requirements before connecting to the existing schedule
 
-The scheduling bridge is a further implementation and rollout step. These are
-its acceptance requirements, not an already available installation command:
+The opt-in scheduling bridge is implemented; managed host activation remains a
+separate reviewed rollout. These requirements cover the bridge and any private
+runtime adapter connected to it:
 
 1. Preserve the existing collector identity, credential, stable Node, source
    boundary and interval. Pin the adapter checkout as well as the CLI; a moving
@@ -359,7 +366,7 @@ its acceptance requirements, not an already available installation command:
    rotated logs, partial trailing records and the exact window boundaries.
    Shared/production API and E2E mutation tests remain prohibited.
 
-After a reviewed bridge exists and installation is authorized, use the ordinary
+After the pinned bridge and inventory are reviewed and installation is authorized, use the ordinary
 fixed-SHA installation/upgrade procedure above. Then run one bounded real task
 and verify local metric samples and receipt bindings against the exact stored
 sidecar batch ID, authenticated agent/source, window and adapter version. Inspect
@@ -367,7 +374,7 @@ the dashboard's missingness, sample counts and evidence labels. Finally observe
 a later natural collector interval without manually triggering it. Report the
 highest verified stage; until that last observation, continuous collection of
 these new fields remains unverified. A normal version upgrade alone cannot
-satisfy this procedure while the bridge is absent.
+satisfy this procedure without explicit bridge configuration and source verification.
 
 ### Delivery expectations not yet implemented in this release
 

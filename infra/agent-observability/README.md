@@ -6,6 +6,10 @@ or establish that any live agent has enabled these capabilities. Existing
 collector schedules continue unchanged until their integration is separately
 reviewed and installed under the [rollout protocol](../agent-telemetry/PROTOCOL.md).
 
+The optional [managed bridge](MANAGED-BRIDGE.md) adds a pinned helper to new
+collector batches only after explicit installation configuration. Its default is
+disabled. The offline commands below do not enable it.
+
 ## Local use
 
 Use Node24+ and the repository's installed dependencies for schema validation.
@@ -156,12 +160,14 @@ for count metrics mean observed collection windows, not individual events.
 No comparison asserts that a change caused an effect. The first-turn sample
 caveat and session-window peak semantics above also apply to the dashboard.
 
-`AgentObservationPanel` is ready for an admin-only parent to render. Adding these
-files does not register the panel, install a live runtime adapter or enable new
-collection. Local browser visual verification is required after parent wiring.
+`AgentObservationPanel` is registered in the admin dashboard. The authenticated
+projection can show compatible saved observations; it does not prove that a live
+agent has enabled the sidecar. Local browser visual verification remains required
+when changing the panel. The opt-in managed bridge is implemented, while actual
+scoped host activation and natural scheduled observations require separate verification.
 
 For the exact current readiness boundaries, private config/offline commands,
-future scheduler-bridge acceptance criteria, and the missing independent deadline
+managed bridge rollout acceptance criteria, and the missing independent deadline
 registration path, follow the rollout protocol's
 [optional runtime observations](../agent-telemetry/PROTOCOL.md#optional-runtime-observations-preparation-versus-live-collection)
 section. Helpers alone do not enable scheduled sidecars or complete

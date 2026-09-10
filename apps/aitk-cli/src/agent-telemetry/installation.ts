@@ -30,6 +30,7 @@ export interface AgentTelemetryInstallation {
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir: string
+  observabilityConfig?: string
   category: string
   serverUrl: string
   backfillDays: number
@@ -116,6 +117,7 @@ function isInstallation(value: unknown): value is AgentTelemetryInstallation {
   if (item.version !== 1 || typeof item.agentId !== 'string' || typeof item.collectorId !== 'string') return false
   if (typeof item.source !== 'string' || !SAFE_SOURCE.has(item.source as AgentTelemetrySource)) return false
   if (typeof item.sessionsDir !== 'string' || typeof item.checkpointDir !== 'string') return false
+  if (item.observabilityConfig !== undefined && typeof item.observabilityConfig !== 'string') return false
   if (item.codexThreadSource !== undefined &&
     (item.source !== 'codex' || item.codexThreadSource !== `aitk-agent:${item.agentId}`)) return false
   if (item.projectSlugs !== undefined && typeof item.projectSlugs !== 'string') return false
@@ -142,6 +144,7 @@ function isInstallation(value: unknown): value is AgentTelemetryInstallation {
     if (item.openclawAgent) assertSafeId(item.openclawAgent, 'openclawAgent')
     assertAbsolutePath(item.sessionsDir, 'sessionsDir')
     assertAbsolutePath(item.checkpointDir, 'checkpointDir')
+    if (item.observabilityConfig) assertAbsolutePath(item.observabilityConfig, 'observabilityConfig')
     assertAbsolutePath(item.cli.nodePath, 'nodePath')
     assertAbsolutePath(item.cli.scriptPath, 'scriptPath')
     if (item.schedule.plistPath) assertAbsolutePath(item.schedule.plistPath, 'plistPath')
@@ -448,6 +451,7 @@ export function createInstallation(input: {
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
+  observabilityConfig?: string
   category?: string
   serverUrl: string
   backfillDays: number
@@ -488,6 +492,7 @@ export function createInstallation(input: {
     ...(input.openclawAgent ? { openclawAgent: input.openclawAgent } : {}),
     ...(input.hermesProfile ? { hermesProfile: input.hermesProfile } : {}),
     checkpointDir,
+    ...(input.observabilityConfig ? { observabilityConfig: resolve(input.observabilityConfig) } : {}),
     category: input.category ?? 'unclassified',
     serverUrl: input.serverUrl.replace(/\/+$/, ''),
     backfillDays: input.backfillDays,

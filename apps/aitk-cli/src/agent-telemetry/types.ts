@@ -59,6 +59,8 @@ export interface AgentTelemetryBatch {
     count: number
   }>
   collection: {
+    /** Validated by the pinned canonical-schema helper and again by the server. */
+    observability?: Record<string, unknown>
     taskEvents?: AgentTaskEvent[]
     source: AgentTelemetrySource
     filesDiscovered: number
