@@ -80,7 +80,9 @@ Slack 봇은 입출력 창구이고 AI agent는 서버에서 실행한다. 대�
 
 - 구현 브랜치: `fix/dev-4280-weekly-skill-digest`
 - 구현 커밋: `6131d04a`
-- Draft PR: [#133](https://github.com/chat-prompt/gpters-ai-toolkit/pull/133)
+- PR [#133](https://github.com/chat-prompt/gpters-ai-toolkit/pull/133)은 2026-09-10 병합됐다.
+  - main merge commit: `e53fb1db`
+  - Vercel Production 배포: `Ready`
 - 2026-09-10 새 Slack 앱 **뽀밋**을 GPTers 워크스페이스에 생성·설치했다.
   - App ID: `A0C0Q9DB4J1`
   - Bot user ID: `U0C0NKECXFD`
@@ -100,15 +102,14 @@ Slack 봇은 입출력 창구이고 AI agent는 서버에서 실행한다. 대�
 
 1. Slack 클라이언트 캐시 갱신 후 `#toolkit-알림`의 앱 목록과 실제 메시지에서 표시 이름이
    `뽀밋`인지 확인한다.
-2. PR #133의 quiet preview를 확인한 뒤 Ready 전환, 병합, 운영 배포한다.
-3. 운영에서 테스트 메시지와 스레드 답글을 보내 Bot Token·채널 멤버십·표시 이름을 검증한다.
-4. 실제 주간 알림 본문과 스레드를 한 차례 수동 실행으로 검증한다.
-5. `/api/slack/events`, 서명 검증, 중복 방지, agent session 연결을 별도 변경으로 구현한다.
-6. 배포된 Request URL을 Slack Event Subscriptions에 등록하고 `app_mention`, `message.im`을 구독한다.
-7. 테스트 채널의 멘션과 DM에서 대화 연속성, 스레드 응답, 오류 처리를 확인한 뒤 사용할 채널 범위를 넓힌다.
+2. 운영에서 테스트 메시지와 스레드 답글을 보내 Bot Token·채널 멤버십·표시 이름을 검증한다.
+3. 실제 주간 알림 본문과 스레드를 한 차례 수동 실행으로 검증한다.
+4. `/api/slack/events`, 서명 검증, 중복 방지, agent session 연결을 별도 변경으로 구현한다.
+5. 배포된 Request URL을 Slack Event Subscriptions에 등록하고 `app_mention`, `message.im`을 구독한다.
+6. 테스트 채널의 멘션과 DM에서 대화 연속성, 스레드 응답, 오류 처리를 확인한 뒤 사용할 채널 범위를 넓힌다.
 
-새 봇 생성과 토큰 등록이 끝나기 전에는 PR #133을 병합하지 않는다. 현재 상태만으로는 다음 월요일
-자동 발송이 보장되지 않는다.
+주간 알림 코드는 운영에 배포됐지만 뽀밋으로 실제 메시지를 보내는 검증은 아직 하지 않았다.
+수동 검증에서 본문과 스레드가 정상 발송되면 다음 월요일 자동 발송 준비가 완료된다.
 
 ## 알림 이후 신규 실행 확인 방법
 
