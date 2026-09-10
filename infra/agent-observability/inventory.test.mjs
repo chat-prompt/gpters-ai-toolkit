@@ -50,3 +50,10 @@ test('copied source session IDs deduplicate and mixed physical-file IDs fail clo
   assert.equal(result.metrics.peakContextTokens.count,1); assert.equal(result.metrics.peakContextTokens.sum,42)
   await save(join(project,'b.jsonl'),[record,{...record,sessionId:'other-session'}]); await assert.rejects(discoverWindowFiles(context(root)))
 }))
+test('known Claude metadata does not poison measured capabilities; unknown formats remain incomplete',()=>fixture(async(root,project)=>{
+  const file=join(project,'a.jsonl'), records=[row(window.startUtc),...['attachment','file-history-delta','last-prompt','atis-latch','mode','permission-mode','ai-title'].map(type=>({type}))]
+  await save(file,records); const files=await discoverWindowFiles(context(root)); let result=await collectCliMetrics({...context(root),files})
+  assert.equal(result.metricCapabilities.peakContextTokens,'supported'); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete')
+  await save(file,[...records,{type:'future-unknown'}]); result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root))})
+  assert.equal(result.metricCapabilities.peakContextTokens,'incomplete'); assert.equal(result.provenance.unsupportedRecords,1)
+}))

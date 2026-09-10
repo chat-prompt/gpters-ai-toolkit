@@ -5,6 +5,8 @@ import { histogram } from './histogram.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
 export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 })
 const integer = value => Number.isSafeInteger(value) && value >= 0
+// Same non-metric Claude metadata recognized by the existing agent collector.
+const claudeMetadata = new Set(['attachment','file-history-delta','last-prompt','atis-latch','mode','permission-mode','ai-title'])
 const textChars = value => typeof value === 'string' ? [...value].length : Array.isArray(value) ? value.reduce((n,b) => n + (b?.type === 'text' && typeof b.text === 'string' ? [...b.text].length : 0),0) : null
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
 function assertCodexFileScope(records, scope) {
@@ -118,7 +120,7 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
         resultItems = row.message.content.filter(b => b.type === 'tool_result')
         if (resultItems.length) entry = timed(item,'result')
       } else if (row.type === 'system' && row.subtype === 'compact_boundary') { compact = true; entry = timed(item,'compact') }
-      else if (!['user','assistant','system','progress','file-history-snapshot','queue-operation','summary'].includes(row.type)) { counters.unsupportedRecords++; continue }
+      else if (!claudeMetadata.has(row.type) && !['user','assistant','system','progress','file-history-snapshot','queue-operation','summary'].includes(row.type)) { counters.unsupportedRecords++; continue }
     } else {
       const payload = row.payload
       if (row.type === 'event_msg' && payload?.type === 'token_count') {
