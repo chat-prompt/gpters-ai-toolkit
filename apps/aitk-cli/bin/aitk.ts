@@ -331,6 +331,8 @@ Options:
   --openclaw-version <version> Runtime version label (default: unknown)
   --claude-cli-version <ver>   Claude CLI version label (default: unknown)
   --dry-run                    Print only aggregate data; never write checkpoint or send
+  --observability-config <path> Opt-in owned private config + pinned observation helper (Node24+)
+  --disable-observability       Disable optional observations during upgrade; flush pending first
 
 Install options:
   --interval <seconds>         launchd interval (default: 3600; laptop-hosted agents may use 21600)
@@ -627,6 +629,7 @@ async function main(): Promise<void> {
           openclawAgent: flags['openclaw-agent'],
           hermesProfile: flags['hermes-profile'],
           checkpointDir: flags['checkpoint-dir'],
+          observabilityConfig: flags['observability-config'],
           collectorInstanceId: flags['collector-id'],
           category: flags['category'],
           serverUrl: flags['server-url'],
@@ -644,6 +647,7 @@ async function main(): Promise<void> {
           openclawAgent: flags['openclaw-agent'],
           hermesProfile: flags['hermes-profile'],
           checkpointDir: flags['checkpoint-dir'],
+          observabilityConfig: flags['observability-config'],
           category: flags['category'],
           serverUrl: flags['server-url'],
           days: flags['days'] ? parseInt(flags['days'], 10) : 7,
@@ -664,7 +668,7 @@ async function main(): Promise<void> {
           cliScriptPath: flags['cli-path'],
           nodePath: flags['node-path'],
         }
-        if (sub === 'upgrade') await runAgentTelemetryUpgrade({ ...lifecycleOptions, ...cliIdentity })
+        if (sub === 'upgrade') await runAgentTelemetryUpgrade({ ...lifecycleOptions, ...cliIdentity, observabilityConfig: flags['observability-config'], disableObservability: flags['disable-observability'] === 'true' })
         else if (sub === 'doctor') await runAgentTelemetryDoctor({ ...lifecycleOptions, ...cliIdentity })
         else if (sub === 'status') runAgentTelemetryStatus(lifecycleOptions)
         else if (sub === 'run') await runAgentTelemetryRun(lifecycleOptions)

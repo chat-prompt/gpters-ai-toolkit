@@ -51,6 +51,7 @@ export interface AgentTelemetryInstallOptions {
   openclawAgent?: string
   hermesProfile?: string
   checkpointDir?: string
+  observabilityConfig?: string
   category?: string
   serverUrl?: string
   days: number
@@ -238,6 +239,7 @@ function collectOptions(installation: AgentTelemetryInstallation, dryRun: boolea
     openclawAgent: installation.openclawAgent,
     hermesProfile: installation.hermesProfile,
     checkpointDir: installation.checkpointDir,
+    observabilityConfig: installation.observabilityConfig,
     collectorInstanceId: installation.collectorId,
     category: installation.category,
     serverUrl: installation.serverUrl,
@@ -266,6 +268,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
   }
   const nodePath = resolve(options.nodePath ?? process.execPath)
   if (!existsSync(nodePath)) error('Node.js executable does not exist')
+  if (options.observabilityConfig) assertObservationNode(nodePath, runner)
 
   try {
     readAgentTelemetryInstallation(options.agentId, selectedSource, home)
@@ -289,6 +292,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     openclawAgent: options.openclawAgent,
     hermesProfile: options.hermesProfile,
     checkpointDir: options.checkpointDir,
+    observabilityConfig: options.observabilityConfig,
     collectorInstanceId: options.collectorId,
     category: options.category,
     serverUrl,
@@ -309,6 +313,7 @@ export async function runAgentTelemetryInstall(options: AgentTelemetryInstallOpt
     openclawAgent: options.openclawAgent,
     hermesProfile: options.hermesProfile,
     checkpointDir: options.checkpointDir,
+    observabilityConfig: options.observabilityConfig,
     category: options.category,
     serverUrl,
     backfillDays: options.days,
@@ -390,7 +395,7 @@ export async function runAgentTelemetryRun(options: AgentTelemetryLifecycleOptio
  * scriptPath는 옛 버전 파일을 가리키므로, 이 명령을 실행하지 않으면 예약 수집은 계속 옛 바이너리로 돈다.
  */
 export async function runAgentTelemetryUpgrade(
-  options: AgentTelemetryLifecycleOptions & AgentTelemetryCliIdentity & { platform?: NodeJS.Platform }
+  options: AgentTelemetryLifecycleOptions & AgentTelemetryCliIdentity & { platform?: NodeJS.Platform; observabilityConfig?: string; disableObservability?: boolean }
 ): Promise<void> {
   const installation = readAgentTelemetryInstallation(options.agentId, source(options.source), options.home)
   const runner = options.runner ?? defaultCommandRunner
@@ -404,11 +409,14 @@ export async function runAgentTelemetryUpgrade(
   const nodePath = resolve(options.nodePath ?? process.execPath)
   if (!existsSync(nodePath)) error('Node.js executable does not exist')
   if (!options.collectorVersion) error('Telemetry upgrade requires the running CLI version')
+  if (options.observabilityConfig && options.disableObservability) error('Choose either observability config or disable, not both')
+  const observabilityConfig = options.disableObservability ? undefined : options.observabilityConfig ? resolve(options.observabilityConfig) : installation.observabilityConfig
+  if (observabilityConfig) assertObservationNode(nodePath, runner)
 
   const previous = { ...installation.cli }
   const identity = { collectorVersion: options.collectorVersion, cliScriptPath: scriptPath, nodePath }
   // 기록과 plist가 모두 최신일 때만 할 일이 없다. 기록만 최신이면 plist를 다시 써서 중단된 업그레이드를 고친다.
-  if (installationFullyUpToDate(installation, identity)) {
+  if (installationFullyUpToDate(installation, identity) && observabilityConfig === installation.observabilityConfig && !options.observabilityConfig && !options.disableObservability) {
     jsonOut({
       ok: true,
       upgraded: false,
@@ -423,6 +431,7 @@ export async function runAgentTelemetryUpgrade(
 
   const upgraded: AgentTelemetryInstallation = {
     ...installation,
+    observabilityConfig,
     cli: { nodePath, scriptPath, collectorVersion: options.collectorVersion },
   }
   // 미전송 batch가 남아 있으면 dry-run이 그 batch를 그대로 돌려주므로 새 CLI가 source를 읽는지 확인할 수 없다.
@@ -458,6 +467,12 @@ export async function runAgentTelemetryUpgrade(
     checkpointPreserved: true,
     credentialPreserved: true,
   })
+}
+
+function assertObservationNode(nodePath: string, runner: CommandRunner) {
+  const version = runner(nodePath, ['--version'])
+  const major = Number(version.stdout.trim().match(/^v(\d+)\./)?.[1])
+  if (version.status !== 0 || !Number.isFinite(major) || major < 24) error('Observation bridge requires the selected scheduler Node24+; existing collectors without the opt-in are unchanged')
 }
 
 export async function runAgentTelemetryDoctor(
