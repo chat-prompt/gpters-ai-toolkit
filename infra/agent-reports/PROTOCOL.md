@@ -23,6 +23,11 @@ required. Production must enable the report API before agents use it.
    is not a receipt. Retry the same input and canonical problem link; do not
    change the payload on retry. HTTP 409 means read the existing report and use
    an explicit supplement, not a new problem link to evade deduplication.
+   The helper does not retry automatically. For a timeout, connection failure or
+   HTTP 500/502/504, the agent may retry once after 15 seconds with the identical
+   saved input. If still uncertain, report the uncertainty in the same thread
+   and stop. For 400/401/403/404/409/429/503, stop and report the error; never
+   change identity, approval, input or issue link to force acceptance.
 5. For follow-up, call `get` while the conversation/task remains active, after
    providing evidence, and when the human asks for status. Convey a
    `needs-info` decision in the same thread, obtain the answer and append it.
