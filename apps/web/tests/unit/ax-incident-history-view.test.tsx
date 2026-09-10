@@ -30,6 +30,32 @@ describe('saved incident history view', () => {
     expect(fetch.mock.calls[2][0]).toBe('/api/ax/incident-history?source=codex')
     expect(screen.getByRole('button', { name: '이전' })).toBeDisabled()
   })
+  it('refetches the current filtered page on dashboard refresh and keeps draft input', async () => {
+    const firstToken = {}, nextToken = {}
+    let refreshed = false
+    const fetch = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ ...page('cursor-one'), items: [{ ...item, title: refreshed ? 'Updated issue' : item.title }] })))
+    vi.stubGlobal('fetch', fetch)
+    const view = render(<IncidentHistoryPanel refreshToken={firstToken}/>)
+    await screen.findByRole('link', { name: /Example issue/ })
+    fireEvent.change(screen.getByLabelText('소스'), { target: { value: 'codex' } })
+    await screen.findByRole('link', { name: /Example issue/ })
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    await screen.findByRole('link', { name: /Example issue/ })
+    expect(screen.getByText('2 페이지')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('에이전트 ID'), { target: { value: 'draft.agent' } })
+    const currentUrl = fetch.mock.calls[2][0]
+    expect(currentUrl).toBe('/api/ax/incident-history?source=codex&cursor=cursor-one')
+    view.rerender(<IncidentHistoryPanel refreshToken={firstToken}/>)
+    expect(fetch).toHaveBeenCalledTimes(3)
+    refreshed = true
+    view.rerender(<IncidentHistoryPanel refreshToken={nextToken}/>)
+    await screen.findByRole('link', { name: /Updated issue/ })
+    expect(fetch).toHaveBeenCalledTimes(4)
+    expect(fetch.mock.calls[3][0]).toBe(currentUrl)
+    expect(screen.getByLabelText('소스')).toHaveValue('codex')
+    expect(screen.getByLabelText('에이전트 ID')).toHaveValue('draft.agent')
+    expect(screen.getByText('2 페이지')).toBeTruthy()
+  })
   it('shows an actionable error without raw server details and retries', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(Response.json({ message: 'private secret' }, { status: 500 })).mockResolvedValueOnce(Response.json(page()))
     vi.stubGlobal('fetch', fetch)

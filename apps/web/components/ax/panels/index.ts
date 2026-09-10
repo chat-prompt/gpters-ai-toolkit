@@ -50,8 +50,8 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   'agent-activity': AgentActivityPanel,
   'agent-incidents': AgentIncidentPanel,
   'agent-monitoring': AgentMonitoringPanel,
-  'incident-history': IncidentHistoryPanel,
-  'agent-observations': ({ days }) => createElement(AgentObservationPanel, { days: days === 30 || days === 90 ? days : 7 }),
+  'incident-history': ({ data }) => createElement<{ refreshToken?: unknown }>(IncidentHistoryPanel, { refreshToken: data }),
+  'agent-observations': ({ days, data }) => createElement(AgentObservationPanel, { days: days === 30 || days === 90 ? days : 7, refreshToken: data }),
 }
 
 /**

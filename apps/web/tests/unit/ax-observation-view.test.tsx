@@ -27,6 +27,31 @@ describe('observation panel scope and missingness',()=>{
   expect(url.searchParams.get('changeAt')).toBe(new Date('2026-01-04T12:00').toISOString());expect(url.searchParams.get('comparisonHours')).toBe('24')
   expect(fetch.mock.calls[1][1].method).toBeUndefined()
  })
+ it('refetches on dashboard refresh without resetting the chosen comparison',async()=>{
+  const firstToken={},nextToken={}
+  const fresh={...data,streams:data.streams.map(row=>({...row,summary:{...row.summary,metrics:{...row.summary.metrics,compactionEvents:7},metricCapabilities:{...row.summary.metricCapabilities,compactionEvents:'supported'}}}))}
+  let refreshed=false
+  const fetch=vi.fn().mockImplementation(()=>Promise.resolve(Response.json(refreshed?fresh:data)));vi.stubGlobal('fetch',fetch)
+  const view=render(<AgentObservationPanel days={7} refreshToken={firstToken}/>)
+  await screen.findByLabelText('관측 비교 에이전트·소스')
+  fireEvent.change(screen.getByLabelText('관측 비교 에이전트·소스'),{target:{value:JSON.stringify(['example-agent','codex'])}})
+  fireEvent.change(screen.getByLabelText('관측 변경 시각'),{target:{value:'2026-01-04T12:00'}})
+  fireEvent.change(screen.getByLabelText('관측 비교 구간 시간'),{target:{value:'24'}})
+  fireEvent.click(screen.getByRole('button',{name:'비교 조회'}))
+  await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2))
+  await screen.findByLabelText('관측 비교 구간 시간')
+  const comparisonUrl=fetch.mock.calls[1][0]
+  view.rerender(<AgentObservationPanel days={7} refreshToken={firstToken}/>)
+  expect(fetch).toHaveBeenCalledTimes(2)
+  refreshed=true
+  view.rerender(<AgentObservationPanel days={7} refreshToken={nextToken}/>)
+  await screen.findByText('7 건')
+  expect(fetch).toHaveBeenCalledTimes(3);expect(fetch.mock.calls[2][0]).toBe(comparisonUrl)
+  expect(screen.getByLabelText('관측 비교 에이전트·소스')).toHaveValue(JSON.stringify(['example-agent','codex']))
+  expect(screen.getByLabelText('관측 변경 시각')).toHaveValue('2026-01-04T12:00')
+  expect(screen.getByLabelText('관측 비교 구간 시간')).toHaveValue(24)
+  expect(screen.getByRole('button',{name:'비교 해제'})).toBeTruthy()
+ })
  it('clears old metrics when a new period fails and explains truncation',async()=>{
   const fetch=vi.fn().mockResolvedValueOnce(Response.json({...data,coverage:{...data.coverage,truncated:true,totalStreams:51}})).mockResolvedValueOnce(Response.json({},{status:500}));vi.stubGlobal('fetch',fetch)
   const view=render(<AgentObservationPanel days={7}/>);await waitFor(()=>expect(screen.getByText(/조회 한도에 도달했습니다/)).toBeTruthy())

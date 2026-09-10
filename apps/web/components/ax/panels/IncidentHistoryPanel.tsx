@@ -7,7 +7,7 @@ const labels = { candidate: '검토 전', reviewing: '검토 중', 'needs-info':
 const field = 'rounded-lg border border-[var(--border-hover)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)]'
 
 /** Independent read-only history view; server always rechecks internal administrator access. */
-export function IncidentHistoryPanel() {
+export function IncidentHistoryPanel({ refreshToken }: { refreshToken?: unknown } = {}) {
   const [draftAgent, setDraftAgent] = useState('')
   const [filters, setFilters] = useState({ agent: '', source: '', state: '' })
   const [cursors, setCursors] = useState<Array<string | null>>([null])
@@ -15,6 +15,9 @@ export function IncidentHistoryPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
+  const [settledRefresh, setSettledRefresh] = useState({ token: refreshToken })
+  const refreshing = !Object.is(settledRefresh.token, refreshToken)
+  const busy = loading || refreshing
   const cursor = cursors[cursors.length - 1]
   useEffect(() => {
     const controller = new AbortController()
@@ -25,11 +28,11 @@ export function IncidentHistoryPanel() {
     if (cursor) query.set('cursor', cursor)
     fetch(`/api/ax/incident-history?${query}`, { signal: controller.signal, cache: 'no-store' })
       .then(async response => { if (!response.ok) throw new Error('저장된 이력을 불러오지 못했습니다. 다시 시도해 주세요.'); return response.json() as Promise<IncidentHistoryPage> })
-      .then(result => { if (active) setPage(result) })
-      .catch(() => { if (active) setError('저장된 이력을 불러오지 못했습니다. 다시 시도해 주세요.') })
-      .finally(() => { clearTimeout(timer); if (active) setLoading(false) })
+      .then(result => { if (active) { setPage(result); setError('') } })
+      .catch(() => { if (active) { setPage(null); setError('저장된 이력을 불러오지 못했습니다. 다시 시도해 주세요.') } })
+      .finally(() => { clearTimeout(timer); if (active) { setLoading(false); setSettledRefresh({ token: refreshToken }) } })
     return () => { active = false; clearTimeout(timer); controller.abort() }
-  }, [filters, cursor, refresh])
+  }, [filters, cursor, refresh, refreshToken])
   function beginLoad() { setLoading(true); setError(''); setPage(null) }
   function filter(key: 'source' | 'state', value: string) { beginLoad(); setFilters(previous => ({ ...previous, [key]: value })); setCursors([null]) }
   return <section aria-label="저장된 문제 이력" className="space-y-4">
@@ -41,9 +44,9 @@ export function IncidentHistoryPanel() {
       <button className={field} type="submit">조회</button>
       <button className={field} type="button" onClick={() => { beginLoad(); setCursors([null]); setRefresh(value => value + 1) }}>최신 이력</button>
     </form>
-    <div className="min-h-64 space-y-2" aria-busy={loading}>
-      {loading && <p role="status" className="py-6 text-sm">이력을 불러오는 중입니다.</p>}
-      {error && <div role="alert" className="space-y-2 py-6 text-sm"><p>{error}</p><button className={field} onClick={() => { beginLoad(); setRefresh(value => value + 1) }}>다시 시도</button></div>}
+    <div className="min-h-64 space-y-2" aria-busy={busy}>
+      {busy && <p role="status" className="py-6 text-sm">이력을 불러오는 중입니다.</p>}
+      {!refreshing && error && <div role="alert" className="space-y-2 py-6 text-sm"><p>{error}</p><button className={field} onClick={() => { beginLoad(); setRefresh(value => value + 1) }}>다시 시도</button></div>}
       {page?.items.length === 0 && <p className="py-6 text-sm text-[var(--text-secondary)]">조건에 맞는 저장된 기록이 없습니다.</p>}
       {page?.items.map(item => <a key={item.id} href={`?panel=agent-incidents&incident=${encodeURIComponent(item.id)}`} className="block rounded-xl border border-[var(--border-subtle)] p-4 hover:bg-[var(--bg-secondary)]">
         <div className="flex flex-wrap justify-between gap-2"><strong className="min-w-0 break-words">{item.title}</strong><span className="text-sm">{labels[item.state]}{item.pendingReview ? ' · 검토 필요' : ''}</span></div>
@@ -52,9 +55,9 @@ export function IncidentHistoryPanel() {
       </a>)}
     </div>
     <nav aria-label="이력 페이지" className="flex items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
-      <button className={field + ' disabled:opacity-50'} disabled={loading || cursors.length === 1} onClick={() => { beginLoad(); setCursors(previous => previous.slice(0, -1)) }}>이전</button>
+      <button className={field + ' disabled:opacity-50'} disabled={busy || cursors.length === 1} onClick={() => { beginLoad(); setCursors(previous => previous.slice(0, -1)) }}>이전</button>
       <span className="text-sm">{cursors.length} 페이지</span>
-      <button className={field + ' disabled:opacity-50'} disabled={loading || !page?.nextCursor} onClick={() => { if (page?.nextCursor) { beginLoad(); setCursors(previous => [...previous, page.nextCursor]) } }}>다음</button>
+      <button className={field + ' disabled:opacity-50'} disabled={busy || !page?.nextCursor} onClick={() => { if (page?.nextCursor) { beginLoad(); setCursors(previous => [...previous, page.nextCursor]) } }}>다음</button>
     </nav>
     <p className="text-xs text-[var(--text-secondary)]">조회 중 변경된 기록은 최신 이력에서 다시 확인할 수 있습니다.</p>
   </section>
