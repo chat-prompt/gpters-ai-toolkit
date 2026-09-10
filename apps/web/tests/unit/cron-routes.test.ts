@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CRON_EXPECTATIONS } from '../../../../packages/lib/src/ops'
+import { INDEPENDENTLY_WATCHED_CRONS } from '../../../../packages/lib/src/ops/cron-registry'
 
 /** 앱 루트 — 이 테스트 파일 기준 `apps/web` */
 const APP_ROOT = join(__dirname, '..', '..')
@@ -51,7 +52,8 @@ describe('크론 감시 레지스트리', () => {
 
   it('등록된 크론이 전부 감시 대상이다', async () => {
     const entries = await readCronEntries()
-    const registered = new Set(CRON_EXPECTATIONS.map((entry) => entry.jobName))
+    const registered = new Set([...CRON_EXPECTATIONS.map((entry) => entry.jobName),...INDEPENDENTLY_WATCHED_CRONS.map(entry=>entry.jobName)])
+    for (const entry of INDEPENDENTLY_WATCHED_CRONS) expect(existsSync(join(APP_ROOT,'../..',entry.watchdog))).toBe(true)
     const unwatched = entries
       .map((entry) => entry.path.split('?')[0])
       .filter((path) => path !== SELF)

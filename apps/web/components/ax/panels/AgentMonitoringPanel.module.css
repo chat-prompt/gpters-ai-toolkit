@@ -1,0 +1,11 @@
+.attention {
+  color: var(--accent-orange);
+}
+
+:global([data-theme='light']) .attention {
+  color: #a34500;
+}
+
+:global([data-theme='dark']) .attention {
+  color: #ffb86b;
+}
