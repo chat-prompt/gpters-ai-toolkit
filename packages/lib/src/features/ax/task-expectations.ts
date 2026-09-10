@@ -63,18 +63,24 @@ export function changeTaskExpectation(current: TaskExpectation, raw: Expectation
 }
 /** A receipt from another attempt/phase/source or before registration cannot fulfill this plan. */
 export function reconcileTaskExpectation(current: TaskExpectation, observations: MonitorObservation[], now: string): TaskExpectation {
-  if (current.state === 'cancelled') return current
   const matching = observations.filter(({ agentId, source, event }) => agentId === current.agentId && source === current.source && event.taskId === current.taskId && event.attemptId === current.attemptId && event.phase === current.phase && event.status === 'succeeded' && event.evidence === current.evidence && Date.parse(event.atUtc) >= Date.parse(current.createdAt) && Date.parse(event.atUtc) <= Date.parse(now))
     .map(({ event }) => ({ eventId: event.eventId, at: event.atUtc, evidence: current.evidence }))
   const receipt = [...(current.receipt ? [current.receipt] : []), ...matching].sort((a, b) => a.at.localeCompare(b.at) || a.eventId.localeCompare(b.eventId))[0]
   if (!receipt || (current.receipt && receipt.eventId === current.receipt.eventId)) return current
-  return { ...current, receipt, state: 'completed', revision: current.revision + 1, updatedAt: now }
+  // Cancellation remains terminal even if delayed telemetry corrects its past
+  // timing. Store the receipt without changing the operator's cancelled state.
+  return { ...current, receipt, state: current.state === 'cancelled' ? 'cancelled' : 'completed', revision: current.revision + 1, updatedAt: now }
 }
 export function projectTaskExpectation(record: TaskExpectation): MonitorReceiptExpectation {
+  // A late change request is an audit fact, not proof execution was late. An
+  // earlier on-time receipt can arrive after cancellation/defer and correct the
+  // missed-deadline interpretation without deleting that change history.
+  const changedAfterDeadline = record.overdueBeforeChange && (!record.receipt || record.receipt.at > record.overdueBeforeChange) ? record.overdueBeforeChange : undefined
+  const missedDeadlineAt = changedAfterDeadline ?? (record.receipt && record.receipt.at > record.deadlineAt ? record.deadlineAt : undefined)
   return { id: record.id, agentId: record.agentId, source: record.source, taskId: record.taskId, attemptId: record.attemptId, phase: record.phase,
     deadlineAt: record.deadlineAt, requiredEvidence: 'reported', cancelled: record.state === 'cancelled',
     receipt: record.receipt ? { at: record.receipt.at, evidence: record.receipt.evidence, independentlyVerified: false } : null,
-    registration: { id: record.id, revision: record.revision, scheduledFor: record.scheduledFor, state: record.state, originalDeadlineAt: record.originalDeadlineAt, missedDeadlineAt: record.overdueBeforeChange ?? (record.receipt && record.receipt.at > record.deadlineAt ? record.deadlineAt : undefined) },
+    registration: { id: record.id, revision: record.revision, scheduledFor: record.scheduledFor, state: record.state, originalDeadlineAt: record.originalDeadlineAt, missedDeadlineAt },
   }
 }
 

@@ -94,6 +94,9 @@ attempt gets a new attempt UUID and a new registration; it does not complete or
 cancel the old attempt. Explicitly cancel an obsolete old plan if that is the
 intended decision. There is no automatic retry scheduling or cascade cancellation.
 A cancellation racing completion can lose revision CAS; read the resulting state.
+An earlier on-time receipt arriving later corrects the apparent missed-deadline
+label, including on a cancelled plan, while retaining the cancellation/defer
+audit. Recording that receipt never changes a cancelled plan back to completed.
 
 There is deliberately no arbitrary `complete` command. Completion comes only
 from a successful task event or normalized process/API receipt for the exact
@@ -116,7 +119,10 @@ must still detect a stalled central monitor separately.
 Plan mutations invalidate the monitor snapshot through its revision CAS.
 Completion, batch acknowledgment, projection and alert outbox commit atomically.
 The pre-send guard rechecks the current plan after Slack channel resolution and
-cancels an obsolete alert after cancellation or postponement. Database state and
+cancels an obsolete alert after cancellation or postponement. A revised deadline
+starts a new observation episode even when it expires between monitor ticks; an
+old cancelled opening cannot suppress the new opening until a daily reminder.
+Database state and
 a final external message POST cannot be one distributed transaction; a change
 made after that final check can still race a send. Existing ambiguous-send rules
 remain in force.

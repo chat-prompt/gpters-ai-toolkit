@@ -126,6 +126,11 @@ export function reduceMonitor(input: MonitorInput): MonitorResult {
       phase: expectation.phase, evidence: expectation.receipt?.evidence })
     candidate.lastObservedAt = input.now
     if (expectation.registration) {
+      // A revised deadline is a new observation episode. The prior queued first
+      // may already have been cancelled by pre-send validation. Even if the new
+      // deadline expires between ticks, do not inherit its openingQueued marker
+      // and suppress the replacement alert until the next daily reminder.
+      if (candidate.expectation && candidate.expectation.deadlineAt !== expectation.deadlineAt) updateCondition(candidate, false)
       candidate.expectation = { ...expectation.registration, deadlineAt: expectation.deadlineAt, receiptAt: expectation.receipt?.at ?? null }
       candidate.lastEventAt = expectation.receipt?.at ?? null
       candidate.evidence = expectation.receipt?.evidence

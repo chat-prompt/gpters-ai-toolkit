@@ -69,4 +69,41 @@ describe('explicit task expectations',()=>{
   const after=reduceMonitor({state:before.state,observations:[],collectors:[],receiptExpectations:[projectTaskExpectation(record)],now:'2026-01-02T00:00:00.000Z',policy,caughtUp:true})
   expect(after.state.candidates[candidate.id]).toMatchObject({state:'false-positive',needsReview:false,observationActive:false})
  })
+ it('replaces a revised queued opening even when the deferred deadline expires between monitor ticks',()=>{
+  const record=createTaskExpectation(principal,input(),now)
+  const args={observations:[],collectors:[],caughtUp:true,policy}
+  const first=reduceMonitor({...args,state:emptyMonitorState(),receiptExpectations:[projectTaskExpectation(record)],now:'2026-01-01T01:01:00.000Z'})
+  expect(first.outbox.map(item=>item.kind)).toEqual(['first'])
+  // The pre-send guard cancels this revision-1 opening after the defer commits.
+  const deferred=changeTaskExpectation(record,{action:'defer',id:record.id,revision:1,operationId:randomUUID(),deadlineAt:'2026-01-01T01:03:00.000Z',reason:'rescheduled'},'2026-01-01T01:02:00.000Z').record
+  const next=reduceMonitor({...args,state:first.state,receiptExpectations:[projectTaskExpectation(deferred)],now:'2026-01-01T01:06:00.000Z'})
+  expect(next.outbox.map(item=>item.kind)).toEqual(['first'])
+  expect(next.outbox[0].episode).toBe(first.outbox[0].episode+1)
+  expect(next.outbox[0].id).not.toBe(first.outbox[0].id)
+  expect(reduceMonitor({...args,state:next.state,receiptExpectations:[projectTaskExpectation(deferred)],now:'2026-01-01T01:11:00.000Z'}).outbox).toHaveLength(0)
+ })
+ it.each(['defer','cancel'] as const)('corrects an apparent missed deadline from a late %s without deleting its audit or undoing cancellation',action=>{
+  const record=createTaskExpectation(principal,input(),now)
+  const change=action==='cancel'?{action,id:record.id,revision:1,operationId:randomUUID(),reason:'operator-request' as const}:{action,id:record.id,revision:1,operationId:randomUUID(),reason:'operator-request' as const,deadlineAt:'2026-01-01T04:00:00.000Z'}
+  const changed=changeTaskExpectation(record,change,overdue).record
+  const args={observations:[],collectors:[],caughtUp:true,policy,now:overdue}
+  const before=reduceMonitor({...args,state:emptyMonitorState(),receiptExpectations:[projectTaskExpectation(changed)]})
+  const candidate=Object.values(before.state.candidates)[0];candidate.state='confirmed'
+  expect(candidate.expectation?.missedDeadlineAt).toBe(record.deadlineAt)
+  const receipt:MonitorObservation={position:'1',agentId:record.agentId,source:record.source,event:{eventId:randomUUID(),taskId:record.taskId,attemptId:record.attemptId,phase:record.phase,status:'succeeded',evidence:'api',atUtc:'2026-01-01T00:59:00.000Z'}}
+  const corrected=reconcileTaskExpectation(changed,[receipt],overdue)
+  expect(corrected.state).toBe(action==='cancel'?'cancelled':'completed')
+  expect(corrected.overdueBeforeChange).toBe(record.deadlineAt)
+  expect(corrected.history).toEqual(changed.history)
+  expect(projectTaskExpectation(corrected).registration?.missedDeadlineAt).toBeUndefined()
+  const after=reduceMonitor({...args,state:before.state,receiptExpectations:[projectTaskExpectation(corrected)]})
+  expect(after.state.candidates[candidate.id]).toMatchObject({state:'confirmed',observationActive:false,expectation:{receiptAt:receipt.event.atUtc}})
+  expect(after.state.candidates[candidate.id].expectation?.missedDeadlineAt).toBeUndefined()
+  expect(after.outbox).toHaveLength(0)
+  expect(reconcileTaskExpectation(corrected,[receipt],overdue)).toBe(corrected)
+  // Real late success still retains the historical missed deadline.
+  const late=reconcileTaskExpectation(changed,[{...receipt,event:{...receipt.event,atUtc:'2026-01-01T01:30:00.000Z'}}],overdue)
+  expect(projectTaskExpectation(late).registration?.missedDeadlineAt).toBe(record.deadlineAt)
+ })
+
 })
