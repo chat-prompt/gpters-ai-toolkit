@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-import { incidentReportSchema, incidentSupplementSchema, allowedReportWorkspace } from '../../../../packages/lib/src/features/ax/incident-report'
+import { incidentReportSchema, incidentSupplementSchema, allowedReportWorkspace, allowedReactionReport } from '../../../../packages/lib/src/features/ax/incident-report'
 const mocks=vi.hoisted(()=>({auth:vi.fn(),submit:vi.fn(),read:vi.fn(),append:vi.fn()}))
 class IncidentConflict extends Error {}
 class IncidentValidationError extends Error {}
 vi.mock('@gpters/lib/security',()=>({authenticateAgent:mocks.auth}))
-vi.mock('@/lib/features/ax',()=>({incidentReportSchema,incidentSupplementSchema,allowedReportWorkspace,submitIncidentReport:mocks.submit,readOwnIncidentReport:mocks.read,supplementIncidentReport:mocks.append,IncidentConflict,IncidentValidationError}))
+vi.mock('@/lib/features/ax',()=>({incidentReportSchema,incidentSupplementSchema,allowedReportWorkspace,allowedReactionReport,submitIncidentReport:mocks.submit,readOwnIncidentReport:mocks.read,supplementIncidentReport:mocks.append,IncidentConflict,IncidentValidationError}))
 vi.mock('@/lib/utils/rate-limit',()=>({withRateLimit:()=>null,RateLimitPresets:{standard:{}}}))
 const {POST}=await import('../../app/api/ax/agent-reports/route')
 const {GET,POST:APPEND}=await import('../../app/api/ax/agent-reports/[id]/route')
@@ -51,6 +51,17 @@ describe('agent report HTTP boundary',()=>{
   it('rejects oversized bodies even without a content-length header',async()=>{
     expect((await POST(request({...body,summary:'x'.repeat(17000)})))).toHaveProperty('status',400)
     expect(mocks.submit).not.toHaveBeenCalled()
+  })
+  it('requires separate reaction enrollment and the original actor and channel',async()=>{
+    const {approvalUrl:_,...base}=body
+    const reaction={eventId:'Ev000000001',teamId:'T000000001',channelId:'C0000000001',messageTs:'1767229200.000000',threadTs:'1767229200.000000',eventTs:'1767229260.000000',userId:body.requestedBy,name:'rage'}
+    const report={...base,initiation:'reaction-requested',reaction}
+    expect((await POST(request(report))).status).toBe(403)
+    vi.stubEnv('AX_INCIDENT_REACTION_REPORTS_ENABLED','true');vi.stubEnv('AX_INCIDENT_SLACK_TEAM_ID',reaction.teamId);vi.stubEnv('AX_INCIDENT_REACTION_NAMES','rage');vi.stubEnv('AX_INCIDENT_REACTION_REQUESTER_IDS',body.requestedBy);vi.stubEnv('AX_INCIDENT_REACTION_CHANNEL_IDS',reaction.channelId)
+    expect((await POST(request(report))).status).toBe(201)
+    vi.stubEnv('AX_INCIDENT_REACTION_CHANNEL_IDS','C0000000002')
+    expect((await POST(request(report))).status).toBe(403)
+    expect((await POST(request({...report,requestedBy:'U0000000002'}))).status).toBe(400)
   })
   it('reads only the authenticated agent scope and does not expose actor IDs or hashes',async()=>{
     mocks.read.mockResolvedValueOnce({id,state:'needs-info',revision:2,history:[{at:'now',actor:'private-user-id',action:'needs-info',reason:'Please reproduce',evidenceRef:body.issueUrl}],report:{pendingReview:false,supplements:[]}})

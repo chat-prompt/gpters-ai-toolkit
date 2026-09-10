@@ -12,6 +12,7 @@ export function reportId(agent: Pick<AgentPrincipal,'orgId'|'agentId'>, issueUrl
 }
 export function createReportCase(agent: Pick<AgentPrincipal,'orgId'|'agentId'>, input: IncidentReportSubmission, now = new Date().toISOString()): IncidentCase {
   if (Date.parse(input.occurredAt) > Date.parse(now)) throw new IncidentValidationError('발생 시각은 미래일 수 없습니다')
+  if (input.reaction && Number(input.reaction.eventTs) * 1000 > Date.parse(now)) throw new IncidentValidationError('반응 시각은 미래일 수 없습니다')
   return { id: reportId(agent,input.issueUrl), revision: 1, state: 'candidate', agentId: agent.agentId, source: input.source, phase: 'task', evidence: 'self-reported',
     createdAt: now, updatedAt: now, lastFailureAt: input.occurredAt, lastFailureIds: [], failureCount: 0, examples: [],
     history: [{at:now,actor:`agent:${agent.agentId}`,action:'reported',reason:input.summary,evidenceRef:input.issueUrl}],
