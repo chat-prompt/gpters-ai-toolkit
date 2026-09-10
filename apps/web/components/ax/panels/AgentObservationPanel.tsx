@@ -22,25 +22,27 @@ function MetricValue({summary,metric}:{summary:ObservationSummary;metric:typeof 
     <p className="mt-1 text-xs text-[var(--text-secondary)]">{capabilityText[capability]} · {typeof value==='number'?`${summary.windows}개 수집 구간`:value?`표본 ${number(value.count)}개`:'표본 미확인'}</p>
   </div>
 }
-export function AgentObservationPanel({days=7,agentId='all'}:{days?:7|30|90;agentId?:string}){
-  return <ObservationPanelContent key={`${days}:${agentId}`} days={days} agentId={agentId}/>
+export function AgentObservationPanel({days=7,agentId='all',refreshToken}:{days?:7|30|90;agentId?:string;refreshToken?:unknown}){
+  return <ObservationPanelContent key={`${days}:${agentId}`} days={days} agentId={agentId} refreshToken={refreshToken}/>
 }
-function ObservationPanelContent({days,agentId}:{days:7|30|90;agentId:string}){
-  const [result,setResult]=useState<{key:string;data:AgentObservationData|null;error:string}|null>(null)
+function ObservationPanelContent({days,agentId,refreshToken}:{days:7|30|90;agentId:string;refreshToken?:unknown}){
+  const [result,setResult]=useState<{key:string;refreshToken:unknown;data:AgentObservationData|null;error:string}|null>(null)
   const [retry,setRetry]=useState(0)
   const [stream,setStream]=useState(''),[changeAt,setChangeAt]=useState(''),[hours,setHours]=useState(''),[comparison,setComparison]=useState<{agentId:string;source:string;changeAt:string;comparisonHours:string}|null>(null)
   const params=new URLSearchParams({days:String(days)})
   if(agentId!=='all')params.set('agentId',agentId)
   if(comparison)for(const [key,value]of Object.entries(comparison))params.set(key,value)
-  const requestKey=params.toString(),loading=result?.key!==requestKey,data=result?.key===requestKey?result.data:null,error=result?.key===requestKey?result.error:''
+  const requestKey=params.toString()
+  const currentResult=result?.key===requestKey&&Object.is(result.refreshToken,refreshToken)?result:null
+  const loading=!currentResult,data=currentResult?.data??null,error=currentResult?.error??''
   useEffect(()=>{
     const controller=new AbortController()
     fetch(`/api/ax/agent-observations?${requestKey}`,{signal:controller.signal,cache:'no-store'}).then(async response=>{
       if(!response.ok)throw new Error(response.status===403?'관리자만 관측 지표를 볼 수 있습니다.':response.status===400?'동일 길이의 비교 구간이 현재 조회 기간 안에 있는지 확인하세요.':'관측 지표를 불러오지 못했습니다.')
       return response.json() as Promise<AgentObservationData>
-    }).then(value=>{if(!controller.signal.aborted)setResult({key:requestKey,data:value,error:''})}).catch(reason=>{if(!controller.signal.aborted)setResult({key:requestKey,data:null,error:reason instanceof Error?reason.message:'조회에 실패했습니다.'})})
+    }).then(value=>{if(!controller.signal.aborted)setResult({key:requestKey,refreshToken,data:value,error:''})}).catch(reason=>{if(!controller.signal.aborted)setResult({key:requestKey,refreshToken,data:null,error:reason instanceof Error?reason.message:'조회에 실패했습니다.'})})
     return()=>controller.abort()
-  },[requestKey,retry])
+  },[requestKey,retry,refreshToken])
   const selected=data?.streams.find(row=>JSON.stringify([row.agentId,row.source])===stream)
   return <section aria-labelledby="agent-observation-heading" className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
