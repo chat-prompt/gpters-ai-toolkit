@@ -46,6 +46,31 @@ describe('persisted observation projection',()=>{
   expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:false,delta:null})
   expect((data.comparison?.metrics.firstTurnTokens.beforeSamples??0)+(data.comparison?.metrics.firstTurnTokens.afterSamples??0)).toBe(1)
  })
+ it.each([false,true])('selects the latest collected adapter once, independent of insertion order (reverse=%s)',reverse=>{
+  const v2=(a:string,b:string,value:number)=>({...observation(a,b,value),provenance:{...observation().provenance,adapterVersion:'2' as const}})
+  const rows=[observationRow(observation(start,change,100),'old-before'),observationRow(observation(change,end,90),'old-after'),
+   {...observationRow(v2(start,change,200),'new-before'),collectedAt:'2026-01-05T01:00:00.000Z'},
+   {...observationRow(v2(change,end,150),'new-after'),collectedAt:'2026-01-05T01:00:00.000Z'}]
+  const data=projectObservationTrends(reverse?[...rows].reverse():rows,query,now)
+  expect(data.comparison?.adapterVersion).toBe('2')
+  expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:true,delta:-50})
+  // Equal collection time deterministically prefers the higher known adapter.
+  const tied=projectObservationTrends((reverse?[...rows].reverse():rows).map(row=>({...row,collectedAt:end})),query,now)
+  expect(tied.comparison?.adapterVersion).toBe('2')
+  expect(tied.comparison?.metrics.firstTurnTokens.delta).toBe(-50)
+  // Observation recency wins over version rank; the rank is only a tie-breaker.
+  const newerLegacy=projectObservationTrends(rows.map(row=>({...row,collectedAt:row.batchId.startsWith('old-')?'2026-01-05T02:00:00.000Z':row.collectedAt})),query,now)
+  expect(newerLegacy.comparison?.adapterVersion).toBe('1')
+  expect(newerLegacy.comparison?.metrics.firstTurnTokens.delta).toBe(-10)
+ })
+ it('does not replace a new incomplete version with an older complete comparison',()=>{
+  const current={...observation(change,end,80),provenance:{...observation().provenance,adapterVersion:'2' as const}}
+  const rows=[observationRow(),observationRow(observation(change,end,90),'old-after'),
+   {...observationRow(current,'new-after'),collectedAt:'2026-01-05T01:00:00.000Z'}]
+  const data=projectObservationTrends(rows,query,now)
+  expect(data.comparison).toMatchObject({adapterVersion:'2',reason:'incomplete-evidence',before:{completeWindow:false},after:{completeWindow:true}})
+  expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:false,beforeSamples:0,afterSamples:1,delta:null})
+ })
  it('keeps version 1 readable and rejects unknown version 3 without counting it as observed or legacy',()=>{
   const legacy=observation(),unsupported={...legacy,provenance:{...legacy.provenance,adapterVersion:'3'}}
   expect(agentObservabilitySchema.safeParse(legacy).success).toBe(true)

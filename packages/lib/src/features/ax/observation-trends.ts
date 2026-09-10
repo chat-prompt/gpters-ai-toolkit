@@ -111,7 +111,7 @@ export function projectObservationTrends(rows:ObservationRow[],query:Observation
   }
   coverage.totalStreams=grouped.size;coverage.truncated=grouped.size>50
   const result:AgentObservationData={startUtc:start.toISOString(),endUtc:end.toISOString(),generatedAt:now.toISOString(),streams:[],comparison:null,coverage}
-  for(const group of [...grouped.values()].sort((a,b)=>b.latestAt.localeCompare(a.latestAt)||a.agentId.localeCompare(b.agentId)||a.source.localeCompare(b.source)).slice(0,50)){
+  for(const group of [...grouped.values()].sort((a,b)=>b.latestAt.localeCompare(a.latestAt)||a.agentId.localeCompare(b.agentId)||a.source.localeCompare(b.source)||Number(b.adapterVersion)-Number(a.adapterVersion)).slice(0,50)){
     const candidates=[...group.byWindow.values()].filter((o):o is AgentObservability=>o!==null).sort((a,b)=>a.window.startUtc.localeCompare(b.window.startUtc)||a.window.endUtc.localeCompare(b.window.endUtc))
     const overlap=new Set<number>()
     // Sorted windows: mark every member of an overlap cluster, including containment.
@@ -126,7 +126,9 @@ export function projectObservationTrends(rows:ObservationRow[],query:Observation
     result.streams.push({agentId:group.agentId,source:group.source,adapterVersion:group.adapterVersion,latestAt:group.latestAt,summary,
       points:observations.slice(-200).map(o=>({startUtc:o.window.startUtc,endUtc:o.window.endUtc,metrics:o.metrics,metricCapabilities:o.metricCapabilities})),
       pointsTruncated:observations.length>200,excludedOverlaps:overlap.size,conflictingWindows:group.conflictingWindows})
-    if(query.changeAt&&query.comparisonHours&&query.agentId===group.agentId&&query.source===group.source){
+    // Use the latest observed adapter for this pair, even if its comparison is
+    // incomplete. Falling back to older complete metrics would hide an upgrade.
+    if(!result.comparison&&query.changeAt&&query.comparisonHours&&query.agentId===group.agentId&&query.source===group.source){
       const change=Date.parse(query.changeAt),duration=query.comparisonHours*3600000
       const before=summarize(observations,change-duration,change,incomplete),after=summarize(observations,change,change+duration,incomplete)
       const metrics={} as ObservationComparison['metrics']
