@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest'
 import { observationQuerySchema,observationRange,projectObservationTrends,type ObservationRow } from '../../../../packages/lib/src/features/ax/observation-trends'
-import { OBSERVABILITY_BOUNDS,type AgentObservability } from '../../../../packages/lib/src/features/ax/agent-observability-contract'
+import { agentObservabilitySchema,OBSERVABILITY_BOUNDS,type AgentObservability } from '../../../../packages/lib/src/features/ax/agent-observability-contract'
 const now=new Date('2026-01-08T00:00:00.000Z'),start='2026-01-03T00:00:00.000Z',change='2026-01-04T00:00:00.000Z',end='2026-01-05T00:00:00.000Z'
 const query=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex',changeAt:change,comparisonHours:'24'})
 function histogram(value=100){const counts=Array(OBSERVABILITY_BOUNDS.length+1).fill(0);counts[OBSERVABILITY_BOUNDS.findIndex(b=>value<=b)]=1;return {bounds:[...OBSERVABILITY_BOUNDS],counts,count:1,sum:value,min:value,max:value}}
@@ -21,6 +21,64 @@ describe('persisted observation projection',()=>{
   const other={...observation(),agentId:'other-agent'}
   const data=projectObservationTrends([observationRow(),observationRow(),observationRow(other)],observationQuerySchema.parse({days:'7'}),now)
   expect(data.streams).toHaveLength(2);expect(data.coverage.duplicateWindows).toBe(1);expect(data.streams.every(s=>s.summary.metrics.firstTurnTokens?.count===1)).toBe(true)
+ })
+ it.each([100,250])('keeps versions 1 and 2 separate for the identical agent/source/window even with value %i',value=>{
+  const legacy=observation(),current={...observation(start,change,value),provenance:{...observation().provenance,adapterVersion:'2' as const}}
+  const rows=[observationRow(legacy,'version-1'),observationRow(current,'version-2')]
+  const data=projectObservationTrends(rows,query,now)
+  expect(data.coverage).toMatchObject({totalStreams:2,invalidRows:0,duplicateWindows:0})
+  const byVersion=new Map(data.streams.map(stream=>[stream.adapterVersion,stream]))
+  expect([...byVersion.keys()].sort()).toEqual(['1','2'])
+  for(const [version,expected] of [['1',100],['2',value]] as const){
+   expect(byVersion.get(version)).toMatchObject({excludedOverlaps:0,conflictingWindows:0,summary:{windows:1,metrics:{firstTurnTokens:{count:1,sum:expected}}}})
+  }
+  // Only an additional replay of the same adapter version is deduplicated.
+  const replay=projectObservationTrends([...rows,observationRow(current,'version-2-retry')],query,now)
+  expect(replay.coverage.duplicateWindows).toBe(1)
+  expect(replay.streams.every(stream=>stream.summary.metrics.firstTurnTokens?.count===1)).toBe(true)
+ })
+ it('never compares the old adapter before-window against the new adapter after-window',()=>{
+  const current={...observation(change,end,80),provenance:{...observation().provenance,adapterVersion:'2' as const}}
+  const data=projectObservationTrends([observationRow(),observationRow(current,'after-v2')],query,now)
+  expect(data.streams).toHaveLength(2)
+  expect(data.streams.every(stream=>stream.summary.windows===1)).toBe(true)
+  expect(data.comparison?.reason).toBe('incomplete-evidence')
+  expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:false,delta:null})
+  expect((data.comparison?.metrics.firstTurnTokens.beforeSamples??0)+(data.comparison?.metrics.firstTurnTokens.afterSamples??0)).toBe(1)
+ })
+ it.each([false,true])('selects the latest collected adapter once, independent of insertion order (reverse=%s)',reverse=>{
+  const v2=(a:string,b:string,value:number)=>({...observation(a,b,value),provenance:{...observation().provenance,adapterVersion:'2' as const}})
+  const rows=[observationRow(observation(start,change,100),'old-before'),observationRow(observation(change,end,90),'old-after'),
+   {...observationRow(v2(start,change,200),'new-before'),collectedAt:'2026-01-05T01:00:00.000Z'},
+   {...observationRow(v2(change,end,150),'new-after'),collectedAt:'2026-01-05T01:00:00.000Z'}]
+  const data=projectObservationTrends(reverse?[...rows].reverse():rows,query,now)
+  expect(data.comparison?.adapterVersion).toBe('2')
+  expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:true,delta:-50})
+  // Equal collection time deterministically prefers the higher known adapter.
+  const tied=projectObservationTrends((reverse?[...rows].reverse():rows).map(row=>({...row,collectedAt:end})),query,now)
+  expect(tied.comparison?.adapterVersion).toBe('2')
+  expect(tied.comparison?.metrics.firstTurnTokens.delta).toBe(-50)
+  // Observation recency wins over version rank; the rank is only a tie-breaker.
+  const newerLegacy=projectObservationTrends(rows.map(row=>({...row,collectedAt:row.batchId.startsWith('old-')?'2026-01-05T02:00:00.000Z':row.collectedAt})),query,now)
+  expect(newerLegacy.comparison?.adapterVersion).toBe('1')
+  expect(newerLegacy.comparison?.metrics.firstTurnTokens.delta).toBe(-10)
+ })
+ it('does not replace a new incomplete version with an older complete comparison',()=>{
+  const current={...observation(change,end,80),provenance:{...observation().provenance,adapterVersion:'2' as const}}
+  const rows=[observationRow(),observationRow(observation(change,end,90),'old-after'),
+   {...observationRow(current,'new-after'),collectedAt:'2026-01-05T01:00:00.000Z'}]
+  const data=projectObservationTrends(rows,query,now)
+  expect(data.comparison).toMatchObject({adapterVersion:'2',reason:'incomplete-evidence',before:{completeWindow:false},after:{completeWindow:true}})
+  expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:false,beforeSamples:0,afterSamples:1,delta:null})
+ })
+ it('keeps version 1 readable and rejects unknown version 3 without counting it as observed or legacy',()=>{
+  const legacy=observation(),unsupported={...legacy,provenance:{...legacy.provenance,adapterVersion:'3'}}
+  expect(agentObservabilitySchema.safeParse(legacy).success).toBe(true)
+  expect(agentObservabilitySchema.safeParse(unsupported).success).toBe(false)
+  const invalid={...observationRow(),batchId:'unsupported',collection:{source:'codex',observability:unsupported}}
+  const data=projectObservationTrends([observationRow(legacy),invalid],query,now)
+  expect(data.coverage).toMatchObject({invalidRows:1,legacyRows:0,totalStreams:1,duplicateWindows:0})
+  expect(data.streams[0]).toMatchObject({adapterVersion:'1',summary:{windows:1,metrics:{firstTurnTokens:{count:1,sum:100}}}})
  })
  it('excludes conflicting identical windows, partial overlap and containment',()=>{
   const conflict=projectObservationTrends([observationRow(),observationRow(observation(start,change,80))],query,now)

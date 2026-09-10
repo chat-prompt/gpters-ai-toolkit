@@ -8,6 +8,14 @@ const data:AgentObservationData={startUtc:summary.startUtc,endUtc:summary.endUtc
  coverage:{streamLimit:50,totalStreams:1,truncated:false,rowLimit:20000,rowsTruncated:false,invalidRows:0,legacyRows:0,duplicateWindows:0,excludedBoundaryWindows:0}}
 afterEach(()=>{cleanup();vi.unstubAllGlobals()})
 describe('observation panel scope and missingness',()=>{
+ it('offers one comparison choice while keeping both adapter versions visible',async()=>{
+  const multiple={...data,streams:[{...data.streams[0],adapterVersion:'2'},data.streams[0]]}
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(multiple)));render(<AgentObservationPanel days={7}/>)
+  await screen.findByLabelText('관측 비교 에이전트·소스')
+  expect(screen.getAllByRole('option')).toHaveLength(2)
+  expect(screen.getByText(/관측 규격 1 · 최근 수집/)).toBeTruthy()
+  expect(screen.getByText(/관측 규격 2 · 최근 수집/)).toBeTruthy()
+ })
  it('shows missing and unsupported as words rather than zero',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(data)));render(<AgentObservationPanel days={7}/>)
   await waitFor(()=>expect(screen.getByText('첫 턴 입력')).toBeTruthy())

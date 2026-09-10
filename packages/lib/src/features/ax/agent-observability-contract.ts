@@ -40,7 +40,7 @@ export const agentObservabilitySchema = z.object({
   metrics: z.object({ firstTurnTokens: observationHistogramSchema.nullable(), peakContextTokens: observationHistogramSchema.nullable(),
     toolResultChars: observationHistogramSchema.nullable(), compactionEvents: count.nullable(), readGuardAllow: count.nullable(), readGuardDeny: count.nullable() }).strict(),
   metricCapabilities,
-  provenance: z.object({ adapterVersion: z.literal('1'), cli: counters, readGuard: counters,
+  provenance: z.object({ adapterVersion: z.enum(['1', '2']), cli: counters, readGuard: counters,
     runtime: z.object({ recordsRead: count, unmatchedRecords: count, unsupportedRecords: count, missingTimestamps: count, duplicates: count, conflicts: count }).strict() }).strict(),
 }).strict().superRefine((value, ctx) => {
   const start = Date.parse(value.window.startUtc), end = Date.parse(value.window.endUtc)

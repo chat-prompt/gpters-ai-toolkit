@@ -75,6 +75,10 @@ file mtimes do not suppress new or imported records. Each physical Codex file
 must independently pass its header and subsequent scope checks. The scanner
 streams source bytes, compares file identity/size/mtime/ctime before and after,
 rechecks the directory inventory, then pins selected identities for metric reads.
+For a Codex file excluded by its first header, unrelated body appends are allowed
+only after the same inode and identical exclusion header are rechecked. Header
+changes, replacement and changes to any included file still invalidate the scan.
+New/deleted filenames also invalidate the inventory, even for another session.
 Stable source session IDs deduplicate copied/rotated records; absent IDs fall
 back to file identity. Full first-turn history is not attested by discovery and
 therefore remains incomplete when samples would require that history.
@@ -89,6 +93,16 @@ hard limits, never silent truncation. Verify runtime and memory against the
 approved real source before enabling; keep the original collector active if the
 inventory cannot be safely processed. Discovery adds no cache or source writes.
 Read-guard and runtime receipt inventories remain explicit and separate.
+
+Adapter version `2` counts Codex `input_text` tool-output blocks as text, avoids
+argument-count overflow on long usage histories, and counts Unicode code points
+without allocating a character array. Unknown output blocks remain incomplete;
+images do not add text characters. See the official
+[custom tool output schema](https://developers.openai.com/api/reference/cli/resources/responses/methods/create).
+Version `1` batches are retained unchanged and are not mixed with version `2` in
+observation comparisons. Unrecognized log record types remain incomplete until
+their meaning is established; a newer helper does not retroactively repair old
+uploaded metrics. The collector version and helper adapter version are separate.
 
 CLI source files must stay inside the existing collector's sessions directory.
 Claude files must also belong to its approved project slug. Codex observations

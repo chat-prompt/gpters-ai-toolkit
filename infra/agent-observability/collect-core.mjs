@@ -11,5 +11,5 @@ export async function collectObservability(config) {
   return {schemaVersion:1,agentId,source,window:{startUtc:new Date(window.startUtc).toISOString(),endUtc:new Date(window.endUtc).toISOString()},
     capabilities:{runtimeReceipts:runtime.capability,cliMetrics:cli.capability,readGuard:readGuard.capability},
     receipts:runtime.receipts,metrics:{...cli.metrics,...readGuard.metrics},metricCapabilities:{...cli.metricCapabilities,...readGuard.metricCapabilities},
-    provenance:{adapterVersion:'1',cli:cli.provenance,readGuard:readGuard.provenance,runtime:runtime.provenance}}
+    provenance:{adapterVersion:'2',cli:cli.provenance,readGuard:readGuard.provenance,runtime:runtime.provenance}}
 }

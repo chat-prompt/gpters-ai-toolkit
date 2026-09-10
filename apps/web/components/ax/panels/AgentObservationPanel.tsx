@@ -44,6 +44,7 @@ function ObservationPanelContent({days,agentId,refreshToken}:{days:7|30|90;agent
     return()=>controller.abort()
   },[requestKey,retry,refreshToken])
   const selected=data?.streams.find(row=>JSON.stringify([row.agentId,row.source])===stream)
+  const comparisonStreams=data?.streams.filter((row,index,rows)=>rows.findIndex(other=>other.agentId===row.agentId&&other.source===row.source)===index)??[]
   return <section aria-labelledby="agent-observation-heading" className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 id="agent-observation-heading" className="text-sm font-semibold text-[var(--text-primary)]" title="수집기가 보낸 구간별 관측입니다. 첫 턴은 전체 이력이 확인된 세션만 포함합니다. 최대 입력은 세션·수집 구간의 최대이며 전체 생애 최대가 아닙니다. 표본과 결측을 확인하세요.">실행 관측 지표 ⓘ</h3>
@@ -70,16 +71,16 @@ function ObservationPanelContent({days,agentId,refreshToken}:{days:7|30|90;agent
           setComparison({agentId:selected.agentId,source:selected.source,changeAt:at.toISOString(),comparisonHours:hours})
         }}>
           <h4 className="text-sm font-medium text-[var(--text-primary)]">변경 시각 전후 비교</h4>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">같은 에이전트·소스에서 같은 길이의 인접 구간을 비교합니다. 관측된 차이가 변경의 효과를 입증하지는 않습니다.</p>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">같은 에이전트·소스의 가장 최근 관측 규격에서 같은 길이의 인접 구간을 비교합니다. 관측된 차이가 변경의 효과를 입증하지는 않습니다.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="text-xs text-[var(--text-secondary)]">에이전트·소스<select required aria-label="관측 비교 에이전트·소스" value={stream} onChange={e=>setStream(e.target.value)} className="mt-1 block w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-2"><option value="">선택하세요</option>{data.streams.map(row=><option key={`${row.agentId}:${row.source}`} value={JSON.stringify([row.agentId,row.source])}>{row.agentId} · {row.source}</option>)}</select></label>
+            <label className="text-xs text-[var(--text-secondary)]">에이전트·소스<select required aria-label="관측 비교 에이전트·소스" value={stream} onChange={e=>setStream(e.target.value)} className="mt-1 block w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-2"><option value="">선택하세요</option>{comparisonStreams.map(row=><option key={`${row.agentId}:${row.source}`} value={JSON.stringify([row.agentId,row.source])}>{row.agentId} · {row.source}</option>)}</select></label>
             <label className="text-xs text-[var(--text-secondary)]">변경 시각 (현지 시간)<input required aria-label="관측 변경 시각" type="datetime-local" step="0.001" value={changeAt} onChange={e=>setChangeAt(e.target.value)} className="mt-1 block w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-2"/></label>
             <label className="text-xs text-[var(--text-secondary)]">변경 전·후 각각 (시간)<input required aria-label="관측 비교 구간 시간" type="number" min="1" max={days*12} step="1" value={hours} onChange={e=>setHours(e.target.value)} className="mt-1 block w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-2"/></label>
           </div>
           <div className="mt-3 flex gap-3"><button type="submit" disabled={loading||!selected} className="rounded border border-[var(--border-subtle)] px-3 py-2 text-xs text-[var(--text-primary)] disabled:opacity-40">비교 조회</button>{comparison&&<button type="button" onClick={()=>setComparison(null)} className="text-xs text-[var(--text-secondary)]">비교 해제</button>}</div>
         </form>
         {data.comparison&&<div className="rounded-lg border border-[var(--border-subtle)] p-4">
-          <h4 className="text-sm font-medium text-[var(--text-primary)]">{data.comparison.agentId} · {data.comparison.source} · 전후 각각 {data.comparison.durationHours}시간</h4>
+          <h4 className="text-sm font-medium text-[var(--text-primary)]">{data.comparison.agentId} · {data.comparison.source} · 관측 규격 {data.comparison.adapterVersion} · 전후 각각 {data.comparison.durationHours}시간</h4>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">변경 시각 {when(data.comparison.changeAt)} · {data.comparison.reason==='incomplete-evidence'?'일부 지표에 결측·불완전 구간 또는 표본 부족이 있어 차이를 계산하지 않았습니다.':'관측된 차이이며 인과관계를 판정하지 않습니다.'}</p>
           <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[30rem] text-left text-xs text-[var(--text-secondary)]"><thead><tr><th className="p-2">지표</th><th className="p-2">변경 전 표본</th><th className="p-2">변경 후 표본</th><th className="p-2">차이 (후 − 전)</th></tr></thead><tbody>{metrics.map(metric=>{
             const result=data.comparison!.metrics[metric.key]

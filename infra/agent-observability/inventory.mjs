@@ -39,32 +39,38 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
   const limits={...defaults,...testLimits}, root=await realpath(scope.sessionsDir), [start,end]=windowBounds(window)
   const paths=await candidates(root,source,scope,limits), files=[], snapshots=[]
   let totalBytes=0, selectedBytes=0
+  async function headerOf(handle) {
+    let header=Buffer.alloc(0), position=0
+    while(header.length<2*1024**2) {
+      const bytes=Buffer.alloc(Math.min(64*1024,2*1024**2-header.length)), read=await handle.read(bytes,0,bytes.length,position)
+      if(!read.bytesRead) break
+      position+=read.bytesRead; totalBytes+=read.bytesRead; if(totalBytes>limits.bytes) fail('scan-limit')
+      header=Buffer.concat([header,bytes.subarray(0,read.bytesRead)])
+      const newline=header.indexOf(10); if(newline>=0) { header=header.subarray(0,newline); break }
+    }
+    const first=header.toString('utf8')
+    let row; try { row=JSON.parse(first) } catch { fail('invalid-header') }
+    if(Buffer.byteLength(first)>=2*1024**2) fail('header-limit')
+    return {row,key:digest(first)}
+  }
   for(const path of paths) {
     if(await realpath(path)!==path || !inside(root,path)) fail()
     const handle=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK)
     try {
       const before=await handle.stat()
       if(!before.isFile() || before.size>limits.fileBytes) fail('file-limit')
-      snapshots.push({path,before})
+      const snapshot={path,before}; snapshots.push(snapshot)
       // Codex's shared root is authorized by the first physical header, never by a nearby file.
       if(source==='codex') {
-        let header=Buffer.alloc(0), position=0
-        while(header.length<2*1024**2) {
-          const bytes=Buffer.alloc(Math.min(64*1024,2*1024**2-header.length)), read=await handle.read(bytes,0,bytes.length,position)
-          if(!read.bytesRead) break
-          position+=read.bytesRead; totalBytes+=read.bytesRead; if(totalBytes>limits.bytes) fail('scan-limit')
-          header=Buffer.concat([header,bytes.subarray(0,read.bytesRead)])
-          const newline=header.indexOf(10); if(newline>=0) { header=header.subarray(0,newline); break }
-        }
-        const first=header.toString('utf8')
-        let row; try { row=JSON.parse(first) } catch { fail('invalid-header') }
-        if(Buffer.byteLength(first)>=2*1024**2) fail('header-limit')
-        if(!allowedHeader(row,scope)) continue
+        const header=await headerOf(handle)
+        if(!allowedHeader(header.row,scope)) { snapshot.excludedHeader=header.key; continue }
       }
       totalBytes+=before.size; if(totalBytes>limits.bytes) fail('scan-limit')
       let offset=0, carry='', selected=false
       const sessionIds=new Set()
-      const decoder=new StringDecoder('utf8'), buffer=Buffer.alloc(64*1024)
+      // Amortize filesystem round trips over large histories; all byte, line,
+      // scope and identity limits still apply to every record and source.
+      const decoder=new StringDecoder('utf8'), buffer=Buffer.alloc(1024*1024)
       const parse=line=>{
         if(!line.trim()) return
         let row; try { row=JSON.parse(line) } catch { fail('invalid-record') }
@@ -100,6 +106,23 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
     } finally { await handle.close() }
   }
   if(JSON.stringify(paths)!==JSON.stringify(await candidates(root,source,scope,limits))) fail()
-  for(const {path,before} of snapshots) if(await realpath(path)!==path || !same(before,await lstat(path))) fail()
+  for(const {path,before,excludedHeader} of snapshots) {
+    if(await realpath(path)!==path) fail()
+    const named=await lstat(path)
+    if(same(before,named)) continue
+    // Unrelated Codex sessions may append while an agent is scanned. Recheck
+    // their original exclusion header rather than requiring their body to stop.
+    // A replaced file or changed header still invalidates the inventory.
+    if(!excludedHeader || named.dev!==before.dev || named.ino!==before.ino || !named.isFile()) fail()
+    const handle=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK)
+    try {
+      const opened=await handle.stat()
+      if(opened.dev!==before.dev || opened.ino!==before.ino || !opened.isFile()) fail()
+      const header=await headerOf(handle)
+      if(header.key!==excludedHeader || allowedHeader(header.row,scope)) fail()
+      const current=await lstat(path)
+      if(await realpath(path)!==path || current.dev!==before.dev || current.ino!==before.ino || !current.isFile()) fail()
+    } finally { await handle.close() }
+  }
   return files
 }
