@@ -148,12 +148,20 @@ export async function readAgentMonitor():Promise<MonitorDashboardData|null> {
   const config=monitorConfiguration();if(!config)return null
   const stored=await db.execute(sql`SELECT record,last_success_at FROM ax_monitor_state WHERE id=${config.id}`)
   const state=stored.rows[0]?.record as MonitorState|undefined
-  const counts=await db.execute(sql`SELECT
-    (SELECT count(*)::int FROM ax_agent_telemetry_batches b WHERE agent_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(config.agents)}::jsonb)) AND NOT EXISTS(SELECT 1 FROM ax_monitor_processed_batches p WHERE p.monitor_id=${config.id} AND p.batch_id=b.batch_id)) AS backlog,
+  const counts=await db.execute(sql`WITH unprocessed AS (
+    SELECT b.batch_id,b.created_at FROM ax_agent_telemetry_batches b
+    WHERE agent_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(config.agents)}::jsonb))
+      AND NOT EXISTS(SELECT 1 FROM ax_monitor_processed_batches p WHERE p.monitor_id=${config.id} AND p.batch_id=b.batch_id)
+    ) SELECT
+    (SELECT count(*)::int FROM unprocessed) AS backlog,
+    (SELECT min(created_at) FROM unprocessed) AS oldest_unprocessed_at,
+    (SELECT count(*)::int FROM ax_monitor_deferred_batches d JOIN unprocessed b USING(batch_id) WHERE d.monitor_id=${config.id}) AS deferred_backlog,
     (SELECT count(*)::int FROM ax_monitor_outbox WHERE monitor_id=${config.id} AND status IN ('pending','sending')) AS pending,
     (SELECT count(*)::int FROM ax_monitor_outbox WHERE monitor_id=${config.id} AND status='uncertain') AS uncertain,
     (SELECT count(*)::int FROM ax_monitor_outbox WHERE monitor_id=${config.id} AND status='blocked') AS blocked`)
   const candidates=Object.values(state?.candidates??{}).sort((a,b)=>b.lastObservedAt.localeCompare(a.lastObservedAt))
-  return {lastSuccessAt:state?.lastSuccessAt??null,checkedAt:new Date().toISOString(),backlog:Number(counts.rows[0].backlog),alertsPending:Number(counts.rows[0].pending),alertsUncertain:Number(counts.rows[0].uncertain),alertsBlocked:Number(counts.rows[0].blocked),
+  return {lastSuccessAt:state?.lastSuccessAt??null,checkedAt:new Date().toISOString(),backlog:Number(counts.rows[0].backlog),
+    oldestUnprocessedAt:counts.rows[0].oldest_unprocessed_at?new Date(counts.rows[0].oldest_unprocessed_at as string).toISOString():null,
+    deferredBacklog:Number(counts.rows[0].deferred_backlog),alertsPending:Number(counts.rows[0].pending),alertsUncertain:Number(counts.rows[0].uncertain),alertsBlocked:Number(counts.rows[0].blocked),
     candidates:candidates.slice(0,100),totalCandidates:candidates.length,capabilities:{taskEvents:state?.cursor!=='0'&&state?'observed':'unavailable',independentReceipts:'unavailable'}}
 }

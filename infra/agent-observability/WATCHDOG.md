@@ -34,10 +34,19 @@ API bodies.
 
 Each invocation makes only `GET /api/cron/agent-monitor?heartbeat=1` using the
 health secret. Redirects are rejected and the request times out after 15 seconds.
-Healthy requires all of: successful HTTP response, `healthy: true`, `backlog: 0`,
-and a valid `lastSuccessAt` from zero to fifteen minutes old. An unknown backlog,
-future timestamp, stale run, HTTP error or network failure is unhealthy. This
-detects failures to drain the backlog even if a scheduler is still executing.
+Healthy requires a successful HTTP response, `healthy: true`, and a valid
+`lastSuccessAt` from zero to fifteen minutes old. An empty backlog remains healthy.
+For a nonempty backlog, `oldestUnprocessedAt` must be a valid server-created batch
+timestamp no more than fifteen minutes old, and `deferredBacklog` must be zero.
+This tolerates normal arrivals between five-minute cron runs, without requiring
+an always-empty queue. Client event/window timestamps do not establish queue age.
+A pending batch older than fifteen minutes or any quarantined/deferred pending
+batch remains unhealthy even when the scheduler is running recently. Unknown age,
+unknown deferred count for nonempty queues, invalid/future timestamps, stale runs,
+HTTP errors and network failures also remain unhealthy. Old endpoints lacking
+queue-age metadata are compatible only while their backlog is zero. Deploy the
+server metadata before installing the updated watchdog; an older watchdog still
+requires an empty backlog.
 
 The first unhealthy observation requests one operator DM. Another outage message
 is due no sooner than 24 hours after acceptance. Healthy observations after an

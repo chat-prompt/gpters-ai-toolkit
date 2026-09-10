@@ -108,6 +108,8 @@ export interface MonitorDashboardData {
   lastSuccessAt: string | null
   checkedAt: string
   backlog: number
+  oldestUnprocessedAt?: string | null
+  deferredBacklog?: number
   alertsPending: number
   /** Delivery may have happened; do not automatically resend these alerts. */
   alertsUncertain?: number

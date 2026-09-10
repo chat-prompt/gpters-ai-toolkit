@@ -1,3 +1,4 @@
+import { monitorOperationalHealth, type MonitorHealthSnapshot } from '../../packages/lib/src/features/ax/monitor-health'
 /** Independent read-only heartbeat check. Scheduling and behavior changes require operator notice. */
 import { constants, readFileSync, fstatSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, lstatSync, realpathSync, fsyncSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
@@ -80,9 +81,8 @@ export async function watchMonitor(config: WatchMonitorConfig, fetcher: typeof f
     let healthy = false
     try {
       const response = await fetcher(`${config.origin}/api/cron/agent-monitor?heartbeat=1`, { method: 'GET', headers: { Authorization: `Bearer ${config.healthSecret}` }, redirect: 'error', signal: AbortSignal.timeout(15_000) })
-      const data = await response.json() as { healthy?: boolean; lastSuccessAt?: string; backlog?: number }
-      const age = now - Date.parse(data.lastSuccessAt ?? '')
-      healthy = response.ok && data.healthy === true && data.backlog === 0 && Number.isFinite(age) && age >= 0 && age <= 900_000
+      const data = await response.json() as MonitorHealthSnapshot & { healthy?: boolean }
+      healthy = response.ok && data.healthy === true && monitorOperationalHealth(data, new Date(now).toISOString())
     } catch { healthy = false }
     state.checkedAt = now; state.healthy = healthy
     const uncertain = state.pending?.status === 'uncertain'

@@ -68,6 +68,26 @@ describe('read-only health, backlog and clock checks', () => {
     expect(await watchMonitor(config, heartbeat(true, at, extra), now, deliver)).toMatchObject({ healthy: false })
     expect(deliver).toHaveBeenCalledTimes(1)
   })
+  it('does not send outage messages for a continuously replenished recent backlog', async () => {
+    const deliver = accepted()
+    for (let tick = 0; tick < 5; tick++) {
+      const at = now + tick * 300_000
+      const result = await watchMonitor(config, heartbeat(true, at - 60_000, {
+        backlog: 1, oldestUnprocessedAt: new Date(at - 30_000).toISOString(), deferredBacklog: 0,
+      }), at, deliver)
+      expect(result.healthy).toBe(true)
+    }
+    expect(deliver).not.toHaveBeenCalled()
+  })
+  it.each([
+    { oldestUnprocessedAt: new Date(now - 900_001).toISOString(), deferredBacklog: 0 },
+    { oldestUnprocessedAt: new Date(now - 1000).toISOString(), deferredBacklog: 1 },
+  ])('independently rejects old or poisoned backlog despite server healthy claim %j', async fields => {
+    const deliver = accepted()
+    const result = await watchMonitor(config, heartbeat(true, now - 1000, { backlog: 1, ...fields }), now, deliver)
+    expect(result.healthy).toBe(false)
+    expect(deliver).toHaveBeenCalledTimes(1)
+  })
   it('accepts the 15-minute boundary but stops on backward local clock rather than suppressing alarms indefinitely', async () => {
     await watchMonitor(config, heartbeat(true, now - 900_000), now)
     const fetcher = heartbeat(true)
