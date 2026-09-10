@@ -103,6 +103,44 @@ from the validated token, permits only the configured internal organization,
 and limits reads/supplements to that agent's own reports. There is no report
 list API exposing another agent's records.
 
+### Separate report identity without changing default AITK mode
+
+When the executing account still uses personal AITK for other work, do not
+silently replace its default authentication. The repo-built `identity.mjs` can
+import an owner-issued agent grant into a separate private identity directory.
+The operator first verifies ownership and issues the grant on their own machine
+using the existing `aitk agent authorize` flow, with deployment permission off.
+Transfer the file through an already approved private channel; never put the
+grant in Slack, arguments, Git or a public artifact. A telemetry token is not a
+report credential. Grant issuance is an explicit authorization change, not part
+of a helper build or a read-only test.
+
+Create a canonical absolute directory owned by the executing account, mode0700.
+The following paths are placeholders, not operational inventory:
+
+```sh
+node /private/operator/helpers/identity.mjs import \
+  --identity-home /private/operator/report-identity --credential-stdin \
+  < /private/operator/approved-agent-grant.json
+node /private/operator/helpers/identity.mjs status \
+  --identity-home /private/operator/report-identity
+node /private/operator/helpers/report.mjs get --id report_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --identity-home /private/operator/report-identity
+```
+
+Import verifies the grant against the configured server before writing its
+file-backed credential and config. It refuses to replace an existing identity.
+After successful import, remove the transfer copy according to the approved
+private transfer procedure. All later report commands must pass the same
+`--identity-home`; a missing identity there fails without trying default or
+personal credentials. Neither helper changes the process HOME, default AITK
+settings, collector identity, scheduler or agent instructions. Existing callers
+that omit the option retain their current agent-auth behavior. Disabling a
+private report integration does not revoke or alter a telemetry collector.
+
+The optional reaction and inbox adapters are separate integrations; they do not
+automatically inherit this report-helper option or become enabled by import.
+
 Slack requester IDs and approval links are **agent-attested**. The server
 validates the configured Slack hostname and permalink format but does not fetch
 Slack or cryptographically verify the human approval. The final reviewer checks

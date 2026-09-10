@@ -9,5 +9,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["report.ts", "slack-reaction.ts", "inbox.ts"]
+  "include": ["report.ts", "identity.ts", "slack-reaction.ts", "inbox.ts"]
 }
