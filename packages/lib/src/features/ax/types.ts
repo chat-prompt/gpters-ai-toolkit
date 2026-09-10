@@ -44,6 +44,8 @@ export interface AxPanelMeta {
 
 /** 패널 로딩 컨텍스트 */
 export interface AxPanelContext {
+  /** Authenticated human identity for narrowly scoped operator actions. */
+  viewerUserId?: string
   /** 조회 기간(일). 기간 개념이 없는 패널은 무시한다 */
   days: number
   /**
@@ -1112,4 +1114,3 @@ export interface AxUnusedSkillsData {
   /** 등록자별 후보 수 — 누구에게 묶어서 물을지 정하는 근거 */
   byAuthor: Array<{ authorName: string | null; count: number }>
 }
-

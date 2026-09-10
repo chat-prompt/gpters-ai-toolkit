@@ -23,7 +23,7 @@ export const metadata = {
  *
  * 패널 메타는 서버에서 미리 구해 넘긴다 — 첫 렌더에 목록 조회 왕복을 없애기 위함이다.
  */
-export default async function AxPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function AxPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams?: Promise<{panel?:string;incident?:string}> }) {
   const { locale } = await params
   setRequestLocale(locale)
 
@@ -38,6 +38,8 @@ export default async function AxPage({ params }: { params: Promise<{ locale: str
   }
 
   const panels = listAxPanels(viewer)
+  const query = await searchParams
+  const incident = query?.panel === 'agent-incidents' && /^report_[a-f0-9]{32}$/.test(query.incident ?? '') ? query.incident : undefined
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-primary)]">
@@ -54,7 +56,7 @@ export default async function AxPage({ params }: { params: Promise<{ locale: str
           </p>
         </header>
 
-        <AxDashboard panels={panels} isAdmin={viewer.isAdmin} />
+        <AxDashboard panels={panels} isAdmin={viewer.isAdmin} initialPanelId={query?.panel} initialSelection={incident} />
       </main>
 
       <Footer label="AI Toolkit - AX 대시보드" />

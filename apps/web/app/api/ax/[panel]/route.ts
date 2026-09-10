@@ -81,6 +81,7 @@ export async function GET(
 
   try {
     const result = await panel.load({
+      viewerUserId: session?.user?.id,
       days,
       isAdmin: viewer.isAdmin,
       forceRefresh,

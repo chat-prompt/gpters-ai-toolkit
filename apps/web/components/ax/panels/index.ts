@@ -20,6 +20,7 @@ import { VercelProjectsPanel } from './VercelProjectsPanel'
 import { SubscriptionsPanel } from './SubscriptionsPanel'
 import { ClientUsagePanel } from './ClientUsagePanel'
 import { AgentActivityPanel } from './AgentActivityPanel'
+import { AgentIncidentPanel } from './AgentIncidentPanel'
 import { FallbackPanel } from './FallbackPanel'
 
 /**
@@ -44,6 +45,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   subscriptions: SubscriptionsPanel,
   'client-usage': ClientUsagePanel,
   'agent-activity': AgentActivityPanel,
+  'agent-incidents': AgentIncidentPanel,
 }
 
 /**
