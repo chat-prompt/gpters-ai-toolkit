@@ -237,6 +237,12 @@ See `docs/DEPLOYMENT_GUIDE.md` for deployment.
 - 배경·지시·검증·후속 대화·결과는 모두 해당 원문의 스레드에 쓴다.
 - 처음 사용하는 방이거나 규칙이 불명확하면 최하영님(`<@U0BP4R0CUSD>`)을 먼저 호출한다.
 
+## 에이전트 공통 작업 규칙
+
+Slack 업무방, 테스트 데이터 안전, UI 시각 검증, 핸드오프 문서 작성 등 **에이전트 종류와 무관한
+작업 규칙의 정본은 `AGENTS.md`다.** Claude·Codex·기타 하네스가 모두 읽으므로, 규칙을 새로
+정하거나 고칠 때는 `AGENTS.md`에 쓰고 이 파일에는 중복해 두지 않는다.
+
 ## Development Guidelines
 
 ### Test Requirements
