@@ -301,8 +301,8 @@ Claude weekly limits:
   aitk usage status     Inspect local capture/report status
   aitk usage uninstall  Restore the previous statusline
   Restart Claude Code after setup. Automatic reporting starts after a response
-  supplies seven_day limits. Token totals are scanned once per UTC day; changed
-  weekly limits reuse those totals and report at most once every 5 minutes.
+  supplies seven_day limits. Each report rescans local transcripts: at most every
+  5 minutes when the weekly percentage changes, otherwise hourly. AITK_USAGE_REPORT=0 disables it.
 
 Options:
   --days <N>         Aggregation window in days (default: 7, max: 90)

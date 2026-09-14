@@ -28,6 +28,9 @@ Claude Code가 상태 표시줄 명령의 stdin으로 보내는 공식 JSON에�
 - 선택은 `~/.claude/aitk-usage/statusline.json`의 `display`에 남고 재설치 때 유지된다.
   `display` 없는 파일럿 설치본은 `default`로 읽는다.
 - 기본 표시줄은 공식 입력에 있는 값만 그린다: `모델 · ctx N% · 5h N% · 7d N%`.
+- 자동 보고는 보고마다 transcript를 다시 읽는다(당일 캐시 재사용은 구현하지 않음). 정수 퍼센트가
+  바뀔 때 5분, 같으면 1시간 간격. 에이전트 신원(`~/.config/aitk/agent.json`) 머신은 보내지 않는다.
+- `uninstall`은 설정 원복과 함께 스냅샷·보고 상태를 지워 legacy 캐시 경로가 다시 살아난다.
 - Claude Code 플러그인 0.1.25에 `usage-setup` 스킬을 넣어 "usage 설정해줘" 요청을
   `status` 조회 → 선택 질문 → `setup --display …` 순서로 안내한다.
 
@@ -80,6 +83,6 @@ npm install -g @gpters/aitk@latest
 aitk upgrade
 ```
 
-새 `aitk upgrade`는 플러그인 갱신 후 공식 상태 표시줄 수집도 연결한다. 기존 표시줄은 보존한다.
+(파일럿 당시 계획) `aitk upgrade`가 수집까지 연결하려 했으나 정식 반영에서는 `aitk usage setup`을 별도로 실행한다. 기존 표시줄은 보존한다.
 Claude Code 재시작 후 실제 응답을 한 번 받아야 주간 한도 필드가 제공될 수 있다.
 이 파일럿은 로컬 검증 단계이며 정식 npm 배포 및 사용자 업그레이드 공지는 별도로 진행한다.

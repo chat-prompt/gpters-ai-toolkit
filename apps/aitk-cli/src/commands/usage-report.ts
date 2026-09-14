@@ -4,6 +4,7 @@
 
 import { jsonRpcCall } from '../client.js'
 import { resolveToken } from '../auth.js'
+import { readAgentConfig } from '../agent-auth.js'
 import { jsonOut, info, error } from '../output.js'
 import { collectClaudeCode } from '../usage/claude-code.js'
 import { collectCodex } from '../usage/codex.js'
@@ -79,6 +80,11 @@ export async function sendUsageRecords(records: UsageRecord[]): Promise<unknown>
 
 /** 사용량을 집계해 보고한다. dry-run은 전송하거나 수집 상태 파일을 바꾸지 않는다. */
 export async function runUsageReport(opts: UsageReportOptions): Promise<UsageRecord[]> {
+  // 에이전트 머신의 개인 사용량은 보내지 않는다 (#116). 서버도 agent 토큰의 report_usage를 거부한다.
+  if (readAgentConfig()) {
+    info('Personal usage reporting is disabled in agent mode; use agent-telemetry')
+    return []
+  }
   try {
     const records = await collectUsageRecords(opts.days)
     if (opts.dryRun) { jsonOut({ records }); return records }

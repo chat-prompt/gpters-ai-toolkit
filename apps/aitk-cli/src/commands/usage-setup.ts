@@ -13,7 +13,7 @@ import { error, info } from '../output.js'
 export interface UsageSetupOptions {
   /** 표시줄이 없을 때 무엇을 그릴지. 생략하면 TTY에서 묻는다. */
   display?: string
-  /** true면 묻지 않고 `default`를 고른다. */
+  /** true면 새 설치에서 묻지 않고 `default`를 고른다. 이미 연결된 설치는 이전 선택을 유지한다. */
   yes?: boolean
 }
 
@@ -31,8 +31,10 @@ async function askDisplay(): Promise<StatuslineDisplay> {
     info('Claude Code 상태 표시줄이 설정돼 있지 않습니다.')
     info('aitk 기본 표시줄(모델 · 컨텍스트 · 5시간/주간 한도)을 보여드릴까요?')
     info('아니오를 고르면 화면에는 아무것도 그리지 않고 주간 한도만 수집합니다.')
+    // readline의 question은 EOF(Ctrl+D)에서 영원히 대기하므로 close 이벤트를 따로 듣는다.
+    const closed = new Promise<never>((_, reject) => rl.once('close', () => reject(new Error('eof'))))
     let answer: string
-    try { answer = (await rl.question('기본 표시줄 보기 [Y/n] ')).trim().toLowerCase() }
+    try { answer = (await Promise.race([rl.question('기본 표시줄 보기 [Y/n] '), closed])).trim().toLowerCase() }
     catch { error('입력이 없어 설정을 바꾸지 않았습니다. 다시 실행하거나 --display default|none 을 넘기세요.') }
     return answer === '' || answer === 'y' || answer === 'yes' ? 'default' : 'none'
   } finally {

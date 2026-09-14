@@ -4,6 +4,8 @@ import { homedir } from 'node:os'
 import { claudeUsagePaths, extractClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
 import { shouldScheduleClaudeReport } from '../usage/claude-auto-report.js'
 
+const RENDERER_TIMEOUT_MS = 10_000
+
 /** 원본 입력은 메모리에서만 사용하고 기존 명령의 stdout은 그대로 전달한다. */
 export async function runUsageStatusline(): Promise<void> {
   const chunks: Buffer[] = []
@@ -16,8 +18,11 @@ export async function runUsageStatusline(): Promise<void> {
   if (typeof previous?.command === 'string') {
     rendered = new Promise<void>((done) => {
       const renderer = spawn('/bin/sh', ['-c', previous.command as string], { stdio: ['pipe', 'inherit', 'inherit'] })
-      renderer.on('error', () => done())
-      renderer.on('close', () => done())
+      // 끝나지 않는 표시줄 명령이 래퍼를 붙잡지 않게 한다. Claude Code는 표시줄을 수백 ms마다 다시 부른다.
+      const deadline = setTimeout(() => { try { renderer.kill('SIGKILL') } catch { /* 이미 종료 */ } }, RENDERER_TIMEOUT_MS)
+      const finish = () => { clearTimeout(deadline); done() }
+      renderer.on('error', finish)
+      renderer.on('close', finish)
       renderer.stdin.on('error', () => { /* renderer exited before reading */ })
       renderer.stdin.end(input)
     })

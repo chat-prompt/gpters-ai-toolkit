@@ -1,6 +1,6 @@
 /** 공식 입력 누락·오염·만료, 기존 표시줄 보존, 중복 보고 및 재시도를 검증한다. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, utimesSync } from 'node:fs'
+import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -123,6 +123,32 @@ describe('statusLine 설치', () => {
     expect(inspectClaudeStatusline(home)).toEqual({ kind: 'aitk', previous: null, display: 'default' })
     writeUsageJson(claudeUsagePaths(home).installation, { ...receipt, display: 'fancy' })
     expect(readClaudeStatuslineInstallation(home)).toBeNull()
+  })
+  it('심링크된 settings.json은 링크를 유지한 채 원본 파일과 권한을 갱신한다', () => {
+    const paths = claudeUsagePaths(home)
+    const source = join(home, 'dotfiles-settings.json')
+    writeFileSync(source, JSON.stringify({ language: 'ko' }), { mode: 0o644 })
+    symlinkSync(source, paths.settings)
+    installClaudeStatusline(entry, home, undefined, { display: 'none' })
+    expect(lstatSync(paths.settings).isSymbolicLink()).toBe(true)
+    expect((readUsageJson(source) as Record<string, unknown>).statusLine).toBeTruthy()
+    expect(statSync(source).mode & 0o777).toBe(0o644)
+    expect(uninstallClaudeStatusline(home)).toBe(true)
+    expect(lstatSync(paths.settings).isSymbolicLink()).toBe(true)
+    expect(readUsageJson(source)).toEqual({ language: 'ko' })
+  })
+  it('uninstall은 공식 스냅샷과 보고 상태를 지워 legacy 캐시가 다시 쓰이게 한다', () => {
+    installClaudeStatusline(entry, home)
+    snapshot()
+    writeUsageJson(claudeUsagePaths(home).report, { lastSuccessAt: new Date(NOW).toISOString() })
+    const legacy = join(home, '.claude/statusline-usage-cache.json')
+    writeFileSync(legacy, JSON.stringify({ seven_day: { utilization: 75, resets_at: RESET } }))
+    utimesSync(legacy, new Date(NOW), new Date(NOW))
+    expect(readClaudeWeeklyLimit(home, NOW)?.usedPercent).toBe(0)
+    expect(uninstallClaudeStatusline(home)).toBe(true)
+    expect(readUsageJson(claudeUsagePaths(home).snapshot)).toBeNull()
+    expect(readUsageJson(claudeUsagePaths(home).report)).toBeNull()
+    expect(readClaudeWeeklyLimit(home, NOW)?.usedPercent).toBe(75)
   })
   it('command 형식이 아닌 statusLine은 unsupported로 보고 건드리지 않는다', () => {
     writeUsageJson(claudeUsagePaths(home).settings, { statusLine: 'not-an-object' })

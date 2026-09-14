@@ -1,5 +1,6 @@
 /** 공식 한도를 받은 뒤 새 집계를 보고한다. 변경 시 5분, 동일 한도는 1시간 간격이다. */
-import { existsSync, statSync, unlinkSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, renameSync, statSync, unlinkSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readAgentConfig } from '../agent-auth.js'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { claudeUsagePaths, readClaudeQuota, readUsageJson, writeUsageJson } from './claude-statusline.js'
@@ -56,13 +57,18 @@ function activeLock(home: string, now: number): boolean {
 /** statusline 프로세스에서는 가벼운 파일 검사만 한다. 집계·네트워크는 자식 작업이 맡는다. */
 export function shouldScheduleClaudeReport(home = homedir(), now = Date.now()): boolean {
   if (process.env.AITK_USAGE_REPORT === '0') return false
+  // 에이전트 신원이 있는 머신은 개인 사용량을 보내지 않는다 (usage report와 같은 경계).
+  if (readAgentConfig()) return false
   const quota = readClaudeQuota(home, now)
   return !!quota && !activeLock(home, now)
     && claudeReportDue(readClaudeAutoReportState(home), now, quotaKey(quota))
 }
 
-/** 같은 입력의 반복 보고를 피하기 위한 값 비교 키. 관측 시각은 제외한다. */
-function quotaKey(quota: ClaudeQuotaSnapshot): string { return `${quota.usedPercent}|${quota.resetsAt}` }
+/**
+ * 같은 입력의 반복 보고를 피하기 위한 값 비교 키. 관측 시각은 제외한다.
+ * 소수점 변동(31.4→31.6)마다 transcript를 다시 읽지 않도록 정수 퍼센트로 비교한다.
+ */
+function quotaKey(quota: ClaudeQuotaSnapshot): string { return `${Math.round(quota.usedPercent)}|${quota.resetsAt}` }
 
 /** 보고마다 두 클라이언트를 재집계한다. 기존 aggregate.json은 재전송하지 않는다. */
 export async function reportCollectedUsage(
@@ -92,11 +98,13 @@ export async function runAutomaticClaudeReport(
   if (!shouldScheduleClaudeReport(home, now)) return false
   const paths = claudeUsagePaths(home)
   mkdirSync(paths.directory, { recursive: true, mode: 0o700 })
-  // 죽은 작업만 회수한다. 다른 작업이 먼저 잡았다면 wx가 실패하므로 중복 집계하지 않는다.
-  if (existsSync(paths.lock) && !activeLock(home, now)) {
-    try { unlinkSync(paths.lock) } catch { /* 이미 회수됨 */ }
-  }
   const lockId = randomUUID()
+  // 죽은 작업만 회수한다. unlink 대신 rename으로 가져가야 두 프로세스가 같은 잠금을 번갈아 지우고
+  // 둘 다 새 잠금을 만드는 경주가 없다. rename에 성공한 쪽만 회수한 것이고, 그래도 wx는 따로 겨룬다.
+  if (existsSync(paths.lock) && !activeLock(home, now)) {
+    const claimed = `${paths.lock}.${lockId}.stale`
+    try { renameSync(paths.lock, claimed); unlinkSync(claimed) } catch { /* 다른 프로세스가 먼저 회수함 */ }
+  }
   try { writeFileSync(paths.lock, JSON.stringify({ pid: process.pid, lockId }), { flag: 'wx', mode: 0o600 }) }
   catch (err) { if ((err as NodeJS.ErrnoException).code === 'EEXIST') return false; throw err }
   let state = readClaudeAutoReportState(home)

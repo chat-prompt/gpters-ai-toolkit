@@ -6,9 +6,12 @@ description: Connect Claude Code weekly-limit collection to the AX dashboard whe
 # Usage setup
 
 `aitk usage setup`은 Claude Code가 상태 표시줄 명령에 넘겨주는 공식 JSON에서
-주간 한도(`rate_limits.seven_day`)만 받아 AX 대시보드에 보내는 연결이다.
-대화 원문·경로·자격증명은 읽지 않는다. 설정 변경은 `~/.claude/settings.json`의
-`statusLine` 한 항목뿐이고 `aitk usage uninstall`로 원래대로 돌아간다.
+주간 한도(`rate_limits.seven_day`)만 캐시하고, 한도를 받으면 백그라운드 작업이
+로컬 transcript(`~/.claude/projects`, `~/.codex/sessions`)에서 토큰 수·세션 수·플랜·
+모델별 사용량을 집계해 AX 대시보드에 보낸다. 세션 시작 때 하루 한 번 보내던 것과
+같은 집계이며, 대화 원문·파일 경로·세션 ID·자격증명은 보내지 않는다.
+설정 변경은 `~/.claude/settings.json`의 `statusLine` 한 항목뿐이고
+`aitk usage uninstall`로 원래대로 돌아간다.
 
 ## 절차
 
@@ -17,7 +20,11 @@ description: Connect Claude Code weekly-limit collection to the AX dashboard whe
 2. `aitk usage status`를 실행해 `statusline.kind`를 읽는다. 읽기 전용이다.
    - `user`: 사용자가 만든 표시줄이 있다. 그대로 감싸기만 하므로 표시는 바뀌지 않는다.
    - `none`: 표시줄이 없다. 아래 3번처럼 먼저 물어본다.
-   - `aitk`: 이미 연결돼 있다. `display`와 `snapshot`을 보여주고 끝낸다.
+   - `aitk`: 이미 연결돼 있다. `display`와 `snapshot`을 보여주고 끝낸다. `snapshot`이
+     계속 null이면 node/aitk 경로가 바뀐 것일 수 있다. `aitk usage setup`을 한 번 더
+     실행하면 저장된 명령 경로가 현재 설치본으로 갱신된다.
+   - 사용자가 해제를 원하면 `aitk usage uninstall`을 안내한다. 원래 표시줄 설정과
+     캐시가 함께 원복·삭제된다.
    - `unsupported`: `statusLine`이 command 형식이 아니다. 설정을 건드리지 말고 사용자에게 알린다.
 3. `none`이면 AskUserQuestion으로 하나를 고르게 한다.
    - "aitk 기본 표시줄 보기": 모델 · 컨텍스트 사용률 · 5시간/주간 한도 한 줄 (권장)
