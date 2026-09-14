@@ -17,6 +17,7 @@ import {
   formatMissingDescriptionLines,
   formatUpdatedLines,
   notifySlackPopularSkills,
+  notifySlackPopularSkillsFailure,
 } from '@gpters/lib/notifications'
 import { runCronJob } from '@gpters/lib/ops'
 
@@ -96,7 +97,11 @@ export async function GET(request: NextRequest) {
       )
     }
   }
-  const result = await runCronJob('popular-skills', collect)
+  // 실패 알림은 복돌이(공용 Webhook)가 아니라 뽀밋이가 자기 채널에 직접 남긴다
+  const result = await runCronJob('popular-skills', collect, { notifyFailure: false })
+  if (!result.ok) {
+    await notifySlackPopularSkillsFailure({ error: result.error ?? 'Unknown error' })
+  }
 
   return NextResponse.json(
     {

@@ -16,12 +16,14 @@ export {
   notifySlackCronHealth,
   notifySlackAccountAudit,
   notifySlackPopularSkills,
+  notifySlackPopularSkillsFailure,
   buildPopularSkillsMessages,
   type PopularSkillsMessages,
   type CronFailureParams,
   type CronHealthParams,
   type AccountAuditParams,
   type PopularSkillsParams,
+  type PopularSkillsFailureParams,
 } from './slack'
 export type { SlackDeployParams, SlackPayload, EvoAnalyzeParams, EvoActionParams, EvoPromoteParams } from './slack'
 

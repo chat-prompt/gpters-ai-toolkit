@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET } from '../../app/api/cron/popular-skills/route'
-import { collectPopularSkills, notifySlackPopularSkills } from '@gpters/lib/notifications'
+import {
+  collectPopularSkills,
+  notifySlackPopularSkills,
+  notifySlackPopularSkillsFailure,
+} from '@gpters/lib/notifications'
 import { runCronJob } from '@gpters/lib/ops'
 
 vi.mock('@gpters/lib/notifications', async (importOriginal) => ({
   ...await importOriginal<typeof import('@gpters/lib/notifications')>(),
   collectPopularSkills: vi.fn(),
   notifySlackPopularSkills: vi.fn(),
+  notifySlackPopularSkillsFailure: vi.fn(),
 }))
 vi.mock('@gpters/lib/ops', () => ({ runCronJob: vi.fn() }))
 
@@ -61,3 +66,21 @@ it('실제 실행은 발송 결과를 크론 산출량과 응답에 포함한다
   expect(fetch).not.toHaveBeenCalled()
 })
 
+it('실제 실행은 복돌이 실패 알림을 끄고, 실패하면 뽀밋이가 직접 알린다', async () => {
+  vi.mocked(runCronJob).mockImplementationOnce(async (jobName) => ({
+    ok: false, jobName, durationMs: 0, stats: {}, error: 'Slack skill digest failed: not_in_channel',
+  }))
+  const result = await GET(new NextRequest('http://localhost/api/cron/popular-skills'))
+  expect(result.status).toBe(500)
+  expect(runCronJob).toHaveBeenCalledWith('popular-skills', expect.any(Function), { notifyFailure: false })
+  expect(notifySlackPopularSkillsFailure).toHaveBeenCalledWith({ error: 'Slack skill digest failed: not_in_channel' })
+})
+
+it('성공하면 뽀밋이 실패 알림을 보내지 않는다', async () => {
+  vi.mocked(notifySlackPopularSkills).mockResolvedValueOnce({ sent: true, repliesSent: 0, threadTs: '100.001' })
+  vi.mocked(runCronJob).mockImplementationOnce(async (jobName, handler) => ({
+    ok: true, jobName, durationMs: 0, ...await handler(),
+  }))
+  await GET(new NextRequest('http://localhost/api/cron/popular-skills'))
+  expect(notifySlackPopularSkillsFailure).not.toHaveBeenCalled()
+})

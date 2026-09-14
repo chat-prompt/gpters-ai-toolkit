@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPopularSkillsMessages,
   notifySlackPopularSkills,
+  notifySlackPopularSkillsFailure,
   type PopularSkillsParams,
 } from '@gpters/lib/notifications'
 
@@ -57,7 +58,7 @@ describe('주간 스킬 소식 본문·스레드', () => {
     expect(await notifySlackPopularSkills(params)).toEqual({ sent: true, repliesSent: 2, threadTs: '100.001' })
     const bodies = mockFetch.mock.calls.map(([, init]) => JSON.parse(init!.body as string))
     expect(bodies[0].thread_ts).toBeUndefined()
-    expect(bodies.every((body) => body.username === '뽀밋')).toBe(true)
+    expect(bodies.every((body) => body.username === '뽀밋이')).toBe(true)
     for (const reply of bodies.slice(1)) {
       expect(reply).toMatchObject({ channel: 'C_TEST', thread_ts: '100.001', reply_broadcast: false })
     }
@@ -106,5 +107,26 @@ describe('주간 스킬 소식 본문·스레드', () => {
     vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503 } as Response)
     await expect(notifySlackPopularSkills(params)).rejects.toThrow('HTTP 503')
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('주간 스킬 소식 실패 알림 (뽀밋이 자체 발신)', () => {
+  it('실패 사유를 뽀밋이 이름으로 소식 채널에 보낸다', async () => {
+    const mockFetch = vi.mocked(fetch).mockResolvedValueOnce(response('200.001') as Response)
+    expect(await notifySlackPopularSkillsFailure({ error: 'not_in_channel' })).toBe(true)
+    const body = JSON.parse(mockFetch.mock.calls[0][1]!.body as string)
+    expect(body.channel).toBe('C_TEST')
+    expect(body.username).toBe('뽀밋이')
+    expect(body.text).toContain('not_in_channel')
+    expect(body.thread_ts).toBeUndefined()
+  })
+
+  it('설정이 없거나 발신이 실패하면 던지지 않고 false를 돌려준다', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', '')
+    expect(await notifySlackPopularSkillsFailure({ error: 'x' })).toBe(false)
+    expect(fetch).not.toHaveBeenCalled()
+    vi.stubEnv('SLACK_BOT_TOKEN', 'test-bot-token')
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ ok: false, error: 'not_in_channel' }) } as Response)
+    expect(await notifySlackPopularSkillsFailure({ error: 'x' })).toBe(false)
   })
 })

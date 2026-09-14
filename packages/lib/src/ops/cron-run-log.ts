@@ -27,6 +27,15 @@ export interface CronOutcome {
   body?: Record<string, unknown>
 }
 
+/** 실행 감싸기 옵션 */
+export interface CronRunOptions {
+  /**
+   * 실패를 공용 Webhook(복돌이)으로 알릴지. 기본 true.
+   * 자기 이름으로 발신하는 잡(뽀밋이 주간 소식)은 false로 두고 스스로 알린다.
+   */
+  notifyFailure?: boolean
+}
+
 /** 감싼 실행의 결과 */
 export interface CronRunResult {
   ok: boolean
@@ -74,11 +83,13 @@ async function record(row: {
  *
  * @param jobName - `vercel.json` 경로에서 딴 잡 이름
  * @param handler - 실제로 할 일. 산출량을 숫자로 돌려준다
+ * @param options - 실패 알림 여부 등 (기본: 공용 Webhook으로 알림)
  * @returns 성공 여부와 산출량
  */
 export async function runCronJob(
   jobName: string,
-  handler: () => Promise<CronOutcome>
+  handler: () => Promise<CronOutcome>,
+  options: CronRunOptions = {}
 ): Promise<CronRunResult> {
   const startedAt = new Date()
   try {
@@ -99,7 +110,9 @@ export async function runCronJob(
     await record({ jobName, startedAt, finishedAt, status: 'failure', stats: {}, error: message })
     log.error('Cron job failed', { jobName, error: message })
     // 알림이 실패해도 라우트 응답은 그대로 간다
-    await notifySlackCronFailure({ jobName, error: message }).catch(() => undefined)
+    if (options.notifyFailure !== false) {
+      await notifySlackCronFailure({ jobName, error: message }).catch(() => undefined)
+    }
     return {
       ok: false,
       jobName,
