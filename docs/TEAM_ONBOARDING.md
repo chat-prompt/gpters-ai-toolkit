@@ -77,6 +77,7 @@ Claude Code를 재시작하면 자동으로 활성화됩니다.
 - 요청 시 팀 스킬 검색 (`skill-suggest` 스킬, 대화 중 실행되는 훅 없음)
 - MCP 서버 자동 등록 (별도 `claude mcp add` 불필요)
 - 세션 종료 시 사용자 입력 수만 집계해 전송 (SessionEnd hook), 세션 시작 시 하루 한 번 사용량 보고
+- 주간 한도 수집은 선택 사항: `aitk usage setup` (기존 상태 표시줄은 그대로, 없으면 기본 표시줄을 보여줄지 물어봄). Claude Code에서 "usage 설정해줘"라고 하면 `usage-setup` 스킬이 안내
 
 ### OpenCode
 

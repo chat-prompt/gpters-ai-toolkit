@@ -1,4 +1,3 @@
-import { readAgentConfig } from '../agent-auth.js'
 /**
  * usage report 명령어 - 로컬 사용량을 집계해 서버로 보고
  */
@@ -35,17 +34,13 @@ export interface UsageReportOptions {
 }
 
 /**
- * usage report 명령어 실행
+ * 두 클라이언트의 사용량을 UTC 일 경계에 맞춰 집계한다.
  *
- * @param opts - 집계 옵션
+ * @param days - 집계할 일 수
  */
-export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
-  if (readAgentConfig()) {
-    info('Personal usage reporting is disabled in agent mode; use agent-telemetry')
-    return
-  }
-  if (!Number.isFinite(opts.days) || opts.days < 1 || opts.days > MAX_DAYS) {
-    error(`--days must be between 1 and ${MAX_DAYS}`)
+export async function collectUsageRecords(days: number): Promise<UsageRecord[]> {
+  if (!Number.isFinite(days) || days < 1 || days > MAX_DAYS) {
+    throw new Error(`--days must be between 1 and ${MAX_DAYS}`)
   }
 
   // 구간 경계를 UTC 하루 단위로 스냅한다.
@@ -56,33 +51,43 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
   //
   // end는 오늘 0시가 아니라 내일 0시다. 오늘 0시로 잡으면 오늘 쓴 양이 통째로 빠진다.
   const end = new Date(startOfUtcDay(new Date()).getTime() + 86_400_000)
-  const start = new Date(end.getTime() - opts.days * 86_400_000)
+  const start = new Date(end.getTime() - days * 86_400_000)
   const window = { start, end }
 
   const collected = await Promise.all([collectClaudeCode(window), collectCodex(window)])
   const records = collected.filter((record): record is UsageRecord => record !== null)
 
-  // --dry-run은 무엇을 보낼지 확인하는 용도라 인증도, 결과가 비었는지도 따지지 않는다
-  if (opts.dryRun) {
-    jsonOut({ records })
-    return
-  }
+  return records
+}
 
+/** 인증 실패와 MCP 도구 수준의 거부도 실패로 돌려 자동 보고가 재시도할 수 있게 한다. */
+export async function sendUsageRecords(records: UsageRecord[]): Promise<unknown> {
   const token = resolveToken()
-  if (!token) {
-    // 훅에서 돌 수 있어 미인증은 실패가 아니다 (report-session은 재시도를 위해 exitCode 2를 남긴다)
-    process.exit(0)
-  }
-
+  if (!token) throw new Error('Auth required. Run "aitk login" first.')
   const result = await jsonRpcCall('tools/call', { name: 'report_usage', arguments: { records } }, token)
-
-  if (!result.ok) {
-    error(result.error!)
+  if (!result.ok) throw new Error(result.error ?? 'Usage report failed')
+  const body = result.data as { isError?: boolean; content?: Array<{ type: string; text?: string }> } | undefined
+  if (body?.isError) throw new Error('Usage report rejected by server')
+  for (const item of body?.content ?? []) {
+    if (item.type !== 'text' || !item.text) continue
+    let parsed: { success?: boolean }
+    try { parsed = JSON.parse(item.text) } catch { continue }
+    if (parsed?.success === false) throw new Error('Usage report rejected by server')
   }
+  return result.data
+}
 
-  if (records.length === 0) {
-    info('No local usage found for the period. Collector status reported.')
+/** 사용량을 집계해 보고한다. dry-run은 전송하거나 수집 상태 파일을 바꾸지 않는다. */
+export async function runUsageReport(opts: UsageReportOptions): Promise<UsageRecord[]> {
+  try {
+    const records = await collectUsageRecords(opts.days)
+    if (opts.dryRun) { jsonOut({ records }); return records }
+    const result = await sendUsageRecords(records)
+    if (records.length === 0) info('No local usage found for the period. Collector status reported.')
+    jsonOut(result)
+    return records
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    error(message, message.startsWith('Auth required') ? 2 : 1)
   }
-
-  jsonOut(result.data)
 }
