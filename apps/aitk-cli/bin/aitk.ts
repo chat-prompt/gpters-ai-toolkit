@@ -18,6 +18,11 @@ import { runReportSkip } from '../src/commands/report-skip.js'
 import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runReportExecution, runReportExecutionStart } from '../src/commands/report-execution.js'
 import { runUsageReport } from '../src/commands/usage-report.js'
+import { runUsageStatusline } from '../src/commands/usage-statusline.js'
+import { runUsageSetup } from '../src/commands/usage-setup.js'
+import { writeDailyUsageAggregate } from '../src/usage/usage-aggregate-cache.js'
+import { runAutomaticClaudeReport } from '../src/usage/claude-auto-report.js'
+import { uninstallClaudeStatusline, readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson } from '../src/usage/claude-statusline.js'
 import { runAgentTelemetryCollect } from '../src/commands/agent-telemetry.js'
 import {
   runAgentTelemetryDoctor,
@@ -35,7 +40,7 @@ import { runUndeploy } from '../src/commands/undeploy.js'
 import { runAddFiles } from '../src/commands/add-files.js'
 import { runRemoveFiles } from '../src/commands/remove-files.js'
 import { runUpgrade } from '../src/commands/upgrade.js'
-import { error, info } from '../src/output.js'
+import { error, info, jsonOut } from '../src/output.js'
 import pkg from '../package.json' with { type: 'json' }
 
 /** 버전 — package.json 하나만 고치면 되도록 여기서 읽는다 (하드코딩하면 배포본이 거짓 버전을 답한다) */
@@ -91,6 +96,7 @@ Usage:
   aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id <id>] [options]
   aitk report-execution --skill-id <id> --status <status> --agent <runtime> [--agent-id <id>] [options]
   aitk usage report [--days 7] [--dry-run]
+  aitk usage setup [--display default|none] [--yes] | status | uninstall
   aitk agent-telemetry collect --agent <id> [--days 7] [--dry-run]
   aitk agent-telemetry install|upgrade|doctor|status|run|uninstall --agent <id> --source <source>
   aitk undeploy <id>
@@ -280,11 +286,23 @@ Options:
   usage: `aitk usage - Report local Claude Code / Codex token usage
 
 Usage: aitk usage report [--days <N>] [--dry-run]
+       aitk usage setup [--display default|none] [--yes]
+       aitk usage status | uninstall
 
 Aggregates token counts from local transcripts (~/.claude/projects,
 ~/.codex/sessions) and reports them to the team dashboard.
 Only aggregate numbers and the plan name leave your machine —
 never conversation content, file paths, or credentials.
+
+Claude weekly limits:
+  aitk usage setup      Connect the official statusline input, preserving your existing display.
+                        Without a statusline it asks whether to show the aitk default line;
+                        use --display default|none (or --yes) when not interactive.
+  aitk usage status     Inspect local capture/report status
+  aitk usage uninstall  Restore the previous statusline
+  Restart Claude Code after setup. Automatic reporting starts after a response
+  supplies seven_day limits. Each report rescans local transcripts: at most every
+  5 minutes when the weekly percentage changes, otherwise hourly. AITK_USAGE_REPORT=0 disables it.
 
 Options:
   --days <N>         Aggregation window in days (default: 7, max: 90)
@@ -597,13 +615,21 @@ async function main(): Promise<void> {
 
     case 'usage': {
       const sub = positional[0]
-      if (sub !== 'report') {
-        error(`Unknown subcommand: aitk usage ${sub ?? ''}\nUsage: aitk usage report [--days N] [--dry-run]`)
-      }
-      await runUsageReport({
-        days: flags['days'] ? parseInt(flags['days'], 10) : 7,
-        dryRun: flags['dry-run'] === 'true',
-      })
+      if (sub === 'statusline') await runUsageStatusline()
+      else if (sub === 'auto-report') await runAutomaticClaudeReport()
+      else if (sub === 'setup') await runUsageSetup({ display: flags['display'], yes: flags['yes'] === 'true' })
+      else if (sub === 'uninstall') {
+        info(uninstallClaudeStatusline() ? 'Previous Claude statusline restored.' : 'No matching AITK statusline to restore; settings preserved.')
+      } else if (sub === 'status') {
+        jsonOut({ statusline: inspectClaudeStatusline(), installation: readClaudeStatuslineInstallation(), snapshot: readClaudeQuota(), report: readUsageJson(claudeUsagePaths().report) })
+      } else if (sub === 'report') {
+        const days = flags['days'] ? parseInt(flags['days'], 10) : 7
+        const dryRun = flags['dry-run'] === 'true'
+        const records = await runUsageReport({ days, dryRun })
+        if (!dryRun && days === 7) {
+          try { writeDailyUsageAggregate(records) } catch { info('Usage reported; local aggregate cache could not be saved.') }
+        }
+      } else error(`Unknown subcommand: aitk usage ${sub ?? ''}\nUsage: aitk usage report|setup|status|uninstall`)
       break
     }
 

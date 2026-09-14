@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { countUserPrompts } from '../scripts/session-report.mjs'
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const pluginVersion = JSON.parse(readFileSync(join(source, '.claude-plugin', 'plugin.json'), 'utf8')).version
 
 function row(promptId, content, extra = {}) {
   return {
@@ -108,7 +109,7 @@ test('SessionEnd stays silent, reports only a count, and sends only later deltas
   f.run(input)
   const stateDir = join(f.cache, 'gpters-aitk', 'session-report')
   await waitFor(() => existsSync(f.reports) && existsSync(stateDir) && readdirSync(stateDir).some(name => name.endsWith('.json')), 'first report did not finish')
-  assert.equal(readFileSync(f.reports, 'utf8').trim(), 'report-session --count 2 --version 0.1.24')
+  assert.equal(readFileSync(f.reports, 'utf8').trim(), `report-session --count 2 --version ${pluginVersion}`)
   assert.equal(readFileSync(f.reports, 'utf8').includes('비밀 원문'), false)
   assert.equal(readFileSync(f.reports, 'utf8').includes(path), false)
   assert.equal(readFileSync(f.reports, 'utf8').includes(sessionId), false)
@@ -121,8 +122,8 @@ test('SessionEnd stays silent, reports only a count, and sends only later deltas
   f.run(input)
   await waitFor(() => readFileSync(f.reports, 'utf8').trim().split('\n').length === 2, 'delta report did not finish')
   assert.deepEqual(readFileSync(f.reports, 'utf8').trim().split('\n'), [
-    'report-session --count 2 --version 0.1.24',
-    'report-session --count 1 --version 0.1.24',
+    `report-session --count 2 --version ${pluginVersion}`,
+    `report-session --count 1 --version ${pluginVersion}`,
   ])
 })
 
@@ -172,7 +173,7 @@ test('agent mode does not invoke the personal session reporter', async t => {
 
 test('manifest has no conversation-context hook and only reports at SessionEnd', () => {
   const manifest = JSON.parse(readFileSync(join(source, '.claude-plugin', 'plugin.json'), 'utf8'))
-  assert.equal(manifest.version, '0.1.24')
+  assert.match(manifest.version, /^0\.1\.\d+$/)
   assert.equal(manifest.hooks.UserPromptSubmit, undefined)
   assert.equal(manifest.hooks.Stop, undefined)
   assert.equal(manifest.hooks.SessionEnd.length, 1)

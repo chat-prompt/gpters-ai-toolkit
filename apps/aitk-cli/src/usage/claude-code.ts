@@ -5,10 +5,11 @@
  * 대화 내용·파일 경로는 읽되 어디에도 담지 않는다 — 나가는 건 집계 수치와 플랜 문자열뿐이다.
  */
 
-import { readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { findJsonlFiles, scanJsonl, toCount } from './jsonl.js'
+import { claudeUsagePaths, readClaudeQuota } from './claude-statusline.js'
 import type { UsageRecord, UsageWindow } from './types.js'
 
 /** 토큰이 붙는 줄은 assistant 줄뿐이다 — 이 문자열이 없으면 파싱할 이유가 없다 */
@@ -24,6 +25,8 @@ interface ClaudeWeeklyLimit {
 
 /** 알 수 없는 값을 0~100 범위의 사용률로 바꾼다 */
 function toPercent(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null
+  if (typeof value === 'string' && value.trim() === '') return null
   const number = Number(value)
   return Number.isFinite(number) && number >= 0 && number <= 100 ? number : null
 }
@@ -46,6 +49,13 @@ function toResetIso(value: unknown): string | null {
  * @param nowMs - 현재 시각(epoch ms). 테스트에서 최신성 경계를 고정할 수 있게 받는다
  */
 export function readClaudeWeeklyLimit(home: string, nowMs = Date.now()): ClaudeWeeklyLimit | null {
+  // 공식 수집을 설치했거나 공식 입력을 받은 머신은 이 캐시를 정본으로 쓴다.
+  // 오래됐다고 별도 OAuth 캐시로 돌아가면 과거 값이 현재 값처럼 되살아날 수 있다.
+  const nativePaths = claudeUsagePaths(home)
+  if (existsSync(nativePaths.installation) || existsSync(nativePaths.snapshot)) {
+    const snapshot = readClaudeQuota(home, nowMs)
+    return snapshot ? { usedPercent: snapshot.usedPercent, resetsAt: snapshot.resetsAt } : null
+  }
   const path = join(home, '.claude', 'statusline-usage-cache.json')
 
   try {

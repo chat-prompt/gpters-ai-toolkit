@@ -44,6 +44,8 @@ const RECORD: UsageRecord = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(resolveToken).mockReturnValue('tok')
+  vi.mocked(jsonRpcCall).mockResolvedValue({ ok: true, data: { ok: true } })
   collected.claude = RECORD
   collected.codex = null
 })
@@ -51,10 +53,23 @@ beforeEach(() => {
 describe('aitk usage report', () => {
   it('agent mode does not transmit personal usage or resolve a human token', async () => {
     vi.mocked(readAgentConfig).mockReturnValueOnce({ version: 1, agentId: 'example-agent', serverUrl: 'https://test.example.com' })
-    await runUsageReport({ days: 7, dryRun: false })
+    expect(await runUsageReport({ days: 7, dryRun: false })).toEqual([])
     expect(jsonRpcCall).not.toHaveBeenCalled()
     expect(resolveToken).not.toHaveBeenCalled()
   })
+  it('인증이 없으면 조용히 성공하지 않는다', async () => {
+    vi.mocked(resolveToken).mockReturnValue(undefined)
+    await expect(runUsageReport({ days: 7, dryRun: false })).rejects.toThrow('exit')
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Auth required'), 2)
+    expect(jsonRpcCall).not.toHaveBeenCalled()
+  })
+
+  it('HTTP 성공이어도 MCP 도구가 거부하면 실패로 처리한다', async () => {
+    vi.mocked(jsonRpcCall).mockResolvedValue({ ok: true, data: { content: [{ type: 'text', text: '{"success":false}' }] } })
+    await expect(runUsageReport({ days: 7, dryRun: false })).rejects.toThrow('exit')
+    expect(error).toHaveBeenCalledWith('Usage report rejected by server', 1)
+  })
+
   it('수집한 레코드를 report_usage 툴로 보낸다', async () => {
     await runUsageReport({ days: 7, dryRun: false })
 
@@ -76,7 +91,7 @@ describe('aitk usage report', () => {
   it('집계 구간이 계약 상한(90일)을 넘으면 보내기 전에 막는다', async () => {
     await expect(runUsageReport({ days: 120, dryRun: true })).rejects.toThrow('exit')
 
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('90'))
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('90'), 1)
   })
 
   it('수집기가 null을 준 클라이언트는 payload에서 빠진다', async () => {
