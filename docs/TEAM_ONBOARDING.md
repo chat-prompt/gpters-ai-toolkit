@@ -62,7 +62,7 @@ aitk get code-reviewer
 
 ## 3단계: 코딩 도구별 플러그인 설치 (선택)
 
-플러그인을 설치하면 작업 시 관련 팀 스킬이 자동으로 검색됩니다. 사용하는 도구에 맞게 설치하세요.
+플러그인을 설치하면 팀 스킬 검색과 사용량 보고가 연결됩니다. 사용하는 도구에 맞게 설치하세요.
 
 ### Claude Code
 
@@ -74,9 +74,9 @@ claude plugin install gpters-ai-toolkit
 Claude Code를 재시작하면 자동으로 활성화됩니다.
 
 **포함 기능:**
-- 작업 시작 시 관련 팀 스킬 자동 검색 (UserPromptSubmit hook)
+- 요청 시 팀 스킬 검색 (`skill-suggest` 스킬, 대화 중 실행되는 훅 없음)
 - MCP 서버 자동 등록 (별도 `claude mcp add` 불필요)
-- 세션 종료 시 사용 리포트 자동 전송
+- 세션 종료 시 사용자 입력 수만 집계해 전송 (SessionEnd hook), 세션 시작 시 하루 한 번 사용량 보고
 
 ### OpenCode
 

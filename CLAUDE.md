@@ -360,7 +360,7 @@ pnpm lint && pnpm test && pnpm build
 ### 팀 스킬 활용 가이드
 
 새 작업을 시작하기 전에 팀이 공유한 스킬이 있는지 확인한다. 이 저장소의 기본 검색 경로는 `aitk` CLI다
-(`UserPromptSubmit` 훅이 프롬프트마다 힌트를 넣는다).
+(플러그인 0.1.24부터 `UserPromptSubmit` 훅으로 힌트를 넣지 않으므로 직접 검색한다).
 
 ```bash
 aitk search '키워드' --limit 3 --context '작업 맥락'

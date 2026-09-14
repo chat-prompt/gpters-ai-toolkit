@@ -2,13 +2,22 @@
 # SessionStart hook: 세션 시작 시 플러그인 자동 업데이트 체크
 
 PLUGIN_NAME="gpters-ai-toolkit"
-MP_DIR="$HOME/.claude/plugins/marketplaces/gpters-marketplace"
-CACHE_DIR="$HOME/.claude/plugins/cache/gpters-marketplace/$PLUGIN_NAME"
 INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
-SOURCE_DIR="$MP_DIR/apps/claude-code-plugin"
 
-# 마켓플레이스 레포가 없으면 종료
-[ -d "$MP_DIR/.git" ] || exit 0
+# 마켓플레이스 이름은 canonical(chat-prompt-gpters-ai-toolkit)과 옛 이름 둘 중 하나다.
+# 디스크에 실제로 clone 된 쪽을 쓴다 (aitk upgrade의 MARKETPLACE_NAMES와 같은 순서).
+MP_NAME=""
+for candidate in chat-prompt-gpters-ai-toolkit gpters-marketplace; do
+  if [ -d "$HOME/.claude/plugins/marketplaces/$candidate/.git" ]; then
+    MP_NAME="$candidate"
+    break
+  fi
+done
+[ -n "$MP_NAME" ] || exit 0
+
+MP_DIR="$HOME/.claude/plugins/marketplaces/$MP_NAME"
+CACHE_DIR="$HOME/.claude/plugins/cache/$MP_NAME/$PLUGIN_NAME"
+SOURCE_DIR="$MP_DIR/apps/claude-code-plugin"
 
 # 1. 마켓플레이스 레포 pull
 git -C "$MP_DIR" pull --ff-only --quiet 2>/dev/null || exit 0

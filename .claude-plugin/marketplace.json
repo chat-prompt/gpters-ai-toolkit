@@ -9,7 +9,7 @@
     {
       "name": "gpters-ai-toolkit",
       "source": "./apps/claude-code-plugin",
-      "description": "GPTers AI Toolkit - 팀 스킬 자동 검색 및 MCP 연동",
+      "description": "GPTers AI Toolkit - 팀 스킬 검색, 세션 집계 및 MCP 연동",
       "author": {
         "name": "GPTers",
         "email": "contact@gpters.org"
