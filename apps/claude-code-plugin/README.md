@@ -8,7 +8,7 @@ GPTers AI Toolkit MCP 서버와 연동하여 팀 스킬을 검색하고 사용�
 - **MCP 서버 자동 연결**: 플러그인 설치 시 GPTers AI Toolkit MCP 서버(`https://ai-toolkit.gpters.org/api/mcp`)가 자동으로 등록됩니다. 별도의 `claude mcp add` 명령이 필요하지 않습니다.
 - **사용량 자동 보고**: 하루 한 번, 세션 시작 시 Claude Code와 Codex 사용량을 집계해 [AX 대시보드](https://ai-toolkit.gpters.org/ko/ax)로 보냅니다. `aitk` CLI가 설치돼 있어야 동작합니다.
 - **세션 집계 보고**: 세션이 끝난 뒤 실제 사용자 입력 수만 계산해 보냅니다. 대화 중 실행되는 훅이나 모델 컨텍스트 출력은 없습니다.
-- **주간 한도 수집 설정**: 사용자가 요청하면 `usage-setup` 스킬이 `aitk usage setup`으로 Claude Code 공식 주간 한도 수집을 연결합니다. 기존 상태 표시줄은 그대로 두고, 표시줄이 없으면 aitk 기본 한 줄을 보여줄지 먼저 묻습니다. 자동 설치되지는 않습니다.
+- **주간 한도 수집 설정**: 플러그인 설치 후 `aitk usage setup`을 한 번 실행합니다(온보딩 4단계). Claude Code에서 "usage 설정해줘"라고 하면 `usage-setup` 스킬이 같은 절차를 안내합니다. 기존 상태 표시줄은 그대로 두고, 표시줄이 없으면 aitk 기본 한 줄을 보여줄지 먼저 묻습니다. 자동 설치되지는 않습니다.
 - **에이전트 텔레메트리 설정 지침**: 사용자가 요청하면 `agent-telemetry-setup` 스킬이 범위를 확인하고 macOS Keychain·launchd 기반 수집기를 안전하게 설치·진단·해제합니다. 자동 설치되지는 않습니다.
 
 ### 사용량 보고가 보내는 것
