@@ -70,7 +70,7 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<void> {
 
   const token = resolveToken()
   if (!token) {
-    // 훅에서 돌 수 있어 미인증은 실패가 아니다 (report-session과 같은 처리)
+    // 훅에서 돌 수 있어 미인증은 실패가 아니다 (report-session은 재시도를 위해 exitCode 2를 남긴다)
     process.exit(0)
   }
 

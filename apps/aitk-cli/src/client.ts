@@ -135,7 +135,7 @@ async function apiCallUntraced<T = unknown>(
 }
 
 /**
- * JSON-RPC 2.0 호출 (report-session, updates용)
+ * 세션 연결이 필요 없는 JSON-RPC 2.0 호출
  *
  * @param method - JSON-RPC 메서드명
  * @param params - 메서드 파라미터
@@ -187,8 +187,8 @@ async function jsonRpcCallUntraced<T = unknown>(
 /**
  * MCP 세션을 먼저 초기화한 뒤 JSON-RPC 도구를 호출한다.
  *
- * 실제 대화 transport 호환 검증을 위한 legacy helper다. 단발 CLI 이벤트는
- * journeyId/attemptId로 연결하므로 이 함수를 사용하지 않는다.
+ * 서버가 MCP 세션에 합치는 이벤트와 실제 대화 transport 호환 검증에 사용한다.
+ * journeyId/attemptId로 연결되는 단발 실행 이벤트는 jsonRpcCall을 사용한다.
  */
 export async function jsonRpcSessionCall<T = unknown>(
   method: string,

@@ -247,6 +247,9 @@ export async function upsertSessionSummary(input: SessionUpsertInput): Promise<v
   }
 }
 
+/** sql.raw에 그대로 들어가는 클라이언트 문자열의 허용 형식 (버전·종료 사유) */
+const SAFE_CONTEXT_TEXT = /^[0-9A-Za-z._+-]{1,64}$/
+
 /**
  * Merge client-reported context into an existing session
  *
@@ -275,10 +278,11 @@ export async function mergeClientContext(
     if (context.skippedSearches !== undefined) {
       mergeFields.push(`'skippedSearches', to_jsonb(COALESCE((existing->>'skippedSearches')::int, 0) + ${context.skippedSearches})`)
     }
-    if (context.sessionEndReason !== undefined) {
+    // 두 문자열은 sql.raw로 들어가므로 허용 문자만 통과시킨다 (aitk report-session --version 등 클라이언트 입력).
+    if (context.sessionEndReason !== undefined && SAFE_CONTEXT_TEXT.test(context.sessionEndReason)) {
       mergeFields.push(`'sessionEndReason', to_jsonb('${context.sessionEndReason}'::text)`)
     }
-    if (context.pluginVersion !== undefined) {
+    if (context.pluginVersion !== undefined && SAFE_CONTEXT_TEXT.test(context.pluginVersion)) {
       mergeFields.push(`'pluginVersion', to_jsonb('${context.pluginVersion}'::text)`)
     }
     if (mergeFields.length === 0) return
