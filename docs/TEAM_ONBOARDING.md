@@ -58,6 +58,12 @@ aitk search "code review"
 aitk get code-reviewer
 ```
 
+이미 설치돼 있다면 최신으로 올립니다. `aitk upgrade`는 Claude Code 플러그인까지 함께 갱신합니다:
+
+```bash
+npm i -g @gpters/aitk@latest && aitk upgrade
+```
+
 ---
 
 ## 3단계: 코딩 도구별 플러그인 설치 (선택)
@@ -77,7 +83,7 @@ Claude Code를 재시작하면 자동으로 활성화됩니다.
 - 요청 시 팀 스킬 검색 (`skill-suggest` 스킬, 대화 중 실행되는 훅 없음)
 - MCP 서버 자동 등록 (별도 `claude mcp add` 불필요)
 - 세션 종료 시 사용자 입력 수만 집계해 전송 (SessionEnd hook), 세션 시작 시 하루 한 번 사용량 보고
-- 주간 한도 수집은 선택 사항: `aitk usage setup` (기존 상태 표시줄은 그대로, 없으면 기본 표시줄을 보여줄지 물어봄). Claude Code에서 "usage 설정해줘"라고 하면 `usage-setup` 스킬이 안내
+- 주간 한도 수집: 플러그인 설치 후 아래 4단계의 `aitk usage setup`을 한 번 실행합니다
 
 ### OpenCode
 
@@ -116,6 +122,24 @@ npx @gpters/codex-plugin setup
 이 명령으로 스킬 파일과 MCP 서버 설정(`~/.codex/config.toml`)이 함께 설치됩니다.
 
 ---
+
+
+## 4단계: Claude Code 주간 한도 수집 연결
+
+AX 대시보드의 주간 한도 지표는 Claude Code가 상태 표시줄 명령에 넘겨주는 공식 값에서만 얻을 수
+있습니다. 플러그인 설치 후 한 번 실행합니다:
+
+```bash
+aitk usage setup
+```
+
+- 상태 표시줄을 이미 쓰고 있으면 그대로 감싸기만 하므로 화면은 바뀌지 않습니다.
+- 상태 표시줄이 없으면 aitk 기본 한 줄(모델 · 컨텍스트 · 5시간/주간 한도)을 보여줄지 묻습니다.
+  아니오를 고르면 화면에는 아무것도 그리지 않고 한도만 수집합니다.
+- Claude Code를 재시작하면 적용됩니다. Claude Code 안에서 "usage 설정해줘"라고 해도 `usage-setup`
+  스킬이 같은 절차를 안내합니다. 되돌리려면 `aitk usage uninstall`.
+- 보내는 값은 토큰 수·세션 수·플랜·모델별 사용량·주간 한도 사용률뿐입니다. 대화 내용·경로·세션 ID·
+  인증 토큰은 보내지 않습니다.
 
 ## 인증 구조
 
