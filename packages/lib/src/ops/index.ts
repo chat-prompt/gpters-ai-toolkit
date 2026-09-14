@@ -6,6 +6,7 @@
 
 export {
   runCronJob,
+  type CronRunOptions,
   type CronOutcome,
   type CronRunResult,
   type CronStats,

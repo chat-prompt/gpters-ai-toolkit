@@ -651,7 +651,7 @@ export function buildPopularSkillsMessages(params: PopularSkillsParams): Popular
   }
 }
 
-const WEEKLY_SKILL_DIGEST_BOT_NAME = '뽀밋'
+const WEEKLY_SKILL_DIGEST_BOT_NAME = '뽀밋이'
 
 /** Slack은 HTTP 200에도 ok:false를 반환할 수 있다. 수신 확인 없는 성공으로 처리하지 않는다. */
 async function postSkillDigestMessage(
@@ -688,6 +688,42 @@ async function postSkillDigestMessage(
     return result.ts
   }
   throw new Error('Slack skill digest rate limit exceeded')
+}
+
+/** 주간 스킬 소식 실패 알림 인자 */
+export interface PopularSkillsFailureParams {
+  /** 실패 메시지 */
+  error: string
+}
+
+/**
+ * 주간 스킬 소식이 실패했을 때 뽀밋이가 자기 채널에 직접 알린다.
+ *
+ * 복돌이(공용 Webhook) 크론 실패 알림에서 이 잡을 뺐으므로, 여기가 유일한 실패 알림이다.
+ * 채널 접근 자체가 문제면 이 알림도 실패한다 — 그때는 로그와 `cron_runs` 기록만 남고,
+ * 8일 뒤 크론 감시(`cron-health`)가 잡는다.
+ *
+ * @param params - 실패 메시지
+ * @returns 알림을 보냈으면 true
+ */
+export async function notifySlackPopularSkillsFailure(
+  params: PopularSkillsFailureParams
+): Promise<boolean> {
+  const token = process.env.SLACK_BOT_TOKEN
+  const channel = process.env.SLACK_SKILL_DIGEST_CHANNEL_ID
+  if (!token || !channel) return false
+  const detail = params.error.length > 300 ? `${params.error.slice(0, 300)}…` : params.error
+  const text = `주간 스킬 소식을 보내지 못했어요. 실행 기록을 확인해 주세요.\n\`\`\`${detail}\`\`\``
+  try {
+    await postSkillDigestMessage(token, channel, {
+      text,
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }],
+    })
+    return true
+  } catch (error) {
+    log.error('Failed to send skill digest failure notice', error)
+    return false
+  }
 }
 
 /**
