@@ -122,7 +122,35 @@ async function loadUsageRows(): Promise<ClientUsageRow[]> {
   }
 }
 
-async function loadInternalMembers(): Promise<InternalMember[] | null> {
+/**
+ * 사람 사용량 집계에서 뺄 공용 계정 (`AX_USAGE_EXCLUDED_EMAILS`, 쉼표 구분).
+ *
+ * 회사 대표 계정처럼 여러 사람·봇이 나눠 쓰는 계정은 개인 수집기가 붙지 않아
+ * 참여 상태가 영원히 "미확인"으로 남고 분모만 부풀린다.
+ */
+function excludedUsageEmails(): Set<string> {
+  return new Set(
+    (process.env.AX_USAGE_EXCLUDED_EMAILS ?? '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  )
+}
+
+async function loadInternalMembers(): Promise<{
+  members: InternalMember[]
+  excludedIds: Set<string>
+} | null> {
+  const members = await queryInternalMembers()
+  if (!members) return null
+  const excluded = excludedUsageEmails()
+  const excludedIds = new Set(
+    members.filter((member) => excluded.has(member.email.toLowerCase())).map((member) => member.id)
+  )
+  return { members: members.filter((member) => !excludedIds.has(member.id)), excludedIds }
+}
+
+async function queryInternalMembers(): Promise<InternalMember[] | null> {
   const domain = (process.env.INTERNAL_ORGANIZATION_DOMAIN || '').trim().toLowerCase()
   if (!domain) return null
 
@@ -335,10 +363,13 @@ function formatTokens(n: number): string {
  */
 async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageData>> {
   try {
-    const [rows, internalMemberRows] = await Promise.all([
-      loadUsageRows(),
-      loadInternalMembers(),
-    ])
+    const [allRows, internal] = await Promise.all([loadUsageRows(), loadInternalMembers()])
+    const internalMemberRows = internal?.members ?? null
+    // 공용 계정은 분모·참여 상태뿐 아니라 사용량·활성 인원에서도 뺀다 — 어느 한쪽에만
+    // 남으면 오류 복구 경로에서 활성 인원이 전체 구성원보다 많아진다.
+    const rows = internal?.excludedIds.size
+      ? allRows.filter((row) => !row.userId || !internal.excludedIds.has(row.userId))
+      : allRows
 
     if (rows.length === 0 && internalMemberRows === null) {
       return panelNotConfigured(
