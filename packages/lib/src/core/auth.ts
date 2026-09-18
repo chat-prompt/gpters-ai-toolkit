@@ -214,7 +214,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
         }
       } catch {
-        // Keep existing token values on DB error
+        // Keep existing token values on DB error.
+        // 이때 token.sub 도 옛 값일 수 있다 — 다음 정상 조회에서 계정 id 로 다시 맞춰진다
       }
 
       return token
