@@ -137,12 +137,17 @@ function excludedUsageEmails(): Set<string> {
   )
 }
 
-async function loadInternalMembers(): Promise<InternalMember[] | null> {
+async function loadInternalMembers(): Promise<{
+  members: InternalMember[]
+  excludedIds: Set<string>
+} | null> {
   const members = await queryInternalMembers()
-  if (!members) return members
+  if (!members) return null
   const excluded = excludedUsageEmails()
-  if (excluded.size === 0) return members
-  return members.filter((member) => !excluded.has(member.email.toLowerCase()))
+  const excludedIds = new Set(
+    members.filter((member) => excluded.has(member.email.toLowerCase())).map((member) => member.id)
+  )
+  return { members: members.filter((member) => !excludedIds.has(member.id)), excludedIds }
 }
 
 async function queryInternalMembers(): Promise<InternalMember[] | null> {
@@ -358,10 +363,13 @@ function formatTokens(n: number): string {
  */
 async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageData>> {
   try {
-    const [rows, internalMemberRows] = await Promise.all([
-      loadUsageRows(),
-      loadInternalMembers(),
-    ])
+    const [allRows, internal] = await Promise.all([loadUsageRows(), loadInternalMembers()])
+    const internalMemberRows = internal?.members ?? null
+    // 공용 계정은 분모·참여 상태뿐 아니라 사용량·활성 인원에서도 뺀다 — 어느 한쪽에만
+    // 남으면 오류 복구 경로에서 활성 인원이 전체 구성원보다 많아진다.
+    const rows = internal?.excludedIds.size
+      ? allRows.filter((row) => !row.userId || !internal.excludedIds.has(row.userId))
+      : allRows
 
     if (rows.length === 0 && internalMemberRows === null) {
       return panelNotConfigured(

@@ -305,6 +305,31 @@ describe('clientUsagePanel', () => {
     expect(result.data!.participation!.map((item) => item.userId)).toEqual(['user-1'])
   })
 
+  it('공용 계정의 사용량은 참여 상태 조회가 실패해도 활성 인원·토큰에 섞이지 않는다', async () => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
+    process.env.AX_USAGE_EXCLUDED_EMAILS = 'support@gpters.org'
+
+    vi.mocked(db.select).mockReset()
+    vi.mocked(db.select)
+      .mockReturnValueOnce(builder([row({ userId: 'user-1' }), row({ userId: 'shared', memberName: '공용' })]) as never)
+      .mockReturnValueOnce(
+        builder([
+          { id: 'user-1', email: 'member01@gpters.org', name: '구성원', lastLoginAt: null },
+          { id: 'shared', email: 'support@gpters.org', name: '공용', lastLoginAt: null },
+        ]) as never
+      )
+      // 참여 상태 조회 실패 → 활성 인원은 사용량 행으로 센다
+      .mockImplementationOnce(() => {
+        throw new Error('연결 끊김')
+      })
+
+    const result = await clientUsagePanel.load(ADMIN)
+
+    expect(result.data!.internalMembers).toBe(1)
+    expect(result.data!.reportingMembers).toBe(1)
+    expect(result.data!.members!.map((item) => item.userId)).toEqual(['user-1'])
+  })
+
   it('user_id가 연결된 상세 행은 수집 당시 별칭 대신 현재 계정 이름을 쓴다', async () => {
     process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
 
