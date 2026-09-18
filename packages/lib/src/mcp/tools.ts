@@ -27,6 +27,24 @@ export function isAdminTool(toolName: string): toolName is AdminToolName {
  */
 const ALL_TOOLS: McpTool[] = [
   {
+    name: 'ax_list_panels',
+    description: 'AX 대시보드에서 조회 가능한 일반 패널의 제목, 설명, 데이터 출처를 나열합니다. OAuth ax:read 권한과 사내 계정이 필요합니다.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'ax_get_panel',
+    description: 'AX 대시보드의 일반 패널 하나를 조회합니다. 기본은 상태와 핵심 수치만 반환하며, 상세 데이터가 필요할 때 includeData=true를 사용합니다. 관리자 전용 정보는 제공하지 않습니다.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        panelId: { type: 'string', description: 'ax_list_panels에 표시된 패널 ID' },
+        days: { type: 'number', enum: [7, 30, 90], description: '조회 기간. 기본 7일' },
+        includeData: { type: 'boolean', description: '상세 데이터도 포함. 기본 false' },
+      },
+      required: ['panelId'],
+    },
+  },
+  {
     name: 'semantic_search',
     description: `의미 기반으로 플러그인을 검색합니다.
 자연어로 질문하면 의미적으로 유사한 플러그인을 찾습니다.

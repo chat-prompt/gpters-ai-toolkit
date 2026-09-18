@@ -37,6 +37,8 @@ describe('MCP Tools', () => {
       const toolNames = MCP_TOOLS.map((t) => t.name)
 
       expect(toolNames).toContain('semantic_search')
+      expect(toolNames).toContain('ax_list_panels')
+      expect(toolNames).toContain('ax_get_panel')
       expect(toolNames).toContain('get_plugin_content')
       expect(toolNames).toContain('deploy_skill')
       expect(toolNames).toContain('undeploy_skill')
@@ -61,8 +63,8 @@ describe('MCP Tools', () => {
       expect((completed.inputSchema.properties.agent as { enum: string[] }).enum).toContain('hermes')
     })
 
-    it('should have 13 public tools', () => {
-      expect(MCP_TOOLS).toHaveLength(13)
+    it('should have 15 public tools', () => {
+      expect(MCP_TOOLS).toHaveLength(15)
     })
 
     describe('Suggest feature removal (EDU-7987 D2)', () => {

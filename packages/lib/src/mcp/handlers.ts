@@ -54,6 +54,7 @@ import { getBaseUrl } from '../utils'
 import { generateEmbedding, prepareTextForEmbedding } from '../search/embedding'
 import { checkDeployDuplicates } from '../features/ax/deploy-duplicate-guard'
 import { semanticSearch as semanticSearchImpl } from '../search/vector-search'
+import { listReadableAxPanels, readAxPanel } from './ax-read'
 
 async function updateItemEmbedding(id: string, item: { name: string; description: string; content?: string | null; tags?: string[] | null; readme?: string | null }): Promise<void> {
   try {
@@ -1435,6 +1436,28 @@ export async function executeTool(
   const startTime = Date.now()
   try {
     switch (toolName) {
+      case 'ax_list_panels': {
+        const result = await listReadableAxPanels(userId, userRole)
+        return { content: [{ type: 'text', text: JSON.stringify(result.ok ? result.value : { error: result.error }) }], isError: !result.ok }
+      }
+      case 'ax_get_panel': {
+        const panelId = args.panelId
+        const days = args.days === undefined ? 7 : args.days
+        if (typeof panelId !== 'string' || !panelId.trim() || typeof days !== 'number') {
+          return { content: [{ type: 'text', text: JSON.stringify({ error: 'panelId must be a nonempty string and days must be 7, 30, or 90' }) }], isError: true }
+        }
+        const result = await readAxPanel(panelId, days, userId, userRole)
+        if (!result.ok) return { content: [{ type: 'text', text: JSON.stringify({ error: result.error }) }], isError: true }
+        const panelResult = result.value as Record<string, unknown>
+        const value = args.includeData === true ? panelResult : {
+          meta: panelResult.meta,
+          status: panelResult.status,
+          message: panelResult.message,
+          highlights: panelResult.highlights,
+          generatedAt: panelResult.generatedAt,
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(value) }] }
+      }
       case 'semantic_search': {
         const input = args as unknown as SemanticSearchInput
         if (!input.query) {

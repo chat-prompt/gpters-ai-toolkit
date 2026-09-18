@@ -270,6 +270,24 @@ describe('MCP Server', () => {
   })
 
   describe('handleHttpRequest', () => {
+    it('does not execute write tools with a read-only OAuth scope', async () => {
+      const response = await handleHttpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'deploy_skill', arguments: {} } },
+        'user-1', 'admin', undefined, undefined, 'toolkit:read ax:read'
+      )
+      expect((response as { result: { isError: boolean } }).result.isError).toBe(true)
+      expect(executeTool).not.toHaveBeenCalled()
+    })
+
+    it('filters the tool catalog by OAuth scope', async () => {
+      const response = await handleHttpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+        'user-1', 'viewer', undefined, undefined, 'toolkit:read'
+      )
+      const names = (response as { result: { tools: Array<{ name: string }> } }).result.tools.map((tool) => tool.name)
+      expect(names).toEqual(['search_plugins', 'list_plugins'])
+    })
+
     it('should handle single request', async () => {
       const response = await handleHttpRequest({
         jsonrpc: '2.0',
