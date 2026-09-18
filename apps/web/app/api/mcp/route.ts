@@ -32,7 +32,7 @@
 
 import { after } from 'next/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MCP_TOOLS } from '@/lib/mcp'
+import { handleHttpRequest, handleSimpleRequest, SERVER_INFO, MCP_TOOLS, canCallMcpTool, canCallMcpRestAction } from '@/lib/mcp'
 import { withRateLimit, RateLimitPresets, getMcpCommand } from '@/lib/utils'
 import { withOAuthAuth, type OAuthAuthResult } from '@/lib/security/oauth-tokens'
 import {
@@ -364,7 +364,7 @@ export async function GET(request: NextRequest) {
         name: SERVER_INFO.name,
         version: SERVER_INFO.version,
         description: SERVER_INFO.description,
-        tools: MCP_TOOLS.map((t) => ({
+        tools: MCP_TOOLS.filter((t) => canCallMcpTool(t.name, auth?.scope)).map((t) => ({
           name: t.name,
           description: t.description.split('\n')[0],
         })),
@@ -386,7 +386,7 @@ export async function GET(request: NextRequest) {
         'POST /api/mcp?action=get': 'Get plugin content (pluginId)',
         'POST /api/mcp?action=list': 'List all plugins (category)',
       },
-      tools: MCP_TOOLS.map((t) => ({
+      tools: MCP_TOOLS.filter((t) => canCallMcpTool(t.name, auth?.scope)).map((t) => ({
         name: t.name,
         description: t.description.split('\n')[0],
       })),
@@ -785,6 +785,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+    const requestedAction = new URL(request.url).searchParams.get('action')
+    if (requestedAction && !canCallMcpRestAction(requestedAction, auth?.scope)) {
+      return addCorsHeaders(NextResponse.json({ success: false, error: 'Action is not allowed by this OAuth scope' }, { status: 403 }))
+    }
 
     // Map REST action to corresponding MCP tool name for audit logging
     const REST_ACTION_TO_TOOL: Record<string, string> = {
@@ -912,7 +916,7 @@ export async function POST(request: NextRequest) {
 
     const rpcMethod = (body as Record<string, unknown>)?.method as string
     const tool = extractToolFromBody(body)
-    const response = await handleHttpRequest(body, userId, userRole, orgId, currentClientType)
+    const response = await handleHttpRequest(body, userId, userRole, orgId, currentClientType, auth?.scope)
 
     // Handle notifications (null response means no response should be sent)
     // Per JSON-RPC 2.0 spec and MCP: notifications don't expect a response

@@ -7,6 +7,7 @@
  */
 
 import { MCP_TOOLS } from './tools'
+import { canCallMcpTool } from './tool-access'
 import { executeTool, listPrompts, getPrompt } from './handlers'
 import type { McpToolResponse, McpPromptResult, GetPromptInput, ToolExecutionMeta } from './types'
 
@@ -62,9 +63,9 @@ function handleInitialize(): McpResponse['result'] {
 /**
  * Handle tools/list request
  */
-function handleToolsList(): McpResponse['result'] {
+function handleToolsList(scope?: string): McpResponse['result'] {
   return {
-    tools: MCP_TOOLS.map((tool) => ({
+    tools: MCP_TOOLS.filter((tool) => canCallMcpTool(tool.name, scope)).map((tool) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
@@ -83,9 +84,13 @@ async function handleToolsCall(
   userId?: string,
   userRole?: string,
   orgId?: string,
-  clientType?: string
+  clientType?: string,
+  scope?: string
 ): Promise<McpToolResponse> {
   const { name, arguments: args = {} } = params
+  if (!canCallMcpTool(name, scope)) {
+    return { content: [{ type: 'text', text: JSON.stringify({ error: 'Tool is not allowed by this OAuth scope' }) }], isError: true }
+  }
   return executeTool(name, args, userId, userRole, orgId, clientType)
 }
 
@@ -118,7 +123,8 @@ export async function processRequest(
   userId?: string,
   userRole?: string,
   orgId?: string,
-  clientType?: string
+  clientType?: string,
+  scope?: string
 ): Promise<McpResponse | null> {
   const { id, method, params } = request
 
@@ -146,12 +152,12 @@ export async function processRequest(
         return {
           jsonrpc: '2.0',
           id: id!,
-          result: handleToolsList(),
+          result: handleToolsList(scope),
         }
 
       case 'tools/call': {
         const toolParams = params as { name: string; arguments?: Record<string, unknown> }
-        const result = await handleToolsCall(toolParams, userId, userRole, orgId, clientType)
+        const result = await handleToolsCall(toolParams, userId, userRole, orgId, clientType, scope)
         return {
           jsonrpc: '2.0',
           id: id!,
@@ -257,12 +263,13 @@ export async function handleHttpRequest(
   userId?: string,
   userRole?: string,
   orgId?: string,
-  clientType?: string
+  clientType?: string,
+  scope?: string
 ): Promise<McpResponse | McpResponse[] | null> {
   // Handle batch requests
   if (Array.isArray(body)) {
     const responses = await Promise.all(
-      body.map((req) => processRequest(req as McpRequest, userId, userRole, orgId, clientType))
+      body.map((req) => processRequest(req as McpRequest, userId, userRole, orgId, clientType, scope))
     )
     // Filter out null responses (notifications)
     const validResponses = responses.filter((r): r is McpResponse => r !== null)
@@ -270,7 +277,7 @@ export async function handleHttpRequest(
   }
 
   // Handle single request
-  return processRequest(body as McpRequest, userId, userRole, orgId, clientType)
+  return processRequest(body as McpRequest, userId, userRole, orgId, clientType, scope)
 }
 
 /**
@@ -324,7 +331,7 @@ export async function handleSimpleRequest(
         return {
           success: true,
           data: {
-            tools: MCP_TOOLS.map((t) => ({
+            tools: MCP_TOOLS.filter((t) => canCallMcpTool(t.name)).map((t) => ({
               name: t.name,
               description: t.description.split('\n')[0], // First line only
             })),

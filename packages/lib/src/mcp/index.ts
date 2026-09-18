@@ -40,6 +40,7 @@ export type {
 
 // Export tools
 export { MCP_TOOLS, getToolByName, getAllToolNames, ADMIN_TOOL_NAMES, isAdminTool } from './tools'
+export { canCallMcpTool, canCallMcpRestAction } from './tool-access'
 
 // Export handlers
 export {
