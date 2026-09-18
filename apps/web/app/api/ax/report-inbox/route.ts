@@ -12,7 +12,10 @@ export async function POST(request: NextRequest) {
   if (limited) return limited
   const session = await auth()
   const viewer = resolveAxViewer({ email: session?.user?.email, role: session?.user?.role as UserRole })
-  const reviewerId = viewer.canAccess && viewer.isAdmin ? await resolveAccountUserId(session?.user?.email) : null
+  let reviewerId: string | null = null
+  if (viewer.canAccess && viewer.isAdmin) {
+    try { reviewerId = await resolveAccountUserId(session?.user?.email) } catch { return failure('검토자 계정을 확인하지 못했습니다', 500) }
+  }
   if (!reviewerId || !isIncidentReviewer(reviewerId)) return failure('지정된 사내 검토자 로그인이 필요합니다', 403)
   if (process.env.AX_REPORT_INBOX_ENABLED !== 'true' || process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return failure('보고 감시 등록이 비활성입니다', 503)
   if (request.headers.get('origin') !== new URL(request.url).origin || !request.headers.get('content-type')?.startsWith('application/json')) return failure('허용되지 않은 요청입니다', 403)

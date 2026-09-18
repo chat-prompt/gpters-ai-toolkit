@@ -5,7 +5,10 @@ import { incidentActionSchema } from '../../../../packages/lib/src/features/ax/i
 import { isIncidentReviewer } from '../../../../packages/lib/src/features/ax/incident-report'
 import { resolveAxViewer } from '../../../../packages/lib/src/features/ax/access'
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), save: vi.fn(), accounts: { 'operator@example.org': 'operator-1', 'member@example.org': 'member-1' } as Record<string, string> }))
-const resolveAccountUserId = async (email?: string | null) => (email ? mocks.accounts[email] ?? null : null)
+const resolveAccountUserId = async (email?: string | null) => {
+  if (email === 'broken@example.org') throw new Error('private database credentials')
+  return email ? mocks.accounts[email] ?? null : null
+}
 class IncidentConflict extends Error {}
 class IncidentValidationError extends Error {}
 vi.mock('@/lib/core/auth', () => ({ auth: mocks.auth }))
@@ -47,6 +50,11 @@ describe('incident review authorization and input', () => {
     mocks.save.mockRejectedValueOnce(new Error('private database credentials'))
     const response = await POST(request())
     expect(response.status).toBe(500); expect(await response.text()).not.toContain('credentials')
+  })
+  it('hides account lookup failures behind a generic error',async () => {
+    mocks.auth.mockResolvedValue({user:{id:'x',email:'broken@example.org',role:'admin'}})
+    const response = await POST(request())
+    expect(response.status).toBe(500); expect(await response.text()).not.toContain('credentials'); expect(mocks.save).not.toHaveBeenCalled()
   })
   it('does not write before storage is enabled',async () => {
     vi.stubEnv('AX_INCIDENT_REVIEW_ENABLED','false')

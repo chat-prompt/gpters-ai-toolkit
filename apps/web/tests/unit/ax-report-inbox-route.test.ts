@@ -5,7 +5,10 @@ import { resolveAxViewer } from '../../../../packages/lib/src/features/ax/access
 import { isIncidentReviewer } from '../../../../packages/lib/src/features/ax/incident-report'
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), enroll: vi.fn() }))
 const accounts: Record<string, string> = { 'operator@example.org': 'operator', 'other@example.org': 'other' }
-const resolveAccountUserId = async (email?: string | null) => (email ? accounts[email] ?? null : null)
+const resolveAccountUserId = async (email?: string | null) => {
+  if (email === 'broken@example.org') throw new Error('private database connection')
+  return email ? accounts[email] ?? null : null
+}
 vi.mock('@/lib/core/auth', () => ({ auth: mocks.auth }))
 vi.mock('@/lib/features/ax', () => ({ resolveAxViewer, isIncidentReviewer, resolveAccountUserId }))
 vi.mock('@/lib/utils/rate-limit', () => ({ withRateLimit: () => null, RateLimitPresets: { standard: {} } }))
@@ -28,6 +31,10 @@ describe('explicit reviewer-only inbox enrollment route', () => {
   })
   it.each([null, { id: 'other', email: 'other@example.org', role: 'admin' }, { id: 'operator', email: 'operator@outside.org', role: 'admin' }])('rejects unauthorized identities %s', async user => {
     mocks.auth.mockResolvedValue({ user }); expect((await POST(request())).status).toBe(403); expect(mocks.enroll).not.toHaveBeenCalled()
+  })
+  it('hides account lookup failures behind a generic error', async () => {
+    mocks.auth.mockResolvedValue({ user: { id: 'x', email: 'broken@example.org', role: 'admin' } })
+    const response = await POST(request()); expect(response.status).toBe(500); expect(await response.text()).not.toContain('connection'); expect(mocks.enroll).not.toHaveBeenCalled()
   })
   it('requires same origin and explicit root confirmation, rejecting injected recipients', async () => {
     expect((await POST(request(body, 'https://outside.org'))).status).toBe(403)

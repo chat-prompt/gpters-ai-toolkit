@@ -14,7 +14,8 @@ export async function POST(request: NextRequest) {
   const session = await auth()
   const viewer = resolveAxViewer({ email: session?.user?.email, role: session?.user?.role as UserRole })
   if (!viewer.canAccess || !viewer.isAdmin || !session?.user?.email) return failure('사내 관리자 로그인이 필요합니다', 403)
-  const reviewerId = await resolveAccountUserId(session.user.email)
+  let reviewerId: string | null
+  try { reviewerId = await resolveAccountUserId(session.user.email) } catch { return failure('검토자 계정을 확인하지 못했습니다', 500) }
   if (!reviewerId || !isIncidentReviewer(reviewerId)) return failure('지정된 최종 검토자만 판정할 수 있습니다', 403)
   if (process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return failure('문제 검토 저장소를 준비 중입니다', 503)
   // Cookie-authenticated writes require a same-origin JSON request.
