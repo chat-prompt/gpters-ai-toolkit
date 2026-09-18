@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited
   const session = await auth()
   const viewer = resolveAxViewer({ email: session?.user?.email, role: session?.user?.role as UserRole })
-  if (!viewer.canAccess || !viewer.isAdmin || !session?.user?.id) return failure('사내 관리자 로그인이 필요합니다', 403)
+  if (!viewer.canAccess || !viewer.isAdmin || !session?.user?.email) return failure('사내 관리자 로그인이 필요합니다', 403)
   if (process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return failure('문제 검토 저장소를 준비 중입니다', 503)
   const params = new URL(request.url).searchParams
   if ([...params.keys()].some(key => params.getAll(key).length !== 1)) return failure('조회 조건을 확인하세요', 400)
