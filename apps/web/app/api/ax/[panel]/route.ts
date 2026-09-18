@@ -81,7 +81,7 @@ export async function GET(
 
   try {
     const result = await panel.load({
-      viewerUserId: session?.user?.id,
+      viewerEmail: session?.user?.email ?? undefined,
       days,
       isAdmin: viewer.isAdmin,
       forceRefresh,

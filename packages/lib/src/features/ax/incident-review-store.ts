@@ -1,4 +1,4 @@
-import { db, axIncidentReviews } from '@gpters/db'
+import { db, axIncidentReviews, users } from '@gpters/db'
 import { and, eq } from 'drizzle-orm'
 import { agentActivityPanel } from './agent-activity'
 import { applyIncidentAction, incidentStats, projectIncidentCases } from './incident-review'
@@ -6,6 +6,23 @@ import type { IncidentAction, IncidentCase, IncidentInput, IncidentReviewData } 
 import { panelError, panelNotConfigured, panelOk } from './panel'
 import type { AxPanel, AxPanelMeta } from './types'
 import { isIncidentReviewer } from './incident-report'
+
+/**
+ * 검토자 판정에 쓰는 계정 ID를 로그인 이메일로 찾는다.
+ *
+ * 세션의 `user.id`는 로그인 때 발급된 값이라 `users.id`와 다르다.
+ * `AX_INCIDENT_REVIEWER_IDS`는 `users.id`를 적으므로 이메일로 한 번 더 찾아야 맞는다.
+ */
+export async function resolveAccountUserId(email?: string | null): Promise<string | null> {
+  const normalized = email?.trim().toLowerCase()
+  if (!normalized) return null
+  const [row] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.email, normalized), eq(users.accountStatus, 'active')))
+    .limit(1)
+  return row?.id ?? null
+}
 
 const meta: AxPanelMeta = { id: 'agent-incidents', title: '문제 검토', description: '실패 후보를 검토하고 수정·재검증 근거를 남깁니다', source: '관측된 작업 이벤트 · 관리자 검토 기록', visibility: 'admin', parentId: 'skill-usage', usesPeriod: true }
 
@@ -59,6 +76,6 @@ export async function saveIncidentReview(action: IncidentAction, actor: string):
 export const agentIncidentsPanel: AxPanel<IncidentReviewData> = { meta, async load(ctx) {
   if (!ctx.isAdmin) return panelError(meta, '관리자만 조회할 수 있습니다')
   if (process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return panelNotConfigured(meta, '문제 검토 저장소를 준비 중입니다')
-  try { return panelOk(meta, {...await readIncidentReview(ctx.days),canReview:isIncidentReviewer(ctx.viewerUserId)}) }
+  try { return panelOk(meta, {...await readIncidentReview(ctx.days),canReview:isIncidentReviewer(await resolveAccountUserId(ctx.viewerEmail))}) }
   catch { return panelError(meta, '문제 검토 데이터를 조회하지 못했습니다') }
 } }

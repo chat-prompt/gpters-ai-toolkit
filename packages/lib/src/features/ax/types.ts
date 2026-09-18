@@ -44,8 +44,8 @@ export interface AxPanelMeta {
 
 /** 패널 로딩 컨텍스트 */
 export interface AxPanelContext {
-  /** Authenticated human identity for narrowly scoped operator actions. */
-  viewerUserId?: string
+  /** 로그인 이메일. 검토자처럼 계정 단위 권한을 판정하는 패널이 `users.id`를 찾을 때 쓴다 */
+  viewerEmail?: string
   /** 조회 기간(일). 기간 개념이 없는 패널은 무시한다 */
   days: number
   /**
