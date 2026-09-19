@@ -84,6 +84,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           user.role = DEFAULT_ROLE
         }
 
+        // 세션의 user.id 는 token.sub 에서 온다. Auth.js 는 어댑터 없이 로그인마다 임의 id 를
+        // 만들기 때문에, 여기서 users.id 로 고정하지 않으면 세션 id 와 계정 id 가 갈린다.
+        user.id = userId
+
         const orgIds: string[] = []
         for (const org of matchingOrgs) {
           const existingMembership = await db
@@ -157,6 +161,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       if (user) {
         token.id = user.id
+        token.sub = user.id
       }
 
       try {
@@ -175,6 +180,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null
           }
 
+          // 이 수정 전에 발급된 세션도 다음 요청부터 계정 id 로 맞춘다 (재로그인 불필요)
+          token.sub = dbUser.id
+          token.id = dbUser.id
           token.role = dbUser.role as UserRole
 
           const userOrgMemberships = await db
@@ -206,7 +214,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
         }
       } catch {
-        // Keep existing token values on DB error
+        // Keep existing token values on DB error.
+        // 이때 token.sub 도 옛 값일 수 있다 — 다음 정상 조회에서 계정 id 로 다시 맞춰진다
       }
 
       return token
