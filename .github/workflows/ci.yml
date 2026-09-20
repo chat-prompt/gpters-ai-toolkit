@@ -62,6 +62,36 @@ jobs:
       - name: Build
         run: pnpm build
 
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    env:
+      # 단위 테스트는 DB 를 목으로 대신한다. 전역 env 의 공유 DATABASE_URL 을 물려받지 않도록
+      # 닿을 수 없는 주소로 덮어써, 실수로 실제 DB 를 부르는 테스트가 있으면 공유 DB 대신 연결 실패로 드러나게 한다.
+      # 격리 PostgreSQL 테스트(*.postgres.test.ts)는 RUN_ISOLATED_*_TESTS=true 일 때만 돌고 여기서는 skip 된다.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:1/ci_unit_tests_no_db
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm test
+
   test-api:
     name: API Tests
     # API suite mutates catalog data. Run only when the repository has an isolated
