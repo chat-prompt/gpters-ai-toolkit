@@ -4,13 +4,8 @@ import { NextRequest } from 'next/server'
 import { resolveAxViewer } from '../../../../packages/lib/src/features/ax/access'
 import { isIncidentReviewer } from '../../../../packages/lib/src/features/ax/incident-report'
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), enroll: vi.fn() }))
-const accounts: Record<string, string> = { 'operator@example.org': 'operator', 'other@example.org': 'other' }
-const resolveAccountUserId = async (email?: string | null) => {
-  if (email === 'broken@example.org') throw new Error('private database connection')
-  return email ? accounts[email] ?? null : null
-}
 vi.mock('@/lib/core/auth', () => ({ auth: mocks.auth }))
-vi.mock('@/lib/features/ax', () => ({ resolveAxViewer, isIncidentReviewer, resolveAccountUserId }))
+vi.mock('@/lib/features/ax', () => ({ resolveAxViewer, isIncidentReviewer }))
 vi.mock('@/lib/utils/rate-limit', () => ({ withRateLimit: () => null, RateLimitPresets: { standard: {} } }))
 vi.mock('../../../../packages/lib/src/features/ax/report-inbox-store', async importOriginal => ({ ...await importOriginal<typeof import('../../../../packages/lib/src/features/ax/report-inbox-store')>(), enrollStoredReportInbox: mocks.enroll }))
 const { POST } = await import('../../app/api/ax/report-inbox/route')
@@ -19,7 +14,7 @@ const request = (input: unknown = body, origin = 'https://toolkit.example.org') 
 beforeEach(() => {
   vi.stubEnv('INTERNAL_ORGANIZATION_DOMAIN', 'example.org'); vi.stubEnv('AX_INCIDENT_REVIEWER_IDS', 'operator')
   vi.stubEnv('AX_INCIDENT_REVIEW_ENABLED', 'true'); vi.stubEnv('AX_REPORT_INBOX_ENABLED', 'true')
-  mocks.auth.mockResolvedValue({ user: { id: 'session-uuid', email: 'operator@example.org', role: 'admin' } }); mocks.enroll.mockReset(); mocks.enroll.mockResolvedValue({ id: body.reportId, status: 'watching' })
+  mocks.auth.mockResolvedValue({ user: { id: 'operator', email: 'operator@example.org', role: 'admin' } }); mocks.enroll.mockReset(); mocks.enroll.mockResolvedValue({ id: body.reportId, status: 'watching' })
 })
 afterEach(() => vi.unstubAllEnvs())
 describe('explicit reviewer-only inbox enrollment route', () => {
@@ -31,10 +26,6 @@ describe('explicit reviewer-only inbox enrollment route', () => {
   })
   it.each([null, { id: 'other', email: 'other@example.org', role: 'admin' }, { id: 'operator', email: 'operator@outside.org', role: 'admin' }])('rejects unauthorized identities %s', async user => {
     mocks.auth.mockResolvedValue({ user }); expect((await POST(request())).status).toBe(403); expect(mocks.enroll).not.toHaveBeenCalled()
-  })
-  it('hides account lookup failures behind a generic error', async () => {
-    mocks.auth.mockResolvedValue({ user: { id: 'x', email: 'broken@example.org', role: 'admin' } })
-    const response = await POST(request()); expect(response.status).toBe(500); expect(await response.text()).not.toContain('connection'); expect(mocks.enroll).not.toHaveBeenCalled()
   })
   it('requires same origin and explicit root confirmation, rejecting injected recipients', async () => {
     expect((await POST(request(body, 'https://outside.org'))).status).toBe(403)

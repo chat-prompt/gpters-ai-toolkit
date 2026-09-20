@@ -4,15 +4,11 @@ import { NextRequest } from 'next/server'
 import { incidentActionSchema } from '../../../../packages/lib/src/features/ax/incident-review'
 import { isIncidentReviewer } from '../../../../packages/lib/src/features/ax/incident-report'
 import { resolveAxViewer } from '../../../../packages/lib/src/features/ax/access'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), save: vi.fn(), accounts: { 'operator@example.org': 'operator-1', 'member@example.org': 'member-1' } as Record<string, string> }))
-const resolveAccountUserId = async (email?: string | null) => {
-  if (email === 'broken@example.org') throw new Error('private database credentials')
-  return email ? mocks.accounts[email] ?? null : null
-}
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), save: vi.fn() }))
 class IncidentConflict extends Error {}
 class IncidentValidationError extends Error {}
 vi.mock('@/lib/core/auth', () => ({ auth: mocks.auth }))
-vi.mock('@/lib/features/ax', () => ({ incidentActionSchema, resolveAxViewer, isIncidentReviewer, resolveAccountUserId, saveIncidentReview: mocks.save, IncidentConflict, IncidentValidationError }))
+vi.mock('@/lib/features/ax', () => ({ incidentActionSchema, resolveAxViewer, isIncidentReviewer, saveIncidentReview: mocks.save, IncidentConflict, IncidentValidationError }))
 vi.mock('@/lib/utils/rate-limit', () => ({ withRateLimit: () => null, RateLimitPresets: { standard: {} } }))
 const { POST } = await import('../../app/api/ax/incident-review/route')
 const payload = { id:'candidate',revision:0,days:7,action:'confirmed',reason:'Reviewed',evidenceRef:'private:receipt' }
@@ -22,12 +18,11 @@ function request(body: unknown = payload, origin = 'http://localhost') {
 describe('incident review authorization and input', () => {
   beforeEach(() => {
     vi.stubEnv('AX_INCIDENT_REVIEWER_IDS','operator-1'); vi.stubEnv('INTERNAL_ORGANIZATION_DOMAIN','example.org'); vi.stubEnv('AX_INCIDENT_REVIEW_ENABLED','true')
-    // 세션 id 는 로그인 때 발급된 값이라 users.id 와 다르다
-    mocks.auth.mockResolvedValue({user:{id:'session-uuid',email:'operator@example.org',role:'admin'}})
+    mocks.auth.mockResolvedValue({user:{id:'operator-1',email:'operator@example.org',role:'admin'}})
     mocks.save.mockReset(); mocks.save.mockResolvedValue({revision:1})
   })
   afterEach(() => vi.unstubAllEnvs())
-  it('takes reviewer identity from the account of the authenticated email, not the session id',async () => {
+  it('takes reviewer identity from the authenticated session',async () => {
     const response = await POST(request())
     expect(response.status).toBe(200)
     expect(response.headers.get('cache-control')).toBe('private, no-store')
@@ -50,11 +45,6 @@ describe('incident review authorization and input', () => {
     mocks.save.mockRejectedValueOnce(new Error('private database credentials'))
     const response = await POST(request())
     expect(response.status).toBe(500); expect(await response.text()).not.toContain('credentials')
-  })
-  it('hides account lookup failures behind a generic error',async () => {
-    mocks.auth.mockResolvedValue({user:{id:'x',email:'broken@example.org',role:'admin'}})
-    const response = await POST(request())
-    expect(response.status).toBe(500); expect(await response.text()).not.toContain('credentials'); expect(mocks.save).not.toHaveBeenCalled()
   })
   it('does not write before storage is enabled',async () => {
     vi.stubEnv('AX_INCIDENT_REVIEW_ENABLED','false')

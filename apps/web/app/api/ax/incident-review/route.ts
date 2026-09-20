@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/core/auth'
-import { resolveAxViewer, incidentActionSchema, saveIncidentReview, IncidentConflict, IncidentValidationError, isIncidentReviewer, resolveAccountUserId } from '@/lib/features/ax'
+import { resolveAxViewer, incidentActionSchema, saveIncidentReview, IncidentConflict, IncidentValidationError, isIncidentReviewer } from '@/lib/features/ax'
 import { withRateLimit, RateLimitPresets } from '@/lib/utils/rate-limit'
 import type { UserRole } from '@/lib/security/rbac'
 
@@ -13,10 +13,8 @@ export async function POST(request: NextRequest) {
   if (limited) return limited
   const session = await auth()
   const viewer = resolveAxViewer({ email: session?.user?.email, role: session?.user?.role as UserRole })
-  if (!viewer.canAccess || !viewer.isAdmin || !session?.user?.email) return failure('사내 관리자 로그인이 필요합니다', 403)
-  let reviewerId: string | null
-  try { reviewerId = await resolveAccountUserId(session.user.email) } catch { return failure('검토자 계정을 확인하지 못했습니다', 500) }
-  if (!reviewerId || !isIncidentReviewer(reviewerId)) return failure('지정된 최종 검토자만 판정할 수 있습니다', 403)
+  if (!viewer.canAccess || !viewer.isAdmin || !session?.user?.id) return failure('사내 관리자 로그인이 필요합니다', 403)
+  if (!isIncidentReviewer(session.user.id)) return failure('지정된 최종 검토자만 판정할 수 있습니다', 403)
   if (process.env.AX_INCIDENT_REVIEW_ENABLED !== 'true') return failure('문제 검토 저장소를 준비 중입니다', 503)
   // Cookie-authenticated writes require a same-origin JSON request.
   if (request.headers.get('origin') !== new URL(request.url).origin || !request.headers.get('content-type')?.startsWith('application/json')) return failure('허용되지 않은 요청입니다', 403)
@@ -28,7 +26,7 @@ export async function POST(request: NextRequest) {
     try { json = JSON.parse(text) } catch { return failure('요청 형식을 확인하세요', 400) }
     const parsed = incidentActionSchema.safeParse(json)
     if (!parsed.success) return failure('필수 항목과 입력 형식을 확인하세요', 400)
-    const record = await saveIncidentReview(parsed.data, reviewerId)
+    const record = await saveIncidentReview(parsed.data, session.user.id)
     return NextResponse.json({ record }, { headers })
   } catch (error) {
     if (error instanceof IncidentConflict) return failure(error.message, 409)
