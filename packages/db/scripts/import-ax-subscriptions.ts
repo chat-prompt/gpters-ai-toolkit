@@ -20,7 +20,7 @@
 
 import { readFileSync } from 'fs'
 import { eq, inArray } from 'drizzle-orm'
-import { parseRosterCsv, planRosterSync, type RosterSubscription } from './lib/ax-subscription-roster'
+import { parseRosterCsv, planRosterSync, subscriptionValues, type RosterSubscription } from './lib/ax-subscription-roster'
 
 /**
  * `DATABASE_URL`이 셸에 없으면 레포 루트 `.env`에서 읽어 온다
@@ -91,21 +91,7 @@ async function main() {
   if (PLAN_ONLY) return
 
   const now = new Date()
-  const valuesOf = (row: RosterSubscription) => ({
-    vendor: row.vendor,
-    plan: row.plan,
-    ownerName: row.ownerName,
-    renewalDay: row.renewalDay,
-    payer: row.payer,
-    // numeric 컬럼이라 문자열로 넣는다 (금액을 float로 통과시키지 않는다)
-    amount: row.amount.toFixed(2),
-    currency: row.currency,
-    billingCycle: row.billingCycle,
-    status: row.status,
-    note: null,
-    syncedAt: now,
-    updatedAt: now,
-  })
+  const valuesOf = (row: RosterSubscription) => subscriptionValues(row, now)
 
   for (const { id, row } of plan.update) {
     await db.update(axSubscriptions).set(valuesOf(row)).where(eq(axSubscriptions.id, id))
