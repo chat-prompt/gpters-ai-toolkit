@@ -14,6 +14,7 @@ type Callbacks = {
 const mocks = vi.hoisted(() => ({
   config: null as null | { callbacks: unknown },
   results: [] as unknown[][],
+  dbDown: false,
 }))
 
 vi.mock('next-auth', () => ({
@@ -38,6 +39,7 @@ vi.mock('../../../../packages/lib/src/account-access', () => ({
 vi.mock('@gpters/db', () => {
   // select() 호출마다 큐에서 결과 한 묶음을 꺼낸다. where() 결과는 await 도 되고 limit() 도 된다.
   const select = () => {
+    if (mocks.dbDown) throw new Error('database unavailable')
     const rows = mocks.results.shift() ?? []
     const whereResult = Object.assign(Promise.resolve(rows), { limit: async () => rows })
     return { from: () => ({ where: () => whereResult }) }
@@ -55,6 +57,7 @@ const packageCallbacks = mocks.config!.callbacks as Callbacks
 
 beforeEach(() => {
   mocks.results = []
+  mocks.dbDown = false
   delete process.env.RONA_API_URL
 })
 
@@ -93,6 +96,21 @@ describe.each([
 
     const session = await callbacks.session({ session: { user: {} }, token: token! })
     expect(session.user.id).toBe('account-1')
+  })
+
+  it('keeps a recently verified token through a short database outage', async () => {
+    mocks.dbDown = true
+    const token = { sub: 'account-1', email: 'member@gpters.org', role: 'admin', tokenRefreshedAt: Date.now() - 60_000 }
+
+    expect(await callbacks.jwt({ token })).toMatchObject({ sub: 'account-1', role: 'admin' })
+  })
+
+  it('drops the session when the database stays unreachable past the grace window', async () => {
+    mocks.dbDown = true
+    // 정지 여부를 확인하지 못한 채 오래된 토큰의 권한을 계속 쓰게 두지 않는다
+    const stale = { sub: 'account-1', email: 'member@gpters.org', role: 'admin', tokenRefreshedAt: Date.now() - 11 * 60_000 }
+    expect(await callbacks.jwt({ token: stale })).toBeNull()
+    expect(await callbacks.jwt({ token: { sub: 'account-1', email: 'member@gpters.org', role: 'admin' } })).toBeNull()
   })
 
   it('still rejects a suspended account instead of repairing its token', async () => {

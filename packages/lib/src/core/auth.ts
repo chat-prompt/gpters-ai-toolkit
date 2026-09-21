@@ -16,6 +16,8 @@ const log = createLogger('auth')
 
 const DEFAULT_ROLE: UserRole = 'viewer'
 const DEFAULT_ORG_ROLE: OrgRole = 'org_viewer'
+/** DB 조회 실패 시 직전 토큰을 믿어 주는 최대 시간 */
+const STALE_AUTH_GRACE_MS = 10 * 60 * 1000
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: process.env.NODE_ENV === 'development',
@@ -162,6 +164,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id
         token.sub = user.id
+        token.tokenRefreshedAt = Date.now()
       }
 
       try {
@@ -213,9 +216,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
           }
         }
+        token.tokenRefreshedAt = Date.now()
       } catch {
-        // Keep existing token values on DB error.
-        // 이때 token.sub 도 옛 값일 수 있다 — 다음 정상 조회에서 계정 id 로 다시 맞춰진다
+        // 짧은 DB 장애에는 직전 토큰을 유지하되, 마지막 정상 확인이 오래됐으면 세션을 끊는다.
+        // 유지하는 동안에는 계정 정지·멤버십 해제를 확인하지 못하므로 그 창을 제한해야
+        // 정지된 계정이 장애 중에 권한을 계속 쓰지 못한다 (DEV-4319 교차 리뷰).
+        const refreshedAt = typeof token.tokenRefreshedAt === 'number' ? token.tokenRefreshedAt : 0
+        if (Date.now() - refreshedAt > STALE_AUTH_GRACE_MS) return null
       }
 
       return token
