@@ -1,6 +1,6 @@
 {
   "name": "gpters-ai-toolkit",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "description": "GPTers AI Toolkit - 팀 스킬 검색, 세션 집계 및 MCP 연동 플러그인",
   "author": {
     "name": "GPTers",
