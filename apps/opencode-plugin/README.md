@@ -2,6 +2,10 @@
 
 GPTers OpenCode Plugin - OpenCode 확장 플러그인
 
+> **유지보수 중단 (2026-09-21 기록)** — 코드와 npm 패키지는 남겨 두지만 더 개발하지 않는다.
+> 운영 기록상 2026-03-10 이후 사용이 없고, 퍼블릭 npm 자동 발행 경로와 AX 사용량 수집이 모두 없다.
+> 자세한 근거는 `src/index.ts` 상단 주석과 Linear DEV-4483 참고.
+
 ## 설치
 
 ### macOS / Linux (Bash)

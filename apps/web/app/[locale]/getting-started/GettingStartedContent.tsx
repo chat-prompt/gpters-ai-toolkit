@@ -225,6 +225,10 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
 
 /**
  * OpenCode plugin tab content
+ *
+ * 플러그인은 유지보수 중단 상태다(2026-09-21 기록, DEV-4483 · `apps/opencode-plugin/src/index.ts` 참고).
+ * 탭은 지우지 않고 모든 사용자에게 보인다(2026-03-09 `18f096e9` 에서 INTERNAL_ONLY_TABS 를 비움).
+ * 안내하는 npm 버전은 수동 발행본이다.
  */
 function OpenCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
   const t = useTranslations('getting-started')
