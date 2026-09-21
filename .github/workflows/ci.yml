@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# 모든 작업은 저장소를 읽기만 한다. 저장소 기본 토큰 권한이 넓어져도 CI 가 따라가지 않게 명시한다.
+permissions:
+  contents: read
+
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
@@ -66,12 +70,19 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     env:
-      # 단위 테스트는 DB 를 목으로 대신한다. 전역 env 의 공유 DATABASE_URL 을 물려받지 않도록
-      # 닿을 수 없는 주소로 덮어써, 실수로 실제 DB 를 부르는 테스트가 있으면 공유 DB 대신 연결 실패로 드러나게 한다.
-      # 격리 PostgreSQL 테스트(*.postgres.test.ts)는 RUN_ISOLATED_*_TESTS=true 일 때만 돌고 여기서는 skip 된다.
+      # 단위 테스트는 외부 비밀값이 필요 없다. 워크플로 전역 env 의 비밀값을 이 작업에서는 모두 지운다
+      # — PR 브랜치의 테스트·스크립트 코드가 실행되는 작업이라 공유 DB·OAuth·세션 서명 키를 쥐여 주지 않는다.
+      # (turbo strict env 모드라 원래도 테스트 프로세스에는 전달되지 않지만, 설치 단계·turbo 상위 프로세스에는 남는다)
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:1/ci_unit_tests_no_db
+      GOOGLE_CLIENT_ID: ''
+      GOOGLE_CLIENT_SECRET: ''
+      AUTH_SECRET: ''
+      AUTH_URL: ''
+      # 격리 PostgreSQL 테스트(*.postgres.test.ts)는 RUN_ISOLATED_*_TESTS=true 일 때만 돌고 여기서는 skip 된다.
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
