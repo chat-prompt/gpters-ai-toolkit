@@ -19,6 +19,13 @@ interface ObservationConfig {
   runtimeRecords?: unknown[]
 }
 export interface ObservationScope { sessionsDir: string; projectSlugs?: string[]; codexThreadSource?: string }
+/** Fixed timing reasons the pinned helper may report with exit code 75. Anything else fails closed. */
+export const OBSERVATION_TIMING_REASONS = ['source-changed', 'partial-tail'] as const
+/** A timing reason: a source file changed or was still being written while the helper scanned it. */
+export type ObservationTimingReason = typeof OBSERVATION_TIMING_REASONS[number]
+/** Result when the window is sent without observability because of a timing failure. */
+export interface ObservationSkipped { skipped: ObservationTimingReason }
+class ObservationTimingError extends Error { constructor(readonly reason: ObservationTimingReason) { super('Observation timing failure') } }
 function readOwned(path: string, maximum: number, privateMode: boolean): Buffer {
   if (!isAbsolute(path)) throw new Error('Absolute path required')
   const parent = dirname(path), directory = lstatSync(parent)
@@ -84,7 +91,17 @@ async function runHelper(config: ObservationConfig, helper: Buffer, batch: Agent
     child.stdout.on('data', (chunk: Buffer) => { size += chunk.length; if (size > 512000) stop(); else output.push(chunk) })
     child.stderr.on('data', (chunk: Buffer) => { errorSize += chunk.length; if (errorSize > 64000) stop() })
     child.on('error', () => { clearTimeout(timer); reject(new Error('Bridge helper failed')) })
-    child.on('close', code => { clearTimeout(timer); if (failed || code !== 0) reject(new Error('Bridge helper failed')); else resolve(Buffer.concat(output).toString('utf8')) })
+    child.on('close', code => {
+      clearTimeout(timer)
+      if (!failed && code === 75) {
+        // Only the exact fixed reason is trusted; any other stdout on exit 75 is a helper failure.
+        const text = Buffer.concat(output).toString('utf8')
+        const reason = OBSERVATION_TIMING_REASONS.find(value => text === JSON.stringify({ observationUnavailable: value }))
+        if (reason) reject(new ObservationTimingError(reason))
+        else reject(new Error('Bridge helper failed'))
+      } else if (failed || code !== 0) reject(new Error('Bridge helper failed'))
+      else resolve(Buffer.concat(output).toString('utf8'))
+    })
     child.stdin.on('error', () => { /* close event owns the failure */ })
     const inputPipe = child.stdio[3] as Writable
     inputPipe.on('error', () => { /* close event owns the failure */ })
@@ -92,8 +109,19 @@ async function runHelper(config: ObservationConfig, helper: Buffer, batch: Agent
     child.stdin.end(helper)
   })
 }
-/** Canonical schema validation happens inside the pinned, reviewed self-contained helper. */
-export async function attachAgentObservability(batch: AgentTelemetryBatch, configPath: string, scope: ObservationScope): Promise<void> {
+/**
+ * Canonical schema validation happens inside the pinned, reviewed self-contained helper.
+ *
+ * Config, hash and scope checks run before the helper, so a timing result can only come from a
+ * verified helper. A timing failure (a source file changed during the scan) returns `{ skipped }` and
+ * the caller sends the window without observability; every other failure still throws (fail closed).
+ *
+ * @param batch - New batch to enrich in place
+ * @param configPath - Private observation config path
+ * @param scope - Existing collector scope
+ * @returns `{ skipped }` when this window's observation was omitted for a timing reason, otherwise undefined
+ */
+export async function attachAgentObservability(batch: AgentTelemetryBatch, configPath: string, scope: ObservationScope): Promise<ObservationSkipped | undefined> {
   try {
     if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Node24 required')
     if (batch.collection.observability !== undefined) throw new Error('Already enriched')
@@ -105,7 +133,9 @@ export async function attachAgentObservability(batch: AgentTelemetryBatch, confi
       || observation.schemaVersion !== 1 || observation.agentId !== batch.agentId || observation.source !== batch.collection.source
       || window?.startUtc !== batch.window.startUtc || window.endUtc !== batch.window.endUtc) throw new Error('Unexpected observation')
     batch.collection.observability = observation
-  } catch {
+    return undefined
+  } catch (cause) {
+    if (cause instanceof ObservationTimingError) return { skipped: cause.reason }
     // Never include a private source path, helper stderr, raw record or credentials in CLI output.
     throw new Error('Observation bridge failed; check Node24+, private config, artifact hash and source scope. No new batch was sent or checkpoint advanced.')
   }

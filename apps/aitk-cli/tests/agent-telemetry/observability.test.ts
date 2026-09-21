@@ -102,6 +102,43 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     if (reason === 'node22') Object.defineProperty(process.versions, 'node', { value: '22.0.0' })
     await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('Observation bridge failed'); expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
   })
+  it.each(['source-changed', 'partial-tail'])('sends the window without observability when a verified helper reports timing reason %s', async reason => {
+    fakeHelper(`process.stdout.write(JSON.stringify({observationUnavailable:'${reason}'})); process.exitCode=75`)
+    const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response() }))
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const result = await runAgentTelemetryCollect(opts())
+    expect(sent).toHaveLength(1); expect(JSON.parse(sent[0]).collection.observability).toBeUndefined()
+    expect(result.dryRun).toBe(false); expect(state().pending).toBeUndefined(); expect(state().committed.lastWindowEndUtc).toBe(now.toISOString())
+    expect(stderr.mock.calls.map(call => String(call[0])).join('')).toContain(`observation omitted for this window (${reason})`)
+  })
+  it('the actual bundled helper turns a still-being-written transcript into a timing skip, not a lost batch', async () => {
+    const project = join(sessions, 'project-a'); mkdirSync(project)
+    const record = JSON.stringify({ type: 'assistant', timestamp: '2026-01-02T12:00:00Z', message: { id: 'live', role: 'assistant', model: 'example', stop_reason: 'end_turn', usage: { input_tokens: 42, output_tokens: 1 } } })
+    writeFileSync(join(project, 'live.jsonl'), record + '\n' + record.slice(0, 20))
+    config({ source: 'claude-code', cliInventory: 'installed-scope' })
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response() }))
+    await runAgentTelemetryCollect({ ...opts(), source: 'claude-code', projectSlugs: 'project-a' })
+    expect(sent).toHaveLength(1); expect(JSON.parse(sent[0]).collection.observability).toBeUndefined(); expect(sent[0]).not.toContain(root)
+  })
+  it.each([
+    ['unknown reason', "process.stdout.write(JSON.stringify({observationUnavailable:'config'})); process.exitCode=75"],
+    ['extra stdout', "process.stdout.write(JSON.stringify({observationUnavailable:'source-changed', path:'/private/x'.repeat(30)})); process.exitCode=75"],
+    ['short extra key', "process.stdout.write(JSON.stringify({observationUnavailable:'source-changed', path:'/x'})); process.exitCode=75"],
+    ['integrity reason', "process.stdout.write(JSON.stringify({observationUnavailable:'stale-tail'})); process.exitCode=75"],
+    ['non-json stdout', "process.stdout.write('source-changed'); process.exitCode=75"],
+  ])('fails closed with no POST/checkpoint on exit 75 with %s', async (_label, code) => {
+    fakeHelper(code)
+    await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('Observation bridge failed'); expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
+  })
+  it('keeps a timing-skipped batch pending and replays it unchanged after an upload failure', async () => {
+    fakeHelper("process.stdout.write(JSON.stringify({observationUnavailable:'source-changed'})); process.exitCode=75")
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response(sent.length > 1) }))
+    await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('Pending batch was preserved')
+    expect(state().committed.lastWindowEndUtc).toBeNull(); expect(state().pending.batch.collection.observability).toBeUndefined()
+    await runAgentTelemetryCollect(opts()); expect(sent[1]).toBe(sent[0]); expect(state().pending).toBeUndefined()
+  })
   it.each(['exit', 'stdout', 'stderr'])('bounds helper %s failure and never exposes stderr', async kind => {
     fakeHelper(kind === 'stdout' ? "process.stdout.write('x'.repeat(512001))" : kind === 'stderr' ? "process.stderr.write('x'.repeat(64001))" : "process.stderr.write('/private/secret-fixture/raw-record'); process.exitCode=1")
     await expect(runAgentTelemetryCollect(opts())).rejects.toThrow(/^Observation bridge failed; check/); expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)

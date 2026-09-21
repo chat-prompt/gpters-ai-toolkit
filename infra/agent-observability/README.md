@@ -90,7 +90,11 @@ Repeated windows must be deduplicated by the surrounding authenticated batch
 pipeline, since this stateless helper deliberately keeps no hidden checkpoint.
 
 Files are opened read-only. Each read checks inode, size and modification time;
-a concurrent replacement/truncation is incomplete, never silently accepted.
+a concurrent replacement/truncation is incomplete, never silently accepted. For
+dynamically discovered files, growth of the same regular file (same inode, not
+shrunk, discovery-time prefix hash unchanged) is reported as the timing reason `source-changed` so the managed collector
+can omit that window's observation instead of dropping the usage batch;
+replacement, truncation and path changes stay scope failures (see `MANAGED-BRIDGE.md`).
 The default per-file limit is64MiB. Oversize input is rejected as incomplete;
 partition it into reviewed complete parts rather than silently dropping history.
 An incomplete final line is excluded and marks parse failure. Exact source/session

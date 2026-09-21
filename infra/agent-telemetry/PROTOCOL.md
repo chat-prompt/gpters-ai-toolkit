@@ -129,6 +129,12 @@ retry. If that cannot send, preserve the pending file/ID and diagnose it; do not
 remove it to bypass the gate. Do not reinstall or reset the checkpoint as an
 upgrade shortcut. Re-running a completed upgrade is safe.
 
+Pass a stable `--node-path` (for Homebrew, `/opt/homebrew/bin/node`). Without it the
+running executable's resolved path, such as a versioned `Cellar/node/<version>/bin/node`,
+is pinned and breaks on the next Node upgrade. Upgrade reloads the launchd job, whose
+`RunAtLoad` starts one collection immediately; confirm that run has exited
+(`launchctl list` shows no PID) before upgrading the next source or changing config.
+
 For a new fleet revision, the private rollout request enumerates the affected
 hosts/sources. Each host pulls the approved commit and applies this procedure.
 There is no unattended polling of GitHub `main`, and adding a new agent to
