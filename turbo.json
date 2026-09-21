@@ -1,40 +1,94 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["**/.env.*local"],
+  "globalDependencies": [
+    "**/.env.*local"
+  ],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
     "start": {
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "build"
+      ],
       "cache": false,
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$"
+      ]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$"
+      ]
     },
     "test:api": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$"
+      ],
+      "passThroughEnv": [
+        "TEST_API_URL",
+        "TEST_DATABASE_URL",
+        "CONFIRM_ISOLATED_API_TESTS",
+        "RUN_DB_TEST_CLEANUP",
+        "RONA_SERVICE_TOKEN",
+        "DATABASE_URL",
+        "CI"
+      ],
+      "cache": false
     },
     "test:e2e": {
-      "dependsOn": ["build"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "dependsOn": [
+        "build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$"
+      ],
+      "passThroughEnv": [
+        "PLAYWRIGHT_TEST_BASE_URL",
+        "TEST_DATABASE_URL",
+        "DATABASE_URL",
+        "AUTH_SECRET",
+        "AUTH_URL",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "CI"
+      ],
+      "cache": false
     },
     "typecheck": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$"
+      ]
     },
     "db:generate": {
       "cache": false
