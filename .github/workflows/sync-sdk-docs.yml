@@ -12,6 +12,9 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      # 전역 설치는 버전을 고정한다 — 액션 SHA 고정과 같은 이유(DEV-4478)
+      CHUB_VERSION: "0.1.4"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -25,7 +28,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install chub CLI
-        run: npm install -g @aisuite/chub
+        run: npm install -g "@aisuite/chub@${CHUB_VERSION}"
 
       - name: Run SDK docs sync
         run: cd packages/db && pnpm exec tsx scripts/sync-sdk-docs.ts

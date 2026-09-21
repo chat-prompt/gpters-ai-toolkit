@@ -1,0 +1,11 @@
+# 액션을 커밋 SHA 로 고정했으므로(DEV-4478) 보안 패치를 따라가려면 갱신 경로가 필요하다.
+# Dependabot 은 SHA 고정을 이해하고 주석의 태그까지 함께 올려 준다.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    open-pull-requests-limit: 3
