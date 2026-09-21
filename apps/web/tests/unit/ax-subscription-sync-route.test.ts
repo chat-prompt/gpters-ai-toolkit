@@ -129,6 +129,7 @@ describe('POST /api/ax/subscription-sync', () => {
     const queries = mocks.batch.mock.calls[0][0] as Query[]
     expect(queries.map((query) => query.op)).toEqual(['update', 'insert', 'delete'])
     expect(queries[0]).toMatchObject({ ids: 'a', values: { plan: 'Max20x', amount: '200.00', syncedAt: expect.any(Date) } })
+    expect(queries[0].values).not.toHaveProperty('note')
     expect(queries[1].values).toEqual([expect.objectContaining({ vendor: 'OpenAI', plan: 'Plus', ownerName: '이영희', amount: '20.00' })])
     expect(queries[2].ids).toEqual(['b'])
   })
