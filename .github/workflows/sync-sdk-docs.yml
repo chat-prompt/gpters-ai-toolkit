@@ -5,17 +5,21 @@ on:
     - cron: '30 17 * * *'  # 매일 KST 02:30 (모델 싱크 30분 후)
   workflow_dispatch:
 
+# 이 워크플로는 저장소를 읽기만 한다 (저장소 기본 토큰 권한이 넓어져도 따라가지 않게 명시)
+permissions:
+  contents: read
+
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
