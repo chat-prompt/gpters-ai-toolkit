@@ -1,6 +1,11 @@
 name: Release public packages
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/aitk-cli/package.json
   workflow_dispatch:
     inputs:
       package:
@@ -28,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.package == 'all' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"},{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]' || inputs.package == 'aitk' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || '[{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]') }}
+        include: ${{ fromJSON(github.event_name == 'push' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || inputs.package == 'all' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"},{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]' || inputs.package == 'aitk' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || '[{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]') }}
 
     steps:
       - name: Checkout
@@ -63,8 +68,15 @@ jobs:
 
       - name: Read package metadata
         id: package
+        env:
+          EXPECTED_PACKAGE_NAME: ${{ matrix.package }}
         run: |
+          PACKAGE_NAME="$(node -p "require('./${{ matrix.directory }}/package.json').name")"
           PACKAGE_VERSION="$(node -p "require('./${{ matrix.directory }}/package.json').version")"
+          if [ "$PACKAGE_NAME" != "$EXPECTED_PACKAGE_NAME" ]; then
+            echo "Package name mismatch: expected $EXPECTED_PACKAGE_NAME, got $PACKAGE_NAME" >&2
+            exit 1
+          fi
           echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check registry
@@ -73,11 +85,14 @@ jobs:
           PACKAGE_NAME: ${{ matrix.package }}
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         run: |
-          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+          if REGISTRY_RESULT="$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version 2>&1)"; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "$PACKAGE_NAME@$PACKAGE_VERSION already exists; skipping."
-          else
+          elif echo "$REGISTRY_RESULT" | grep -qE 'E404|404 Not Found'; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$REGISTRY_RESULT" >&2
+            exit 1
           fi
 
       - name: Publish
