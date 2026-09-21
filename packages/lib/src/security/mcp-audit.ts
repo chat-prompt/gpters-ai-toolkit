@@ -65,7 +65,7 @@ export interface McpAuditEntry {
   errorMessage?: string
   // Discovery analytics fields
   sessionId?: string          // MCP session ID for linking search → view flow
-  searchResults?: Array<{ itemId: string; rank: number; score: number }>
+  searchResults?: Array<{ itemId: string; rank: number; score: number; embeddingRank?: number; rerankScore?: number }>
   referralSource?: string     // 'search' | 'suggest' | 'direct' | 'browse'
 }
 

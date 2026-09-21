@@ -760,7 +760,7 @@ export const mcpAuditLogs = pgTable('mcp_audit_logs', {
   /** MCP session ID for linking search → view → install flow */
   sessionId: text('session_id'),
   /** Search result list snapshot [{itemId, rank, score}] */
-  searchResults: jsonb('search_results').$type<Array<{ itemId: string; rank: number; score: number }>>(),
+  searchResults: jsonb('search_results').$type<Array<{ itemId: string; rank: number; score: number; embeddingRank?: number; rerankScore?: number }>>(),
   /** How user arrived: 'search' | 'suggest' | 'direct' | 'browse' */
   referralSource: text('referral_source'),
 

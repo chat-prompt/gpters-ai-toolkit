@@ -1528,10 +1528,17 @@ export async function executeTool(
           ],
           _meta: {
             journeyId,
+            // rank는 최종(재랭킹 후) 순위다. 재랭킹 전 임베딩 순위와 JEV 점수를 같이 남긴다.
             searchResults: searchResult.items.map((item, idx) => ({
               itemId: item.id,
               rank: idx + 1,
               score: item.similarity ?? 0,
+              ...(searchResult.rerank && {
+                embeddingRank: searchResult.rerank.embeddingRanks[item.id],
+                ...(searchResult.rerank.scores?.[item.id] !== undefined && {
+                  rerankScore: searchResult.rerank.scores[item.id],
+                }),
+              }),
             })),
             referralSource: input._source === 'skill-suggest' ? 'suggest' : (input._source || 'direct'),
           },
