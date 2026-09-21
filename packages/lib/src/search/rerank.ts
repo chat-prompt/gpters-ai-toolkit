@@ -33,8 +33,11 @@ export const RERANK_THRESHOLDS = {
   jevTopAtLeast: 0.5,
   /** JEV 1등과 2등의 차이가 이보다 작으면 JEV도 가르지 못한 것으로 보고 원래 순서를 쓴다 */
   jevMarginAtLeast: 0.2,
-  /** JEV 호출 제한 시간(ms). 넘기면 원래 순서를 쓴다 */
-  timeoutMs: 2500,
+  /**
+   * JEV 호출 제한 시간(ms). 넘기면 기다리지 않고 원래 순서를 쓴다.
+   * 실측 대부분 220~280ms, 연결을 처음 맺는 호출만 700~860ms였다. 실험 기능이 검색을 오래 붙잡지 않게 짧게 둔다.
+   */
+  timeoutMs: 800,
 } as const
 
 /** 후보에서 JEV state로 보낼 설명의 최대 길이(자) */
