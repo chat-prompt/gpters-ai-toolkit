@@ -113,6 +113,13 @@ describe.each([
     expect(await callbacks.jwt({ token: { sub: 'account-1', email: 'member@gpters.org', role: 'admin' } })).toBeNull()
   })
 
+  it('does not trust a future verification time during an outage', async () => {
+    mocks.dbDown = true
+    const skewed = { sub: 'account-1', email: 'member@gpters.org', role: 'admin', tokenRefreshedAt: Date.now() + 60 * 60_000 }
+
+    expect(await callbacks.jwt({ token: skewed })).toBeNull()
+  })
+
   it('still rejects a suspended account instead of repairing its token', async () => {
     mocks.results = [[{ id: 'account-1', role: 'admin', accountStatus: 'suspended' }]]
 

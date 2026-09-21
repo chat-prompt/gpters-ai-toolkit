@@ -254,7 +254,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // 유지하는 동안에는 계정 정지·멤버십 해제를 확인하지 못하므로 그 창을 제한해야
         // 정지된 계정이 장애 중에 권한을 계속 쓰지 못한다 (DEV-4319 교차 리뷰).
         const refreshedAt = typeof token.tokenRefreshedAt === 'number' ? token.tokenRefreshedAt : 0
-        if (Date.now() - refreshedAt > STALE_AUTH_GRACE_MS) return null
+        const age = Date.now() - refreshedAt
+        // 미래 시각은 서명된 토큰이라도 믿지 않는다 — 시계 차이만큼 유예가 늘어나면 안 된다
+        if (age < 0 || age > STALE_AUTH_GRACE_MS) {
+          log.warn('계정 확인 실패가 유예를 넘겨 세션을 끊는다', { email: token.email, age })
+          return null
+        }
       }
 
       return token
