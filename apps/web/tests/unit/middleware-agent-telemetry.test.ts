@@ -23,6 +23,10 @@ describe('agent telemetry middleware boundary', () => {
     expect(isPublicRoute('/api/ax/task-expectations')).toBe(true)
     expect(isPublicRoute('/api/ax/task-expectations/extra')).toBe(false)
     expect(isPublicRoute('/api/ax/task-expectations-extra')).toBe(false)
+    expect(isPublicRoute('/api/ax/subscription-sync')).toBe(true)
+    expect(isPublicRoute('/en/api/ax/subscription-sync')).toBe(true)
+    expect(isPublicRoute('/api/ax/subscription-sync/extra')).toBe(false)
+    expect(isPublicRoute('/api/ax/subscription-sync-extra')).toBe(false)
     expect(isPublicRoute('/api/ax/incident-review')).toBe(false)
     expect(isPublicRoute('/api/ax/agent-incidents')).toBe(false)
 

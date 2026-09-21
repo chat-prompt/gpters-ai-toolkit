@@ -69,6 +69,8 @@ export function isPublicRoute(pathname: string): boolean {
     // Keep dashboard reads and human review writes behind the session boundary.
     strippedPath === '/api/ax/agent-reports' ||
     strippedPath === '/api/ax/task-expectations' ||
+    // 구독 로스터 동기화는 전용 Bearer 토큰을 라우트 안에서 검사한다(뽀밋이 전용).
+    strippedPath === '/api/ax/subscription-sync' ||
     /^\/api\/ax\/agent-reports\/report_[a-f0-9]{32}$/.test(strippedPath) ||
     strippedPath === '/api/agents/credentials' ||
     strippedPath === '/api/agents/mcp' ||

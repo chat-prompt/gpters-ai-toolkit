@@ -8,6 +8,8 @@ import {
   parseRosterCsv,
   planRosterSync,
   subscriptionKey,
+  summarizeRosterSync,
+  type ExistingSubscriptionValues,
 } from '../../../../packages/db/scripts/lib/ax-subscription-roster'
 
 const HEADER = 'name,slack_id,account,plan,price_usd,renewal_day,payer,card_last4'
@@ -79,5 +81,48 @@ describe('planRosterSync', () => {
     expect(subscriptionKey({ vendor: 'OpenAI', plan: 'Pro', ownerName: 'a', renewalDay: 1 })).not.toBe(
       subscriptionKey({ vendor: 'Anthropic', plan: 'Pro', ownerName: 'a', renewalDay: 1 })
     )
+  })
+})
+
+describe('summarizeRosterSync', () => {
+  const existingRow = (id: string, ownerName: string, plan: string, renewalDay: number, amount = '200.00'): ExistingSubscriptionValues => ({
+    id, vendor: 'Anthropic', plan, ownerName, renewalDay, payer: '본인', amount, currency: 'USD', billingCycle: 'monthly', status: 'active', note: null,
+  })
+  const roster = (lines: string[]) => parseRosterCsv([HEADER, ...lines].join('\n')).rows
+
+  it('counts only rows whose values changed and reports no amounts', () => {
+    const existing = [existingRow('a', '홍길동', 'Max20x', 6), existingRow('b', '김철수', 'Max5x', 14, '100.00')]
+    const rows = roster(['홍길동,,anthropic,Max20x,200,6,본인,', '김철수,,anthropic,Max5x,100,14,현진우,'])
+    const summary = summarizeRosterSync(planRosterSync(rows, existing), existing)
+
+    expect(summary.counts).toEqual({ update: 1, insert: 0, remove: 0 })
+    expect(summary.updated).toEqual([{ vendor: 'Anthropic', plan: 'Max5x', ownerName: '김철수', renewalDay: 14 }])
+    expect(summary.unchanged).toBe(false)
+    const { planHash: _planHash, ...shown } = summary
+    expect(JSON.stringify(shown)).not.toMatch(/amount|200|100\.00/)
+  })
+
+  it('treats a plan change as one removal and one insertion', () => {
+    const existing = [existingRow('a', '홍길동', 'Max5x', 14, '100.00')]
+    const summary = summarizeRosterSync(planRosterSync(roster(['홍길동,,anthropic,Max20x,200,3,본인,']), existing), existing)
+
+    expect(summary.counts).toEqual({ update: 0, insert: 1, remove: 1 })
+    expect(summary.removed).toEqual([{ vendor: 'Anthropic', plan: 'Max5x', ownerName: '홍길동', renewalDay: 14 }])
+    expect(summary.inserted).toEqual([{ vendor: 'Anthropic', plan: 'Max20x', ownerName: '홍길동', renewalDay: 3 }])
+  })
+
+  it('gives the same hash for the same plan and a different hash when the DB or roster moves', () => {
+    const existing = [existingRow('a', '홍길동', 'Max20x', 6)]
+    const rows = roster(['홍길동,,anthropic,Max20x,200,6,본인,'])
+    const first = summarizeRosterSync(planRosterSync(rows, existing), existing)
+
+    expect(first.unchanged).toBe(true)
+    expect(first.planHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(summarizeRosterSync(planRosterSync(rows, existing), existing).planHash).toBe(first.planHash)
+
+    const grown = [...existing, existingRow('b', '김철수', 'Pro', 1, '20.00')]
+    expect(summarizeRosterSync(planRosterSync(rows, grown), grown).planHash).not.toBe(first.planHash)
+    const repriced = roster(['홍길동,,anthropic,Max20x,220,6,본인,'])
+    expect(summarizeRosterSync(planRosterSync(repriced, existing), existing).planHash).not.toBe(first.planHash)
   })
 })
