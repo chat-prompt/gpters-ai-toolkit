@@ -1229,7 +1229,7 @@ export const axSubscriptionStatusEnum = pgEnum('ax_subscription_status', ['activ
 /**
  * 팀원별 구독 현황 (AX 대시보드)
  *
- * 결제내역 트래커 시트가 SSOT이고, 이 테이블은 대시보드가 읽는 사본이다.
+ * 「지니파이(주) 결제 내역」 `구독 로스터` 탭이 SSOT이고, 이 테이블은 대시보드가 읽는 사본이다.
  * `pnpm --filter @gpters/db exec tsx scripts/import-ax-subscriptions.ts <csv>` 로 갱신한다.
  *
  * 개인 식별 데이터(ownerName/payer)를 담으므로 API는 관리자에게만 행 단위로 내려주고,
