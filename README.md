@@ -322,18 +322,19 @@ pnpm db:studio      # Drizzle Studio
 | claude-code-plugin | Git push → 마켓플레이스 자동 반영 (새 세션부터) |
 | AITK CLI | 내부 에이전트: repo 빌드 → 영속 사용자 경로 / 외부 배포: `main` 버전 변경 → npm public 자동 반영 (`@gpters/aitk`) |
 | opencode-plugin | `npm publish` → npm public (`@gpters/opencode`) |
-| codex-plugin | 서버 검증 후 GitHub Actions 승인 실행 → npm public (`@gpters/codex-plugin`) |
+| codex-plugin | `main` 버전 변경 → npm public 자동 반영 (`@gpters/codex-plugin`) |
 | 웹 (Next.js) | Git push → Vercel 자동 배포 |
 
 공개 패키지 릴리스는 `.github/workflows/release-public-packages.yml`이 담당합니다.
 npm의 Trusted Publisher(OIDC)를 사용하므로 장기 `NPM_TOKEN` secret은 두지 않습니다.
 각 npm 패키지 설정에 GitHub 조직 `chat-prompt`, 저장소 `gpters-ai-toolkit`, workflow
 `release-public-packages.yml`을 publisher로 한 번 등록해야 하며, 같은 버전이 이미
-레지스트리에 있으면 해당 패키지는 건너뜁니다. AITK CLI는
-`apps/aitk-cli/package.json`의 버전 변경이 `main`에 반영되면 자동으로 테스트·타입
-검사·빌드 후 npm에 발행됩니다. 수동 실행 시 `aitk`, `codex-plugin`,
-`all` 중 승인받은 배포 대상만 선택하며 기본값은 `aitk`입니다. 두 패키지를 함께
-승인받지 않았다면 `all`을 선택하지 않습니다. 서버 변경과 연동되는 AITK 배포는
+레지스트리에 있으면 해당 패키지는 건너뜁니다. AITK CLI 또는 Codex 플러그인의
+`package.json` 버전 변경이 `main`에 반영되면 두 npm 패키지를 모두 검사하고, 새 버전만
+자동으로 테스트·타입 검사·빌드 후 발행합니다. Claude Code 플러그인은
+`apps/claude-code-plugin/.claude-plugin/plugin.json`의 버전을 올려 `main`에 반영하면
+마켓플레이스에서 갱신되며 새 세션부터 적용됩니다. 수동 실행 시 `aitk`, `codex-plugin`,
+`all` 중 승인받은 배포 대상만 선택하며 기본값은 `aitk`입니다. 서버 변경과 연동되는 AITK 배포는
 기존 서버와 호환되도록 구성한 뒤 버전 변경을 `main`에 반영합니다.
 내부 에이전트 텔레메트리는 npm 공개를 기다리지 않고
 `infra/agent-telemetry/install-from-repo.sh`로 설치하며, 공개 패키지가 필요한

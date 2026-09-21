@@ -6,11 +6,16 @@ const workflow = readFileSync(
   'utf8'
 )
 
-describe('AITK npm release workflow', () => {
-  it('main의 AITK 버전 변경으로 자동 실행된다', () => {
-    expect(workflow).toMatch(/push:\s+branches:\s+- main\s+paths:\s+- apps\/aitk-cli\/package\.json/)
+describe('public npm release workflow', () => {
+  it('main의 AITK 또는 Codex 플러그인 버전 변경으로 두 npm 패키지를 확인한다', () => {
+    expect(workflow).toMatch(
+      /push:\s+branches:\s+- main\s+paths:\s+- apps\/aitk-cli\/package\.json\s+- apps\/codex-plugin\/package\.json/
+    )
     expect(workflow).toContain(
-      `github.event_name == 'push' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]'`
+      `github.event_name == 'push' || inputs.package == 'all'`
+    )
+    expect(workflow).toContain(
+      `'[{"package":"@gpters/aitk","directory":"apps/aitk-cli"},{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]'`
     )
   })
 

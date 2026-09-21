@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - apps/aitk-cli/package.json
+      - apps/codex-plugin/package.json
   workflow_dispatch:
     inputs:
       package:
@@ -33,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(github.event_name == 'push' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || inputs.package == 'all' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"},{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]' || inputs.package == 'aitk' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || '[{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]') }}
+        include: ${{ fromJSON((github.event_name == 'push' || inputs.package == 'all') && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"},{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]' || inputs.package == 'aitk' && '[{"package":"@gpters/aitk","directory":"apps/aitk-cli"}]' || '[{"package":"@gpters/codex-plugin","directory":"apps/codex-plugin"}]') }}
 
     steps:
       - name: Checkout
