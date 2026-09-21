@@ -1,4 +1,4 @@
-import { agentObservabilitySchema } from './agent-observability-contract'
+import { agentObservabilitySchema, OBSERVATION_FAILURE_REASONS } from './agent-observability-contract'
 import { agentTaskEventSchema } from './agent-task-events'
 /** 개인정보를 받지 않는 에이전트 delta telemetry v1 계약 */
 
@@ -84,6 +84,7 @@ export const axAgentTelemetryBatchSchema = z.object({
   collection: z.object({
     taskEvents: z.array(agentTaskEventSchema).max(500).optional(),
     observability: agentObservabilitySchema.optional(),
+    observabilityFailure: z.enum(OBSERVATION_FAILURE_REASONS).optional(),
     source: sourceSchema,
     filesDiscovered: nonNegativeInt,
     filesExcludedByScope: nonNegativeInt,
@@ -110,6 +111,9 @@ export const axAgentTelemetryBatchSchema = z.object({
     if (Date.parse(event.atUtc) > Date.parse(batch.collectedAtUtc)) ctx.addIssue({ code: 'custom', path: ['collection','taskEvents'], message: 'Task event cannot be in the future' })
   }
   const observation = batch.collection.observability
+  if (observation && batch.collection.observabilityFailure) {
+    ctx.addIssue({code:'custom',path:['collection','observabilityFailure'],message:'A window has either an observation or an observation failure, not both'})
+  }
   if (observation && (observation.agentId !== batch.agentId || observation.source !== batch.collection.source ||
     Date.parse(observation.window.startUtc) !== Date.parse(batch.window.startUtc) ||
     Date.parse(observation.window.endUtc) !== Date.parse(batch.window.endUtc))) {

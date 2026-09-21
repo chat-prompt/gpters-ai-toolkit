@@ -84,4 +84,30 @@ describe('observation panel scope and missingness',()=>{
   fireEvent.click(screen.getByRole('button',{name:'다시 시도'}));await screen.findByText('첫 턴 입력')
   expect(fetch.mock.calls.map(call=>call[0])).toEqual(['/api/ax/agent-observations?days=7','/api/ax/agent-observations?days=7'])
  })
+ it('shows boot-file health and windows sent without observability without inventing zeros',async()=>{
+  const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:3,truncatedSessions:0,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:29500,largestFileCharsLatest:27482,fileCharsLimit:32000}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
+  const withBoot={...data,streams:[{...data.streams[0],adapterVersion:'3',summary:boot},data.streams[0]],coverage:{...data.coverage,observationFailures:[{agentId:'example-agent',source:'codex',reason:'source-changed' as const,windows:4},{agentId:'example-agent',source:'codex',reason:'partial-tail' as const,windows:1}]}}
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(withBoot)));render(<AgentObservationPanel days={7}/>)
+  await screen.findByText(/부팅 파일: 가장 큰 파일 27,482자 \/ 한도 32,000자 \(85\.9%\)/)
+  expect(screen.getByText(/상한 근접 2세션/)).toBeTruthy()
+  expect(screen.getAllByText(/관측 없이 보낸 구간 5개 \(수집 중 파일 변경 4 · 쓰는 중 파일 1\)/)).toHaveLength(1)
+  expect(screen.getAllByText(/부팅 파일:/)).toHaveLength(1)
+ })
+ it('shows failures of an agent/source that has no observation card, including when no stream exists',async()=>{
+  const orphan={...data,streams:[],coverage:{...data.coverage,totalStreams:0,observationFailures:[{agentId:'busy-agent',source:'claude-code',reason:'source-changed' as const,windows:24}],observationFailureTotals:[{agentId:'busy-agent',source:'claude-code',windows:24}]}}
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(orphan)));render(<AgentObservationPanel days={7}/>)
+  await screen.findByText(/관측 없이 보낸 구간 24개 \(수집 중 파일 변경 24\)/)
+  expect(screen.getByText('busy-agent · claude-code')).toBeTruthy()
+ })
+ it('omits the percentage when the per-file limit is unknown',async()=>{
+  const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:1,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:100,largestFileCharsLatest:100,fileCharsLimit:null}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],summary:boot}]})));render(<AgentObservationPanel days={7}/>)
+  const line=await screen.findByText(/부팅 파일: 가장 큰 파일 100자 · 잘림/)
+  expect(line.textContent).not.toContain('%')
+ })
+ it('totals unique failed windows rather than summing reasons',async()=>{
+  const failed={...data,coverage:{...data.coverage,observationFailures:[{agentId:'example-agent',source:'codex',reason:'source-changed' as const,windows:1},{agentId:'example-agent',source:'codex',reason:'partial-tail' as const,windows:1}],observationFailureTotals:[{agentId:'example-agent',source:'codex',windows:1}]}}
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(failed)));render(<AgentObservationPanel days={7}/>)
+  await screen.findByText(/관측 없이 보낸 구간 1개 \(수집 중 파일 변경 1 · 쓰는 중 파일 1\)/)
+ })
 })

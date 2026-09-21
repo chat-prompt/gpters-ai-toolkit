@@ -1,4 +1,9 @@
 'use client'
+
+/**
+ * AX 실행 관측 지표 패널 — 수집기가 보낸 구간별 관측(첫 턴·최대 입력·도구 결과·부팅 파일)을 보여 준다.
+ * 결측은 0 이 아니라 상태 단어로, 관측 없이 보낸 구간은 사유별 개수로 표시한다.
+ */
 import { useEffect, useState } from 'react'
 import styles from './AgentObservationPanel.module.css'
 import type { AgentObservationData, ObservationMetric, ObservationSummary } from '@/lib/features/ax'
@@ -14,6 +19,22 @@ const metrics: Array<{key:ObservationMetric;label:string;unit:string}>=[
 const capabilityText={supported:'관측',unsupported:'미지원',uncollected:'미수집',incomplete:'불완전'}
 const number=(value:number)=>value.toLocaleString('ko-KR',{maximumFractionDigits:1})
 const when=(value:string)=>new Date(value).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})
+const failureText={'source-changed':'수집 중 파일 변경','partial-tail':'쓰는 중 파일'} as const
+/** Boot-file health line: the largest injected file against the per-file limit, and truncation/near-limit snapshots. */
+function BootstrapLine({summary}:{summary:ObservationSummary}){
+  const value=summary.metrics.bootstrap,capability=summary.metricCapabilities.bootstrap
+  if(capability===undefined)return null
+  const text=!value?capabilityText[capability]:!value.sessions?'이 기간에 부팅 스냅샷 없음'
+    :`가장 큰 파일 ${number(value.largestFileCharsLatest!)}자${value.fileCharsLimit?` / 한도 ${number(value.fileCharsLimit)}자 (${number(value.largestFileCharsLatest!/value.fileCharsLimit*100)}%)`:''} · 잘림 ${value.truncatedSessions}세션 · 상한 근접 ${value.nearLimitSessions}세션 · 경고 ${value.warningSessions}세션 · 스냅샷 ${value.sessions}개 · 기간 최대 ${number(value.largestFileCharsMax!)}자`
+  return <p className={`mt-1 text-xs ${value&&value.truncatedSessions>0?styles.attention:'text-[var(--text-secondary)]'}`}>부팅 파일: {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
+}
+/** Windows sent without observability for a timing reason; usage for those windows was still collected. */
+function FailureLine({failures,total}:{failures:NonNullable<AgentObservationData['coverage']['observationFailures']>;total?:number}){
+  if(!failures.length)return null
+  // The total counts unique windows; a window stored with two reasons is one window, not two.
+  total??=failures.reduce((a,f)=>a+f.windows,0)
+  return <p className="mt-1 text-xs text-[var(--text-secondary)]">관측 없이 보낸 구간 {total}개 ({failures.map(f=>`${failureText[f.reason]} ${f.windows}`).join(' · ')}) — 그 구간의 사용량은 수집됨</p>
+}
 function MetricValue({summary,metric}:{summary:ObservationSummary;metric:typeof metrics[number]}){
   const value=summary.metrics[metric.key],capability=summary.metricCapabilities[metric.key]
   return <div className="min-w-0 rounded border border-[var(--border-subtle)] p-3">
@@ -55,10 +76,17 @@ function ObservationPanelContent({days,agentId,refreshToken}:{days:7|30|90;agent
     {data&&<>
       {(data.coverage.truncated||data.coverage.rowsTruncated)&&<p className={`text-xs ${styles.attention}`}>조회 한도에 도달했습니다. {data.coverage.totalStreams}개 관측 그룹 중 최근 {data.streams.length}개를 표시합니다.{data.coverage.rowsTruncated?' 원본 배치도 일부만 조회되어 비교 근거가 불완전합니다.':''}</p>}
       {(data.coverage.invalidRows>0||data.coverage.excludedBoundaryWindows>0)&&<p className="text-xs text-[var(--text-secondary)]">검증되지 않은 배치 {data.coverage.invalidRows}개 · 조회 경계를 걸친 배치 {data.coverage.excludedBoundaryWindows}개 제외</p>}
+      {/* Failures of an agent/source with no observation card (every window failed, or past the stream cap) still show. */}
+      {(()=>{const orphans=(data.coverage.observationFailures??[]).filter(f=>!data.streams.some(row=>row.agentId===f.agentId&&row.source===f.source))
+        const groups=[...new Set(orphans.map(f=>JSON.stringify([f.agentId,f.source])))].map(key=>JSON.parse(key) as [string,string])
+        return groups.map(([agent,source])=><div key={`${agent}:${source}`} className="rounded-lg border border-[var(--border-subtle)] p-4"><h4 className="break-all text-sm font-medium text-[var(--text-primary)]">{agent} · {source}</h4><FailureLine failures={orphans.filter(f=>f.agentId===agent&&f.source===source)} total={data.coverage.observationFailureTotals?.find(t=>t.agentId===agent&&t.source===source)?.windows}/></div>)})()}
       {!data.streams.length?<p className="py-4 text-sm text-[var(--text-secondary)]">이 기간에 적재된 실행 관측 지표가 없습니다. 수집기 연동 후 새 보고부터 표시됩니다.</p>:<>
-        <div className="space-y-4">{data.streams.map(row=><article key={`${row.agentId}:${row.source}:${row.adapterVersion}`} className="rounded-lg border border-[var(--border-subtle)] p-4">
+        <div className="space-y-4">{data.streams.map((row,index)=><article key={`${row.agentId}:${row.source}:${row.adapterVersion}`} className="rounded-lg border border-[var(--border-subtle)] p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2"><h4 className="break-all text-sm font-medium text-[var(--text-primary)]">{row.agentId} · {row.source}</h4><span className="text-xs text-[var(--text-secondary)]">관측 규격 {row.adapterVersion} · 최근 수집 {when(row.latestAt)}</span></div>
           <p className="mt-2 text-xs text-[var(--text-secondary)]">{row.summary.windows}개 구간 · {row.summary.completeWindow?'조회 기간 전체 관측':'조회 기간에 빈 구간 있음'}{row.excludedOverlaps||row.conflictingWindows?` · 겹침 ${row.excludedOverlaps}개 / 충돌 ${row.conflictingWindows}개 제외`:''}</p>
+          <BootstrapLine summary={row.summary}/>
+          {/* Failure windows carry no adapter version; show them once, on the newest card of the agent/source. */}
+          {data.streams.findIndex(other=>other.agentId===row.agentId&&other.source===row.source)===index&&<FailureLine failures={(data.coverage.observationFailures??[]).filter(f=>f.agentId===row.agentId&&f.source===row.source)} total={data.coverage.observationFailureTotals?.find(t=>t.agentId===row.agentId&&t.source===row.source)?.windows}/>}
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{metrics.map(metric=><MetricValue key={metric.key} summary={row.summary} metric={metric}/>)}</div>
           <details className="mt-3 text-xs text-[var(--text-secondary)]"><summary className="cursor-pointer">수집 구간별 표본 보기</summary>
             {row.pointsTruncated&&<p className="mt-2">상세 목록은 최근 200개 구간입니다. 위 합계는 검증된 전체 구간을 포함합니다.</p>}
