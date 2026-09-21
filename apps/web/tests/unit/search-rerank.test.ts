@@ -27,7 +27,9 @@ import {
   buildJevRequest,
   isEmbeddingConfident,
   isJevDecisive,
+  isRerankAvailable,
   rerankCandidates,
+  resetRerankCooldown,
   type RerankCandidate,
 } from '../../../../packages/lib/src/search/rerank'
 import { semanticSearch } from '../../../../packages/lib/src/search/vector-search'
@@ -46,6 +48,8 @@ function jevResponse(nouls: number[]) {
 }
 
 const bunched = [candidate('kakao', 0.405), candidate('slack-archive', 0.388), candidate('epub', 0.387)]
+
+beforeEach(() => resetRerankCooldown())
 
 describe('rerank decisions', () => {
   it('treats a clear embedding gap as confident', () => {
@@ -94,6 +98,32 @@ describe('rerankCandidates', () => {
     const out = await rerankCandidates('q', bunched, { apiKey: 'k', fetchImpl })
     expect(out).toMatchObject({ applied: false, skipReason: 'jev_error' })
     expect(out.items).toBe(bunched)
+  })
+
+  it('pauses JEV after an error so the next searches skip it immediately', async () => {
+    const failing = vi.fn(async () => new Response('bad key', { status: 401 })) as unknown as typeof fetch
+    expect((await rerankCandidates('q', bunched, { apiKey: 'k', fetchImpl: failing })).skipReason).toBe('jev_error')
+
+    const next = jevResponse([0.04, 0.87, 0.1])
+    const out = await rerankCandidates('q', bunched, { apiKey: 'k', fetchImpl: next })
+    expect(out).toMatchObject({ applied: false, skipReason: 'jev_cooldown' })
+    expect(next).not.toHaveBeenCalled()
+
+    vi.stubEnv('TYPESAFE_API_KEY', 'k')
+    expect(isRerankAvailable()).toBe(false)
+    expect(isRerankAvailable(Date.now() + RERANK_THRESHOLDS.errorCooldownMs + 1)).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
+  it('does not pause JEV after a timeout', async () => {
+    const slow = vi.fn(async () => {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+    }) as unknown as typeof fetch
+    const out = await rerankCandidates('q', bunched, { apiKey: 'k', fetchImpl: slow })
+    expect(out).toMatchObject({ applied: false, skipReason: 'jev_timeout' })
+
+    const next = jevResponse([0.04, 0.87, 0.1])
+    expect((await rerankCandidates('q', bunched, { apiKey: 'k', fetchImpl: next })).applied).toBe(true)
   })
 
   it('falls back when an answer is missing', async () => {
@@ -147,6 +177,19 @@ describe('semanticSearch with rerank', () => {
     vi.stubGlobal('fetch', jevResponse([]))
     await semanticSearch({ query: 'slack summary', limit: 20, queryEmbedding: [0.1] })
     expect(limitCalls).toEqual([40])
+  })
+
+  it('searches the old way during the error pause', async () => {
+    vi.stubEnv('TYPESAFE_API_KEY', 'k')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('overloaded', { status: 529 })))
+    const first = await semanticSearch({ query: 'slack summary', limit: 5, queryEmbedding: [0.1] })
+    expect(first.rerank).toMatchObject({ applied: false, skipReason: 'jev_error' })
+
+    limitCalls.length = 0
+    const second = await semanticSearch({ query: 'slack summary', limit: 5, queryEmbedding: [0.1] })
+    expect(limitCalls).toEqual([5])
+    expect(second.rerank).toBeUndefined()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('skips reranking when the caller opts out', async () => {

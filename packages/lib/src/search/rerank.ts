@@ -6,6 +6,7 @@
  *
  * - 후보는 한 요청에 묶어 보낸다. 나눠 보내면 후보끼리 비교가 안 돼 점수가 뭉갠다(2026-09-21 실측).
  * - 키가 없거나, 호출이 실패하거나, JEV도 확신하지 못하면 원래 순서를 그대로 쓴다.
+ * - JEV가 오류를 돌려주면(시간 초과 제외) 일정 시간 JEV를 부르지 않고 곧바로 기존 방식으로 검색한다.
  * - 문턱은 절대값 하나가 아니라 1등 점수와 (1등−2등) 여유를 같이 본다.
  *
  * 문턱값의 근거는 `docs/plans/2026-09-21-rerank-thresholds.md`에 있다.
@@ -38,7 +39,36 @@ export const RERANK_THRESHOLDS = {
    * 실측 대부분 220~280ms, 연결을 처음 맺는 호출만 700~860ms였다. 실험 기능이 검색을 오래 붙잡지 않게 짧게 둔다.
    */
   timeoutMs: 800,
+  /** JEV가 오류를 돌려준 뒤(시간 초과 제외) JEV를 부르지 않는 시간(ms) */
+  errorCooldownMs: 5 * 60 * 1000,
 } as const
+
+/** 마지막 JEV 오류 이후 JEV를 다시 불러도 되는 시각 (프로세스 단위) */
+let jevDisabledUntil = 0
+
+/**
+ * JEV를 지금 불러도 되는지 — 키가 있고 오류 휴지 시간이 아닐 때만 true.
+ *
+ * vector-search는 이 값이 false면 후보를 넓게 뽑지도 않고 기존 방식으로 검색한다.
+ *
+ * @param now - 현재 시각(ms), 테스트용
+ * @returns 재랭킹을 시도해도 되면 true
+ */
+export function isRerankAvailable(now: number = Date.now()): boolean {
+  return Boolean(process.env.TYPESAFE_API_KEY) && now >= jevDisabledUntil
+}
+
+/**
+ * 오류 휴지 상태를 초기화한다 (테스트용).
+ */
+export function resetRerankCooldown(): void {
+  jevDisabledUntil = 0
+}
+
+/** 시간 초과로 끊긴 호출인지 — 느린 것은 오류로 치지 않는다 */
+function isTimeout(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
+}
 
 /** 후보에서 JEV state로 보낼 설명의 최대 길이(자) */
 const MAX_DESCRIPTION_CHARS = 400
@@ -67,6 +97,8 @@ export type RerankSkipReason =
   | 'too_few_candidates'
   | 'embedding_confident'
   | 'jev_error'
+  | 'jev_timeout'
+  | 'jev_cooldown'
   | 'jev_uncertain'
 
 /**
@@ -178,6 +210,7 @@ export async function rerankCandidates<T extends RerankCandidate>(
 ): Promise<RerankOutcome<T>> {
   const apiKey = options.apiKey ?? process.env.TYPESAFE_API_KEY
   if (!apiKey) return { items: candidates, applied: false, skipReason: 'no_api_key' }
+  if (Date.now() < jevDisabledUntil) return { items: candidates, applied: false, skipReason: 'jev_cooldown' }
   if (candidates.length < 2) return { items: candidates, applied: false, skipReason: 'too_few_candidates' }
   if (isEmbeddingConfident(candidates)) {
     return { items: candidates, applied: false, skipReason: 'embedding_confident' }
@@ -203,11 +236,14 @@ export async function rerankCandidates<T extends RerankCandidate>(
     })
   } catch (err) {
     const jevMs = Date.now() - start
-    log.warn('Rerank skipped: JEV call failed', {
+    const timedOut = isTimeout(err)
+    if (!timedOut) jevDisabledUntil = Date.now() + RERANK_THRESHOLDS.errorCooldownMs
+    log.warn(timedOut ? 'Rerank skipped: JEV timed out' : 'Rerank skipped: JEV call failed, pausing JEV', {
       jevMs,
       error: err instanceof Error ? err.message : String(err),
+      ...(!timedOut && { cooldownMs: RERANK_THRESHOLDS.errorCooldownMs }),
     })
-    return { items: candidates, applied: false, skipReason: 'jev_error', jevMs }
+    return { items: candidates, applied: false, skipReason: timedOut ? 'jev_timeout' : 'jev_error', jevMs }
   }
   const jevMs = Date.now() - start
 

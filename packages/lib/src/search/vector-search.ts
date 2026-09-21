@@ -2,7 +2,7 @@ import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
 import { sql, eq, and, or, gt, desc } from 'drizzle-orm'
 import { cosineDistance } from 'drizzle-orm'
 import { generateEmbedding } from './embedding'
-import { rerankCandidates, type RerankSkipReason } from './rerank'
+import { isRerankAvailable, rerankCandidates, type RerankSkipReason } from './rerank'
 import { createLogger } from '../core/logger'
 import type { ItemType } from '../core/types'
 
@@ -31,7 +31,7 @@ export interface SemanticSearchOptions {
   queryEmbedding?: number[]
   /**
    * 임베딩 점수가 뭉칠 때 JEV로 재랭킹할지 (기본 true).
-   * `TYPESAFE_API_KEY`가 없으면 이 값과 무관하게 재랭킹하지 않는다.
+   * `TYPESAFE_API_KEY`가 없거나 JEV 오류 휴지 중이면 이 값과 무관하게 기존 방식으로 검색한다.
    */
   rerank?: boolean
 }
@@ -81,7 +81,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     rerank = true,
   } = options
 
-  const rerankEnabled = rerank && Boolean(process.env.TYPESAFE_API_KEY)
+  const rerankEnabled = rerank && isRerankAvailable()
   const fetchLimit = rerankEnabled
     ? Math.min(Math.max(limit * RERANK_OVERFETCH_FACTOR, limit), RERANK_MAX_CANDIDATES)
     : limit
