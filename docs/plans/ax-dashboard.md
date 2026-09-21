@@ -82,7 +82,7 @@ API는 라우트 하나가 레지스트리를 타고 처리한다.
 | 스킬 › 보유 스킬 | GitHub git trees API (`BBOPTERS_SHARED_REPO` + `GH_TOKEN`) | 인벤토리만 · 5분 캐시. 실행 이벤트는 미연결 ([계약 설계](./ax-shared-skills.md)) |
 | 스킬 › 팀 스킬과 비교 | aitk DB + GitHub (`BBOPTERS_SHARED_REPO` + `GH_TOKEN`) | 이름·본문 비교 · 1시간 캐시 |
 | 클라이언트 › 구성원별 사용량 | `ax_client_usage` + `ax_usage_collector_state` ← `aitk usage report` CLI → MCP `report_usage` | 팀원 머신에서 하루 1회 사용량·점검 신호 자동 보고 |
-| 클라이언트 › 구독 현황 | `ax_subscriptions` 테이블 ← 결제내역 트래커 시트에서 CSV import | 수동 갱신 |
+| 클라이언트 › 구독 현황 | `ax_subscriptions` 테이블 ← 「지니파이(주) 결제 내역」 `구독 로스터` 탭 CSV import (2026-09-21 정본 변경, 로스터에 없는 행은 삭제) | 수동 갱신 |
 | 배포 사이트 | Vercel REST API (`VERCEL_API_TOKEN`, 선택 `VERCEL_TEAM_ID`) | 자동 조회 + 5분 캐시 |
 
 성과 요약 패널은 목업의 지표 중 **실측 가능한 것만** 계산한다(계정 연결형 누적 스킬 참여·일별 활성 인원·KST 시간대별 활성 인원). 두 활성 인원 그래프는 막대에 마우스를 올리면 해당 날짜·시간의 고유 사용자 수를 보여준다. 계정 연결이 없는 익명 스킬 이벤트가 있어 누적 참여 수는 상단 핵심 카드에서 제외하고, 상단에는 내부 도메인의 `전체 구성원`을 보여준다. 완료 세션·완주율·절감 시간·부서별 참여는 계측 근거가 없어 값 대신 "미계측 + 사유"로 내려간다 — 0이나 추정값으로 꾸미지 않는다는 완료 기준을 그대로 따른 것이다.

@@ -1,25 +1,26 @@
 /**
- * AX 구독 데이터 import 스크립트 (팀원별 구독 패널 데이터 소스)
+ * AX 구독 데이터 import 스크립트 (클라이언트 › 구독 현황 패널의 데이터 소스)
  *
- * "020 비용 처리" 결제내역 트래커 시트가 SSOT(단일 진실 원천)다.
- * `ax_subscriptions` 테이블은 대시보드가 읽는 사본일 뿐이다 — 시트를 CSV로
- * 내보낸 뒤 이 스크립트로 테이블을 동기화한다. 일회성 실행 스크립트.
+ * 정본은 「지니파이(주) 결제 내역」 시트의 `구독 로스터` 탭이다(EDU-10958, 2026-09-21).
+ * `ax_subscriptions` 테이블은 대시보드가 읽는 사본이다 — 탭을 CSV 로 내려받아 이 스크립트로 맞춘다.
+ * (2026-08-06 처음 만들 때는 "020 비용 처리" 결제내역 트래커 형식이었다. 로스터로 정본이 바뀌어 형식을 옮겼다)
  *
  * 사용:
- *   pnpm --filter @gpters/db exec tsx scripts/import-ax-subscriptions.ts <csv경로> [--dry-run]
+ *   pnpm --filter @gpters/db exec tsx scripts/import-ax-subscriptions.ts <csv경로> [--dry-run | --plan]
  *
- * CSV 헤더(고정):
- *   vendor,plan,owner_name,renewal_day,payer,amount,currency,billing_cycle,status,note
+ * CSV: 로스터 탭 그대로. 헤더 이름으로 `name, account, plan, price_usd, renewal_day, payer` 를 찾는다.
+ *   `slack_id`, `card_last4` 는 읽지 않는다. 금액은 USD, 주기는 월간으로 넣는다.
  *
- * 갱신 방식: (vendor, plan, owner_name, renewal_day) 조합을 키로 upsert 한다.
- * 결제일까지 키에 넣는 이유는 같은 사람이 같은 플랜을 둘 이상 쓰는 경우가 실제로 있어서다.
- * CSV에 없는 기존 행은 지우지 않는다 — 사람이 대시보드 밖에서 직접 관리할 수 있게.
+ * 갱신 방식: 전체 동기화. (vendor, plan, owner_name, renewal_day) 로 기존 행을 찾아 갱신·추가하고,
+ * **로스터에 없는 기존 행은 지운다** — 로스터가 해지·퇴사 구독의 행을 지우는 방식이라서다.
  *
- * --dry-run: DB에 쓰지 않고 파싱·검증 결과와 upsert 예정 내역만 출력한다 (DB 접속 불필요).
+ *   --dry-run: CSV 파싱 결과만 출력한다 (DB 접속 없음)
+ *   --plan:    DB 를 읽어 갱신·추가·삭제 예정을 출력하고 쓰지 않는다. 실제 반영 전에 먼저 돌린다
  */
 
 import { readFileSync } from 'fs'
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
+import { parseRosterCsv, planRosterSync, type RosterSubscription } from './lib/ax-subscription-roster'
 
 /**
  * `DATABASE_URL`이 셸에 없으면 레포 루트 `.env`에서 읽어 온다
@@ -41,210 +42,82 @@ function loadDatabaseUrlFromEnvFile(): void {
   }
 }
 
-loadDatabaseUrlFromEnvFile()
-
-const { db, axSubscriptions } = await import('../src/index')
-
 const DRY_RUN = process.argv.includes('--dry-run')
+const PLAN_ONLY = process.argv.includes('--plan')
 const csvPath = process.argv.slice(2).find((arg) => !arg.startsWith('--'))
 
 if (!csvPath) {
-  console.error('사용법: tsx scripts/import-ax-subscriptions.ts <csv경로> [--dry-run]')
+  console.error('사용법: tsx scripts/import-ax-subscriptions.ts <csv경로> [--dry-run | --plan]')
   process.exit(1)
 }
 
-const EXPECTED_HEADER = [
-  'vendor', 'plan', 'owner_name', 'renewal_day', 'payer',
-  'amount', 'currency', 'billing_cycle', 'status', 'note',
-]
+const describe = (row: Pick<RosterSubscription, 'vendor' | 'plan' | 'renewalDay'> & { ownerName: string | null }) =>
+  `${row.vendor} / ${row.plan} / ${row.ownerName ?? '(공용)'} / ${row.renewalDay ?? '-'}일`
 
-/** 한 줄을 필드 배열로 파싱. 따옴표로 감싼 필드와 그 안의 콤마, 이스케이프된 따옴표(`""`)를 처리한다 */
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = []
-  let current = ''
-  let inQuotes = false
+async function main() {
+  const { rows, errors } = parseRosterCsv(readFileSync(csvPath!, 'utf-8'))
+  for (const error of errors) console.error(`스킵 ${error}`)
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        current += char
-      }
-      continue
-    }
-
-    if (char === '"') {
-      inQuotes = true
-    } else if (char === ',') {
-      fields.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  fields.push(current)
-  return fields
-}
-
-interface ParsedRow {
-  vendor: string
-  plan: string
-  ownerName: string | null
-  renewalDay: number | null
-  payer: string | null
-  amount: number
-  currency: string
-  billingCycle: 'monthly' | 'yearly'
-  status: 'active' | 'canceled'
-  note: string | null
-}
-
-/** CSV 본문을 파싱해 유효한 행과 스킵 건수를 돌려준다. 잘못된 행은 사유를 stderr로 출력한다 */
-function parseCsv(content: string): { rows: ParsedRow[]; skipped: number } {
-  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0)
-  if (lines.length === 0) {
-    return { rows: [], skipped: 0 }
-  }
-
-  const header = parseCsvLine(lines[0]).map((h) => h.trim())
-  const headerMismatch = EXPECTED_HEADER.some((col, i) => header[i] !== col)
-  if (headerMismatch) {
-    console.error(`CSV 헤더가 예상과 다릅니다.\n  기대: ${EXPECTED_HEADER.join(',')}\n  실제: ${header.join(',')}`)
+  if (rows.length === 0) {
+    // 전체 동기화라 빈 입력을 반영하면 구독이 전부 지워진다 — 잘못 내보낸 파일로 보고 멈춘다
+    console.error('읽힌 구독이 0건이라 중단합니다. CSV 가 구독 로스터 탭인지 확인하세요.')
     process.exit(1)
   }
 
-  const rows: ParsedRow[] = []
-  let skipped = 0
-
-  for (let i = 1; i < lines.length; i++) {
-    const lineNo = i + 1
-    const [vendor, plan, ownerNameRaw, renewalDayRaw, payerRaw, amountRaw, currencyRaw, billingCycleRaw, statusRaw, noteRaw] =
-      parseCsvLine(lines[i])
-
-    if (!vendor?.trim()) {
-      console.error(`${lineNo}행 스킵: vendor 누락`)
-      skipped++
-      continue
-    }
-    if (!plan?.trim()) {
-      console.error(`${lineNo}행 스킵: plan 누락`)
-      skipped++
-      continue
-    }
-    if (!amountRaw?.trim() || Number.isNaN(Number(amountRaw))) {
-      console.error(`${lineNo}행 스킵: amount가 숫자가 아님 (${amountRaw ?? ''})`)
-      skipped++
-      continue
-    }
-
-    const billingCycle = billingCycleRaw?.trim()
-    if (billingCycle !== 'monthly' && billingCycle !== 'yearly') {
-      console.error(`${lineNo}행 스킵: billing_cycle은 monthly|yearly만 허용 (${billingCycleRaw ?? ''})`)
-      skipped++
-      continue
-    }
-
-    const status = statusRaw?.trim() || 'active'
-    if (status !== 'active' && status !== 'canceled') {
-      console.error(`${lineNo}행 스킵: status는 active|canceled만 허용 (${statusRaw ?? ''})`)
-      skipped++
-      continue
-    }
-
-    const renewalDayValue = renewalDayRaw?.trim() ? Number(renewalDayRaw) : null
-    if (renewalDayValue !== null && (!Number.isInteger(renewalDayValue) || renewalDayValue < 1 || renewalDayValue > 31)) {
-      console.error(`${lineNo}행 스킵: renewal_day는 1~31 정수여야 함 (${renewalDayRaw ?? ''})`)
-      skipped++
-      continue
-    }
-
-    rows.push({
-      vendor: vendor.trim(),
-      plan: plan.trim(),
-      ownerName: ownerNameRaw?.trim() || null,
-      renewalDay: renewalDayValue,
-      payer: payerRaw?.trim() || null,
-      amount: Number(amountRaw),
-      currency: currencyRaw?.trim() || 'KRW',
-      billingCycle,
-      status,
-      note: noteRaw?.trim() || null,
-    })
-  }
-
-  return { rows, skipped }
-}
-
-async function main() {
-  const content = readFileSync(csvPath!, 'utf-8')
-  const { rows, skipped } = parseCsv(content)
-
   if (DRY_RUN) {
-    console.log(`[dry-run] DB에 쓰지 않습니다. upsert 예정 ${rows.length}건:`)
-    for (const row of rows) {
-      console.log(
-        `  - ${row.vendor} / ${row.plan} / ${row.ownerName ?? '(공용)'} / ${row.renewalDay ?? '-'}일 — ${row.amount} ${row.currency} (${row.billingCycle}, ${row.status}, 결제 ${row.payer ?? '-'})`
-      )
-    }
-    console.log(`\n성공 ${rows.length}건 / 스킵 ${skipped}건`)
+    console.log(`[dry-run] DB 에 접속하지 않습니다. 로스터에서 읽은 구독 ${rows.length}건:`)
+    for (const row of rows) console.log(`  - ${describe(row)} — ${row.amount} ${row.currency} (결제 ${row.payer ?? '-'})`)
+    console.log(`\n읽음 ${rows.length}건 / 스킵 ${errors.length}건`)
     return
   }
 
-  let upserted = 0
+  loadDatabaseUrlFromEnvFile()
+  const { db, axSubscriptions } = await import('../src/index')
 
-  for (const row of rows) {
-    // 같은 사람이 같은 플랜을 둘 이상 쓰는 경우가 있어(결제일만 다름) 결제일까지 키에 넣는다
-    const ownerCondition = row.ownerName
-      ? eq(axSubscriptions.ownerName, row.ownerName)
-      : isNull(axSubscriptions.ownerName)
-    const renewalCondition = row.renewalDay !== null
-      ? eq(axSubscriptions.renewalDay, row.renewalDay)
-      : isNull(axSubscriptions.renewalDay)
+  const existing = await db
+    .select({
+      id: axSubscriptions.id,
+      vendor: axSubscriptions.vendor,
+      plan: axSubscriptions.plan,
+      ownerName: axSubscriptions.ownerName,
+      renewalDay: axSubscriptions.renewalDay,
+    })
+    .from(axSubscriptions)
+  const plan = planRosterSync(rows, existing)
 
-    const existing = await db
-      .select({ id: axSubscriptions.id })
-      .from(axSubscriptions)
-      .where(and(
-        eq(axSubscriptions.vendor, row.vendor),
-        eq(axSubscriptions.plan, row.plan),
-        ownerCondition,
-        renewalCondition
-      ))
-      .limit(1)
+  console.log(`${PLAN_ONLY ? '[plan] 쓰지 않습니다. ' : ''}갱신 ${plan.update.length} · 추가 ${plan.insert.length} · 삭제 ${plan.remove.length} (스킵 ${errors.length})`)
+  for (const row of plan.insert) console.log(`  + ${describe(row)} — ${row.amount} ${row.currency}`)
+  for (const row of plan.remove) console.log(`  - ${describe(row)}`)
+  if (PLAN_ONLY) return
 
-    const values = {
-      vendor: row.vendor,
-      plan: row.plan,
-      ownerName: row.ownerName,
-      renewalDay: row.renewalDay,
-      payer: row.payer,
-      // numeric 컬럼이라 문자열로 넣는다 (금액을 float로 통과시키지 않는다)
-      amount: row.amount.toFixed(2),
-      currency: row.currency,
-      billingCycle: row.billingCycle,
-      status: row.status,
-      note: row.note,
-      syncedAt: new Date(),
-      updatedAt: new Date(),
-    }
+  const now = new Date()
+  const valuesOf = (row: RosterSubscription) => ({
+    vendor: row.vendor,
+    plan: row.plan,
+    ownerName: row.ownerName,
+    renewalDay: row.renewalDay,
+    payer: row.payer,
+    // numeric 컬럼이라 문자열로 넣는다 (금액을 float로 통과시키지 않는다)
+    amount: row.amount.toFixed(2),
+    currency: row.currency,
+    billingCycle: row.billingCycle,
+    status: row.status,
+    note: null,
+    syncedAt: now,
+    updatedAt: now,
+  })
 
-    if (existing.length > 0) {
-      await db.update(axSubscriptions).set(values).where(eq(axSubscriptions.id, existing[0].id))
-    } else {
-      await db.insert(axSubscriptions).values(values)
-    }
-    upserted++
+  for (const { id, row } of plan.update) {
+    await db.update(axSubscriptions).set(valuesOf(row)).where(eq(axSubscriptions.id, id))
+  }
+  if (plan.insert.length > 0) {
+    await db.insert(axSubscriptions).values(plan.insert.map(valuesOf))
+  }
+  if (plan.remove.length > 0) {
+    await db.delete(axSubscriptions).where(inArray(axSubscriptions.id, plan.remove.map((row) => row.id)))
   }
 
-  console.log(`✅ 성공 ${upserted}건 / 스킵 ${skipped}건`)
+  console.log(`✅ 갱신 ${plan.update.length} · 추가 ${plan.insert.length} · 삭제 ${plan.remove.length}`)
 }
 
 main().catch((err) => {

@@ -3,6 +3,7 @@
   "framework": "nextjs",
   "buildCommand": "pnpm turbo build --filter=@gpters/web",
   "outputDirectory": ".next",
+  "regions": ["sin1"],
   "crons": [
     {
       "path": "/api/cron/finalize-sessions",
