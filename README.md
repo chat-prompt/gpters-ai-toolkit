@@ -129,7 +129,7 @@ gpters-ai-toolkit/
 | **MCP Auth** | OAuth 2.1 (PKCE) |
 | **Testing** | Vitest (unit/API), Playwright (E2E) |
 | **Monorepo** | Turbo |
-| **Deployment** | Vercel (웹), npm/Verdaccio (플러그인) |
+| **Deployment** | Vercel (웹), npm (플러그인) |
 
 ## 데이터 모델
 
