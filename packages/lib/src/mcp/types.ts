@@ -295,8 +295,11 @@ export interface SemanticSearchInput {
 export interface ToolExecutionMeta {
   /** 탐색·로드·실행을 transport session과 독립적으로 연결한다 */
   journeyId?: string
-  /** Search result snapshot for discovery analytics */
-  searchResults?: Array<{ itemId: string; rank: number; score: number }>
+  /**
+   * Search result snapshot for discovery analytics.
+   * `rank`은 최종(재랭킹 후) 순위, `embeddingRank`는 재랭킹 전 임베딩 순위, `rerankScore`는 JEV noul 점수다.
+   */
+  searchResults?: Array<{ itemId: string; rank: number; score: number; embeddingRank?: number; rerankScore?: number }>
   /** Referral source marker (e.g., 'suggest' from skill-suggest hook) */
   referralSource?: string
   /** Client session event data from report_session_event tool */

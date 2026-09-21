@@ -2,6 +2,7 @@ import { db, catalogItems, type CatalogItemRecord } from '@gpters/db'
 import { sql, eq, and, or, gt, desc } from 'drizzle-orm'
 import { cosineDistance } from 'drizzle-orm'
 import { generateEmbedding } from './embedding'
+import { rerankCandidates, type RerankSkipReason } from './rerank'
 import { createLogger } from '../core/logger'
 import type { ItemType } from '../core/types'
 
@@ -28,12 +29,43 @@ export interface SemanticSearchOptions {
    * duplicate OpenAI API calls.
    */
   queryEmbedding?: number[]
+  /**
+   * 임베딩 점수가 뭉칠 때 JEV로 재랭킹할지 (기본 true).
+   * `TYPESAFE_API_KEY`가 없으면 이 값과 무관하게 재랭킹하지 않는다.
+   */
+  rerank?: boolean
+}
+
+/** 재랭킹할 때 최종 limit 대비 몇 배를 후보로 뽑는가 */
+const RERANK_OVERFETCH_FACTOR = 4
+
+/** 재랭킹 후보 수 상한 */
+const RERANK_MAX_CANDIDATES = 40
+
+/**
+ * 재랭킹 기록 — 재랭킹 전/후 순위를 둘 다 남기기 위한 정보
+ */
+export interface SemanticSearchRerankInfo {
+  /** JEV 순서가 실제로 적용됐는지 */
+  applied: boolean
+  /** 적용되지 않은 이유 */
+  skipReason?: RerankSkipReason
+  /** 후보 수 (overfetch 포함) */
+  candidateCount: number
+  /** 항목 ID → 재랭킹 전(임베딩) 순위, 1부터 */
+  embeddingRanks: Record<string, number>
+  /** 항목 ID → JEV noul 점수 (JEV를 불렀을 때만) */
+  scores?: Record<string, number>
+  /** JEV 호출 시간(ms) */
+  jevMs?: number
 }
 
 export interface SemanticSearchResult {
   items: Array<CatalogItemRecord & { similarity: number }>
   total: number
   searchTime: number
+  /** 재랭킹 기록 (본 경로에서 재랭킹을 시도했을 때만) */
+  rerank?: SemanticSearchRerankInfo
 }
 
 export async function semanticSearch(options: SemanticSearchOptions): Promise<SemanticSearchResult> {
@@ -46,7 +78,13 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     userContext,
     clientType,
     queryEmbedding: providedEmbedding,
+    rerank = true,
   } = options
+
+  const rerankEnabled = rerank && Boolean(process.env.TYPESAFE_API_KEY)
+  const fetchLimit = rerankEnabled
+    ? Math.min(Math.max(limit * RERANK_OVERFETCH_FACTOR, limit), RERANK_MAX_CANDIDATES)
+    : limit
 
   const cleanedQuery = cleanQuery(query)
   if (!cleanedQuery) {
@@ -133,7 +171,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     .from(catalogItems)
     .where(and(...conditions))
     .orderBy(desc(similarity))
-    .limit(limit)
+    .limit(fetchLimit)
   const dbMs = Date.now() - dbStart
 
   // Keyword fallback when semantic search returns no results
@@ -220,19 +258,45 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     }
   }
 
+  const candidates = results as Array<CatalogItemRecord & { similarity: number }>
+  let items = candidates
+  let rerankInfo: SemanticSearchRerankInfo | undefined
+  if (rerankEnabled) {
+    const outcome = await rerankCandidates(cleanedQuery, candidates, { userContext })
+    items = outcome.items
+    rerankInfo = {
+      applied: outcome.applied,
+      skipReason: outcome.skipReason,
+      candidateCount: candidates.length,
+      embeddingRanks: Object.fromEntries(candidates.map((c, i) => [c.id, i + 1])),
+      scores: outcome.scores,
+      jevMs: outcome.jevMs,
+    }
+  }
+  items = items.slice(0, limit)
+
   const searchTime = Date.now() - startTime
 
   log.info('Semantic search completed', {
     embeddingMs,
     dbMs,
     totalMs: searchTime,
-    resultCount: results.length,
+    resultCount: items.length,
+    ...(rerankInfo && {
+      rerankApplied: rerankInfo.applied,
+      rerankSkipReason: rerankInfo.skipReason,
+      rerankCandidates: rerankInfo.candidateCount,
+      jevMs: rerankInfo.jevMs,
+      embeddingTop: candidates.slice(0, limit).map((c) => c.id),
+      finalTop: items.map((c) => c.id),
+    }),
   })
 
   return {
-    items: results as Array<CatalogItemRecord & { similarity: number }>,
-    total: results.length,
+    items,
+    total: items.length,
     searchTime,
+    ...(rerankInfo && { rerank: rerankInfo }),
   }
 }
 
