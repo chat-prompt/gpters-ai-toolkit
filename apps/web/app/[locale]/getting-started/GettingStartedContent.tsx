@@ -227,7 +227,8 @@ function ClaudeCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabConten
  * OpenCode plugin tab content
  *
  * 플러그인은 유지보수 중단 상태다(2026-09-21 기록, DEV-4483 · `apps/opencode-plugin/src/index.ts` 참고).
- * 탭은 지우지 않고 모든 사용자에게 보인다(2026-03-09 `18f096e9` 에서 INTERNAL_ONLY_TABS 를 비움).
+ * 탭은 지우지 않았다. INTERNAL_ONLY_TABS 가 비어 있어(2026-03-09 `18f096e9`) 로그인한 사람 모두에게 보이지만,
+ * 로그인 자체가 사내 도메인과 승인된 외부 계정으로 제한돼 있어 실제로 보는 사람은 사내 인원이다.
  * 안내하는 npm 버전은 수동 발행본이다.
  */
 function OpenCodeTab({ copiedStep, onCopy, copyLabel, copiedLabel }: TabContentProps) {
