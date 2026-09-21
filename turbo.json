@@ -55,10 +55,10 @@
       "passThroughEnv": [
         "TEST_API_URL",
         "TEST_DATABASE_URL",
+        "DATABASE_DRIVER",
         "CONFIRM_ISOLATED_API_TESTS",
         "RUN_DB_TEST_CLEANUP",
         "RONA_SERVICE_TOKEN",
-        "DATABASE_URL",
         "CI"
       ],
       "cache": false
@@ -74,6 +74,7 @@
         "PLAYWRIGHT_TEST_BASE_URL",
         "TEST_DATABASE_URL",
         "DATABASE_URL",
+        "DATABASE_DRIVER",
         "AUTH_SECRET",
         "AUTH_URL",
         "GOOGLE_CLIENT_ID",
