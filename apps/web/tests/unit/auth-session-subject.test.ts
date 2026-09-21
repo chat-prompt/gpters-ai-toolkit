@@ -105,6 +105,23 @@ describe.each([
     expect(await callbacks.jwt({ token })).toMatchObject({ sub: 'account-1', role: 'admin' })
   })
 
+  it('cuts the outage grace exactly at 30 minutes', async () => {
+    // 경계를 고정해 둬야 상수를 몰래 늘리거나 줄이는 변경이 테스트에 걸린다
+    mocks.dbDown = true
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-21T00:00:00Z'))
+      const at = (msAgo: number) => ({ sub: 'account-1', email: 'member@gpters.org', role: 'admin', tokenRefreshedAt: Date.now() - msAgo })
+      const GRACE = 30 * 60_000
+
+      expect(await callbacks.jwt({ token: at(GRACE - 1) })).not.toBeNull()
+      expect(await callbacks.jwt({ token: at(GRACE) })).not.toBeNull()
+      expect(await callbacks.jwt({ token: at(GRACE + 1) })).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('drops the session when the database stays unreachable past the 30 minute grace window', async () => {
     mocks.dbDown = true
     // 정지 여부를 확인하지 못한 채 오래된 토큰의 권한을 계속 쓰게 두지 않는다
