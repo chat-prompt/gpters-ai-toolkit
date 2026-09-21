@@ -255,6 +255,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
   const release = options.observabilityConfig ? observationLock(checkpointPath, checkpointDir) : () => {}
   try {
   let state = await readAgentTelemetryCheckpoint(checkpointPath) ?? createCheckpoint(agentId, options.collectorInstanceId)
+  let observationSkipped: string | undefined
 
   if (state.agentId !== agentId) error('Checkpoint belongs to a different agent')
   if (options.collectorInstanceId && state.collectorInstanceId !== options.collectorInstanceId) {
@@ -310,7 +311,14 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       executions: collected.executions,
       collection: { ...collected.collection, taskEvents: taskJournal.events },
     }
-    if (options.observabilityConfig) await attachAgentObservability(batch, options.observabilityConfig, { sessionsDir, projectSlugs, codexThreadSource })
+    if (options.observabilityConfig) {
+      const omitted = await attachAgentObservability(batch, options.observabilityConfig, { sessionsDir, projectSlugs, codexThreadSource })
+      // A source changed during the scan: keep usage telemetry flowing and record only the fixed reason.
+      if (omitted) {
+        observationSkipped = omitted.skipped
+        process.stderr.write(`warning: observation omitted for this window (${omitted.skipped}); the batch is sent without observability.\n`)
+      }
+    }
     state = { ...state, pending: { batch, nextCommitted: collected.nextCommitted } }
   }
   const pending = state.pending
@@ -350,6 +358,7 @@ export async function runAgentTelemetryCollect(options: AgentTelemetryOptions): 
       window: pending.batch.window,
       sessions: pending.batch.sessions,
       turns: pending.batch.turns,
+      ...(observationSkipped ? { observationSkipped } : {}),
     }
     if (options.emitOutput !== false) jsonOut(output)
     return {

@@ -2,11 +2,12 @@ import { constants } from 'node:fs'
 import { relative, isAbsolute } from 'node:path'
 import { open, realpath } from 'node:fs/promises'
 import { histogram } from './histogram.mjs'
+import { prefixMatches } from './inventory.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
 export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 })
 const integer = value => Number.isSafeInteger(value) && value >= 0
 // Same non-metric Claude metadata recognized by the existing agent collector.
-const claudeMetadata = new Set(['attachment','file-history-delta','last-prompt','atis-latch','mode','permission-mode','ai-title'])
+const claudeMetadata = new Set(['attachment','file-history-delta','last-prompt','atis-latch','mode','permission-mode','ai-title','cost-state'])
 function codePointLength(value) {
   let count = 0
   // String iteration counts astral characters once and preserves lone surrogates,
@@ -22,7 +23,8 @@ function textChars(value) {
     if (block?.type === 'text' || block?.type === 'input_text') {
       if (typeof block.text !== 'string') return null
       count += codePointLength(block.text)
-    } else if (block?.type !== 'image' && block?.type !== 'input_image') {
+    } else if (!['image','input_image','tool_reference'].includes(block?.type)) {
+      // tool_reference (a ToolSearch result naming a tool) carries no text characters.
       // An unknown or malformed block is not evidence of a zero-character result.
       return null
     }
@@ -30,6 +32,11 @@ function textChars(value) {
   return count
 }
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
+/** A discovered file changed before or while it was read: a timing failure, never accepted as data. */
+function sourceChanged() { const error = new Error('Observation source scope changed'); error.inventoryReason = 'source-changed'; return error }
+/** Same device/inode regular file that did not shrink since discovery. Timing only if its prefix is also unchanged. */
+const sameGrown = (expected, stat) => String(stat.dev) === expected.dev && String(stat.ino) === expected.ino && stat.isFile() && stat.size >= expected.size
+const differs = (expected, stat) => Object.entries(expected).some(([key,value]) => ['dev','ino'].includes(key) ? String(stat[key])!==value : stat[key]!==value)
 function assertCodexFileScope(records, scope) {
   const slugs = new Set(scope.projectSlugs ?? [])
   const allowedCwd = cwd => typeof cwd === 'string' && slugs.has(cwd.replaceAll('\\','/').replace(/\/$/,'').split('/').at(-1))
@@ -47,6 +54,7 @@ function assertCodexFileScope(records, scope) {
 /** Explicit inventory only: no home discovery, no mtime window filtering, no writes/checkpoint resets. */
 export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scope, source } = {}) {
   const counters = emptyCounters(), records = [], seenFiles = new Set(), seenRows = new Set()
+  let timing = false
   counters.filesExpected = files.length
   for (const file of files) {
     let handle
@@ -65,7 +73,9 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       checkScope(path)
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       const before = await handle.stat(), identity = `${before.dev}:${before.ino}`
-      if(file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(before[key])!==value : before[key]!==value)) throw scopeError()
+      // A discovered file may only differ by growth; every other difference is a scope failure.
+      let grown = false
+      if (file.expectedIdentity && differs(file.expectedIdentity, before)) { if (!sameGrown(file.expectedIdentity, before)) throw scopeError(); grown = true }
       if (!before.isFile() || before.size > maxFileBytes) { if (file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
       if (seenFiles.has(identity)) { counters.duplicates++; counters.filesExpected--; continue }
       seenFiles.add(identity)
@@ -73,15 +83,29 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
       let offset = 0
       while (offset < bytes.length) { const read = await handle.read(bytes, offset, bytes.length-offset, offset); if (!read.bytesRead) break; offset += read.bytesRead }
       const after = await handle.stat()
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || offset !== before.size) { if(file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
+      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || offset !== before.size) {
+        if (!file.expectedIdentity) { counters.rotatedFiles++; continue }
+        if (after.dev !== before.dev || after.ino !== before.ino || !after.isFile() || after.size < before.size || offset !== before.size) throw scopeError()
+        grown = true
+      }
       const current = await realpath(file.path)
       checkScope(current)
       const check = await open(current, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       try {
         const named = await check.stat()
-        if (file.expectedIdentity && Object.entries(file.expectedIdentity).some(([key,value]) => ['dev','ino'].includes(key) ? String(named[key])!==value : named[key]!==value)) throw scopeError()
+        if (file.expectedIdentity && differs(file.expectedIdentity, named)) { if (!sameGrown(file.expectedIdentity, named)) throw scopeError(); grown = true }
         if (named.ino !== before.ino || named.dev !== before.dev) { if (file.expectedIdentity) throw scopeError(); counters.rotatedFiles++; continue }
       } finally { await check.close() }
+      if (grown) {
+        // Growth is timing only when the bytes seen at discovery are still the file's exact prefix;
+        // an in-place rewrite that also grew is a scope failure. The file is then skipped, not counted.
+        // The prefix is re-read from the file now at the path (inode checked before and after), never from
+        // the in-memory buffer, which may predate an in-place rewrite.
+        const expected = { dev: file.expectedIdentity.dev, ino: file.expectedIdentity.ino, size: file.expectedIdentity.size }
+        if (!await prefixMatches(file.path, expected, file.expectedPrefix)) throw scopeError()
+        timing = true
+        continue
+      }
       counters.filesRead++
       const lines = bytes.toString('utf8').split('\n'), fileRecords = []
       if (source === 'codex' && scope) {
@@ -107,12 +131,15 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
         seenRows.add(item.key); records.push(item)
       }
     } catch (error) {
+      // Timing is only raised after the loop, so any error here for a discovered file is a scope failure.
       if (file.expectedIdentity) throw scopeError()
       if (error.scopeMismatch) throw new Error('Observation source scope changed')
       /* Private paths/errors never escape. filesRead mismatch makes missing source explicit. */
     }
     finally { if (handle) await handle.close() }
   }
+  // Raised only after every file passed its integrity checks, so a live append cannot mask a scope failure.
+  if (timing) throw sourceChanged()
   return { records, counters }
 }
 function state(counters, observed) {

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, rm, utimes, symlink, realpath, rename, open, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { discoverWindowFiles } from './inventory.mjs'
+import { discoverWindowFiles, prefixMatches } from './inventory.mjs'
+import { createHash } from 'node:crypto'
+import { stat, readFile } from 'node:fs/promises'
 import { collectCliMetrics } from './metrics.mjs'
 const window={startUtc:'2026-01-02T00:00:00.000Z',endUtc:'2026-01-03T00:00:00.000Z'}
 const row=timestamp=>({type:'assistant',timestamp,message:{id:'m',stop_reason:'end_turn',usage:{input_tokens:42}}})
@@ -99,4 +101,127 @@ test('streaming discovery preserves long Unicode records across read chunks',()=
   const path=join(project,'unicode.jsonl')
   await save(path,[{type:'progress',padding:'a'.repeat(1024*1024-32)+'😀한글'.repeat(40)},row(window.startUtc)])
   assert.deepEqual((await discoverWindowFiles(context(root))).map(file=>file.path),[path])
+}))
+test('a discovered file that grows before metrics reports the timing reason source-changed (observation omitted, never accepted)',()=>fixture(async(root,project)=>{
+  const path=join(project,'live.jsonl'); await save(path,[row(window.startUtc)])
+  const files=await discoverWindowFiles(context(root)); await appendFile(path,JSON.stringify(row(window.startUtc))+'\n')
+  await assert.rejects(collectCliMetrics({...context(root),files}), error => error.inventoryReason==='source-changed' && /Observation source scope/.test(error.message))
+}))
+test('out-of-scope and symlink sources keep the integrity reason, not the timing reason',()=>fixture(async(root,project)=>{
+  const path=join(project,'source.jsonl'); await save(path,[row(window.startUtc)]); await symlink(path,join(project,'alias.jsonl'))
+  await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-consistency')
+  await rm(join(project,'alias.jsonl')); const files=await discoverWindowFiles(context(root)); await rm(path)
+  await assert.rejects(collectCliMetrics({...context(root),files}), error => error.inventoryReason===undefined && error.scopeMismatch===true)
+}))
+test('a partial tail during discovery is the timing reason partial-tail',()=>fixture(async(root,project)=>{
+  await writeFile(join(project,'live.jsonl'),JSON.stringify(row(window.startUtc))+'\n'+'{"type":"assistant"')
+  await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='partial-tail')
+}))
+test('cost-state metadata and tool_reference result blocks do not poison measured capabilities',()=>fixture(async(root,project)=>{
+  const result={type:'user',timestamp:window.startUtc,message:{content:[{type:'tool_result',tool_use_id:'t1',content:[{type:'tool_reference',tool_name:'example'},{type:'text',text:'abc'}]}]}}
+  await save(join(project,'a.jsonl'),[row(window.startUtc),{type:'cost-state'},result])
+  const out=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root))})
+  assert.equal(out.provenance.unsupportedRecords,0); assert.equal(out.metricCapabilities.peakContextTokens,'supported'); assert.equal(out.metrics.toolResultChars.sum,3)
+}))
+for (const change of ['replace','directory','symlink','truncate']) test(`dynamic ${change} after discovery is an integrity failure, never the timing reason`,()=>fixture(async(root,project)=>{
+  const path=join(project,'source.jsonl'); await save(path,[row(window.startUtc),row(window.startUtc)])
+  const files=await discoverWindowFiles(context(root))
+  if (change==='truncate') await writeFile(path,JSON.stringify(row(window.startUtc))+'\n')
+  else { const moved=join(project,'moved.jsonl'); await rename(path,moved)
+    if (change==='replace') await save(path,[row(window.startUtc),row(window.startUtc),row(window.startUtc)])
+    if (change==='directory') await mkdir(path)
+    if (change==='symlink') await symlink(moved,path) }
+  await assert.rejects(collectCliMetrics({...context(root),files}), error => error.inventoryReason===undefined && error.scopeMismatch===true)
+}))
+function duringRead(marker, action) {
+  return async fn => { const probe=await open(import.meta.filename,'r'),prototype=Object.getPrototypeOf(probe),originalRead=prototype.read; await probe.close()
+    let done=false
+    const patched=mock.method(prototype,'read',async function(...args){ const result=await originalRead.apply(this,args)
+      if(!done&&args[0].subarray(0,result.bytesRead).toString().includes(marker)){ done=true; await action() } return result })
+    try { await fn(); assert.equal(done,true) } finally { patched.mock.restore() } }
+}
+test('an earlier selected file appended while a later file is scanned is the timing reason source-changed',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'), b=join(project,'b.jsonl'); await save(a,[row(window.startUtc)]); await save(b,[{...row(window.startUtc),marker:'second-file'}])
+  await duringRead('second-file',()=>appendFile(a,JSON.stringify(row(window.startUtc))+'\n'))(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-changed') })
+}))
+test('a new file appearing mid-scan is timing; a candidate removed mid-scan stays integrity',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'), b=join(project,'b.jsonl'); await save(a,[{...row(window.startUtc),marker:'first-file'}]); await save(b,[row(window.startUtc)])
+  await duringRead('first-file',()=>save(join(project,'c.jsonl'),[row(window.startUtc)]))(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-changed') })
+  await rm(join(project,'c.jsonl'))
+  await duringRead('first-file',()=>rm(b))(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => !['source-changed','partial-tail'].includes(error.inventoryReason)) })
+}))
+test('an old partial tail is stale-tail (fail closed), not the timing reason',()=>fixture(async(root,project)=>{
+  const path=join(project,'old.jsonl'); await writeFile(path,JSON.stringify(row(window.startUtc))+'\n'+'{"type":"assistant"')
+  const old=new Date(Date.now()-60*60*1000); await utimes(path,old,old)
+  await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='stale-tail')
+}))
+test('an in-place rewrite that also grows is an integrity failure, not timing (metrics and final recheck)',()=>fixture(async(root,project)=>{
+  const path=join(project,'source.jsonl'); await save(path,[row(window.startUtc)])
+  const files=await discoverWindowFiles(context(root))
+  const handle=await open(path,'r+'); await handle.write(Buffer.from(JSON.stringify({...row(window.startUtc),message:{id:'z',stop_reason:'end_turn',usage:{input_tokens:9999}}})+'\n'),0); await handle.close()
+  await assert.rejects(collectCliMetrics({...context(root),files}), error => error.inventoryReason===undefined && error.scopeMismatch===true)
+  const a=join(project,'a.jsonl'), b=join(project,'b.jsonl'); await rm(path); await save(a,[row(window.startUtc)]); await save(b,[{...row(window.startUtc),marker:'second-file'}])
+  await duringRead('second-file',async()=>{ const h=await open(a,'r+'); await h.write(Buffer.from(JSON.stringify({...row(window.startUtc),x:'rewritten-longer-record'})+'\n'),0); await h.close() })(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-consistency') })
+}))
+test('append followed by inode replacement during the scan stays integrity',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'), b=join(project,'b.jsonl'); await save(a,[row(window.startUtc)]); await save(b,[{...row(window.startUtc),marker:'second-file'}])
+  await duringRead('second-file',async()=>{ await appendFile(a,JSON.stringify(row(window.startUtc))+'\n'); await rename(a,a+'.old'); await save(a,[row(window.startUtc),row(window.startUtc)]) })(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-consistency') })
+}))
+for (const change of ['directory','replace']) test(`final recheck: earlier file ${change} during a later scan stays integrity`,()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'), b=join(project,'b.jsonl'); await save(a,[row(window.startUtc)]); await save(b,[{...row(window.startUtc),marker:'second-file'}])
+  await duringRead('second-file',async()=>{ await rename(a,a+'.old'); if(change==='directory') await mkdir(a); else await save(a,[row(window.startUtc),row(window.startUtc)]) })(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => !['source-changed','partial-tail'].includes(error.inventoryReason)) })
+}))
+test('a partial tail with a modification time in the future is stale-tail, not timing',()=>fixture(async(root,project)=>{
+  const path=join(project,'future.jsonl'); await writeFile(path,JSON.stringify(row(window.startUtc))+'\n'+'{"type":"assistant"')
+  const future=new Date('2099-01-01T00:00:00Z'); await utimes(path,future,future)
+  await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='stale-tail')
+}))
+
+test('timing on one file never masks an integrity failure on another (final recheck and metrics)',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'), b=join(project,'b.jsonl'), c=join(project,'c.jsonl')
+  await save(a,[row(window.startUtc)]); await save(b,[row(window.startUtc)]); await save(c,[{...row(window.startUtc),marker:'third-file'}])
+  await duringRead('third-file',async()=>{ await appendFile(a,JSON.stringify(row(window.startUtc))+'\n'); await rename(b,b+'.old'); await save(b,[row(window.startUtc),row(window.startUtc)]) })(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-consistency') })
+  await rm(b+'.old'); await rm(a); await save(a,[row(window.startUtc)]); await save(b,[row(window.startUtc)])
+  const files=await discoverWindowFiles(context(root))
+  await appendFile(a,JSON.stringify(row(window.startUtc))+'\n'); await rename(b,b+'.old'); await save(b,[row(window.startUtc),row(window.startUtc)])
+  await assert.rejects(collectCliMetrics({...context(root),files}), error => error.inventoryReason===undefined && error.scopeMismatch===true)
+}))
+test('the file being scanned growing during its own read is the timing reason source-changed',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'); await save(a,[{...row(window.startUtc),marker:'self-file'}])
+  await duringRead('self-file',()=>appendFile(a,JSON.stringify(row(window.startUtc))+'\n'))(async()=>{
+    await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='source-changed') })
+}))
+test('a live partial tail never masks an invalid record in a later file',()=>fixture(async(root,project)=>{
+  await writeFile(join(project,'a.jsonl'),JSON.stringify(row(window.startUtc))+'\n'+'{"type":"assistant"')
+  await writeFile(join(project,'b.jsonl'),'not json\n')
+  await assert.rejects(discoverWindowFiles(context(root)), error => error.inventoryReason==='invalid-record')
+}))
+test('metrics re-reads the prefix from the current file: a rewrite-and-grow right after its read is integrity',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'); await save(a,[{...row(window.startUtc),marker:'metrics-read'}])
+  const files=await discoverWindowFiles(context(root))
+  await duringRead('metrics-read',async()=>{ const h=await open(a,'r+'); await h.write(Buffer.from(JSON.stringify({...row(window.startUtc),marker:'rewritten',x:'longer-record'})+'\n'),0); await h.close() })(async()=>{
+    await assert.rejects(collectCliMetrics({...context(root),files}), error => error.inventoryReason===undefined && error.scopeMismatch===true) })
+}))
+test('prefixMatches rejects a same-prefix replacement with a new inode',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'); await save(a,[row(window.startUtc)])
+  const before=await stat(a), expected=createHash('sha256').update(await readFile(a)).digest('hex')
+  assert.equal(await prefixMatches(a,before,expected),true)
+  const content=await readFile(a); await rename(a,a+'.old'); await writeFile(a,Buffer.concat([content,Buffer.from(JSON.stringify(row(window.startUtc))+'\n')]))
+  assert.equal(await prefixMatches(a,before,expected),false)
+}))
+
+test('prefixMatches does not trust a prefix read while the file keeps changing',()=>fixture(async(root,project)=>{
+  const a=join(project,'a.jsonl'); await save(a,[{...row(window.startUtc),marker:'unstable'}])
+  const before=await stat(a), expected=createHash('sha256').update(await readFile(a)).digest('hex')
+  const probe=await open(a,'r'),prototype=Object.getPrototypeOf(probe),originalRead=prototype.read; await probe.close()
+  const patched=mock.method(prototype,'read',async function(...args){ const result=await originalRead.apply(this,args); await appendFile(a,'{}\n'); return result })
+  try { assert.equal(await prefixMatches(a,before,expected),false) } finally { patched.mock.restore() }
+  assert.equal(await prefixMatches(a,before,expected),true)
 }))

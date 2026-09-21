@@ -86,10 +86,50 @@ therefore remains incomplete when samples would require that history.
 Limits are 50,000 directory entries, 10,000 candidate files, 4GiB scanned bytes
 (including Codex header reads), 256MiB per scanned file and 16MiB per line. At
 most 500 files/256MiB are selected for metrics, with a 64MiB selected-file limit.
-The existing 30-second process limit remains. Invalid JSON/timestamps, partial
-tails, unsafe paths, mixed identities, concurrent changes and limit overruns
-fail closed: no new pending batch, upload or checkpoint advancement. These are
-hard limits, never silent truncation. Verify runtime and memory against the
+The existing 30-second process limit remains. Invalid JSON/timestamps, unsafe
+paths, mixed identities, out-of-scope sources and limit overruns fail closed: no
+new pending batch, upload or checkpoint advancement. These are hard limits, never
+silent truncation.
+
+**Timing failures omit only the observation.** Two reasons are timing, and only
+under narrow conditions; everything else stays fail closed:
+
+- `source-changed` — a selected file is the **same regular file** (same device and
+  inode, path and realpath unchanged), did **not shrink**, and the SHA-256 of the
+  bytes seen at discovery still matches its prefix (a live writer only appended),
+  but its size or times changed between discovery and read; or **new** files
+  appeared in the scope while every earlier candidate is still present. The timing
+  result is raised only after every file has passed its integrity checks, so an
+  append cannot mask a replacement, a rewrite or a path change elsewhere. The
+  prefix is re-read from the current file with its inode checked, and counts only
+  if the file held still while it was hashed (up to three attempts). A change after
+  the last check can only cause an omitted observation, never accepted data.
+- `partial-tail` — the last line has no newline and the file was modified within
+  the last 10 minutes. An older broken tail, or a modification time more than two
+  seconds in the future, is `stale-tail` and fails closed, so a permanently damaged
+  file cannot silently suppress observations forever. The failing file is not
+  named in output; find it with a local scan for a `.jsonl` without a trailing
+  newline in the collector scope, and repair or move it with its owner's approval.
+
+Replacement (new inode), a directory or symlink in its place, truncation, an
+in-place rewrite (even one that grows), a removed or moved candidate, and any
+path/scope change remain integrity failures.
+
+A live agent appends to its transcript all day, so failing closed on these meant
+the whole usage batch (tokens, tools, skills) was never sent during busy hours and
+windows older than `--days` were lost for good. The helper now exits 75 with only
+`{"observationUnavailable":"<reason>"}` on stdout; the CLI accepts exactly that
+string for these two reasons and sends that window **without**
+`collection.observability`, printing the reason on stderr and as
+`observationSkipped` in its JSON output. The changed data is never accepted — the
+window simply has no observation.
+
+Known limits of this first step: the server cannot yet tell an omitted window
+from a collector without observability (a fixed optional marker is planned with
+the next contract change), and the reason is printed only by the run that created
+the batch — a later retry of the same pending batch or a dry-run does not repeat
+it. Measuring appended files without loss (prefix digests, complete-line
+boundaries, late records) is a separate, not yet designed change. Verify runtime and memory against the
 approved real source before enabling; keep the original collector active if the
 inventory cannot be safely processed. Discovery adds no cache or source writes.
 Read-guard and runtime receipt inventories remain explicit and separate.
@@ -151,7 +191,9 @@ before changing the managed installation. Disabling the feature does not strip
 observations already frozen into pending data.
 
 Config, hash, Node version, scope, child-process or schema errors fail the new
-collection closed: no new pending batch, upload or checkpoint advance. Approved
+collection closed: no new pending batch, upload or checkpoint advance. The only
+exception is a verified helper's exit 75 with a fixed timing reason (above), which
+omits the observation for that window and sends the batch. Approved
 missing/partial files produce explicit `incomplete` provenance when the helper
 can represent the missingness; unsupported/uncollected states are retained.
 They are not silently dropped. Child execution is limited to 30 seconds,

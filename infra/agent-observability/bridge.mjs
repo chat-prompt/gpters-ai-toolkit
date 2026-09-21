@@ -4,6 +4,8 @@ import { collectObservability } from './collect-core.mjs'
 import { agentObservabilitySchema } from '../../packages/lib/src/features/ax/agent-observability-contract.ts'
 import { createReadStream } from 'node:fs'
 
+/** Inventory reasons that describe a source changing during the scan, not an unsafe or out-of-scope source. */
+const TIMING_REASONS = ['source-changed', 'partial-tail']
 const chunks = []
 let size = 0
 try {
@@ -18,8 +20,11 @@ try {
   if (observation.agentId !== input.agentId || observation.source !== input.source || observation.window.startUtc !== input.window.startUtc || observation.window.endUtc !== input.window.endUtc) throw new Error('Scope changed')
   process.stdout.write(JSON.stringify(observation))
 } catch (cause) {
-  const reasons=['source-consistency','entry-limit','candidate-limit','file-limit','scan-limit','invalid-header','header-limit','invalid-record','session-identity','invalid-timestamp','line-limit','partial-tail','selection-limit']
+  const reasons=['source-consistency','source-changed','entry-limit','candidate-limit','file-limit','scan-limit','invalid-header','header-limit','invalid-record','session-identity','invalid-timestamp','line-limit','partial-tail','stale-tail','selection-limit']
   const reason=reasons.includes(cause?.inventoryReason) ? ` Inventory: ${cause.inventoryReason}.` : ''
   process.stderr.write(`Observation bridge failed validation; no batch was sent.${reason}\n`)
-  process.exitCode = 1
+  // Timing failures (a source file changed or was still being written during the scan) exit 75 with only the
+  // fixed reason on stdout, so the collector can send the window without observability. Everything else stays fail closed.
+  if (TIMING_REASONS.includes(cause?.inventoryReason)) { process.stdout.write(JSON.stringify({ observationUnavailable: cause.inventoryReason })); process.exitCode = 75 }
+  else process.exitCode = 1
 }
