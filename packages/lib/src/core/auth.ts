@@ -16,8 +16,8 @@ const log = createLogger('auth')
 
 const DEFAULT_ROLE: UserRole = 'viewer'
 const DEFAULT_ORG_ROLE: OrgRole = 'org_viewer'
-/** DB 조회 실패 시 직전 토큰을 믿어 주는 최대 시간 */
-const STALE_AUTH_GRACE_MS = 10 * 60 * 1000
+/** DB 조회 실패 시 직전 토큰을 믿어 주는 최대 시간 (정지 반영이 늦어지는 상한이기도 하다) */
+const STALE_AUTH_GRACE_MS = 30 * 60 * 1000
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: process.env.NODE_ENV === 'development',

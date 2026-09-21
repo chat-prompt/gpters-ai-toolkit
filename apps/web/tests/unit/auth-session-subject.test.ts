@@ -105,10 +105,10 @@ describe.each([
     expect(await callbacks.jwt({ token })).toMatchObject({ sub: 'account-1', role: 'admin' })
   })
 
-  it('drops the session when the database stays unreachable past the grace window', async () => {
+  it('drops the session when the database stays unreachable past the 30 minute grace window', async () => {
     mocks.dbDown = true
     // 정지 여부를 확인하지 못한 채 오래된 토큰의 권한을 계속 쓰게 두지 않는다
-    const stale = { sub: 'account-1', email: 'member@gpters.org', role: 'admin', tokenRefreshedAt: Date.now() - 11 * 60_000 }
+    const stale = { sub: 'account-1', email: 'member@gpters.org', role: 'admin', tokenRefreshedAt: Date.now() - 31 * 60_000 }
     expect(await callbacks.jwt({ token: stale })).toBeNull()
     expect(await callbacks.jwt({ token: { sub: 'account-1', email: 'member@gpters.org', role: 'admin' } })).toBeNull()
   })
