@@ -1,7 +1,7 @@
 /**
  * AX Dashboard — 팀원별 구독 패널
  *
- * `import-ax-subscriptions.ts` 스크립트로 결제내역 트래커 시트에서 옮겨진
+ * `import-ax-subscriptions.ts` 스크립트로 「지니파이(주) 결제 내역」 `구독 로스터` 탭에서 옮겨진
  * `ax_subscriptions` 테이블을 읽어 벤더별 집계와 (관리자 전용) 팀원별 상세를 보여준다.
  */
 
@@ -25,7 +25,7 @@ const meta: AxPanelMeta = {
   id: 'subscriptions',
   title: '구독 현황',
   description: '팀에서 쓰는 AI·SaaS 구독 플랜과 월 비용',
-  source: '결제내역 트래커 시트 (수동 import)',
+  source: '결제 내역 시트 · 구독 로스터 (수동 import)',
   visibility: 'org',
   parentId: 'client-usage',
   usesPeriod: false,
