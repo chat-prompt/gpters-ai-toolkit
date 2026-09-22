@@ -26,8 +26,10 @@ function BootstrapLine({summary}:{summary:ObservationSummary}){
   if(capability===undefined)return null
   const text=!value?capabilityText[capability]:!value.sessions?'이 기간에 부팅 스냅샷 없음'
     :`가장 큰 파일 ${number(value.largestFileCharsLatest!)}자${value.fileCharsLimit?` / 한도 ${number(value.fileCharsLimit)}자 (${number(value.largestFileCharsLatest!/value.fileCharsLimit*100)}%)`:''} · 잘림 ${value.truncatedSessions}세션 · 상한 근접 ${value.nearLimitSessions}세션 · 경고 ${value.warningSessions}세션 · 스냅샷 ${value.sessions}개 · 기간 최대 ${number(value.largestFileCharsMax!)}자`
-  const prompt=value&&value.sessions&&typeof value.promptCharsSum==='number'
-    ?`최근 ${number(value.promptCharsLatest!)}자 (주입 파일 ${number(value.projectContextCharsLatest!)}자) · 평균 ${number(value.promptCharsSum/value.sessions)}자 · 최대 ${number(value.promptCharsMax!)}자 · 도구 스키마 ${number(value.toolSchemaCharsLatest!)}자`:null
+  // Older collectors did not report prompt sizes; the average covers only the snapshots that did, and says so.
+  const measured=value?.promptSessions??value?.sessions??0
+  const prompt=value&&measured&&typeof value.promptCharsSum==='number'
+    ?`최근 ${number(value.promptCharsLatest!)}자 (주입 파일 ${number(value.projectContextCharsLatest!)}자) · 평균 ${number(value.promptCharsSum/measured)}자 · 최대 ${number(value.promptCharsMax!)}자 · 도구 스키마 ${number(value.toolSchemaCharsLatest!)}자${measured<value.sessions?` · 스냅샷 ${measured}/${value.sessions}개 기준`:''}`:null
   return <>
     <p className={`mt-1 text-xs ${value&&value.truncatedSessions>0?styles.attention:'text-[var(--text-secondary)]'}`}>부팅 파일: {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
     {prompt&&<p className="mt-1 text-xs text-[var(--text-secondary)]">부팅 프롬프트: {prompt}</p>}

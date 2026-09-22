@@ -292,3 +292,33 @@ test('prefixState tells a changed prefix from a file that never held still',()=>
   const timer=setInterval(()=>appendFile(path,'more\n').catch(()=>{}),0)
   try { const states=new Set(); for(let i=0;i<20;i++) states.add(await prefixState(path,before,expected,1)); assert.ok(!states.has('mismatch')) } finally { clearInterval(timer) }
 }))
+test('unread files: a same-size rewrite during the scan fails closed; their session names still attribute and block attestation',()=>fixture(async(root,project)=>{
+  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module'), realLstat=fs.lstat
+  const old=join(project,'old.jsonl'); await save(old,[row('2026-01-01T12:00:00Z')]); await utimes(old,new Date('2026-01-01'),new Date('2026-01-01'))
+  let fired=false
+  fs.lstat=async (...args)=>{ if(!fired && String(args[0])===old){ fired=true; const h=await fs.open(old,'r+'); await h.write(Buffer.from('X'),0,1,0); await h.close() } return realLstat(...args) }; syncBuiltinESMExports()
+  try { await assert.rejects(discoverWindowFiles(context(root)),error=>error.inventoryReason==='source-consistency') } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+  await rm(old)
+  // An old transcript of session "quiet": its name attributes guard rows even though it was not read.
+  const quiet=join(project,'quiet-session.jsonl'); await save(quiet,[turn('quiet-session','q1',null,'2026-01-01T01:00:00Z')]); await utimes(quiet,new Date('2026-01-01'),new Date('2026-01-01'))
+  const scannedSessions=new Set(); await discoverWindowFiles({...context(root),scannedSessions}); assert.ok(scannedSessions.has('quiet-session'))
+}))
+test('a session named in two approved projects is never attested from the recent copy alone',()=>fixture(async(root,project)=>{
+  await mkdir(join(root,'second'))
+  const scope={source:'claude-code',scope:{sessionsDir:root,projectSlugs:['allowed','second']},window}
+  const earlier=join(root,'second','s.jsonl'); await save(earlier,[turn('s','e1',null,'2026-01-01T01:00:00Z')]); await utimes(earlier,new Date('2026-01-01'),new Date('2026-01-01'))
+  await save(join(project,'s.jsonl'),[turn('s','u1',null,'2026-01-02T01:00:00Z')])
+  const files=await discoverWindowFiles(scope); assert.equal(files.length,1); assert.equal(files[0].completeFromStart,false)
+  await rm(earlier); assert.equal((await discoverWindowFiles(scope))[0].completeFromStart,true)
+}))
+test('Codex: another project\'s old session resuming during the scan keeps its exclusion path (not timing)',()=>fixture(async(root)=>{
+  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module'), realLstat=fs.lstat
+  const config={source:'codex',scope:{sessionsDir:root,codexThreadSource:'aitk-agent:example'},window}
+  const header=tag=>({type:'session_meta',payload:{thread_source:tag,cwd:'/work/x'}})
+  const own=join(root,'agent.jsonl'), foreign=join(root,'human.jsonl')
+  await save(own,[header('aitk-agent:example'),{type:'event_msg',timestamp:'2026-01-02T01:00:00Z',payload:{type:'token_count',info:{last_token_usage:{input_tokens:5}}}}])
+  await save(foreign,[header('human')]); await utimes(foreign,new Date('2026-01-01'),new Date('2026-01-01'))
+  let fired=false
+  fs.lstat=async (...args)=>{ if(!fired && String(args[0])===foreign){ fired=true; await appendFile(foreign,JSON.stringify({type:'event_msg',timestamp:'2026-01-02T02:00:00Z'})+'\n') } return realLstat(...args) }; syncBuiltinESMExports()
+  try { assert.deepEqual((await discoverWindowFiles(config)).map(f=>f.path),[own]) } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+}))

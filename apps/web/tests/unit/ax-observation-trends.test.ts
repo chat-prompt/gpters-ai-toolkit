@@ -157,7 +157,7 @@ describe('persisted observation projection',()=>{
   const both=projectObservationTrends([observationRow(v3(start,change,boot(2,29000,29500,prompt(42000,43000,85000)))),observationRow(v3(change,end,boot(1,27400,27400,prompt(40000,40000,40000,32000,21000))),'later')],q,now)
   expect(both.streams[0].summary.metrics.bootstrap).toMatchObject({sessions:3,promptCharsLatest:40000,promptCharsMax:43000,promptCharsSum:125000,projectContextCharsLatest:32000,toolSchemaCharsLatest:21000})
   const older=projectObservationTrends([observationRow(v3(start,change,boot(2,29000,29500))),observationRow(v3(change,end,boot(1,27400,27400,prompt(40000,40000,40000))),'later')],q,now)
-  expect(older.streams[0].summary.metrics.bootstrap?.promptCharsSum).toBeUndefined()
+  expect(older.streams[0].summary.metrics.bootstrap).toMatchObject({sessions:3,promptSessions:1,promptCharsSum:40000,promptCharsLatest:40000})
  })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})

@@ -286,3 +286,14 @@ test('shared guard log: renamed away between identification and opening is a rot
   assert.equal(result.metrics.readGuardDeny,1); assert.equal(result.capability,'incomplete'); assert.deepEqual([result.provenance.filesExpected,result.provenance.filesRead],[2,1])
  } finally { fs.realpath=realRealpath; syncBuiltinESMExports() }
 })
+test('boot reports: an OpenClaw build without prompt sizes keeps the file metrics; a wrong-shaped prompt size is malformed',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
+ db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
+ const older={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:1,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:40000,truncated:true}]}
+ db.prepare('insert into session_nodes values (?,?)').run('older',JSON.stringify({systemPromptReport:older}))
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)})
+ assert.equal(result.capability,'supported'); assert.equal(result.value.truncatedSessions,1); assert.equal(result.value.promptCharsSum,undefined)
+ db.prepare('insert into session_nodes values (?,?)').run('bigger-part',JSON.stringify({systemPromptReport:{...older,systemPrompt:{chars:100,projectContextChars:200},tools:{schemaChars:1}}})); db.close()
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
+})
