@@ -4,7 +4,7 @@
  * Drizzle ORM schema for PostgreSQL including tables for
  * catalog items, users, tags, MCP servers, and related entities.
  */
-import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, uniqueIndex, halfvec, real, numeric } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, pgEnum, integer, bigint, boolean, primaryKey, jsonb, index, uniqueIndex, unique, halfvec, real, numeric } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
 /** Internal operator decisions only. No transcripts or credentials belong here. */
@@ -1266,6 +1266,11 @@ export const axSubscriptions = pgTable('ax_subscriptions', {
   index('ax_subscriptions_vendor_idx').on(table.vendor),
   index('ax_subscriptions_status_idx').on(table.status),
   index('ax_subscriptions_owner_name_idx').on(table.ownerName),
+  /**
+   * 구독 키 — 코드의 subscriptionKey 와 같은 네 열. 동시 apply 가 같은 구독을 두 줄 넣지 못하게 한다(DEV-4491).
+   * NULLS NOT DISTINCT: 키 함수가 NULL 을 한 값으로 묶듯 DB 도 NULL 끼리 같은 값으로 본다(0043)
+   */
+  unique('ax_subscriptions_key_uniq').on(table.vendor, table.plan, table.ownerName, table.renewalDay).nullsNotDistinct(),
 ])
 
 export type AxSubscriptionRecord = typeof axSubscriptions.$inferSelect

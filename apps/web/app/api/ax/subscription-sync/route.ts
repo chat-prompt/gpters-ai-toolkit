@@ -44,6 +44,31 @@ function authorize(authorization: string | null): 'ok' | 'unconfigured' | 'unaut
   return constantTimeEqual(actualHash, expectedHash) ? 'ok' : 'unauthorized'
 }
 
+/** 0043 의 구독 키 유니크 제약 이름 (packages/db/src/schema.ts axSubscriptions) */
+const SUBSCRIPTION_KEY_CONSTRAINT = 'ax_subscriptions_key_uniq'
+
+/**
+ * 동시에 들어온 다른 apply 가 같은 구독을 먼저 넣어 유니크 제약에 걸렸는지.
+ *
+ * drizzle 은 드라이버 오류를 cause 로 감싸므로 cause 사슬을 따라가며 SQLSTATE 23505 와 제약 이름을 찾는다.
+ * Neon(NeonDbError)은 `constraint`, postgres-js 는 `constraint_name` 에 이름을 싣고, 둘 다 message 에도 이름이 있다.
+ */
+function isSubscriptionKeyConflict(cause: unknown): boolean {
+  for (let current = cause, depth = 0; current && typeof current === 'object' && depth < 5; depth++) {
+    const err = current as { code?: unknown; constraint?: unknown; constraint_name?: unknown; message?: unknown; cause?: unknown }
+    if (
+      err.code === '23505' &&
+      (err.constraint === SUBSCRIPTION_KEY_CONSTRAINT ||
+        err.constraint_name === SUBSCRIPTION_KEY_CONSTRAINT ||
+        (typeof err.message === 'string' && err.message.includes(SUBSCRIPTION_KEY_CONSTRAINT)))
+    ) {
+      return true
+    }
+    current = err.cause
+  }
+  return false
+}
+
 const error = (message: string, status: number, details?: string[]) =>
   NextResponse.json(details ? { error: message, details } : { error: message }, { status, headers: NO_STORE })
 
@@ -134,13 +159,24 @@ export async function POST(request: NextRequest) {
         ? [client.delete(axSubscriptions).where(inArray(axSubscriptions.id, plan.remove.map((row) => row.id)))]
         : []),
     ]
-    // Neon HTTP 는 batch 를 한 트랜잭션으로 돈다. 로컬 postgres-js 드라이버는 batch 가 없어 트랜잭션으로 묶는다
-    if (typeof (db as { batch?: unknown }).batch === 'function') {
-      await db.batch(build(db) as [BatchItem<'pg'>, ...BatchItem<'pg'>[]])
-    } else {
-      await db.transaction(async (tx) => {
-        for (const query of build(tx as unknown as typeof db)) await query
-      })
+    // Neon HTTP 는 batch 를 한 트랜잭션으로 돈다. 로컬 postgres-js 드라이버는 batch 가 없어 트랜잭션으로 묶는다.
+    // 해시 확인은 이 트랜잭션 밖이라, 거의 동시에 들어온 apply 둘이 모두 통과할 수 있다. 그때 늦은 쪽의 insert 는
+    // 구독 키 유니크 제약(0043)에 걸려 batch 전체가 롤백된다 — 아무것도 반쯤 쓰지 않고 409 로 "다시 plan" 을 알린다
+    try {
+      if (typeof (db as { batch?: unknown }).batch === 'function') {
+        await db.batch(build(db) as [BatchItem<'pg'>, ...BatchItem<'pg'>[]])
+      } else {
+        await db.transaction(async (tx) => {
+          for (const query of build(tx as unknown as typeof db)) await query
+        })
+      }
+    } catch (cause) {
+      if (!isSubscriptionKeyConflict(cause)) throw cause
+      console.warn('[ax/subscription-sync] concurrent apply hit the subscription key constraint; nothing was written')
+      return NextResponse.json(
+        { error: 'Subscriptions changed concurrently; nothing was applied. Run plan again', status: 'conflict', ...body },
+        { status: 409, headers: NO_STORE }
+      )
     }
 
     return NextResponse.json({ status: 'applied', ...body }, { headers: NO_STORE })
