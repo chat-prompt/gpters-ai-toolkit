@@ -124,11 +124,11 @@ string for these two reasons and sends that window **without**
 `observationSkipped` in its JSON output. The changed data is never accepted — the
 window simply has no observation.
 
-Known limits of this first step: the server cannot yet tell an omitted window
-from a collector without observability (a fixed optional marker is planned with
-the next contract change), and the reason is printed only by the run that created
-the batch — a later retry of the same pending batch or a dry-run does not repeat
-it. Measuring appended files without loss (prefix digests, complete-line
+The batch also carries only that fixed reason as `collection.observabilityFailure`,
+so the dashboard counts omitted windows separately from collectors without
+observability. Requires a server that accepts the field (deployed before this
+collector). The stderr reason is printed only by the run that created the batch —
+a later retry of the same pending batch or a dry-run does not repeat it. Measuring appended files without loss (prefix digests, complete-line
 boundaries, late records) is a separate, not yet designed change. Verify runtime and memory against the
 approved real source before enabling; keep the original collector active if the
 inventory cannot be safely processed. Discovery adds no cache or source writes.
@@ -155,7 +155,12 @@ or leave CLI inventory empty until an independently scoped source is available. 
 because the model provider is Codex.
 
 A read-guard file is eligible only when an operator has established that the log
-is exclusive to this agent and records `agentExclusive:true` in its file entry.
+is exclusive to this agent and records `agentExclusive:true` in its file entry,
+or — for a Claude collector with `cliInventory:"installed-scope"` — when it is a
+shared hook log entered with `"sessionFilter":"installed-scope"` (and neither
+`agentExclusive` nor `completeFromStart`). The helper then counts only rows whose
+`session` belongs to a Claude session found in this collector's own scope and also
+reads the rotated `<path>.1` when present (see README).
 This is an explicit private inventory attestation, not independent verification
 by the helper. A shared global hook log must not be attested as exclusive; its
 other sessions would otherwise be wrongly attributed. First-turn completeness
@@ -190,8 +195,17 @@ Never patch a pending batch or reuse its batch ID with changed content. Flush it
 before changing the managed installation. Disabling the feature does not strip
 observations already frozen into pending data.
 
+An OpenClaw agent database may be added as `"bootstrapReports":{"path":"/abs/agent.sqlite"}`
+for a Claude collector only: an owned regular file, not reached through a symlink.
+The helper opens it read-only with `node:sqlite` (loaded only when configured) and
+uploads only the boot-file counts described in the README.
+
 Config, hash, Node version, scope, child-process or schema errors fail the new
-collection closed: no new pending batch, upload or checkpoint advance. The only
+collection closed: no new pending batch, upload or checkpoint advance. The error
+names one fixed code — `node-version`, `config`, `artifact`, `helper-timeout`,
+`helper-output`, `helper-failed`, `unexpected-observation`, `validation` or the
+helper's inventory reason (e.g. `scan-limit`, `stale-tail`) — never a path, record
+or helper stderr, so an operator can tell a timeout from an integrity failure. The only
 exception is a verified helper's exit 75 with a fixed timing reason (above), which
 omits the observation for that window and sends the batch. Approved
 missing/partial files produce explicit `incomplete` provenance when the helper

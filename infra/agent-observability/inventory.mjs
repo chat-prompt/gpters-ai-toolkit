@@ -68,8 +68,12 @@ async function candidates(root,source,scope,limits) {
   return result.sort()
 }
 
-/** A fresh enumeration per new batch; private output paths never enter the observation payload. */
-export async function discoverWindowFiles({source,scope,window}, testLimits={}) {
+/**
+ * A fresh enumeration per new batch; private output paths never enter the observation payload.
+ * `scannedSessions`, when given, receives every Claude session ID found in scope (helper-internal only,
+ * used to attribute shared hook logs; never uploaded).
+ */
+export async function discoverWindowFiles({source,scope,window,scannedSessions}, testLimits={}) {
   if(!['claude-code','codex'].includes(source) || !scope?.sessionsDir) fail()
   const limits={...defaults,...testLimits}, root=await realpath(scope.sessionsDir), [start,end]=windowBounds(window)
   const paths=await candidates(root,source,scope,limits), files=[], snapshots=[]
@@ -90,6 +94,7 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
   }
   // Timing is decided only after every integrity check has passed, so a live append never masks one.
   let timing=null
+  const lineages=[]
   const mark=reason => { timing ??= reason }
   // Prefix re-reads count against the same scan budget as the first pass.
   const reread=async (path,before,expected) => { totalBytes+=before.size; if(totalBytes>limits.bytes) fail('scan-limit'); return prefixMatches(path,before,expected) }
@@ -108,6 +113,8 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
       totalBytes+=before.size; if(totalBytes>limits.bytes) fail('scan-limit')
       let offset=0, carry='', selected=false
       const sessionIds=new Set()
+      // Claude first-turn attestation: the first uuid record and every parent link, checked within this file only.
+      const lineage={first:null,uuids:new Set(),parents:[]}
       // Amortize filesystem round trips over large histories; all byte, line,
       // scope and identity limits still apply to every record and source.
       const decoder=new StringDecoder('utf8'), buffer=Buffer.alloc(1024*1024), prefix=createHash('sha256')
@@ -117,6 +124,10 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
         if(!row || typeof row!=='object' || Array.isArray(row)) fail('invalid-record')
         const sessionId=source==='codex' && row.type==='session_meta' ? row.payload?.id : source==='claude-code' ? row.sessionId ?? row.session_id : undefined
         if(sessionId!==undefined) { if(typeof sessionId!=='string' || !sessionId || sessionId.length>255) fail('session-identity'); sessionIds.add(sessionId); if(sessionIds.size>1) fail('session-identity') }
+        if(source==='claude-code' && typeof row.uuid==='string') {
+          lineage.first ??= {parent:row.parentUuid,sidechain:row.isSidechain===true,compact:row.isCompactSummary===true}
+          lineage.uuids.add(row.uuid); if(row.parentUuid!=null) lineage.parents.push(row.parentUuid)
+        }
         if(source==='codex' && row.type==='session_meta' && !allowedHeader(row,scope)) fail()
         if(source==='codex' && row.type==='turn_context' && scope.projectSlugs?.length && !allowedHeader({type:'session_meta',payload:{...row.payload,thread_source:scope.codexThreadSource}},scope)) fail()
         const timestamp=row.timestamp
@@ -147,10 +158,17 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
       // an old tail, or a modification time in the future, stays fail closed. Timing is deferred like above.
       const age=Date.now()-before.mtimeMs
       if(carry.trim()) { if(age>=-CLOCK_SKEW_MS && age<=LIVE_TAIL_MS) { mark('partial-tail'); continue } fail('stale-tail') }
+      const sessionKey=digest([source,sessionIds.size ? ['session',...sessionIds] : ['file',relative(root,path)]])
+      if(source==='claude-code' && sessionIds.size) {
+        for(const id of sessionIds) scannedSessions?.add(id)
+        const first=lineage.first
+        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,
+          selfContained:Boolean(first) && first.parent===null && !first.sidechain && !first.compact && lineage.parents.every(parent=>lineage.uuids.has(parent))})
+      }
       if(selected) {
         selectedBytes+=before.size
         if(files.length>=limits.selectedFiles || selectedBytes>limits.selectedBytes || before.size>64*1024**2) fail('selection-limit')
-        files.push({path,sessionKey:digest([source,sessionIds.size ? ['session',...sessionIds] : ['file',relative(root,path)]]),completeFromStart:false,expectedIdentity:identity(before),expectedPrefix:snapshot.prefix})
+        files.push({path,sessionKey,completeFromStart:false,expectedIdentity:identity(before),expectedPrefix:snapshot.prefix})
       }
     } finally { await handle.close() }
   }
@@ -184,5 +202,23 @@ export async function discoverWindowFiles({source,scope,window}, testLimits={}) 
     } finally { await handle.close() }
   }
   if(timing) fail(timing)
+  attestFirstTurns(files,lineages)
   return files
+}
+/**
+ * Claude sessions are complete from their start only when, among every scanned file with that session ID,
+ * exactly one is a main thread (its first uuid record is not a sidechain), that file is selected and
+ * self-contained (first uuid record has no parent and is not a compact summary, every parent resolves inside
+ * the file), and every other file starts as a sidechain (subagents). Anything else stays unproven.
+ */
+function attestFirstTurns(files,lineages) {
+  const bySession=new Map()
+  for(const item of lineages) { if(!bySession.has(item.sessionKey)) bySession.set(item.sessionKey,[]); bySession.get(item.sessionKey).push(item) }
+  const selected=new Set(files.map(file=>file.path))
+  for(const file of files) {
+    const group=bySession.get(file.sessionKey)
+    if(!group) continue
+    const mains=group.filter(item=>!item.sidechain)
+    file.completeFromStart=mains.length===1 && mains[0].selfContained && selected.has(mains[0].path)
+  }
 }

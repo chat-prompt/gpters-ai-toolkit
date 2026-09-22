@@ -94,3 +94,41 @@ test('combined payload excludes private config and no unsupported Hermes CLI met
  const result=await collectObservability({agentId:'example-agent',source:'hermes',window})
  assert.equal(result.schemaVersion,1);assert.equal(result.metricCapabilities.firstTurnTokens,'unsupported');assert.deepEqual(result.receipts,[])
 })
+import { collectBootstrapMetrics } from './bootstrap.mjs'
+import { appendFile, realpath, rename } from 'node:fs/promises'
+test('shared guard log: only scanned sessions count, a missing rotated copy is normal, a missing log is not zero',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const path=join(dir,'guard.jsonl'), row=(session,decision,ts=inside)=>JSON.stringify({ts,decision,session})+'\n', files=[{path,sessionKey:'g',sessionFilter:'installed-scope'}]
+ await writeFile(path,row('own','deny')+row('other','allow')+row('other','weird-foreign-format')+row('own','allow',end))
+ let result=await collectReadGuardMetrics({files,window,sessions:new Set(['own'])})
+ assert.deepEqual(result.metrics,{readGuardAllow:0,readGuardDeny:1}); assert.equal(result.capability,'supported'); assert.equal(result.provenance.filesExpected,1)
+ result=await collectReadGuardMetrics({files,window,sessions:new Set(['nobody'])}); assert.deepEqual(result.metrics,{readGuardAllow:0,readGuardDeny:0}); assert.equal(result.capability,'supported')
+ await rename(path,path+'.1'); await writeFile(path,row('own','allow'))
+ result=await collectReadGuardMetrics({files,window,sessions:new Set(['own'])}); assert.deepEqual(result.metrics,{readGuardAllow:1,readGuardDeny:1}); assert.equal(result.provenance.filesRead,2)
+ await rm(path); result=await collectReadGuardMetrics({files,window,sessions:new Set(['own'])}); assert.equal(result.capability,'incomplete')
+ // Without the scanned session set (static inventory) a shared log is never attributed.
+ await writeFile(path,row('own','deny')); result=await collectReadGuardMetrics({files,window}); assert.equal(result.capability,'incomplete'); assert.equal(result.metrics.readGuardDeny,null)
+})
+test('shared guard log: a stable file ending mid-line is incomplete, not silently complete',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const path=join(dir,'guard.jsonl'), row=decision=>JSON.stringify({ts:inside,decision,session:'own'})+'\n', files=[{path,sessionKey:'g',sessionFilter:'installed-scope'}]
+ await writeFile(path,row('deny')); await appendFile(path,row('allow').slice(0,10))
+ const result=await collectReadGuardMetrics({files,window,sessions:new Set(['own'])})
+ assert.equal(result.provenance.parseFailures,1); assert.equal(result.capability,'incomplete'); assert.equal(result.metrics.readGuardDeny,1)
+})
+test('boot reports: absent config adds nothing, other runtimes are unsupported, unreadable sources are missing not zero',async t=>{
+ assert.equal(await collectBootstrapMetrics({source:'claude-code',window,reports:undefined}),undefined)
+ assert.deepEqual(await collectBootstrapMetrics({source:'codex',window,reports:{path:'/nowhere'}}),{value:null,capability:'unsupported'})
+ assert.deepEqual(await collectBootstrapMetrics({source:'claude-code',window,reports:{path:'/nowhere/agent.sqlite'}}),{value:null,capability:'incomplete'})
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
+ db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
+ const at=Date.parse('2026-01-02T03:00:00Z'), report=extra=>JSON.stringify({systemPromptReport:{generatedAt:at,provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:true,truncatedFiles:1,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:40000,truncated:true},{missing:true,truncated:false}],...extra}})
+ db.prepare('insert into session_nodes values (?,?)').run('ok',report({}))
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}})
+ assert.deepEqual(result,{capability:'supported',value:{sessions:1,truncatedSessions:1,nearLimitSessions:0,warningSessions:1,largestFileCharsMax:40000,largestFileCharsLatest:40000,fileCharsLimit:32000}})
+ db.prepare('insert into session_nodes values (?,?)').run('bad',report({bootstrapMaxChars:'32000'})); db.close()
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
+ result=await collectBootstrapMetrics({source:'claude-code',window:{startUtc:'2026-01-05T00:00:00.000Z',endUtc:'2026-01-06T00:00:00.000Z'},reports:{path}})
+ assert.deepEqual(result,{capability:'supported',value:{sessions:0,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:null,largestFileCharsLatest:null,fileCharsLimit:null}})
+})

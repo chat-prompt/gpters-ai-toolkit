@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
 import { relative, isAbsolute } from 'node:path'
 import { open, realpath } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { histogram } from './histogram.mjs'
 import { prefixMatches } from './inventory.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
@@ -235,10 +236,76 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
   if (unknownFirst && metrics.firstTurnTokens) metricCapabilities.firstTurnTokens = 'incomplete'
   return { metrics,metricCapabilities,capability,provenance:counters }
 }
-export async function collectReadGuardMetrics({ files = [], window }) {
-  const [start,end] = windowBounds(window), {records,counters} = await readRecords(files)
+/**
+ * Reads a shared, append-only hook log and its rotated predecessor (`<path>.1`, optional).
+ * Returns complete lines from a stable prefix: a file that only grew during the read keeps the bytes read
+ * (proven by re-hashing that prefix on the same inode), dropping the line still being written. A missing
+ * rotated file is normal; any other change (replacement, truncation, rewrite) marks the log unreadable.
+ */
+async function readSharedLog(path, counters) {
+  const lines = []
+  for (const [candidate, optional] of [[`${path}.1`, true], [path, false]]) {
+    let handle
+    try {
+      if (await realpath(candidate) !== candidate) throw new Error('Unsafe log path')
+      handle = await open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    } catch (error) {
+      if (optional && error?.code === 'ENOENT') continue
+      counters.filesExpected++; continue
+    }
+    counters.filesExpected++
+    try {
+      const before = await handle.stat()
+      if (!before.isFile() || before.size > 64 * 1024 * 1024) { counters.rotatedFiles++; continue }
+      const bytes = Buffer.alloc(before.size)
+      let offset = 0
+      while (offset < bytes.length) { const read = await handle.read(bytes, offset, bytes.length-offset, offset); if (!read.bytesRead) break; offset += read.bytesRead }
+      const after = await handle.stat()
+      let text = bytes.subarray(0, offset).toString('utf8')
+      if (offset !== before.size || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) {
+        const expected = createHash('sha256').update(bytes.subarray(0, offset)).digest('hex')
+        if (offset !== before.size || !await prefixMatches(candidate, { dev: before.dev, ino: before.ino, size: before.size }, expected)) { counters.rotatedFiles++; continue }
+        // Appended while read: the line being written belongs to a later window's read.
+        text = text.slice(0, text.lastIndexOf('\n') + 1)
+      }
+      counters.filesRead++
+      const parts = text.split('\n')
+      if (parts.at(-1)) counters.parseFailures++
+      lines.push(...parts.slice(0, -1))
+    } finally { await handle.close() }
+  }
+  return lines
+}
+/**
+ * Read-guard allow/deny counts for the window.
+ *
+ * Files are either attested exclusive to the agent (`agentExclusive`), or a shared hook log read with
+ * `sessionFilter:'installed-scope'`, where only rows whose `session` is one of the agent's scanned Claude
+ * sessions count. Other agents' rows are skipped without being interpreted.
+ */
+export async function collectReadGuardMetrics({ files = [], window, sessions }) {
+  const [start,end] = windowBounds(window)
+  const exclusive = files.filter(file => file?.sessionFilter === undefined), shared = files.filter(file => file?.sessionFilter !== undefined)
+  const {records,counters} = await readRecords(exclusive)
+  const rows = records.map(({row}) => ({ row }))
+  let sharedRead = false
+  for (const file of shared) {
+    if (file.sessionFilter !== 'installed-scope' || !(sessions instanceof Set) || typeof file.path !== 'string') { counters.filesExpected++; continue }
+    const readBefore = counters.filesRead
+    for (const line of await readSharedLog(file.path, counters)) {
+      if (!line.trim()) continue
+      counters.recordsRead++
+      // A rotated copy never repeats a row; identical lines are separate reads (e.g. the same file twice).
+      let row
+      try { row = JSON.parse(line) } catch { counters.parseFailures++; continue }
+      if (!row || typeof row !== 'object' || Array.isArray(row)) { counters.parseFailures++; continue }
+      // Rows of other agents' sessions are never interpreted, so their format cannot affect this agent's state.
+      if (typeof row.session === 'string' && sessions.has(row.session)) rows.push({ row })
+    }
+    if (counters.filesRead > readBefore) sharedRead = true
+  }
   let allow = 0, deny = 0, recognized = 0
-  for (const {row} of records) {
+  for (const {row} of rows) {
     if (!['allow','deny'].includes(row.decision)) { counters.unsupportedRecords++; continue }
     // Supported log format is ISO ts. Numeric epochs are deliberately not guessed.
     const at = typeof row.ts === 'string' ? Date.parse(row.ts) : NaN
@@ -247,7 +314,8 @@ export async function collectReadGuardMetrics({ files = [], window }) {
     if (at < start || at >= end) continue
     if (row.decision === 'allow') allow++; else deny++
   }
-  const observed = recognized > 0 || (counters.filesRead > 0 && counters.recordsRead === 0)
+  // A fully read shared log with no rows for this agent is an observed zero, not missing data.
+  const observed = recognized > 0 || sharedRead || (counters.filesRead > 0 && counters.recordsRead === 0)
   const capability = state(counters,observed)
   return { metrics:{readGuardAllow: observed ? allow:null,readGuardDeny:observed ? deny:null},
     metricCapabilities:{readGuardAllow:capability,readGuardDeny:capability},capability,provenance:counters }

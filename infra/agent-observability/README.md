@@ -60,6 +60,14 @@ reuse its ID with different content; this command is for local review only.
 - First-turn input samples are included only when the first usage in the complete
   session lies in `[start,end)`. A session's first record in a reporting window
   is not automatically its first turn. Partial history marks this metric incomplete.
+  Adapter version `3` attests complete history for dynamically discovered Claude
+  sessions when, among every scanned file carrying that session ID, exactly one is
+  a main thread (its first uuid record is not a sidechain), that file is selected
+  for the window and self-contained (its first uuid record has `parentUuid:null`
+  and is not a compact summary, and every `parentUuid` resolves inside the file),
+  and every other file starts as a sidechain (subagents). Anything else, and every
+  Codex session, stays unproven. Version `3` first-turn numbers are not comparable
+  with version `2`, which never attested dynamic sessions.
 - Peak context is the maximum observed in-window input per session, not lifetime
   peak. Histograms merged across windows describe *session-window peaks*. They
   must not be presented as distinct-session lifetime peaks.
@@ -73,6 +81,22 @@ reuse its ID with different content; this command is for local review only.
   host; paths, tool inputs, session keys and content are excluded. An existing
   empty guard log yields observed zero; missing files yield null. Numeric epoch
   units and unrecognized decisions remain incomplete.
+  A shared guard log (one hook log for every session on the account) is read only
+  with `sessionFilter:"installed-scope"`: rows whose `session` is one of the Claude
+  session IDs found in this collector's installed scope count; every other row is
+  skipped without being interpreted. `<path>.1` (the hook's rotated copy) is read
+  too when present. A log appended to during the read keeps its bytes read once
+  the same inode's prefix re-hashes identically; the line still being written is
+  left for the next window. Session IDs stay inside the helper.
+- Boot-file health (adapter version `3`, Claude/OpenClaw only) reads OpenClaw's
+  agent database read-only (`bootstrapReports.path`, `node:sqlite` with
+  `readOnly`). Each session's latest `systemPromptReport` generated inside
+  `[start,end)` for the `claude-cli` provider counts once: snapshots, truncated,
+  near-limit and warning snapshots, the largest injected file's characters (max and
+  latest) and the per-file limit. No file name or path leaves the host. OpenClaw
+  keeps only a session's newest report, so a boot replaced before its window is
+  collected is not counted. An unreadable or busy database is `incomplete` with
+  null; a malformed report marks the value incomplete.
 - Hermes and OpenClaw CLI metrics are explicitly unsupported. Their exact-bound
   normalized runtime receipts remain usable. A provider named Codex does not
   establish the Codex JSONL format.

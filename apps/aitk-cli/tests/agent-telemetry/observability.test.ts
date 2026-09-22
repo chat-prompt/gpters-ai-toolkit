@@ -107,7 +107,7 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     const sent: string[] = []; vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(init.body); return response() }))
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const result = await runAgentTelemetryCollect(opts())
-    expect(sent).toHaveLength(1); expect(JSON.parse(sent[0]).collection.observability).toBeUndefined()
+    expect(sent).toHaveLength(1); expect(JSON.parse(sent[0]).collection.observability).toBeUndefined(); expect(JSON.parse(sent[0]).collection.observabilityFailure).toBe(reason)
     expect(result.dryRun).toBe(false); expect(state().pending).toBeUndefined(); expect(state().committed.lastWindowEndUtc).toBe(now.toISOString())
     expect(stderr.mock.calls.map(call => String(call[0])).join('')).toContain(`observation omitted for this window (${reason})`)
   })
@@ -139,9 +139,29 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     expect(state().committed.lastWindowEndUtc).toBeNull(); expect(state().pending.batch.collection.observability).toBeUndefined()
     await runAgentTelemetryCollect(opts()); expect(sent[1]).toBe(sent[0]); expect(state().pending).toBeUndefined()
   })
-  it.each(['exit', 'stdout', 'stderr'])('bounds helper %s failure and never exposes stderr', async kind => {
+  it.each([['exit', 'helper-failed'], ['stdout', 'helper-output'], ['stderr', 'helper-output']])('bounds helper %s failure and never exposes stderr', async (kind, code) => {
     fakeHelper(kind === 'stdout' ? "process.stdout.write('x'.repeat(512001))" : kind === 'stderr' ? "process.stderr.write('x'.repeat(64001))" : "process.stderr.write('/private/secret-fixture/raw-record'); process.exitCode=1")
-    await expect(runAgentTelemetryCollect(opts())).rejects.toThrow(/^Observation bridge failed; check/); expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
+    const failure = await runAgentTelemetryCollect(opts()).then(() => null, (cause: Error) => cause.message)
+    expect(failure).toMatch(new RegExp(`^Observation bridge failed \\(${code}\\); check`)); expect(failure).not.toContain('secret-fixture')
+    expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
+  })
+  it.each([
+    ['config-mode', 'config'], ['helper-hash', 'artifact'], ['node22', 'node-version'],
+    ['fixed helper reason', 'scan-limit'], ['unknown helper reason', 'helper-failed'], ['helper reason with extra keys', 'helper-failed'],
+  ])('reports fail-closed %s with only the fixed code %s', async (label, code) => {
+    if (label === 'config-mode') chmodSync(configPath, 0o644)
+    if (label === 'helper-hash') writeFileSync(helperPath, 'changed')
+    if (label === 'node22') Object.defineProperty(process.versions, 'node', { value: '22.0.0' })
+    if (label === 'fixed helper reason') fakeHelper("process.stdout.write(JSON.stringify({observationFailed:'scan-limit'})); process.exitCode=1")
+    if (label === 'unknown helper reason') fakeHelper("process.stdout.write(JSON.stringify({observationFailed:'/private/path'})); process.exitCode=1")
+    if (label === 'helper reason with extra keys') fakeHelper("process.stdout.write(JSON.stringify({observationFailed:'scan-limit',path:'/x'})); process.exitCode=1")
+    await expect(runAgentTelemetryCollect(opts())).rejects.toThrow(`Observation bridge failed (${code});`); expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
+  })
+  it('the actual bundled helper names a fixed reason when it fails closed', async () => {
+    const project = join(sessions, 'project-a'); mkdirSync(project)
+    writeFileSync(join(project, 'broken.jsonl'), '{not json\n')
+    config({ source: 'claude-code', cliInventory: 'installed-scope' })
+    await expect(attachAgentObservability(batch('claude-code'), configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })).rejects.toThrow('Observation bridge failed (invalid-record);')
   })
   it('kills a helper after its 30 second deadline', async () => {
     fakeHelper('setInterval(() => {}, 1000)'); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -196,6 +216,55 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     writeFileSync(path, [{ type: 'event_msg', timestamp: '2026-01-02T02:00:00Z', payload: { type: 'token_count', info: { last_token_usage: { input_tokens: 999 } } } }, header].map(row => JSON.stringify(row)).join('\n') + '\n')
     config({ source: 'codex', cliFiles: [{ path, sessionKey: 'session-a' }] })
     await expect(attachAgentObservability(batch('codex'), configPath, { sessionsDir: sessions, projectSlugs: ['project-a'], codexThreadSource: 'aitk-agent:example-agent' })).rejects.toThrow('Observation bridge failed')
+  })
+  it('counts only this agent\'s sessions from a shared guard log and its rotated copy, inside the actual helper', async () => {
+    const project = join(sessions, 'project-a'); mkdirSync(project)
+    const usage = (sessionId: string) => JSON.stringify({ type: 'assistant', sessionId, timestamp: '2026-01-02T12:00:00Z', message: { id: `m-${sessionId}`, stop_reason: 'end_turn', usage: { input_tokens: 42 } } }) + '\n'
+    writeFileSync(join(project, 'own.jsonl'), usage('own-session'))
+    const guard = join(root, 'shared-guard.jsonl'), row = (session: string, decision: string) => JSON.stringify({ ts: '2026-01-02T01:00:00.000Z', decision, session, path: '/private/guarded' }) + '\n'
+    writeFileSync(guard + '.1', row('own-session', 'deny') + row('foreign-session', 'deny'))
+    writeFileSync(guard, row('own-session', 'allow') + row('foreign-session', 'allow') + row('foreign-session', 'deny'))
+    config({ source: 'claude-code', cliInventory: 'installed-scope', readGuardFiles: [{ path: guard, sessionKey: 'shared-guard', sessionFilter: 'installed-scope' }] })
+    const value = batch('claude-code'); await attachAgentObservability(value, configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })
+    expect(value.collection.observability).toMatchObject({ capabilities: { readGuard: 'supported' }, metrics: { readGuardAllow: 1, readGuardDeny: 1 }, provenance: { readGuard: { filesExpected: 2, filesRead: 2 } } })
+    expect(JSON.stringify(value)).not.toContain('own-session'); expect(JSON.stringify(value)).not.toContain('/private/guarded')
+  })
+  it.each([
+    ['another source', { source: 'openclaw', readGuardFiles: [{ path: '/tmp/guard.jsonl', sessionKey: 'g', sessionFilter: 'installed-scope' }] }],
+    ['static inventory', { source: 'claude-code', cliFiles: [], readGuardFiles: [{ path: '/tmp/guard.jsonl', sessionKey: 'g', sessionFilter: 'installed-scope' }] }],
+    ['both attestations', { source: 'claude-code', cliInventory: 'installed-scope', readGuardFiles: [{ path: '/tmp/guard.jsonl', sessionKey: 'g', sessionFilter: 'installed-scope', agentExclusive: true }] }],
+    ['unknown filter', { source: 'claude-code', cliInventory: 'installed-scope', readGuardFiles: [{ path: '/tmp/guard.jsonl', sessionKey: 'g', sessionFilter: 'all' }] }],
+    ['filter on a CLI file', { source: 'claude-code', cliFiles: [{ path: '/tmp/a.jsonl', sessionKey: 'a', sessionFilter: 'installed-scope' }] }],
+    ['boot reports for Codex', { source: 'codex', bootstrapReports: { path: '/tmp/agent.sqlite' } }],
+    ['boot reports with extra keys', { source: 'claude-code', bootstrapReports: { path: '/tmp/agent.sqlite', agent: 'x' } }],
+    ['relative boot reports', { source: 'claude-code', bootstrapReports: { path: 'agent.sqlite' } }],
+  ])('rejects shared-source config for %s as a config failure', async (_label, extra) => {
+    config(extra as Record<string, unknown>)
+    const source = (extra as { source: string }).source
+    await expect(attachAgentObservability(batch(source), configPath, { sessionsDir: sessions, projectSlugs: ['project-a'], codexThreadSource: 'aitk-agent:example-agent' })).rejects.toThrow('Observation bridge failed (config);')
+  })
+  it('rejects a boot report database reached through a symlink', async () => {
+    const real = join(root, 'real.sqlite'), link = join(root, 'link.sqlite'); writeFileSync(real, ''); symlinkSync(real, link)
+    config({ source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path: link } }); mkdirSync(join(sessions, 'project-a'))
+    await expect(attachAgentObservability(batch('claude-code'), configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })).rejects.toThrow('Observation bridge failed (config);')
+  })
+  it('reads OpenClaw boot reports read-only inside the actual bundled helper (node:sqlite stays external)', async () => {
+    const { DatabaseSync } = await import('node:sqlite')
+    const path = join(root, 'agent.sqlite'), db = new DatabaseSync(path)
+    db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
+    const report = (at: number, rawChars: number, near: number) => JSON.stringify({ systemPromptReport: { generatedAt: at, provider: 'claude-cli', bootstrapMaxChars: 32000,
+      bootstrapTruncation: { warningShown: false, truncatedFiles: 0, nearLimitFiles: near }, injectedWorkspaceFiles: [{ name: 'AGENTS.md', path: '/private/ws/AGENTS.md', missing: false, rawChars, injectedChars: rawChars, truncated: false }] } })
+    const insert = db.prepare('insert into session_nodes values (?, ?)')
+    insert.run('a', report(Date.parse('2026-01-02T01:00:00Z'), 29000, 1)); insert.run('b', report(Date.parse('2026-01-02T05:00:00Z'), 27482, 1))
+    insert.run('old', report(Date.parse('2026-01-01T05:00:00Z'), 40000, 1))
+    insert.run('codex', JSON.stringify({ systemPromptReport: { generatedAt: Date.parse('2026-01-02T06:00:00Z'), provider: 'codex' } }))
+    db.close(); const before = sha(readFileSync(path))
+    mkdirSync(join(sessions, 'project-a')); config({ source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path } })
+    const value = batch('claude-code'); await attachAgentObservability(value, configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })
+    expect(value.collection.observability).toMatchObject({ metricCapabilities: { bootstrap: 'supported' }, provenance: { adapterVersion: '3' },
+      metrics: { bootstrap: { sessions: 2, truncatedSessions: 0, nearLimitSessions: 2, warningSessions: 0, largestFileCharsMax: 29000, largestFileCharsLatest: 27482, fileCharsLimit: 32000 } } })
+    expect(JSON.stringify(value)).not.toContain('AGENTS.md'); expect(sha(readFileSync(path))).toBe(before)
+    expect(readFileSync(join(built, 'bridge.mjs'), 'utf8')).toMatch(/import\(["']node:sqlite["']\)/)
   })
   it('retains explicit incomplete provenance for missing approved guard source', async () => {
     config({ readGuardFiles: [{ path: join(root, 'absent.jsonl'), sessionKey: 'exclusive', agentExclusive: true }] }); const value = batch(); await attachAgentObservability(value, configPath, { sessionsDir: sessions })
