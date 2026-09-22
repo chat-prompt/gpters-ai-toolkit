@@ -2,9 +2,9 @@
 import { collectCliMetrics, collectReadGuardMetrics } from './metrics.mjs'
 import { adaptRuntimeReceipts } from './runtime-receipts.mjs'
 import { discoverWindowFiles } from './inventory.mjs'
-import { collectBootstrapMetrics } from './bootstrap.mjs'
+import { collectBootstrapMetrics, readProbeSessions } from './bootstrap.mjs'
 export async function collectObservability(config) {
-  const { agentId, source, window, cliFiles = [], readGuardFiles = [], runtimeBindings = [], runtimeRecords = [], scope, bootstrapReports } = config
+  const { agentId, source, window, cliFiles = [], readGuardFiles = [], runtimeBindings = [], runtimeRecords = [], scope, bootstrapReports, bootProbe } = config
   if(config.cliInventory!==undefined && (config.cliInventory!=='installed-scope' || cliFiles.length)) throw new Error('Invalid dynamic inventory')
   // Session IDs stay inside the helper: they only attribute rows of a shared hook log to this agent.
   const scannedSessions=new Set()
@@ -16,7 +16,10 @@ export async function collectObservability(config) {
   // An integrity failure found by discovery is final: report it before other sources can outlast the time limit.
   if(failures.some(error=>!TIMING.includes(error?.inventoryReason))) throw failures[0]
   const runtime = adaptRuntimeReceipts({agentId,source,window,bindings:runtimeBindings,records:runtimeRecords})
-  const [cli,readGuard,bootstrap] = await Promise.all([settle(()=>collectCliMetrics({source,window,files:selectedCliFiles ?? [],scope})),
+  // The daily boot probe: its channel's sessions come from the approved session database (IDs stay in the helper).
+  const probeSessions=await settle(()=>readProbeSessions({source,reports:bootstrapReports,probe:bootProbe}))
+  const probe=bootProbe===undefined ? undefined : {ids:probeSessions?.ids,marker:bootProbe.marker}
+  const [cli,readGuard,bootstrap] = await Promise.all([settle(()=>collectCliMetrics({source,window,files:selectedCliFiles ?? [],scope,probe})),
     settle(()=>collectReadGuardMetrics({window,files:readGuardFiles,sessions:config.cliInventory==='installed-scope' ? scannedSessions : undefined})),
     settle(()=>collectBootstrapMetrics({source,window,reports:bootstrapReports}))])
   if(failures.length) throw failures.find(error=>!TIMING.includes(error?.inventoryReason)) ?? failures[0]

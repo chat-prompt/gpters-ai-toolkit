@@ -337,3 +337,20 @@ test('a read-guard row of a session whose transcript is unread (old) is still at
   const result=await collectObservability({agentId:'example-agent',...context(root),cliInventory:'installed-scope',readGuardFiles:[{path:guard,sessionKey:'g',sessionFilter:'installed-scope'}]})
   assert.equal(result.metrics.readGuardDeny,1); assert.equal(result.metricCapabilities.readGuardDeny,'supported')
 }))
+test('boot probe: only marked sessions of the probe channel count, apart from real first turns, and only when complete',()=>fixture(async(root,project)=>{
+  const user=(sessionId,uuid,parentUuid,timestamp,text)=>({type:'user',sessionId,uuid,parentUuid,timestamp,message:{role:'user',content:[{type:'text',text}]}})
+  await save(join(project,'probe.jsonl'),[user('probe','p0',null,'2026-01-02T02:30:00Z','<meta> [BOOT-PROBE] ok'),turn('probe','p1','p0','2026-01-02T02:30:05Z')])
+  await save(join(project,'dev.jsonl'),[user('dev','d0',null,'2026-01-02T03:00:00Z','debugging something'),turn('dev','d1','d0','2026-01-02T03:00:05Z')])
+  await save(join(project,'real.jsonl'),[user('real','r0',null,'2026-01-02T04:00:00Z','[BOOT-PROBE] typed elsewhere'),turn('real','r1','r0','2026-01-02T04:00:05Z')])
+  const files=await discoverWindowFiles(context(root)), probe={ids:new Set(['probe','dev']),marker:'[BOOT-PROBE]'}
+  let result=await collectCliMetrics({...context(root),files,probe})
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,1); assert.equal(result.metrics.probeFirstTurnTokens.sum,20)
+  assert.equal(result.metrics.firstTurnTokens.count,3)
+  // The probe database was busy: the probe is missing, never zero.
+  result=await collectCliMetrics({...context(root),files,probe:{ids:undefined,marker:'[BOOT-PROBE]'}}); assert.equal(result.metrics.probeFirstTurnTokens,null); assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete')
+  // Without a probe configuration the metric is absent (older collectors).
+  assert.equal('probeFirstTurnTokens' in (await collectCliMetrics({...context(root),files})).metrics,false)
+  // A probe session whose history is not proven complete makes the probe incomplete rather than dropping it silently.
+  await save(join(project,'probe.jsonl'),[user('probe','p0','earlier','2026-01-02T02:30:00Z','[BOOT-PROBE] ok'),turn('probe','p1','p0','2026-01-02T02:30:05Z')])
+  result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe}); assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
+}))

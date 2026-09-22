@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * AX 실행 관측 지표 패널 — 수집기가 보낸 구간별 관측(첫 턴·최대 입력·도구 결과·부팅 파일)을 보여 준다.
+ * AX 실행 관측 지표 패널 — 수집기가 보낸 구간별 관측(첫 턴·최대 입력·도구 결과·부팅 파일·테스트 첫 턴)을 보여 준다.
  * 결측은 0 이 아니라 상태 단어로, 관측 없이 보낸 구간은 사유별 개수로 표시한다.
  */
 import { useEffect, useState } from 'react'
@@ -34,6 +34,18 @@ function BootstrapLine({summary}:{summary:ObservationSummary}){
     <p className={`mt-1 text-xs ${value&&value.truncatedSessions>0?styles.attention:'text-[var(--text-secondary)]'}`}>부팅 파일: {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
     {prompt&&<p className="mt-1 text-xs text-[var(--text-secondary)]">부팅 프롬프트: {prompt}</p>}
   </>
+}
+/**
+ * Daily boot probe: the same fixed message every day, so its first-turn input is comparable across days. Shows the
+ * latest probe (from the newest window that measured one) and the period average.
+ */
+function ProbeLine({row}:{row:AgentObservationData['streams'][number]}){
+  const value=row.summary.metrics.probeFirstTurnTokens,capability=row.summary.metricCapabilities.probeFirstTurnTokens
+  if(capability===undefined)return null
+  const latest=[...row.points].reverse().find(point=>point.metrics.probeFirstTurnTokens?.count)
+  const text=!value?capabilityText[capability]:!value.count?'이 기간에 테스트 없음'
+    :`최근 ${number(latest?latest.metrics.probeFirstTurnTokens!.sum/latest.metrics.probeFirstTurnTokens!.count:value.sum/value.count)}토큰${latest?` (${when(latest.endUtc)} 구간)`:''} · 기간 평균 ${number(value.sum/value.count)}토큰 · 최소 ${number(value.min!)} · 최대 ${number(value.max!)} · ${value.count}회`
+  return <p className="mt-1 text-xs text-[var(--text-secondary)]">테스트 첫 턴 (고정 입력): {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
 }
 /** Windows sent without observability for a timing reason; usage for those windows was still collected. */
 function FailureLine({failures,total}:{failures:NonNullable<AgentObservationData['coverage']['observationFailures']>;total?:number}){
@@ -92,6 +104,7 @@ function ObservationPanelContent({days,agentId,refreshToken}:{days:7|30|90;agent
           <div className="flex flex-wrap items-baseline justify-between gap-2"><h4 className="break-all text-sm font-medium text-[var(--text-primary)]">{row.agentId} · {row.source}</h4><span className="text-xs text-[var(--text-secondary)]">관측 규격 {row.adapterVersion} · 최근 수집 {when(row.latestAt)}</span></div>
           <p className="mt-2 text-xs text-[var(--text-secondary)]">{row.summary.windows}개 구간 · {row.summary.completeWindow?'조회 기간 전체 관측':'조회 기간에 빈 구간 있음'}{row.excludedOverlaps||row.conflictingWindows?` · 겹침 ${row.excludedOverlaps}개 / 충돌 ${row.conflictingWindows}개 제외`:''}</p>
           <BootstrapLine summary={row.summary}/>
+          <ProbeLine row={row}/>
           {/* Failure windows carry no adapter version; show them once, on the newest card of the agent/source. */}
           {data.streams.findIndex(other=>other.agentId===row.agentId&&other.source===row.source)===index&&<FailureLine failures={(data.coverage.observationFailures??[]).filter(f=>f.agentId===row.agentId&&f.source===row.source)} total={data.coverage.observationFailureTotals?.find(t=>t.agentId===row.agentId&&t.source===row.source)?.windows}/>}
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{metrics.map(metric=><MetricValue key={metric.key} summary={row.summary} metric={metric}/>)}</div>

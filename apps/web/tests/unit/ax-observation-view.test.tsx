@@ -112,6 +112,16 @@ describe('observation panel scope and missingness',()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],adapterVersion:'3',summary:older}]})));render(<AgentObservationPanel days={7}/>)
   await screen.findByText(/부팅 파일:/); expect(screen.queryByText(/부팅 프롬프트/)).toBeNull()
  })
+ it('shows the latest daily boot probe and the period average, and nothing for collectors without it',async()=>{
+  const h=(values:number[])=>({bounds:[0,100,1000,8000,32000,64000,128000,200000,500000,1000000],counts:[0,0,0,0,0,0,values.length,0,0,0,0],count:values.length,sum:values.reduce((a,b)=>a+b,0),min:Math.min(...values),max:Math.max(...values)})
+  const probed={...summary,metrics:{...summary.metrics,probeFirstTurnTokens:h([102068,98000])},metricCapabilities:{...summary.metricCapabilities,probeFirstTurnTokens:'supported' as const}}
+  const points=[{startUtc:'2026-01-01T17:00:00.000Z',endUtc:'2026-01-01T18:00:00.000Z',metrics:{...summary.metrics,probeFirstTurnTokens:h([102068])},metricCapabilities:probed.metricCapabilities},{startUtc:'2026-01-02T17:00:00.000Z',endUtc:'2026-01-02T18:00:00.000Z',metrics:{...summary.metrics,probeFirstTurnTokens:h([98000])},metricCapabilities:probed.metricCapabilities}]
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],adapterVersion:'3',summary:probed,points}]})));render(<AgentObservationPanel days={7}/>)
+  await screen.findByText(/테스트 첫 턴 \(고정 입력\): 최근 98,000토큰 .* 기간 평균 100,034토큰 · 최소 98,000 · 최대 102,068 · 2회/)
+  cleanup()
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(data)));render(<AgentObservationPanel days={7}/>)
+  await screen.findAllByText(/example-agent/); expect(screen.queryByText(/테스트 첫 턴/)).toBeNull()
+ })
  it('omits the percentage when the per-file limit is unknown',async()=>{
   const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:1,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:100,largestFileCharsLatest:100,fileCharsLimit:null}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],summary:boot}]})));render(<AgentObservationPanel days={7}/>)

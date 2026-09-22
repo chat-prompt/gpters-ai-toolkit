@@ -206,6 +206,9 @@ observations already frozen into pending data.
 
 An OpenClaw agent database may be added as `"bootstrapReports":{"path":"/abs/agent.sqlite"}`
 for a Claude collector only: an owned regular file, not reached through a symlink.
+`"bootProbe":{"channel":"<Slack channel ID>","marker":"[BOOT-PROBE]"}` adds the
+daily boot probe (README); it requires `bootstrapReports` and a Claude
+`cliInventory:"installed-scope"`, an upper-case channel ID and a bracketed marker.
 The collector checks this before running the helper, so a missing, foreign-owned or
 symlinked database is a `config` failure that stops the new batch (usage included)
 until the config is fixed or the key removed.

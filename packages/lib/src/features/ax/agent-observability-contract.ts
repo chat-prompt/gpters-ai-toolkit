@@ -83,7 +83,7 @@ export type BootstrapObservation = z.infer<typeof bootstrapObservationSchema>
 const metricNames = ['firstTurnTokens', 'peakContextTokens', 'toolResultChars', 'compactionEvents', 'readGuardAllow', 'readGuardDeny'] as const
 const metricCapabilities = z.object({ firstTurnTokens: capabilitySchema, peakContextTokens: capabilitySchema,
   toolResultChars: capabilitySchema, compactionEvents: capabilitySchema, readGuardAllow: capabilitySchema, readGuardDeny: capabilitySchema,
-  bootstrap: capabilitySchema.optional() }).strict()
+  bootstrap: capabilitySchema.optional(), probeFirstTurnTokens: capabilitySchema.optional() }).strict()
 const counters = z.object({ filesExpected: count, filesRead: count, recordsRead: count, parseFailures: count,
   unsupportedRecords: count, missingTimestamps: count, duplicates: count, rotatedFiles: count }).strict()
 export const agentObservabilitySchema = z.object({
@@ -93,7 +93,9 @@ export const agentObservabilitySchema = z.object({
   receipts: z.array(runtimeReceiptSchema).max(500),
   metrics: z.object({ firstTurnTokens: observationHistogramSchema.nullable(), peakContextTokens: observationHistogramSchema.nullable(),
     toolResultChars: observationHistogramSchema.nullable(), compactionEvents: count.nullable(), readGuardAllow: count.nullable(), readGuardDeny: count.nullable(),
-    bootstrap: bootstrapObservationSchema.nullable().optional() }).strict(),
+    bootstrap: bootstrapObservationSchema.nullable().optional(),
+    /** First-turn input of the daily fixed boot probe sessions (same prompt every day), apart from real sessions */
+    probeFirstTurnTokens: observationHistogramSchema.nullable().optional() }).strict(),
   metricCapabilities,
   provenance: z.object({ adapterVersion: z.enum(['1', '2', '3']), cli: counters, readGuard: counters,
     runtime: z.object({ recordsRead: count, unmatchedRecords: count, unsupportedRecords: count, missingTimestamps: count, duplicates: count, conflicts: count }).strict() }).strict(),
@@ -106,12 +108,14 @@ export const agentObservabilitySchema = z.object({
     if ((capability === 'unsupported' || capability === 'uncollected') && value.metrics[key] !== null) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Unobserved metrics must be null'})
     if (capability === 'supported' && value.metrics[key] === null) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Supported metrics require observed values'})
   }
-  // Boot-file health is optional, but its value and capability always travel together.
-  const bootstrap = value.metrics.bootstrap, bootstrapCapability = value.metricCapabilities.bootstrap
-  if ((bootstrap === undefined) !== (bootstrapCapability === undefined)) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Boot-file value and capability must be present together'})
-  else if (bootstrapCapability !== undefined) {
-    if ((bootstrapCapability === 'unsupported' || bootstrapCapability === 'uncollected') && bootstrap !== null) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Unobserved metrics must be null'})
-    if (bootstrapCapability === 'supported' && bootstrap === null) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Supported metrics require observed values'})
+  // Optional metrics (boot-file health, boot probe) are absent from older rows; value and capability travel together.
+  for (const key of ['bootstrap', 'probeFirstTurnTokens'] as const) {
+    const metric = value.metrics[key], capability = value.metricCapabilities[key]
+    if ((metric === undefined) !== (capability === undefined)) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Optional metric value and capability must be present together'})
+    else if (capability !== undefined) {
+      if ((capability === 'unsupported' || capability === 'uncollected') && metric !== null) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Unobserved metrics must be null'})
+      if (capability === 'supported' && metric === null) ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Supported metrics require observed values'})
+    }
   }
 })
 /** Validated agent observation for one collection window */

@@ -149,13 +149,15 @@ function state(counters, observed) {
   return observed ? 'supported' : 'uncollected'
 }
 /** First-turn samples are only sessions whose observed first usage is in-window and full history is explicitly attested. */
-export async function collectCliMetrics({ source, files = [], window, scope }) {
+export async function collectCliMetrics({ source, files = [], window, scope, probe }) {
   const [start,end] = windowBounds(window), supported = ['claude-code','codex'].includes(source)
   const metricCapabilities = { firstTurnTokens: 'unsupported', peakContextTokens: 'unsupported', toolResultChars: 'unsupported', compactionEvents: 'unsupported' }
   const metrics = { firstTurnTokens: null, peakContextTokens: null, toolResultChars: null, compactionEvents: null }
   if (!supported) return { metrics, metricCapabilities, capability: 'unsupported', provenance: { ...emptyCounters(),filesExpected:files.length } }
   const { records,counters } = await readRecords(files, { scope, source }), usages = new Map(), results = new Map(), compactions = new Map(), sessions = new Map()
   let recognized = 0
+  // Boot probe: sessions of the probe channel whose first user message carries the marker (text never leaves here).
+  const probeMarked = new Map()
   function timed(item, type) {
     const value = item.row.timestamp
     const at = Date.parse(value)
@@ -165,6 +167,12 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
   for (const item of records) {
     const {row,session} = item
     let entry, usage, usageId, resultItems = [], compact = false, complete = true
+    if (probe?.ids && source === 'claude-code' && row.type === 'user' && row.isSidechain !== true && !probeMarked.has(session)
+      && typeof row.sessionId === 'string' && probe.ids.has(row.sessionId) && !row.message?.content?.some?.(b => b?.type === 'tool_result')) {
+      const content = row.message?.content
+      const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(b => typeof b?.text === 'string' ? b.text : '').join('') : ''
+      probeMarked.set(session, text.slice(0, 4000).includes(probe.marker))
+    }
     if (source === 'claude-code') {
       if (row.type === 'assistant' && row.message?.usage) {
         entry = timed(item,'usage'); usage = row.message.usage; usageId = row.message.id
@@ -214,8 +222,14 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
     if (compact) compactions.set(digest([source,session,row.uuid ?? row.id ?? item.key]),entry)
   }
   for (const usage of usages.values()) sessions.get(usage.session).usage.push(usage)
-  const first = [], peaks = []
-  let unknownFirst = false
+  const first = [], peaks = [], probeFirst = []
+  let unknownFirst = false, unknownProbe = false
+  for (const [key, session] of sessions) {
+    session.usage.sort((a,b) => a.at-b.at)
+    if (probeMarked.get(key) && session.usage.length && session.usage[0].at >= start && session.usage[0].at < end) {
+      if (session.complete) probeFirst.push(session.usage[0].value); else unknownProbe = true
+    }
+  }
   for (const session of sessions.values()) {
     session.usage.sort((a,b) => a.at-b.at)
     const observed = session.usage.filter(r => r.at >= start && r.at < end)
@@ -234,6 +248,14 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
   }
   for (const key of Object.keys(metricCapabilities)) metricCapabilities[key] = capability
   if (unknownFirst && metrics.firstTurnTokens) metricCapabilities.firstTurnTokens = 'incomplete'
+  if (probe !== undefined) {
+    // Busy session database: probe sessions cannot be recognized, so the probe is missing, never zero.
+    if (!probe.ids || !counters.filesRead && counters.filesExpected) { metrics.probeFirstTurnTokens = null; metricCapabilities.probeFirstTurnTokens = 'incomplete' }
+    else {
+      metrics.probeFirstTurnTokens = histogram(probeFirst)
+      metricCapabilities.probeFirstTurnTokens = capability === 'uncollected' ? 'supported' : unknownProbe || capability !== 'supported' ? 'incomplete' : 'supported'
+    }
+  }
   return { metrics,metricCapabilities,capability,provenance:counters }
 }
 /** Integrity failure of an approved shared log: fails the observation closed. */

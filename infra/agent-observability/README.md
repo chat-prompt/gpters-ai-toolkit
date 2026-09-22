@@ -101,6 +101,17 @@ reuse its ID with different content; this command is for local review only.
   and opening is a rotation (timing). A
   rewrite that happens before the bytes are read cannot be told from the file's
   state and is simply read. Session IDs stay inside the helper.
+- Boot probe (`bootProbe: {channel, marker}`, Claude with `bootstrapReports` and
+  the dynamic inventory): once a day a fixed one-line message starting with the
+  marker (e.g. `[BOOT-PROBE]`) is posted to the agent in one Slack channel. The
+  helper maps that channel's OpenClaw sessions (`session_key` containing
+  `:slack:channel:<id>:`) to their Claude CLI session IDs (`claudeCliSessionId`)
+  in the approved database, and counts the first-turn input of those whose first
+  user message carries the marker, under the same completeness rule as real first
+  turns, as `probeFirstTurnTokens`. The same input every day makes days comparable;
+  real first turns mix in conversation context. Probe sessions also remain in the
+  ordinary metrics. Only the histogram leaves the host — no channel, session ID or
+  message text. A busy database makes the probe `incomplete` with null.
 - Boot-file health (adapter version `3`, Claude/OpenClaw only) reads OpenClaw's
   agent database read-only (`bootstrapReports.path`, `node:sqlite` with
   `readOnly`). Each session's latest `systemPromptReport` generated inside

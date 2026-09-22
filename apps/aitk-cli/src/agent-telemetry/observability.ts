@@ -18,6 +18,7 @@ interface ObservationConfig {
   runtimeBindings?: unknown[]
   runtimeRecords?: unknown[]
   bootstrapReports?: { path: string }
+  bootProbe?: { channel: string; marker: string }
 }
 export interface ObservationScope { sessionsDir: string; projectSlugs?: string[]; codexThreadSource?: string }
 /** Fixed timing reasons the pinned helper may report with exit code 75. Anything else fails closed. */
@@ -63,7 +64,7 @@ function readOwned(path: string, maximum: number, privateMode: boolean): Buffer 
 }
 function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: ObservationScope): { config: ObservationConfig; helper: Buffer; bootstrapIdentity?: string } {
   const config = JSON.parse(readOwned(path, 240000, true).toString('utf8')) as ObservationConfig
-  const keys = ['version', 'agentId', 'source', 'helperPath', 'helperSha256', 'cliFiles', 'cliInventory', 'readGuardFiles', 'runtimeBindings', 'runtimeRecords', 'bootstrapReports']
+  const keys = ['version', 'agentId', 'source', 'helperPath', 'helperSha256', 'cliFiles', 'cliInventory', 'readGuardFiles', 'runtimeBindings', 'runtimeRecords', 'bootstrapReports', 'bootProbe']
   if (!config || typeof config !== 'object' || Object.keys(config).some(key => !keys.includes(key)) || config.version !== 1
     || config.agentId !== batch.agentId || config.source !== batch.collection.source || typeof config.helperPath !== 'string'
     || !/^[a-f0-9]{64}$/.test(config.helperSha256)) throw new Error('Bridge scope mismatch')
@@ -104,6 +105,15 @@ function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: 
     // The helper must read exactly this file: it re-checks device, inode and owner before and after its query.
     bootstrapIdentity = `${stat.dev}:${stat.ino}:${stat.uid}`
   }
+  if (config.bootProbe !== undefined) {
+    // The daily fixed boot probe: sessions of one Slack channel whose first message starts with a marker.
+    // It needs the approved OpenClaw database to map the channel to Claude sessions, and a Claude dynamic inventory.
+    const probe = config.bootProbe as { channel?: unknown; marker?: unknown }
+    if (!probe || typeof probe !== 'object' || Object.keys(probe).some(key => !['channel', 'marker'].includes(key))
+      || typeof probe.channel !== 'string' || !/^[A-Z0-9]{9,12}$/.test(probe.channel)
+      || typeof probe.marker !== 'string' || !/^\[[A-Z0-9-]{3,32}\]$/.test(probe.marker)
+      || config.bootstrapReports === undefined || config.cliInventory !== 'installed-scope' || batch.collection.source !== 'claude-code') throw new Error('Invalid boot probe')
+  }
   let helper: Buffer
   try { helper = readOwned(config.helperPath, 2000000, false) } catch { return failWith('artifact') }
   if (createHash('sha256').update(helper).digest('hex') !== config.helperSha256) failWith('artifact')
@@ -113,6 +123,7 @@ async function runHelper(config: ObservationConfig, helper: Buffer, batch: Agent
   const input = JSON.stringify({ agentId: batch.agentId, source: batch.collection.source, window: batch.window,
     cliFiles: config.cliFiles ?? [], cliInventory: config.cliInventory, readGuardFiles: config.readGuardFiles ?? [], runtimeBindings: config.runtimeBindings ?? [], runtimeRecords: config.runtimeRecords ?? [],
     ...(config.bootstrapReports ? { bootstrapReports: { path: config.bootstrapReports.path, identity: bootstrapIdentity } } : {}),
+    ...(config.bootProbe ? { bootProbe: config.bootProbe } : {}),
     scope: { sessionsDir: realpathSync(scope.sessionsDir), projectSlugs: scope.projectSlugs, codexThreadSource: scope.codexThreadSource } })
   return new Promise((resolve, reject) => {
     // Do not inherit collector credentials, HOME, NODE_OPTIONS or runtime agent settings.

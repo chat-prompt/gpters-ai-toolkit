@@ -58,14 +58,13 @@ function reportNumbers(report) {
  * @param testing.busyTimeoutMs - How long to wait for a busy database before reporting it incomplete
  * @returns `undefined` when not configured, otherwise the metric value and its capability
  */
-export async function collectBootstrapMetrics({ source, window, reports }, { busyTimeoutMs = 5000 } = {}) {
-  if (reports === undefined) return undefined
-  const provider = PROVIDERS[source]
-  if (!provider) return { value: null, capability: 'unsupported' }
-  const [start,end] = windowBounds(window)
+/**
+ * Runs one read-only query on the database file the collector approved (device, inode, owner). The file SQLite
+ * reads must be that file before and after the query, on every exit path: a change is an integrity failure, never
+ * missing data. Returns `{ busy: true }` only for a busy or locked database (transient missing data).
+ */
+async function queryApproved(reports, query, busyTimeoutMs) {
   const path = reports?.path
-  // The CLI approved this file (device, inode, owner) before the helper ran. The file SQLite reads must be that
-  // file before and after the query, on every exit path: a change is an integrity failure, never missing data.
   // Without the collector's approval there is nothing to compare against: never fall back to trusting the path.
   if (typeof reports?.identity !== 'string') throw integrity()
   const approved = reports.identity
@@ -76,32 +75,58 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
       return stat.isFile() ? `${stat.dev}:${stat.ino}:${stat.uid}` : null
     } catch { return null }
   }
-  const verify = async () => { const now = await identify(); if (!now || now !== approved) throw integrity(); return now }
-  const identity = await verify()
-  let rows
+  const identity = await identify()
+  if (!identity || identity !== approved) throw integrity()
   // Loaded only when configured, so the helper still runs on Node builds without node:sqlite.
   const { DatabaseSync } = await import('node:sqlite')
+  let rows
   try {
     const db = new DatabaseSync(path, { readOnly: true, timeout: busyTimeoutMs })
-    try {
-      // Reports whose time is not an integer are selected too, so they count as malformed instead of vanishing.
-      // A row that is not valid JSON is selected as null (malformed) instead of failing the whole query.
-      // Reports of another runtime are excluded before the row limit; ours with a non-integer time stay in.
-      rows = db.prepare(`select case when json_valid(entry_json) then json_extract(entry_json,'$.systemPromptReport') end as report
+    try { rows = query(db) } finally { db.close() }
+  } catch (error) {
+    // A missing table or any error other than busy/locked fails closed.
+    if (await identify() !== identity) throw integrity()
+    if (BUSY.has(error?.errcode & 0xff)) return { busy: true }
+    throw integrity()
+  }
+  if (await identify() !== identity) throw integrity()
+  return { rows }
+}
+
+// Slack channel IDs as OpenClaw writes them into session keys (`agent:<id>:slack:channel:<lowercase id>:…`).
+const CHANNEL = /^[A-Z0-9]{9,12}$/
+/**
+ * Claude CLI session IDs of the agent's sessions in the boot probe channel, from the approved session database.
+ * Only IDs leave this function, and only into the helper: they select which transcripts are probe candidates.
+ *
+ * @returns `undefined` when no probe is configured, `{ ids }`, or `{ busy: true }`
+ */
+export async function readProbeSessions({ source, reports, probe }, { busyTimeoutMs = 5000 } = {}) {
+  if (probe === undefined) return undefined
+  if (source !== 'claude-code' || !probe || !CHANNEL.test(probe.channel ?? '') || reports === undefined) throw integrity()
+  const result = await queryApproved(reports, db => db.prepare(`select json_extract(entry_json,'$.claudeCliSessionId') as id from session_nodes
+    where session_key like ? escape '\\' and json_valid(entry_json)`).all(`%:slack:channel:${probe.channel.toLowerCase()}:%`), busyTimeoutMs)
+  if (result.busy) return result
+  return { ids: new Set(result.rows.map(row => row.id).filter(id => typeof id === 'string' && /^[A-Za-z0-9-]{1,255}$/.test(id))) }
+}
+
+export async function collectBootstrapMetrics({ source, window, reports }, { busyTimeoutMs = 5000 } = {}) {
+  if (reports === undefined) return undefined
+  const provider = PROVIDERS[source]
+  if (!provider) return { value: null, capability: 'unsupported' }
+  const [start,end] = windowBounds(window)
+  // Reports whose time is not an integer are selected too, so they count as malformed instead of vanishing.
+  // A row that is not valid JSON is selected as null (malformed) instead of failing the whole query.
+  // Reports of another runtime are excluded before the row limit; ours with a non-integer time stay in.
+  const result = await queryApproved(reports, db => db.prepare(`select case when json_valid(entry_json) then json_extract(entry_json,'$.systemPromptReport') end as report
         from session_nodes where entry_json is null or not json_valid(entry_json) or (
           json_type(entry_json,'$.systemPromptReport') = 'object'
           and (json_type(entry_json,'$.systemPromptReport.provider') is not 'text' or json_extract(entry_json,'$.systemPromptReport.provider') = ?)
           and (json_type(entry_json,'$.systemPromptReport.generatedAt') is not 'integer'
             or (json_extract(entry_json,'$.systemPromptReport.generatedAt') >= ? and json_extract(entry_json,'$.systemPromptReport.generatedAt') < ?)))
-        limit ${MAX_ROWS + 1}`).all(provider, start, end)
-    } finally { db.close() }
-  } catch (error) {
-    // Only a busy or locked database is transient missing data; a missing table or any other error fails closed.
-    if (await identify() !== identity) throw integrity()
-    if (BUSY.has(error?.errcode & 0xff)) return { value: null, capability: 'incomplete' }
-    throw integrity()
-  }
-  if (await identify() !== identity) throw integrity()
+        limit ${MAX_ROWS + 1}`).all(provider, start, end), busyTimeoutMs)
+  if (result.busy) return { value: null, capability: 'incomplete' }
+  const rows = result.rows
   if (rows.length > MAX_ROWS) return { value: null, capability: 'incomplete' }
   const reportsInWindow = []
   let malformed = 0
