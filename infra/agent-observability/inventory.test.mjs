@@ -373,10 +373,16 @@ test('boot probe: unreadable channel info or an unproven session makes the probe
     assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete',`case ${label}`)
     await rm(join(project,`${label}.jsonl`))
   }
-  // A probe that was never answered is missing, not a day without a probe.
-  await save(join(project,'unanswered.jsonl'),[probeUser('unanswered',envelope('C0BUF7RC2SD'))])
+  // A probe that was never answered is missing, not a day without a probe — also when it is probe-like but misfit.
+  for(const [label,text] of [['unanswered',envelope('C0BUF7RC2SD')],['unanswered-misfit',envelope('C0BUF7RC2SD').replace(/"channel:C0BUF7RC2SD"/,'null')]]) {
+    await save(join(project,`${label}.jsonl`),[probeUser(label,text)])
+    const result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
+    assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete',`case ${label}`); await rm(join(project,`${label}.jsonl`))
+  }
+  // Sent in the last minutes of the window and not answered yet: still being answered, counted in the next window.
+  await save(join(project,'pending.jsonl'),[{...probeUser('pending',envelope('C0BUF7RC2SD')),timestamp:'2026-01-02T23:58:00Z'}])
   let result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
-  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); await rm(join(project,'unanswered.jsonl'))
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,0); await rm(join(project,'pending.jsonl'))
   result=await probeResult(root,project,[['resumed',envelope('C0BUF7RC2SD'),'earlier-leaf']])
   assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
   // Without a probe configuration the metric is absent (older collectors).
@@ -393,4 +399,10 @@ test('boot probe: hook output appended as another block and a written-out mentio
   await save(join(project,'named.jsonl'),[probeUser('named',envelope('C0BUF7RC2SD',{current:'@뽀짝이 [BOOT-PROBE] ok'})),probeReply('named')])
   const result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
   assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,2)
+}))
+test('boot probe: a DM whose history quotes a probe is simply not the probe channel',()=>fixture(async(root,project)=>{
+  const dm=envelope('C0BUF7RC2SD',{history:['#1 뽀밋이: <@U0AGV1N6YDP> [BOOT-PROBE] 기록·파일 쓰기 금지.'],current:'<@U0AGV1N6YDP> 안녕'}).replace('"channel:C0BUF7RC2SD"','"dm:D0ABCDEF12"')
+  await save(join(project,'dm.jsonl'),[probeUser('dm',dm),probeReply('dm')])
+  const result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
 }))
