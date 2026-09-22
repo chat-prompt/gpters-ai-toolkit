@@ -231,9 +231,13 @@ included in CLI failure output or telemetry. Only verified helper bytes execute,
 so replacing its pathname after verification cannot run replacement code.
 
 Opt-in runs acquire an exclusive per-checkpoint `.observation.lock` covering
-collection, pending persistence, upload and acknowledgment. A competing or stale
-lock stops without upload or checkpoint change. No stale lock is auto-deleted:
-an operator must verify that its owning process is gone before recovering it.
+collection, pending persistence, upload and acknowledgment. A competing lock stops
+without upload or checkpoint change. A collector stopped by SIGTERM, SIGINT or
+SIGHUP (logout, shutdown, `launchctl bootout`) releases its lock before exiting.
+A lock left anyway (SIGKILL, power loss) is reclaimed only when it is an owned
+regular file whose recorded pid no longer exists and that is older than 10
+minutes; it is moved aside atomically and deleted only if it is still that lock.
+An unreadable, recent or live lock still stops the run for an operator to inspect.
 Never remove an active lock. Dry run creates a private checkpoint directory and
 temporary lock but writes no checkpoint and makes no upload. Ordinary unconfigured
 collectors do not participate in this optional lock; do not mix old/unconfigured

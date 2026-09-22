@@ -14,7 +14,7 @@ vi.mock('node:child_process', async importOriginal => {
 vi.mock('../../src/output.js', () => ({ jsonOut: vi.fn(), error: (message: string) => { throw new Error(message) } }))
 import { createInstallation, writeAgentTelemetryInstallation, readAgentTelemetryInstallation } from '../../src/agent-telemetry/installation.js'
 import { runAgentTelemetryUpgrade } from '../../src/commands/agent-telemetry-lifecycle.js'
-import { runAgentTelemetryCollect } from '../../src/commands/agent-telemetry.js'
+import { observationLock, runAgentTelemetryCollect } from '../../src/commands/agent-telemetry.js'
 const now = new Date('2026-01-03T00:00:00.000Z')
 let root: string, sessions: string, checkpoints: string, configPath: string, helperPath: string, built: string, bundle: Buffer
 const originalNode = process.versions.node
@@ -174,6 +174,30 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     const first = runAgentTelemetryCollect(opts()); await ready; const before = readFileSync(statePath(), 'utf8')
     await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('lock unavailable'); expect(fetch).toHaveBeenCalledTimes(1); expect(readFileSync(statePath(), 'utf8')).toBe(before)
     accept(response()); await first; expect(state().pending).toBeUndefined()
+  })
+  it('reclaims only a lock left by a collector that is gone and older than 10 minutes', async () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const lock = statePath() + '.observation.lock'
+    const gone = await new Promise<number>(resolve => { const child = spawn(process.execPath, ['-e', '0']); child.on('exit', () => resolve(child.pid!)) })
+    const old = new Date(Date.now() - 11 * 60 * 1000).toISOString(), recent = new Date(Date.now() - 60 * 1000).toISOString()
+    // A live process (this test's parent) or a recent lock is never taken.
+    for (const content of [{ pid: process.ppid, createdAt: old }, { pid: gone, createdAt: recent }]) {
+      writeFileSync(lock, JSON.stringify(content), { mode: 0o600 })
+      await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('lock unavailable'); expect(fetch).not.toHaveBeenCalled()
+      expect(JSON.parse(readFileSync(lock, 'utf8'))).toEqual(content)
+    }
+    writeFileSync(lock, JSON.stringify({ pid: gone, createdAt: old }), { mode: 0o600 })
+    await runAgentTelemetryCollect(opts()); expect(fetch).toHaveBeenCalledTimes(1); expect(existsSync(lock)).toBe(false)
+    expect(readdirSync(checkpoints).filter(name => name.includes('.stale-'))).toEqual([])
+  })
+  it('releases the lock when the collector is stopped by a signal', async () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const lock = join(checkpoints, 'signal-state.json.observation.lock')
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const release = observationLock(join(checkpoints, 'signal-state.json'), checkpoints)
+    expect(existsSync(lock)).toBe(true)
+    process.emit('SIGTERM', 'SIGTERM')
+    expect(existsSync(lock)).toBe(false); expect(exit).toHaveBeenCalledWith(143)
+    release()
+    expect(process.listenerCount('SIGTERM')).toBe(0)
   })
   it('does not steal stale lock or touch checkpoint', async () => {
     mkdirSync(checkpoints, { mode: 0o700 }); const lock = statePath() + '.observation.lock'; writeFileSync(lock, 'stale-fixture', { mode: 0o600 })

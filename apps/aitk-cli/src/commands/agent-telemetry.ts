@@ -5,7 +5,7 @@ import { attachAgentObservability } from '../agent-telemetry/observability.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { constants, closeSync, lstatSync, mkdirSync, openSync, unlinkSync, writeFileSync } from 'node:fs'
+import { constants, closeSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readConfig } from '../config.js'
 import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
@@ -215,19 +215,80 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
   }
 }
 
+/** A lock older than this whose process is gone was left by a collector that was killed (reboot, logout, bootout). */
+const STALE_LOCK_MS = 10 * 60 * 1000
+
+/**
+ * Whether the lock file at `lock` was left by a collector that no longer runs: an owned regular file recording a
+ * pid that no longer exists, older than {@link STALE_LOCK_MS}. Anything unreadable, recent or alive is kept.
+ */
+function staleLock(lock: string, content: string, now = Date.now()): boolean {
+  try {
+    const stat = lstatSync(lock)
+    if (!stat.isFile() || stat.uid !== process.getuid?.()) return false
+    const { pid, createdAt } = JSON.parse(content) as { pid?: unknown; createdAt?: unknown }
+    if (!Number.isSafeInteger(pid) || (pid as number) <= 0 || pid === process.pid || typeof createdAt !== 'string') return false
+    const created = Date.parse(createdAt)
+    if (!Number.isFinite(created) || now - created < STALE_LOCK_MS) return false
+    try { process.kill(pid as number, 0); return false }
+    catch (cause) { return (cause as NodeJS.ErrnoException).code === 'ESRCH' }
+  } catch { return false }
+}
+
+/**
+ * Moves a stale lock aside atomically and deletes it only if it is still the stale lock that was read; a lock another
+ * collector created in between is put back. Returns true when the lock path is free again.
+ */
+function reclaimStaleLock(lock: string): boolean {
+  let content: string
+  try { content = readFileSync(lock, 'utf8') } catch { return false }
+  if (!staleLock(lock, content)) return false
+  const aside = `${lock}.stale-${process.pid}-${Date.now()}`
+  try { renameSync(lock, aside) } catch { return false }
+  try {
+    if (readFileSync(aside, 'utf8') === content) { unlinkSync(aside); return true }
+    // Someone replaced it between the read and the move: restore theirs (never over a newer lock) and keep waiting.
+    try { linkSync(aside, lock) } catch { /* a newer lock exists; theirs stays aside for inspection */ }
+    unlinkSync(aside)
+  } catch { /* leave the moved file for inspection */ }
+  return false
+}
+
 /** Existing default collectors retain their behavior; opt-in work owns one state lock through acknowledgement. */
-function observationLock(path: string, directory: string): () => void {
+export function observationLock(path: string, directory: string): () => void {
   try {
     mkdirSync(directory, { recursive: true, mode: 0o700 })
     const stat = lstatSync(directory)
     if (!stat.isDirectory() || stat.uid !== process.getuid?.() || (stat.mode & 0o022) !== 0) throw new Error('Unsafe checkpoint directory')
     const lock = path + '.observation.lock'
-    const fd = openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+    const create = () => openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+    let fd: number
+    try { fd = create() }
+    catch (cause) {
+      // Only a lock left by a killed collector is reclaimed; a live or unreadable lock still stops this run.
+      if ((cause as NodeJS.ErrnoException).code !== 'EEXIST' || !reclaimStaleLock(lock)) throw cause
+      fd = create()
+    }
     try { writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })) }
     catch { closeSync(fd); unlinkSync(lock); throw new Error('Cannot record lock') }
-    return () => {
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
       try { closeSync(fd); unlinkSync(lock) }
       catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
+    }
+    // A collector stopped by a signal (logout, shutdown, launchctl bootout) releases its lock before exiting, so the
+    // next scheduled run is not blocked. The checkpoint rule is unchanged: nothing advances without acknowledgement.
+    const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT', 'SIGHUP']
+    const onSignal = (signal: NodeJS.Signals) => {
+      try { release() } catch { /* the next run reports the leftover lock */ }
+      process.exit(128 + (signal === 'SIGHUP' ? 1 : signal === 'SIGINT' ? 2 : 15))
+    }
+    for (const signal of signals) process.once(signal, onSignal)
+    return () => {
+      for (const signal of signals) process.off(signal, onSignal)
+      release()
     }
   } catch { throw new Error('Observation collector lock unavailable; inspect the private checkpoint and active process. No batch was sent. Never remove an active lock.') }
 }
