@@ -52,7 +52,26 @@ export const bootstrapObservationSchema = z.object({
   largestFileCharsLatest: count.nullable(),
   /** Per-file injection limit (characters) reported by the latest snapshot */
   fileCharsLimit: count.nullable(),
+  /** Whole system prompt (characters) of the latest snapshot; optional so rows stored before it still parse */
+  promptCharsLatest: count.nullable().optional(),
+  /** Largest whole system prompt (characters) across the window's snapshots */
+  promptCharsMax: count.nullable().optional(),
+  /** Sum of whole system prompt sizes across snapshots, so windows merge into an average */
+  promptCharsSum: count.nullable().optional(),
+  /** Injected workspace files in the latest snapshot's prompt (characters) */
+  projectContextCharsLatest: count.nullable().optional(),
+  /** Tool schemas sent with the latest snapshot (characters) */
+  toolSchemaCharsLatest: count.nullable().optional(),
 }).strict().superRefine((value, ctx) => {
+  // Prompt sizes travel together: all absent (older collectors), or all present — null exactly when there is no snapshot.
+  const prompt = [value.promptCharsLatest, value.promptCharsMax, value.promptCharsSum, value.projectContextCharsLatest, value.toolSchemaCharsLatest]
+  if (prompt.some(v => v !== undefined)) {
+    if (prompt.some(v => v === undefined) || (value.sessions === 0 ? prompt.some(v => v !== null) : prompt.some(v => v === null))
+      || (value.sessions > 0 && (value.promptCharsLatest! > value.promptCharsMax! || value.promptCharsSum! < value.promptCharsMax!
+        || value.promptCharsSum! > value.promptCharsMax! * value.sessions || value.projectContextCharsLatest! > value.promptCharsLatest!))) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid boot prompt size' })
+    }
+  }
   if (value.truncatedSessions > value.sessions || value.nearLimitSessions > value.sessions || value.warningSessions > value.sessions
     || (value.sessions === 0 ? value.largestFileCharsMax !== null || value.largestFileCharsLatest !== null || value.fileCharsLimit !== null
       : value.largestFileCharsMax === null || value.largestFileCharsLatest === null || value.largestFileCharsLatest > value.largestFileCharsMax)) {

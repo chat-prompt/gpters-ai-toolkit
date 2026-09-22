@@ -70,8 +70,16 @@ project/tag scope. It cannot specify a different root, owner, tag or project.
 Static `cliFiles` remain useful for bounded reviews but do not discover future
 sessions. Supplying both modes is invalid.
 
-Dynamic discovery scans actual record timestamps for `[startUtc,endUtc)`; old
-file mtimes do not suppress new or imported records. Each physical Codex file
+Dynamic discovery selects records by their own timestamps in `[startUtc,endUtc)`,
+but reads only files modified since 10 minutes before the window starts: appending
+updates a file's modification time, so an older file cannot hold a record written
+inside the window. Unread files are still identified; one that changes during the
+scan cannot be proven an append (its bytes were never read) and fails closed — the
+next run reads it, so no window is lost. This keeps an hourly run proportional to recent
+activity (on 2026-09-22: 22 files, 11MB of 2,911 files, 1.8GB) instead of rereading
+every transcript, which under launchd's background priority took 33–35s against the
+30-second limit. The accepted blind spot: a file copied in with its old modification
+time preserved is not read. Each physical Codex file
 must independently pass its header and subsequent scope checks. The scanner
 streams source bytes, compares file identity/size/mtime/ctime before and after,
 rechecks the directory inventory, then pins selected identities for metric reads.

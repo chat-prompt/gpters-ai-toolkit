@@ -1,7 +1,7 @@
-/** Read-only discovery inside an installed collector scope; never follows mtime as a window. */
+/** Read-only discovery inside an installed collector scope: reads only files modified since shortly before the window. */
 import { constants } from 'node:fs'
 import { open, readdir, realpath, lstat } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { createHash } from 'node:crypto'
 import { digest, windowBounds } from './runtime-receipts.mjs'
@@ -42,10 +42,21 @@ export async function prefixState(path,before,expected,attempts=3) {
 }
 /** True only when `prefixState` proves the prefix unchanged. */
 export async function prefixMatches(path,before,expected,attempts=3) { return await prefixState(path,before,expected,attempts)==='match' }
-// A missing final newline is timing only while the file is being written; an old broken tail stays fail closed.
+// A missing final newline is timing only while the file is being written; an old broken tail in a file that is
+// read (modified since shortly before the window) stays fail closed. Files unchanged before the window are not read.
 const LIVE_TAIL_MS = 10*60*1000
 // Filesystem timestamps can be a moment ahead of Date.now(); anything further in the future is not trusted.
 const CLOCK_SKEW_MS = 2000
+// A file last modified this long before the window starts cannot hold a record written inside it (appending
+// updates the modification time). Such files are identified but never read. Files copied in with an old
+// preserved modification time are the accepted blind spot of this rule (see README).
+const UNCHANGED_BEFORE_WINDOW_MS = 10*60*1000
+/** The Claude session a transcript belongs to by its layout: `<slug>/<id>.jsonl` or `<slug>/<id>/subagents/<file>.jsonl`. */
+function claudeSessionOf(root,path) {
+  const parts=relative(root,path).split(sep)
+  const id=parts.length===2 ? parts[1].replace(/\.jsonl$/,'') : parts.length===4 && parts[2]==='subagents' ? parts[1] : null
+  return id && /^[A-Za-z0-9-]{1,255}$/.test(id) ? id : null
+}
 function inside(root,path) { const value=relative(root,path); return value && value!=='..' && !value.startsWith('../') && !isAbsolute(value) }
 const defaults = { entries: 50000, candidates: 10000, bytes: 4*1024**3, fileBytes: 256*1024**2, lineBytes: 16*1024**2, selectedFiles: 500, selectedBytes: 256*1024**2 }
 function allowedHeader(row,scope) {
@@ -97,7 +108,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
   }
   // Timing is decided only after every integrity check has passed, so a live append never masks one.
   let timing=null
-  const lineages=[]
+  const lineages=[], unreadSessions=new Set()
   const mark=reason => { timing ??= reason }
   // Prefix re-reads count against the same scan budget as the first pass.
   // 'mismatch' is integrity; 'unstable' (still being written while re-hashed) is timing like the growth itself.
@@ -109,10 +120,18 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
       const before=await handle.stat()
       if(!before.isFile() || before.size>limits.fileBytes) fail('file-limit')
       const snapshot={path,before}; snapshots.push(snapshot)
-      // Codex's shared root is authorized by the first physical header, never by a nearby file.
+      // Codex's shared root is authorized by the first physical header, never by a nearby file. Headers are read
+      // even for old files, so another project's session resuming during the scan keeps its exclusion path.
       if(source==='codex') {
         const header=await headerOf(handle)
         if(!allowedHeader(header.row,scope)) { snapshot.excludedHeader=header.key; continue }
+      }
+      if(before.mtimeMs<start-UNCHANGED_BEFORE_WINDOW_MS) {
+        snapshot.unread=true
+        // Claude names a transcript `<sessionId>.jsonl` and keeps subagents under `<sessionId>/subagents/`. The
+        // name is enough to attribute a shared hook log row and to rule a session's first turn unproven.
+        if(source==='claude-code') { const id=claudeSessionOf(root,path); if(id) { scannedSessions?.add(id); if(!path.includes(`${sep}subagents${sep}`)) unreadSessions.add(id) } }
+        continue
       }
       totalBytes+=before.size; if(totalBytes>limits.bytes) fail('scan-limit')
       let offset=0, carry='', selected=false
@@ -167,7 +186,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
       if(source==='claude-code' && sessionIds.size) {
         for(const id of sessionIds) scannedSessions?.add(id)
         const first=lineage.first
-        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,
+        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,named:sessionIds.size===1 && claudeSessionOf(root,path)===[...sessionIds][0] && !path.includes(`${sep}subagents${sep}`),sessionId:[...sessionIds][0],
           selfContained:Boolean(first) && first.parent===null && !first.sidechain && !first.compact && lineage.parents.every(parent=>lineage.uuids.has(parent))})
       }
       if(selected) {
@@ -183,10 +202,13 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
     const now=new Set(current); if(!paths.every(path=>now.has(path))) fail()
     mark('source-changed')
   }
-  for(const {path,before,excludedHeader,prefix} of snapshots) {
+  for(const {path,before,excludedHeader,prefix,unread} of snapshots) {
     if(await realpath(path)!==path) fail()
     const named=await lstat(path)
     if(same(before,named)) continue
+    // A file skipped as unchanged that changed during the scan cannot be proven an append (its bytes were never
+    // read, so there is no prefix to re-hash): fail closed. The next run reads it normally, so no window is lost.
+    if(unread) fail()
     // A selected file appended after it was scanned is timing only when its scanned prefix is unchanged.
     if(!excludedHeader) {
       if(!grew(before,named)) fail()
@@ -208,7 +230,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
     } finally { await handle.close() }
   }
   if(timing) fail(timing)
-  attestFirstTurns(files,lineages)
+  attestFirstTurns(files,lineages,unreadSessions)
   return files
 }
 /**
@@ -217,7 +239,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
  * self-contained (first uuid record has no parent and is not a compact summary, every parent resolves inside
  * the file), and every other file starts as a sidechain (subagents). Anything else stays unproven.
  */
-function attestFirstTurns(files,lineages) {
+function attestFirstTurns(files,lineages,unreadSessions) {
   // A file of the session without any uuid record counts as a main thread, which keeps the session unproven.
   const bySession=new Map()
   for(const item of lineages) { if(!bySession.has(item.sessionKey)) bySession.set(item.sessionKey,[]); bySession.get(item.sessionKey).push(item) }
@@ -226,6 +248,11 @@ function attestFirstTurns(files,lineages) {
     const group=bySession.get(file.sessionKey)
     if(!group) continue
     const mains=group.filter(item=>!item.sidechain)
-    file.completeFromStart=mains.length===1 && mains[0].selfContained && selected.has(mains[0].path)
+    // Files unchanged before the window are not read, so the main transcript must also carry the session's own
+    // file name (`<sessionId>.jsonl`, Claude's layout): any other file of that session then lives under
+    // `<sessionId>/subagents/` as a sidechain and cannot be a second, unread main thread.
+    // An unread file carrying this session's name (a second copy, e.g. in another approved project) could be an
+    // earlier main thread: never attest over it.
+    file.completeFromStart=mains.length===1 && mains[0].selfContained && mains[0].named && selected.has(mains[0].path) && !unreadSessions.has(mains[0].sessionId)
   }
 }

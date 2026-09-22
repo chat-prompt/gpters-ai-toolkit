@@ -21,9 +21,11 @@ export interface ObservationRow {
   batchId: string; agentId: string; windowStart: Date | string; windowEnd: Date | string; collectedAt: Date | string
   collection: unknown
 }
+/** Boot-file health merged over a period; `promptSessions` counts the snapshots whose prompt size was reported. */
+export type BootstrapSummary = BootstrapObservation & { promptSessions?: number }
 export interface ObservationSummary {
   startUtc: string; endUtc: string; windows: number; coveredMs: number; completeWindow: boolean
-  metrics: AgentObservability['metrics']; metricCapabilities: AgentObservability['metricCapabilities']
+  metrics: Omit<AgentObservability['metrics'],'bootstrap'> & { bootstrap?: BootstrapSummary | null }; metricCapabilities: AgentObservability['metricCapabilities']
 }
 export interface ObservationStream {
   agentId: string; source: AgentObservability['source']; adapterVersion: string
@@ -69,15 +71,25 @@ export function observationRange(query:ObservationQuery,now=new Date()){
   return {start,end}
 }
 /** Boot-file health across windows: counts add up, sizes take the maximum and the latest snapshot. */
-function mergeBootstrap(values:BootstrapObservation[]):BootstrapObservation {
+function mergeBootstrap(values:BootstrapObservation[]):BootstrapSummary {
   const withSize=values.filter(v=>v.sessions>0),last=withSize.at(-1)
   const sum=(key:'sessions'|'truncatedSessions'|'nearLimitSessions'|'warningSessions')=>{
     const total=values.reduce((a,v)=>a+v[key],0)
     if(!Number.isSafeInteger(total))throw new Error('Observation aggregation overflow')
     return total
   }
-  return {sessions:sum('sessions'),truncatedSessions:sum('truncatedSessions'),nearLimitSessions:sum('nearLimitSessions'),warningSessions:sum('warningSessions'),
+  const merged:BootstrapSummary={sessions:sum('sessions'),truncatedSessions:sum('truncatedSessions'),nearLimitSessions:sum('nearLimitSessions'),warningSessions:sum('warningSessions'),
     largestFileCharsMax:withSize.length?Math.max(...withSize.map(v=>v.largestFileCharsMax!)):null,largestFileCharsLatest:last?.largestFileCharsLatest??null,fileCharsLimit:last?.fileCharsLimit??null}
+  // Prompt sizes merge over the windows that report them (newer collectors), with their own snapshot count, so the
+  // average never divides by snapshots whose prompt was not measured.
+  const withPrompt=withSize.filter(v=>typeof v.promptCharsSum==='number'),lastPrompt=withPrompt.at(-1)
+  if(lastPrompt){
+    const promptSum=withPrompt.reduce((a,v)=>a+v.promptCharsSum!,0),promptSessions=withPrompt.reduce((a,v)=>a+v.sessions,0)
+    if(!Number.isSafeInteger(promptSum)||!Number.isSafeInteger(promptSessions))throw new Error('Observation aggregation overflow')
+    Object.assign(merged,{promptCharsLatest:lastPrompt.promptCharsLatest,promptCharsMax:Math.max(...withPrompt.map(v=>v.promptCharsMax!)),promptCharsSum:promptSum,promptSessions,
+      projectContextCharsLatest:lastPrompt.projectContextCharsLatest,toolSchemaCharsLatest:lastPrompt.toolSchemaCharsLatest})
+  }
+  return merged
 }
 function summarize(observations:AgentObservability[],start:number,end:number,forceIncomplete=false):ObservationSummary {
   const selected=observations.filter(o=>Date.parse(o.window.startUtc)>=start&&Date.parse(o.window.endUtc)<=end)
