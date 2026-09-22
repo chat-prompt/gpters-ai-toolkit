@@ -225,3 +225,28 @@ export async function loadAgentObservations(query:ObservationQuery,now=new Date(
     .orderBy(desc(table.collectedAt)).limit(20001)
   return projectObservationTrends(rows.slice(0,20000),query,now,rows.length>20000)
 }
+
+/** One agent/source's daily boot probe series, compact enough for an MCP panel read */
+export interface BootProbeSeries {
+  agentId: string; source: string; adapterVersion: string
+  /** Period capability of the probe metric */
+  capability: AgentObservability['metricCapabilities']['firstTurnTokens']
+  /** Windows that measured at least one probe, oldest first: window end, probe count and their summed first-turn tokens */
+  points: Array<{ endUtc: string; count: number; sum: number }>
+  /** Windows in the period whose probe was incomplete (missing, not zero), oldest first */
+  incompleteWindows: string[]
+}
+/**
+ * Boot probe series per stream that reported the probe, for readers such as a nightly report.
+ *
+ * @param data - Projected observation data
+ * @returns Streams with a probe capability, each with its measured and incomplete windows
+ */
+export function summarizeBootProbes(data:AgentObservationData):BootProbeSeries[] {
+  return data.streams.filter(stream=>stream.summary.metricCapabilities.probeFirstTurnTokens!==undefined).map(stream=>({
+    agentId:stream.agentId,source:stream.source,adapterVersion:stream.adapterVersion,
+    capability:stream.summary.metricCapabilities.probeFirstTurnTokens!,
+    points:stream.points.flatMap(point=>point.metrics.probeFirstTurnTokens?.count?[{endUtc:point.endUtc,count:point.metrics.probeFirstTurnTokens.count,sum:point.metrics.probeFirstTurnTokens.sum}]:[]),
+    incompleteWindows:stream.points.filter(point=>point.metricCapabilities.probeFirstTurnTokens==='incomplete').map(point=>point.endUtc),
+  }))
+}
