@@ -43,8 +43,10 @@ function ProbeLine({row}:{row:AgentObservationData['streams'][number]}){
   const value=row.summary.metrics.probeFirstTurnTokens,capability=row.summary.metricCapabilities.probeFirstTurnTokens
   if(capability===undefined)return null
   const latest=[...row.points].reverse().find(point=>point.metrics.probeFirstTurnTokens?.count)
+  // The latest value comes only from the listed windows; a window holding two probes shows their average and says so.
+  const recent=latest?.metrics.probeFirstTurnTokens
   const text=!value?capabilityText[capability]:!value.count?'이 기간에 테스트 없음'
-    :`최근 ${number(latest?latest.metrics.probeFirstTurnTokens!.sum/latest.metrics.probeFirstTurnTokens!.count:value.sum/value.count)}토큰${latest?` (${when(latest.endUtc)} 구간)`:''} · 기간 평균 ${number(value.sum/value.count)}토큰 · 최소 ${number(value.min!)} · 최대 ${number(value.max!)} · ${value.count}회`
+    :`${recent?`최근 ${number(recent.sum/recent.count)}토큰${recent.count>1?` (${recent.count}회 평균)`:''} (${when(latest!.endUtc)} 구간) · `:''}기간 평균 ${number(value.sum/value.count)}토큰 · 최소 ${number(value.min!)} · 최대 ${number(value.max!)} · ${value.count}회`
   return <p className="mt-1 text-xs text-[var(--text-secondary)]">테스트 첫 턴 (고정 입력): {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
 }
 /** Windows sent without observability for a timing reason; usage for those windows was still collected. */

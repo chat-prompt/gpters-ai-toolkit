@@ -337,20 +337,41 @@ test('a read-guard row of a session whose transcript is unread (old) is still at
   const result=await collectObservability({agentId:'example-agent',...context(root),cliInventory:'installed-scope',readGuardFiles:[{path:guard,sessionKey:'g',sessionFilter:'installed-scope'}]})
   assert.equal(result.metrics.readGuardDeny,1); assert.equal(result.metricCapabilities.readGuardDeny,'supported')
 }))
-test('boot probe: only marked sessions of the probe channel count, apart from real first turns, and only when complete',()=>fixture(async(root,project)=>{
-  const user=(sessionId,uuid,parentUuid,timestamp,text)=>({type:'user',sessionId,uuid,parentUuid,timestamp,message:{role:'user',content:[{type:'text',text}]}})
-  await save(join(project,'probe.jsonl'),[user('probe','p0',null,'2026-01-02T02:30:00Z','<meta> [BOOT-PROBE] ok'),turn('probe','p1','p0','2026-01-02T02:30:05Z')])
-  await save(join(project,'dev.jsonl'),[user('dev','d0',null,'2026-01-02T03:00:00Z','debugging something'),turn('dev','d1','d0','2026-01-02T03:00:05Z')])
-  await save(join(project,'real.jsonl'),[user('real','r0',null,'2026-01-02T04:00:00Z','[BOOT-PROBE] typed elsewhere'),turn('real','r1','r0','2026-01-02T04:00:05Z')])
-  const files=await discoverWindowFiles(context(root)), probe={ids:new Set(['probe','dev']),marker:'[BOOT-PROBE]'}
-  let result=await collectCliMetrics({...context(root),files,probe})
-  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,1); assert.equal(result.metrics.probeFirstTurnTokens.sum,20)
-  assert.equal(result.metrics.firstTurnTokens.count,3)
-  // The probe database was busy: the probe is missing, never zero.
-  result=await collectCliMetrics({...context(root),files,probe:{ids:undefined,marker:'[BOOT-PROBE]'}}); assert.equal(result.metrics.probeFirstTurnTokens,null); assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete')
-  // Without a probe configuration the metric is absent (older collectors).
-  assert.equal('probeFirstTurnTokens' in (await collectCliMetrics({...context(root),files})).metrics,false)
-  // A probe session whose history is not proven complete makes the probe incomplete rather than dropping it silently.
-  await save(join(project,'probe.jsonl'),[user('probe','p0','earlier','2026-01-02T02:30:00Z','[BOOT-PROBE] ok'),turn('probe','p1','p0','2026-01-02T02:30:05Z')])
-  result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe}); assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
+// OpenClaw's envelope for a Slack message: conversation info, optional history, then the current message last.
+const envelope=(channel,{history=[],current='<@U0AGV1N6YDP> (뽀짝이) [BOOT-PROBE] 기록·파일 쓰기 금지. "ok" 한 줄로만 답해 주세요.'}={})=>[
+  'Conversation info: ⟦openclaw:ctx⟧','```json',JSON.stringify({chat_id:`channel:${channel}`,message_id:'1'}),'```','',
+  ...(history.length?['Chat history since last reply: ⟦openclaw:ctx⟧',...history,'']:[]),
+  'System: [2026-01-02 11:30:00 GMT+9] Slack message','',current].join('\n')
+const probeUser=(sessionId,text,parentUuid=null)=>({type:'user',sessionId,uuid:`${sessionId}-u0`,parentUuid,timestamp:'2026-01-02T02:30:00Z',message:{role:'user',content:text}})
+const probeReply=sessionId=>({type:'assistant',sessionId,uuid:`${sessionId}-a1`,parentUuid:`${sessionId}-u0`,timestamp:'2026-01-02T02:30:05Z',message:{id:`m-${sessionId}`,stop_reason:'end_turn',usage:{input_tokens:2,cache_creation_input_tokens:70240,cache_read_input_tokens:31826}}})
+const probeConfig={channel:'C0BUF7RC2SD',marker:'[BOOT-PROBE]'}
+async function probeResult(root,project,sessions){
+  for(const [id,text,parent] of sessions) await save(join(project,`${id}.jsonl`),[probeUser(id,text,parent),probeReply(id)])
+  return collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
+}
+test('boot probe: the last envelope line in the probe channel counts; quoted history, other channels and look-alikes do not',()=>fixture(async(root,project)=>{
+  const longHistory=Array.from({length:40},(_,i)=>`#${i} 2026-01-02 최하영: ${'긴 대화 '.repeat(40)}`)
+  const result=await probeResult(root,project,[
+    ['probe',envelope('C0BUF7RC2SD',{history:longHistory})],
+    ['quoted',envelope('C0BUF7RC2SD',{history:['#1 뽀밋이: <@U0AGV1N6YDP> [BOOT-PROBE] 기록·파일 쓰기 금지.'],current:'<@U0AGV1N6YDP> 오늘 배포 확인해 줘'})],
+    ['other-channel',envelope('C0OTHER0001')],
+    ['typed-inline',envelope('C0BUF7RC2SD',{current:'<@U0AGV1N6YDP> 이건 [BOOT-PROBE] 얘기야'})],
+  ])
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported')
+  assert.deepEqual([result.metrics.probeFirstTurnTokens.count,result.metrics.probeFirstTurnTokens.sum],[1,102068])
+  assert.equal(result.metrics.firstTurnTokens.count,4)
 }))
+test('boot probe: unreadable channel info or an unproven session makes the probe incomplete, never a silent zero',()=>fixture(async(root,project)=>{
+  let result=await probeResult(root,project,[['broken-info',envelope('C0BUF7RC2SD').replace(/\{"chat_id".*\}/,'{not json')]])
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete')
+  await rm(join(project,'broken-info.jsonl'))
+  result=await probeResult(root,project,[['resumed',envelope('C0BUF7RC2SD'),'earlier-leaf']])
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
+  // Without a probe configuration the metric is absent (older collectors).
+  assert.equal('probeFirstTurnTokens' in (await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root))})).metrics,false)
+}))
+test('boot probe: settings are re-checked inside the helper',async()=>{
+  const { collectObservability } = await import('./collect.mjs')
+  for(const bootProbe of [{channel:'c0buf7rc2sd',marker:'[BOOT-PROBE]'},{channel:'C0BUF7RC2SD',marker:''},{channel:'C0BUF7RC2SD',marker:'[BOOT-PROBE]',extra:1}])
+    await assert.rejects(collectObservability({agentId:'example-agent',source:'claude-code',window,bootProbe}),error=>error.inventoryReason==='source-consistency')
+})

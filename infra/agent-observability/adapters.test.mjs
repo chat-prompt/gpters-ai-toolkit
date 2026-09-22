@@ -300,16 +300,3 @@ test('boot reports: an OpenClaw build without prompt sizes keeps the file metric
  db.prepare('insert into session_nodes values (?,?)').run('bigger-part',JSON.stringify({systemPromptReport:{...older,systemPrompt:{chars:100,projectContextChars:200},tools:{schemaChars:1}}})); db.close()
  result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,2)
 })
-test('boot probe sessions come from the approved database by channel only; a missing probe config reads nothing',async t=>{
- const { readProbeSessions } = await import('./bootstrap.mjs')
- assert.equal(await readProbeSessions({source:'claude-code',reports:undefined,probe:undefined}),undefined)
- const dir=await realpath(await mkdtemp(join(tmpdir(),'probe-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
- const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
- db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
- const insert=(key,id)=>db.prepare('insert into session_nodes values (?,?)').run(key,JSON.stringify({claudeCliSessionId:id}))
- insert('agent:x:slack:channel:c0probe001:thread:1','probe-a'); insert('agent:x:slack:channel:c0probe001:thread:2','probe-b'); insert('agent:x:slack:channel:c0other001:thread:1','other'); insert('agent:x:slack:channel:c0probe001:thread:3','../bad'); db.close()
- const reports=await approve(path), probe={channel:'C0PROBE001',marker:'[BOOT-PROBE]'}
- assert.deepEqual([...(await readProbeSessions({source:'claude-code',reports,probe})).ids].sort(),['probe-a','probe-b'])
- for (const bad of [{source:'codex',reports,probe},{source:'claude-code',reports,probe:{channel:'c0probe001'}},{source:'claude-code',reports:undefined,probe}])
-  await assert.rejects(readProbeSessions(bad),error=>error.inventoryReason==='source-consistency')
-})

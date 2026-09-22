@@ -119,6 +119,10 @@ describe('observation panel scope and missingness',()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],adapterVersion:'3',summary:probed,points}]})));render(<AgentObservationPanel days={7}/>)
   await screen.findByText(/테스트 첫 턴 \(고정 입력\): 최근 98,000토큰 .* 기간 평균 100,034토큰 · 최소 98,000 · 최대 102,068 · 2회/)
   cleanup()
+  // The probe windows fell out of the listed points: no "latest" is claimed, only the period values.
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],adapterVersion:'3',summary:probed,points:[]}]})));render(<AgentObservationPanel days={7}/>)
+  const line=await screen.findByText(/테스트 첫 턴 \(고정 입력\): 기간 평균 100,034토큰/); expect(line.textContent).not.toContain('최근')
+  cleanup()
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(data)));render(<AgentObservationPanel days={7}/>)
   await screen.findAllByText(/example-agent/); expect(screen.queryByText(/테스트 첫 턴/)).toBeNull()
  })

@@ -2,7 +2,15 @@
 import { collectCliMetrics, collectReadGuardMetrics } from './metrics.mjs'
 import { adaptRuntimeReceipts } from './runtime-receipts.mjs'
 import { discoverWindowFiles } from './inventory.mjs'
-import { collectBootstrapMetrics, readProbeSessions } from './bootstrap.mjs'
+import { collectBootstrapMetrics } from './bootstrap.mjs'
+/** The helper re-checks the probe settings it was given: a Claude collector, a Slack channel ID, a bracketed marker. */
+function validProbe(probe,source) {
+  if(source!=='claude-code' || !probe || typeof probe!=='object' || Object.keys(probe).some(key=>!['channel','marker'].includes(key))
+    || typeof probe.channel!=='string' || !/^[A-Z0-9]{9,12}$/.test(probe.channel) || typeof probe.marker!=='string' || !/^\[[A-Z0-9-]{3,32}\]$/.test(probe.marker)) {
+    const error=new Error('Invalid boot probe'); error.inventoryReason='source-consistency'; throw error
+  }
+  return {channel:probe.channel,marker:probe.marker}
+}
 export async function collectObservability(config) {
   const { agentId, source, window, cliFiles = [], readGuardFiles = [], runtimeBindings = [], runtimeRecords = [], scope, bootstrapReports, bootProbe } = config
   if(config.cliInventory!==undefined && (config.cliInventory!=='installed-scope' || cliFiles.length)) throw new Error('Invalid dynamic inventory')
@@ -16,9 +24,8 @@ export async function collectObservability(config) {
   // An integrity failure found by discovery is final: report it before other sources can outlast the time limit.
   if(failures.some(error=>!TIMING.includes(error?.inventoryReason))) throw failures[0]
   const runtime = adaptRuntimeReceipts({agentId,source,window,bindings:runtimeBindings,records:runtimeRecords})
-  // The daily boot probe: its channel's sessions come from the approved session database (IDs stay in the helper).
-  const probeSessions=await settle(()=>readProbeSessions({source,reports:bootstrapReports,probe:bootProbe}))
-  const probe=bootProbe===undefined ? undefined : {ids:probeSessions?.ids,marker:bootProbe.marker}
+  // The daily boot probe is recognized from each transcript's own first message (channel and marker, never uploaded).
+  const probe=bootProbe===undefined ? undefined : validProbe(bootProbe,source)
   const [cli,readGuard,bootstrap] = await Promise.all([settle(()=>collectCliMetrics({source,window,files:selectedCliFiles ?? [],scope,probe})),
     settle(()=>collectReadGuardMetrics({window,files:readGuardFiles,sessions:config.cliInventory==='installed-scope' ? scannedSessions : undefined})),
     settle(()=>collectBootstrapMetrics({source,window,reports:bootstrapReports}))])

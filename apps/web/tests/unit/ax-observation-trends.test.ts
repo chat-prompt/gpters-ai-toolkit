@@ -170,6 +170,9 @@ describe('persisted observation projection',()=>{
   expect(data.streams[0].summary.metrics.probeFirstTurnTokens).toMatchObject({count:2,sum:200068,min:98000,max:102068})
   expect(data.streams[0].points.map(p=>p.metrics.probeFirstTurnTokens?.sum)).toEqual([102068,98000])
   expect(projectObservationTrends([observationRow()],q,now).streams[0].summary.metricCapabilities.probeFirstTurnTokens).toBeUndefined()
+  // A window from before the probe was configured does not make the probe incomplete.
+  const mixed=projectObservationTrends([observationRow(v3(start,change,null,'uncollected')),observationRow(withProbe(change,end,[98000]),'later')],q,now)
+  expect(mixed.streams[0].summary.metricCapabilities.probeFirstTurnTokens).toBe('supported')
  })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})

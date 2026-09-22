@@ -93,23 +93,6 @@ async function queryApproved(reports, query, busyTimeoutMs) {
   return { rows }
 }
 
-// Slack channel IDs as OpenClaw writes them into session keys (`agent:<id>:slack:channel:<lowercase id>:…`).
-const CHANNEL = /^[A-Z0-9]{9,12}$/
-/**
- * Claude CLI session IDs of the agent's sessions in the boot probe channel, from the approved session database.
- * Only IDs leave this function, and only into the helper: they select which transcripts are probe candidates.
- *
- * @returns `undefined` when no probe is configured, `{ ids }`, or `{ busy: true }`
- */
-export async function readProbeSessions({ source, reports, probe }, { busyTimeoutMs = 5000 } = {}) {
-  if (probe === undefined) return undefined
-  if (source !== 'claude-code' || !probe || !CHANNEL.test(probe.channel ?? '') || reports === undefined) throw integrity()
-  const result = await queryApproved(reports, db => db.prepare(`select json_extract(entry_json,'$.claudeCliSessionId') as id from session_nodes
-    where session_key like ? escape '\\' and json_valid(entry_json)`).all(`%:slack:channel:${probe.channel.toLowerCase()}:%`), busyTimeoutMs)
-  if (result.busy) return result
-  return { ids: new Set(result.rows.map(row => row.id).filter(id => typeof id === 'string' && /^[A-Za-z0-9-]{1,255}$/.test(id))) }
-}
-
 export async function collectBootstrapMetrics({ source, window, reports }, { busyTimeoutMs = 5000 } = {}) {
   if (reports === undefined) return undefined
   const provider = PROVIDERS[source]

@@ -238,10 +238,10 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     ['boot reports for Codex', { source: 'codex', bootstrapReports: { path: '/tmp/agent.sqlite' } }],
     ['boot reports with extra keys', { source: 'claude-code', bootstrapReports: { path: '/tmp/agent.sqlite', agent: 'x' } }],
     ['relative boot reports', { source: 'claude-code', bootstrapReports: { path: 'agent.sqlite' } }],
-    ['boot probe without boot reports', { source: 'claude-code', cliInventory: 'installed-scope', bootProbe: { channel: 'C0BUF7RC2SD', marker: '[BOOT-PROBE]' } }],
-    ['boot probe with a lowercase channel', { source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path: '/tmp/agent.sqlite' }, bootProbe: { channel: 'c0buf7rc2sd', marker: '[BOOT-PROBE]' } }],
-    ['boot probe with a free-text marker', { source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path: '/tmp/agent.sqlite' }, bootProbe: { channel: 'C0BUF7RC2SD', marker: 'ok' } }],
-    ['boot probe with extra keys', { source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path: '/tmp/agent.sqlite' }, bootProbe: { channel: 'C0BUF7RC2SD', marker: '[BOOT-PROBE]', text: 'x' } }],
+    ['boot probe without the dynamic inventory', { source: 'claude-code', cliFiles: [], bootProbe: { channel: 'C0BUF7RC2SD', marker: '[BOOT-PROBE]' } }],
+    ['boot probe with a lowercase channel', { source: 'claude-code', cliInventory: 'installed-scope', bootProbe: { channel: 'c0buf7rc2sd', marker: '[BOOT-PROBE]' } }],
+    ['boot probe with a free-text marker', { source: 'claude-code', cliInventory: 'installed-scope', bootProbe: { channel: 'C0BUF7RC2SD', marker: 'ok' } }],
+    ['boot probe with extra keys', { source: 'claude-code', cliInventory: 'installed-scope', bootProbe: { channel: 'C0BUF7RC2SD', marker: '[BOOT-PROBE]', text: 'x' } }],
     ['missing boot report database', { source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path: '/nonexistent-aitk-fixture/agent.sqlite' } }],
   ])('rejects shared-source config for %s as a config failure', async (_label, extra) => {
     config(extra as Record<string, unknown>)
@@ -273,21 +273,17 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     expect(readFileSync(join(built, 'bridge.mjs'), 'utf8')).toMatch(/import\(["']node:sqlite["']\)/)
   })
   it('measures the daily boot probe inside the actual bundled helper and uploads only numbers', async () => {
-    const { DatabaseSync } = await import('node:sqlite')
-    const path = join(root, 'agent.sqlite'), db = new DatabaseSync(path)
-    db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
-    db.prepare('insert into session_nodes values (?, ?)').run('agent:bbojjak:slack:channel:c0buf7rc2sd:thread:1', JSON.stringify({ claudeCliSessionId: 'probe-session' }))
-    db.close()
     const project = join(sessions, 'project-a'); mkdirSync(project)
+    const text = ['Conversation info: ⟦openclaw:ctx⟧', '```json', JSON.stringify({ chat_id: 'channel:C0BUF7RC2SD', message_id: '1' }), '```', '', 'System: [2026-01-02 11:30:00 GMT+9] Slack message', '', '<@U0AGV1N6YDP> (뽀짝이) [BOOT-PROBE] private probe text'].join('\n')
     writeFileSync(join(project, 'probe-session.jsonl'), [
-      { type: 'user', sessionId: 'probe-session', uuid: 'u0', parentUuid: null, timestamp: '2026-01-02T02:30:00Z', message: { role: 'user', content: [{ type: 'text', text: '[BOOT-PROBE] private probe text' }] } },
+      { type: 'user', sessionId: 'probe-session', uuid: 'u0', parentUuid: null, timestamp: '2026-01-02T02:30:00Z', message: { role: 'user', content: text } },
       { type: 'assistant', sessionId: 'probe-session', uuid: 'a1', parentUuid: 'u0', timestamp: '2026-01-02T02:30:05Z', message: { id: 'm1', stop_reason: 'end_turn', usage: { input_tokens: 2, cache_creation_input_tokens: 70240, cache_read_input_tokens: 31826 } } },
     ].map(row => JSON.stringify(row)).join('\n') + '\n')
-    config({ source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path }, bootProbe: { channel: 'C0BUF7RC2SD', marker: '[BOOT-PROBE]' } })
+    config({ source: 'claude-code', cliInventory: 'installed-scope', bootProbe: { channel: 'C0BUF7RC2SD', marker: '[BOOT-PROBE]' } })
     const value = batch('claude-code'); await attachAgentObservability(value, configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })
     expect(value.collection.observability).toMatchObject({ metricCapabilities: { probeFirstTurnTokens: 'supported' }, metrics: { probeFirstTurnTokens: { count: 1, sum: 102068 } } })
     const sent = JSON.stringify(value)
-    for (const secret of ['probe-session', 'private probe text', 'c0buf7rc2sd', 'C0BUF7RC2SD', root]) expect(sent).not.toContain(secret)
+    for (const secret of ['probe-session', 'private probe text', 'C0BUF7RC2SD', 'U0AGV1N6YDP', root]) expect(sent).not.toContain(secret)
   })
   it('retains explicit incomplete provenance for missing approved guard source', async () => {
     config({ readGuardFiles: [{ path: join(root, 'absent.jsonl'), sessionKey: 'exclusive', agentExclusive: true }] }); const value = batch(); await attachAgentObservability(value, configPath, { sessionsDir: sessions })

@@ -125,7 +125,8 @@ function summarize(observations:AgentObservability[],start:number,end:number,for
     const values=probed.map(o=>o.metrics.probeFirstTurnTokens).filter((v):v is ObservationHistogram=>v!==null&&v!==undefined)
     const capabilities=probed.map(o=>o.metricCapabilities.probeFirstTurnTokens)
     metricCapabilities.probeFirstTurnTokens=!values.length?(capabilities.every(c=>c==='unsupported')?'unsupported':capabilities.some(c=>c==='incomplete')?'incomplete':'uncollected')
-      :capabilities.every(c=>c==='supported')&&probed.length===selected.length&&!forceIncomplete?'supported':'incomplete'
+      // Windows from before the probe was configured did not measure it: they are not missing probe data.
+      :capabilities.every(c=>c==='supported')&&!forceIncomplete?'supported':'incomplete'
     metrics.probeFirstTurnTokens=values.length?mergeHistogram(values):null
   }
   return {startUtc:new Date(start).toISOString(),endUtc:new Date(end).toISOString(),windows:selected.length,coveredMs,completeWindow,metrics,metricCapabilities}

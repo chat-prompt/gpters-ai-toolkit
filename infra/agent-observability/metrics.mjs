@@ -32,6 +32,22 @@ function textChars(value) {
   }
   return count
 }
+/**
+ * Classifies a Claude session's first user message as the daily boot probe. OpenClaw wraps a Slack message in an
+ * envelope: a `Conversation info` JSON block (with `chat_id: "channel:<ID>"`), optional channel or thread history,
+ * then the current message as the last line. The probe is that last line — the agent mention, then the marker — in
+ * the probe channel. History lines that quote an earlier probe never count.
+ *
+ * @returns 'probe', 'not', or 'unknown' when the last line is a probe but the channel cannot be read
+ */
+function probeOf(text, probe) {
+  const lines = text.split('\n'), last = [...lines].reverse().find(line => line.trim()) ?? ''
+  const mention = /^<@[A-Z0-9]+>(?: \([^)\n]{0,80}\))? /.exec(last)
+  if (!mention || !last.slice(mention[0].length).startsWith(probe.marker)) return 'not'
+  const info = lines.findIndex(line => line.startsWith('Conversation info:'))
+  if (info < 0 || lines[info + 1] !== '```json') return 'unknown'
+  try { return JSON.parse(lines[info + 2])?.chat_id === `channel:${probe.channel}` ? 'probe' : 'not' } catch { return 'unknown' }
+}
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
 /** A discovered file changed before or while it was read: a timing failure, never accepted as data. */
 function sourceChanged() { const error = new Error('Observation source scope changed'); error.inventoryReason = 'source-changed'; return error }
@@ -156,7 +172,7 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
   if (!supported) return { metrics, metricCapabilities, capability: 'unsupported', provenance: { ...emptyCounters(),filesExpected:files.length } }
   const { records,counters } = await readRecords(files, { scope, source }), usages = new Map(), results = new Map(), compactions = new Map(), sessions = new Map()
   let recognized = 0
-  // Boot probe: sessions of the probe channel whose first user message carries the marker (text never leaves here).
+  // Boot probe: sessions whose first user message is the probe in the probe channel (text never leaves here).
   const probeMarked = new Map()
   function timed(item, type) {
     const value = item.row.timestamp
@@ -167,11 +183,11 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
   for (const item of records) {
     const {row,session} = item
     let entry, usage, usageId, resultItems = [], compact = false, complete = true
-    if (probe?.ids && source === 'claude-code' && row.type === 'user' && row.isSidechain !== true && !probeMarked.has(session)
-      && typeof row.sessionId === 'string' && probe.ids.has(row.sessionId) && !row.message?.content?.some?.(b => b?.type === 'tool_result')) {
+    if (probe && source === 'claude-code' && row.type === 'user' && row.isSidechain !== true && !probeMarked.has(session)
+      && !row.message?.content?.some?.(b => b?.type === 'tool_result')) {
       const content = row.message?.content
       const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(b => typeof b?.text === 'string' ? b.text : '').join('') : ''
-      probeMarked.set(session, text.slice(0, 4000).includes(probe.marker))
+      probeMarked.set(session, probeOf(text, probe))
     }
     if (source === 'claude-code') {
       if (row.type === 'assistant' && row.message?.usage) {
@@ -226,9 +242,12 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
   let unknownFirst = false, unknownProbe = false
   for (const [key, session] of sessions) {
     session.usage.sort((a,b) => a.at-b.at)
-    if (probeMarked.get(key) && session.usage.length && session.usage[0].at >= start && session.usage[0].at < end) {
+    const kind = probeMarked.get(key)
+    if (kind === 'probe' && session.usage.length && session.usage[0].at >= start && session.usage[0].at < end) {
       if (session.complete) probeFirst.push(session.usage[0].value); else unknownProbe = true
     }
+    // A probe-looking message whose channel cannot be read cannot be ruled in or out.
+    if (kind === 'unknown') unknownProbe = true
   }
   for (const session of sessions.values()) {
     session.usage.sort((a,b) => a.at-b.at)
@@ -249,11 +268,13 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
   for (const key of Object.keys(metricCapabilities)) metricCapabilities[key] = capability
   if (unknownFirst && metrics.firstTurnTokens) metricCapabilities.firstTurnTokens = 'incomplete'
   if (probe !== undefined) {
-    // Busy session database: probe sessions cannot be recognized, so the probe is missing, never zero.
-    if (!probe.ids || !counters.filesRead && counters.filesExpected) { metrics.probeFirstTurnTokens = null; metricCapabilities.probeFirstTurnTokens = 'incomplete' }
+    if (!counters.filesRead && counters.filesExpected) { metrics.probeFirstTurnTokens = null; metricCapabilities.probeFirstTurnTokens = 'incomplete' }
     else {
       metrics.probeFirstTurnTokens = histogram(probeFirst)
-      metricCapabilities.probeFirstTurnTokens = capability === 'uncollected' ? 'supported' : unknownProbe || capability !== 'supported' ? 'incomplete' : 'supported'
+      // A session whose history is unproven may have started with a probe that is no longer visible, so the probe is
+      // as incomplete as the ordinary first turn. No transcript in the window at all is an observed zero.
+      metricCapabilities.probeFirstTurnTokens = capability === 'uncollected' ? 'supported'
+        : unknownProbe || unknownFirst || capability !== 'supported' ? 'incomplete' : 'supported'
     }
   }
   return { metrics,metricCapabilities,capability,provenance:counters }

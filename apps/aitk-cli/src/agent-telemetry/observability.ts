@@ -106,13 +106,13 @@ function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: 
     bootstrapIdentity = `${stat.dev}:${stat.ino}:${stat.uid}`
   }
   if (config.bootProbe !== undefined) {
-    // The daily fixed boot probe: sessions of one Slack channel whose first message starts with a marker.
-    // It needs the approved OpenClaw database to map the channel to Claude sessions, and a Claude dynamic inventory.
+    // The daily fixed boot probe: Claude sessions whose first message is the marker line in one Slack channel,
+    // recognized from the transcripts of the Claude dynamic inventory.
     const probe = config.bootProbe as { channel?: unknown; marker?: unknown }
     if (!probe || typeof probe !== 'object' || Object.keys(probe).some(key => !['channel', 'marker'].includes(key))
       || typeof probe.channel !== 'string' || !/^[A-Z0-9]{9,12}$/.test(probe.channel)
       || typeof probe.marker !== 'string' || !/^\[[A-Z0-9-]{3,32}\]$/.test(probe.marker)
-      || config.bootstrapReports === undefined || config.cliInventory !== 'installed-scope' || batch.collection.source !== 'claude-code') throw new Error('Invalid boot probe')
+      || config.cliInventory !== 'installed-scope' || batch.collection.source !== 'claude-code') throw new Error('Invalid boot probe')
   }
   let helper: Buffer
   try { helper = readOwned(config.helperPath, 2000000, false) } catch { return failWith('artifact') }
