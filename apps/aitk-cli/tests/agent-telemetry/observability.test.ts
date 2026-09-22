@@ -222,6 +222,13 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     expect(staleLockContent('stale-fixture', { now })).toBe(false)
     expect(currentBootId()).toMatch(/^[0-9A-Fa-f-]{16,64}$/)
   })
+  it('publishes a lock only complete, so a collector killed while taking it never leaves an empty lock', () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const state = join(checkpoints, 'atomic-state.json'), lock = state + '.observation.lock'
+    const release = observationLock(state, checkpoints)
+    expect(JSON.parse(readFileSync(lock, 'utf8'))).toMatchObject({ pid: process.pid, bootId: currentBootId() })
+    expect(readdirSync(checkpoints).filter(name => name.endsWith('.tmp'))).toEqual([])
+    release(); expect(existsSync(lock)).toBe(false)
+  })
   it('removes a reclaim guard only when its holder is gone, and that run still stops', async () => {
     mkdirSync(checkpoints, { mode: 0o700 }); const state = join(checkpoints, 'guard-state.json'), lock = state + '.observation.lock'
     const gone = await new Promise<number>(resolve => { const child = spawn(process.execPath, ['-e', '0']); child.on('exit', () => resolve(child.pid!)) })

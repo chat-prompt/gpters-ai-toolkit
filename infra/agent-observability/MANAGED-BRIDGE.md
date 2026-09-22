@@ -240,7 +240,7 @@ only its own lock; its observation helper is killed with it. A lock left anyway
 records another boot (macOS `kern.bootsessionuuid`, Linux `boot_id` — not a clock
 comparison), or whose recorded pid no longer exists and that is older than 10
 minutes. Reclaiming happens under a short exclusive `.reclaim` guard, so a
-competitor that finds the guard held stops instead of racing; a guard is removed
+competitor that finds the guard held stops instead of racing. Locks and guards appear only complete (written under a temporary name, then hard-linked), so a kill never leaves an empty one; a leftover `*.tmp` is harmless. A guard is removed
 only when its own holder is gone (never by age), and that run still stops. An unreadable,
 recent or live lock still stops the run for an operator to inspect. Never remove an
 active lock. Dry run creates a private checkpoint directory and

@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { constants, closeSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readConfig } from '../config.js'
 import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
@@ -266,28 +266,39 @@ export function staleLockContent(content: string, { now = Date.now(), bootId = c
 const holder = () => JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString(), bootId: currentBootId() })
 
 /**
+ * Publishes `content` at `path` only if nothing is there, all at once: the complete file is written under a private
+ * temporary name and hard-linked into place, so a process killed at any point never leaves an empty lock or guard.
+ * Throws EEXIST when the path is taken.
+ */
+function publishExclusive(path: string, content: string): void {
+  const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
+  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+  try {
+    try { writeFileSync(fd, content) } finally { closeSync(fd) }
+    linkSync(temporary, path)
+  } finally { try { unlinkSync(temporary) } catch { /* already gone */ } }
+}
+
+/**
  * Reclaims a stale lock under a short exclusive guard, so only one process at a time may remove a lock and every
  * competitor that finds the guard held simply stops. A guard is removed only when its own holder is gone (never by
  * age alone), and that run still stops. Returns true when the lock path is free again.
  */
 function reclaimStaleLock(lock: string): boolean {
   const guard = `${lock}.reclaim`
-  let guardFd: number
-  try { guardFd = openSync(guard, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600) }
+  const guardContent = holder()
+  try { publishExclusive(guard, guardContent) }
   catch {
     const left = readLockFile(guard)
     if (left !== null && staleLockContent(left, { minimumAgeMs: 0 }) && readLockFile(guard) === left) { try { unlinkSync(guard) } catch { /* gone */ } }
     return false
   }
-  const guardContent = holder()
   try {
-    writeFileSync(guardFd, guardContent)
     const content = readLockFile(lock)
     if (content === null || !staleLockContent(content) || readLockFile(lock) !== content) return false
     unlinkSync(lock)
     return true
   } catch { return false } finally {
-    closeSync(guardFd)
     try { if (readLockFile(guard) === guardContent) unlinkSync(guard) } catch { /* already gone */ }
   }
 }
@@ -299,23 +310,18 @@ export function observationLock(path: string, directory: string): () => void {
     const stat = lstatSync(directory)
     if (!stat.isDirectory() || stat.uid !== process.getuid?.() || (stat.mode & 0o022) !== 0) throw new Error('Unsafe checkpoint directory')
     const lock = path + '.observation.lock'
-    const create = () => openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
-    let fd: number
-    try { fd = create() }
+    const content = holder()
+    try { publishExclusive(lock, content) }
     catch (cause) {
       // Only a lock left by a collector that is gone is reclaimed; a live or unreadable lock still stops this run.
       if ((cause as NodeJS.ErrnoException).code !== 'EEXIST' || !reclaimStaleLock(lock)) throw cause
-      fd = create()
+      publishExclusive(lock, content)
     }
-    const content = holder()
-    try { writeFileSync(fd, content) }
-    catch { closeSync(fd); unlinkSync(lock); throw new Error('Cannot record lock') }
     let released = false
     const release = () => {
       if (released) return
       released = true
       try {
-        closeSync(fd)
         // Remove only our own lock: never one another collector holds after a reclaim.
         if (readLockFile(lock) === content) unlinkSync(lock)
       } catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
