@@ -164,12 +164,23 @@ test('shared guard log: a rotation or append during the read is retried, a persi
  await rm(path+'.1'); await writeFile(path,row('deny'))
  result=await during(1,()=>appendFile(path,row('allow',1)),collect); assert.deepEqual(result.metrics,{readGuardAllow:1,readGuardDeny:1})
  await writeFile(path,row('deny'))
- await during(Infinity,n=>appendFile(path,row('allow',n+10)),()=>assert.rejects(collect(),error=>error.inventoryReason==='source-changed'))
+ // Appends that keep landing after every read (each identity check) never give a consistent snapshot: timing.
+ { const realLstat=fs.lstat; let n=0
+   fs.lstat=async (...args)=>{ const result=await realLstat(...args); if(String(args[0])===path) await appendFile(path,row('allow',100+n++)); return result }; syncBuiltinESMExports()
+   try { await assert.rejects(collect(),error=>error.inventoryReason==='source-changed') } finally { fs.lstat=realLstat; syncBuiltinESMExports() } }
  // A hook only appends, so a same-size change or a shrink is a rewrite, and so is growth that changed the prefix.
  await writeFile(path,row('deny',1)+row('allow',2))
  await during(1,()=>fs.truncate(path,5),()=>assert.rejects(collect(),error=>error.inventoryReason==='source-consistency'))
  await writeFile(path,row('deny',1))
- await during(1,async()=>{ const handle=await realOpen(path,'r+'); await handle.write(Buffer.from('X'),0,1,0); await handle.close() },()=>assert.rejects(collect(),error=>error.inventoryReason==='source-consistency'))
+ // Same size and the modification time put back, after the bytes were read: the handle re-hash still sees it,
+ // even when the log is rotated right after.
+ for (const rotate of [false,true]) {
+   await rm(path+'.1',{force:true}); await writeFile(path,row('deny',1))
+   const realLstat=fs.lstat; let checks=0
+   fs.lstat=async (...args)=>{ if(String(args[0])===path && ++checks===2){ const {mtime}=await realLstat(path); const handle=await realOpen(path,'r+'); await handle.write(Buffer.from('X'),0,1,0); await handle.close(); await fs.utimes(path,mtime,mtime); if(rotate){ await rename(path,path+'.1'); await writeFile(path,'') } } return realLstat(...args) }; syncBuiltinESMExports()
+   try { await assert.rejects(collect(),error=>error.inventoryReason==='source-consistency') } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+ }
+ await rm(path+'.1',{force:true})
  // Rewritten and grown after its bytes were read (right before the final identity check): the prefix proves it.
  await writeFile(path,row('deny',1))
  const realLstat=fs.lstat; let checks=0
@@ -209,4 +220,20 @@ test('a live transcript (timing) never masks a broken boot report database (inte
  const config={agentId:'example-agent',source:'claude-code',window,cliInventory:'installed-scope',scope:{sessionsDir:join(dir,'sessions'),projectSlugs:['allowed']}}
  await assert.rejects(collectObservability(config),error=>error.inventoryReason==='partial-tail')
  await assert.rejects(collectObservability({...config,bootstrapReports:{path}}),error=>error.inventoryReason==='source-consistency')
+})
+test('boot reports: only the file the collector approved is read, on every exit path including a busy database',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const { DatabaseSync } = await import('node:sqlite'), { lstat } = await import('node:fs/promises')
+ const make=async name=>{ const path=join(dir,name), db=new DatabaseSync(path); db.exec('create table session_nodes (session_key text primary key, entry_json text)'); return {path,db} }
+ const {path,db}=await make('agent.sqlite'), stat=await lstat(path), identity=`${stat.dev}:${stat.ino}:${stat.uid}`
+ db.prepare('insert into session_nodes values (?,?)').run('null-row',null)
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path,identity}}); assert.equal(result.capability,'incomplete')
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path,identity:'1:2:3'}}),error=>error.inventoryReason==='source-consistency')
+ // Swapped for another (locked) database after approval: never reported as a busy, merely missing value.
+ db.close(); const other=await make('other.sqlite'); other.db.exec('begin exclusive')
+ await rename(path,join(dir,'moved.sqlite')); await symlink(other.path,path)
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path,identity}},{busyTimeoutMs:10}),error=>error.inventoryReason==='source-consistency')
+ await rm(path); await rename(other.path,path)
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path,identity}},{busyTimeoutMs:10}),error=>error.inventoryReason==='source-consistency')
+ other.db.exec('rollback'); other.db.close()
 })

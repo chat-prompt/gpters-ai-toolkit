@@ -53,17 +53,18 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
   if (!provider) return { value: null, capability: 'unsupported' }
   const [start,end] = windowBounds(window)
   const path = reports?.path
-  // The CLI checked this path before the helper ran; a change since then is an integrity failure, never missing data.
-  // The file checked here must be the file SQLite read: its identity is compared again after the query.
+  // The CLI approved this file (device, inode, owner) before the helper ran. The file SQLite reads must be that
+  // file before and after the query, on every exit path: a change is an integrity failure, never missing data.
+  const approved = typeof reports?.identity === 'string' ? reports.identity : null
   const identify = async () => {
     try {
       if (typeof path !== 'string' || !isAbsolute(path) || await realpath(path) !== path) return null
       const stat = await lstat(path)
-      return stat.isFile() ? `${stat.dev}:${stat.ino}` : null
+      return stat.isFile() ? `${stat.dev}:${stat.ino}:${stat.uid}` : null
     } catch { return null }
   }
-  const identity = await identify()
-  if (!identity) throw integrity()
+  const verify = async () => { const now = await identify(); if (!now || (approved !== null && now !== approved)) throw integrity(); return now }
+  const identity = await verify()
   let rows
   // Loaded only when configured, so the helper still runs on Node builds without node:sqlite.
   const { DatabaseSync } = await import('node:sqlite')
@@ -74,7 +75,7 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
       // A row that is not valid JSON is selected as null (malformed) instead of failing the whole query.
       // Reports of another runtime are excluded before the row limit; ours with a non-integer time stay in.
       rows = db.prepare(`select case when json_valid(entry_json) then json_extract(entry_json,'$.systemPromptReport') end as report
-        from session_nodes where not json_valid(entry_json) or (
+        from session_nodes where entry_json is null or not json_valid(entry_json) or (
           json_type(entry_json,'$.systemPromptReport') = 'object'
           and (json_type(entry_json,'$.systemPromptReport.provider') is not 'text' or json_extract(entry_json,'$.systemPromptReport.provider') = ?)
           and (json_type(entry_json,'$.systemPromptReport.generatedAt') is not 'integer'
@@ -83,6 +84,7 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
     } finally { db.close() }
   } catch (error) {
     // Only a busy or locked database is transient missing data; a missing table or any other error fails closed.
+    if (await identify() !== identity) throw integrity()
     if (BUSY.has(error?.errcode & 0xff)) return { value: null, capability: 'incomplete' }
     throw integrity()
   }

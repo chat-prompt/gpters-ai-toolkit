@@ -90,8 +90,10 @@ reuse its ID with different content; this command is for local review only.
   identified before and after reading. An append or a rotation in between is
   retried (three attempts); if it keeps changing, it is the timing reason
   `source-changed` (the window is sent without observation, never a partial count).
-  A hook only appends, so a symlink, a non-file, a shrink, a same-size change or
-  growth whose earlier bytes changed (checked by re-hashing them) fails closed. A
+  A hook only appends, so a symlink, a non-file, a shrink, or any change to bytes
+  already read (re-hashed through the handle that read them, so a rotation right
+  after cannot hide it, and whatever the timestamps say) fails closed. A prefix
+  that keeps changing while re-hashed proves nothing either way and is timing. A
   rewrite that happens before the bytes are read cannot be told from the file's
   state and is simply read. Session IDs stay inside the helper.
 - Boot-file health (adapter version `3`, Claude/OpenClaw only) reads OpenClaw's
@@ -103,8 +105,12 @@ reuse its ID with different content; this command is for local review only.
   keeps only a session's newest report, so a boot replaced before its window is
   collected is not counted. A busy or locked database, or more than 5,000 selected
   rows (this runtime's reports in the window plus unreadable ones), is `incomplete`
-  with null. A row that is not valid JSON marks the value incomplete. The file's
-  identity is checked before and after the query. A report of this provider whose time or
+  with null. A row that is null or not valid JSON marks the value incomplete. The
+  helper reads only the file the collector approved (device, inode, owner), checked
+  before and after the query on every exit path, a busy one included. The row limit
+  does not bound query time: the table is small (466 rows, about 1MB, a 3ms scan on
+  2026-09-22), but a much larger one could reach the helper's 30-second limit and
+  fail the window closed; re-measure if OpenClaw's session table grows. A report of this provider whose time or
   numbers do not have the established shape marks the value incomplete; reports of
   other providers are skipped. A path that changed since the collector checked it,
   a missing table or any other database error fails closed. If OpenClaw renames the

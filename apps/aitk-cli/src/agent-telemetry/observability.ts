@@ -61,7 +61,7 @@ function readOwned(path: string, maximum: number, privateMode: boolean): Buffer 
     return bytes.subarray(0, length)
   } finally { closeSync(fd) }
 }
-function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: ObservationScope): { config: ObservationConfig; helper: Buffer } {
+function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: ObservationScope): { config: ObservationConfig; helper: Buffer; bootstrapIdentity?: string } {
   const config = JSON.parse(readOwned(path, 240000, true).toString('utf8')) as ObservationConfig
   const keys = ['version', 'agentId', 'source', 'helperPath', 'helperSha256', 'cliFiles', 'cliInventory', 'readGuardFiles', 'runtimeBindings', 'runtimeRecords', 'bootstrapReports']
   if (!config || typeof config !== 'object' || Object.keys(config).some(key => !keys.includes(key)) || config.version !== 1
@@ -93,6 +93,7 @@ function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: 
       if (batch.collection.source === 'claude-code' && !scope.projectSlugs?.includes(local.split('/')[0])) throw new Error('CLI project outside existing collector scope')
     }
   }
+  let bootstrapIdentity: string | undefined
   if (config.bootstrapReports !== undefined) {
     // OpenClaw boot reports: one owned regular file, read by the helper in read-only mode. Claude only.
     const reports = config.bootstrapReports as { path?: unknown }
@@ -100,16 +101,18 @@ function readObservationConfig(path: string, batch: AgentTelemetryBatch, scope: 
       || !isAbsolute(reports.path) || batch.collection.source !== 'claude-code') throw new Error('Invalid boot report source')
     const stat = lstatSync(reports.path)
     if (!stat.isFile() || stat.uid !== process.getuid?.() || realpathSync(reports.path) !== reports.path) throw new Error('Invalid boot report source')
+    // The helper must read exactly this file: it re-checks device, inode and owner before and after its query.
+    bootstrapIdentity = `${stat.dev}:${stat.ino}:${stat.uid}`
   }
   let helper: Buffer
   try { helper = readOwned(config.helperPath, 2000000, false) } catch { return failWith('artifact') }
   if (createHash('sha256').update(helper).digest('hex') !== config.helperSha256) failWith('artifact')
-  return { config, helper }
+  return { config, helper, bootstrapIdentity }
 }
-async function runHelper(config: ObservationConfig, helper: Buffer, batch: AgentTelemetryBatch, scope: ObservationScope): Promise<string> {
+async function runHelper(config: ObservationConfig, helper: Buffer, batch: AgentTelemetryBatch, scope: ObservationScope, bootstrapIdentity?: string): Promise<string> {
   const input = JSON.stringify({ agentId: batch.agentId, source: batch.collection.source, window: batch.window,
     cliFiles: config.cliFiles ?? [], cliInventory: config.cliInventory, readGuardFiles: config.readGuardFiles ?? [], runtimeBindings: config.runtimeBindings ?? [], runtimeRecords: config.runtimeRecords ?? [],
-    ...(config.bootstrapReports ? { bootstrapReports: config.bootstrapReports } : {}),
+    ...(config.bootstrapReports ? { bootstrapReports: { path: config.bootstrapReports.path, identity: bootstrapIdentity } } : {}),
     scope: { sessionsDir: realpathSync(scope.sessionsDir), projectSlugs: scope.projectSlugs, codexThreadSource: scope.codexThreadSource } })
   return new Promise((resolve, reject) => {
     // Do not inherit collector credentials, HOME, NODE_OPTIONS or runtime agent settings.
@@ -160,10 +163,10 @@ export async function attachAgentObservability(batch: AgentTelemetryBatch, confi
   try {
     if (Number(process.versions.node.split('.')[0]) < 24) failWith('node-version')
     if (batch.collection.observability !== undefined || batch.collection.observabilityFailure !== undefined) failWith('already-enriched')
-    let checked: { config: ObservationConfig; helper: Buffer }
+    let checked: { config: ObservationConfig; helper: Buffer; bootstrapIdentity?: string }
     try { checked = readObservationConfig(configPath, batch, scope) } catch (cause) { if (cause instanceof ObservationFailure) throw cause; return failWith('config') }
-    const { config, helper } = checked
-    const text = await runHelper(config, helper, batch, scope)
+    const { config, helper, bootstrapIdentity } = checked
+    const text = await runHelper(config, helper, batch, scope, bootstrapIdentity)
     let observation: Record<string, unknown>
     try { observation = JSON.parse(text) as Record<string, unknown> } catch { return failWith('unexpected-observation') }
     const keys = ['schemaVersion', 'agentId', 'source', 'window', 'capabilities', 'receipts', 'metrics', 'metricCapabilities', 'provenance']

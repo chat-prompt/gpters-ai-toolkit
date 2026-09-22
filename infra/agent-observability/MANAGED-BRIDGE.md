@@ -102,7 +102,8 @@ under narrow conditions; everything else stays fail closed:
   result is raised only after every file has passed its integrity checks, so an
   append cannot mask a replacement, a rewrite or a path change elsewhere. The
   prefix is re-read from the current file with its inode checked, and counts only
-  if the file held still while it was hashed (up to three attempts). A change after
+  if the file held still while it was hashed (up to three attempts). A file that never
+  held still is unproven and stays timing; only a changed prefix is integrity. A change after
   the last check can only cause an omitted observation, never accepted data.
 - `partial-tail` — the last line has no newline and the file was modified within
   the last 10 minutes. An older broken tail, or a modification time more than two

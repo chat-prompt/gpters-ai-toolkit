@@ -270,3 +270,11 @@ test('a same-session file without any uuid record keeps an otherwise proven main
   const {files,result}=await firstTurn(root)
   assert.ok(files.every(f=>f.completeFromStart===false)); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete')
 }))
+test('prefixState tells a changed prefix from a file that never held still',()=>fixture(async(root,project)=>{
+  const { prefixState } = await import('./inventory.mjs')
+  const path=join(project,'a.jsonl'); await writeFile(path,'abc\n'); const before=await stat(path), expected=createHash('sha256').update('abc\n').digest('hex')
+  assert.equal(await prefixState(path,before,expected),'match')
+  assert.equal(await prefixState(path,before,createHash('sha256').update('xyz\n').digest('hex')),'mismatch')
+  const timer=setInterval(()=>appendFile(path,'more\n').catch(()=>{}),0)
+  try { const states=new Set(); for(let i=0;i<20;i++) states.add(await prefixState(path,before,expected,1)); assert.ok(!states.has('mismatch')) } finally { clearInterval(timer) }
+}))

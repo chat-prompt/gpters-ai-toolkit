@@ -14,31 +14,34 @@ const same = (a,b) => JSON.stringify(identity(a)) === JSON.stringify(identity(b)
 const grew = (before,after) => String(before.dev)===String(after.dev) && String(before.ino)===String(after.ino) && after.isFile() && after.size>=before.size
 const sameInode = (a,b) => String(a.dev)===String(b.dev) && String(a.ino)===String(b.ino)
 /**
- * True when the file now at `path` is still the scanned inode and its first `before.size` bytes still hash
- * to `expected` (the file was only appended to). The inode is checked on the opened handle before and after
- * the read and on the path afterwards, so a same-prefix replacement cannot pass.
+ * Whether the file now at `path` is still the scanned inode and its first `before.size` bytes still hash to
+ * `expected` (the file was only appended to): 'match', 'mismatch' (replaced, shrunk, moved or rewritten) or
+ * 'unstable' (it kept changing while hashed, so nothing is proven either way — timing, never integrity).
+ * The inode is checked on the opened handle before and after the read and on the path afterwards, so a
+ * same-prefix replacement cannot pass.
  */
-export async function prefixMatches(path,before,expected,attempts=3) {
-  if(typeof expected!=='string') return false
+export async function prefixState(path,before,expected,attempts=3) {
+  if(typeof expected!=='string') return 'mismatch'
   for(let attempt=0; attempt<attempts; attempt++) {
-    if(await realpath(path)!==path) return false
+    if(await realpath(path)!==path) return 'mismatch'
     const handle=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK)
     try {
-      const first=await handle.stat(); if(!first.isFile() || !sameInode(before,first) || first.size<before.size) return false
+      const first=await handle.stat(); if(!first.isFile() || !sameInode(before,first) || first.size<before.size) return 'mismatch'
       const hash=createHash('sha256'), buffer=Buffer.alloc(1024*1024)
       let offset=0
-      while(offset<before.size) { const {bytesRead}=await handle.read(buffer,0,Math.min(buffer.length,before.size-offset),offset); if(!bytesRead) return false; hash.update(buffer.subarray(0,bytesRead)); offset+=bytesRead }
+      while(offset<before.size) { const {bytesRead}=await handle.read(buffer,0,Math.min(buffer.length,before.size-offset),offset); if(!bytesRead) return 'mismatch'; hash.update(buffer.subarray(0,bytesRead)); offset+=bytesRead }
       const last=await handle.stat(), named=await lstat(path)
-      if(!last.isFile() || !sameInode(before,last) || !named.isFile() || !sameInode(before,named) || await realpath(path)!==path) return false
-      // The prefix counts only if the file was stable while it was hashed; a change during the read is retried,
-      // and a file that never holds still is not proven (the caller fails closed). A change after the last check
-      // can only lead to an omitted observation, never to accepted data.
+      if(!last.isFile() || !sameInode(before,last) || !named.isFile() || !sameInode(before,named) || await realpath(path)!==path) return 'mismatch'
+      // The prefix counts only if the file was stable while it was hashed; a change during the read is retried.
+      // A file that never holds still is unproven, which only omits an observation, never accepts data.
       if(!same(first,last) || !same(first,named)) continue
-      return hash.digest('hex')===expected
+      return hash.digest('hex')===expected ? 'match' : 'mismatch'
     } finally { await handle.close() }
   }
-  return false
+  return 'unstable'
 }
+/** True only when `prefixState` proves the prefix unchanged. */
+export async function prefixMatches(path,before,expected,attempts=3) { return await prefixState(path,before,expected,attempts)==='match' }
 // A missing final newline is timing only while the file is being written; an old broken tail stays fail closed.
 const LIVE_TAIL_MS = 10*60*1000
 // Filesystem timestamps can be a moment ahead of Date.now(); anything further in the future is not trusted.
@@ -97,7 +100,8 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
   const lineages=[]
   const mark=reason => { timing ??= reason }
   // Prefix re-reads count against the same scan budget as the first pass.
-  const reread=async (path,before,expected) => { totalBytes+=before.size; if(totalBytes>limits.bytes) fail('scan-limit'); return prefixMatches(path,before,expected) }
+  // 'mismatch' is integrity; 'unstable' (still being written while re-hashed) is timing like the growth itself.
+  const reread=async (path,before,expected) => { totalBytes+=before.size; if(totalBytes>limits.bytes) fail('scan-limit'); const state=await prefixState(path,before,expected); if(state==='mismatch') fail(); return state }
   for(const path of paths) {
     if(await realpath(path)!==path || !inside(root,path)) fail()
     const handle=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK)
@@ -151,7 +155,8 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
       const after=await handle.stat(), named=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK)
       let current; try { current=await named.stat() } finally { await named.close() }
       if(!same(before,after) || !same(before,current)) {
-        if(!grew(before,after) || !grew(before,current) || !await reread(path,before,snapshot.prefix)) fail()
+        if(!grew(before,after) || !grew(before,current)) fail()
+        await reread(path,before,snapshot.prefix)
         mark('source-changed'); continue
       }
       // A partial tail is not a complete scan. It is timing only while the file is actively written;
@@ -184,7 +189,8 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
     if(same(before,named)) continue
     // A selected file appended after it was scanned is timing only when its scanned prefix is unchanged.
     if(!excludedHeader) {
-      if(!grew(before,named) || !await reread(path,before,prefix)) fail()
+      if(!grew(before,named)) fail()
+      await reread(path,before,prefix)
       mark('source-changed'); continue
     }
     // Unrelated Codex sessions may append while an agent is scanned. Recheck

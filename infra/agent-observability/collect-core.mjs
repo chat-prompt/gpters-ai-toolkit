@@ -13,6 +13,8 @@ export async function collectObservability(config) {
   const TIMING=['source-changed','partial-tail'], failures=[]
   const settle=async work=>{ try { return await work() } catch(error) { failures.push(error); return undefined } }
   const selectedCliFiles=config.cliInventory==='installed-scope' ? await settle(()=>discoverWindowFiles({source,scope,window,scannedSessions})) : cliFiles
+  // An integrity failure found by discovery is final: report it before other sources can outlast the time limit.
+  if(failures.some(error=>!TIMING.includes(error?.inventoryReason))) throw failures[0]
   const runtime = adaptRuntimeReceipts({agentId,source,window,bindings:runtimeBindings,records:runtimeRecords})
   const [cli,readGuard,bootstrap] = await Promise.all([settle(()=>collectCliMetrics({source,window,files:selectedCliFiles ?? [],scope})),
     settle(()=>collectReadGuardMetrics({window,files:readGuardFiles,sessions:config.cliInventory==='installed-scope' ? scannedSessions : undefined})),

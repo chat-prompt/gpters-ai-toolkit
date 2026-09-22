@@ -3,7 +3,7 @@ import { relative, isAbsolute } from 'node:path'
 import { lstat, open, realpath } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { histogram } from './histogram.mjs'
-import { prefixMatches } from './inventory.mjs'
+import { prefixState } from './inventory.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
 export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 })
 const integer = value => Number.isSafeInteger(value) && value >= 0
@@ -103,7 +103,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
         // The prefix is re-read from the file now at the path (inode checked before and after), never from
         // the in-memory buffer, which may predate an in-place rewrite.
         const expected = { dev: file.expectedIdentity.dev, ino: file.expectedIdentity.ino, size: file.expectedIdentity.size }
-        if (!await prefixMatches(file.path, expected, file.expectedPrefix)) throw scopeError()
+        if (await prefixState(file.path, expected, file.expectedPrefix) === 'mismatch') throw scopeError()
         timing = true
         continue
       }
@@ -244,60 +244,78 @@ async function presence(path) {
   try { const stat = await lstat(path); if (!stat.isFile()) throw logIntegrity(); return { dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs, key: `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}` } }
   catch (error) { if (error?.code === 'ENOENT') return null; throw error.inventoryReason ? error : logIntegrity() }
 }
+const identify = stat => ({ dev: stat.dev, ino: stat.ino, size: stat.size, key: `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}` })
 /**
- * How a log file changed since it was read: 'same', 'timing' (an append that kept the read bytes as its exact
- * prefix, or the path now naming another file after a rotation) or 'integrity' (shrank, or changed without
- * growing — a hook only appends, so any same-size change is a rewrite).
+ * Re-hashes the first `size` bytes through the handle that read them, so the inode is fixed even if the path was
+ * rotated away: 'match', 'mismatch' or 'unstable' (kept changing while hashed).
  */
-async function changeOf(path, read, now) {
-  if (!read || !now) return read === now ? 'same' : 'timing'
-  if (read.key === now.key) return 'same'
-  if (read.dev !== now.dev || read.ino !== now.ino) return 'timing'
-  // Only the inode's metadata changed (a rename during rotation updates ctime): the content is the same.
-  if (now.size === read.size && now.mtimeMs === read.mtimeMs) return 'same'
-  if (now.size <= read.size) return 'integrity'
-  // Growth before the bytes were read has no hash to prove it: timing, and the retry reads it again.
-  if (read.hash === undefined) return 'timing'
-  return await prefixMatches(path, read, read.hash) ? 'timing' : 'integrity'
+async function handlePrefix(handle, size, expected) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const first = await handle.stat()
+    if (first.size < size) return 'mismatch'
+    const hash = createHash('sha256'), buffer = Buffer.alloc(1024 * 1024)
+    let offset = 0
+    while (offset < size) { const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - offset), offset); if (!bytesRead) return 'mismatch'; hash.update(buffer.subarray(0, bytesRead)); offset += bytesRead }
+    const last = await handle.stat()
+    if (identify(first).key !== identify(last).key) continue
+    return hash.digest('hex') === expected ? 'match' : 'mismatch'
+  }
+  return 'unstable'
 }
 /**
  * One attempt at reading a shared hook log and its rotated predecessor (`<path>.1`) as a consistent snapshot.
- * Every path is checked for integrity before a timing change is reported, so a live append never masks a rewrite.
+ *
+ * Handles stay open until both paths are re-identified. Every file read is then re-checked through its own
+ * handle: bytes that changed after being read are a rewrite (integrity) even if the path was rotated meanwhile;
+ * unchanged bytes with a grown file, or a path now naming another file, are timing. Integrity is decided for
+ * every file before timing is reported, so a live append or rotation never masks a rewrite.
  */
 async function sharedLogAttempt(path) {
-  const paths = [`${path}.1`, path], before = await Promise.all(paths.map(presence)), reads = [null, null]
+  const paths = [`${path}.1`, path], before = await Promise.all(paths.map(presence)), reads = [null, null], handles = []
   const local = { filesExpected: 0, filesRead: 0, parseFailures: 0 }, lines = []
   let timing = false
-  for (let index = 0; index < paths.length; index++) {
-    const candidate = paths[index]
-    if (before[index] === null) { if (index === 1) local.filesExpected++; continue }
-    local.filesExpected++
-    if (await realpath(candidate) !== candidate) throw logIntegrity()
-    const handle = await open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
-    try {
+  try {
+    for (let index = 0; index < paths.length; index++) {
+      const candidate = paths[index]
+      if (before[index] === null) { if (index === 1) local.filesExpected++; continue }
+      local.filesExpected++
+      if (await realpath(candidate) !== candidate) throw logIntegrity()
+      const handle = await open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+      handles.push(handle)
       const opened = await handle.stat()
       if (!opened.isFile() || opened.size > 64 * 1024 * 1024) throw logIntegrity()
+      // The path now names another file than the one identified: a rotation in between, read again next attempt.
+      if (opened.dev !== before[index].dev || opened.ino !== before[index].ino) timing = true
+      else if (opened.size < before[index].size) throw logIntegrity()
       const bytes = Buffer.alloc(opened.size)
       let offset = 0
       while (offset < bytes.length) { const read = await handle.read(bytes, offset, bytes.length-offset, offset); if (!read.bytesRead) break; offset += read.bytesRead }
       if (offset !== opened.size) throw logIntegrity()
-      const identify = stat => ({ dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs, key: `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}` })
-      reads[index] = { ...identify(opened), hash: createHash('sha256').update(bytes).digest('hex') }
-      // The file identified before opening must be the one read, unchanged or only appended to.
-      const since = await changeOf(candidate, before[index], identify(opened))
-      if (since === 'integrity') throw logIntegrity()
-      if (since === 'timing') timing = true
+      reads[index] = { handle, ...identify(opened), hash: createHash('sha256').update(bytes).digest('hex') }
       local.filesRead++
       const parts = bytes.toString('utf8').split('\n')
       // A tail without newline in a file that held still is a damaged or unfinished row: never counted as complete.
       if (parts.at(-1)) local.parseFailures++
       lines.push(...parts.slice(0, -1))
-    } finally { await handle.close() }
-  }
-  const after = await Promise.all(paths.map(presence))
-  const changes = await Promise.all(paths.map((candidate, index) => changeOf(candidate, reads[index] ?? before[index], after[index])))
-  if (changes.includes('integrity')) throw logIntegrity()
-  return { lines, local, timing: timing || changes.includes('timing') }
+    }
+    const after = await Promise.all(paths.map(presence))
+    for (let index = 0; index < paths.length; index++) {
+      const read = reads[index]
+      if (read) {
+        const now = identify(await read.handle.stat())
+        if (now.key !== read.key) {
+          // A hook only appends: bytes already read must be the exact prefix, whatever the times say.
+          const state = now.size < read.size ? 'mismatch' : await handlePrefix(read.handle, read.size, read.hash)
+          if (state === 'mismatch') throw logIntegrity()
+          if (state === 'unstable' || now.size > read.size) timing = true
+        }
+      }
+      const identified = read ?? before[index]
+      if (!identified !== !after[index] || (after[index] && (after[index].dev !== identified.dev || after[index].ino !== identified.ino))) timing = true
+      else if (after[index] && after[index].size !== identified.size) timing = true
+    }
+  } finally { await Promise.all(handles.map(handle => handle.close())) }
+  return { lines, local, timing }
 }
 /**
  * Reads a shared hook log and its rotated predecessor (`<path>.1`, optional) as one consistent snapshot.
