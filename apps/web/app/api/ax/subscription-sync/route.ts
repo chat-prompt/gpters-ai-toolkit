@@ -118,26 +118,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 값이 그대로인 행도 갱신해 synced_at(대시보드의 "시트 반영" 날짜)을 이번 반영으로 맞춘다
+    // 값이 그대로인 행도 갱신해 synced_at(대시보드의 "시트 반영" 날짜)을 이번 반영으로 맞춘다.
+    // note 는 로스터에 없는 열이라 갱신하지 않는다(손으로 적은 메모를 지우지 않는다)
     const now = new Date()
-    const queries: BatchItem<'pg'>[] = [
+    const withoutNote = (row: Parameters<typeof subscriptionValues>[0]) => {
+      const { note: _note, ...values } = subscriptionValues(row, now)
+      return values
+    }
+    const build = (client: typeof db): BatchItem<'pg'>[] => [
       ...plan.update.map(({ id, row }) =>
-        db.update(axSubscriptions).set(subscriptionValues(row, now)).where(eq(axSubscriptions.id, id))
+        client.update(axSubscriptions).set(withoutNote(row)).where(eq(axSubscriptions.id, id))
       ),
-      ...(plan.insert.length > 0 ? [db.insert(axSubscriptions).values(plan.insert.map((row) => subscriptionValues(row, now)))] : []),
+      ...(plan.insert.length > 0 ? [client.insert(axSubscriptions).values(plan.insert.map((row) => subscriptionValues(row, now)))] : []),
       ...(plan.remove.length > 0
-        ? [db.delete(axSubscriptions).where(inArray(axSubscriptions.id, plan.remove.map((row) => row.id)))]
+        ? [client.delete(axSubscriptions).where(inArray(axSubscriptions.id, plan.remove.map((row) => row.id)))]
         : []),
     ]
-    // Neon HTTP 는 batch 를 한 트랜잭션으로 돈다. 로컬 postgres-js 드라이버에는 batch 가 없어 차례로 돈다
+    // Neon HTTP 는 batch 를 한 트랜잭션으로 돈다. 로컬 postgres-js 드라이버는 batch 가 없어 트랜잭션으로 묶는다
     if (typeof (db as { batch?: unknown }).batch === 'function') {
-      await db.batch(queries as [BatchItem<'pg'>, ...BatchItem<'pg'>[]])
+      await db.batch(build(db) as [BatchItem<'pg'>, ...BatchItem<'pg'>[]])
     } else {
-      for (const query of queries) await query
+      await db.transaction(async (tx) => {
+        for (const query of build(tx as unknown as typeof db)) await query
+      })
     }
 
     return NextResponse.json({ status: 'applied', ...body }, { headers: NO_STORE })
-  } catch {
+  } catch (cause) {
+    // 금액·이름 없이 원인만 남긴다
+    console.error('[ax/subscription-sync] failed:', cause instanceof Error ? cause.message : String(cause))
     return error('Failed to sync subscriptions', 500)
   }
 }

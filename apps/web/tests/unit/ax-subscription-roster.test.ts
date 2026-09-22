@@ -125,4 +125,18 @@ describe('summarizeRosterSync', () => {
     const repriced = roster(['홍길동,,anthropic,Max20x,220,6,본인,'])
     expect(summarizeRosterSync(planRosterSync(repriced, existing), existing).planHash).not.toBe(first.planHash)
   })
+
+  it('changes the hash when an existing DB value moves after plan, and ignores note and empty payer', () => {
+    const existing = [existingRow('a', '홍길동', 'Max20x', 6)]
+    const rows = roster(['홍길동,,anthropic,Max20x,200,6,본인,'])
+    const first = summarizeRosterSync(planRosterSync(rows, existing), existing)
+    const moved = [{ ...existing[0], amount: '999.00' }]
+    expect(summarizeRosterSync(planRosterSync(rows, moved), moved).planHash).not.toBe(first.planHash)
+
+    const noted = [{ ...existing[0], note: '손으로 적은 메모' }]
+    expect(summarizeRosterSync(planRosterSync(rows, noted), noted).unchanged).toBe(true)
+    const emptyPayer = [{ ...existing[0], payer: '' }]
+    const noPayer = parseRosterCsv([HEADER, '홍길동,,anthropic,Max20x,200,6,,'].join('\n')).rows
+    expect(summarizeRosterSync(planRosterSync(noPayer, emptyPayer), emptyPayer).unchanged).toBe(true)
+  })
 })
