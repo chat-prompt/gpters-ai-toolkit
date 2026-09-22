@@ -11,6 +11,9 @@ type Query = { op: 'update' | 'insert' | 'delete'; values?: unknown; ids?: unkno
 const mocks = vi.hoisted(() => ({
   existing: [] as Array<Record<string, unknown>>,
   batch: vi.fn(async (queries: unknown[]) => queries),
+  /** false 면 로컬 postgres-js 처럼 batch 가 없어 transaction 경로를 탄다 */
+  hasBatch: true,
+  transaction: vi.fn(async (run: (tx: unknown) => Promise<void>) => run({})),
 }))
 
 vi.mock('drizzle-orm', () => ({
@@ -25,7 +28,8 @@ vi.mock('@/lib/db', () => ({
     update: () => ({ set: (values: unknown) => ({ where: (where: { eq: unknown }) => ({ op: 'update', values, ids: where.eq }) }) }),
     insert: () => ({ values: (values: unknown) => ({ op: 'insert', values }) }),
     delete: () => ({ where: (where: { inArray: unknown }) => ({ op: 'delete', ids: where.inArray }) }),
-    batch: mocks.batch,
+    get batch() { return mocks.hasBatch ? mocks.batch : undefined },
+    transaction: (run: (tx: unknown) => Promise<void>) => mocks.transaction(run),
   },
 }))
 
@@ -57,6 +61,8 @@ async function planFor(body: string) {
 describe('POST /api/ax/subscription-sync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.batch.mockImplementation(async (queries: unknown[]) => queries)
+    mocks.hasBatch = true
     vi.stubEnv('AX_SUBSCRIPTION_SYNC_TOKEN_SHA256', sha256(TOKEN))
     mocks.existing = [
       existingRow('a', '홍길동', 'Max20x', 6, '200.00'),
@@ -141,5 +147,69 @@ describe('POST /api/ax/subscription-sync', () => {
 
     expect((await POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash }))).status).toBe(409)
     expect(mocks.batch).not.toHaveBeenCalled()
+  })
+
+  describe('동시 apply — 구독 키 유니크 제약(0043, DEV-4491)', () => {
+    /** 드라이버 오류를 drizzle 처럼 cause 로 감싼 unique violation */
+    const uniqueViolation = (constraint: string, field: 'constraint' | 'constraint_name' = 'constraint') =>
+      Object.assign(new Error('Failed query: insert into "ax_subscriptions" ...'), {
+        cause: Object.assign(new Error(`duplicate key value violates unique constraint "${constraint}"`), { code: '23505', [field]: constraint }),
+      })
+
+    const keyOf = (row: Record<string, unknown>) => [row.vendor, row.plan, row.ownerName ?? null, row.renewalDay ?? null].join('|')
+
+    it('같은 해시로 거의 동시에 두 번 apply 해도 insert 는 한 번만 남고 늦은 쪽은 409 로 다시 plan 하게 한다', async () => {
+      const roster = csv('홍길동,anthropic,Max20x,200,6,본인', '김철수,anthropic,Max5x,100,14,본인', '이영희,openai,Plus,20,21,본인')
+      const { json: plan } = await planFor(roster)
+      expect(plan.counts).toEqual({ update: 0, insert: 1, remove: 0 })
+
+      // 제약이 있는 테이블처럼 동작하는 batch: 한 트랜잭션 — 키가 겹치면 아무것도 쓰지 않고 실패한다
+      const table = new Map(mocks.existing.map((row) => [keyOf(row), row]))
+      mocks.batch.mockImplementation(async (queries: unknown[]) => {
+        const inserts = (queries as Query[]).filter((query) => query.op === 'insert').flatMap((query) => query.values as Array<Record<string, unknown>>)
+        if (inserts.some((row) => table.has(keyOf(row)))) throw uniqueViolation('ax_subscriptions_key_uniq')
+        for (const row of inserts) table.set(keyOf(row), row)
+        return queries
+      })
+
+      // 둘 다 같은 existing 을 읽고 해시 확인을 통과한 뒤 batch 에 들어간다
+      const responses = await Promise.all([
+        POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash })),
+        POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash })),
+      ])
+      expect(mocks.batch).toHaveBeenCalledTimes(2)
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 409])
+
+      const late = responses.find((response) => response.status === 409)!
+      const json = await late.json()
+      expect(json.status).toBe('conflict')
+      expect(json.error).toMatch(/run plan again/i)
+      expect([...table.keys()].filter((key) => key.startsWith('OpenAI|Plus|이영희'))).toHaveLength(1)
+      expect(table.size).toBe(3)
+    })
+
+    it('로컬 postgres-js(transaction 경로)의 constraint_name 도 409 로 다룬다', async () => {
+      mocks.hasBatch = false
+      mocks.transaction.mockRejectedValueOnce(uniqueViolation('ax_subscriptions_key_uniq', 'constraint_name'))
+      const roster = csv('홍길동,anthropic,Max20x,200,6,본인', '김철수,anthropic,Max5x,100,14,본인', '이영희,openai,Plus,20,21,본인')
+      const { json: plan } = await planFor(roster)
+
+      const response = await POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash }))
+      expect(response.status).toBe(409)
+      expect(mocks.transaction).toHaveBeenCalledTimes(1)
+      expect(mocks.batch).not.toHaveBeenCalled()
+    })
+
+    it('다른 제약 위반이나 다른 DB 오류는 충돌로 숨기지 않고 500 이다', async () => {
+      const roster = csv('홍길동,anthropic,Max20x,200,6,본인', '김철수,anthropic,Max5x,100,14,본인', '이영희,openai,Plus,20,21,본인')
+      const { json: plan } = await planFor(roster)
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      mocks.batch.mockRejectedValueOnce(uniqueViolation('ax_subscriptions_pkey'))
+      expect((await POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash }))).status).toBe(500)
+      mocks.batch.mockRejectedValueOnce(new Error('connection reset'))
+      expect((await POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash }))).status).toBe(500)
+      errorLog.mockRestore()
+    })
   })
 })
