@@ -216,12 +216,18 @@ export function projectObservationTrends(rows:ObservationRow[],query:Observation
   }
   return result
 }
-export async function loadAgentObservations(query:ObservationQuery,now=new Date()):Promise<AgentObservationData>{
+/**
+ * Loads and projects stored observations for a period.
+ *
+ * @param options.probeOnly - Only batches whose observation reports the daily boot probe (a small, separate stream set)
+ */
+export async function loadAgentObservations(query:ObservationQuery,now=new Date(),options:{probeOnly?:boolean}={}):Promise<AgentObservationData>{
   const {start,end}=observationRange(query,now)
   const [{db,axAgentTelemetryBatches:table},{and,gte,lte,eq,sql,desc}]=await Promise.all([import('@gpters/db'),import('drizzle-orm')])
   const rows=await db.select({batchId:table.batchId,agentId:table.agentId,windowStart:table.windowStart,windowEnd:table.windowEnd,collectedAt:table.collectedAt,collection:table.collection}).from(table)
     .where(and(gte(table.windowEnd,start),lte(table.windowStart,end),query.agentId?eq(table.agentId,query.agentId):undefined,
-      query.source?sql`${table.collection}->>'source' = ${query.source}`:undefined,sql`(${table.collection} ? 'observability' OR ${table.collection} ? 'observabilityFailure')`))
+      query.source?sql`${table.collection}->>'source' = ${query.source}`:undefined,
+      options.probeOnly?sql`(${table.collection}->'observability'->'metricCapabilities') ? 'probeFirstTurnTokens'`:sql`(${table.collection} ? 'observability' OR ${table.collection} ? 'observabilityFailure')`))
     .orderBy(desc(table.collectedAt)).limit(20001)
   return projectObservationTrends(rows.slice(0,20000),query,now,rows.length>20000)
 }

@@ -22,7 +22,11 @@ export const agentObservationPanel:AxPanel<Record<string,never>>={meta:observati
  * no paths, session IDs or text — so it is an organization panel, unlike the full observations. Hidden from tabs.
  */
 const bootProbeMeta={id:'boot-probe',title:'부팅 테스트',description:'매일 고정 테스트 메시지의 첫 턴 입력 토큰',source:'수집된 관측 지표 (테스트 세션만)',visibility:'org' as const,usesPeriod:true,hidden:true}
-export const bootProbePanel:AxPanel<{bootProbes:BootProbeSeries[]}>={meta:bootProbeMeta,async load(ctx){
-  try{return panelOk(bootProbeMeta,{bootProbes:summarizeBootProbes(await loadAgentObservations(observationQuerySchema.parse({days:String(ctx.days)})))})}
+export const bootProbePanel:AxPanel<{bootProbes:BootProbeSeries[];truncated:boolean}>={meta:bootProbeMeta,async load(ctx){
+  try{
+    // Only batches that report the probe, so ordinary collectors never crowd probe streams out of the stream limit.
+    const data=await loadAgentObservations(observationQuerySchema.parse({days:String(ctx.days)}),new Date(),{probeOnly:true})
+    return panelOk(bootProbeMeta,{bootProbes:summarizeBootProbes(data),truncated:data.coverage.truncated||data.coverage.rowsTruncated})
+  }
   catch(cause){console.error('[ax] boot-probe panel failed',cause instanceof Error?cause.message:'unknown');return panelError(bootProbeMeta,'부팅 테스트 지표를 불러오지 못했습니다')}
 }}

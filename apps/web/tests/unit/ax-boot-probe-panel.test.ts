@@ -20,11 +20,11 @@ describe('boot probe panel', () => {
     const stream = { agentId: 'example-agent', source: 'claude-code', adapterVersion: '3', latestAt: '2026-01-02T03:00:00.000Z', pointsTruncated: false, excludedOverlaps: 0, conflictingWindows: 0,
       summary: { metricCapabilities: { probeFirstTurnTokens: 'supported' } },
       points: [{ startUtc: '2026-01-02T02:00:00.000Z', endUtc: '2026-01-02T03:00:00.000Z', metrics: { probeFirstTurnTokens: { count: 1, sum: 102068 }, firstTurnTokens: { count: 9, sum: 1 } }, metricCapabilities: { probeFirstTurnTokens: 'supported' } }] }
-    loadAgentObservations.mockResolvedValueOnce({ streams: [stream, { ...stream, agentId: 'no-probe', summary: { metricCapabilities: {} } }] })
+    loadAgentObservations.mockResolvedValueOnce({ streams: [stream, { ...stream, agentId: 'no-probe', summary: { metricCapabilities: {} } }], coverage: { truncated: false, rowsTruncated: false } })
     const result = await getAxPanel('boot-probe')!.load({ days: 7, isAdmin: false })
-    expect(result).toMatchObject({ status: 'ok', data: { bootProbes: [{ agentId: 'example-agent', points: [{ endUtc: '2026-01-02T03:00:00.000Z', count: 1, sum: 102068 }], measuredWindows: 1, pointsTruncated: false }] } })
+    expect(result).toMatchObject({ status: 'ok', data: { truncated: false, bootProbes: [{ agentId: 'example-agent', points: [{ endUtc: '2026-01-02T03:00:00.000Z', count: 1, sum: 102068 }], measuredWindows: 1, pointsTruncated: false }] } })
     expect(JSON.stringify(result)).not.toContain('firstTurnTokens')
-    expect(loadAgentObservations).toHaveBeenCalledWith(expect.objectContaining({ days: '7' }))
+    expect(loadAgentObservations).toHaveBeenCalledWith(expect.objectContaining({ days: '7' }), expect.any(Date), { probeOnly: true })
     vi.spyOn(console, 'error').mockImplementation(() => {})
     loadAgentObservations.mockRejectedValueOnce(new Error('db down'))
     const failed = await getAxPanel('boot-probe')!.load({ days: 7, isAdmin: false })
