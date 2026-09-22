@@ -44,8 +44,6 @@ function textChars(value) {
  * @param blocks - The first user message's text blocks; hook output appended as separate blocks is ignored
  * @returns 'probe', 'not', or 'unknown'
  */
-// How long a sent probe may wait for its answer before an unanswered probe counts as missing.
-const PROBE_ANSWER_MS = 10*60*1000
 function probeOf(blocks, probe) {
   const text = blocks.find(block => block.startsWith('Conversation info:'))
   if (text === undefined) return blocks.some(block => block.includes(probe.marker)) ? 'unknown' : 'not'
@@ -202,7 +200,7 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
       && !row.message?.content?.some?.(b => b?.type === 'tool_result')) {
       const content = row.message?.content
       const blocks = typeof content === 'string' ? [content] : Array.isArray(content) ? content.filter(b => typeof b?.text === 'string').map(b => b.text) : []
-      probeMarked.set(session, { kind: probeOf(blocks, probe), at: Date.parse(row.timestamp) })
+      probeMarked.set(session, { kind: probeOf(blocks, probe) })
     }
     if (source === 'claude-code') {
       if (row.type === 'assistant' && row.message?.usage) {
@@ -255,12 +253,12 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
   for (const usage of usages.values()) sessions.get(usage.session).usage.push(usage)
   const first = [], peaks = [], probeFirst = []
   let unknownFirst = false, unknownProbe = false
-  for (const [key, { kind, at }] of probeMarked) {
+  for (const [key, { kind }] of probeMarked) {
     // Probe-like but not recognizable: the probe cannot be ruled in or out, answered or not.
     if (kind === 'unknown') unknownProbe = true
-    // Sent but not answered: still being answered if it is recent (its first usage lands in the next window),
-    // otherwise missing — never a day without a probe.
-    else if (kind === 'probe' && !sessions.get(key)?.usage.length && !(Number.isFinite(at) && at >= end - PROBE_ANSWER_MS)) unknownProbe = true
+    // Sent but not answered in this window: missing, never a day without a probe. If the answer merely lands in the
+    // next window (the collector ran in the seconds between probe and answer), that window counts it normally.
+    else if (kind === 'probe' && !sessions.get(key)?.usage.length) unknownProbe = true
   }
   for (const [key, session] of sessions) {
     session.usage.sort((a,b) => a.at-b.at)

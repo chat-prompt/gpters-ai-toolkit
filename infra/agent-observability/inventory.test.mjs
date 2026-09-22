@@ -379,10 +379,16 @@ test('boot probe: unreadable channel info or an unproven session makes the probe
     const result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
     assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete',`case ${label}`); await rm(join(project,`${label}.jsonl`))
   }
-  // Sent in the last minutes of the window and not answered yet: still being answered, counted in the next window.
-  await save(join(project,'pending.jsonl'),[{...probeUser('pending',envelope('C0BUF7RC2SD')),timestamp:'2026-01-02T23:58:00Z'}])
+  // Answered only in the next window (the collector ran between probe and answer): that window is incomplete, and the
+  // next one counts the first turn normally.
+  const late={...probeReply('late'),timestamp:'2026-01-03T00:00:05Z'}
+  await save(join(project,'late.jsonl'),[{...probeUser('late',envelope('C0BUF7RC2SD')),timestamp:'2026-01-02T23:59:58Z'}])
   let result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
-  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,0); await rm(join(project,'pending.jsonl'))
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete')
+  await appendFile(join(project,'late.jsonl'),JSON.stringify(late)+'\n')
+  const next={startUtc:'2026-01-03T00:00:00.000Z',endUtc:'2026-01-03T01:00:00.000Z'}, nextContext={...context(root),window:next}
+  result=await collectCliMetrics({...nextContext,files:await discoverWindowFiles(nextContext),probe:probeConfig})
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,1); await rm(join(project,'late.jsonl'))
   result=await probeResult(root,project,[['resumed',envelope('C0BUF7RC2SD'),'earlier-leaf']])
   assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
   // Without a probe configuration the metric is absent (older collectors).

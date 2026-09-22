@@ -112,7 +112,9 @@ reuse its ID with different content; this command is for local review only.
   `System: [...] Slack message` line — is the mention followed by the marker;
   history quoting an earlier probe and hook output appended as separate blocks
   never count. Anything probe-like that does not fit this shape (channel field
-  missing, marker misplaced, no answer recorded) makes the probe `incomplete`,
+  missing, marker misplaced, no answer recorded in the window) makes the probe
+  `incomplete` — if the collector happens to run in the seconds between the probe
+  and its answer, that one window is incomplete and the next counts it —
   so an OpenClaw format change shows up instead of becoming a silent zero. Its first-turn input, under the same completeness rule as
   real first turns, is `probeFirstTurnTokens`. The same message every day makes
   days comparable; the envelope still carries the channel's messages since the
