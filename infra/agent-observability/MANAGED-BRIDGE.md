@@ -197,12 +197,15 @@ observations already frozen into pending data.
 
 An OpenClaw agent database may be added as `"bootstrapReports":{"path":"/abs/agent.sqlite"}`
 for a Claude collector only: an owned regular file, not reached through a symlink.
+The collector checks this before running the helper, so a missing, foreign-owned or
+symlinked database is a `config` failure that stops the new batch (usage included)
+until the config is fixed or the key removed.
 The helper opens it read-only with `node:sqlite` (loaded only when configured) and
 uploads only the boot-file counts described in the README.
 
 Config, hash, Node version, scope, child-process or schema errors fail the new
 collection closed: no new pending batch, upload or checkpoint advance. The error
-names one fixed code — `node-version`, `config`, `artifact`, `helper-timeout`,
+names one fixed code — `node-version`, `already-enriched`, `config`, `artifact`, `helper-timeout`,
 `helper-output`, `helper-failed`, `unexpected-observation`, `validation` or the
 helper's inventory reason (e.g. `scan-limit`, `stale-tail`) — never a path, record
 or helper stderr, so an operator can tell a timeout from an integrity failure. The only

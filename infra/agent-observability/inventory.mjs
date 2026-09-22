@@ -212,6 +212,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
  * the file), and every other file starts as a sidechain (subagents). Anything else stays unproven.
  */
 function attestFirstTurns(files,lineages) {
+  // A file of the session without any uuid record counts as a main thread, which keeps the session unproven.
   const bySession=new Map()
   for(const item of lineages) { if(!bySession.has(item.sessionKey)) bySession.set(item.sessionKey,[]); bySession.get(item.sessionKey).push(item) }
   const selected=new Set(files.map(file=>file.path))

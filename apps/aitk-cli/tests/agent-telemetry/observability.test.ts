@@ -165,7 +165,7 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
   })
   it('kills a helper after its 30 second deadline', async () => {
     fakeHelper('setInterval(() => {}, 1000)'); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const rejected = expect(attachAgentObservability(batch(), configPath, { sessionsDir: sessions })).rejects.toThrow('Observation bridge failed')
+    const rejected = expect(attachAgentObservability(batch(), configPath, { sessionsDir: sessions })).rejects.toThrow('Observation bridge failed (helper-timeout);')
     await vi.advanceTimersByTimeAsync(30001); vi.useRealTimers(); await rejected; expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
   })
   it('blocks concurrent writers until the first request acknowledges pending', async () => {
@@ -238,6 +238,7 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     ['boot reports for Codex', { source: 'codex', bootstrapReports: { path: '/tmp/agent.sqlite' } }],
     ['boot reports with extra keys', { source: 'claude-code', bootstrapReports: { path: '/tmp/agent.sqlite', agent: 'x' } }],
     ['relative boot reports', { source: 'claude-code', bootstrapReports: { path: 'agent.sqlite' } }],
+    ['missing boot report database', { source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path: '/nonexistent-aitk-fixture/agent.sqlite' } }],
   ])('rejects shared-source config for %s as a config failure', async (_label, extra) => {
     config(extra as Record<string, unknown>)
     const source = (extra as { source: string }).source

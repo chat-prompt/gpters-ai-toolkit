@@ -13,6 +13,11 @@ import { windowBounds } from './runtime-receipts.mjs'
 // OpenClaw names the CLI runtime that booted the session; only the collector's own runtime is attributed.
 const PROVIDERS = { 'claude-code': 'claude-cli' }
 const integer = value => Number.isSafeInteger(value) && value >= 0
+// SQLITE_BUSY and SQLITE_LOCKED (primary result codes).
+const BUSY = new Set([5, 6])
+// More recent reports than this in one window is not a shape we have seen; report it as incomplete.
+const MAX_ROWS = 5000
+function integrity() { const error = new Error('Boot report source changed'); error.inventoryReason = 'source-consistency'; return error }
 const empty = { sessions: 0, truncatedSessions: 0, nearLimitSessions: 0, warningSessions: 0, largestFileCharsMax: null, largestFileCharsLatest: null, fileCharsLimit: null }
 
 /** One report's numbers, or null when its shape is not the one established for OpenClaw. */
@@ -38,34 +43,46 @@ function reportNumbers(report) {
  * @param options.source - Collector source; only its own OpenClaw provider is counted
  * @param options.window - Collection window
  * @param options.reports - `{ path }` of the agent's session database, or undefined when not configured
+ * @param testing.busyTimeoutMs - How long to wait for a busy database before reporting it incomplete
  * @returns `undefined` when not configured, otherwise the metric value and its capability
  */
-export async function collectBootstrapMetrics({ source, window, reports }) {
+export async function collectBootstrapMetrics({ source, window, reports }, { busyTimeoutMs = 5000 } = {}) {
   if (reports === undefined) return undefined
   const provider = PROVIDERS[source]
   if (!provider) return { value: null, capability: 'unsupported' }
   const [start,end] = windowBounds(window)
+  const path = reports?.path
+  // The CLI checked this path before the helper ran; a change since then is an integrity failure, never missing data.
+  let safe = false
+  try { safe = typeof path === 'string' && isAbsolute(path) && await realpath(path) === path && (await lstat(path)).isFile() } catch { /* unsafe */ }
+  if (!safe) throw integrity()
   let rows
+  // Loaded only when configured, so the helper still runs on Node builds without node:sqlite.
+  const { DatabaseSync } = await import('node:sqlite')
   try {
-    const path = reports?.path
-    if (typeof path !== 'string' || !isAbsolute(path) || await realpath(path) !== path || !(await lstat(path)).isFile()) throw new Error('Unsafe report source')
-    // Loaded only when configured, so the helper still runs on Node builds without node:sqlite.
-    const { DatabaseSync } = await import('node:sqlite')
-    const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 })
+    const db = new DatabaseSync(path, { readOnly: true, timeout: busyTimeoutMs })
     try {
+      // Reports whose time is not an integer are selected too, so they count as malformed instead of vanishing.
       rows = db.prepare(`select json_extract(entry_json,'$.systemPromptReport') as report from session_nodes
-        where json_extract(entry_json,'$.systemPromptReport.generatedAt') >= ? and json_extract(entry_json,'$.systemPromptReport.generatedAt') < ?
-          and json_extract(entry_json,'$.systemPromptReport.provider') = ?`).all(start, end, provider)
+        where json_type(entry_json,'$.systemPromptReport') = 'object'
+          and (json_type(entry_json,'$.systemPromptReport.generatedAt') is not 'integer'
+            or (json_extract(entry_json,'$.systemPromptReport.generatedAt') >= ? and json_extract(entry_json,'$.systemPromptReport.generatedAt') < ?))
+        limit ${MAX_ROWS + 1}`).all(start, end)
     } finally { db.close() }
-  } catch {
-    // Unreadable or busy source: missing data, never a zero.
-    return { value: null, capability: 'incomplete' }
+  } catch (error) {
+    // Only a busy or locked database is transient missing data; a missing table or any other error fails closed.
+    if (BUSY.has(error?.errcode & 0xff)) return { value: null, capability: 'incomplete' }
+    throw integrity()
   }
+  if (rows.length > MAX_ROWS) return { value: null, capability: 'incomplete' }
   const reportsInWindow = []
   let malformed = 0
   for (const { report } of rows) {
-    let numbers = null
-    try { numbers = reportNumbers(JSON.parse(report)) } catch { /* counted below */ }
+    let parsed = null
+    try { parsed = JSON.parse(report) } catch { /* malformed below */ }
+    // Another runtime's report is not this collector's; an unreadable or mistimed one of ours is malformed.
+    if (parsed && typeof parsed.provider === 'string' && parsed.provider !== provider) continue
+    const numbers = parsed?.provider === provider ? reportNumbers(parsed) : null
     if (numbers && numbers.at >= start && numbers.at < end) reportsInWindow.push(numbers); else malformed++
   }
   if (!reportsInWindow.length) return { value: { ...empty }, capability: malformed ? 'incomplete' : 'supported' }

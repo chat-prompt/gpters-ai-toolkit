@@ -119,7 +119,7 @@ test('shared guard log: a stable file ending mid-line is incomplete, not silentl
 test('boot reports: absent config adds nothing, other runtimes are unsupported, unreadable sources are missing not zero',async t=>{
  assert.equal(await collectBootstrapMetrics({source:'claude-code',window,reports:undefined}),undefined)
  assert.deepEqual(await collectBootstrapMetrics({source:'codex',window,reports:{path:'/nowhere'}}),{value:null,capability:'unsupported'})
- assert.deepEqual(await collectBootstrapMetrics({source:'claude-code',window,reports:{path:'/nowhere/agent.sqlite'}}),{value:null,capability:'incomplete'})
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path:'/nowhere/agent.sqlite'}}),error=>error.inventoryReason==='source-consistency')
  const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
  db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
@@ -131,4 +131,39 @@ test('boot reports: absent config adds nothing, other runtimes are unsupported, 
  result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
  result=await collectBootstrapMetrics({source:'claude-code',window:{startUtc:'2026-01-05T00:00:00.000Z',endUtc:'2026-01-06T00:00:00.000Z'},reports:{path}})
  assert.deepEqual(result,{capability:'supported',value:{sessions:0,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:null,largestFileCharsLatest:null,fileCharsLimit:null}})
+})
+test('boot reports: mistimed or unattributed reports are malformed, other runtimes are skipped, busy is incomplete, a wrong schema fails closed',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
+ db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
+ const insert=(key,report)=>db.prepare('insert into session_nodes values (?,?)').run(key,JSON.stringify({systemPromptReport:report}))
+ const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
+ insert('codex',{...good,provider:'codex'})
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,0)
+ insert('string-time',{...good,generatedAt:'2026-01-02T03:00:00Z'})
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,0)
+ db.exec("delete from session_nodes where session_key='string-time'"); insert('no-provider',{...good,provider:undefined})
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete')
+ db.exec('begin exclusive')
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}},{busyTimeoutMs:10}); assert.deepEqual(result,{value:null,capability:'incomplete'})
+ db.exec('rollback'); db.exec('drop table session_nodes'); db.close()
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path}}),error=>error.inventoryReason==='source-consistency')
+})
+test('shared guard log: rotation or append between reads is timing, a rewrite or symlink fails closed, duplicates count once',async t=>{
+ const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const path=join(dir,'guard.jsonl'), row=(decision,n=0)=>JSON.stringify({ts:inside,decision,session:'own',n})+'\n', files=[{path,sessionKey:'g',sessionFilter:'installed-scope'}]
+ const collect=()=>collectReadGuardMetrics({files,window,sessions:new Set(['own'])})
+ const realOpen=fs.open
+ const once=async (hook,fn)=>{ let fired=false; fs.open=async (...args)=>{ const handle=await realOpen(...args); if(!fired && String(args[0])===path){ fired=true; await hook() } return handle }; syncBuiltinESMExports(); try { return await fn() } finally { fs.open=realOpen; syncBuiltinESMExports() } }
+ // Rotation right after the active log was opened: the view would miss rows, so it is timing.
+ await writeFile(path,row('deny'))
+ await once(async()=>{ await rename(path,path+'.1'); await writeFile(path,'') }, ()=>assert.rejects(collect(),error=>error.inventoryReason==='source-changed'))
+ await rm(path+'.1'); await writeFile(path,row('deny'))
+ await once(()=>appendFile(path,row('allow')), ()=>assert.rejects(collect(),error=>error.inventoryReason==='source-changed'))
+ await writeFile(path,row('deny',1)+row('allow',2))
+ await once(()=>fs.truncate(path,5), ()=>assert.rejects(collect(),error=>error.inventoryReason==='source-consistency'))
+ await writeFile(path+'.1',row('deny',3)); await writeFile(path,row('deny',3)+row('allow',4))
+ let result=await collect(); assert.deepEqual(result.metrics,{readGuardAllow:1,readGuardDeny:1}); assert.equal(result.provenance.duplicates,1)
+ await rm(path); await symlink(path+'.1',path); await assert.rejects(collect(),error=>error.inventoryReason==='source-consistency')
 })
