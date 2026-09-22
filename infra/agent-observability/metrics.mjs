@@ -35,18 +35,30 @@ function textChars(value) {
 /**
  * Classifies a Claude session's first user message as the daily boot probe. OpenClaw wraps a Slack message in an
  * envelope: a `Conversation info` JSON block (with `chat_id: "channel:<ID>"`), optional channel or thread history,
- * then the current message as the last line. The probe is that last line — the agent mention, then the marker — in
- * the probe channel. History lines that quote an earlier probe never count.
+ * a `System: [...] Slack message` line, then the current message. The probe is a current message that is the agent
+ * mention followed by the marker, in the probe channel. History quoting an earlier probe never counts.
  *
- * @returns 'probe', 'not', or 'unknown' when the last line is a probe but the channel cannot be read
+ * Anything that looks like the probe but does not fit — channel field missing, current message not found, marker
+ * not where expected — is 'unknown' (the probe is then incomplete), so a format change never becomes a silent zero.
+ *
+ * @param blocks - The first user message's text blocks; hook output appended as separate blocks is ignored
+ * @returns 'probe', 'not', or 'unknown'
  */
-function probeOf(text, probe) {
-  const lines = text.split('\n'), last = [...lines].reverse().find(line => line.trim()) ?? ''
-  const mention = /^<@[A-Z0-9]+>(?: \([^)\n]{0,80}\))? /.exec(last)
-  if (!mention || !last.slice(mention[0].length).startsWith(probe.marker)) return 'not'
-  const info = lines.findIndex(line => line.startsWith('Conversation info:'))
-  if (info < 0 || lines[info + 1] !== '```json') return 'unknown'
-  try { return JSON.parse(lines[info + 2])?.chat_id === `channel:${probe.channel}` ? 'probe' : 'not' } catch { return 'unknown' }
+function probeOf(blocks, probe) {
+  const text = blocks.find(block => block.startsWith('Conversation info:'))
+  if (text === undefined) return blocks.some(block => block.includes(probe.marker)) ? 'unknown' : 'not'
+  const lines = text.split('\n')
+  if (lines[1] !== '```json') return 'unknown'
+  let chat
+  try { chat = JSON.parse(lines[2])?.chat_id } catch { return 'unknown' }
+  if (typeof chat !== 'string' || !chat.startsWith('channel:')) return text.includes(probe.marker) ? 'unknown' : 'not'
+  if (chat !== `channel:${probe.channel}`) return 'not'
+  const system = lines.findLastIndex(line => /^System: \[[^\]]+\] Slack message/.test(line))
+  if (system < 0) return text.includes(probe.marker) ? 'unknown' : 'not'
+  const current = lines.slice(system + 1).join('\n').trim()
+  if (!current.includes(probe.marker)) return 'not'
+  const mention = /^(?:<@[A-Z0-9]+>|@\S+)(?: \([^)\n]{0,80}\))? /.exec(current)
+  return mention && current.slice(mention[0].length).startsWith(probe.marker) ? 'probe' : 'unknown'
 }
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
 /** A discovered file changed before or while it was read: a timing failure, never accepted as data. */
@@ -186,8 +198,8 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
     if (probe && source === 'claude-code' && row.type === 'user' && row.isSidechain !== true && !probeMarked.has(session)
       && !row.message?.content?.some?.(b => b?.type === 'tool_result')) {
       const content = row.message?.content
-      const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(b => typeof b?.text === 'string' ? b.text : '').join('') : ''
-      probeMarked.set(session, probeOf(text, probe))
+      const blocks = typeof content === 'string' ? [content] : Array.isArray(content) ? content.filter(b => typeof b?.text === 'string').map(b => b.text) : []
+      probeMarked.set(session, probeOf(blocks, probe))
     }
     if (source === 'claude-code') {
       if (row.type === 'assistant' && row.message?.usage) {
@@ -240,6 +252,8 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
   for (const usage of usages.values()) sessions.get(usage.session).usage.push(usage)
   const first = [], peaks = [], probeFirst = []
   let unknownFirst = false, unknownProbe = false
+  // A probe that was sent but never answered (no usage recorded) is missing, not a day without a probe.
+  for (const [key, kind] of probeMarked) if (kind === 'probe' && !sessions.get(key)?.usage.length) unknownProbe = true
   for (const [key, session] of sessions) {
     session.usage.sort((a,b) => a.at-b.at)
     const kind = probeMarked.get(key)
@@ -273,8 +287,8 @@ export async function collectCliMetrics({ source, files = [], window, scope, pro
       metrics.probeFirstTurnTokens = histogram(probeFirst)
       // A session whose history is unproven may have started with a probe that is no longer visible, so the probe is
       // as incomplete as the ordinary first turn. No transcript in the window at all is an observed zero.
-      metricCapabilities.probeFirstTurnTokens = capability === 'uncollected' ? 'supported'
-        : unknownProbe || unknownFirst || capability !== 'supported' ? 'incomplete' : 'supported'
+      metricCapabilities.probeFirstTurnTokens = unknownProbe ? 'incomplete' : capability === 'uncollected' ? 'supported'
+        : unknownFirst || capability !== 'supported' ? 'incomplete' : 'supported'
     }
   }
   return { metrics,metricCapabilities,capability,provenance:counters }

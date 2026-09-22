@@ -103,18 +103,23 @@ reuse its ID with different content; this command is for local review only.
   state and is simply read. Session IDs stay inside the helper.
 - Boot probe (`bootProbe: {channel, marker}`, Claude dynamic inventory): once a
   day a fixed one-line message — the agent mention, then the marker (e.g.
-  `[BOOT-PROBE]`) — is posted as a new top-level message in one Slack channel. A
-  session counts when its first user message is OpenClaw's envelope for that
-  channel (`Conversation info` with `chat_id: "channel:<ID>"`) and the envelope's
-  last line is that mention-plus-marker line; history lines quoting an earlier
-  probe never count. Its first-turn input, under the same completeness rule as
+  `[BOOT-PROBE]`) — is posted as a new top-level message in one Slack channel.
+  OpenClaw opens a session per top-level message there (session key
+  `…:slack:channel:<id>:thread:<ts>`, observed 2026-09-22), so the probe is always
+  that session's first message. A session counts when its first user message is
+  OpenClaw's envelope for that channel (`Conversation info` with
+  `chat_id: "channel:<ID>"`) and the current message — after the last
+  `System: [...] Slack message` line — is the mention followed by the marker;
+  history quoting an earlier probe and hook output appended as separate blocks
+  never count. Anything probe-like that does not fit this shape (channel field
+  missing, marker misplaced, no answer recorded) makes the probe `incomplete`,
+  so an OpenClaw format change shows up instead of becoming a silent zero. Its first-turn input, under the same completeness rule as
   real first turns, is `probeFirstTurnTokens`. The same message every day makes
   days comparable; the envelope still carries the channel's messages since the
   agent's last reply there, so a busy channel adds a little. Probe sessions also
   remain in the ordinary metrics. Only the histogram leaves the host — no channel,
-  session ID or message text. An unproven session history or an unreadable
-  envelope makes the probe `incomplete`; no transcript in the window is an
-  observed zero. A new server contract must be deployed before a helper that
+  session ID or message text. An unproven session history in the window also
+  makes it `incomplete`; no transcript in the window is an observed zero. A new server contract must be deployed before a helper that
   reports it.
 - Boot-file health (adapter version `3`, Claude/OpenClaw only) reads OpenClaw's
   agent database read-only (`bootstrapReports.path`, `node:sqlite` with

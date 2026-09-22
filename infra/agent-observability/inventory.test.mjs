@@ -355,16 +355,28 @@ test('boot probe: the last envelope line in the probe channel counts; quoted his
     ['probe',envelope('C0BUF7RC2SD',{history:longHistory})],
     ['quoted',envelope('C0BUF7RC2SD',{history:['#1 뽀밋이: <@U0AGV1N6YDP> [BOOT-PROBE] 기록·파일 쓰기 금지.'],current:'<@U0AGV1N6YDP> 오늘 배포 확인해 줘'})],
     ['other-channel',envelope('C0OTHER0001')],
-    ['typed-inline',envelope('C0BUF7RC2SD',{current:'<@U0AGV1N6YDP> 이건 [BOOT-PROBE] 얘기야'})],
+    ['plain-message',envelope('C0BUF7RC2SD',{current:'<@U0AGV1N6YDP> 오늘 점검 부탁해'})],
   ])
   assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported')
   assert.deepEqual([result.metrics.probeFirstTurnTokens.count,result.metrics.probeFirstTurnTokens.sum],[1,102068])
   assert.equal(result.metrics.firstTurnTokens.count,4)
 }))
 test('boot probe: unreadable channel info or an unproven session makes the probe incomplete, never a silent zero',()=>fixture(async(root,project)=>{
-  let result=await probeResult(root,project,[['broken-info',envelope('C0BUF7RC2SD').replace(/\{"chat_id".*\}/,'{not json')]])
-  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete')
-  await rm(join(project,'broken-info.jsonl'))
+  for(const [label,text] of [
+    ['broken-info',envelope('C0BUF7RC2SD').replace(/\{"chat_id".*\}/,'{not json')],
+    ['no-chat-id',envelope('C0BUF7RC2SD').replace(/"chat_id":"channel:C0BUF7RC2SD",/,'')],
+    ['null-chat-id',envelope('C0BUF7RC2SD').replace(/"channel:C0BUF7RC2SD"/,'null')],
+    ['no-system-line',envelope('C0BUF7RC2SD').replace(/System: .*Slack message/,'')],
+    ['marker-misplaced',envelope('C0BUF7RC2SD',{current:'[BOOT-PROBE] <@U0AGV1N6YDP> 순서가 바뀜'})],
+  ]) {
+    const result=await probeResult(root,project,[[label,text]])
+    assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete',`case ${label}`)
+    await rm(join(project,`${label}.jsonl`))
+  }
+  // A probe that was never answered is missing, not a day without a probe.
+  await save(join(project,'unanswered.jsonl'),[probeUser('unanswered',envelope('C0BUF7RC2SD'))])
+  let result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); await rm(join(project,'unanswered.jsonl'))
   result=await probeResult(root,project,[['resumed',envelope('C0BUF7RC2SD'),'earlier-leaf']])
   assert.equal(result.metricCapabilities.probeFirstTurnTokens,'incomplete'); assert.equal(result.metrics.probeFirstTurnTokens.count,0)
   // Without a probe configuration the metric is absent (older collectors).
@@ -375,3 +387,10 @@ test('boot probe: settings are re-checked inside the helper',async()=>{
   for(const bootProbe of [{channel:'c0buf7rc2sd',marker:'[BOOT-PROBE]'},{channel:'C0BUF7RC2SD',marker:''},{channel:'C0BUF7RC2SD',marker:'[BOOT-PROBE]',extra:1}])
     await assert.rejects(collectObservability({agentId:'example-agent',source:'claude-code',window,bootProbe}),error=>error.inventoryReason==='source-consistency')
 })
+test('boot probe: hook output appended as another block and a written-out mention still count',()=>fixture(async(root,project)=>{
+  const hooked={...probeUser('hooked',''),message:{role:'user',content:[{type:'text',text:envelope('C0BUF7RC2SD')},{type:'text',text:'<system-reminder>hook output</system-reminder>'}]}}
+  await save(join(project,'hooked.jsonl'),[hooked,probeReply('hooked')])
+  await save(join(project,'named.jsonl'),[probeUser('named',envelope('C0BUF7RC2SD',{current:'@뽀짝이 [BOOT-PROBE] ok'})),probeReply('named')])
+  const result=await collectCliMetrics({...context(root),files:await discoverWindowFiles(context(root)),probe:probeConfig})
+  assert.equal(result.metricCapabilities.probeFirstTurnTokens,'supported'); assert.equal(result.metrics.probeFirstTurnTokens.count,2)
+}))
