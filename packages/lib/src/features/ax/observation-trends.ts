@@ -76,8 +76,17 @@ function mergeBootstrap(values:BootstrapObservation[]):BootstrapObservation {
     if(!Number.isSafeInteger(total))throw new Error('Observation aggregation overflow')
     return total
   }
-  return {sessions:sum('sessions'),truncatedSessions:sum('truncatedSessions'),nearLimitSessions:sum('nearLimitSessions'),warningSessions:sum('warningSessions'),
+  const merged:BootstrapObservation={sessions:sum('sessions'),truncatedSessions:sum('truncatedSessions'),nearLimitSessions:sum('nearLimitSessions'),warningSessions:sum('warningSessions'),
     largestFileCharsMax:withSize.length?Math.max(...withSize.map(v=>v.largestFileCharsMax!)):null,largestFileCharsLatest:last?.largestFileCharsLatest??null,fileCharsLimit:last?.fileCharsLimit??null}
+  // Prompt sizes merge only when every window with snapshots carries them; an older collector's window would
+  // otherwise make the average cover fewer snapshots than `sessions` says.
+  if(withSize.length&&withSize.every(v=>v.promptCharsSum!==undefined&&v.promptCharsSum!==null)){
+    const promptSum=withSize.reduce((a,v)=>a+v.promptCharsSum!,0)
+    if(!Number.isSafeInteger(promptSum))throw new Error('Observation aggregation overflow')
+    Object.assign(merged,{promptCharsLatest:last!.promptCharsLatest,promptCharsMax:Math.max(...withSize.map(v=>v.promptCharsMax!)),promptCharsSum:promptSum,
+      projectContextCharsLatest:last!.projectContextCharsLatest,toolSchemaCharsLatest:last!.toolSchemaCharsLatest})
+  }
+  return merged
 }
 function summarize(observations:AgentObservability[],start:number,end:number,forceIncomplete=false):ObservationSummary {
   const selected=observations.filter(o=>Date.parse(o.window.startUtc)>=start&&Date.parse(o.window.endUtc)<=end)

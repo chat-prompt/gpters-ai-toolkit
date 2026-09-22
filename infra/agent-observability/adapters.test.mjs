@@ -125,21 +125,22 @@ test('boot reports: absent config adds nothing, other runtimes are unsupported, 
  const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
  db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
- const at=Date.parse('2026-01-02T03:00:00Z'), report=extra=>JSON.stringify({systemPromptReport:{generatedAt:at,provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:true,truncatedFiles:1,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:40000,truncated:true},{missing:true,truncated:false}],...extra}})
+ const at=Date.parse('2026-01-02T03:00:00Z'), report=extra=>JSON.stringify({systemPromptReport:{generatedAt:at,provider:'claude-cli',systemPrompt:{chars:42000,projectContextChars:34000},tools:{schemaChars:22000},bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:true,truncatedFiles:1,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:40000,truncated:true},{missing:true,truncated:false}],...extra}})
  db.prepare('insert into session_nodes values (?,?)').run('ok',report({}))
  let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)})
- assert.deepEqual(result,{capability:'supported',value:{sessions:1,truncatedSessions:1,nearLimitSessions:0,warningSessions:1,largestFileCharsMax:40000,largestFileCharsLatest:40000,fileCharsLimit:32000}})
- db.prepare('insert into session_nodes values (?,?)').run('bad',report({bootstrapMaxChars:'32000'})); db.close()
+ assert.deepEqual(result,{capability:'supported',value:{sessions:1,truncatedSessions:1,nearLimitSessions:0,warningSessions:1,largestFileCharsMax:40000,largestFileCharsLatest:40000,fileCharsLimit:32000,promptCharsLatest:42000,promptCharsMax:42000,promptCharsSum:42000,projectContextCharsLatest:34000,toolSchemaCharsLatest:22000}})
+ db.prepare('insert into session_nodes values (?,?)').run('bad',report({bootstrapMaxChars:'32000'}))
+ db.prepare('insert into session_nodes values (?,?)').run('no-prompt',report({systemPrompt:undefined})); db.close()
  result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
  result=await collectBootstrapMetrics({source:'claude-code',window:{startUtc:'2026-01-05T00:00:00.000Z',endUtc:'2026-01-06T00:00:00.000Z'},reports:await approve(path)})
- assert.deepEqual(result,{capability:'supported',value:{sessions:0,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:null,largestFileCharsLatest:null,fileCharsLimit:null}})
+ assert.deepEqual(result,{capability:'supported',value:{sessions:0,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:null,largestFileCharsLatest:null,fileCharsLimit:null,promptCharsLatest:null,promptCharsMax:null,promptCharsSum:null,projectContextCharsLatest:null,toolSchemaCharsLatest:null}})
 })
 test('boot reports: mistimed or unattributed reports are malformed, other runtimes are skipped, busy is incomplete, a wrong schema fails closed',async t=>{
  const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
  db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
  const insert=(key,report)=>db.prepare('insert into session_nodes values (?,?)').run(key,JSON.stringify({systemPromptReport:report}))
- const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
+ const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',systemPrompt:{chars:42000,projectContextChars:34000},tools:{schemaChars:22000},bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
  insert('codex',{...good,provider:'codex'})
  let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,0)
  insert('string-time',{...good,generatedAt:'2026-01-02T03:00:00Z'})
@@ -207,7 +208,7 @@ test('boot reports: a broken JSON row is malformed (never a failed batch) and ot
  const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
  db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
- const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
+ const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',systemPrompt:{chars:42000,projectContextChars:34000},tools:{schemaChars:22000},bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
  const insert=db.prepare('insert into session_nodes values (?,?)')
  db.exec('begin'); for(let i=0;i<5001;i++) insert.run(`codex-${i}`,JSON.stringify({systemPromptReport:{...good,provider:'codex'}})); insert.run('ours',JSON.stringify({systemPromptReport:good})); db.exec('commit')
  let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,1)

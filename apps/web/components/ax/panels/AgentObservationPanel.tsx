@@ -20,13 +20,18 @@ const capabilityText={supported:'관측',unsupported:'미지원',uncollected:'�
 const number=(value:number)=>value.toLocaleString('ko-KR',{maximumFractionDigits:1})
 const when=(value:string)=>new Date(value).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})
 const failureText={'source-changed':'수집 중 파일 변경','partial-tail':'쓰는 중 파일'} as const
-/** Boot-file health line: the largest injected file against the per-file limit, and truncation/near-limit snapshots. */
+/** Boot-file health line (largest injected file vs. limit, truncation/near-limit snapshots) and, when reported, boot prompt sizes. */
 function BootstrapLine({summary}:{summary:ObservationSummary}){
   const value=summary.metrics.bootstrap,capability=summary.metricCapabilities.bootstrap
   if(capability===undefined)return null
   const text=!value?capabilityText[capability]:!value.sessions?'이 기간에 부팅 스냅샷 없음'
     :`가장 큰 파일 ${number(value.largestFileCharsLatest!)}자${value.fileCharsLimit?` / 한도 ${number(value.fileCharsLimit)}자 (${number(value.largestFileCharsLatest!/value.fileCharsLimit*100)}%)`:''} · 잘림 ${value.truncatedSessions}세션 · 상한 근접 ${value.nearLimitSessions}세션 · 경고 ${value.warningSessions}세션 · 스냅샷 ${value.sessions}개 · 기간 최대 ${number(value.largestFileCharsMax!)}자`
-  return <p className={`mt-1 text-xs ${value&&value.truncatedSessions>0?styles.attention:'text-[var(--text-secondary)]'}`}>부팅 파일: {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
+  const prompt=value&&value.sessions&&typeof value.promptCharsSum==='number'
+    ?`최근 ${number(value.promptCharsLatest!)}자 (주입 파일 ${number(value.projectContextCharsLatest!)}자) · 평균 ${number(value.promptCharsSum/value.sessions)}자 · 최대 ${number(value.promptCharsMax!)}자 · 도구 스키마 ${number(value.toolSchemaCharsLatest!)}자`:null
+  return <>
+    <p className={`mt-1 text-xs ${value&&value.truncatedSessions>0?styles.attention:'text-[var(--text-secondary)]'}`}>부팅 파일: {text}{value&&capability!=='supported'?` (${capabilityText[capability]})`:''}</p>
+    {prompt&&<p className="mt-1 text-xs text-[var(--text-secondary)]">부팅 프롬프트: {prompt}</p>}
+  </>
 }
 /** Windows sent without observability for a timing reason; usage for those windows was still collected. */
 function FailureLine({failures,total}:{failures:NonNullable<AgentObservationData['coverage']['observationFailures']>;total?:number}){

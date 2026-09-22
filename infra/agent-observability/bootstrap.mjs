@@ -19,7 +19,8 @@ const BUSY = new Set([5, 6])
 // have seen; report it as incomplete. The table is small (466 rows, about 1MB, a 3ms scan on 2026-09-22).
 const MAX_ROWS = 5000
 function integrity() { const error = new Error('Boot report source changed'); error.inventoryReason = 'source-consistency'; return error }
-const empty = { sessions: 0, truncatedSessions: 0, nearLimitSessions: 0, warningSessions: 0, largestFileCharsMax: null, largestFileCharsLatest: null, fileCharsLimit: null }
+const empty = { sessions: 0, truncatedSessions: 0, nearLimitSessions: 0, warningSessions: 0, largestFileCharsMax: null, largestFileCharsLatest: null, fileCharsLimit: null,
+  promptCharsLatest: null, promptCharsMax: null, promptCharsSum: null, projectContextCharsLatest: null, toolSchemaCharsLatest: null }
 
 /** One report's numbers, or null when its shape is not the one established for OpenClaw. */
 function reportNumbers(report) {
@@ -35,7 +36,10 @@ function reportNumbers(report) {
     largest = Math.max(largest, file.rawChars)
     truncated ||= file.truncated
   }
-  return { at: report.generatedAt, truncated, nearLimit: truncation.nearLimitFiles > 0, warning: truncation.warningShown, largest, limit: report.bootstrapMaxChars }
+  // Prompt sizes: the whole system prompt, its injected workspace part, and the tool schemas sent with it.
+  const prompt = report.systemPrompt?.chars, project = report.systemPrompt?.projectContextChars, tools = report.tools?.schemaChars
+  if (!integer(prompt) || !integer(project) || !integer(tools) || project > prompt) return null
+  return { at: report.generatedAt, truncated, nearLimit: truncation.nearLimitFiles > 0, warning: truncation.warningShown, largest, limit: report.bootstrapMaxChars, prompt, project, tools }
 }
 
 /**
@@ -113,6 +117,11 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
     largestFileCharsMax: Math.max(...reportsInWindow.map(r => r.largest)),
     largestFileCharsLatest: latest.largest,
     fileCharsLimit: latest.limit,
+    promptCharsLatest: latest.prompt,
+    promptCharsMax: Math.max(...reportsInWindow.map(r => r.prompt)),
+    promptCharsSum: reportsInWindow.reduce((a, r) => a + r.prompt, 0),
+    projectContextCharsLatest: latest.project,
+    toolSchemaCharsLatest: latest.tools,
   }
   return { value, capability: malformed ? 'incomplete' : 'supported' }
 }

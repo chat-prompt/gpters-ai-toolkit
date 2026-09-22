@@ -65,7 +65,9 @@ reuse its ID with different content; this command is for local review only.
   a main thread (its first uuid record is not a sidechain), that file is selected
   for the window and self-contained (its first uuid record has `parentUuid:null`
   and is not a compact summary, and every `parentUuid` resolves inside the file),
-  and every other file starts as a sidechain (subagents). Anything else, and every
+  and every other file starts as a sidechain (subagents), and the main file carries
+  the session's own name (`<sessionId>.jsonl`), since files unchanged before the
+  window are not read. Anything else, and every
   Codex session, stays unproven. Version `3` first-turn numbers are not comparable
   with version `2`, which never attested dynamic sessions.
 - Peak context is the maximum observed in-window input per session, not lifetime

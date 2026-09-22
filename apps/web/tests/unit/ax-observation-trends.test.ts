@@ -144,6 +144,21 @@ describe('persisted observation projection',()=>{
   const none=projectObservationTrends([observationRow()],q,now)
   expect(none.streams[0].summary.metrics.bootstrap).toBeUndefined();expect(none.streams[0].summary.metricCapabilities.bootstrap).toBeUndefined()
  })
+ it('accepts boot prompt sizes only together and consistent, and merges them only when every window has them',()=>{
+  const prompt=(latest:number,max:number,sum:number,project=latest-8000,tools=22000)=>({promptCharsLatest:latest,promptCharsMax:max,promptCharsSum:sum,projectContextCharsLatest:project,toolSchemaCharsLatest:tools})
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(2,27000,29000,prompt(42000,43000,85000)))).success).toBe(true)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(0,null,null,{promptCharsLatest:null,promptCharsMax:null,promptCharsSum:null,projectContextCharsLatest:null,toolSchemaCharsLatest:null} as never))).success).toBe(true)
+  const partial={...prompt(42000,43000,85000)};delete (partial as Record<string,unknown>).toolSchemaCharsLatest
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(2,27000,29000,partial))).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(2,27000,29000,prompt(44000,43000,87000)))).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(2,27000,29000,prompt(42000,43000,90000)))).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(1,27000,27000,prompt(42000,42000,42000,50000)))).success).toBe(false)
+  const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
+  const both=projectObservationTrends([observationRow(v3(start,change,boot(2,29000,29500,prompt(42000,43000,85000)))),observationRow(v3(change,end,boot(1,27400,27400,prompt(40000,40000,40000,32000,21000))),'later')],q,now)
+  expect(both.streams[0].summary.metrics.bootstrap).toMatchObject({sessions:3,promptCharsLatest:40000,promptCharsMax:43000,promptCharsSum:125000,projectContextCharsLatest:32000,toolSchemaCharsLatest:21000})
+  const older=projectObservationTrends([observationRow(v3(start,change,boot(2,29000,29500))),observationRow(v3(change,end,boot(1,27400,27400,prompt(40000,40000,40000))),'later')],q,now)
+  expect(older.streams[0].summary.metrics.bootstrap?.promptCharsSum).toBeUndefined()
+ })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})
   const rows=[observationRow(),failure('f1','source-changed'),failure('f1','source-changed'),failure('f2','source-changed',undefined,change,end),failure('f3','partial-tail'),failure('f4','source-changed','other-agent'),failure('f5','config'),failure('f6','source-changed',undefined,'2025-12-01T00:00:00.000Z',change)]

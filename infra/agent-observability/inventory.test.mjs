@@ -12,10 +12,24 @@ const row=timestamp=>({type:'assistant',timestamp,message:{id:'m',stop_reason:'e
 async function fixture(fn) { const root=await realpath(await mkdtemp(join(tmpdir(),'dynamic-inventory-'))); const project=join(root,'allowed'); await mkdir(project); try { await fn(root,project) } finally { await rm(root,{recursive:true,force:true}) } }
 const context=root=>({source:'claude-code',scope:{sessionsDir:root,projectSlugs:['allowed']},window})
 const save=(path,rows)=>writeFile(path,rows.map(v=>JSON.stringify(v)).join('\n')+'\n')
-test('discovers a new file on the next batch and uses record timestamps despite old mtime',()=>fixture(async(root,project)=>{
+test('discovers a new file on the next batch by its record timestamps',()=>fixture(async(root,project)=>{
   await save(join(project,'old.jsonl'),[row('2026-01-01T12:00:00Z')]); assert.equal((await discoverWindowFiles(context(root))).length,0)
-  const fresh=join(project,'new.jsonl'); await save(fresh,[row('2026-01-02T12:00:00Z')]); await utimes(fresh,new Date('2000-01-01'),new Date('2000-01-01'))
+  const fresh=join(project,'new.jsonl'); await save(fresh,[row('2026-01-02T12:00:00Z')])
   const files=await discoverWindowFiles(context(root)); assert.equal(files.length,1); assert.equal(files[0].path,fresh); assert.equal(files[0].completeFromStart,false)
+}))
+test('a file unchanged since before the window is identified but never read; if it is written during the scan, that is timing',()=>fixture(async(root,project)=>{
+  // Records inside the window in a file whose modification time says it was last written before: the accepted blind spot.
+  const old=join(project,'old.jsonl'); await save(old,[row('2026-01-02T12:00:00Z')]); await utimes(old,new Date('2026-01-01'),new Date('2026-01-01'))
+  await writeFile(join(project,'broken-but-old.jsonl'),'not JSON'); await utimes(join(project,'broken-but-old.jsonl'),new Date('2026-01-01'),new Date('2026-01-01'))
+  assert.deepEqual(await discoverWindowFiles(context(root)),[])
+  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module'), realLstat=fs.lstat
+  let fired=false
+  fs.lstat=async (...args)=>{ if(!fired && String(args[0])===old){ fired=true; await appendFile(old,JSON.stringify(row('2026-01-02T13:00:00Z'))+'\n') } return realLstat(...args) }; syncBuiltinESMExports()
+  try { await assert.rejects(discoverWindowFiles(context(root)),error=>error.inventoryReason==='source-changed') } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+}))
+test('a main transcript attests its first turn only under its own session file name',()=>fixture(async(root,project)=>{
+  await save(join(project,'renamed.jsonl'),[turn('s','u1',null,'2026-01-02T01:00:00Z')])
+  const {files,result}=await firstTurn(root); assert.equal(files[0].completeFromStart,false); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete')
 }))
 test('enforces the half-open window and never reads other Claude projects',()=>fixture(async(root,project)=>{
   await save(join(project,'start.jsonl'),[row(window.startUtc)]); await save(join(project,'end.jsonl'),[row(window.endUtc)])

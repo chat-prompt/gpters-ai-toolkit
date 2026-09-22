@@ -253,7 +253,7 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     const { DatabaseSync } = await import('node:sqlite')
     const path = join(root, 'agent.sqlite'), db = new DatabaseSync(path)
     db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
-    const report = (at: number, rawChars: number, near: number) => JSON.stringify({ systemPromptReport: { generatedAt: at, provider: 'claude-cli', bootstrapMaxChars: 32000,
+    const report = (at: number, rawChars: number, near: number) => JSON.stringify({ systemPromptReport: { generatedAt: at, provider: 'claude-cli', systemPrompt: { chars: rawChars + 15000, projectContextChars: rawChars + 7000 }, tools: { schemaChars: 22842 }, bootstrapMaxChars: 32000,
       bootstrapTruncation: { warningShown: false, truncatedFiles: 0, nearLimitFiles: near }, injectedWorkspaceFiles: [{ name: 'AGENTS.md', path: '/private/ws/AGENTS.md', missing: false, rawChars, injectedChars: rawChars, truncated: false }] } })
     const insert = db.prepare('insert into session_nodes values (?, ?)')
     insert.run('a', report(Date.parse('2026-01-02T01:00:00Z'), 29000, 1)); insert.run('b', report(Date.parse('2026-01-02T05:00:00Z'), 27482, 1))
@@ -263,7 +263,8 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     mkdirSync(join(sessions, 'project-a')); config({ source: 'claude-code', cliInventory: 'installed-scope', bootstrapReports: { path } })
     const value = batch('claude-code'); await attachAgentObservability(value, configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })
     expect(value.collection.observability).toMatchObject({ metricCapabilities: { bootstrap: 'supported' }, provenance: { adapterVersion: '3' },
-      metrics: { bootstrap: { sessions: 2, truncatedSessions: 0, nearLimitSessions: 2, warningSessions: 0, largestFileCharsMax: 29000, largestFileCharsLatest: 27482, fileCharsLimit: 32000 } } })
+      metrics: { bootstrap: { sessions: 2, truncatedSessions: 0, nearLimitSessions: 2, warningSessions: 0, largestFileCharsMax: 29000, largestFileCharsLatest: 27482, fileCharsLimit: 32000,
+        promptCharsLatest: 42482, promptCharsMax: 44000, promptCharsSum: 86482, projectContextCharsLatest: 34482, toolSchemaCharsLatest: 22842 } } })
     expect(JSON.stringify(value)).not.toContain('AGENTS.md'); expect(sha(readFileSync(path))).toBe(before)
     expect(readFileSync(join(built, 'bridge.mjs'), 'utf8')).toMatch(/import\(["']node:sqlite["']\)/)
   })

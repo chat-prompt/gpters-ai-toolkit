@@ -99,6 +99,11 @@ describe('observation panel scope and missingness',()=>{
   await screen.findByText(/관측 없이 보낸 구간 24개 \(수집 중 파일 변경 24\)/)
   expect(screen.getByText('busy-agent · claude-code')).toBeTruthy()
  })
+ it('shows boot prompt sizes when reported, and nothing about them for older windows',async()=>{
+  const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:2,truncatedSessions:0,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:27482,largestFileCharsLatest:27482,fileCharsLimit:32000,promptCharsLatest:42414,promptCharsMax:43000,promptCharsSum:85414,projectContextCharsLatest:34293,toolSchemaCharsLatest:22842}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],adapterVersion:'3',summary:boot}]})));render(<AgentObservationPanel days={7}/>)
+  await screen.findByText('부팅 프롬프트: 최근 42,414자 (주입 파일 34,293자) · 평균 42,707자 · 최대 43,000자 · 도구 스키마 22,842자')
+ })
  it('omits the percentage when the per-file limit is unknown',async()=>{
   const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:1,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:100,largestFileCharsLatest:100,fileCharsLimit:null}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],summary:boot}]})));render(<AgentObservationPanel days={7}/>)

@@ -1,4 +1,4 @@
-/** Read-only discovery inside an installed collector scope; never follows mtime as a window. */
+/** Read-only discovery inside an installed collector scope: reads only files modified since shortly before the window. */
 import { constants } from 'node:fs'
 import { open, readdir, realpath, lstat } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
@@ -46,6 +46,10 @@ export async function prefixMatches(path,before,expected,attempts=3) { return aw
 const LIVE_TAIL_MS = 10*60*1000
 // Filesystem timestamps can be a moment ahead of Date.now(); anything further in the future is not trusted.
 const CLOCK_SKEW_MS = 2000
+// A file last modified this long before the window starts cannot hold a record written inside it (appending
+// updates the modification time). Such files are identified but never read. Files copied in with an old
+// preserved modification time are the accepted blind spot of this rule (see README).
+const UNCHANGED_BEFORE_WINDOW_MS = 10*60*1000
 function inside(root,path) { const value=relative(root,path); return value && value!=='..' && !value.startsWith('../') && !isAbsolute(value) }
 const defaults = { entries: 50000, candidates: 10000, bytes: 4*1024**3, fileBytes: 256*1024**2, lineBytes: 16*1024**2, selectedFiles: 500, selectedBytes: 256*1024**2 }
 function allowedHeader(row,scope) {
@@ -109,6 +113,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
       const before=await handle.stat()
       if(!before.isFile() || before.size>limits.fileBytes) fail('file-limit')
       const snapshot={path,before}; snapshots.push(snapshot)
+      if(before.mtimeMs<start-UNCHANGED_BEFORE_WINDOW_MS) { snapshot.unread=true; continue }
       // Codex's shared root is authorized by the first physical header, never by a nearby file.
       if(source==='codex') {
         const header=await headerOf(handle)
@@ -167,7 +172,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
       if(source==='claude-code' && sessionIds.size) {
         for(const id of sessionIds) scannedSessions?.add(id)
         const first=lineage.first
-        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,
+        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,named:sessionIds.size===1 && path.endsWith(`/${[...sessionIds][0]}.jsonl`),
           selfContained:Boolean(first) && first.parent===null && !first.sidechain && !first.compact && lineage.parents.every(parent=>lineage.uuids.has(parent))})
       }
       if(selected) {
@@ -183,10 +188,12 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
     const now=new Set(current); if(!paths.every(path=>now.has(path))) fail()
     mark('source-changed')
   }
-  for(const {path,before,excludedHeader,prefix} of snapshots) {
+  for(const {path,before,excludedHeader,prefix,unread} of snapshots) {
     if(await realpath(path)!==path) fail()
     const named=await lstat(path)
     if(same(before,named)) continue
+    // A file skipped as unchanged that was written during the scan may now hold in-window records: timing.
+    if(unread) { if(!grew(before,named)) fail(); mark('source-changed'); continue }
     // A selected file appended after it was scanned is timing only when its scanned prefix is unchanged.
     if(!excludedHeader) {
       if(!grew(before,named)) fail()
@@ -226,6 +233,9 @@ function attestFirstTurns(files,lineages) {
     const group=bySession.get(file.sessionKey)
     if(!group) continue
     const mains=group.filter(item=>!item.sidechain)
-    file.completeFromStart=mains.length===1 && mains[0].selfContained && selected.has(mains[0].path)
+    // Files unchanged before the window are not read, so the main transcript must also carry the session's own
+    // file name (`<sessionId>.jsonl`, Claude's layout): any other file of that session then lives under
+    // `<sessionId>/subagents/` as a sidechain and cannot be a second, unread main thread.
+    file.completeFromStart=mains.length===1 && mains[0].selfContained && mains[0].named && selected.has(mains[0].path)
   }
 }
