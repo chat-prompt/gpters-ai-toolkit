@@ -17,7 +17,7 @@ test('discovers a new file on the next batch by its record timestamps',()=>fixtu
   const fresh=join(project,'new.jsonl'); await save(fresh,[row('2026-01-02T12:00:00Z')])
   const files=await discoverWindowFiles(context(root)); assert.equal(files.length,1); assert.equal(files[0].path,fresh); assert.equal(files[0].completeFromStart,false)
 }))
-test('a file unchanged since before the window is identified but never read; if it is written during the scan, that is timing',()=>fixture(async(root,project)=>{
+test('a file unchanged since before the window is identified but never read; a change to it during the scan fails closed',()=>fixture(async(root,project)=>{
   // Records inside the window in a file whose modification time says it was last written before: the accepted blind spot.
   const old=join(project,'old.jsonl'); await save(old,[row('2026-01-02T12:00:00Z')]); await utimes(old,new Date('2026-01-01'),new Date('2026-01-01'))
   await writeFile(join(project,'broken-but-old.jsonl'),'not JSON'); await utimes(join(project,'broken-but-old.jsonl'),new Date('2026-01-01'),new Date('2026-01-01'))
@@ -25,7 +25,9 @@ test('a file unchanged since before the window is identified but never read; if 
   const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module'), realLstat=fs.lstat
   let fired=false
   fs.lstat=async (...args)=>{ if(!fired && String(args[0])===old){ fired=true; await appendFile(old,JSON.stringify(row('2026-01-02T13:00:00Z'))+'\n') } return realLstat(...args) }; syncBuiltinESMExports()
-  try { await assert.rejects(discoverWindowFiles(context(root)),error=>error.inventoryReason==='source-changed') } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+  try { await assert.rejects(discoverWindowFiles(context(root)),error=>error.inventoryReason==='source-consistency') } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+  // The next run reads it: nothing in the window is lost.
+  assert.equal((await discoverWindowFiles(context(root))).length,1)
 }))
 test('a main transcript attests its first turn only under its own session file name',()=>fixture(async(root,project)=>{
   await save(join(project,'renamed.jsonl'),[turn('s','u1',null,'2026-01-02T01:00:00Z')])
@@ -251,6 +253,10 @@ test('a self-contained main transcript attests its first turn; its subagent file
   assert.deepEqual(files.map(f=>f.completeFromStart),[true,true])
   assert.equal(result.metricCapabilities.firstTurnTokens,'supported'); assert.equal(result.metrics.firstTurnTokens.count,1); assert.equal(result.metrics.firstTurnTokens.sum,20)
 }))
+test('the canonical fixture with nothing wrong attests its first turn (control for the unproven cases below)',()=>fixture(async(root,project)=>{
+  await save(join(project,'s.jsonl'),[turn('s','u1',null,'2026-01-02T01:00:00Z'),turn('s','u2','u1','2026-01-02T02:00:00Z')])
+  const {files}=await firstTurn(root); assert.equal(files[0].completeFromStart,true)
+}))
 test('first turns stay unproven for a dangling parent, a parented or compact-summary start, or two main files',async()=>{
   const cases={
     dangling:[[turn('s','u1',null,'2026-01-02T01:00:00Z'),turn('s','u2','missing','2026-01-02T02:00:00Z')]],
@@ -261,7 +267,9 @@ test('first turns stay unproven for a dangling parent, a parented or compact-sum
     'no uuid':[[{...turn('s','u1',null,'2026-01-02T01:00:00Z'),uuid:undefined}]],
   }
   for(const [label,parts] of Object.entries(cases)) await fixture(async(root,project)=>{
-    for(let i=0;i<parts.length;i++) await save(join(project,`${i}.jsonl`),parts[i])
+    // Canonical Claude names (`s.jsonl`, then `s/subagents/…`), so only the condition under test can fail.
+    await save(join(project,'s.jsonl'),parts[0])
+    if(parts[1]) { await mkdir(join(project,'s','subagents'),{recursive:true}); await save(join(project,'s','subagents','agent-a.jsonl'),parts[1]) }
     const {files,result}=await firstTurn(root)
     assert.ok(files.every(f=>f.completeFromStart===false),label); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete',label)
   })
@@ -321,4 +329,11 @@ test('Codex: another project\'s old session resuming during the scan keeps its e
   let fired=false
   fs.lstat=async (...args)=>{ if(!fired && String(args[0])===foreign){ fired=true; await appendFile(foreign,JSON.stringify({type:'event_msg',timestamp:'2026-01-02T02:00:00Z'})+'\n') } return realLstat(...args) }; syncBuiltinESMExports()
   try { assert.deepEqual((await discoverWindowFiles(config)).map(f=>f.path),[own]) } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
+}))
+test('a read-guard row of a session whose transcript is unread (old) is still attributed',()=>fixture(async(root,project)=>{
+  const { collectObservability } = await import('./collect.mjs')
+  const quiet=join(project,'quiet-session.jsonl'); await save(quiet,[turn('quiet-session','q1',null,'2026-01-01T01:00:00Z')]); await utimes(quiet,new Date('2026-01-01'),new Date('2026-01-01'))
+  const guard=join(root,'guard.jsonl'); await writeFile(guard,JSON.stringify({ts:'2026-01-02T01:00:00.000Z',decision:'deny',session:'quiet-session'})+'\n')
+  const result=await collectObservability({agentId:'example-agent',...context(root),cliInventory:'installed-scope',readGuardFiles:[{path:guard,sessionKey:'g',sessionFilter:'installed-scope'}]})
+  assert.equal(result.metrics.readGuardDeny,1); assert.equal(result.metricCapabilities.readGuardDeny,'supported')
 }))

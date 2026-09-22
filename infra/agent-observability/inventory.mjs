@@ -1,7 +1,7 @@
 /** Read-only discovery inside an installed collector scope: reads only files modified since shortly before the window. */
 import { constants } from 'node:fs'
 import { open, readdir, realpath, lstat } from 'node:fs/promises'
-import { basename, isAbsolute, join, relative, sep } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { createHash } from 'node:crypto'
 import { digest, windowBounds } from './runtime-receipts.mjs'
@@ -186,7 +186,7 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
       if(source==='claude-code' && sessionIds.size) {
         for(const id of sessionIds) scannedSessions?.add(id)
         const first=lineage.first
-        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,named:sessionIds.size===1 && basename(path)===`${[...sessionIds][0]}.jsonl`,sessionId:[...sessionIds][0],
+        lineages.push({sessionKey,path,sidechain:first?.sidechain===true,named:sessionIds.size===1 && claudeSessionOf(root,path)===[...sessionIds][0] && !path.includes(`${sep}subagents${sep}`),sessionId:[...sessionIds][0],
           selfContained:Boolean(first) && first.parent===null && !first.sidechain && !first.compact && lineage.parents.every(parent=>lineage.uuids.has(parent))})
       }
       if(selected) {
@@ -206,9 +206,9 @@ export async function discoverWindowFiles({source,scope,window,scannedSessions},
     if(await realpath(path)!==path) fail()
     const named=await lstat(path)
     if(same(before,named)) continue
-    // A file skipped as unchanged that grew during the scan may now hold in-window records: timing. Without the
-    // bytes there is no prefix to re-hash, so only strict growth of the same inode counts; anything else fails closed.
-    if(unread) { if(!grew(before,named) || named.size===before.size) fail(); mark('source-changed'); continue }
+    // A file skipped as unchanged that changed during the scan cannot be proven an append (its bytes were never
+    // read, so there is no prefix to re-hash): fail closed. The next run reads it normally, so no window is lost.
+    if(unread) fail()
     // A selected file appended after it was scanned is timing only when its scanned prefix is unchanged.
     if(!excludedHeader) {
       if(!grew(before,named)) fail()

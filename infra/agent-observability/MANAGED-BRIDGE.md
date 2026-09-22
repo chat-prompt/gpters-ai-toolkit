@@ -73,8 +73,9 @@ sessions. Supplying both modes is invalid.
 Dynamic discovery selects records by their own timestamps in `[startUtc,endUtc)`,
 but reads only files modified since 10 minutes before the window starts: appending
 updates a file's modification time, so an older file cannot hold a record written
-inside the window. Unread files are still identified, and one written during the
-scan is timing (`source-changed`). This keeps an hourly run proportional to recent
+inside the window. Unread files are still identified; one that changes during the
+scan cannot be proven an append (its bytes were never read) and fails closed — the
+next run reads it, so no window is lost. This keeps an hourly run proportional to recent
 activity (on 2026-09-22: 22 files, 11MB of 2,911 files, 1.8GB) instead of rereading
 every transcript, which under launchd's background priority took 33–35s against the
 30-second limit. The accepted blind spot: a file copied in with its old modification

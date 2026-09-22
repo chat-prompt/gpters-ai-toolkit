@@ -40,7 +40,11 @@ function reportNumbers(report) {
   // An OpenClaw build that does not report them keeps the file metrics; a report with them of the wrong shape is malformed.
   const prompt = report.systemPrompt?.chars, project = report.systemPrompt?.projectContextChars, tools = report.tools?.schemaChars
   const numbers = { at: report.generatedAt, truncated, nearLimit: truncation.nearLimitFiles > 0, warning: truncation.warningShown, largest, limit: report.bootstrapMaxChars }
-  if (prompt === undefined && project === undefined && tools === undefined) return { ...numbers, prompt: null }
+  if (prompt === undefined || project === undefined || tools === undefined) {
+    // Any size present with the wrong type is malformed; missing sizes only drop the prompt part.
+    if ([prompt, project, tools].some(v => v !== undefined && !integer(v))) return null
+    return { ...numbers, prompt: null }
+  }
   if (!integer(prompt) || !integer(project) || !integer(tools) || project > prompt) return null
   return { ...numbers, prompt, project, tools }
 }
