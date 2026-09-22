@@ -3,7 +3,8 @@ import { attachAgentObservability } from '../agent-telemetry/observability.js'
 /** 에이전트 delta telemetry 수집·전송 명령 */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { homedir, uptime } from 'node:os'
+import { execFileSync } from 'node:child_process'
+import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readConfig } from '../config.js'
@@ -217,8 +218,21 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
 
 /** A lock older than this whose process is gone was left by a collector that was killed or exited without cleanup. */
 const STALE_LOCK_MS = 10 * 60 * 1000
-/** A reclaim guard is held for milliseconds; one older than this was left by a reclaimer that was killed. */
-const STALE_GUARD_MS = 60 * 1000
+
+let cachedBootId: string | null | undefined
+/**
+ * An identifier of the current boot (macOS `kern.bootsessionuuid`, Linux `boot_id`), or null when unavailable.
+ * Unlike boot time it does not move when the clock is adjusted, so a lock from another boot is recognized exactly.
+ */
+export function currentBootId(): string | null {
+  if (cachedBootId !== undefined) return cachedBootId
+  let value: string | null = null
+  try { value = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim() } catch {
+    try { value = execFileSync('/usr/sbin/sysctl', ['-n', 'kern.bootsessionuuid'], { encoding: 'utf8', timeout: 2000 }).trim() } catch { value = null }
+  }
+  cachedBootId = value && /^[0-9A-Fa-f-]{16,64}$/.test(value) ? value : null
+  return cachedBootId
+}
 
 /** Reads a small owned regular lock file without following links or blocking; null when it is anything else. */
 function readLockFile(path: string): string | null {
@@ -232,42 +246,50 @@ function readLockFile(path: string): string | null {
 }
 
 /**
- * Whether lock content was left by a collector that no longer runs: it was created before this boot, or its
- * recorded pid no longer exists and it is older than {@link STALE_LOCK_MS}. Anything unreadable, recent or alive
- * is kept. A lock from before the last boot cannot belong to a running process, whatever reused its pid.
+ * Whether lock or guard content was left by a process that no longer runs: it records a different boot, or its pid
+ * no longer exists and it is at least `minimumAgeMs` old. Anything unreadable, recent or alive is kept. A pid reused
+ * within the same boot keeps the lock (an operator inspects it); a lock from another boot is always stale.
  */
-export function staleLockContent(content: string, now = Date.now(), bootAt = now - uptime() * 1000): boolean {
+export function staleLockContent(content: string, { now = Date.now(), bootId = currentBootId(), minimumAgeMs = STALE_LOCK_MS } = {}): boolean {
   try {
-    const { pid, createdAt } = JSON.parse(content) as { pid?: unknown; createdAt?: unknown }
-    if (!Number.isSafeInteger(pid) || (pid as number) <= 0 || pid === process.pid || typeof createdAt !== 'string') return false
-    const created = Date.parse(createdAt)
-    if (!Number.isFinite(created) || created > now) return false
-    if (created < bootAt - 60_000) return true
-    if (now - created < STALE_LOCK_MS) return false
-    try { process.kill(pid as number, 0); return false }
+    const record = JSON.parse(content) as { pid?: unknown; createdAt?: unknown; bootId?: unknown }
+    if (!Number.isSafeInteger(record.pid) || (record.pid as number) <= 0 || record.pid === process.pid || typeof record.createdAt !== 'string') return false
+    if (typeof record.bootId === 'string' && bootId && record.bootId !== bootId) return true
+    const created = Date.parse(record.createdAt)
+    if (!Number.isFinite(created) || now - created < minimumAgeMs) return false
+    try { process.kill(record.pid as number, 0); return false }
     catch (cause) { return (cause as NodeJS.ErrnoException).code === 'ESRCH' }
   } catch { return false }
 }
 
+/** What a lock or guard records about its holder. */
+const holder = () => JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString(), bootId: currentBootId() })
+
 /**
  * Reclaims a stale lock under a short exclusive guard, so only one process at a time may remove a lock and every
- * competitor that finds the guard held simply stops. Returns true when the lock path is free again.
+ * competitor that finds the guard held simply stops. A guard is removed only when its own holder is gone (never by
+ * age alone), and that run still stops. Returns true when the lock path is free again.
  */
 function reclaimStaleLock(lock: string): boolean {
   const guard = `${lock}.reclaim`
   let guardFd: number
   try { guardFd = openSync(guard, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600) }
   catch {
-    // A guard left by a killed reclaimer is removed once it is clearly old; this run still stops and the next retries.
-    try { const stat = lstatSync(guard); if (stat.isFile() && stat.uid === process.getuid?.() && Date.now() - stat.mtimeMs > STALE_GUARD_MS) unlinkSync(guard) } catch { /* nothing to clean */ }
+    const left = readLockFile(guard)
+    if (left !== null && staleLockContent(left, { minimumAgeMs: 0 }) && readLockFile(guard) === left) { try { unlinkSync(guard) } catch { /* gone */ } }
     return false
   }
+  const guardContent = holder()
   try {
+    writeFileSync(guardFd, guardContent)
     const content = readLockFile(lock)
-    if (content === null || !staleLockContent(content)) return false
+    if (content === null || !staleLockContent(content) || readLockFile(lock) !== content) return false
     unlinkSync(lock)
     return true
-  } catch { return false } finally { closeSync(guardFd); try { unlinkSync(guard) } catch { /* already gone */ } }
+  } catch { return false } finally {
+    closeSync(guardFd)
+    try { if (readLockFile(guard) === guardContent) unlinkSync(guard) } catch { /* already gone */ }
+  }
 }
 
 /** Existing default collectors retain their behavior; opt-in work owns one state lock through acknowledgement. */
@@ -285,7 +307,7 @@ export function observationLock(path: string, directory: string): () => void {
       if ((cause as NodeJS.ErrnoException).code !== 'EEXIST' || !reclaimStaleLock(lock)) throw cause
       fd = create()
     }
-    const content = JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })
+    const content = holder()
     try { writeFileSync(fd, content) }
     catch { closeSync(fd); unlinkSync(lock); throw new Error('Cannot record lock') }
     let released = false

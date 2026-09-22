@@ -236,10 +236,12 @@ without upload or checkpoint change. A collector releases its lock on every way
 out — including an error exit from inside the run (upload failure, blocked health)
 and SIGTERM, SIGINT or SIGHUP (logout, shutdown, `launchctl bootout`) — and removes
 only its own lock; its observation helper is killed with it. A lock left anyway
-(SIGKILL, power loss) is reclaimed only when it is an owned regular file created
-before the last boot, or whose recorded pid no longer exists and that is older than
-10 minutes. Reclaiming happens under a short exclusive `.reclaim` guard, so a
-competitor that finds the guard held stops instead of racing. An unreadable,
+(SIGKILL, power loss) is reclaimed only when it is an owned regular file that
+records another boot (macOS `kern.bootsessionuuid`, Linux `boot_id` — not a clock
+comparison), or whose recorded pid no longer exists and that is older than 10
+minutes. Reclaiming happens under a short exclusive `.reclaim` guard, so a
+competitor that finds the guard held stops instead of racing; a guard is removed
+only when its own holder is gone (never by age), and that run still stops. An unreadable,
 recent or live lock still stops the run for an operator to inspect. Never remove an
 active lock. Dry run creates a private checkpoint directory and
 temporary lock but writes no checkpoint and makes no upload. Ordinary unconfigured
