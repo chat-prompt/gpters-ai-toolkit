@@ -225,3 +225,56 @@ test('prefixMatches does not trust a prefix read while the file keeps changing',
   try { assert.equal(await prefixMatches(a,before,expected),false) } finally { patched.mock.restore() }
   assert.equal(await prefixMatches(a,before,expected),true)
 }))
+// Version 3 first-turn attestation for Claude sessions found in the installed scope.
+const turn=(sessionId,uuid,parentUuid,timestamp,extra={})=>({type:'assistant',sessionId,uuid,parentUuid,timestamp,message:{id:`m-${uuid}`,stop_reason:'end_turn',usage:{input_tokens:uuid.length*10}},...extra})
+const meta=sessionId=>({type:'attachment',sessionId})
+const firstTurn=async root=>{const files=await discoverWindowFiles(context(root));return {files,result:await collectCliMetrics({...context(root),files})}}
+test('a self-contained main transcript attests its first turn; its subagent files keep it complete',()=>fixture(async(root,project)=>{
+  await save(join(project,'s.jsonl'),[meta('s'),turn('s','u1',null,'2026-01-02T01:00:00Z'),turn('s','u22',"u1",'2026-01-02T02:00:00Z')])
+  await mkdir(join(project,'s','subagents'),{recursive:true})
+  await save(join(project,'s','subagents','agent-a.jsonl'),[turn('s','sub1',null,'2026-01-02T01:30:00Z',{isSidechain:true}),turn('s','sub22','dangling-parent','2026-01-02T01:31:00Z',{isSidechain:true})])
+  const {files,result}=await firstTurn(root)
+  assert.deepEqual(files.map(f=>f.completeFromStart),[true,true])
+  assert.equal(result.metricCapabilities.firstTurnTokens,'supported'); assert.equal(result.metrics.firstTurnTokens.count,1); assert.equal(result.metrics.firstTurnTokens.sum,20)
+}))
+test('first turns stay unproven for a dangling parent, a parented or compact-summary start, or two main files',async()=>{
+  const cases={
+    dangling:[[turn('s','u1',null,'2026-01-02T01:00:00Z'),turn('s','u2','missing','2026-01-02T02:00:00Z')]],
+    parented:[[turn('s','u1','earlier','2026-01-02T01:00:00Z')]],
+    compact:[[turn('s','u1',null,'2026-01-02T01:00:00Z',{isCompactSummary:true})]],
+    'sidechain only':[[turn('s','u1',null,'2026-01-02T01:00:00Z',{isSidechain:true})]],
+    'two mains':[[turn('s','u1',null,'2026-01-02T01:00:00Z')],[turn('s','u9',null,'2026-01-02T03:00:00Z')]],
+    'no uuid':[[{...turn('s','u1',null,'2026-01-02T01:00:00Z'),uuid:undefined}]],
+  }
+  for(const [label,parts] of Object.entries(cases)) await fixture(async(root,project)=>{
+    for(let i=0;i<parts.length;i++) await save(join(project,`${i}.jsonl`),parts[i])
+    const {files,result}=await firstTurn(root)
+    assert.ok(files.every(f=>f.completeFromStart===false),label); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete',label)
+  })
+})
+test('a main transcript outside the window leaves its in-window subagent unproven',()=>fixture(async(root,project)=>{
+  await save(join(project,'s.jsonl'),[turn('s','u1',null,'2026-01-01T01:00:00Z')])
+  await mkdir(join(project,'s','subagents'),{recursive:true})
+  await save(join(project,'s','subagents','agent-a.jsonl'),[turn('s','sub1',null,'2026-01-02T01:30:00Z',{isSidechain:true})])
+  const {files,result}=await firstTurn(root)
+  assert.equal(files.length,1); assert.equal(files[0].completeFromStart,false); assert.equal(result.metrics.firstTurnTokens.count,0)
+}))
+test('scanned Claude session IDs are collected for shared-log attribution only when requested',()=>fixture(async(root,project)=>{
+  await save(join(project,'a.jsonl'),[turn('in-window','u1',null,'2026-01-02T01:00:00Z')]); await save(join(project,'b.jsonl'),[turn('older','u1',null,'2026-01-01T01:00:00Z')])
+  const scannedSessions=new Set(); await discoverWindowFiles({...context(root),scannedSessions})
+  assert.deepEqual([...scannedSessions].sort(),['in-window','older'])
+}))
+test('a same-session file without any uuid record keeps an otherwise proven main transcript unproven',()=>fixture(async(root,project)=>{
+  await save(join(project,'main.jsonl'),[turn('s','u1',null,'2026-01-02T01:00:00Z')])
+  await save(join(project,'fragment.jsonl'),[{...turn('s','x',null,'2026-01-02T02:00:00Z'),uuid:undefined}])
+  const {files,result}=await firstTurn(root)
+  assert.ok(files.every(f=>f.completeFromStart===false)); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete')
+}))
+test('prefixState tells a changed prefix from a file that never held still',()=>fixture(async(root,project)=>{
+  const { prefixState } = await import('./inventory.mjs')
+  const path=join(project,'a.jsonl'); await writeFile(path,'abc\n'); const before=await stat(path), expected=createHash('sha256').update('abc\n').digest('hex')
+  assert.equal(await prefixState(path,before,expected),'match')
+  assert.equal(await prefixState(path,before,createHash('sha256').update('xyz\n').digest('hex')),'mismatch')
+  const timer=setInterval(()=>appendFile(path,'more\n').catch(()=>{}),0)
+  try { const states=new Set(); for(let i=0;i<20;i++) states.add(await prefixState(path,before,expected,1)); assert.ok(!states.has('mismatch')) } finally { clearInterval(timer) }
+}))

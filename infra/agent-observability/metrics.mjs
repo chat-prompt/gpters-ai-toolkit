@@ -1,8 +1,9 @@
 import { constants } from 'node:fs'
 import { relative, isAbsolute } from 'node:path'
-import { open, realpath } from 'node:fs/promises'
+import { lstat, open, realpath } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { histogram } from './histogram.mjs'
-import { prefixMatches } from './inventory.mjs'
+import { prefixState } from './inventory.mjs'
 import { digest, windowBounds } from './runtime-receipts.mjs'
 export const emptyCounters = () => ({ filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 })
 const integer = value => Number.isSafeInteger(value) && value >= 0
@@ -102,7 +103,7 @@ export async function readRecords(files, { maxFileBytes = 64 * 1024 * 1024, scop
         // The prefix is re-read from the file now at the path (inode checked before and after), never from
         // the in-memory buffer, which may predate an in-place rewrite.
         const expected = { dev: file.expectedIdentity.dev, ino: file.expectedIdentity.ino, size: file.expectedIdentity.size }
-        if (!await prefixMatches(file.path, expected, file.expectedPrefix)) throw scopeError()
+        if (await prefixState(file.path, expected, file.expectedPrefix) === 'mismatch') throw scopeError()
         timing = true
         continue
       }
@@ -235,10 +236,154 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
   if (unknownFirst && metrics.firstTurnTokens) metricCapabilities.firstTurnTokens = 'incomplete'
   return { metrics,metricCapabilities,capability,provenance:counters }
 }
-export async function collectReadGuardMetrics({ files = [], window }) {
-  const [start,end] = windowBounds(window), {records,counters} = await readRecords(files)
+/** Integrity failure of an approved shared log: fails the observation closed. */
+function logIntegrity() { const error = new Error('Shared log changed unsafely'); error.inventoryReason = 'source-consistency'; return error }
+/** The log was appended to or rotated while read: timing, so only this window's observation is omitted. */
+function logTiming() { const error = new Error('Shared log changed during read'); error.inventoryReason = 'source-changed'; return error }
+async function presence(path) {
+  try { const stat = await lstat(path); if (!stat.isFile()) throw logIntegrity(); return { dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs, key: `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}` } }
+  catch (error) { if (error?.code === 'ENOENT') return null; throw error.inventoryReason ? error : logIntegrity() }
+}
+const identify = stat => ({ dev: stat.dev, ino: stat.ino, size: stat.size, key: `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}` })
+/**
+ * Re-hashes the first `size` bytes through the handle that read them, so the inode is fixed even if the path was
+ * rotated away: 'match', 'mismatch' or 'unstable' (kept changing while hashed).
+ */
+async function handlePrefix(handle, size, expected) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const first = await handle.stat()
+    if (first.size < size) return 'mismatch'
+    const hash = createHash('sha256'), buffer = Buffer.alloc(1024 * 1024)
+    let offset = 0
+    while (offset < size) { const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - offset), offset); if (!bytesRead) return 'mismatch'; hash.update(buffer.subarray(0, bytesRead)); offset += bytesRead }
+    const last = await handle.stat()
+    if (identify(first).key !== identify(last).key) continue
+    return hash.digest('hex') === expected ? 'match' : 'mismatch'
+  }
+  return 'unstable'
+}
+/**
+ * One attempt at reading a shared hook log and its rotated predecessor (`<path>.1`) as a consistent snapshot.
+ *
+ * Handles stay open until both paths are re-identified. Every file read is then re-checked through its own
+ * handle: bytes that changed after being read are a rewrite (integrity) even if the path was rotated meanwhile;
+ * unchanged bytes with a grown file, or a path now naming another file, are timing. Integrity is decided for
+ * every file before timing is reported, so a live append or rotation never masks a rewrite.
+ */
+async function sharedLogAttempt(path) {
+  const paths = [`${path}.1`, path], before = await Promise.all(paths.map(presence)), reads = [null, null], handles = []
+  const local = { filesExpected: 0, filesRead: 0, parseFailures: 0 }, lines = []
+  let timing = false, unproven = false
+  try {
+    for (let index = 0; index < paths.length; index++) {
+      const candidate = paths[index]
+      if (before[index] === null) { if (index === 1) local.filesExpected++; continue }
+      local.filesExpected++
+      let handle
+      try {
+        if (await realpath(candidate) !== candidate) throw logIntegrity()
+        handle = await open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+      } catch (error) {
+        // Renamed away between identification and opening (a rotation in progress): timing, read again next attempt.
+        if (error?.code === 'ENOENT') { timing = true; continue }
+        throw error.inventoryReason ? error : logIntegrity()
+      }
+      handles.push(handle)
+      const opened = await handle.stat()
+      if (!opened.isFile() || opened.size > 64 * 1024 * 1024) throw logIntegrity()
+      // The path now names another file than the one identified: a rotation in between, read again next attempt.
+      if (opened.dev !== before[index].dev || opened.ino !== before[index].ino) timing = true
+      else if (opened.size < before[index].size) throw logIntegrity()
+      const bytes = Buffer.alloc(opened.size)
+      let offset = 0
+      while (offset < bytes.length) { const read = await handle.read(bytes, offset, bytes.length-offset, offset); if (!read.bytesRead) break; offset += read.bytesRead }
+      if (offset !== opened.size) throw logIntegrity()
+      reads[index] = { handle, ...identify(opened), hash: createHash('sha256').update(bytes).digest('hex') }
+      local.filesRead++
+      const parts = bytes.toString('utf8').split('\n')
+      // A tail without newline in a file that held still is a damaged or unfinished row: never counted as complete.
+      if (parts.at(-1)) local.parseFailures++
+      lines.push(...parts.slice(0, -1))
+    }
+    const after = await Promise.all(paths.map(presence))
+    for (let index = 0; index < paths.length; index++) {
+      const read = reads[index]
+      if (read) {
+        const now = identify(await read.handle.stat())
+        if (now.key !== read.key) {
+          // A hook only appends: bytes already read must be the exact prefix, whatever the times say.
+          const state = now.size < read.size ? 'mismatch' : await handlePrefix(read.handle, read.size, read.hash)
+          if (state === 'mismatch') throw logIntegrity()
+          // Bytes already read that could not be re-proven are never retried away: the retry would read the new
+          // content and lose the evidence, so this window's observation is omitted instead.
+          if (state === 'unstable') unproven = true
+          else if (now.size > read.size) timing = true
+        }
+      }
+      const identified = read ?? before[index]
+      if (!identified !== !after[index] || (after[index] && (after[index].dev !== identified.dev || after[index].ino !== identified.ino))) timing = true
+      else if (after[index] && after[index].size !== identified.size) timing = true
+    }
+  } finally { await Promise.all(handles.map(handle => handle.close())) }
+  return { lines, local, timing, unproven }
+}
+/**
+ * Reads a shared hook log and its rotated predecessor (`<path>.1`, optional) as one consistent snapshot.
+ *
+ * An append or a rotation during the read is timing: retried a few times, then this window's observation is
+ * omitted rather than accepting a partial or rotated view. A symlink, a non-file, or a file that shrank or was
+ * rewritten is an integrity failure (fail closed). A missing rotated copy is normal; a missing active log is
+ * missing data (incomplete).
+ */
+async function readSharedLog(path, counters, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const { lines, local, timing, unproven } = await sharedLogAttempt(path)
+    if (unproven) throw logTiming()
+    if (timing) continue
+    for (const [key, value] of Object.entries(local)) counters[key] += value
+    return lines
+  }
+  throw logTiming()
+}
+/**
+ * Read-guard allow/deny counts for the window.
+ *
+ * Files are either attested exclusive to the agent (`agentExclusive`), or a shared hook log read with
+ * `sessionFilter:'installed-scope'`, where only rows whose `session` is one of the agent's scanned Claude
+ * sessions count. Every line of a shared log is parsed, so a damaged line anywhere marks it incomplete.
+ */
+export async function collectReadGuardMetrics({ files = [], window, sessions }) {
+  const [start,end] = windowBounds(window)
+  const exclusive = files.filter(file => file?.sessionFilter === undefined), shared = files.filter(file => file?.sessionFilter !== undefined)
+  const {records,counters} = await readRecords(exclusive)
+  const rows = records.map(({row}) => ({ row }))
+  let sharedRead = false
+  const seenLines = new Set()
+  let timing = null
+  for (const file of shared) {
+    if (file.sessionFilter !== 'installed-scope' || !(sessions instanceof Set) || typeof file.path !== 'string') { counters.filesExpected++; continue }
+    const readBefore = counters.filesRead
+    let lines
+    // A timing change is held until every approved log has passed its integrity checks.
+    try { lines = await readSharedLog(file.path, counters) } catch (error) { if (error.inventoryReason !== 'source-changed') throw error; timing ??= error; continue }
+    for (const line of lines) {
+      if (!line.trim()) continue
+      counters.recordsRead++
+      // A row present in both the rotated copy and the active log is counted once.
+      const key = digest(['shared-log', line])
+      if (seenLines.has(key)) { counters.duplicates++; continue }
+      seenLines.add(key)
+      let row
+      try { row = JSON.parse(line) } catch { counters.parseFailures++; continue }
+      if (!row || typeof row !== 'object' || Array.isArray(row)) { counters.parseFailures++; continue }
+      // Other agents' rows are parsed only to read their session; their decisions and times are never interpreted.
+      if (typeof row.session === 'string' && sessions.has(row.session)) rows.push({ row })
+    }
+    if (counters.filesRead > readBefore) sharedRead = true
+  }
+  if (timing) throw timing
   let allow = 0, deny = 0, recognized = 0
-  for (const {row} of records) {
+  for (const {row} of rows) {
     if (!['allow','deny'].includes(row.decision)) { counters.unsupportedRecords++; continue }
     // Supported log format is ISO ts. Numeric epochs are deliberately not guessed.
     const at = typeof row.ts === 'string' ? Date.parse(row.ts) : NaN
@@ -247,7 +392,8 @@ export async function collectReadGuardMetrics({ files = [], window }) {
     if (at < start || at >= end) continue
     if (row.decision === 'allow') allow++; else deny++
   }
-  const observed = recognized > 0 || (counters.filesRead > 0 && counters.recordsRead === 0)
+  // A fully read shared log with no rows for this agent is an observed zero, not missing data.
+  const observed = recognized > 0 || sharedRead || (counters.filesRead > 0 && counters.recordsRead === 0)
   const capability = state(counters,observed)
   return { metrics:{readGuardAllow: observed ? allow:null,readGuardDeny:observed ? deny:null},
     metricCapabilities:{readGuardAllow:capability,readGuardDeny:capability},capability,provenance:counters }

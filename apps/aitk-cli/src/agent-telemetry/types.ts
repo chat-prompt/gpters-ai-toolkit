@@ -61,6 +61,8 @@ export interface AgentTelemetryBatch {
   collection: {
     /** Validated by the pinned canonical-schema helper and again by the server. */
     observability?: Record<string, unknown>
+    /** Fixed timing reason when this window was sent without observability */
+    observabilityFailure?: 'source-changed' | 'partial-tail'
     taskEvents?: AgentTaskEvent[]
     source: AgentTelemetrySource
     filesDiscovered: number

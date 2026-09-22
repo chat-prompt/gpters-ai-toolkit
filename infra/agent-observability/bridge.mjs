@@ -26,5 +26,9 @@ try {
   // Timing failures (a source file changed or was still being written during the scan) exit 75 with only the
   // fixed reason on stdout, so the collector can send the window without observability. Everything else stays fail closed.
   if (TIMING_REASONS.includes(cause?.inventoryReason)) { process.stdout.write(JSON.stringify({ observationUnavailable: cause.inventoryReason })); process.exitCode = 75 }
-  else process.exitCode = 1
+  else {
+    // A fixed code only (never a path or message), so the collector can log why it failed closed.
+    process.stdout.write(JSON.stringify({ observationFailed: reasons.includes(cause?.inventoryReason) ? cause.inventoryReason : 'validation' }))
+    process.exitCode = 1
+  }
 }
