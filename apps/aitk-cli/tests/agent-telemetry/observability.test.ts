@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { attachAgentObservability } from '../../src/agent-telemetry/observability.js'
 import type { AgentTelemetryBatch } from '../../src/agent-telemetry/types.js'
-const processHook = vi.hoisted(() => ({ beforeSpawn: undefined as (() => void) | undefined }))
+const processHook = vi.hoisted(() => ({ beforeSpawn: undefined as (() => void) | undefined, afterSpawn: undefined as ((child: import('node:child_process').ChildProcess) => void) | undefined }))
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>()
-  return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => { processHook.beforeSpawn?.(); return actual.spawn(...args) } }
+  return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => { processHook.beforeSpawn?.(); const child = actual.spawn(...args); processHook.afterSpawn?.(child); return child } }
 })
 vi.mock('../../src/output.js', () => ({ jsonOut: vi.fn(), error: (message: string) => { throw new Error(message) } }))
 import { createInstallation, writeAgentTelemetryInstallation, readAgentTelemetryInstallation } from '../../src/agent-telemetry/installation.js'
@@ -35,7 +35,7 @@ beforeEach(() => {
   writeFileSync(join(sessions, 'session.jsonl'), JSON.stringify({ type: 'session', id: 'anonymous', timestamp: '2026-01-02T01:00:00Z' }) + '\n' + JSON.stringify({ type: 'message', id: 'anonymous-message', timestamp: '2026-01-02T02:00:00Z', message: { role: 'assistant', model: 'example-model', usage: { input: 10, output: 2 }, content: [{ type: 'text', text: 'fixture raw content must stay local' }] } }) + '\n')
   configPath = join(root, 'config.json'); helperPath = join(root, 'bridge.mjs'); writeFileSync(helperPath, bundle, { mode: 0o600 }); config(); vi.stubGlobal('fetch', vi.fn(async () => response()))
 })
-afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); Object.defineProperty(process.versions, 'node', { value: originalNode }); rmSync(root, { recursive: true, force: true }) })
+afterEach(() => { processHook.beforeSpawn = undefined; processHook.afterSpawn = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); Object.defineProperty(process.versions, 'node', { value: originalNode }); rmSync(root, { recursive: true, force: true }) })
   it('discovers new scoped sessions each batch and retries dynamic pending without touching config/helper/source', async () => {
     const project = join(sessions, 'project-a'); mkdirSync(project)
     const record = (id: string, at: string) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id, role: 'assistant', model: 'example', stop_reason: 'end_turn', usage: { input_tokens: 42, output_tokens: 1 } } }) + '\n'
@@ -164,11 +164,12 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     await expect(attachAgentObservability(batch('claude-code'), configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })).rejects.toThrow('Observation bridge failed (invalid-record);')
   })
   it('kills a helper after its 120 second deadline, not before', async () => {
+    const kill = vi.fn()
+    processHook.afterSpawn = child => { const original = child.kill.bind(child); child.kill = ((signal?: NodeJS.Signals) => { kill(signal); return original(signal) }) as typeof child.kill }
     fakeHelper('setInterval(() => {}, 1000)'); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const rejected = expect(attachAgentObservability(batch(), configPath, { sessionsDir: sessions })).rejects.toThrow('Observation bridge failed (helper-timeout);')
-    let settled = false; void rejected.finally(() => { settled = true })
-    await vi.advanceTimersByTimeAsync(119000); expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1001); vi.useRealTimers(); await rejected; expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
+    await vi.advanceTimersByTimeAsync(119000); expect(kill).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1001); expect(kill).toHaveBeenCalledWith('SIGKILL'); vi.useRealTimers(); await rejected; expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
   })
   it('blocks concurrent writers until the first request acknowledges pending', async () => {
     let accept!: (value: Response) => void, entered!: () => void

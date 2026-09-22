@@ -29,7 +29,9 @@ export function parseOptions(args) {
   return options
 }
 function execute(node, cli, args) {
-  const result = spawnSync(node, [cli, ...args], { encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024 })
+  // A collection step may run the observation helper (up to 120s) plus collection and upload (30s); leave room
+  // so this verifier never kills a collector mid-run, which would leave its observation lock behind.
+  const result = spawnSync(node, [cli, ...args], { encoding: 'utf8', timeout: 300_000, maxBuffer: 8 * 1024 * 1024 })
   // Do not echo arbitrary CLI stdout/stderr into Slack-ready evidence.
   if (result.error || result.status !== 0) throw new Error(`CLI step failed: ${args[1] ?? args[0]}`)
   if (args[0] === '--version') {
