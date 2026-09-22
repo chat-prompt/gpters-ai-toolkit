@@ -14,12 +14,15 @@ const historyMeta={id:'incident-history',title:'문제 이력',description:'저�
 export const incidentHistoryPanel:AxPanel<Record<string,never>>={meta:historyMeta,async load(ctx){return ctx.isAdmin?panelOk(historyMeta,{}):panelError(historyMeta,'관리자만 조회할 수 있습니다')}}
 
 const observationMeta={id:'agent-observations',title:'사용 관측',description:'소스별 사용량 추세와 변경 전후 비교',source:'수집된 관측 지표',visibility:'admin' as const,parentId:'skill-usage',usesPeriod:true}
+export const agentObservationPanel:AxPanel<Record<string,never>>={meta:observationMeta,async load(ctx){return ctx.isAdmin?panelOk(observationMeta,{}):panelError(observationMeta,'관리자만 조회할 수 있습니다')}}
+
 /**
- * The dashboard reads full observations from its own route; this registry panel (read over MCP) carries only the
- * compact daily boot probe series, so a nightly report can quote it without the whole observation payload.
+ * Daily boot probe (a fixed message the agent answers once a day): only its first-turn series, for organization
+ * readers such as a nightly report over MCP. Carries agent/source names, window ends, counts and token sums —
+ * no paths, session IDs or text — so it is an organization panel, unlike the full observations. Hidden from tabs.
  */
-export const agentObservationPanel:AxPanel<{bootProbes:BootProbeSeries[]}>={meta:observationMeta,async load(ctx){
-  if(!ctx.isAdmin)return panelError(observationMeta,'관리자만 조회할 수 있습니다')
-  try{return panelOk(observationMeta,{bootProbes:summarizeBootProbes(await loadAgentObservations(observationQuerySchema.parse({days:String(ctx.days)})))})}
-  catch{return panelError(observationMeta,'관측 지표를 불러오지 못했습니다')}
+const bootProbeMeta={id:'boot-probe',title:'부팅 테스트',description:'매일 고정 테스트 메시지의 첫 턴 입력 토큰',source:'수집된 관측 지표 (테스트 세션만)',visibility:'org' as const,usesPeriod:true,hidden:true}
+export const bootProbePanel:AxPanel<{bootProbes:BootProbeSeries[]}>={meta:bootProbeMeta,async load(ctx){
+  try{return panelOk(bootProbeMeta,{bootProbes:summarizeBootProbes(await loadAgentObservations(observationQuerySchema.parse({days:String(ctx.days)})))})}
+  catch(cause){console.error('[ax] boot-probe panel failed',cause instanceof Error?cause.message:'unknown');return panelError(bootProbeMeta,'부팅 테스트 지표를 불러오지 못했습니다')}
 }}

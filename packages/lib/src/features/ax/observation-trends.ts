@@ -235,6 +235,10 @@ export interface BootProbeSeries {
   points: Array<{ endUtc: string; count: number; sum: number }>
   /** Windows in the period whose probe was incomplete (missing, not zero), oldest first */
   incompleteWindows: string[]
+  /** Listed windows that measured the probe (a measured window without a probe is a real zero) */
+  measuredWindows: number
+  /** Only the latest 200 windows are listed; older windows of the period are summarized but not listed */
+  pointsTruncated: boolean
 }
 /**
  * Boot probe series per stream that reported the probe, for readers such as a nightly report.
@@ -248,5 +252,7 @@ export function summarizeBootProbes(data:AgentObservationData):BootProbeSeries[]
     capability:stream.summary.metricCapabilities.probeFirstTurnTokens!,
     points:stream.points.flatMap(point=>point.metrics.probeFirstTurnTokens?.count?[{endUtc:point.endUtc,count:point.metrics.probeFirstTurnTokens.count,sum:point.metrics.probeFirstTurnTokens.sum}]:[]),
     incompleteWindows:stream.points.filter(point=>point.metricCapabilities.probeFirstTurnTokens==='incomplete').map(point=>point.endUtc),
+    measuredWindows:stream.points.filter(point=>point.metricCapabilities.probeFirstTurnTokens==='supported').length,
+    pointsTruncated:stream.pointsTruncated,
   }))
 }

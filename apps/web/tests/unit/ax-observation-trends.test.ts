@@ -180,7 +180,7 @@ describe('persisted observation projection',()=>{
   const mid='2026-01-04T12:00:00.000Z'
   const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
   const data=projectObservationTrends([observationRow(win(start,change,[102068])),observationRow(win(change,mid,[]),'b'),observationRow(win(mid,end,null),'c')],q,now)
-  expect(summarizeBootProbes(data)).toEqual([{agentId:'example-agent',source:'codex',adapterVersion:'3',capability:'incomplete',points:[{endUtc:change,count:1,sum:102068}],incompleteWindows:[end]}])
+  expect(summarizeBootProbes(data)).toEqual([{agentId:'example-agent',source:'codex',adapterVersion:'3',capability:'incomplete',points:[{endUtc:change,count:1,sum:102068}],incompleteWindows:[end],measuredWindows:2,pointsTruncated:false}])
   expect(summarizeBootProbes(projectObservationTrends([observationRow()],q,now))).toEqual([])
  })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
