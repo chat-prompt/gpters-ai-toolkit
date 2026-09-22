@@ -1,6 +1,7 @@
 /** Read-only projections of authenticated persisted observation batches. */
 import { z } from 'zod'
-import { agentObservabilitySchema, OBSERVABILITY_BOUNDS, type AgentObservability } from './agent-observability-contract'
+import { agentObservabilitySchema, OBSERVABILITY_BOUNDS, OBSERVATION_FAILURE_REASONS, type AgentObservability, type BootstrapObservation, type ObservationFailureReason } from './agent-observability-contract'
+const sourceSchema=z.enum(['claude-code','codex','openclaw','hermes'])
 export const observationQuerySchema = z.object({
   days: z.enum(['7','30','90']).default('7'),
   agentId: z.string().regex(/^[a-z0-9][a-z0-9._:-]{0,99}$/).optional(),
@@ -12,7 +13,8 @@ export const observationQuerySchema = z.object({
       (!value.changeAt || !value.comparisonHours || !value.agentId || !value.source)) ctx.addIssue({code:z.ZodIssueCode.custom,message:'Comparison requires exact stream, change time and duration'})
 })
 export type ObservationQuery = z.infer<typeof observationQuerySchema>
-export type ObservationMetric = keyof AgentObservability['metrics']
+/** Histogram/count metrics that are summed and compared; boot-file health has its own reducer. */
+export type ObservationMetric = Exclude<keyof AgentObservability['metrics'], 'bootstrap'>
 export type ObservationHistogram = NonNullable<AgentObservability['metrics']['firstTurnTokens']>
 export const OBSERVATION_METRICS: ObservationMetric[] = ['firstTurnTokens','peakContextTokens','toolResultChars','compactionEvents','readGuardAllow','readGuardDeny']
 export interface ObservationRow {
@@ -36,7 +38,11 @@ export interface ObservationComparison {
 }
 export interface AgentObservationData {
   startUtc: string; endUtc: string; generatedAt: string; streams: ObservationStream[]; comparison: ObservationComparison|null
-  coverage: {streamLimit:50;totalStreams:number;truncated:boolean;rowLimit:number;rowsTruncated:boolean;invalidRows:number;legacyRows:number;duplicateWindows:number;excludedBoundaryWindows:number}
+  coverage: {streamLimit:50;totalStreams:number;truncated:boolean;rowLimit:number;rowsTruncated:boolean;invalidRows:number;legacyRows:number;duplicateWindows:number;excludedBoundaryWindows:number
+    /** Windows a collector sent without observability for a timing reason, per agent/source/reason (unique batches) */
+    observationFailures?:Array<{agentId:string;source:string;reason:ObservationFailureReason;windows:number}>
+    /** Unique failed windows per agent/source regardless of reason (a window stored with two reasons counts once) */
+    observationFailureTotals?:Array<{agentId:string;source:string;windows:number}>}
 }
 const emptyMetrics = ():AgentObservability['metrics']=>({firstTurnTokens:null,peakContextTokens:null,toolResultChars:null,compactionEvents:null,readGuardAllow:null,readGuardDeny:null})
 const emptyCapabilities = ():AgentObservability['metricCapabilities']=>({firstTurnTokens:'uncollected',peakContextTokens:'uncollected',toolResultChars:'uncollected',compactionEvents:'uncollected',readGuardAllow:'uncollected',readGuardDeny:'uncollected'})
@@ -62,6 +68,17 @@ export function observationRange(query:ObservationQuery,now=new Date()){
   }
   return {start,end}
 }
+/** Boot-file health across windows: counts add up, sizes take the maximum and the latest snapshot. */
+function mergeBootstrap(values:BootstrapObservation[]):BootstrapObservation {
+  const withSize=values.filter(v=>v.sessions>0),last=withSize.at(-1)
+  const sum=(key:'sessions'|'truncatedSessions'|'nearLimitSessions'|'warningSessions')=>{
+    const total=values.reduce((a,v)=>a+v[key],0)
+    if(!Number.isSafeInteger(total))throw new Error('Observation aggregation overflow')
+    return total
+  }
+  return {sessions:sum('sessions'),truncatedSessions:sum('truncatedSessions'),nearLimitSessions:sum('nearLimitSessions'),warningSessions:sum('warningSessions'),
+    largestFileCharsMax:withSize.length?Math.max(...withSize.map(v=>v.largestFileCharsMax!)):null,largestFileCharsLatest:last?.largestFileCharsLatest??null,fileCharsLimit:last?.fileCharsLimit??null}
+}
 function summarize(observations:AgentObservability[],start:number,end:number,forceIncomplete=false):ObservationSummary {
   const selected=observations.filter(o=>Date.parse(o.window.startUtc)>=start&&Date.parse(o.window.endUtc)<=end)
   let cursor=start,coveredMs=0,gap=false
@@ -80,6 +97,16 @@ function summarize(observations:AgentObservability[],start:number,end:number,for
       ;(metrics as Record<string,unknown>)[key]=value
     }else (metrics as Record<string,unknown>)[key]=mergeHistogram(values as ObservationHistogram[])
   }
+  // Boot-file health appears only when some window reported it; older windows simply lack it.
+  const reported=selected.filter(o=>o.metricCapabilities.bootstrap!==undefined)
+  if(reported.length){
+    const values=reported.map(o=>o.metrics.bootstrap).filter((v):v is BootstrapObservation=>v!==null&&v!==undefined)
+    const capabilities=reported.map(o=>o.metricCapabilities.bootstrap)
+    // A reported 'incomplete' without a value stays incomplete; it is not the same as never collected.
+    metricCapabilities.bootstrap=!values.length?(capabilities.every(c=>c==='unsupported')?'unsupported':capabilities.some(c=>c==='incomplete')?'incomplete':'uncollected')
+      :capabilities.every(c=>c==='supported')&&reported.length===selected.length&&!forceIncomplete?'supported':'incomplete'
+    metrics.bootstrap=values.length?mergeBootstrap(values):null
+  }
   return {startUtc:new Date(start).toISOString(),endUtc:new Date(end).toISOString(),windows:selected.length,coveredMs,completeWindow,metrics,metricCapabilities}
 }
 /** Bounds before summation; excludes overlapping/conflicting windows rather than double-counting. */
@@ -87,9 +114,27 @@ export function projectObservationTrends(rows:ObservationRow[],query:Observation
   const {start,end}=observationRange(query,now)
   const coverage:AgentObservationData['coverage']={streamLimit:50,totalStreams:0,truncated:false,rowLimit:20000,rowsTruncated,invalidRows:0,legacyRows:0,duplicateWindows:0,excludedBoundaryWindows:0}
   const grouped=new Map<string,{agentId:string;source:AgentObservability['source'];adapterVersion:string;latestAt:string;byWindow:Map<string,AgentObservability|null>;conflictingWindows:number}>()
+  const failures=new Map<string,{agentId:string;source:string;reason:ObservationFailureReason;windows:Set<string>}>()
   for(const row of rows){
     const collection=row.collection&&typeof row.collection==='object'&&!Array.isArray(row.collection)?row.collection as Record<string,unknown>:null
-    if(!collection?.observability){coverage.legacyRows++;continue}
+    if(!collection?.observability){
+      // A window sent without observability for a fixed timing reason is counted, never shown as observed zero.
+      const reason=collection?.observabilityFailure,source=collection?.source
+      if(reason===undefined){coverage.legacyRows++;continue}
+      // Stored rows are re-validated like observations: an unknown reason or source is invalid, not legacy.
+      if(!OBSERVATION_FAILURE_REASONS.includes(reason as ObservationFailureReason)||!sourceSchema.safeParse(source).success){coverage.invalidRows++;continue}
+      if((query.agentId&&row.agentId!==query.agentId)||(query.source&&source!==query.source))continue
+      let from:string,to:string
+      try{from=iso(row.windowStart);to=iso(row.windowEnd)}catch{coverage.invalidRows++;continue}
+      // A failure row outside the range is skipped quietly: it has no observation that could make a summary incomplete.
+      if(Date.parse(from)<start.getTime()||Date.parse(to)>end.getTime())continue
+      const key=JSON.stringify([row.agentId,source,reason])
+      const entry=failures.get(key)??{agentId:row.agentId,source:source as string,reason:reason as ObservationFailureReason,windows:new Set<string>()}
+      // Counted per window like observations, so a replay by another collector instance is not a second window.
+      entry.windows.add(JSON.stringify([from,to]));failures.set(key,entry)
+      continue
+    }
+    if(collection.observabilityFailure!==undefined){coverage.invalidRows++;continue}
     const parsed=agentObservabilitySchema.safeParse(collection.observability)
     if(!parsed.success){coverage.invalidRows++;continue}
     const o=parsed.data
@@ -110,6 +155,11 @@ export function projectObservationTrends(rows:ObservationRow[],query:Observation
     grouped.set(key,group)
   }
   coverage.totalStreams=grouped.size;coverage.truncated=grouped.size>50
+  coverage.observationFailures=[...failures.values()].map(f=>({agentId:f.agentId,source:f.source,reason:f.reason,windows:f.windows.size}))
+    .sort((a,b)=>a.agentId.localeCompare(b.agentId)||a.source.localeCompare(b.source)||a.reason.localeCompare(b.reason))
+  const totals=new Map<string,{agentId:string;source:string;windows:Set<string>}>()
+  for(const f of failures.values()){const key=JSON.stringify([f.agentId,f.source]),entry=totals.get(key)??{agentId:f.agentId,source:f.source,windows:new Set<string>()};for(const w of f.windows)entry.windows.add(w);totals.set(key,entry)}
+  coverage.observationFailureTotals=[...totals.values()].map(t=>({agentId:t.agentId,source:t.source,windows:t.windows.size})).sort((a,b)=>a.agentId.localeCompare(b.agentId)||a.source.localeCompare(b.source))
   const result:AgentObservationData={startUtc:start.toISOString(),endUtc:end.toISOString(),generatedAt:now.toISOString(),streams:[],comparison:null,coverage}
   for(const group of [...grouped.values()].sort((a,b)=>b.latestAt.localeCompare(a.latestAt)||a.agentId.localeCompare(b.agentId)||a.source.localeCompare(b.source)||Number(b.adapterVersion)-Number(a.adapterVersion)).slice(0,50)){
     const candidates=[...group.byWindow.values()].filter((o):o is AgentObservability=>o!==null).sort((a,b)=>a.window.startUtc.localeCompare(b.window.startUtc)||a.window.endUtc.localeCompare(b.window.endUtc))
@@ -149,7 +199,7 @@ export async function loadAgentObservations(query:ObservationQuery,now=new Date(
   const [{db,axAgentTelemetryBatches:table},{and,gte,lte,eq,sql,desc}]=await Promise.all([import('@gpters/db'),import('drizzle-orm')])
   const rows=await db.select({batchId:table.batchId,agentId:table.agentId,windowStart:table.windowStart,windowEnd:table.windowEnd,collectedAt:table.collectedAt,collection:table.collection}).from(table)
     .where(and(gte(table.windowEnd,start),lte(table.windowStart,end),query.agentId?eq(table.agentId,query.agentId):undefined,
-      query.source?sql`${table.collection}->>'source' = ${query.source}`:undefined,sql`${table.collection} ? 'observability'`))
+      query.source?sql`${table.collection}->>'source' = ${query.source}`:undefined,sql`(${table.collection} ? 'observability' OR ${table.collection} ? 'observabilityFailure')`))
     .orderBy(desc(table.collectedAt)).limit(20001)
   return projectObservationTrends(rows.slice(0,20000),query,now,rows.length>20000)
 }

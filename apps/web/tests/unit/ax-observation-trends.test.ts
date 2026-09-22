@@ -71,8 +71,8 @@ describe('persisted observation projection',()=>{
   expect(data.comparison).toMatchObject({adapterVersion:'2',reason:'incomplete-evidence',before:{completeWindow:false},after:{completeWindow:true}})
   expect(data.comparison?.metrics.firstTurnTokens).toMatchObject({comparable:false,beforeSamples:0,afterSamples:1,delta:null})
  })
- it('keeps version 1 readable and rejects unknown version 3 without counting it as observed or legacy',()=>{
-  const legacy=observation(),unsupported={...legacy,provenance:{...legacy.provenance,adapterVersion:'3'}}
+ it('keeps version 1 readable and rejects unknown version 4 without counting it as observed or legacy',()=>{
+  const legacy=observation(),unsupported={...legacy,provenance:{...legacy.provenance,adapterVersion:'4'}}
   expect(agentObservabilitySchema.safeParse(legacy).success).toBe(true)
   expect(agentObservabilitySchema.safeParse(unsupported).success).toBe(false)
   const invalid={...observationRow(),batchId:'unsupported',collection:{source:'codex',observability:unsupported}}
@@ -117,5 +117,61 @@ describe('persisted observation projection',()=>{
   expect(observationQuerySchema.safeParse({days:'7',changeAt:change}).success).toBe(false)
   expect(()=>observationRange({...query,endUtc:'2027-01-01T00:00:00Z'},now)).toThrow()
   expect(()=>observationRange({...query,comparisonHours:1000},now)).toThrow()
+ })
+
+ const boot=(sessions:number,latest:number|null,max:number|null,extra:Record<string,number>={})=>({sessions,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:max,largestFileCharsLatest:latest,fileCharsLimit:sessions?32000:null,...extra})
+ function v3(a:string,b:string,bootstrap:ReturnType<typeof boot>|null,capability:'supported'|'uncollected'='supported'){const o=observation(a,b);return {...o,provenance:{...o.provenance,adapterVersion:'3' as const},metrics:{...o.metrics,bootstrap},metricCapabilities:{...o.metricCapabilities,bootstrap:capability}}}
+ it('accepts adapter version 3 with boot-file health and keeps rows without it valid',()=>{
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(2,27000,29000,{nearLimitSessions:2}))).success).toBe(true)
+  expect(agentObservabilitySchema.safeParse(observation()).success).toBe(true)
+  const lonely=observation();(lonely.metrics as Record<string,unknown>).bootstrap=boot(1,1,1)
+  expect(agentObservabilitySchema.safeParse(lonely).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,null,'supported')).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(1,1,1),'uncollected')).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(1,1,1,{truncatedSessions:2}))).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,boot(1,30000,20000))).success).toBe(false)
+  expect(agentObservabilitySchema.safeParse(v3(start,change,{...boot(1,1,1),fileName:'AGENTS.md'} as never)).success).toBe(false)
+ })
+ it('merges boot-file health by sum, maximum and latest snapshot, never as a summed size',()=>{
+  const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
+  const data=projectObservationTrends([observationRow(v3(start,change,boot(2,29000,29500,{nearLimitSessions:2}))),observationRow(v3(change,end,boot(1,27400,27400)),'later')],q,now)
+  expect(data.streams[0].summary.metrics.bootstrap).toEqual({sessions:3,truncatedSessions:0,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:29500,largestFileCharsLatest:27400,fileCharsLimit:32000})
+  expect(data.streams[0].summary.metricCapabilities.bootstrap).toBe('supported')
+  const mixed=projectObservationTrends([observationRow(),observationRow(v3(change,end,boot(1,27400,27400)),'later')],q,now)
+  expect(mixed.streams.find(s=>s.adapterVersion==='3')?.summary.metricCapabilities.bootstrap).toBe('supported')
+  const mixedWindows=[observationRow({...v3(start,change,null,'uncollected')},'a'),observationRow(v3(change,end,boot(1,27400,27400)),'b')]
+  expect(projectObservationTrends(mixedWindows,q,now).streams[0].summary.metricCapabilities.bootstrap).toBe('incomplete')
+  const none=projectObservationTrends([observationRow()],q,now)
+  expect(none.streams[0].summary.metrics.bootstrap).toBeUndefined();expect(none.streams[0].summary.metricCapabilities.bootstrap).toBeUndefined()
+ })
+ it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
+  const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})
+  const rows=[observationRow(),failure('f1','source-changed'),failure('f1','source-changed'),failure('f2','source-changed',undefined,change,end),failure('f3','partial-tail'),failure('f4','source-changed','other-agent'),failure('f5','config'),failure('f6','source-changed',undefined,'2025-12-01T00:00:00.000Z',change)]
+  const data=projectObservationTrends(rows,observationQuerySchema.parse({days:'7',agentId:'example-agent'}),now)
+  expect(data.coverage.observationFailures).toEqual([{agentId:'example-agent',source:'codex',reason:'partial-tail',windows:1},{agentId:'example-agent',source:'codex',reason:'source-changed',windows:2}])
+  // Unknown reason is invalid (not legacy); an out-of-range failure row is skipped without marking streams incomplete.
+  expect(data.coverage).toMatchObject({legacyRows:0,invalidRows:1,excludedBoundaryWindows:0})
+  expect(data.streams[0].summary.metrics.firstTurnTokens?.count).toBe(1)
+  // The same window replayed by another collector instance is one window, not two.
+  const replay=projectObservationTrends([failure('r1','source-changed'),failure('r2','source-changed')],observationQuerySchema.parse({days:'7'}),now)
+  expect(replay.coverage.observationFailures).toEqual([{agentId:'example-agent',source:'codex',reason:'source-changed',windows:1}])
+  // One window stored with two reasons is two reason entries but a single unique window in the total.
+  const twoReasons=projectObservationTrends([failure('a','source-changed'),failure('b','partial-tail')],observationQuerySchema.parse({days:'7'}),now)
+  expect(twoReasons.coverage.observationFailures).toHaveLength(2)
+  expect(twoReasons.coverage.observationFailureTotals).toEqual([{agentId:'example-agent',source:'codex',windows:1}])
+  // A stored row carrying both an observation and a failure reason is invalid.
+  const both=observationRow();(both.collection as Record<string,unknown>).observabilityFailure='source-changed'
+  expect(projectObservationTrends([both],observationQuerySchema.parse({days:'7'}),now).coverage).toMatchObject({invalidRows:1,totalStreams:0})
+  const badSource:ObservationRow={batchId:'s',agentId:'example-agent',windowStart:start,windowEnd:change,collectedAt:change,collection:{source:'/Users/x',observabilityFailure:'source-changed'}}
+  expect(projectObservationTrends([badSource],observationQuerySchema.parse({days:'7'}),now).coverage.invalidRows).toBe(1)
+ })
+ it('keeps a reported incomplete boot-file capability without a value, and the latest size across an empty window',()=>{
+  const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
+  const base=v3(start,change,null,'uncollected'),incomplete={...base,metricCapabilities:{...base.metricCapabilities,bootstrap:'incomplete' as const}}
+  expect(agentObservabilitySchema.safeParse(incomplete).success).toBe(true)
+  expect(projectObservationTrends([observationRow(incomplete)],q,now).streams[0].summary.metricCapabilities.bootstrap).toBe('incomplete')
+  const data=projectObservationTrends([observationRow(v3(start,change,boot(1,27400,27400))),observationRow(v3(change,end,boot(0,null,null)),'empty')],q,now)
+  expect(data.streams[0].summary.metrics.bootstrap).toMatchObject({sessions:1,largestFileCharsLatest:27400,fileCharsLimit:32000})
+  expect(()=>projectObservationTrends([observationRow(v3(start,change,boot(Number.MAX_SAFE_INTEGER,1,1))),observationRow(v3(change,end,boot(2,1,1)),'b')],q,now)).toThrow('overflow')
  })
 })

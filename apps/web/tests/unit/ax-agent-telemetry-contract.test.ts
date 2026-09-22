@@ -87,4 +87,21 @@ describe('validateAgentTelemetryBatch', () => {
     expect(mismatched.ok).toBe(false)
     expect(blocked.ok).toBe(false)
   })
+
+  it('관측 실패 사유는 고정 두 가지만 받고, 관측과 함께 올 수 없다', () => {
+    for (const reason of ['source-changed', 'partial-tail']) {
+      expect(validateAgentTelemetryBatch({ ...fixture, collection: { ...fixture.collection, observabilityFailure: reason } }).ok).toBe(true)
+    }
+    expect(validateAgentTelemetryBatch({ ...fixture, collection: { ...fixture.collection, observabilityFailure: 'config' } }).ok).toBe(false)
+    expect(validateAgentTelemetryBatch({ ...fixture, collection: { ...fixture.collection, observabilityFailure: '/Users/x/a.jsonl' } }).ok).toBe(false)
+    const observability = { schemaVersion: 1, agentId: fixture.agentId, source: fixture.collection.source, window: fixture.window,
+      capabilities: { runtimeReceipts: 'uncollected', cliMetrics: 'uncollected', readGuard: 'uncollected' }, receipts: [],
+      metrics: { firstTurnTokens: null, peakContextTokens: null, toolResultChars: null, compactionEvents: null, readGuardAllow: null, readGuardDeny: null },
+      metricCapabilities: { firstTurnTokens: 'uncollected', peakContextTokens: 'uncollected', toolResultChars: 'uncollected', compactionEvents: 'uncollected', readGuardAllow: 'uncollected', readGuardDeny: 'uncollected' },
+      provenance: { adapterVersion: '2', cli: { filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 },
+        readGuard: { filesExpected: 0, filesRead: 0, recordsRead: 0, parseFailures: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, rotatedFiles: 0 },
+        runtime: { recordsRead: 0, unmatchedRecords: 0, unsupportedRecords: 0, missingTimestamps: 0, duplicates: 0, conflicts: 0 } } }
+    expect(validateAgentTelemetryBatch({ ...fixture, collection: { ...fixture.collection, observability } }).ok).toBe(true)
+    expect(validateAgentTelemetryBatch({ ...fixture, collection: { ...fixture.collection, observability, observabilityFailure: 'source-changed' } }).ok).toBe(false)
+  })
 })

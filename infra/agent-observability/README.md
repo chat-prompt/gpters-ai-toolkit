@@ -164,6 +164,23 @@ for count metrics mean observed collection windows, not individual events.
 No comparison asserts that a change caused an effect. The first-turn sample
 caveat and session-window peak semantics above also apply to the dashboard.
 
+Adapter version 3 may carry optional **boot-file health** (`metrics.bootstrap` with
+`metricCapabilities.bootstrap`): numbers only — boot snapshots in the window,
+snapshots with a truncated / near-limit file or a truncation warning, and the
+largest injected file's characters (window maximum and latest) against the
+per-file limit. Windows merge it by sum (counts), maximum and latest snapshot,
+never by adding sizes; rows written before it existed simply lack it. A batch may
+instead carry `collection.observabilityFailure` (`source-changed` or
+`partial-tail`) when the collector sent the window without observability; the
+projection counts those per agent/source/reason by unique batch
+(`coverage.observationFailures`) so an omitted window is never shown as an observed
+zero; `coverage.observationFailureTotals` gives unique failed windows per
+agent/source regardless of reason. The panel shows both as one line per stream,
+and failures of an agent/source with no observation card as their own block.
+The server accepts these fields first; the collector starts sending
+`observabilityFailure` and adapter version 3 only in the following change, after
+this server is deployed (until then the CLI reports the reason locally only).
+
 `AgentObservationPanel` is registered in the admin dashboard. The authenticated
 projection can show compatible saved observations; it does not prove that a live
 agent has enabled the sidecar. Local browser visual verification remains required
