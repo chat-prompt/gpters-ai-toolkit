@@ -3,9 +3,9 @@ import { attachAgentObservability } from '../agent-telemetry/observability.js'
 /** 에이전트 delta telemetry 수집·전송 명령 */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
+import { homedir, uptime } from 'node:os'
 import { join, resolve } from 'node:path'
-import { constants, closeSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readConfig } from '../config.js'
 import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
@@ -215,43 +215,59 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
   }
 }
 
-/** A lock older than this whose process is gone was left by a collector that was killed (reboot, logout, bootout). */
+/** A lock older than this whose process is gone was left by a collector that was killed or exited without cleanup. */
 const STALE_LOCK_MS = 10 * 60 * 1000
+/** A reclaim guard is held for milliseconds; one older than this was left by a reclaimer that was killed. */
+const STALE_GUARD_MS = 60 * 1000
+
+/** Reads a small owned regular lock file without following links or blocking; null when it is anything else. */
+function readLockFile(path: string): string | null {
+  let fd: number | undefined
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    const stat = fstatSync(fd)
+    if (!stat.isFile() || stat.uid !== process.getuid?.() || stat.size > 4096) return null
+    return readFileSync(fd, 'utf8')
+  } catch { return null } finally { if (fd !== undefined) closeSync(fd) }
+}
 
 /**
- * Whether the lock file at `lock` was left by a collector that no longer runs: an owned regular file recording a
- * pid that no longer exists, older than {@link STALE_LOCK_MS}. Anything unreadable, recent or alive is kept.
+ * Whether lock content was left by a collector that no longer runs: it was created before this boot, or its
+ * recorded pid no longer exists and it is older than {@link STALE_LOCK_MS}. Anything unreadable, recent or alive
+ * is kept. A lock from before the last boot cannot belong to a running process, whatever reused its pid.
  */
-function staleLock(lock: string, content: string, now = Date.now()): boolean {
+export function staleLockContent(content: string, now = Date.now(), bootAt = now - uptime() * 1000): boolean {
   try {
-    const stat = lstatSync(lock)
-    if (!stat.isFile() || stat.uid !== process.getuid?.()) return false
     const { pid, createdAt } = JSON.parse(content) as { pid?: unknown; createdAt?: unknown }
     if (!Number.isSafeInteger(pid) || (pid as number) <= 0 || pid === process.pid || typeof createdAt !== 'string') return false
     const created = Date.parse(createdAt)
-    if (!Number.isFinite(created) || now - created < STALE_LOCK_MS) return false
+    if (!Number.isFinite(created) || created > now) return false
+    if (created < bootAt - 60_000) return true
+    if (now - created < STALE_LOCK_MS) return false
     try { process.kill(pid as number, 0); return false }
     catch (cause) { return (cause as NodeJS.ErrnoException).code === 'ESRCH' }
   } catch { return false }
 }
 
 /**
- * Moves a stale lock aside atomically and deletes it only if it is still the stale lock that was read; a lock another
- * collector created in between is put back. Returns true when the lock path is free again.
+ * Reclaims a stale lock under a short exclusive guard, so only one process at a time may remove a lock and every
+ * competitor that finds the guard held simply stops. Returns true when the lock path is free again.
  */
 function reclaimStaleLock(lock: string): boolean {
-  let content: string
-  try { content = readFileSync(lock, 'utf8') } catch { return false }
-  if (!staleLock(lock, content)) return false
-  const aside = `${lock}.stale-${process.pid}-${Date.now()}`
-  try { renameSync(lock, aside) } catch { return false }
+  const guard = `${lock}.reclaim`
+  let guardFd: number
+  try { guardFd = openSync(guard, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600) }
+  catch {
+    // A guard left by a killed reclaimer is removed once it is clearly old; this run still stops and the next retries.
+    try { const stat = lstatSync(guard); if (stat.isFile() && stat.uid === process.getuid?.() && Date.now() - stat.mtimeMs > STALE_GUARD_MS) unlinkSync(guard) } catch { /* nothing to clean */ }
+    return false
+  }
   try {
-    if (readFileSync(aside, 'utf8') === content) { unlinkSync(aside); return true }
-    // Someone replaced it between the read and the move: restore theirs (never over a newer lock) and keep waiting.
-    try { linkSync(aside, lock) } catch { /* a newer lock exists; theirs stays aside for inspection */ }
-    unlinkSync(aside)
-  } catch { /* leave the moved file for inspection */ }
-  return false
+    const content = readLockFile(lock)
+    if (content === null || !staleLockContent(content)) return false
+    unlinkSync(lock)
+    return true
+  } catch { return false } finally { closeSync(guardFd); try { unlinkSync(guard) } catch { /* already gone */ } }
 }
 
 /** Existing default collectors retain their behavior; opt-in work owns one state lock through acknowledgement. */
@@ -265,28 +281,33 @@ export function observationLock(path: string, directory: string): () => void {
     let fd: number
     try { fd = create() }
     catch (cause) {
-      // Only a lock left by a killed collector is reclaimed; a live or unreadable lock still stops this run.
+      // Only a lock left by a collector that is gone is reclaimed; a live or unreadable lock still stops this run.
       if ((cause as NodeJS.ErrnoException).code !== 'EEXIST' || !reclaimStaleLock(lock)) throw cause
       fd = create()
     }
-    try { writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })) }
+    const content = JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })
+    try { writeFileSync(fd, content) }
     catch { closeSync(fd); unlinkSync(lock); throw new Error('Cannot record lock') }
     let released = false
     const release = () => {
       if (released) return
       released = true
-      try { closeSync(fd); unlinkSync(lock) }
-      catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
+      try {
+        closeSync(fd)
+        // Remove only our own lock: never one another collector holds after a reclaim.
+        if (readLockFile(lock) === content) unlinkSync(lock)
+      } catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
     }
-    // A collector stopped by a signal (logout, shutdown, launchctl bootout) releases its lock before exiting, so the
-    // next scheduled run is not blocked. The checkpoint rule is unchanged: nothing advances without acknowledgement.
+    // Every way out releases the lock: error() exits the process from inside the run (upload failure, blocked
+    // health), and signals (logout, shutdown, launchctl bootout) end it too. The checkpoint rule is unchanged:
+    // nothing advances without acknowledgement, and a saved pending batch is retried by the next run.
+    const onExit = () => { try { release() } catch { /* the next run reports or reclaims the leftover lock */ } }
     const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT', 'SIGHUP']
-    const onSignal = (signal: NodeJS.Signals) => {
-      try { release() } catch { /* the next run reports the leftover lock */ }
-      process.exit(128 + (signal === 'SIGHUP' ? 1 : signal === 'SIGINT' ? 2 : 15))
-    }
+    const onSignal = (signal: NodeJS.Signals) => { process.exit(128 + (signal === 'SIGHUP' ? 1 : signal === 'SIGINT' ? 2 : 15)) }
+    process.once('exit', onExit)
     for (const signal of signals) process.once(signal, onSignal)
     return () => {
+      process.off('exit', onExit)
       for (const signal of signals) process.off(signal, onSignal)
       release()
     }

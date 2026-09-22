@@ -232,13 +232,16 @@ so replacing its pathname after verification cannot run replacement code.
 
 Opt-in runs acquire an exclusive per-checkpoint `.observation.lock` covering
 collection, pending persistence, upload and acknowledgment. A competing lock stops
-without upload or checkpoint change. A collector stopped by SIGTERM, SIGINT or
-SIGHUP (logout, shutdown, `launchctl bootout`) releases its lock before exiting.
-A lock left anyway (SIGKILL, power loss) is reclaimed only when it is an owned
-regular file whose recorded pid no longer exists and that is older than 10
-minutes; it is moved aside atomically and deleted only if it is still that lock.
-An unreadable, recent or live lock still stops the run for an operator to inspect.
-Never remove an active lock. Dry run creates a private checkpoint directory and
+without upload or checkpoint change. A collector releases its lock on every way
+out — including an error exit from inside the run (upload failure, blocked health)
+and SIGTERM, SIGINT or SIGHUP (logout, shutdown, `launchctl bootout`) — and removes
+only its own lock; its observation helper is killed with it. A lock left anyway
+(SIGKILL, power loss) is reclaimed only when it is an owned regular file created
+before the last boot, or whose recorded pid no longer exists and that is older than
+10 minutes. Reclaiming happens under a short exclusive `.reclaim` guard, so a
+competitor that finds the guard held stops instead of racing. An unreadable,
+recent or live lock still stops the run for an operator to inspect. Never remove an
+active lock. Dry run creates a private checkpoint directory and
 temporary lock but writes no checkpoint and makes no upload. Ordinary unconfigured
 collectors do not participate in this optional lock; do not mix old/unconfigured
 and enabled writers against the same checkpoint during rollout.

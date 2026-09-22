@@ -132,12 +132,16 @@ async function runHelper(config: ObservationConfig, helper: Buffer, batch: Agent
     const output: Buffer[] = []
     let size = 0, errorSize = 0, stopped: ObservationFailureCode | null = null
     const stop = (code: ObservationFailureCode) => { stopped ??= code; child.kill('SIGKILL') }
+    // If the collector exits (a signal, an error exit) while the helper runs, the helper does not outlive it.
+    const killOnExit = () => { child.kill('SIGKILL') }
+    process.once('exit', killOnExit)
     const timer = setTimeout(() => stop('helper-timeout'), 30000)
     child.stdout.on('data', (chunk: Buffer) => { size += chunk.length; if (size > 512000) stop('helper-output'); else output.push(chunk) })
     child.stderr.on('data', (chunk: Buffer) => { errorSize += chunk.length; if (errorSize > 64000) stop('helper-output') })
-    child.on('error', () => { clearTimeout(timer); reject(new ObservationFailure('helper-failed')) })
+    child.on('error', () => { clearTimeout(timer); process.off('exit', killOnExit); reject(new ObservationFailure('helper-failed')) })
     child.on('close', code => {
       clearTimeout(timer)
+      process.off('exit', killOnExit)
       const text = Buffer.concat(output).toString('utf8')
       if (stopped) reject(new ObservationFailure(stopped))
       else if (code === 75) {
