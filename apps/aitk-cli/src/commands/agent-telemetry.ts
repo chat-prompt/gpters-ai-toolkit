@@ -3,9 +3,10 @@ import { attachAgentObservability } from '../agent-telemetry/observability.js'
 /** 에이전트 delta telemetry 수집·전송 명령 */
 
 import { createHash, randomUUID } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { constants, closeSync, lstatSync, mkdirSync, openSync, unlinkSync, writeFileSync } from 'node:fs'
+import { constants, closeSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readConfig } from '../config.js'
 import { error, jsonOut } from '../output.js'
 import { readAgentTelemetryCheckpoint, writeAgentTelemetryCheckpoint } from '../agent-telemetry/checkpoint.js'
@@ -215,19 +216,128 @@ function committedAfterSuccess(state: AgentTelemetryCheckpoint): AgentTelemetryC
   }
 }
 
+/** A lock older than this whose process is gone was left by a collector that was killed or exited without cleanup. */
+const STALE_LOCK_MS = 10 * 60 * 1000
+
+let cachedBootId: string | null | undefined
+/**
+ * An identifier of the current boot (macOS `kern.bootsessionuuid`, Linux `boot_id`), or null when unavailable.
+ * Unlike boot time it does not move when the clock is adjusted, so a lock from another boot is recognized exactly.
+ */
+export function currentBootId(): string | null {
+  if (cachedBootId !== undefined) return cachedBootId
+  let value: string | null = null
+  try { value = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim() } catch {
+    try { value = execFileSync('/usr/sbin/sysctl', ['-n', 'kern.bootsessionuuid'], { encoding: 'utf8', timeout: 2000 }).trim() } catch { value = null }
+  }
+  cachedBootId = value && /^[0-9A-Fa-f-]{16,64}$/.test(value) ? value : null
+  return cachedBootId
+}
+
+/** Reads a small owned regular lock file without following links or blocking; null when it is anything else. */
+function readLockFile(path: string): string | null {
+  let fd: number | undefined
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    const stat = fstatSync(fd)
+    if (!stat.isFile() || stat.uid !== process.getuid?.() || stat.size > 4096) return null
+    return readFileSync(fd, 'utf8')
+  } catch { return null } finally { if (fd !== undefined) closeSync(fd) }
+}
+
+/**
+ * Whether lock or guard content was left by a process that no longer runs: it records a different boot, or its pid
+ * no longer exists and it is at least `minimumAgeMs` old. Anything unreadable, recent or alive is kept. A pid reused
+ * within the same boot keeps the lock (an operator inspects it); a lock from another boot is always stale.
+ */
+export function staleLockContent(content: string, { now = Date.now(), bootId = currentBootId(), minimumAgeMs = STALE_LOCK_MS } = {}): boolean {
+  try {
+    const record = JSON.parse(content) as { pid?: unknown; createdAt?: unknown; bootId?: unknown }
+    if (!Number.isSafeInteger(record.pid) || (record.pid as number) <= 0 || record.pid === process.pid || typeof record.createdAt !== 'string') return false
+    if (typeof record.bootId === 'string' && bootId && record.bootId !== bootId) return true
+    const created = Date.parse(record.createdAt)
+    if (!Number.isFinite(created) || now - created < minimumAgeMs) return false
+    try { process.kill(record.pid as number, 0); return false }
+    catch (cause) { return (cause as NodeJS.ErrnoException).code === 'ESRCH' }
+  } catch { return false }
+}
+
+/** What a lock or guard records about its holder. */
+const holder = () => JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString(), bootId: currentBootId() })
+
+/**
+ * Publishes `content` at `path` only if nothing is there, all at once: the complete file is written under a private
+ * temporary name and hard-linked into place, so a process killed at any point never leaves an empty lock or guard.
+ * Throws EEXIST when the path is taken.
+ */
+function publishExclusive(path: string, content: string): void {
+  const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
+  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+  try {
+    try { writeFileSync(fd, content) } finally { closeSync(fd) }
+    linkSync(temporary, path)
+  } finally { try { unlinkSync(temporary) } catch { /* already gone */ } }
+}
+
+/**
+ * Reclaims a stale lock under a short exclusive guard, so only one process at a time may remove a lock and every
+ * competitor that finds the guard held simply stops. A guard is removed only when its own holder is gone (never by
+ * age alone), and that run still stops. Returns true when the lock path is free again.
+ */
+function reclaimStaleLock(lock: string): boolean {
+  const guard = `${lock}.reclaim`
+  const guardContent = holder()
+  try { publishExclusive(guard, guardContent) }
+  catch {
+    const left = readLockFile(guard)
+    if (left !== null && staleLockContent(left, { minimumAgeMs: 0 }) && readLockFile(guard) === left) { try { unlinkSync(guard) } catch { /* gone */ } }
+    return false
+  }
+  try {
+    const content = readLockFile(lock)
+    if (content === null || !staleLockContent(content) || readLockFile(lock) !== content) return false
+    unlinkSync(lock)
+    return true
+  } catch { return false } finally {
+    try { if (readLockFile(guard) === guardContent) unlinkSync(guard) } catch { /* already gone */ }
+  }
+}
+
 /** Existing default collectors retain their behavior; opt-in work owns one state lock through acknowledgement. */
-function observationLock(path: string, directory: string): () => void {
+export function observationLock(path: string, directory: string): () => void {
   try {
     mkdirSync(directory, { recursive: true, mode: 0o700 })
     const stat = lstatSync(directory)
     if (!stat.isDirectory() || stat.uid !== process.getuid?.() || (stat.mode & 0o022) !== 0) throw new Error('Unsafe checkpoint directory')
     const lock = path + '.observation.lock'
-    const fd = openSync(lock, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
-    try { writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })) }
-    catch { closeSync(fd); unlinkSync(lock); throw new Error('Cannot record lock') }
+    const content = holder()
+    try { publishExclusive(lock, content) }
+    catch (cause) {
+      // Only a lock left by a collector that is gone is reclaimed; a live or unreadable lock still stops this run.
+      if ((cause as NodeJS.ErrnoException).code !== 'EEXIST' || !reclaimStaleLock(lock)) throw cause
+      publishExclusive(lock, content)
+    }
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      try {
+        // Remove only our own lock: never one another collector holds after a reclaim.
+        if (readLockFile(lock) === content) unlinkSync(lock)
+      } catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
+    }
+    // Every way out releases the lock: error() exits the process from inside the run (upload failure, blocked
+    // health), and signals (logout, shutdown, launchctl bootout) end it too. The checkpoint rule is unchanged:
+    // nothing advances without acknowledgement, and a saved pending batch is retried by the next run.
+    const onExit = () => { try { release() } catch { /* the next run reports or reclaims the leftover lock */ } }
+    const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT', 'SIGHUP']
+    const onSignal = (signal: NodeJS.Signals) => { process.exit(128 + (signal === 'SIGHUP' ? 1 : signal === 'SIGINT' ? 2 : 15)) }
+    process.once('exit', onExit)
+    for (const signal of signals) process.once(signal, onSignal)
     return () => {
-      try { closeSync(fd); unlinkSync(lock) }
-      catch { throw new Error('Observation collector lock cleanup failed; inspect the private checkpoint before retrying.') }
+      process.off('exit', onExit)
+      for (const signal of signals) process.off(signal, onSignal)
+      release()
     }
   } catch { throw new Error('Observation collector lock unavailable; inspect the private checkpoint and active process. No batch was sent. Never remove an active lock.') }
 }

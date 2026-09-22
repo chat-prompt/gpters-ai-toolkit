@@ -14,7 +14,7 @@ vi.mock('node:child_process', async importOriginal => {
 vi.mock('../../src/output.js', () => ({ jsonOut: vi.fn(), error: (message: string) => { throw new Error(message) } }))
 import { createInstallation, writeAgentTelemetryInstallation, readAgentTelemetryInstallation } from '../../src/agent-telemetry/installation.js'
 import { runAgentTelemetryUpgrade } from '../../src/commands/agent-telemetry-lifecycle.js'
-import { runAgentTelemetryCollect } from '../../src/commands/agent-telemetry.js'
+import { currentBootId, observationLock, runAgentTelemetryCollect, staleLockContent } from '../../src/commands/agent-telemetry.js'
 const now = new Date('2026-01-03T00:00:00.000Z')
 let root: string, sessions: string, checkpoints: string, configPath: string, helperPath: string, built: string, bundle: Buffer
 const originalNode = process.versions.node
@@ -174,6 +174,71 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     const first = runAgentTelemetryCollect(opts()); await ready; const before = readFileSync(statePath(), 'utf8')
     await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('lock unavailable'); expect(fetch).toHaveBeenCalledTimes(1); expect(readFileSync(statePath(), 'utf8')).toBe(before)
     accept(response()); await first; expect(state().pending).toBeUndefined()
+  })
+  it('reclaims only a lock left by a collector that is gone and older than 10 minutes', async () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const lock = statePath() + '.observation.lock'
+    const gone = await new Promise<number>(resolve => { const child = spawn(process.execPath, ['-e', '0']); child.on('exit', () => resolve(child.pid!)) })
+    const old = new Date(Date.now() - 11 * 60 * 1000).toISOString(), recent = new Date(Date.now() - 60 * 1000).toISOString()
+    // A live process (this test's parent) or a recent lock is never taken.
+    for (const content of [{ pid: process.ppid, createdAt: old }, { pid: gone, createdAt: recent }]) {
+      writeFileSync(lock, JSON.stringify(content), { mode: 0o600 })
+      await expect(runAgentTelemetryCollect(opts())).rejects.toThrow('lock unavailable'); expect(fetch).not.toHaveBeenCalled()
+      expect(JSON.parse(readFileSync(lock, 'utf8'))).toEqual(content)
+    }
+    writeFileSync(lock, JSON.stringify({ pid: gone, createdAt: old }), { mode: 0o600 })
+    await runAgentTelemetryCollect(opts()); expect(fetch).toHaveBeenCalledTimes(1); expect(existsSync(lock)).toBe(false)
+    expect(readdirSync(checkpoints).filter(name => name.includes('.reclaim'))).toEqual([])
+  })
+  it('releases the lock on every way out: a signal, and an error exit from inside the run', async () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const state = join(checkpoints, 'signal-state.json'), lock = state + '.observation.lock'
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    let release = observationLock(state, checkpoints)
+    process.emit('SIGTERM', 'SIGTERM'); expect(exit).toHaveBeenCalledWith(143)
+    // process.exit (mocked here) emits 'exit'; the lock is released there, for signals and error() alike.
+    process.emit('exit', 143); expect(existsSync(lock)).toBe(false)
+    release(); expect(process.listenerCount('SIGTERM')).toBe(0)
+    release = observationLock(state, checkpoints); process.emit('exit', 1); expect(existsSync(lock)).toBe(false); release()
+  })
+  it('never removes a lock that is not its own, and lets only one process reclaim at a time', async () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const state = join(checkpoints, 'own-state.json'), lock = state + '.observation.lock'
+    const release = observationLock(state, checkpoints)
+    const theirs = JSON.stringify({ pid: process.ppid, createdAt: new Date().toISOString() })
+    rmSync(lock); writeFileSync(lock, theirs, { mode: 0o600 }); release()
+    expect(readFileSync(lock, 'utf8')).toBe(theirs)
+    // A reclaim guard held by someone else stops this run instead of racing it.
+    const gone = await new Promise<number>(resolve => { const child = spawn(process.execPath, ['-e', '0']); child.on('exit', () => resolve(child.pid!)) })
+    writeFileSync(lock, JSON.stringify({ pid: gone, createdAt: new Date(Date.now() - 11 * 60 * 1000).toISOString() }), { mode: 0o600 })
+    writeFileSync(lock + '.reclaim', '', { mode: 0o600 })
+    expect(() => observationLock(state, checkpoints)).toThrow('lock unavailable'); expect(existsSync(lock)).toBe(true)
+    rmSync(lock + '.reclaim'); const reclaimed = observationLock(state, checkpoints); reclaimed(); expect(existsSync(lock)).toBe(false)
+  })
+  it('treats a lock from another boot as stale whatever reused its pid, and never judges by the clock', () => {
+    const now = Date.parse('2026-09-22T12:00:00Z'), live = process.ppid
+    const lock = (createdAt: string, bootId?: string) => JSON.stringify({ pid: live, createdAt, ...(bootId ? { bootId } : {}) })
+    expect(staleLockContent(lock('2026-09-22T11:59:50.000Z', 'boot-aaaa-0000-1111'), { now, bootId: 'boot-bbbb-0000-2222' })).toBe(true)
+    // Same boot: a live pid keeps even an old lock; a clock jump alone never reclaims it.
+    expect(staleLockContent(lock('2026-09-22T10:00:00.000Z', 'boot-aaaa-0000-1111'), { now, bootId: 'boot-aaaa-0000-1111' })).toBe(false)
+    expect(staleLockContent(lock('2026-09-22T10:00:00.000Z'), { now, bootId: 'boot-aaaa-0000-1111' })).toBe(false)
+    expect(staleLockContent('stale-fixture', { now })).toBe(false)
+    expect(currentBootId()).toMatch(/^[0-9A-Fa-f-]{16,64}$/)
+  })
+  it('publishes a lock only complete, so a collector killed while taking it never leaves an empty lock', () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const state = join(checkpoints, 'atomic-state.json'), lock = state + '.observation.lock'
+    const release = observationLock(state, checkpoints)
+    expect(JSON.parse(readFileSync(lock, 'utf8'))).toMatchObject({ pid: process.pid, bootId: currentBootId() })
+    expect(readdirSync(checkpoints).filter(name => name.endsWith('.tmp'))).toEqual([])
+    release(); expect(existsSync(lock)).toBe(false)
+  })
+  it('removes a reclaim guard only when its holder is gone, and that run still stops', async () => {
+    mkdirSync(checkpoints, { mode: 0o700 }); const state = join(checkpoints, 'guard-state.json'), lock = state + '.observation.lock'
+    const gone = await new Promise<number>(resolve => { const child = spawn(process.execPath, ['-e', '0']); child.on('exit', () => resolve(child.pid!)) })
+    writeFileSync(lock, JSON.stringify({ pid: gone, createdAt: new Date(Date.now() - 11 * 60 * 1000).toISOString() }), { mode: 0o600 })
+    const liveGuard = JSON.stringify({ pid: process.ppid, createdAt: new Date(Date.now() - 3600_000).toISOString() })
+    writeFileSync(lock + '.reclaim', liveGuard, { mode: 0o600 })
+    expect(() => observationLock(state, checkpoints)).toThrow('lock unavailable'); expect(readFileSync(lock + '.reclaim', 'utf8')).toBe(liveGuard)
+    writeFileSync(lock + '.reclaim', JSON.stringify({ pid: gone, createdAt: new Date().toISOString() }), { mode: 0o600 })
+    expect(() => observationLock(state, checkpoints)).toThrow('lock unavailable'); expect(existsSync(lock + '.reclaim')).toBe(false)
+    const release = observationLock(state, checkpoints); release(); expect(existsSync(lock)).toBe(false)
   })
   it('does not steal stale lock or touch checkpoint', async () => {
     mkdirSync(checkpoints, { mode: 0o700 }); const lock = statePath() + '.observation.lock'; writeFileSync(lock, 'stale-fixture', { mode: 0o600 })
