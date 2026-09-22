@@ -2,6 +2,7 @@ import { panelOk,panelError,panelNotConfigured } from './panel'
 import type { AxPanel } from './types'
 import type { MonitorDashboardData } from './monitor-types'
 import { readAgentMonitor } from './monitor-store'
+import { loadAgentObservations, observationQuerySchema, summarizeBootProbes, type BootProbeSeries } from './observation-trends'
 const meta={id:'agent-monitoring',title:'지속 감시',description:'자동 감시·미검토 후보·알림 상태',source:'수집 배치 · 중앙 감시',visibility:'admin' as const,parentId:'skill-usage',usesPeriod:false}
 export const agentMonitoringPanel:AxPanel<MonitorDashboardData>={meta,async load(ctx){
   if(!ctx.isAdmin)return panelError(meta,'관리자만 조회할 수 있습니다')
@@ -14,3 +15,18 @@ export const incidentHistoryPanel:AxPanel<Record<string,never>>={meta:historyMet
 
 const observationMeta={id:'agent-observations',title:'사용 관측',description:'소스별 사용량 추세와 변경 전후 비교',source:'수집된 관측 지표',visibility:'admin' as const,parentId:'skill-usage',usesPeriod:true}
 export const agentObservationPanel:AxPanel<Record<string,never>>={meta:observationMeta,async load(ctx){return ctx.isAdmin?panelOk(observationMeta,{}):panelError(observationMeta,'관리자만 조회할 수 있습니다')}}
+
+/**
+ * Daily boot probe (a fixed message the agent answers once a day): only its first-turn series, for organization
+ * readers such as a nightly report over MCP. Carries agent/source names, window ends, counts and token sums —
+ * no paths, session IDs or text — so it is an organization panel, unlike the full observations. Hidden from tabs.
+ */
+const bootProbeMeta={id:'boot-probe',title:'부팅 테스트',description:'매일 고정 테스트 메시지의 첫 턴 입력 토큰',source:'수집된 관측 지표 (테스트 세션만)',visibility:'org' as const,usesPeriod:true,hidden:true}
+export const bootProbePanel:AxPanel<{bootProbes:BootProbeSeries[];truncated:boolean}>={meta:bootProbeMeta,async load(ctx){
+  try{
+    // Only batches that report the probe, so ordinary collectors never crowd probe streams out of the stream limit.
+    const data=await loadAgentObservations(observationQuerySchema.parse({days:String(ctx.days)}),new Date(),{probeOnly:true})
+    return panelOk(bootProbeMeta,{bootProbes:summarizeBootProbes(data),truncated:data.coverage.truncated||data.coverage.rowsTruncated})
+  }
+  catch(cause){console.error('[ax] boot-probe panel failed',cause instanceof Error?cause.message:'unknown');return panelError(bootProbeMeta,'부팅 테스트 지표를 불러오지 못했습니다')}
+}}

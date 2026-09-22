@@ -36,7 +36,7 @@ describe('AX 패널 레지스트리', () => {
   it('화면 정보 구조를 네 업무 영역으로 유지한다', () => {
     const metas = AX_PANELS.map((panel) => panel.meta)
     // 숨김 패널은 탭이 아니다
-    expect(metas.filter((meta) => meta.hidden).map((meta) => meta.id)).toEqual(['activity-grass'])
+    expect(metas.filter((meta) => meta.hidden).map((meta) => meta.id)).toEqual(['boot-probe', 'activity-grass'])
     expect(metas.filter((meta) => !meta.parentId && !meta.hidden).map((meta) => meta.title)).toEqual([
       '요약', '스킬', '클라이언트', '배포 사이트',
     ])

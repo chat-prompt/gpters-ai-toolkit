@@ -82,6 +82,19 @@ describe('AxDashboard 패널 요청', () => {
     )
   })
 
+  it('보이는 화면이 쓰지 않는 숨김 패널(boot-probe)은 첫 진입·지연 조회·기간 사전 조회·기간 전환 어디서도 받지 않는다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const probe: AxPanelMeta = { id: 'boot-probe', title: '부팅 테스트', description: 'MCP 전용', source: 'test', visibility: 'org', usesPeriod: true, hidden: true }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => ({ ok: true, json: async () => ({ ...responseFor(String(input).includes('boot-probe') ? '/api/ax/overview?' : String(input)) }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<AxDashboard panels={[...PANELS, probe]} isAdmin={false} />)
+    await vi.advanceTimersByTimeAsync(10_000)
+    fireEvent.click(screen.getByRole('button', { name: '30일' }))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes('/api/ax/boot-probe'))).toBe(false)
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain('/api/ax/overview?days=30')
+  })
+
   it('첫 화면 뒤 나머지 기간을 미리 받고, 받아 둔 기간은 즉시 보여주며, 다시 받는 동안 이전 표를 유지한다', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const overview: AxPanelMeta = {

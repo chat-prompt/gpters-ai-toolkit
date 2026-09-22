@@ -260,7 +260,7 @@ export function AxDashboard({ panels, isAdmin, initialPanelId, initialSelection 
   // panels 배열은 렌더마다 새 객체라 요청에 필요한 메타만 문자열로 굳혀 의존성으로 쓴다.
   // usesPeriod까지 포함해야 패널의 기간 계약이 바뀌었을 때 초기 조회를 다시 잡는다.
   const panelRequestKey = JSON.stringify(
-    panels.map((panel) => ({ id: panel.id, usesPeriod: panel.usesPeriod }))
+    panels.map((panel) => ({ id: panel.id, usesPeriod: panel.usesPeriod, hidden: panel.hidden === true }))
   )
   // 패널 구성 변경 효과는 days 변경만으로 재실행되면 안 되므로 최신 값은 ref에서 읽는다.
   const selectedDaysRef = useRef<AxDays>(days)
@@ -284,11 +284,15 @@ export function AxDashboard({ panels, isAdmin, initialPanelId, initialSelection 
     const panelConfigs = JSON.parse(panelRequestKey) as Array<{
       id: string
       usesPeriod: boolean
+      hidden: boolean
     }>
     const initialDays = selectedDaysRef.current
     const { rootId, panelId } = activeIdsRef.current
     const priorityIds = requiredPanelIds(rootId, panelId, panelConfigs.map((panel) => panel.id))
+    // A hidden panel is fetched only when a visible view depends on it (activity-grass); others serve other readers
+    // such as MCP (boot-probe) and are never loaded by the dashboard.
     const deferredIds = panelConfigs
+      .filter((panel) => !panel.hidden)
       .map((panel) => panel.id)
       .filter((id) => !priorityIds.includes(id))
     // 구성이 바뀌면 이전 구성에서 받은 기록은 뜻이 없다 — 지연 조회가 전부를 다시 받게 비운다.
@@ -320,7 +324,7 @@ export function AxDashboard({ panels, isAdmin, initialPanelId, initialSelection 
       if (cancelled) return
       prefetchTimer = setTimeout(() => {
         if (cancelled) return
-        const periodPanels = panelConfigs.filter((panel) => panel.usesPeriod)
+        const periodPanels = panelConfigs.filter((panel) => panel.usesPeriod && (!panel.hidden || priorityIds.includes(panel.id)))
         const otherDays = DAY_OPTIONS.filter((option) => option !== initialDays)
         // 서버와 DB를 한꺼번에 때리지 않게 기간 하나씩, 그 안에서는 패널을 동시에 받는다.
         void otherDays.reduce(
@@ -375,11 +379,14 @@ export function AxDashboard({ panels, isAdmin, initialPanelId, initialSelection 
     const panelConfigs = JSON.parse(panelRequestKey) as Array<{
       id: string
       usesPeriod: boolean
+      hidden: boolean
     }>
+    // Hidden panels no visible view depends on are never loaded by the dashboard.
+    const required = requiredPanelIds(activeIdsRef.current.rootId, activeIdsRef.current.panelId, panelConfigs.map((panel) => panel.id))
     // 효과 본문에서 동기적으로 상태를 바꾸지 않도록 다음 마이크로태스크에서 요청한다.
     queueMicrotask(() => {
       for (const panel of panelConfigs) {
-        if (panel.usesPeriod) void loadPanel(panel.id, days)
+        if (panel.usesPeriod && (!panel.hidden || required.includes(panel.id))) void loadPanel(panel.id, days)
       }
     })
   }, [panelRequestKey, days, loadPanel])

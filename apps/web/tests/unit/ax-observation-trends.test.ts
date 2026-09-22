@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest'
-import { observationQuerySchema,observationRange,projectObservationTrends,type ObservationRow } from '../../../../packages/lib/src/features/ax/observation-trends'
+import { observationQuerySchema,observationRange,projectObservationTrends,summarizeBootProbes,type ObservationRow } from '../../../../packages/lib/src/features/ax/observation-trends'
 import { agentObservabilitySchema,OBSERVABILITY_BOUNDS,type AgentObservability } from '../../../../packages/lib/src/features/ax/agent-observability-contract'
 const now=new Date('2026-01-08T00:00:00.000Z'),start='2026-01-03T00:00:00.000Z',change='2026-01-04T00:00:00.000Z',end='2026-01-05T00:00:00.000Z'
 const query=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex',changeAt:change,comparisonHours:'24'})
@@ -173,6 +173,15 @@ describe('persisted observation projection',()=>{
   // A window from before the probe was configured does not make the probe incomplete.
   const mixed=projectObservationTrends([observationRow(v3(start,change,null,'uncollected')),observationRow(withProbe(change,end,[98000]),'later')],q,now)
   expect(mixed.streams[0].summary.metricCapabilities.probeFirstTurnTokens).toBe('supported')
+ })
+ it('summarizes boot probe series compactly for the MCP panel: measured windows and incomplete windows only',()=>{
+  const h=(values:number[])=>({bounds:[0,100,1000,8000,32000,64000,128000,200000,500000,1000000],counts:[0,0,0,0,0,0,values.length,0,0,0,0],count:values.length,sum:values.reduce((a,b)=>a+b,0),min:values.length?Math.min(...values):null,max:values.length?Math.max(...values):null})
+  const win=(a:string,b:string,values:number[]|null)=>{const o=v3(a,b,null,'uncollected');return {...o,metrics:{...o.metrics,probeFirstTurnTokens:values?h(values):null},metricCapabilities:{...o.metricCapabilities,probeFirstTurnTokens:values?'supported' as const:'incomplete' as const}}}
+  const mid='2026-01-04T12:00:00.000Z'
+  const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
+  const data=projectObservationTrends([observationRow(win(start,change,[102068])),observationRow(win(change,mid,[]),'b'),observationRow(win(mid,end,null),'c')],q,now)
+  expect(summarizeBootProbes(data)).toEqual([{agentId:'example-agent',source:'codex',adapterVersion:'3',capability:'incomplete',points:[{endUtc:change,count:1,sum:102068}],incompleteWindows:[end],measuredWindows:2,pointsTruncated:false}])
+  expect(summarizeBootProbes(projectObservationTrends([observationRow()],q,now))).toEqual([])
  })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})
