@@ -95,6 +95,8 @@ test('combined payload excludes private config and no unsupported Hermes CLI met
  assert.equal(result.schemaVersion,1);assert.equal(result.metricCapabilities.firstTurnTokens,'unsupported');assert.deepEqual(result.receipts,[])
 })
 import { collectBootstrapMetrics } from './bootstrap.mjs'
+// What the collector hands the helper after approving the database file (device, inode, owner).
+const approve=async path=>{ const stat=await (await import('node:fs/promises')).lstat(path); return {path,identity:`${stat.dev}:${stat.ino}:${stat.uid}`} }
 import { appendFile, realpath, rename } from 'node:fs/promises'
 test('shared guard log: only scanned sessions count, a missing rotated copy is normal, a missing log is not zero',async t=>{
  const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
@@ -125,11 +127,11 @@ test('boot reports: absent config adds nothing, other runtimes are unsupported, 
  db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
  const at=Date.parse('2026-01-02T03:00:00Z'), report=extra=>JSON.stringify({systemPromptReport:{generatedAt:at,provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:true,truncatedFiles:1,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:40000,truncated:true},{missing:true,truncated:false}],...extra}})
  db.prepare('insert into session_nodes values (?,?)').run('ok',report({}))
- let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}})
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)})
  assert.deepEqual(result,{capability:'supported',value:{sessions:1,truncatedSessions:1,nearLimitSessions:0,warningSessions:1,largestFileCharsMax:40000,largestFileCharsLatest:40000,fileCharsLimit:32000}})
  db.prepare('insert into session_nodes values (?,?)').run('bad',report({bootstrapMaxChars:'32000'})); db.close()
- result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
- result=await collectBootstrapMetrics({source:'claude-code',window:{startUtc:'2026-01-05T00:00:00.000Z',endUtc:'2026-01-06T00:00:00.000Z'},reports:{path}})
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
+ result=await collectBootstrapMetrics({source:'claude-code',window:{startUtc:'2026-01-05T00:00:00.000Z',endUtc:'2026-01-06T00:00:00.000Z'},reports:await approve(path)})
  assert.deepEqual(result,{capability:'supported',value:{sessions:0,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:null,largestFileCharsLatest:null,fileCharsLimit:null}})
 })
 test('boot reports: mistimed or unattributed reports are malformed, other runtimes are skipped, busy is incomplete, a wrong schema fails closed',async t=>{
@@ -139,15 +141,15 @@ test('boot reports: mistimed or unattributed reports are malformed, other runtim
  const insert=(key,report)=>db.prepare('insert into session_nodes values (?,?)').run(key,JSON.stringify({systemPromptReport:report}))
  const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
  insert('codex',{...good,provider:'codex'})
- let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,0)
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,0)
  insert('string-time',{...good,generatedAt:'2026-01-02T03:00:00Z'})
- result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,0)
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,0)
  db.exec("delete from session_nodes where session_key='string-time'"); insert('no-provider',{...good,provider:undefined})
- result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete')
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete')
  db.exec('begin exclusive')
- result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}},{busyTimeoutMs:10}); assert.deepEqual(result,{value:null,capability:'incomplete'})
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)},{busyTimeoutMs:10}); assert.deepEqual(result,{value:null,capability:'incomplete'})
  db.exec('rollback'); db.exec('drop table session_nodes'); db.close()
- await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path}}),error=>error.inventoryReason==='source-consistency')
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}),error=>error.inventoryReason==='source-consistency')
 })
 test('shared guard log: a rotation or append during the read is retried, a persistent one is timing, a rewrite or symlink fails closed',async t=>{
  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
@@ -208,9 +210,9 @@ test('boot reports: a broken JSON row is malformed (never a failed batch) and ot
  const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
  const insert=db.prepare('insert into session_nodes values (?,?)')
  db.exec('begin'); for(let i=0;i<5001;i++) insert.run(`codex-${i}`,JSON.stringify({systemPromptReport:{...good,provider:'codex'}})); insert.run('ours',JSON.stringify({systemPromptReport:good})); db.exec('commit')
- let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,1)
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,1)
  insert.run('broken','{not json'); db.close()
- result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:await approve(path)}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
 })
 test('a live transcript (timing) never masks a broken boot report database (integrity)',async t=>{
  const dir=await realpath(await mkdtemp(join(tmpdir(),'mask-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
@@ -219,7 +221,7 @@ test('a live transcript (timing) never masks a broken boot report database (inte
  const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path); db.exec('create table unrelated (x)'); db.close()
  const config={agentId:'example-agent',source:'claude-code',window,cliInventory:'installed-scope',scope:{sessionsDir:join(dir,'sessions'),projectSlugs:['allowed']}}
  await assert.rejects(collectObservability(config),error=>error.inventoryReason==='partial-tail')
- await assert.rejects(collectObservability({...config,bootstrapReports:{path}}),error=>error.inventoryReason==='source-consistency')
+ await assert.rejects(collectObservability({...config,bootstrapReports:await approve(path)}),error=>error.inventoryReason==='source-consistency')
 })
 test('boot reports: only the file the collector approved is read, on every exit path including a busy database',async t=>{
  const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
@@ -236,4 +238,47 @@ test('boot reports: only the file the collector approved is read, on every exit 
  await rm(path); await rename(other.path,path)
  await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path,identity}},{busyTimeoutMs:10}),error=>error.inventoryReason==='source-consistency')
  other.db.exec('rollback'); other.db.close()
+})
+test('boot reports: a missing approval, or a swap during the query (busy or not), fails closed',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module'), { DatabaseSync } = await import('node:sqlite')
+ const make=name=>{ const path=join(dir,name), db=new DatabaseSync(path); db.exec('create table session_nodes (session_key text primary key, entry_json text)'); return {path,db} }
+ const main=make('agent.sqlite'); main.db.close()
+ await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path:main.path}}),error=>error.inventoryReason==='source-consistency')
+ const approved=await approve(main.path)
+ // Swap right after the first identity check, so SQLite opens the other file; the later checks must catch it.
+ const swapAfterFirstCheck=async fn=>{ const realLstat=fs.lstat; let calls=0
+   fs.lstat=async (...args)=>{ const result=await realLstat(...args); if(String(args[0])===main.path && ++calls===1){ await rename(main.path,join(dir,'moved.sqlite')); await rename(join(dir,'other.sqlite'),main.path) } return result }; syncBuiltinESMExports()
+   try { await fn() } finally { fs.lstat=realLstat; syncBuiltinESMExports(); await rename(main.path,join(dir,'other.sqlite')); await rename(join(dir,'moved.sqlite'),main.path) } }
+ const other=make('other.sqlite')
+ await swapAfterFirstCheck(()=>assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:approved}),error=>error.inventoryReason==='source-consistency'))
+ other.db.exec('begin exclusive')
+ await swapAfterFirstCheck(()=>assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:approved},{busyTimeoutMs:10}),error=>error.inventoryReason==='source-consistency'))
+ other.db.exec('rollback'); other.db.close()
+ assert.equal((await collectBootstrapMetrics({source:'claude-code',window,reports:approved})).capability,'supported')
+})
+test('shared guard log: a rewrite whose re-hash never settles is omitted, never retried into an accepted count',async t=>{
+ const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const path=join(dir,'guard.jsonl'), row=(session,n)=>JSON.stringify({ts:inside,decision:'deny',session,n})+'\n'
+ await writeFile(path,row('own',1))
+ const realLstat=fs.lstat; let checks=0, rewriting=false
+ // After the read: rewrite the row to another session, then keep appending so the handle re-hash never settles.
+ fs.lstat=async (...args)=>{ if(String(args[0])===path && ++checks===2){ await writeFile(path,row('foreign',1)); rewriting=true } return realLstat(...args) }
+ const realOpen=fs.open
+ fs.open=async (...args)=>{ const handle=await realOpen(...args); const stat=handle.stat.bind(handle); handle.stat=async (...a)=>{ if(rewriting) await appendFile(path,row('foreign',Math.random())); return stat(...a) }; return handle }
+ syncBuiltinESMExports()
+ try { await assert.rejects(collectReadGuardMetrics({files:[{path,sessionKey:'g',sessionFilter:'installed-scope'}],window,sessions:new Set(['own'])}),error=>['source-changed','source-consistency'].includes(error.inventoryReason)) }
+ finally { fs.lstat=realLstat; fs.open=realOpen; syncBuiltinESMExports() }
+})
+test('shared guard log: renamed away between identification and opening is a rotation (timing), not a failure',async t=>{
+ const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const path=join(dir,'guard.jsonl'), row=n=>JSON.stringify({ts:inside,decision:'deny',session:'own',n})+'\n'
+ await writeFile(path,row(1))
+ const realRealpath=fs.realpath; let fired=false
+ fs.realpath=async (...args)=>{ if(!fired && String(args[0])===path){ fired=true; await rename(path,path+'.1') ; setTimeout(()=>writeFile(path,''),0) } return realRealpath(...args) }; syncBuiltinESMExports()
+ try { const result=await collectReadGuardMetrics({files:[{path,sessionKey:'g',sessionFilter:'installed-scope'}],window,sessions:new Set(['own'])}); assert.equal(result.metrics.readGuardDeny,1) }
+ catch (error) { assert.equal(error.inventoryReason,'source-changed') }
+ finally { fs.realpath=realRealpath; syncBuiltinESMExports() }
 })

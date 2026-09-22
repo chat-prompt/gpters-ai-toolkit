@@ -93,7 +93,10 @@ reuse its ID with different content; this command is for local review only.
   A hook only appends, so a symlink, a non-file, a shrink, or any change to bytes
   already read (re-hashed through the handle that read them, so a rotation right
   after cannot hide it, and whatever the timestamps say) fails closed. A prefix
-  that keeps changing while re-hashed proves nothing either way and is timing. A
+  that keeps changing while re-hashed proves nothing either way: the window's
+  observation is omitted at once (never retried, so a retry cannot read the new
+  content in place of the evidence). A path renamed away between identification
+  and opening is a rotation (timing). A
   rewrite that happens before the bytes are read cannot be told from the file's
   state and is simply read. Session IDs stay inside the helper.
 - Boot-file health (adapter version `3`, Claude/OpenClaw only) reads OpenClaw's
@@ -106,7 +109,8 @@ reuse its ID with different content; this command is for local review only.
   collected is not counted. A busy or locked database, or more than 5,000 selected
   rows (this runtime's reports in the window plus unreadable ones), is `incomplete`
   with null. A row that is null or not valid JSON marks the value incomplete. The
-  helper reads only the file the collector approved (device, inode, owner), checked
+  helper reads only the file the collector approved (device, inode, owner; required,
+  so a caller without an approval fails closed), checked
   before and after the query on every exit path, a busy one included. The row limit
   does not bound query time: the table is small (466 rows, about 1MB, a 3ms scan on
   2026-09-22), but a much larger one could reach the helper's 30-second limit and

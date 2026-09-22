@@ -55,7 +55,9 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
   const path = reports?.path
   // The CLI approved this file (device, inode, owner) before the helper ran. The file SQLite reads must be that
   // file before and after the query, on every exit path: a change is an integrity failure, never missing data.
-  const approved = typeof reports?.identity === 'string' ? reports.identity : null
+  // Without the collector's approval there is nothing to compare against: never fall back to trusting the path.
+  if (typeof reports?.identity !== 'string') throw integrity()
+  const approved = reports.identity
   const identify = async () => {
     try {
       if (typeof path !== 'string' || !isAbsolute(path) || await realpath(path) !== path) return null
@@ -63,7 +65,7 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
       return stat.isFile() ? `${stat.dev}:${stat.ino}:${stat.uid}` : null
     } catch { return null }
   }
-  const verify = async () => { const now = await identify(); if (!now || (approved !== null && now !== approved)) throw integrity(); return now }
+  const verify = async () => { const now = await identify(); if (!now || now !== approved) throw integrity(); return now }
   const identity = await verify()
   let rows
   // Loaded only when configured, so the helper still runs on Node builds without node:sqlite.

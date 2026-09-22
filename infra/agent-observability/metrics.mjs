@@ -273,14 +273,21 @@ async function handlePrefix(handle, size, expected) {
 async function sharedLogAttempt(path) {
   const paths = [`${path}.1`, path], before = await Promise.all(paths.map(presence)), reads = [null, null], handles = []
   const local = { filesExpected: 0, filesRead: 0, parseFailures: 0 }, lines = []
-  let timing = false
+  let timing = false, unproven = false
   try {
     for (let index = 0; index < paths.length; index++) {
       const candidate = paths[index]
       if (before[index] === null) { if (index === 1) local.filesExpected++; continue }
       local.filesExpected++
-      if (await realpath(candidate) !== candidate) throw logIntegrity()
-      const handle = await open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+      let handle
+      try {
+        if (await realpath(candidate) !== candidate) throw logIntegrity()
+        handle = await open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+      } catch (error) {
+        // Renamed away between identification and opening (a rotation in progress): timing, read again next attempt.
+        if (error?.code === 'ENOENT') { timing = true; continue }
+        throw error.inventoryReason ? error : logIntegrity()
+      }
       handles.push(handle)
       const opened = await handle.stat()
       if (!opened.isFile() || opened.size > 64 * 1024 * 1024) throw logIntegrity()
@@ -307,7 +314,10 @@ async function sharedLogAttempt(path) {
           // A hook only appends: bytes already read must be the exact prefix, whatever the times say.
           const state = now.size < read.size ? 'mismatch' : await handlePrefix(read.handle, read.size, read.hash)
           if (state === 'mismatch') throw logIntegrity()
-          if (state === 'unstable' || now.size > read.size) timing = true
+          // Bytes already read that could not be re-proven are never retried away: the retry would read the new
+          // content and lose the evidence, so this window's observation is omitted instead.
+          if (state === 'unstable') unproven = true
+          else if (now.size > read.size) timing = true
         }
       }
       const identified = read ?? before[index]
@@ -315,7 +325,7 @@ async function sharedLogAttempt(path) {
       else if (after[index] && after[index].size !== identified.size) timing = true
     }
   } finally { await Promise.all(handles.map(handle => handle.close())) }
-  return { lines, local, timing }
+  return { lines, local, timing, unproven }
 }
 /**
  * Reads a shared hook log and its rotated predecessor (`<path>.1`, optional) as one consistent snapshot.
@@ -327,7 +337,8 @@ async function sharedLogAttempt(path) {
  */
 async function readSharedLog(path, counters, attempts = 3) {
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const { lines, local, timing } = await sharedLogAttempt(path)
+    const { lines, local, timing, unproven } = await sharedLogAttempt(path)
+    if (unproven) throw logTiming()
     if (timing) continue
     for (const [key, value] of Object.entries(local)) counters[key] += value
     return lines
