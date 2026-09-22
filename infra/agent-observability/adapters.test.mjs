@@ -257,28 +257,31 @@ test('boot reports: a missing approval, or a swap during the query (busy or not)
  other.db.exec('rollback'); other.db.close()
  assert.equal((await collectBootstrapMetrics({source:'claude-code',window,reports:approved})).capability,'supported')
 })
-test('shared guard log: a rewrite whose re-hash never settles is omitted, never retried into an accepted count',async t=>{
+test('shared guard log: a rewrite whose re-hash does not settle is omitted, never retried into an accepted count',async t=>{
  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
  const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const path=join(dir,'guard.jsonl'), row=(session,n)=>JSON.stringify({ts:inside,decision:'deny',session,n})+'\n'
  await writeFile(path,row('own',1))
- const realLstat=fs.lstat; let checks=0, rewriting=false
- // After the read: rewrite the row to another session, then keep appending so the handle re-hash never settles.
- fs.lstat=async (...args)=>{ if(String(args[0])===path && ++checks===2){ await writeFile(path,row('foreign',1)); rewriting=true } return realLstat(...args) }
- const realOpen=fs.open
- fs.open=async (...args)=>{ const handle=await realOpen(...args); const stat=handle.stat.bind(handle); handle.stat=async (...a)=>{ if(rewriting) await appendFile(path,row('foreign',Math.random())); return stat(...a) }; return handle }
+ const realLstat=fs.lstat, realOpen=fs.open; let checks=0, appends=0
+ // After the first read: rewrite the row to another session, then append only while that attempt re-hashes
+ // (seven handle stats), so a retry would find a stable file with the new content and report deny 0.
+ fs.lstat=async (...args)=>{ if(String(args[0])===path && ++checks===2){ await writeFile(path,row('foreign',1)); appends=7 } return realLstat(...args) }
+ fs.open=async (...args)=>{ const handle=await realOpen(...args); const stat=handle.stat.bind(handle); handle.stat=async (...a)=>{ if(appends>0){ appends--; await appendFile(path,row('foreign',100+appends)) } return stat(...a) }; return handle }
  syncBuiltinESMExports()
- try { await assert.rejects(collectReadGuardMetrics({files:[{path,sessionKey:'g',sessionFilter:'installed-scope'}],window,sessions:new Set(['own'])}),error=>['source-changed','source-consistency'].includes(error.inventoryReason)) }
+ try { await assert.rejects(collectReadGuardMetrics({files:[{path,sessionKey:'g',sessionFilter:'installed-scope'}],window,sessions:new Set(['own'])}),error=>error.inventoryReason==='source-changed') }
  finally { fs.lstat=realLstat; fs.open=realOpen; syncBuiltinESMExports() }
 })
-test('shared guard log: renamed away between identification and opening is a rotation (timing), not a failure',async t=>{
+test('shared guard log: renamed away between identification and opening is a rotation, read again from the rotated copy',async t=>{
  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
  const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const path=join(dir,'guard.jsonl'), row=n=>JSON.stringify({ts:inside,decision:'deny',session:'own',n})+'\n'
  await writeFile(path,row(1))
  const realRealpath=fs.realpath; let fired=false
- fs.realpath=async (...args)=>{ if(!fired && String(args[0])===path){ fired=true; await rename(path,path+'.1') ; setTimeout(()=>writeFile(path,''),0) } return realRealpath(...args) }; syncBuiltinESMExports()
- try { const result=await collectReadGuardMetrics({files:[{path,sessionKey:'g',sessionFilter:'installed-scope'}],window,sessions:new Set(['own'])}); assert.equal(result.metrics.readGuardDeny,1) }
- catch (error) { assert.equal(error.inventoryReason,'source-changed') }
- finally { fs.realpath=realRealpath; syncBuiltinESMExports() }
+ // The hook has renamed the active log but not yet created a new one when the collector opens it.
+ fs.realpath=async (...args)=>{ if(!fired && String(args[0])===path){ fired=true; await rename(path,path+'.1') } return realRealpath(...args) }; syncBuiltinESMExports()
+ try {
+  const result=await collectReadGuardMetrics({files:[{path,sessionKey:'g',sessionFilter:'installed-scope'}],window,sessions:new Set(['own'])})
+  // The retry reads the rotated copy; the active log is still missing, so the count is a lower bound (incomplete).
+  assert.equal(result.metrics.readGuardDeny,1); assert.equal(result.capability,'incomplete'); assert.deepEqual([result.provenance.filesExpected,result.provenance.filesRead],[2,1])
+ } finally { fs.realpath=realRealpath; syncBuiltinESMExports() }
 })
