@@ -163,10 +163,12 @@ afterEach(() => { processHook.beforeSpawn = undefined; vi.useRealTimers(); vi.un
     config({ source: 'claude-code', cliInventory: 'installed-scope' })
     await expect(attachAgentObservability(batch('claude-code'), configPath, { sessionsDir: sessions, projectSlugs: ['project-a'] })).rejects.toThrow('Observation bridge failed (invalid-record);')
   })
-  it('kills a helper after its 30 second deadline', async () => {
+  it('kills a helper after its 120 second deadline, not before', async () => {
     fakeHelper('setInterval(() => {}, 1000)'); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const rejected = expect(attachAgentObservability(batch(), configPath, { sessionsDir: sessions })).rejects.toThrow('Observation bridge failed (helper-timeout);')
-    await vi.advanceTimersByTimeAsync(30001); vi.useRealTimers(); await rejected; expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
+    let settled = false; void rejected.finally(() => { settled = true })
+    await vi.advanceTimersByTimeAsync(119000); expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1001); vi.useRealTimers(); await rejected; expect(fetch).not.toHaveBeenCalled(); expect(existsSync(statePath())).toBe(false)
   })
   it('blocks concurrent writers until the first request acknowledges pending', async () => {
     let accept!: (value: Response) => void, entered!: () => void

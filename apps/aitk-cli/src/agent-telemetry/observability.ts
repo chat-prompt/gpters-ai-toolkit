@@ -19,6 +19,12 @@ interface ObservationConfig {
   runtimeRecords?: unknown[]
   bootstrapReports?: { path: string }
 }
+/**
+ * How long the pinned helper may run. launchd runs collectors as `ProcessType: Background`, where macOS
+ * throttles CPU and disk I/O: on 2026-09-22 a scan of 1.8GB of transcripts took 6s in the foreground but
+ * 33–35s in the background, over the former 30s limit, so every scheduled window failed closed.
+ */
+export const OBSERVATION_HELPER_TIMEOUT_MS = 120_000
 export interface ObservationScope { sessionsDir: string; projectSlugs?: string[]; codexThreadSource?: string }
 /** Fixed timing reasons the pinned helper may report with exit code 75. Anything else fails closed. */
 export const OBSERVATION_TIMING_REASONS = ['source-changed', 'partial-tail'] as const
@@ -121,7 +127,7 @@ async function runHelper(config: ObservationConfig, helper: Buffer, batch: Agent
     const output: Buffer[] = []
     let size = 0, errorSize = 0, stopped: ObservationFailureCode | null = null
     const stop = (code: ObservationFailureCode) => { stopped ??= code; child.kill('SIGKILL') }
-    const timer = setTimeout(() => stop('helper-timeout'), 30000)
+    const timer = setTimeout(() => stop('helper-timeout'), OBSERVATION_HELPER_TIMEOUT_MS)
     child.stdout.on('data', (chunk: Buffer) => { size += chunk.length; if (size > 512000) stop('helper-output'); else output.push(chunk) })
     child.stderr.on('data', (chunk: Buffer) => { errorSize += chunk.length; if (errorSize > 64000) stop('helper-output') })
     child.on('error', () => { clearTimeout(timer); reject(new ObservationFailure('helper-failed')) })

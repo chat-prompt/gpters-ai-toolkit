@@ -113,7 +113,7 @@ reuse its ID with different content; this command is for local review only.
   so a caller without an approval fails closed), checked
   before and after the query on every exit path, a busy one included. The row limit
   does not bound query time: the table is small (466 rows, about 1MB, a 3ms scan on
-  2026-09-22), but a much larger one could reach the helper's 30-second limit and
+  2026-09-22), but a much larger one could reach the helper's 120-second limit and
   fail the window closed; re-measure if OpenClaw's session table grows. A report of this provider whose time or
   numbers do not have the established shape marks the value incomplete; reports of
   other providers are skipped. A path that changed since the collector checked it,

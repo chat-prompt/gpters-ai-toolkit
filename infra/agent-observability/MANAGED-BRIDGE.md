@@ -86,7 +86,7 @@ therefore remains incomplete when samples would require that history.
 Limits are 50,000 directory entries, 10,000 candidate files, 4GiB scanned bytes
 (including Codex header reads), 256MiB per scanned file and 16MiB per line. At
 most 500 files/256MiB are selected for metrics, with a 64MiB selected-file limit.
-The existing 30-second process limit remains. Invalid JSON/timestamps, unsafe
+The helper process limit is 120 seconds (launchd runs collectors at background priority, where a scan measured 33–35s against 6s in the foreground on 2026-09-22). Invalid JSON/timestamps, unsafe
 paths, mixed identities, out-of-scope sources and limit overruns fail closed: no
 new pending batch, upload or checkpoint advancement. These are hard limits, never
 silent truncation.
@@ -214,7 +214,7 @@ exception is a verified helper's exit 75 with a fixed timing reason (above), whi
 omits the observation for that window and sends the batch. Approved
 missing/partial files produce explicit `incomplete` provenance when the helper
 can represent the missingness; unsupported/uncollected states are retained.
-They are not silently dropped. Child execution is limited to 30 seconds,
+They are not silently dropped. Child execution is limited to 120 seconds,
 512000 stdout bytes and 64000 stderr bytes. Stderr and local file errors are never
 included in CLI failure output or telemetry. Only verified helper bytes execute,
 so replacing its pathname after verification cannot run replacement code.
