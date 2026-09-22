@@ -159,6 +159,21 @@ describe('persisted observation projection',()=>{
   const older=projectObservationTrends([observationRow(v3(start,change,boot(2,29000,29500))),observationRow(v3(change,end,boot(1,27400,27400,prompt(40000,40000,40000))),'later')],q,now)
   expect(older.streams[0].summary.metrics.bootstrap).toMatchObject({sessions:3,promptSessions:1,promptCharsSum:40000,promptCharsLatest:40000})
  })
+ it('accepts the boot probe only with its capability and merges it only from windows that report it',()=>{
+  const probe=(values:number[])=>{const h={bounds:[0,100,1000,8000,32000,64000,128000,200000,500000,1000000],counts:Array(11).fill(0),count:values.length,sum:values.reduce((a,b)=>a+b,0),min:values.length?Math.min(...values):null,max:values.length?Math.max(...values):null};for(const v of values)h.counts[v<=128000?6:7]++;return h}
+  const withProbe=(a:string,b:string,values:number[])=>{const o=v3(start,change,null,'uncollected');return {...o,window:{startUtc:a,endUtc:b},metrics:{...o.metrics,probeFirstTurnTokens:probe(values)},metricCapabilities:{...o.metricCapabilities,probeFirstTurnTokens:'supported' as const}}}
+  expect(agentObservabilitySchema.safeParse(withProbe(start,change,[102068])).success).toBe(true)
+  const lonely=withProbe(start,change,[102068]);delete (lonely.metricCapabilities as Record<string,unknown>).probeFirstTurnTokens
+  expect(agentObservabilitySchema.safeParse(lonely).success).toBe(false)
+  const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
+  const data=projectObservationTrends([observationRow(withProbe(start,change,[102068])),observationRow(withProbe(change,end,[98000]),'later')],q,now)
+  expect(data.streams[0].summary.metrics.probeFirstTurnTokens).toMatchObject({count:2,sum:200068,min:98000,max:102068})
+  expect(data.streams[0].points.map(p=>p.metrics.probeFirstTurnTokens?.sum)).toEqual([102068,98000])
+  expect(projectObservationTrends([observationRow()],q,now).streams[0].summary.metricCapabilities.probeFirstTurnTokens).toBeUndefined()
+  // A window from before the probe was configured does not make the probe incomplete.
+  const mixed=projectObservationTrends([observationRow(v3(start,change,null,'uncollected')),observationRow(withProbe(change,end,[98000]),'later')],q,now)
+  expect(mixed.streams[0].summary.metricCapabilities.probeFirstTurnTokens).toBe('supported')
+ })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})
   const rows=[observationRow(),failure('f1','source-changed'),failure('f1','source-changed'),failure('f2','source-changed',undefined,change,end),failure('f3','partial-tail'),failure('f4','source-changed','other-agent'),failure('f5','config'),failure('f6','source-changed',undefined,'2025-12-01T00:00:00.000Z',change)]

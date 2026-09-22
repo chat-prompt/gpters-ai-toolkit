@@ -32,6 +32,35 @@ function textChars(value) {
   }
   return count
 }
+/**
+ * Classifies a Claude session's first user message as the daily boot probe. OpenClaw wraps a Slack message in an
+ * envelope: a `Conversation info` JSON block (with `chat_id: "channel:<ID>"`), optional channel or thread history,
+ * a `System: [...] Slack message` line, then the current message. The probe is a current message that is the agent
+ * mention followed by the marker, in the probe channel. History quoting an earlier probe never counts.
+ *
+ * Anything that looks like the probe but does not fit — channel field missing, current message not found, marker
+ * not where expected — is 'unknown' (the probe is then incomplete), so a format change never becomes a silent zero.
+ *
+ * @param blocks - The first user message's text blocks; hook output appended as separate blocks is ignored
+ * @returns 'probe', 'not', or 'unknown'
+ */
+function probeOf(blocks, probe) {
+  const text = blocks.find(block => block.startsWith('Conversation info:'))
+  if (text === undefined) return blocks.some(block => block.includes(probe.marker)) ? 'unknown' : 'not'
+  const lines = text.split('\n')
+  if (lines[1] !== '```json') return 'unknown'
+  let chat
+  try { chat = JSON.parse(lines[2])?.chat_id } catch { return 'unknown' }
+  // Another kind of chat (a DM, a group) is not the probe channel, whatever its history quotes.
+  if (typeof chat !== 'string' || !chat) return text.includes(probe.marker) ? 'unknown' : 'not'
+  if (chat !== `channel:${probe.channel}`) return 'not'
+  const system = lines.findLastIndex(line => /^System: \[[^\]]+\] Slack message/.test(line))
+  if (system < 0) return text.includes(probe.marker) ? 'unknown' : 'not'
+  const current = lines.slice(system + 1).join('\n').trim()
+  if (!current.includes(probe.marker)) return 'not'
+  const mention = /^(?:<@[A-Z0-9]+>|@\S+)(?: \([^)\n]{0,80}\))? /.exec(current)
+  return mention && current.slice(mention[0].length).startsWith(probe.marker) ? 'probe' : 'unknown'
+}
 function scopeError() { const error = new Error('Observation source scope mismatch'); error.scopeMismatch = true; return error }
 /** A discovered file changed before or while it was read: a timing failure, never accepted as data. */
 function sourceChanged() { const error = new Error('Observation source scope changed'); error.inventoryReason = 'source-changed'; return error }
@@ -149,13 +178,15 @@ function state(counters, observed) {
   return observed ? 'supported' : 'uncollected'
 }
 /** First-turn samples are only sessions whose observed first usage is in-window and full history is explicitly attested. */
-export async function collectCliMetrics({ source, files = [], window, scope }) {
+export async function collectCliMetrics({ source, files = [], window, scope, probe }) {
   const [start,end] = windowBounds(window), supported = ['claude-code','codex'].includes(source)
   const metricCapabilities = { firstTurnTokens: 'unsupported', peakContextTokens: 'unsupported', toolResultChars: 'unsupported', compactionEvents: 'unsupported' }
   const metrics = { firstTurnTokens: null, peakContextTokens: null, toolResultChars: null, compactionEvents: null }
   if (!supported) return { metrics, metricCapabilities, capability: 'unsupported', provenance: { ...emptyCounters(),filesExpected:files.length } }
   const { records,counters } = await readRecords(files, { scope, source }), usages = new Map(), results = new Map(), compactions = new Map(), sessions = new Map()
   let recognized = 0
+  // Boot probe: sessions whose first user message is the probe in the probe channel (text never leaves here).
+  const probeMarked = new Map()
   function timed(item, type) {
     const value = item.row.timestamp
     const at = Date.parse(value)
@@ -165,6 +196,12 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
   for (const item of records) {
     const {row,session} = item
     let entry, usage, usageId, resultItems = [], compact = false, complete = true
+    if (probe && source === 'claude-code' && row.type === 'user' && row.isSidechain !== true && !probeMarked.has(session)
+      && !row.message?.content?.some?.(b => b?.type === 'tool_result')) {
+      const content = row.message?.content
+      const blocks = typeof content === 'string' ? [content] : Array.isArray(content) ? content.filter(b => typeof b?.text === 'string').map(b => b.text) : []
+      probeMarked.set(session, { kind: probeOf(blocks, probe) })
+    }
     if (source === 'claude-code') {
       if (row.type === 'assistant' && row.message?.usage) {
         entry = timed(item,'usage'); usage = row.message.usage; usageId = row.message.id
@@ -214,8 +251,22 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
     if (compact) compactions.set(digest([source,session,row.uuid ?? row.id ?? item.key]),entry)
   }
   for (const usage of usages.values()) sessions.get(usage.session).usage.push(usage)
-  const first = [], peaks = []
-  let unknownFirst = false
+  const first = [], peaks = [], probeFirst = []
+  let unknownFirst = false, unknownProbe = false
+  for (const [key, { kind }] of probeMarked) {
+    // Probe-like but not recognizable: the probe cannot be ruled in or out, answered or not.
+    if (kind === 'unknown') unknownProbe = true
+    // Sent but not answered in this window: missing, never a day without a probe. If the answer merely lands in the
+    // next window (the collector ran in the seconds between probe and answer), that window counts it normally.
+    else if (kind === 'probe' && !sessions.get(key)?.usage.length) unknownProbe = true
+  }
+  for (const [key, session] of sessions) {
+    session.usage.sort((a,b) => a.at-b.at)
+    const kind = probeMarked.get(key)?.kind
+    if (kind === 'probe' && session.usage.length && session.usage[0].at >= start && session.usage[0].at < end) {
+      if (session.complete) probeFirst.push(session.usage[0].value); else unknownProbe = true
+    }
+  }
   for (const session of sessions.values()) {
     session.usage.sort((a,b) => a.at-b.at)
     const observed = session.usage.filter(r => r.at >= start && r.at < end)
@@ -234,6 +285,16 @@ export async function collectCliMetrics({ source, files = [], window, scope }) {
   }
   for (const key of Object.keys(metricCapabilities)) metricCapabilities[key] = capability
   if (unknownFirst && metrics.firstTurnTokens) metricCapabilities.firstTurnTokens = 'incomplete'
+  if (probe !== undefined) {
+    if (!counters.filesRead && counters.filesExpected) { metrics.probeFirstTurnTokens = null; metricCapabilities.probeFirstTurnTokens = 'incomplete' }
+    else {
+      metrics.probeFirstTurnTokens = histogram(probeFirst)
+      // A session whose history is unproven may have started with a probe that is no longer visible, so the probe is
+      // as incomplete as the ordinary first turn. No transcript in the window at all is an observed zero.
+      metricCapabilities.probeFirstTurnTokens = unknownProbe ? 'incomplete' : capability === 'uncollected' ? 'supported'
+        : unknownFirst || capability !== 'supported' ? 'incomplete' : 'supported'
+    }
+  }
   return { metrics,metricCapabilities,capability,provenance:counters }
 }
 /** Integrity failure of an approved shared log: fails the observation closed. */
