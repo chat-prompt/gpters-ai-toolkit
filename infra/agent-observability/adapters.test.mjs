@@ -149,21 +149,64 @@ test('boot reports: mistimed or unattributed reports are malformed, other runtim
  db.exec('rollback'); db.exec('drop table session_nodes'); db.close()
  await assert.rejects(collectBootstrapMetrics({source:'claude-code',window,reports:{path}}),error=>error.inventoryReason==='source-consistency')
 })
-test('shared guard log: rotation or append between reads is timing, a rewrite or symlink fails closed, duplicates count once',async t=>{
+test('shared guard log: a rotation or append during the read is retried, a persistent one is timing, a rewrite or symlink fails closed',async t=>{
  const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
  const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
  const path=join(dir,'guard.jsonl'), row=(decision,n=0)=>JSON.stringify({ts:inside,decision,session:'own',n})+'\n', files=[{path,sessionKey:'g',sessionFilter:'installed-scope'}]
  const collect=()=>collectReadGuardMetrics({files,window,sessions:new Set(['own'])})
  const realOpen=fs.open
- const once=async (hook,fn)=>{ let fired=false; fs.open=async (...args)=>{ const handle=await realOpen(...args); if(!fired && String(args[0])===path){ fired=true; await hook() } return handle }; syncBuiltinESMExports(); try { return await fn() } finally { fs.open=realOpen; syncBuiltinESMExports() } }
- // Rotation right after the active log was opened: the view would miss rows, so it is timing.
+ // Runs `hook` right after the active log is opened, `times` times (Infinity: on every attempt).
+ const during=async (times,hook,fn)=>{ let fired=0; fs.open=async (...args)=>{ const handle=await realOpen(...args); if(fired<times && String(args[0])===path){ fired++; await hook(fired) } return handle }; syncBuiltinESMExports(); try { return await fn() } finally { fs.open=realOpen; syncBuiltinESMExports() } }
+ // A rotation once: the retry reads the rotated copy and the new log, so nothing is lost.
  await writeFile(path,row('deny'))
- await once(async()=>{ await rename(path,path+'.1'); await writeFile(path,'') }, ()=>assert.rejects(collect(),error=>error.inventoryReason==='source-changed'))
+ let result=await during(1,async()=>{ await rename(path,path+'.1'); await writeFile(path,'') },collect)
+ assert.deepEqual(result.metrics,{readGuardAllow:0,readGuardDeny:1}); assert.equal(result.capability,'supported')
  await rm(path+'.1'); await writeFile(path,row('deny'))
- await once(()=>appendFile(path,row('allow')), ()=>assert.rejects(collect(),error=>error.inventoryReason==='source-changed'))
+ result=await during(1,()=>appendFile(path,row('allow',1)),collect); assert.deepEqual(result.metrics,{readGuardAllow:1,readGuardDeny:1})
+ await writeFile(path,row('deny'))
+ await during(Infinity,n=>appendFile(path,row('allow',n+10)),()=>assert.rejects(collect(),error=>error.inventoryReason==='source-changed'))
+ // A hook only appends, so a same-size change or a shrink is a rewrite, and so is growth that changed the prefix.
  await writeFile(path,row('deny',1)+row('allow',2))
- await once(()=>fs.truncate(path,5), ()=>assert.rejects(collect(),error=>error.inventoryReason==='source-consistency'))
+ await during(1,()=>fs.truncate(path,5),()=>assert.rejects(collect(),error=>error.inventoryReason==='source-consistency'))
+ await writeFile(path,row('deny',1))
+ await during(1,async()=>{ const handle=await realOpen(path,'r+'); await handle.write(Buffer.from('X'),0,1,0); await handle.close() },()=>assert.rejects(collect(),error=>error.inventoryReason==='source-consistency'))
+ // Rewritten and grown after its bytes were read (right before the final identity check): the prefix proves it.
+ await writeFile(path,row('deny',1))
+ const realLstat=fs.lstat; let checks=0
+ fs.lstat=async (...args)=>{ if(String(args[0])===path && ++checks===2){ await fs.truncate(path,0); await appendFile(path,row('allow',7)+row('allow',8)) } return realLstat(...args) }; syncBuiltinESMExports()
+ try { await assert.rejects(collect(),error=>error.inventoryReason==='source-consistency') } finally { fs.lstat=realLstat; syncBuiltinESMExports() }
  await writeFile(path+'.1',row('deny',3)); await writeFile(path,row('deny',3)+row('allow',4))
- let result=await collect(); assert.deepEqual(result.metrics,{readGuardAllow:1,readGuardDeny:1}); assert.equal(result.provenance.duplicates,1)
+ result=await collect(); assert.deepEqual(result.metrics,{readGuardAllow:1,readGuardDeny:1}); assert.equal(result.provenance.duplicates,1)
  await rm(path); await symlink(path+'.1',path); await assert.rejects(collect(),error=>error.inventoryReason==='source-consistency')
+})
+test('a timing change in one shared log never masks an integrity failure in a later one',async t=>{
+ const fs=(await import('node:fs')).promises, { syncBuiltinESMExports } = await import('node:module')
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'shared-guard-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const first=join(dir,'a.jsonl'), second=join(dir,'b.jsonl'), row=n=>JSON.stringify({ts:inside,decision:'deny',session:'own',n})+'\n'
+ await writeFile(first,row(1)); await writeFile(join(dir,'real.jsonl'),row(2)); await symlink(join(dir,'real.jsonl'),second)
+ const realOpen=fs.open; let n=0
+ fs.open=async (...args)=>{ const handle=await realOpen(...args); if(String(args[0])===first) await appendFile(first,row(100+n++)); return handle }; syncBuiltinESMExports()
+ try {
+  await assert.rejects(collectReadGuardMetrics({files:[first,second].map(path=>({path,sessionKey:'g',sessionFilter:'installed-scope'})),window,sessions:new Set(['own'])}),error=>error.inventoryReason==='source-consistency')
+ } finally { fs.open=realOpen; syncBuiltinESMExports() }
+})
+test('boot reports: a broken JSON row is malformed (never a failed batch) and other runtimes do not fill the row limit',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'boot-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path)
+ db.exec('create table session_nodes (session_key text primary key, entry_json text not null)')
+ const good={generatedAt:Date.parse('2026-01-02T03:00:00Z'),provider:'claude-cli',bootstrapMaxChars:32000,bootstrapTruncation:{warningShown:false,truncatedFiles:0,nearLimitFiles:0},injectedWorkspaceFiles:[{rawChars:100,truncated:false}]}
+ const insert=db.prepare('insert into session_nodes values (?,?)')
+ db.exec('begin'); for(let i=0;i<5001;i++) insert.run(`codex-${i}`,JSON.stringify({systemPromptReport:{...good,provider:'codex'}})); insert.run('ours',JSON.stringify({systemPromptReport:good})); db.exec('commit')
+ let result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'supported'); assert.equal(result.value.sessions,1)
+ insert.run('broken','{not json'); db.close()
+ result=await collectBootstrapMetrics({source:'claude-code',window,reports:{path}}); assert.equal(result.capability,'incomplete'); assert.equal(result.value.sessions,1)
+})
+test('a live transcript (timing) never masks a broken boot report database (integrity)',async t=>{
+ const dir=await realpath(await mkdtemp(join(tmpdir(),'mask-'))); t.after(()=>rm(dir,{recursive:true,force:true}))
+ const project=join(dir,'sessions','allowed'); await (await import('node:fs/promises')).mkdir(project,{recursive:true})
+ await writeFile(join(project,'live.jsonl'),JSON.stringify({type:'assistant',timestamp:inside,message:{id:'m',stop_reason:'end_turn',usage:{input_tokens:1}}})+'\n{"partial')
+ const { DatabaseSync } = await import('node:sqlite'), path=join(dir,'agent.sqlite'), db=new DatabaseSync(path); db.exec('create table unrelated (x)'); db.close()
+ const config={agentId:'example-agent',source:'claude-code',window,cliInventory:'installed-scope',scope:{sessionsDir:join(dir,'sessions'),projectSlugs:['allowed']}}
+ await assert.rejects(collectObservability(config),error=>error.inventoryReason==='partial-tail')
+ await assert.rejects(collectObservability({...config,bootstrapReports:{path}}),error=>error.inventoryReason==='source-consistency')
 })

@@ -15,7 +15,8 @@ const PROVIDERS = { 'claude-code': 'claude-cli' }
 const integer = value => Number.isSafeInteger(value) && value >= 0
 // SQLITE_BUSY and SQLITE_LOCKED (primary result codes).
 const BUSY = new Set([5, 6])
-// More recent reports than this in one window is not a shape we have seen; report it as incomplete.
+// More selected rows than this (this runtime's reports in the window plus unreadable ones) is not a shape we
+// have seen; report it as incomplete. The table is small (466 rows, about 1MB, a 3ms scan on 2026-09-22).
 const MAX_ROWS = 5000
 function integrity() { const error = new Error('Boot report source changed'); error.inventoryReason = 'source-consistency'; return error }
 const empty = { sessions: 0, truncatedSessions: 0, nearLimitSessions: 0, warningSessions: 0, largestFileCharsMax: null, largestFileCharsLatest: null, fileCharsLimit: null }
@@ -53,9 +54,16 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
   const [start,end] = windowBounds(window)
   const path = reports?.path
   // The CLI checked this path before the helper ran; a change since then is an integrity failure, never missing data.
-  let safe = false
-  try { safe = typeof path === 'string' && isAbsolute(path) && await realpath(path) === path && (await lstat(path)).isFile() } catch { /* unsafe */ }
-  if (!safe) throw integrity()
+  // The file checked here must be the file SQLite read: its identity is compared again after the query.
+  const identify = async () => {
+    try {
+      if (typeof path !== 'string' || !isAbsolute(path) || await realpath(path) !== path) return null
+      const stat = await lstat(path)
+      return stat.isFile() ? `${stat.dev}:${stat.ino}` : null
+    } catch { return null }
+  }
+  const identity = await identify()
+  if (!identity) throw integrity()
   let rows
   // Loaded only when configured, so the helper still runs on Node builds without node:sqlite.
   const { DatabaseSync } = await import('node:sqlite')
@@ -63,23 +71,28 @@ export async function collectBootstrapMetrics({ source, window, reports }, { bus
     const db = new DatabaseSync(path, { readOnly: true, timeout: busyTimeoutMs })
     try {
       // Reports whose time is not an integer are selected too, so they count as malformed instead of vanishing.
-      rows = db.prepare(`select json_extract(entry_json,'$.systemPromptReport') as report from session_nodes
-        where json_type(entry_json,'$.systemPromptReport') = 'object'
+      // A row that is not valid JSON is selected as null (malformed) instead of failing the whole query.
+      // Reports of another runtime are excluded before the row limit; ours with a non-integer time stay in.
+      rows = db.prepare(`select case when json_valid(entry_json) then json_extract(entry_json,'$.systemPromptReport') end as report
+        from session_nodes where not json_valid(entry_json) or (
+          json_type(entry_json,'$.systemPromptReport') = 'object'
+          and (json_type(entry_json,'$.systemPromptReport.provider') is not 'text' or json_extract(entry_json,'$.systemPromptReport.provider') = ?)
           and (json_type(entry_json,'$.systemPromptReport.generatedAt') is not 'integer'
-            or (json_extract(entry_json,'$.systemPromptReport.generatedAt') >= ? and json_extract(entry_json,'$.systemPromptReport.generatedAt') < ?))
-        limit ${MAX_ROWS + 1}`).all(start, end)
+            or (json_extract(entry_json,'$.systemPromptReport.generatedAt') >= ? and json_extract(entry_json,'$.systemPromptReport.generatedAt') < ?)))
+        limit ${MAX_ROWS + 1}`).all(provider, start, end)
     } finally { db.close() }
   } catch (error) {
     // Only a busy or locked database is transient missing data; a missing table or any other error fails closed.
     if (BUSY.has(error?.errcode & 0xff)) return { value: null, capability: 'incomplete' }
     throw integrity()
   }
+  if (await identify() !== identity) throw integrity()
   if (rows.length > MAX_ROWS) return { value: null, capability: 'incomplete' }
   const reportsInWindow = []
   let malformed = 0
   for (const { report } of rows) {
     let parsed = null
-    try { parsed = JSON.parse(report) } catch { /* malformed below */ }
+    try { parsed = typeof report === 'string' ? JSON.parse(report) : null } catch { /* malformed below */ }
     // Another runtime's report is not this collector's; an unreadable or mistimed one of ours is malformed.
     if (parsed && typeof parsed.provider === 'string' && parsed.provider !== provider) continue
     const numbers = parsed?.provider === provider ? reportNumbers(parsed) : null

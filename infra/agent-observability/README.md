@@ -87,10 +87,13 @@ reuse its ID with different content; this command is for local review only.
   decisions and times are never interpreted, but every line is parsed, so a damaged
   line anywhere marks the metric incomplete. `<path>.1` (the hook's rotated copy)
   is read too when present, and a row in both counts once. Both paths are
-  identified before and after reading: an append or a rotation in between is the
-  timing reason `source-changed` (the window is sent without observation, never a
-  partial count); a symlink, non-file, truncation or rewrite fails closed. Session
-  IDs stay inside the helper.
+  identified before and after reading. An append or a rotation in between is
+  retried (three attempts); if it keeps changing, it is the timing reason
+  `source-changed` (the window is sent without observation, never a partial count).
+  A hook only appends, so a symlink, a non-file, a shrink, a same-size change or
+  growth whose earlier bytes changed (checked by re-hashing them) fails closed. A
+  rewrite that happens before the bytes are read cannot be told from the file's
+  state and is simply read. Session IDs stay inside the helper.
 - Boot-file health (adapter version `3`, Claude/OpenClaw only) reads OpenClaw's
   agent database read-only (`bootstrapReports.path`, `node:sqlite` with
   `readOnly`). Each session's latest `systemPromptReport` generated inside
@@ -98,8 +101,10 @@ reuse its ID with different content; this command is for local review only.
   near-limit and warning snapshots, the largest injected file's characters (max and
   latest) and the per-file limit. No file name or path leaves the host. OpenClaw
   keeps only a session's newest report, so a boot replaced before its window is
-  collected is not counted. A busy or locked database, or more than 5,000 reports
-  in one window, is `incomplete` with null. A report of this provider whose time or
+  collected is not counted. A busy or locked database, or more than 5,000 selected
+  rows (this runtime's reports in the window plus unreadable ones), is `incomplete`
+  with null. A row that is not valid JSON marks the value incomplete. The file's
+  identity is checked before and after the query. A report of this provider whose time or
   numbers do not have the established shape marks the value incomplete; reports of
   other providers are skipped. A path that changed since the collector checked it,
   a missing table or any other database error fails closed. If OpenClaw renames the

@@ -264,3 +264,9 @@ test('scanned Claude session IDs are collected for shared-log attribution only w
   const scannedSessions=new Set(); await discoverWindowFiles({...context(root),scannedSessions})
   assert.deepEqual([...scannedSessions].sort(),['in-window','older'])
 }))
+test('a same-session file without any uuid record keeps an otherwise proven main transcript unproven',()=>fixture(async(root,project)=>{
+  await save(join(project,'main.jsonl'),[turn('s','u1',null,'2026-01-02T01:00:00Z')])
+  await save(join(project,'fragment.jsonl'),[{...turn('s','x',null,'2026-01-02T02:00:00Z'),uuid:undefined}])
+  const {files,result}=await firstTurn(root)
+  assert.ok(files.every(f=>f.completeFromStart===false)); assert.equal(result.metricCapabilities.firstTurnTokens,'incomplete')
+}))
