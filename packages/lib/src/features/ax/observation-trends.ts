@@ -232,8 +232,27 @@ export async function loadAgentObservations(query:ObservationQuery,now=new Date(
   return projectObservationTrends(rows.slice(0,20000),query,now,rows.length>20000)
 }
 
+/** Headroom before OpenClaw truncates an injected boot file, and the truncations seen in the period */
+export interface BootFileHeadroom {
+  /** Largest injected file (characters) in the latest window that measured a boot, and that window's end */
+  latestChars: number | null
+  latestAt: string | null
+  /** Per-file injection limit (characters) reported by the runtime */
+  limitChars: number | null
+  /** Characters left before that file is truncated (limit − largest), null when either side is unknown */
+  headroomChars: number | null
+  /** Largest injected file across the period */
+  maxChars: number | null
+  /** Boot snapshots seen, and those where a file was actually truncated */
+  sessions: number
+  truncatedSessions: number
+  /** Window ends where a truncation was recorded, oldest first */
+  truncatedWindows: string[]
+}
 /** One agent/source's daily boot probe series, compact enough for an MCP panel read */
 export interface BootProbeSeries {
+  /** Boot-file headroom for the same stream, when the collector reports boot files */
+  bootFiles?: BootFileHeadroom
   agentId: string; source: string; adapterVersion: string
   /** Period capability of the probe metric */
   capability: AgentObservability['metricCapabilities']['firstTurnTokens']
@@ -260,5 +279,23 @@ export function summarizeBootProbes(data:AgentObservationData):BootProbeSeries[]
     incompleteWindows:stream.points.filter(point=>point.metricCapabilities.probeFirstTurnTokens==='incomplete').map(point=>point.endUtc),
     measuredWindows:stream.points.filter(point=>point.metricCapabilities.probeFirstTurnTokens==='supported').length,
     pointsTruncated:stream.pointsTruncated,
+    ...bootFileHeadroom(stream),
   }))
+}
+/** Boot-file headroom from the same stream's windows; absent when no window reported boot files. */
+function bootFileHeadroom(stream:ObservationStream):{bootFiles?:BootFileHeadroom} {
+  const windows=stream.points.filter(point=>point.metrics?.bootstrap?.sessions)
+  const summary=stream.summary.metrics?.bootstrap
+  if(!windows.length&&!summary?.sessions)return stream.summary.metricCapabilities?.bootstrap===undefined?{}:{bootFiles:{
+    latestChars:null,latestAt:null,limitChars:null,headroomChars:null,maxChars:null,sessions:0,truncatedSessions:0,truncatedWindows:[]}}
+  const latest=windows.at(-1)?.metrics.bootstrap ?? null
+  const latestChars=latest?.largestFileCharsLatest ?? null, limitChars=latest?.fileCharsLimit ?? null
+  return {bootFiles:{
+    latestChars,latestAt:windows.at(-1)?.endUtc ?? null,limitChars,
+    headroomChars:latestChars!==null&&limitChars!==null?limitChars-latestChars:null,
+    maxChars:summary?.largestFileCharsMax ?? null,
+    sessions:summary?.sessions ?? 0,
+    truncatedSessions:summary?.truncatedSessions ?? 0,
+    truncatedWindows:windows.filter(point=>point.metrics.bootstrap!.truncatedSessions>0).map(point=>point.endUtc),
+  }}
 }

@@ -180,8 +180,22 @@ describe('persisted observation projection',()=>{
   const mid='2026-01-04T12:00:00.000Z'
   const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
   const data=projectObservationTrends([observationRow(win(start,change,[102068])),observationRow(win(change,mid,[]),'b'),observationRow(win(mid,end,null),'c')],q,now)
-  expect(summarizeBootProbes(data)).toEqual([{agentId:'example-agent',source:'codex',adapterVersion:'3',capability:'incomplete',points:[{endUtc:change,count:1,sum:102068}],incompleteWindows:[end],measuredWindows:2,pointsTruncated:false}])
+  expect(summarizeBootProbes(data)).toEqual([{agentId:'example-agent',source:'codex',adapterVersion:'3',capability:'incomplete',points:[{endUtc:change,count:1,sum:102068}],incompleteWindows:[end],measuredWindows:2,pointsTruncated:false,
+    bootFiles:{latestChars:null,latestAt:null,limitChars:null,headroomChars:null,maxChars:null,sessions:0,truncatedSessions:0,truncatedWindows:[]}}])
   expect(summarizeBootProbes(projectObservationTrends([observationRow()],q,now))).toEqual([])
+ })
+ it('carries boot-file headroom for the same stream: characters left, the limit and truncated windows',()=>{
+  const h=(values:number[])=>({bounds:[0,100,1000,8000,32000,64000,128000,200000,500000,1000000],counts:[0,0,0,0,0,0,values.length,0,0,0,0],count:values.length,sum:values.reduce((a,b)=>a+b,0),min:values.length?Math.min(...values):null,max:values.length?Math.max(...values):null})
+  const win=(a:string,b:string,largest:number,truncated:number)=>{const o=v3(a,b,{sessions:1,truncatedSessions:truncated,nearLimitSessions:1,warningSessions:0,largestFileCharsMax:largest,largestFileCharsLatest:largest,fileCharsLimit:32000})
+   return {...o,window:{startUtc:a,endUtc:b},metrics:{...o.metrics,probeFirstTurnTokens:h([95955])},metricCapabilities:{...o.metricCapabilities,probeFirstTurnTokens:'supported' as const}}}
+  const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
+  const data=projectObservationTrends([observationRow(win(start,change,29000,1)),observationRow(win(change,end,28800,0),'later')],q,now)
+  expect(summarizeBootProbes(data)[0].bootFiles).toEqual({latestChars:28800,latestAt:end,limitChars:32000,headroomChars:3200,maxChars:29000,sessions:2,truncatedSessions:1,truncatedWindows:[change]})
+  // A collector without boot files reports no headroom at all, rather than zeros.
+  const o=v3(start,change,null,'uncollected')
+  const probeOnly={...o,metrics:{...o.metrics,probeFirstTurnTokens:h([1])},metricCapabilities:{...o.metricCapabilities,probeFirstTurnTokens:'supported' as const,bootstrap:undefined}}
+  delete (probeOnly.metrics as Record<string,unknown>).bootstrap; delete (probeOnly.metricCapabilities as Record<string,unknown>).bootstrap
+  expect(summarizeBootProbes(projectObservationTrends([observationRow(probeOnly)],q,now))[0].bootFiles).toBeUndefined()
  })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})
