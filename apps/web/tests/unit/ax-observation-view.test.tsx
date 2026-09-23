@@ -105,7 +105,10 @@ describe('observation panel scope and missingness',()=>{
   // 85.9% of the limit is not an alert; the runtime's own near-limit flag stays advisory.
   let line=await render90(boot(27482)); expect(line.className).not.toContain('attention'); cleanup()
   line=await render90(boot(28800)); expect(line.className).toContain('attention'); expect(line.textContent).toContain('여유 3,200자'); cleanup()
-  line=await render90(boot(1000,1)); expect(line.className).toContain('attention')
+  line=await render90(boot(1000,1)); expect(line.className).toContain('attention'); cleanup()
+  // Exactly 90% is flagged, and a file past the limit reads as over, not as negative headroom.
+  line=await render90(boot(28800)); expect(line.className).toContain('attention'); cleanup()
+  line=await render90(boot(33000,2)); expect(line.textContent).toContain('한도 32,000자를 1,000자 초과 (잘림)')
  })
  it('shows boot prompt sizes when reported, and nothing about them for older windows',async()=>{
   const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:2,truncatedSessions:0,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:27482,largestFileCharsLatest:27482,fileCharsLimit:32000,promptCharsLatest:42414,promptCharsMax:43000,promptCharsSum:85414,projectContextCharsLatest:34293,toolSchemaCharsLatest:22842}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}

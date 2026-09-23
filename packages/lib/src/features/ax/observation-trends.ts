@@ -232,8 +232,14 @@ export async function loadAgentObservations(query:ObservationQuery,now=new Date(
   return projectObservationTrends(rows.slice(0,20000),query,now,rows.length>20000)
 }
 
-/** Headroom before OpenClaw truncates an injected boot file, and the truncations seen in the period */
+/**
+ * Headroom before OpenClaw truncates an injected boot file, and the truncations seen in the period.
+ * Only windows of collectors that report the daily probe are in scope (the panel's query), and `truncatedWindows`
+ * lists only the windows the stream lists (the latest 200); `truncatedSessions` covers the whole period.
+ */
 export interface BootFileHeadroom {
+  /** Boot-file collection state for the period: an 'incomplete' zero is missing data, not a proven zero */
+  capability: AgentObservability['metricCapabilities']['firstTurnTokens'] | undefined
   /** Largest injected file (characters) in the latest window that measured a boot, and that window's end */
   latestChars: number | null
   latestAt: string | null
@@ -287,10 +293,14 @@ function bootFileHeadroom(stream:ObservationStream):{bootFiles?:BootFileHeadroom
   const windows=stream.points.filter(point=>point.metrics?.bootstrap?.sessions)
   const summary=stream.summary.metrics?.bootstrap
   if(!windows.length&&!summary?.sessions)return stream.summary.metricCapabilities?.bootstrap===undefined?{}:{bootFiles:{
+    capability:stream.summary.metricCapabilities.bootstrap,
     latestChars:null,latestAt:null,limitChars:null,headroomChars:null,maxChars:null,sessions:0,truncatedSessions:0,truncatedWindows:[]}}
+  // The listed windows are the latest 200; when a boot lands outside them the period summary still carries its size.
   const latest=windows.at(-1)?.metrics.bootstrap ?? null
-  const latestChars=latest?.largestFileCharsLatest ?? null, limitChars=latest?.fileCharsLimit ?? null
+  const latestChars=latest?.largestFileCharsLatest ?? summary?.largestFileCharsLatest ?? null
+  const limitChars=latest?.fileCharsLimit ?? summary?.fileCharsLimit ?? null
   return {bootFiles:{
+    capability:stream.summary.metricCapabilities?.bootstrap,
     latestChars,latestAt:windows.at(-1)?.endUtc ?? null,limitChars,
     headroomChars:latestChars!==null&&limitChars!==null?limitChars-latestChars:null,
     maxChars:summary?.largestFileCharsMax ?? null,

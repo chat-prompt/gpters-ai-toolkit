@@ -181,7 +181,7 @@ describe('persisted observation projection',()=>{
   const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
   const data=projectObservationTrends([observationRow(win(start,change,[102068])),observationRow(win(change,mid,[]),'b'),observationRow(win(mid,end,null),'c')],q,now)
   expect(summarizeBootProbes(data)).toEqual([{agentId:'example-agent',source:'codex',adapterVersion:'3',capability:'incomplete',points:[{endUtc:change,count:1,sum:102068}],incompleteWindows:[end],measuredWindows:2,pointsTruncated:false,
-    bootFiles:{latestChars:null,latestAt:null,limitChars:null,headroomChars:null,maxChars:null,sessions:0,truncatedSessions:0,truncatedWindows:[]}}])
+    bootFiles:{capability:'uncollected',latestChars:null,latestAt:null,limitChars:null,headroomChars:null,maxChars:null,sessions:0,truncatedSessions:0,truncatedWindows:[]}}])
   expect(summarizeBootProbes(projectObservationTrends([observationRow()],q,now))).toEqual([])
  })
  it('carries boot-file headroom for the same stream: characters left, the limit and truncated windows',()=>{
@@ -190,12 +190,16 @@ describe('persisted observation projection',()=>{
    return {...o,window:{startUtc:a,endUtc:b},metrics:{...o.metrics,probeFirstTurnTokens:h([95955])},metricCapabilities:{...o.metricCapabilities,probeFirstTurnTokens:'supported' as const}}}
   const q=observationQuerySchema.parse({days:'7',agentId:'example-agent',source:'codex'})
   const data=projectObservationTrends([observationRow(win(start,change,29000,1)),observationRow(win(change,end,28800,0),'later')],q,now)
-  expect(summarizeBootProbes(data)[0].bootFiles).toEqual({latestChars:28800,latestAt:end,limitChars:32000,headroomChars:3200,maxChars:29000,sessions:2,truncatedSessions:1,truncatedWindows:[change]})
+  expect(summarizeBootProbes(data)[0].bootFiles).toEqual({capability:'supported',latestChars:28800,latestAt:end,limitChars:32000,headroomChars:3200,maxChars:29000,sessions:2,truncatedSessions:1,truncatedWindows:[change]})
   // A collector without boot files reports no headroom at all, rather than zeros.
   const o=v3(start,change,null,'uncollected')
   const probeOnly={...o,metrics:{...o.metrics,probeFirstTurnTokens:h([1])},metricCapabilities:{...o.metricCapabilities,probeFirstTurnTokens:'supported' as const,bootstrap:undefined}}
   delete (probeOnly.metrics as Record<string,unknown>).bootstrap; delete (probeOnly.metricCapabilities as Record<string,unknown>).bootstrap
   expect(summarizeBootProbes(projectObservationTrends([observationRow(probeOnly)],q,now))[0].bootFiles).toBeUndefined()
+  // A failed boot collection is not a proven zero: its capability travels with the zeros.
+  const failed=v3(start,change,null,'uncollected')
+  const incomplete={...failed,metrics:{...failed.metrics,probeFirstTurnTokens:h([1])},metricCapabilities:{...failed.metricCapabilities,probeFirstTurnTokens:'supported' as const,bootstrap:'incomplete' as const}}
+  expect(summarizeBootProbes(projectObservationTrends([observationRow(incomplete)],q,now))[0].bootFiles).toMatchObject({capability:'incomplete',sessions:0,truncatedSessions:0})
  })
  it('counts windows sent without observability per stream and reason, filtered and deduplicated by window',()=>{
   const failure=(batchId:string,reason:string,agentId='example-agent',a=start,b=change):ObservationRow=>({batchId,agentId,windowStart:a,windowEnd:b,collectedAt:b,collection:{source:'codex',observabilityFailure:reason}})
