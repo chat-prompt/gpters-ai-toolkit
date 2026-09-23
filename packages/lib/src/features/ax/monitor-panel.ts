@@ -17,11 +17,12 @@ const observationMeta={id:'agent-observations',title:'사용 관측',description
 export const agentObservationPanel:AxPanel<Record<string,never>>={meta:observationMeta,async load(ctx){return ctx.isAdmin?panelOk(observationMeta,{}):panelError(observationMeta,'관리자만 조회할 수 있습니다')}}
 
 /**
- * Daily boot probe (a fixed message the agent answers once a day): only its first-turn series, for organization
- * readers such as a nightly report over MCP. Carries agent/source names, window ends, counts and token sums —
- * no paths, session IDs or text — so it is an organization panel, unlike the full observations. Hidden from tabs.
+ * Daily boot probe (a fixed message the agent answers once a day): its first-turn series and the boot-file
+ * headroom, for organization readers such as a nightly report over MCP. Carries agent/source names, window ends,
+ * counts, token sums and boot-file character counts — no paths, file names, session IDs or text — so it is an
+ * organization panel, unlike the full observations. Hidden from tabs.
  */
-const bootProbeMeta={id:'boot-probe',title:'부팅 테스트',description:'매일 고정 테스트 메시지의 첫 턴 입력 토큰',source:'수집된 관측 지표 (테스트 세션만)',visibility:'org' as const,usesPeriod:true,hidden:true}
+const bootProbeMeta={id:'boot-probe',title:'부팅 테스트',description:'매일 고정 테스트 메시지의 첫 턴 입력 토큰과 부팅 파일 여유',source:'수집된 관측 지표 (테스트 세션만)',visibility:'org' as const,usesPeriod:true,hidden:true}
 export const bootProbePanel:AxPanel<{bootProbes:BootProbeSeries[];truncated:boolean}>={meta:bootProbeMeta,async load(ctx){
   try{
     // Only batches that report the probe, so ordinary collectors never crowd probe streams out of the stream limit.

@@ -88,8 +88,8 @@ describe('observation panel scope and missingness',()=>{
   const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:3,truncatedSessions:0,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:29500,largestFileCharsLatest:27482,fileCharsLimit:32000}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
   const withBoot={...data,streams:[{...data.streams[0],adapterVersion:'3',summary:boot},data.streams[0]],coverage:{...data.coverage,observationFailures:[{agentId:'example-agent',source:'codex',reason:'source-changed' as const,windows:4},{agentId:'example-agent',source:'codex',reason:'partial-tail' as const,windows:1}]}}
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(withBoot)));render(<AgentObservationPanel days={7}/>)
-  await screen.findByText(/부팅 파일: 가장 큰 파일 27,482자 \/ 한도 32,000자 \(85\.9%\)/)
-  expect(screen.getByText(/상한 근접 2세션/)).toBeTruthy()
+  await screen.findByText(/부팅 파일: 여유 4,518자 \(한도 32,000자의 85\.9% 사용\)/)
+  expect(screen.getByText(/잘림 0세션/)).toBeTruthy()
   expect(screen.getAllByText(/관측 없이 보낸 구간 5개 \(수집 중 파일 변경 4 · 쓰는 중 파일 1\)/)).toHaveLength(1)
   expect(screen.getAllByText(/부팅 파일:/)).toHaveLength(1)
  })
@@ -98,6 +98,17 @@ describe('observation panel scope and missingness',()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(orphan)));render(<AgentObservationPanel days={7}/>)
   await screen.findByText(/관측 없이 보낸 구간 24개 \(수집 중 파일 변경 24\)/)
   expect(screen.getByText('busy-agent · claude-code')).toBeTruthy()
+ })
+ it('marks the boot file line as attention at 90% of the limit or on any truncation',async()=>{
+  const boot=(largest:number,truncated=0)=>({...summary,metrics:{...summary.metrics,bootstrap:{sessions:2,truncatedSessions:truncated,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:largest,largestFileCharsLatest:largest,fileCharsLimit:32000}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}})
+  const render90=async(value:ReturnType<typeof boot>)=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],adapterVersion:'3',summary:value}]})));render(<AgentObservationPanel days={7}/>);return screen.findByText(/부팅 파일:/)}
+  // 85.9% of the limit is not an alert; the runtime's own near-limit flag stays advisory.
+  let line=await render90(boot(27482)); expect(line.className).not.toContain('attention'); cleanup()
+  line=await render90(boot(28800)); expect(line.className).toContain('attention'); expect(line.textContent).toContain('여유 3,200자'); cleanup()
+  line=await render90(boot(1000,1)); expect(line.className).toContain('attention'); cleanup()
+  // Exactly 90% is flagged, and a file past the limit reads as over, not as negative headroom.
+  line=await render90(boot(28800)); expect(line.className).toContain('attention'); cleanup()
+  line=await render90(boot(33000,2)); expect(line.textContent).toContain('한도 32,000자를 1,000자 초과 (잘림)')
  })
  it('shows boot prompt sizes when reported, and nothing about them for older windows',async()=>{
   const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:2,truncatedSessions:0,nearLimitSessions:2,warningSessions:0,largestFileCharsMax:27482,largestFileCharsLatest:27482,fileCharsLimit:32000,promptCharsLatest:42414,promptCharsMax:43000,promptCharsSum:85414,projectContextCharsLatest:34293,toolSchemaCharsLatest:22842}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
@@ -129,7 +140,7 @@ describe('observation panel scope and missingness',()=>{
  it('omits the percentage when the per-file limit is unknown',async()=>{
   const boot={...summary,metrics:{...summary.metrics,bootstrap:{sessions:1,truncatedSessions:0,nearLimitSessions:0,warningSessions:0,largestFileCharsMax:100,largestFileCharsLatest:100,fileCharsLimit:null}},metricCapabilities:{...summary.metricCapabilities,bootstrap:'supported' as const}}
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({...data,streams:[{...data.streams[0],summary:boot}]})));render(<AgentObservationPanel days={7}/>)
-  const line=await screen.findByText(/부팅 파일: 가장 큰 파일 100자 · 잘림/)
+  const line=await screen.findByText(/부팅 파일: 가장 큰 파일 100자 \(한도 모름\) · 잘림/)
   expect(line.textContent).not.toContain('%')
  })
  it('totals unique failed windows rather than summing reasons',async()=>{
