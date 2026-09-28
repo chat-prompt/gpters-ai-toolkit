@@ -10,6 +10,13 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { findJsonlFiles, scanJsonl, toCount } from './jsonl.js'
 import type { UsageRecord, UsageWindow } from './types.js'
+import { cumulativeUsageIdentity } from './codex-usage.js'
+
+interface RateLimitWindow {
+  used_percent?: unknown
+  resets_at?: unknown
+  window_minutes?: unknown
+}
 
 /** 토큰 집계 줄과 모델 지정 줄만 파싱한다 */
 const TOKEN_HINT = '"token_count"'
@@ -28,9 +35,11 @@ interface RolloutEntry {
     thread_settings?: { model?: unknown }
     info?: {
       last_token_usage?: Record<string, unknown>
+      total_token_usage?: Record<string, unknown>
     }
     rate_limits?: {
-      primary?: { used_percent?: unknown; resets_at?: unknown } | null
+      primary?: RateLimitWindow | null
+      secondary?: RateLimitWindow | null
     }
   }
 }
@@ -124,6 +133,7 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
     // 첫 턴의 thread_settings는 이미 토큰이 오간 뒤에 나오므로 turn_context까지 봐야
     // 세션 앞부분이 통째로 'unknown'으로 새지 않는다.
     let currentModel = 'unknown'
+    const seenUsage = new Set<string>()
 
     await scanJsonl(
       file,
@@ -146,7 +156,23 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
         if (payload.type !== 'token_count') return
 
         const at = Date.parse(String(entry.timestamp))
-        if (!Number.isFinite(at) || at < startMs || at >= endMs) return
+        if (!Number.isFinite(at) || at >= endMs) return
+
+        // A quota-only event (or repeated usage snapshot) can still carry a newer weekly limit.
+        const limits = payload.rate_limits
+        if (at >= startMs && limits && at > limitAt) {
+          const weekly = [limits.primary, limits.secondary].find(limit => limit?.window_minutes === 10080)
+          if (weekly) {
+            limitAt = at
+            const percent = weekly.used_percent
+            const resets = weekly.resets_at
+            const resetMs = typeof resets === 'number' ? resets * 1000 : NaN
+            const valid = typeof percent === 'number' && Number.isFinite(percent) && percent >= 0 && percent <= 100
+              && Number.isFinite(resetMs) && resetMs > at && Number.isFinite(new Date(resetMs).getTime())
+            limitUsedPercent = valid ? percent as number : null
+            limitResetsAt = valid ? new Date(resetMs).toISOString() : null
+          }
+        }
 
         // total_token_usage는 세션 누적이라 더하면 수십 배로 부푼다. 증분만 더한다.
         const usage = payload.info?.last_token_usage
@@ -159,6 +185,13 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
         const output = toCount(usage.output_tokens)
         if (input + cached + output === 0) return
 
+        const cumulative = cumulativeUsageIdentity(payload)
+        const identity = cumulative ?? JSON.stringify([at, input, cached, output])
+        if (seenUsage.has(identity)) return
+        seenUsage.add(identity)
+        // A replay after the window start must not recount usage originally observed before it.
+        if (at < startMs) return
+
         inputTokens += input
         cachedTokens += cached
         outputTokens += output
@@ -166,21 +199,6 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
         sessions.add(file)
         models[currentModel] = (models[currentModel] ?? 0) + input + cached + output
 
-        const primary = payload.rate_limits?.primary
-        if (primary && at > limitAt) {
-          limitAt = at
-          const percent = primary.used_percent
-          limitUsedPercent =
-            typeof percent === 'number' && Number.isFinite(percent) && percent >= 0 && percent <= 100
-              ? percent
-              : null
-          // resets_at은 epoch 초다
-          const resets = primary.resets_at
-          limitResetsAt =
-            typeof resets === 'number' && Number.isFinite(resets)
-              ? new Date(resets * 1000).toISOString()
-              : null
-        }
       }
     )
   }
