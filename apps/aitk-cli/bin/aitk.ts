@@ -87,7 +87,7 @@ Usage:
   aitk deploy --id <slug> --type <type> --name <name> --content <@file|text>
               [--description <d>] [--tags a,b] [--changelog <text>] [--platforms claude_code,codex]
               (new skills require --description & --tags; updates require --changelog)
-  aitk upgrade
+  aitk upgrade [--self]
   aitk updates
   aitk config [list|get|set] [key] [value]
   aitk report-session --count <N> [--version <ver>]
@@ -109,7 +109,7 @@ Usage:
 Commands:
   search          Search team skills, agents, and commands
   get             Get plugin details by ID
-  upgrade         Upgrade all GPTers plugins (Claude Code, OpenCode, Codex)
+  upgrade         Upgrade aitk itself and all GPTers plugins (Claude Code, OpenCode, Codex)
   deploy          Deploy a skill, agent, or command
   undeploy        Remove a deployed skill (owner only)
   updates         Check for installed skill updates
@@ -189,11 +189,17 @@ Examples:
   aitk deploy --id helper --type agent --name Helper --content "..." --tags "util,dev"
   aitk deploy --id codex-tool --type skill --name "Codex Tool" --content @skill.md --platforms codex`,
 
-  upgrade: `aitk upgrade - Upgrade all GPTers plugins
+  upgrade: `aitk upgrade - Upgrade aitk itself and all GPTers plugins
 
-Usage: aitk upgrade
+Usage: aitk upgrade [--self]
 
-Checks versions and updates all GPTers plugins at once:
+  --self   Only upgrade aitk itself (used by the plugins' daily SessionStart hook)
+
+aitk itself: when npm has a newer @gpters/aitk and this aitk is an npm global install,
+runs npm install -g @gpters/aitk@<latest>. npm link / npx / repo builds and global paths
+you cannot write to are left alone. Set AITK_AUTO_UPDATE=0 to stop the daily automatic run.
+
+Then checks versions and updates all GPTers plugins at once:
   - Claude Code: marketplace plugin update
   - OpenCode: migrate @gpters-internal/opencode → @gpters/opencode
   - Codex: migrate @gpters-internal/codex → @gpters/codex-plugin
@@ -506,7 +512,7 @@ async function main(): Promise<void> {
     }
 
     case 'upgrade': {
-      runUpgrade()
+      runUpgrade({ version: VERSION, selfOnly: flags['self'] === 'true' })
       break
     }
 
