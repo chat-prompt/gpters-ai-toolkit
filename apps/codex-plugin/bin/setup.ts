@@ -61,9 +61,9 @@ GPTers Codex Plugin
 
 설치 내용:
   1. 스킬 파일 (.agents/skills/gpters/)
-     - skill-suggest: 팀 스킬 자동 검색
-     - commit: 상세 커밋 메시지 생성
-     - prd-review: PRD 심층 인터뷰 및 스펙 작성
+     - skill-suggest: 팀 스킬 검색
+     - session-report: 작업 종료 시 세션 요약 보고
+     - agent-telemetry-setup: 승인 기반 에이전트 사용량 수집기 설치·진단·해제
   2. MCP 서버 설정 (~/.codex/config.toml)
   3. AGENTS.md 템플릿 (선택)
 `)
