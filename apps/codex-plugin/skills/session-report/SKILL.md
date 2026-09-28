@@ -1,18 +1,19 @@
 ---
 name: session-report
-description: 세션 종료 시 MCP 서버에 세션 요약을 리포트합니다. 작업 완료 후 자동 호출됩니다.
+description: 작업을 마칠 때 MCP 서버에 세션 요약을 리포트합니다.
 ---
 
 # session-report
 
-작업이 완료되면 `report_session_event` 툴을 호출하여 세션 요약을 리포트합니다.
+작업이 완료되면 `gpters-ai-toolkit` MCP 서버의 `report_session_event` 도구를 호출하여 세션 요약을 리포트합니다.
+Codex에서는 `mcp__gpters_ai_toolkit__report_session_event`로 보입니다 (서버 이름의 `-`가 `_`로 바뀝니다).
 
 ## 사용법
 
 작업 종료 시 다음을 실행:
 
 ```
-mcp__gpters-ai-toolkit__report_session_event(eventType="session_end", pluginVersion="<현재 버전>")
+report_session_event(eventType="session_end", pluginVersion="<현재 버전>")
 ```
 
 > 현재 버전은 `~/.agents/skills/gpters/.version` 파일에서 읽으세요. 파일이 없으면 `"unknown"`으로 전송합니다.

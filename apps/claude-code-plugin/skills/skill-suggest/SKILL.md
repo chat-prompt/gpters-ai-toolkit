@@ -5,21 +5,25 @@ description: "사용자가 팀 스킬이나 플러그인 검색을 요청했을 
 
 # Skill Suggest (수동 검색)
 
-> **IMPORTANT**: 사용자가 직접 스킬/플러그인 검색을 요청했을 때 적용합니다
-> ("스킬 검색해줘", "유튜브 관련 스킬 찾아줘" 등). `UserPromptSubmit` 훅은 대화에
-> 컨텍스트를 주입하지 않습니다.
+사용자가 직접 스킬/플러그인 검색을 요청했을 때 적용합니다 ("스킬 검색해줘", "유튜브 관련 스킬 찾아줘" 등).
 
-## 검색 방법 결정 (모든 검색에 필수)
+## 검색 방법 결정
 
-스킬 검색 시 **반드시** `~/.config/aitk/config.json`의 `searchMethod` 설정을 확인하고, 설정에 맞는 방법으로 검색합니다:
+`~/.config/aitk/config.json`의 `searchMethod` 설정을 확인하고 그에 맞는 경로로 검색합니다.
+사용자가 고른 경로이므로 설정을 따릅니다 — `cli`이면 MCP 도구로 검색하지 않습니다.
 
-| searchMethod | 검색 방법 |
-|---|---|
-| `cli` | `Bash("aitk search '키워드'")` — **MCP 도구 사용 금지** (기본값) |
-| `mcp` | `mcp__gpters-ai-toolkit__semantic_search(...)` |
-| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback |
+| searchMethod | 검색 경로 | MCP 연결 실패 시 |
+|---|---|---|
+| `cli` (값이 없을 때 기본값) | `aitk` CLI | — |
+| `mcp` | MCP 도구 | 검색을 건너뛰고 작업을 계속합니다 |
+| `auto` | MCP 도구 먼저 | `aitk` CLI로 다시 검색합니다 |
 
-> **주의**: `searchMethod`가 `cli`인데 MCP 도구(`semantic_search`)로 검색하면 안 됩니다. 사용자가 의도적으로 CLI 모드를 선택한 것이므로 반드시 `aitk` CLI를 사용하세요.
+설정을 바꾸려면 `aitk config set searchMethod <cli|mcp|auto>`를 씁니다.
+
+MCP 도구는 `gpters-ai-toolkit` 서버의 도구이고, 아래에는 도구 이름만 적습니다. Claude Code에서
+실제로 보이는 이름은 설치 방식에 따라 다릅니다 — 플러그인으로 설치했으면
+`mcp__plugin_gpters-ai-toolkit_gpters-ai-toolkit__<도구>`, `claude mcp add`로 직접 연결했으면
+`mcp__gpters-ai-toolkit__<도구>`입니다.
 
 ## 워크플로우
 
@@ -37,30 +41,28 @@ description: "사용자가 팀 스킬이나 플러그인 검색을 요청했을 
 
 ### 2단계: 스킬 검색
 
-검색 모드(`~/.config/aitk/config.json`의 `searchMethod`)에 따라 다르게 검색합니다:
-
-**MCP 모드 (`mcp` 또는 `auto`):**
+MCP 모드 (`mcp`, `auto`):
 ```
-mcp__gpters-ai-toolkit__semantic_search(query="추출된 키워드", userContext="작업 맥락", limit=3, _source="skill-suggest")
+semantic_search(query="추출된 키워드", userContext="작업 맥락", limit=3, _source="skill-suggest")
 ```
 
-**CLI 모드 (`cli`):**
+CLI 모드 (`cli`, 또는 `auto`에서 MCP 연결 실패):
 ```
 Bash("aitk search '추출된 키워드' --limit 3 --context '작업 맥락'")
 ```
 
-> `auto` 모드에서 MCP 연결 불가 시 CLI로 fallback합니다.
-> `userContext`/`--context`는 맥락이 있을 때만 전달합니다.
+`userContext`/`--context`는 맥락이 있을 때만 전달합니다.
 
-### 3단계: 결과 판단 + 로드
+### 3단계: 결과 판단 — 로드하거나 스킵을 보고한다
 
-검색 결과의 `relevanceScore`를 확인합니다:
+검색했으면 A나 B 중 하나로 끝냅니다. 결과가 하나도 없어도 B를 실행합니다 — 검색마다 로드나
+스킵 보고가 남아야 추천 퍼널이 집계됩니다.
 
-**A. 0.40 이상 스킬이 있으면 → 로드:**
+**A. `relevanceScore` 0.40 이상 스킬이 있으면 → 로드:**
 
 MCP 모드:
 ```
-mcp__gpters-ai-toolkit__get_plugin_content(pluginId="스킬ID")
+get_plugin_content(pluginId="스킬ID")
 ```
 
 CLI 모드:
@@ -68,19 +70,17 @@ CLI 모드:
 Bash("aitk get '스킬ID'")
 ```
 
-**B. 전부 0.40 미만이거나 관련 없으면 → 스킵 사유 보고:**
+**B. 결과가 없거나, 전부 0.40 미만이거나, 관련 없으면 → 스킵 사유 보고:**
 
-MCP 모드:
+MCP 모드 (결과가 없으면 `resultIds=[]`):
 ```
-mcp__gpters-ai-toolkit__report_search_skip(query="검색어", resultIds=["id1","id2"], reason="스킵 사유 한 줄")
+report_search_skip(query="검색어", resultIds=["id1","id2"], reason="스킵 사유 한 줄")
 ```
 
-CLI 모드:
+CLI 모드 (결과가 없으면 `--result-ids` 생략):
 ```
 Bash("aitk report-skip --query '검색어' --reason '스킵 사유 한 줄' --result-ids 'id1,id2'")
 ```
-
-> 검색 후 아무 행동 없이 넘어가지 마세요. A 또는 B 중 하나는 반드시 실행합니다.
 
 ### 4단계: 실제 적용 시작 보고
 
@@ -89,7 +89,7 @@ Bash("aitk report-skip --query '검색어' --reason '스킵 사유 한 줄' --re
 
 MCP 모드:
 ```
-mcp__gpters-ai-toolkit__report_skill_execution_started(skillId="스킬ID", agent="claude-code")
+report_skill_execution_started(skillId="스킬ID", agent="claude-code")
 ```
 
 CLI 모드:
@@ -122,7 +122,7 @@ Bash("aitk report-execution-start --skill-id '스킬ID' --agent claude-code")
 
 MCP 모드:
 ```
-mcp__gpters-ai-toolkit__report_skill_execution(
+report_skill_execution(
   attemptId="시작 응답의 attemptId",
   skillId="스킬ID",
   agent="claude-code",
@@ -141,34 +141,7 @@ Bash("aitk report-execution --skill-id '스킬ID' --agent claude-code --attempt-
 - 요약에는 대화 원문, 파일 내용, 명령 출력 전문, 경로, ID, 인증정보를 넣지 않습니다.
 - 보고 실패가 사용자 작업을 막아서는 안 됩니다. 실패 사실만 짧게 남기고 본 작업을 계속합니다.
 
-## 검색 모드 설정
-
-`~/.config/aitk/config.json`의 `searchMethod` 필드로 검색 방법을 설정할 수 있습니다:
-
-```json
-{
-  "searchMethod": "cli"
-}
-```
-
-| 값 | 동작 |
-|----|------|
-| `cli` | aitk CLI만 사용 (기본값) |
-| `mcp` | MCP만 사용. 연결 불가 시 검색 스킵 |
-| `auto` | MCP 우선, 연결 불가 시 aitk CLI fallback |
-
-설정 변경:
-```bash
-# CLI로 설정
-aitk config set searchMethod cli
-
-# 또는 직접 편집
-vi ~/.config/aitk/config.json
-```
-
 ## 주의사항
 
 - 스킬 내용이 사용자 요청과 충돌하면 사용자 요청을 우선합니다
-- MCP 서버 연결 실패 시 스킬 검색을 건너뛰고 작업을 진행합니다
-- 결과가 없으면 검색 없이 바로 진행합니다
 - 시작 보고 없이 완료 보고만 만들지 말고, 한 시도에는 시작·완료가 같은 `attemptId`로 연결되어야 합니다
