@@ -48,7 +48,8 @@ MCP 서버와 `aitk` CLI로 로컬 설치 없이 필요한 순간에 스킬을 �
 - **패널 레지스트리 구조**: `features/ax/registry.ts`의 `AX_PANELS` 배열 + 단일 라우트
   `app/api/ax/[panel]/route.ts`. 지표를 추가할 때 라우트를 새로 만들지 않는다.
 - 최상위 탭은 `parentId` 없는 패널(`overview` / `skill-usage` / `client-usage` / `vercel-deployments`),
-  나머지는 하위 탭이다. `hidden: true` 패널(`activity-grass`)은 탭에 안 나오고 데이터만 쓰인다.
+  나머지는 하위 탭이다. `hidden: true` 패널은 탭에 안 나온다 — `activity-grass`는 보이는 화면이 의존할 때만
+  대시보드가 불러오고, `boot-probe`처럼 MCP 등 다른 독자용 패널은 대시보드가 불러오지 않는다.
 - 기간은 7 / 30 / 90일만 허용하고 기본값은 7일이다.
 - 접근 판정은 `features/ax/access.ts` — `INTERNAL_ORGANIZATION_DOMAIN` 구성원 전원 열람,
   개인 식별 데이터는 admin 전용.
@@ -109,7 +110,7 @@ pnpm lint && pnpm test && pnpm build
 ## 팀 스킬 활용
 
 새 작업을 시작하기 전에 팀이 공유한 스킬이 있는지 확인한다. 기본 검색 경로는 `aitk` CLI다
-(플러그인 0.1.24부터 `UserPromptSubmit` 훅으로 힌트를 넣지 않으므로 직접 검색한다).
+(플러그인 훅은 검색 힌트를 넣지 않으므로 직접 검색한다).
 
 ```bash
 aitk search '키워드' --limit 3 --context '작업 맥락'

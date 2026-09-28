@@ -2,9 +2,10 @@
 
 ## 세션 시작
 
-Codex 세션 시작 시 플러그인 업데이트를 확인합니다:
+Codex 세션 시작 시 `~/.agents/auto-update.sh`가 있으면 실행해 플러그인 업데이트를 확인합니다
+(이 스크립트는 사용자 전역 설치 `--scope user`에서만 생깁니다):
 ```bash
-bash ~/.agents/auto-update.sh
+[ -f ~/.agents/auto-update.sh ] && bash ~/.agents/auto-update.sh
 ```
 
 ---
@@ -32,15 +33,9 @@ bash ~/.agents/auto-update.sh
 Codex에서는 `mcp__gpters_ai_toolkit__<도구>`로 보입니다 (서버 이름의 `-`가 `_`로 바뀝니다).
 **이전 대화의 직접적 후속(확인, 수정, "계속해줘" 등)이 아니면 새 주제 시작 시 반드시 검색하세요.** 새 기술/도구 질문, 사용법, 구현 요청 모두 포함됩니다.
 
-### 스킬 검색
-```
-semantic_search(query="키워드", limit=3, _source="skill-suggest")
-```
-
-### 스킬 내용 조회
-```
-get_plugin_content(pluginId="스킬ID")
-```
+### 스킬 검색·조회
+`skill-suggest` 스킬을 따릅니다. 검색 경로(`aitk` CLI 또는 MCP `semantic_search`)는
+`~/.config/aitk/config.json`의 `searchMethod` 설정이 정하고, 로드·스킵 보고 절차도 그 스킬에 있습니다.
 
 ### 스킬 배포
 ```
@@ -53,9 +48,8 @@ deploy_skill(type="skill", name="스킬명", content="...")
 
 | 스킬 | 설명 |
 |------|------|
-| skill-suggest | 새 작업 시 관련 팀 스킬 자동 검색 |
-| commit | 상세한 커밋 메시지 생성 |
-| prd-review | PRD 파일 심층 인터뷰 및 스펙 작성 |
+| skill-suggest | 새 작업 시 관련 팀 스킬 검색 |
+| session-report | 작업 종료 시 세션 요약 보고 |
 | agent-telemetry-setup | 승인 기반 에이전트 사용량 수집기 설치·진단·해제 |
 
 ### 에이전트 텔레메트리
