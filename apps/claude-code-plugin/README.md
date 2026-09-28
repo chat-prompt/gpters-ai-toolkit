@@ -11,6 +11,14 @@ GPTers AI Toolkit MCP 서버와 연동하여 팀 스킬을 검색하고 사용�
 - **주간 한도 수집 설정**: 플러그인 설치 후 `aitk usage setup`을 한 번 실행합니다(온보딩 4단계). Claude Code에서 "usage 설정해줘"라고 하면 `usage-setup` 스킬이 같은 절차를 안내합니다. 기존 상태 표시줄은 그대로 두고, 표시줄이 없으면 aitk 기본 한 줄을 보여줄지 먼저 묻습니다. 자동 설치되지는 않습니다.
 - **에이전트 텔레메트리 설정 지침**: 사용자가 요청하면 `agent-telemetry-setup` 스킬이 범위를 확인하고 macOS Keychain·launchd 기반 수집기를 안전하게 설치·진단·해제합니다. 자동 설치되지는 않습니다.
 
+### aitk 자동 업그레이드
+
+같은 SessionStart 훅이 하루 한 번 백그라운드로 `aitk upgrade --self`를 실행합니다. npm에 더 높은 `@gpters/aitk`가 있고 aitk가 npm 전역 설치본이면 그 버전으로 올립니다. `npm link` 개발본, npx·저장소 빌드, 쓰기 권한이 없는 전역 경로는 건드리지 않습니다. 결과는 `~/.cache/gpters-aitk/self-update.log`에 남습니다. 끄려면:
+
+```bash
+export AITK_AUTO_UPDATE=0
+```
+
 ### 사용량 보고가 보내는 것
 
 토큰 수, 세션 수, 모델별 사용량, 플랜명, 주간 한도 사용률과 세션별 사용자 입력 수만 보냅니다. **대화 내용·파일 경로·세션 ID·인증 토큰은 전송하지 않습니다.** Codex 플랜 확인에 쓰는 `id_token`은 로컬에서만 열어 플랜 문자열을 꺼내며, 토큰 자체는 저장하지도 보내지도 않습니다.

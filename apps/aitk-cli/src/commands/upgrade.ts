@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { info } from '../output.js'
 import { ensureConfig } from '../config.js'
+import { defaultSelfUpgradeDeps, describeSelfUpgrade, upgradeSelf } from './self-upgrade.js'
 
 /** 명령어 실행 결과 (null이면 실패) */
 function run(cmd: string): string | null {
@@ -287,10 +288,21 @@ function upgradeCodex(): void {
 /**
  * upgrade 명령어 실행
  *
- * 모든 GPTers 플러그인의 버전 확인, 마이그레이션, 업데이트를 수행한다.
+ * aitk 자신을 먼저 확인한 뒤, 모든 GPTers 플러그인의 버전 확인, 마이그레이션, 업데이트를 수행한다.
+ *
+ * @param options.version - 실행 중인 aitk 버전
+ * @param options.selfOnly - aitk 자신만 확인한다 (플러그인 SessionStart 훅의 자동 업그레이드)
  */
-export function runUpgrade(): void {
+export function runUpgrade(options: { version: string; selfOnly?: boolean }): void {
+  const self = upgradeSelf(defaultSelfUpgradeDeps(options.version))
+  if (options.selfOnly) {
+    info(describeSelfUpgrade(self))
+    if (self.status === 'failed') process.exitCode = 1
+    return
+  }
+
   info('=== GPTers Plugin Upgrade ===')
+  info(`\n📦 ${describeSelfUpgrade(self)}`)
 
   // 설정 파일이 없으면 기본값(searchMethod: cli)으로 생성
   if (ensureConfig()) {

@@ -58,7 +58,7 @@ aitk search "code review"
 aitk get code-reviewer
 ```
 
-이미 설치돼 있다면 최신으로 올립니다. `aitk upgrade`는 Claude Code 플러그인까지 함께 갱신합니다:
+Claude Code·Codex 플러그인이 설치돼 있으면 aitk는 하루 한 번 자동으로 최신이 됩니다(npm 전역 설치본일 때, 끄려면 `AITK_AUTO_UPDATE=0`). 직접 올리려면 아래를 실행합니다. `aitk upgrade`는 aitk 자신과 Claude Code 플러그인까지 함께 갱신합니다:
 
 ```bash
 npm i -g @gpters/aitk@latest && aitk upgrade

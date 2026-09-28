@@ -58,6 +58,8 @@ aitk usage report --dry-run  # 무엇을 보낼지 확인
 aitk usage report            # 지금 보내기
 ```
 
+같은 훅이 하루 한 번 aitk 자동 업그레이드(`aitk upgrade --self`)도 합니다. npm에 더 높은 버전이 있고 aitk가 npm 전역 설치본일 때만 올리며, 결과는 `~/.cache/gpters-aitk/self-update.log`에 남습니다. 끄려면 `export AITK_AUTO_UPDATE=0`.
+
 ### 에이전트/런타임 상세 수집
 
 위 개인 사용량 보고와 별도로, 특정 Codex 작업 범위나 봇의 도구·스킬·수집
