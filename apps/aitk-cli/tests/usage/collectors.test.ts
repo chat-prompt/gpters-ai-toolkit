@@ -90,7 +90,7 @@ function tokenCountLine(opts: {
       rate_limits:
         opts.usedPercent === undefined
           ? null
-          : { primary: { used_percent: opts.usedPercent, resets_at: opts.resetsAt ?? 1_786_582_131 } },
+          : { primary: { window_minutes: 10080, used_percent: opts.usedPercent, resets_at: opts.resetsAt ?? 1_786_582_131 } },
     },
   })
 }
@@ -385,6 +385,49 @@ describe('collectClaudeCode', () => {
 })
 
 describe('collectCodex', () => {
+  it('기간 직전 사용량의 재방출을 기간 안의 새 사용량으로 세지 않는다', async () => {
+    const a = JSON.parse(tokenCountLine({ timestamp: BEFORE_WINDOW, input: 10, cached: 0, output: 2 }))
+    const b = { ...a, timestamp: IN_WINDOW }
+    write('.codex/sessions/rollout-a.jsonl', [a, b].map(value => JSON.stringify(value)).join('\n'))
+    expect(await collectCodex(WINDOW)).toBeNull()
+  })
+
+  it('누적값이 같은 반복 이벤트는 제외하고 서로 다른 세션은 합산한다', async () => {
+    const a = tokenCountLine({ timestamp: IN_WINDOW, input: 100, cached: 40, output: 20, totalInput: 100 })
+    const duplicate = JSON.parse(a)
+    duplicate.timestamp = '2026-08-05T10:01:00Z'
+    const b = tokenCountLine({ timestamp: '2026-08-05T10:02:00Z', input: 100, cached: 40, output: 20, totalInput: 200 })
+    write('.codex/sessions/rollout-a.jsonl', [a, JSON.stringify(duplicate), b].join('\n'))
+    write('.codex/sessions/rollout-b.jsonl', a)
+    expect(await collectCodex(WINDOW)).toMatchObject({ inputTokens: 180, cachedTokens: 120, outputTokens: 60, sessions: 2 })
+  })
+
+  it('반복·토큰 없는 이벤트에서도 secondary의 주간 한도를 갱신한다', async () => {
+    const a = JSON.parse(tokenCountLine({ timestamp: IN_WINDOW, input: 10, cached: 0, output: 2 }))
+    a.payload.rate_limits = { primary: { window_minutes: 300, used_percent: 6, resets_at: 1786582131 }, secondary: { window_minutes: 10080, used_percent: 43, resets_at: 1786582131 } }
+    const b = JSON.parse(JSON.stringify(a)); b.timestamp = '2026-08-05T11:00:00Z'
+    b.payload.rate_limits.secondary.used_percent = 44
+    const c = JSON.parse(JSON.stringify(b)); c.timestamp = '2026-08-05T12:00:00Z'
+    c.payload.info = null; c.payload.rate_limits.secondary.used_percent = 45
+    write('.codex/sessions/rollout-a.jsonl', [a, b, c].map(value => JSON.stringify(value)).join('\n'))
+    expect(await collectCodex(WINDOW)).toMatchObject({ inputTokens: 10, outputTokens: 2, limitUsedPercent: 45 })
+  })
+
+  it.each([300, undefined])('주간 창으로 확인되지 않은 한도는 추정하지 않는다: %s', async minutes => {
+    const a = JSON.parse(tokenCountLine({ timestamp: IN_WINDOW, input: 10, cached: 0, output: 2, usedPercent: 6 }))
+    a.payload.rate_limits.primary.window_minutes = minutes
+    write('.codex/sessions/rollout-a.jsonl', JSON.stringify(a))
+    expect(await collectCodex(WINDOW)).toMatchObject({ limitUsedPercent: null, limitResetsAt: null })
+  })
+
+  it('누적값 없는 레거시 로그의 서로 다른 시각 사용량은 유지한다', async () => {
+    const a = JSON.parse(tokenCountLine({ timestamp: IN_WINDOW, input: 10, cached: 0, output: 2 }))
+    delete a.payload.info.total_token_usage
+    const b = { ...a, timestamp: '2026-08-05T11:00:00Z' }
+    write('.codex/sessions/rollout-a.jsonl', [a, a, b].map(value => JSON.stringify(value)).join('\n'))
+    expect(await collectCodex(WINDOW)).toMatchObject({ inputTokens: 20, outputTokens: 4 })
+  })
+
   it('누적(total_token_usage)이 아니라 증분(last_token_usage)만 더한다', async () => {
     write(
       '.codex/sessions/2026/08/05/rollout-a.jsonl',
