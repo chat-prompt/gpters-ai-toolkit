@@ -28,22 +28,23 @@ bash ~/.agents/auto-update.sh
 
 ## MCP 도구 (GPTers AI Toolkit)
 
-팀 공유 스킬을 검색하고 활용할 수 있습니다.
+팀 공유 스킬을 검색하고 활용할 수 있습니다. 아래는 `gpters-ai-toolkit` MCP 서버의 도구 이름이며,
+Codex에서는 `mcp__gpters_ai_toolkit__<도구>`로 보입니다 (서버 이름의 `-`가 `_`로 바뀝니다).
 **이전 대화의 직접적 후속(확인, 수정, "계속해줘" 등)이 아니면 새 주제 시작 시 반드시 검색하세요.** 새 기술/도구 질문, 사용법, 구현 요청 모두 포함됩니다.
 
 ### 스킬 검색
 ```
-mcp_gpters-ai-toolkit_semantic_search(query="키워드", limit=3, _source="skill-suggest")
+semantic_search(query="키워드", limit=3, _source="skill-suggest")
 ```
 
 ### 스킬 내용 조회
 ```
-mcp_gpters-ai-toolkit_get_plugin_content(pluginId="스킬ID")
+get_plugin_content(pluginId="스킬ID")
 ```
 
 ### 스킬 배포
 ```
-mcp_gpters-ai-toolkit_deploy_skill(type="skill", name="스킬명", content="...")
+deploy_skill(type="skill", name="스킬명", content="...")
 ```
 
 ---

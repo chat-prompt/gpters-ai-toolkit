@@ -103,17 +103,16 @@ node --test apps/claude-code-plugin/tests/*.test.mjs
 
 ### 수동 스킬 검색
 
-MCP 도구를 직접 호출하여 스킬을 검색할 수도 있습니다:
+`gpters-ai-toolkit` MCP 서버의 도구를 직접 호출하여 스킬을 검색할 수도 있습니다. Claude Code에서 보이는
+이름은 설치 방식에 따라 다릅니다 — 플러그인 설치는 `mcp__plugin_gpters-ai-toolkit_gpters-ai-toolkit__<도구>`,
+`claude mcp add`로 직접 연결했으면 `mcp__gpters-ai-toolkit__<도구>`입니다.
 
 ```
 # 키워드로 스킬 검색
-mcp__gpters-ai-toolkit__semantic_search(query="코드 리뷰", category="skill", limit=5)
+semantic_search(query="코드 리뷰", category="skill", limit=5)
 
 # 특정 스킬의 전체 내용 로드
-mcp__gpters-ai-toolkit__get_plugin_content(pluginId="code-reviewer")
-
-# 전체 플러그인 목록 조회
-mcp__gpters-ai-toolkit__list_plugins()
+get_plugin_content(pluginId="code-reviewer")
 ```
 
 ### 추천 검색어
