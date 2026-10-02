@@ -226,6 +226,7 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
     // 래퍼·저장 명령이 POSIX 셸(/bin/sh)을 전제한다. Windows에서는 원래 표시줄이 사라질 수 있다.
     if ((opts.platform ?? process.platform) === 'win32') return skip('platform')
     const claudeDir = join(home, '.claude')
+    if (!existsSync(claudeDir)) return skip('no-claude')
     // ~/.claude 폴더만으로는 판단하지 않는다 — aitk 사용량 보고가 Codex만 쓰는 사람에게도 ~/.claude/aitk-usage를 만든다.
     // Claude Code가 직접 만드는 것(대화 기록 폴더·사용자 설정 파일·settings.json)이 있어야 쓰는 사람으로 본다.
     if (!usesClaudeCode(home)) return skip('no-claude')
@@ -280,15 +281,17 @@ export function formatUsageAutoSetup(result: UsageAutoSetupResult): string {
 
 /** uninstall은 원래 표시줄을 복원하고, 자동 연결이 다시 켜지지 않게 표식을 남긴다. */
 export function runUsageUninstall(home = homedir()): boolean {
-  const restored = withSetupLock(home, true, () => {
-    // 표식을 먼저 남긴다 — 복원 중 실패해도 자동 연결이 다시 켜지지 않게.
-    // 표식 사본을 못 써도 복원은 한다. 해제는 어떤 경우에도 막히면 안 된다.
-    let mirrored = false
-    try { mirrored = markAutoSetupDeclined(home) } catch { /* 복원이 먼저다 */ }
+  // 해제는 어떤 경우에도 막히면 안 된다. 표식을 먼저 남기고(복원 중 실패해도 다시 켜지지 않게), 표식이나
+  // 잠금을 못 만들어도(수집 폴더 권한 없음 등) 설정 복원은 한다.
+  const body = () => {
+    const marked = markAutoSetupDeclined(home)
     const result = uninstallClaudeStatusline(home)
-    if (!mirrored) info('해제 표식 사본을 ~/.config/aitk 에 남기지 못했습니다. ~/.claude/aitk-usage 를 지우면 다음 날 다시 연결될 수 있습니다.')
+    if (marked === 0) info('해제 표식을 남기지 못했습니다(~/.claude/aitk-usage, ~/.config/aitk 쓰기 실패). 자동 연결이 다시 켜질 수 있으니 AITK_USAGE_SETUP=0 도 설정하세요.')
+    else if (marked === 1) info('해제 표식을 한 곳에만 남겼습니다. ~/.claude/aitk-usage 를 지우면 다음 날 다시 연결될 수 있습니다.')
     return result
-  })
+  }
+  let restored: boolean | 'busy'
+  try { restored = withSetupLock(home, true, body) } catch { restored = body() }
   if (restored === 'busy') error(busyMessage(home))
   return restored
 }

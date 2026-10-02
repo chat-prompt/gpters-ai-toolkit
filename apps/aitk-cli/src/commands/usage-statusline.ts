@@ -31,7 +31,8 @@ export async function runUsageStatusline(): Promise<void> {
       const deadline = setTimeout(() => { try { renderer.kill('SIGKILL') } catch { /* 이미 종료 */ } }, RENDERER_TIMEOUT_MS)
       const finish = () => { clearTimeout(deadline); done() }
       renderer.on('error', finish)
-      renderer.on('close', finish)
+      // 원래 명령의 종료 코드를 그대로 돌려준다. Claude Code는 종료 코드로 출력 사용 여부를 정한다.
+      renderer.on('close', (code) => { if (typeof code === 'number') process.exitCode = code; finish() })
       renderer.stdin.on('error', () => { /* renderer exited before reading */ })
       renderer.stdin.end(input)
     })

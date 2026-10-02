@@ -413,11 +413,52 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
       const result = run(home, ['uninstall'])
       expect(result.status).toBe(0)
       expect(result.stderr).toContain('Previous Claude statusline restored.')
-      expect(result.stderr).toContain('~/.config/aitk')
+      expect(result.stderr).toContain('한 곳에만')
       expect(JSON.parse(settingsOf(home))).toEqual(original)
       expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
     } finally {
       chmodSync(config, 0o700)
+    }
+  })
+
+  it('수집 폴더를 지운 뒤에도(연결 기록 없음) uninstall이 원래 설정으로 되돌린다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    rmSync(join(home, '.claude/aitk-usage'), { recursive: true, force: true })
+    expect(run(home, ['uninstall']).stderr).toContain('Previous Claude statusline restored.')
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+
+    const none = freshHome({ language: 'ko' })
+    run(none, ['setup', '--auto'])
+    rmSync(join(none, '.claude/aitk-usage'), { recursive: true, force: true })
+    run(none, ['uninstall'])
+    expect(JSON.parse(settingsOf(none))).toEqual({ language: 'ko' })
+  })
+
+  it('작은따옴표가 든 원래 명령도 기록 없이 정확히 되돌린다', () => {
+    const original = { statusLine: { type: 'command', command: `printf '%s' "it's"`, padding: 2 } }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    rmSync(join(home, '.claude/aitk-usage/statusline.json'))
+    run(home, ['uninstall'])
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+  })
+
+  it('수집 폴더에 쓸 수 없어도(잠금·표식 실패) uninstall은 설정을 되돌린다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
+    const usage = join(home, '.claude/aitk-usage')
+    chmodSync(usage, 0o500)
+    try {
+      const result = run(home, ['uninstall'])
+      expect(result.status).toBe(0)
+      expect(JSON.parse(settingsOf(home))).toEqual(original)
+      // 사본(~/.config/aitk) 표식은 남아 다시 켜지지 않는다
+      expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+    } finally {
+      chmodSync(usage, 0o700)
     }
   })
 
@@ -445,17 +486,19 @@ describe('래퍼 실패 내성 — 자동 연결로 모두에게 깔리므로 �
   }
   const quotaInput = JSON.stringify({ rate_limits: { seven_day: { used_percentage: 12, resets_at: Math.floor(Date.now() / 1000) + 86400 } } })
 
-  it('원래 명령이 출력 후 실패해도 그 출력을 그대로 내보내고 래퍼는 exit 0이다', () => {
+  it('원래 명령의 출력과 종료 코드를 그대로 돌려준다 (감싸지 않았을 때와 같게)', () => {
     const home = wrapped(`printf 'partial'; exit 3`)
     const result = statusline(home, '{}')
     expect(result.stdout).toBe('partial')
-    expect(result.status).toBe(0)
+    // Claude Code는 종료 코드로 출력 사용 여부를 정한다 — 래퍼가 0으로 바꾸면 화면이 달라진다
+    expect(result.status).toBe(3)
   })
 
-  it('원래 명령이 없어져도 래퍼는 멈추거나 실패하지 않는다', () => {
+  it('원래 명령이 없어져도 래퍼는 멈추지 않고, 셸과 같은 종료 코드를 낸다', () => {
     const home = wrapped('/nonexistent/statusline-renderer')
     const result = statusline(home, '{}')
-    expect(result.status).toBe(0)
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(127)
     expect(result.stdout).toBe('')
   })
 

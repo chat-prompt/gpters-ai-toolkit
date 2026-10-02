@@ -174,6 +174,16 @@ export function buildStatuslineCommand(node: string, entry: string, previous: Re
 /** 저장 명령이 래퍼에 넘기는 원래 표시줄 명령. 빈 값은 원래 표시줄이 없었다는 뜻이다. */
 export const STATUSLINE_PREVIOUS_ENV = 'AITK_STATUSLINE_PREVIOUS'
 
+/**
+ * `buildStatuslineCommand`가 만든 명령에서 원래 명령을 꺼낸다. aitk 형식이 아니면 null, 원래 표시줄이 없었으면 ''.
+ * shellQuote의 역이다: 바깥 작은따옴표를 벗기고 `'"'"'`를 `'`로 되돌린다.
+ */
+export function parseHandedOverPrevious(command: string): string | null {
+  if (!command.startsWith('if [ -x ') || !command.includes(' usage statusline; else ')) return null
+  const match = command.match(new RegExp(`${STATUSLINE_PREVIOUS_ENV}='((?:[^']|'"'"')*)' `))
+  return match ? match[1].replace(/'"'"'/g, "'") : null
+}
+
 /** setup 결과. 메시지와 재시작 안내에만 쓴다. */
 export interface ClaudeStatuslineInstallResult {
   /** wrapped: 기존 표시줄 유지, default/none: 표시줄이 없어 aitk가 맡음, unchanged: 이미 같은 설치 */
@@ -226,12 +236,24 @@ export function uninstallClaudeStatusline(home = homedir()): boolean {
   const receipt = readClaudeStatuslineInstallation(home)
   const raw = existsSync(paths.settings) ? readFileSync(paths.settings, 'utf8') : null
   const settings = object(raw === null ? null : (() => { try { return JSON.parse(raw) } catch { return null } })())
-  if (!receipt || !settings || object(settings.statusLine)?.command !== receipt.command) return false
-  if (receipt.previous === null) delete settings.statusLine
-  else settings.statusLine = receipt.previous
+  if (!settings) return false
+  const current = object(settings.statusLine)
+  const command = current?.command
+  if (receipt && command === receipt.command) {
+    if (receipt.previous === null) delete settings.statusLine
+    else settings.statusLine = receipt.previous
+  } else {
+    // 연결 기록이 사라졌거나(수집 폴더 삭제·중간 종료) 다른 설치본의 명령이어도, 저장 명령이 aitk 형식이면
+    // 그 안에 실어 둔 원래 명령으로 되돌린다. 해제는 기록 유무와 상관없이 되어야 한다.
+    const original = typeof command === 'string' ? parseHandedOverPrevious(command) : null
+    if (original === null) return false
+    if (original === '') delete settings.statusLine
+    else settings.statusLine = { ...current, command: original }
+  }
   // 다른 프로세스가 바꾼 설정을 덮어쓰지 않는다.
   if (readFileSync(paths.settings, 'utf8') !== raw) throw new Error('Claude settings changed during uninstall. Retry.')
   writeUsageJson(paths.settings, settings)
+  // 수집 폴더에 쓸 수 없어도 설정 복원은 끝났다. 남은 파일 정리는 최선만 다한다.
   for (const file of [paths.installation, paths.snapshot, paths.report, paths.lock]) {
     try { unlinkSync(file) } catch { /* 없음 */ }
   }
@@ -253,16 +275,18 @@ function connectedPaths(home: string): [primary: string, mirror: string] {
 }
 
 /**
- * 첫 경로(`~/.claude/aitk-usage`)는 반드시 쓰고, 사본(`~/.config/aitk`)은 최선만 다한다.
- * `~/.config`가 root 소유인 머신이 흔하다 — 사본 실패가 해제·연결 자체를 막으면 안 된다.
- * @returns 사본을 쓰지 못했으면 false
+ * 두 곳에 각각 시도한다. 한쪽 실패가 다른 쪽이나 해제·연결 자체를 막지 않게 한다
+ * (`~/.config`가 root 소유이거나 수집 폴더 권한이 바뀐 머신이 있다).
+ * @returns 실제로 쓴 곳의 수 (0~2)
  */
-function writeMarker([primary, mirror]: [string, string], value: unknown): boolean {
-  writeUsageJson(primary, value)
-  try { writeUsageJson(mirror, value); return true } catch { return false }
+function writeMarker(paths: [string, string], value: unknown): number {
+  let written = 0
+  for (const path of paths) { try { writeUsageJson(path, value); written++ } catch { /* 다른 쪽을 시도 */ } }
+  return written
 }
 
-export function markAutoSetupDeclined(home = homedir(), now = Date.now()): boolean {
+/** @returns 해제 표식을 남긴 곳의 수 (0~2) */
+export function markAutoSetupDeclined(home = homedir(), now = Date.now()): number {
   return writeMarker(declinedPaths(home), { version: 1, declinedAt: new Date(now).toISOString() })
 }
 
