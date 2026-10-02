@@ -205,10 +205,14 @@ export function installClaudeStatusline(
     throw new Error('Unsupported statusLine setting; existing settings were preserved.')
   }
   const receipt = readClaudeStatuslineInstallation(home)
-  if (current?.command !== receipt?.command && typeof current?.command === 'string' && current.command.includes(' usage statusline')) {
-    throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
-  }
-  const previous = receipt && current?.command === receipt.command ? receipt.previous : current
+  let previous: Record<string, unknown> | null
+  if (receipt && current?.command === receipt.command) previous = receipt.previous
+  else if (typeof current?.command === 'string' && current.command.includes(' usage statusline')) {
+    // 기록이 사라진 aitk 명령: 새 형식이면 명령에 실어 둔 원래 명령으로 기록을 되살린다.
+    const original = parseHandedOverPrevious(current.command)
+    if (original === null) throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
+    previous = original === '' ? null : { ...current, command: original }
+  } else previous = current
   const command = buildStatuslineCommand(node, resolve(entry), previous ?? null)
   // 원래 표시줄이 없을 때만 표시 모드가 필요하다. 재설치에서 생략하면 이전 선택을 유지한다.
   const display: StatuslineDisplay | undefined = previous ? undefined : (options.display ?? receipt?.display ?? 'default')
@@ -279,14 +283,14 @@ function connectedPaths(home: string): [primary: string, mirror: string] {
  * (`~/.config`가 root 소유이거나 수집 폴더 권한이 바뀐 머신이 있다).
  * @returns 실제로 쓴 곳의 수 (0~2)
  */
-function writeMarker(paths: [string, string], value: unknown): number {
-  let written = 0
-  for (const path of paths) { try { writeUsageJson(path, value); written++ } catch { /* 다른 쪽을 시도 */ } }
+function writeMarker(paths: [string, string], value: unknown): string[] {
+  const written: string[] = []
+  for (const path of paths) { try { writeUsageJson(path, value); written.push(path) } catch { /* 다른 쪽을 시도 */ } }
   return written
 }
 
-/** @returns 해제 표식을 남긴 곳의 수 (0~2) */
-export function markAutoSetupDeclined(home = homedir(), now = Date.now()): number {
+/** @returns 해제 표식을 실제로 남긴 경로들 */
+export function markAutoSetupDeclined(home = homedir(), now = Date.now()): string[] {
   return writeMarker(declinedPaths(home), { version: 1, declinedAt: new Date(now).toISOString() })
 }
 

@@ -436,6 +436,34 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     expect(JSON.parse(settingsOf(none))).toEqual({ language: 'ko' })
   })
 
+  it('연결 기록만 사라진 사람(설정은 그대로)은 해제로 오판하지 않고 기록을 되살려 수집을 이어간다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    rmSync(join(home, '.claude/aitk-usage'), { recursive: true, force: true })
+    quietReports(home)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('refreshed')
+    expect(existsSync(join(home, '.claude/aitk-usage/auto-setup-declined.json'))).toBe(false)
+    expect(JSON.parse(readFileSync(join(home, '.claude/aitk-usage/statusline.json'), 'utf8')).previous).toEqual(userRenderer())
+    expect(JSON.parse(settingsOf(home)).statusLine.command).toBe(command)
+    expect(runStored(home, command, quotaInput).stdout).toBe('original:' + quotaInput)
+    expect(existsSync(join(home, '.claude/aitk-usage/claude.json'))).toBe(true)
+    run(home, ['uninstall'])
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+  })
+
+  it('기록과 저장 명령이 어긋나면 실제로 실행된 저장 명령이 넘긴 원래 명령을 그린다', () => {
+    const home = freshHome({ statusLine: userRenderer() })
+    run(home, ['setup', '--auto'])
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    const receiptPath = join(home, '.claude/aitk-usage/statusline.json')
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
+    // 다른 머신에서 동기화돼 들어온 기록처럼 원래 명령이 다른 경우
+    writeFileSync(receiptPath, JSON.stringify({ ...receipt, previous: { type: 'command', command: `printf 'other-machine'` } }))
+    expect(runStored(home, command, plainInput).stdout).toBe('original:' + plainInput)
+  })
+
   it('작은따옴표가 든 원래 명령도 기록 없이 정확히 되돌린다', () => {
     const original = { statusLine: { type: 'command', command: `printf '%s' "it's"`, padding: 2 } }
     const home = freshHome(original)
@@ -455,7 +483,8 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
       const result = run(home, ['uninstall'])
       expect(result.status).toBe(0)
       expect(JSON.parse(settingsOf(home))).toEqual(original)
-      // 사본(~/.config/aitk) 표식은 남아 다시 켜지지 않는다
+      // 사본(~/.config/aitk) 표식은 남아 다시 켜지지 않고, 안내도 실제로 남은 쪽을 가리킨다
+      expect(result.stderr).toContain('.config/aitk/usage-auto-setup-declined.json')
       expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
     } finally {
       chmodSync(usage, 0o700)
@@ -492,6 +521,13 @@ describe('래퍼 실패 내성 — 자동 연결로 모두에게 깔리므로 �
     expect(result.stdout).toBe('partial')
     // Claude Code는 종료 코드로 출력 사용 여부를 정한다 — 래퍼가 0으로 바꾸면 화면이 달라진다
     expect(result.status).toBe(3)
+  })
+
+  it('원래 명령이 시그널로 끝나면 128+번호로 알린다 (실패를 성공으로 바꾸지 않음)', () => {
+    const home = wrapped(`printf 'partial'; kill -TERM $$`)
+    const result = statusline(home, '{}')
+    expect(result.stdout).toBe('partial')
+    expect(result.status).toBe(143)
   })
 
   it('원래 명령이 없어져도 래퍼는 멈추지 않고, 셸과 같은 종료 코드를 낸다', () => {

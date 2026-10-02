@@ -1,6 +1,6 @@
 /** Claude statusline stdin을 기존 표시줄에 전달하면서 공식 한도만 수집한다. */
 import { spawn } from 'node:child_process'
-import { homedir } from 'node:os'
+import { constants, homedir } from 'node:os'
 import { STATUSLINE_PREVIOUS_ENV, claudeUsagePaths, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
 import { shouldScheduleClaudeReport } from '../usage/claude-auto-report.js'
 
@@ -17,10 +17,12 @@ export async function runUsageStatusline(): Promise<void> {
   const installation = readClaudeStatuslineInstallation(home)
   // 연결 기록이 없으면(해제 직후·폴더 삭제·다른 머신에서 동기화된 설정) 수집하지 않고,
   // 저장 명령이 넘겨준 원래 명령만 그린다. 기록 부재를 기본 한 줄 동의로 해석하지 않는다.
+  // 원래 명령은 실제로 실행된 저장 명령이 넘긴 값을 우선한다 — 기록은 다른 머신·중간 종료로 어긋날 수 있다.
+  // 옛 형식 명령(값을 넘기지 않음)일 때만 기록을 본다.
   const handedOver = process.env[STATUSLINE_PREVIOUS_ENV]
-  const previousCommand = installation
-    ? (typeof installation.previous?.command === 'string' ? installation.previous.command : undefined)
-    : (handedOver || undefined)
+  const previousCommand = handedOver !== undefined
+    ? (handedOver || undefined)
+    : (typeof installation?.previous?.command === 'string' ? installation.previous.command : undefined)
   const childEnv = { ...process.env }
   delete childEnv[STATUSLINE_PREVIOUS_ENV]
   let rendered = Promise.resolve()
@@ -32,7 +34,12 @@ export async function runUsageStatusline(): Promise<void> {
       const finish = () => { clearTimeout(deadline); done() }
       renderer.on('error', finish)
       // 원래 명령의 종료 코드를 그대로 돌려준다. Claude Code는 종료 코드로 출력 사용 여부를 정한다.
-      renderer.on('close', (code) => { if (typeof code === 'number') process.exitCode = code; finish() })
+      renderer.on('close', (code, signal) => {
+        // 시그널로 끝났으면(타임아웃 SIGKILL 포함) 셸처럼 128+번호로 알린다 — 0으로 바꾸면 실패가 성공이 된다.
+        if (typeof code === 'number') process.exitCode = code
+        else if (signal) process.exitCode = 128 + (constants.signals[signal] ?? 0)
+        finish()
+      })
       renderer.stdin.on('error', () => { /* renderer exited before reading */ })
       renderer.stdin.end(input)
     })

@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
   claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, wasConnected, type StatuslineDisplay,
+  markAutoSetupDeclined, markConnected, parseHandedOverPrevious, readClaudeStatuslineInstallation, uninstallClaudeStatusline, wasConnected, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -119,6 +119,9 @@ export interface UsageAutoSetupOptions {
 
 
 const LOCK_STALE_MS = 60_000
+
+/** 잠금 폴더를 만들 수 없을 때(권한·디스크). 경합(EEXIST)과 구분한다. */
+export class LockUnavailableError extends Error {}
 /** setup은 ms 단위로 끝난다. 이보다 오래된 잠금은 주인 pid가 살아 있어도(pid 재사용) 회수한다. */
 const LOCK_ABANDONED_MS = 10 * 60_000
 
@@ -160,7 +163,7 @@ function sleepSync(ms: number): void { Atomics.wait(new Int32Array(new SharedArr
 export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 'busy' {
   const lock = join(claudeUsagePaths(home).directory, 'setup.lock')
   const owner = join(lock, 'owner')
-  mkdirSync(dirname(lock), { recursive: true, mode: 0o700 })
+  try { mkdirSync(dirname(lock), { recursive: true, mode: 0o700 }) } catch (err) { throw new LockUnavailableError((err as Error).message) }
   const token = `${process.pid}-${randomUUID()}`
   const deadline = Date.now() + (wait ? 5_000 : 0)
   for (let attempt = 0; ; attempt++) {
@@ -169,7 +172,7 @@ export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 
       writeFileSync(owner, token)
       break
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw new LockUnavailableError((err as Error).message)
     }
     let reclaimed = false
     try {
@@ -247,7 +250,9 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
       }
       const state = inspectClaudeStatusline(home)
       if (state.kind === 'unsupported') return skip('unsupported')
-      if (state.kind !== 'aitk' && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
+      // 기록만 사라진 aitk 명령(새 형식)은 사람이 되돌린 게 아니다 — 아래 설치가 기록을 되살린다.
+      const ownCommand = state.kind === 'user' && parseHandedOverPrevious(state.command) !== null
+      if (state.kind !== 'aitk' && !ownCommand && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
         // 연결한 적이 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸거나 옛 aitk로 uninstall했다. 다시 켜지 않는다.
         markAutoSetupDeclined(home)
         return skip('drifted')
@@ -257,7 +262,7 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
       const installed = installClaudeStatusline(opts.entry, home, undefined, { display })
       markConnected(home)
       if (installed.mode === 'unchanged') return { status: 'unchanged' }
-      if (state.kind === 'aitk') return { status: 'refreshed' }
+      if (state.kind === 'aitk' || ownCommand) return { status: 'refreshed' }
       return { status: 'connected', mode: installed.mode === 'wrapped' ? 'wrapped' : 'none' }
     })
     return result === 'busy' ? skip('busy') : result
@@ -286,12 +291,16 @@ export function runUsageUninstall(home = homedir()): boolean {
   const body = () => {
     const marked = markAutoSetupDeclined(home)
     const result = uninstallClaudeStatusline(home)
-    if (marked === 0) info('해제 표식을 남기지 못했습니다(~/.claude/aitk-usage, ~/.config/aitk 쓰기 실패). 자동 연결이 다시 켜질 수 있으니 AITK_USAGE_SETUP=0 도 설정하세요.')
-    else if (marked === 1) info('해제 표식을 한 곳에만 남겼습니다. ~/.claude/aitk-usage 를 지우면 다음 날 다시 연결될 수 있습니다.')
+    if (marked.length === 0) info('해제 표식을 남기지 못했습니다(~/.claude/aitk-usage, ~/.config/aitk 쓰기 실패). 자동 연결이 다시 켜질 수 있으니 AITK_USAGE_SETUP=0 도 설정하세요.')
+    else if (marked.length === 1) info(`해제 표식을 한 곳에만 남겼습니다: ${marked[0]} — 이 파일을 지우면 다음 날 다시 연결될 수 있습니다.`)
     return result
   }
   let restored: boolean | 'busy'
-  try { restored = withSetupLock(home, true, body) } catch { restored = body() }
+  try { restored = withSetupLock(home, true, body) } catch (err) {
+    // 잠금을 못 만든 경우만(수집 폴더 권한 없음 등) 잠금 없이 복원한다. 복원 자체의 오류는 그대로 알린다.
+    if (!(err instanceof LockUnavailableError)) throw err
+    restored = body()
+  }
   if (restored === 'busy') error(busyMessage(home))
   return restored
 }
