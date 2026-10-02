@@ -133,13 +133,14 @@ AX 대시보드의 주간 한도 지표는 Claude Code가 상태 표시줄 명�
 - 상태 표시줄을 이미 쓰고 있으면 그대로 감싸기만 하므로 화면은 바뀌지 않습니다.
 - 상태 표시줄이 없으면 화면에는 아무것도 그리지 않고 한도만 수집합니다.
 - 결과는 `~/.cache/gpters-aitk/usage-setup.log`에 남습니다. 끄려면 `aitk usage uninstall`
-  (이후 자동으로 다시 켜지지 않음), 처음부터 막으려면 `export AITK_USAGE_SETUP=0`.
+  — 연결 전에 실행해 둬도 되고, 이후 자동으로 다시 켜지지 않습니다. 셸의 `export AITK_USAGE_SETUP=0`은
+  GUI·IDE에서 띄운 Claude Code·Codex에는 전달되지 않을 수 있으니 `uninstall`을 우선합니다.
 - aitk 기본 한 줄(모델 · 컨텍스트 · 5시간/주간 한도)을 화면에 보고 싶으면 직접
   `aitk usage setup --display default`. Claude Code 안에서 "usage 설정해줘"라고 해도 `usage-setup`
   스킬이 같은 절차를 안내합니다.
 - 에이전트 머신, `CLAUDE_CONFIG_DIR`을 다른 곳으로 쓰는 경우, `settings.json`이 심링크(dotfiles 공유)인 경우,
   command 형식이 아닌 상태 표시줄, 연결 뒤 `settings.json`에서 직접 뺀 경우는 자동 연결하지 않습니다.
-- node·aitk 경로가 사라져도 원래 상태 표시줄은 그대로 나옵니다(다음 세션에 경로를 다시 맞춤).
+- node·aitk 경로가 사라져도 원래 상태 표시줄은 그대로 나옵니다(다음 날 첫 세션에 경로를 다시 맞춤).
 - 보내는 값은 토큰 수·세션 수·플랜·모델별 사용량·주간 한도 사용률뿐입니다. 대화 내용·경로·세션 ID·
   인증 토큰은 보내지 않습니다.
 

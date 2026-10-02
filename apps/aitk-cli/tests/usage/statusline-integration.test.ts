@@ -13,9 +13,10 @@ beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'aitk-statusline-integration-'))
   entry = join(root, 'repo build.mjs')
   preload = join(root, 'fake-home.mjs')
-  // HOME 자체는 바꾸지 않는다. 이 자식 프로세스의 homedir()만 임시 경로로 고정한다.
+  // 공유 홈 테스트는 HOME을 바꾸지 않고 homedir()만 임시 경로로 고정한다. NODE_OPTIONS로 손자 프로세스까지 전달한다.
+  // 새 홈을 쓰는 테스트는 isolated()가 HOME까지 바꾼다.
   writeFileSync(preload, `import os from 'node:os'; import {syncBuiltinESMExports} from 'node:module'; os.homedir=()=>process.env.AITK_TEST_HOME; syncBuiltinESMExports();`)
-  env = { ...process.env, AITK_TEST_HOME: root }
+  env = { ...process.env, AITK_TEST_HOME: root, NODE_OPTIONS: `--import=${preload}` }
   delete env.AITK_USAGE_REPORT
   // 개발자 셸 설정이 자동 연결 판단을 바꾸지 않게 한다
   delete env.AITK_USAGE_SETUP
@@ -31,6 +32,22 @@ beforeAll(() => {
   writeFileSync(join(root, '.claude/aitk-usage/report.json'), JSON.stringify({ lastSuccessAt: new Date().toISOString(), lastAttemptAt: new Date().toISOString() }))
 })
 afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+/**
+ * 테스트 홈으로 고정한 env. preload를 NODE_OPTIONS로 넘겨 래퍼가 띄우는 auto-report 같은 손자 프로세스도
+ * 실제 홈을 보지 않게 한다.
+ */
+function isolated(home: string): NodeJS.ProcessEnv {
+  // HOME도 같이 바꾼다 — preload가 닿지 않는 손자 프로세스라도 os.homedir()이 HOME을 먼저 본다
+  return { ...env, HOME: home, AITK_TEST_HOME: home, NODE_OPTIONS: `--import=${preload}` }
+}
+
+/** 오늘 보고 성공 상태를 심어 auto-report가 네트워크로 나가지 않게 한다. */
+function quietReports(home: string): void {
+  mkdirSync(join(home, '.claude/aitk-usage'), { recursive: true })
+  const now = new Date().toISOString()
+  writeFileSync(join(home, '.claude/aitk-usage/report.json'), JSON.stringify({ lastSuccessAt: now, lastAttemptAt: now }))
+}
 
 /** 빌드한 CLI를 실행한다. 기존 사용자 홈과 인증 파일에는 닿지 않는다. */
 function cli(args: string[], input?: string) {
@@ -81,13 +98,14 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
   function freshHome(settings?: unknown): string {
     const home = mkdtempSync(join(root, 'home-'))
     mkdirSync(join(home, '.claude'), { recursive: true })
+    quietReports(home)
     if (settings !== undefined) writeFileSync(join(home, '.claude/settings.json'), typeof settings === 'string' ? settings : JSON.stringify(settings))
     return home
   }
   /** 실제 빌드를 그 홈에서 실행한다. 실패해도 예외 대신 결과를 돌려준다. */
   function run(home: string, args: string[], extraEnv: NodeJS.ProcessEnv = {}, input?: string) {
-    return spawnSync(process.execPath, ['--import', preload, entry, 'usage', ...args],
-      { env: { ...env, AITK_TEST_HOME: home, ...extraEnv }, input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+    return spawnSync(process.execPath, [entry, 'usage', ...args],
+      { env: { ...isolated(home), ...extraEnv }, input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
   }
   const settingsOf = (home: string) => readFileSync(join(home, '.claude/settings.json'), 'utf8')
   const userRenderer = () => {
@@ -98,9 +116,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
   const quotaInput = JSON.stringify({ rate_limits: { seven_day: { used_percentage: 12, resets_at: Math.floor(Date.now() / 1000) + 86400 } } })
   /** settings.json에 저장된 명령을 Claude Code처럼 /bin/sh로 실행한다. 래퍼의 홈은 테스트 홈으로 고정한다. */
   function runStored(home: string, command: string, input: string) {
-    return spawnSync('/bin/sh', ['-c', command], {
-      env: { ...env, AITK_TEST_HOME: home, NODE_OPTIONS: `--import=${preload}` }, input, encoding: 'utf8', timeout: 15_000,
-    })
+    return spawnSync('/bin/sh', ['-c', command], { env: isolated(home), input, encoding: 'utf8', timeout: 15_000 })
   }
 
   it('기존 표시줄은 감싸서 연결하고 출력은 그대로다. 두 번째 실행은 바꾸지 않는다', () => {
@@ -188,8 +204,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     // node 버전 전환·재설치로 aitk가 다른 경로에 깔린 상황
     const moved = join(root, `moved-${Date.now()}.mjs`)
     copyFileSync(entry, moved)
-    const result = spawnSync(process.execPath, ['--import', preload, moved, 'usage', 'setup', '--auto'],
-      { env: { ...env, AITK_TEST_HOME: home }, encoding: 'utf8' })
+    const result = spawnSync(process.execPath, [moved, 'usage', 'setup', '--auto'], { env: isolated(home), encoding: 'utf8' })
     expect(result.stderr).toContain('refreshed')
     const command = JSON.parse(settingsOf(home)).statusLine.command as string
     expect(command).toContain(moved)
@@ -213,7 +228,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     const home = freshHome({ language: 'ko' })
     const moved = join(root, `moved-none-${Date.now()}.mjs`)
     copyFileSync(entry, moved)
-    spawnSync(process.execPath, ['--import', preload, moved, 'usage', 'setup', '--auto'], { env: { ...env, AITK_TEST_HOME: home } })
+    spawnSync(process.execPath, [moved, 'usage', 'setup', '--auto'], { env: isolated(home) })
     const command = JSON.parse(settingsOf(home)).statusLine.command as string
     expect(runStored(home, command, plainInput).stdout).toBe('')
     rmSync(moved)
@@ -312,8 +327,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     mkdirSync(usage, { recursive: true })
     chmodSync(usage, 0o500)
     try {
-      const result = spawnSync(process.execPath, ['--import', preload, entry, 'usage', 'setup', '--auto'],
-        { env: { ...env, AITK_TEST_HOME: home }, encoding: 'utf8', timeout: 10_000 })
+      const result = spawnSync(process.execPath, [entry, 'usage', 'setup', '--auto'], { env: isolated(home), encoding: 'utf8', timeout: 10_000 })
       expect(result.error).toBeUndefined()
       expect(result.status).toBe(0)
       expect(result.stderr).toContain('failed:')
@@ -328,9 +342,35 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     mkdirSync(lock, { recursive: true })
     expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: busy')
     const old = new Date(Date.now() - 120_000)
+    // 주인이 살아 있으면(이 테스트 프로세스) 오래돼도 회수하지 않는다
+    writeFileSync(join(lock, 'owner'), `${process.pid}-live`)
+    utimesSync(lock, old, old)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: busy')
+    // 주인이 죽었으면 회수한다
+    writeFileSync(join(lock, 'owner'), '999999-dead')
     utimesSync(lock, old, old)
     expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
     expect(existsSync(lock)).toBe(false)
+  })
+
+  it('uninstall 뒤 수집 폴더를 통째로 지워도 해제 의사가 남는다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    run(home, ['uninstall'])
+    rmSync(join(home, '.claude/aitk-usage'), { recursive: true, force: true })
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+    // 직접 setup하면 두 표식이 모두 지워진다
+    run(home, ['setup'])
+    expect(existsSync(join(home, '.config/aitk/usage-auto-setup-declined.json'))).toBe(false)
+  })
+
+  it('연결 전에 uninstall해 두면 처음부터 자동 연결하지 않는다 (env가 전달되지 않는 실행 환경용)', () => {
+    const home = freshHome({ language: 'ko' })
+    run(home, ['uninstall'])
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+    expect(JSON.parse(settingsOf(home))).toEqual({ language: 'ko' })
   })
 })
 
@@ -338,13 +378,13 @@ describe('래퍼 실패 내성 — 자동 연결로 모두에게 깔리므로 �
   function wrapped(command: string): string {
     const home = mkdtempSync(join(root, 'wrap-'))
     mkdirSync(join(home, '.claude'), { recursive: true })
+    quietReports(home)
     writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ statusLine: { type: 'command', command } }))
-    spawnSync(process.execPath, ['--import', preload, entry, 'usage', 'setup', '--auto'], { env: { ...env, AITK_TEST_HOME: home } })
+    spawnSync(process.execPath, [entry, 'usage', 'setup', '--auto'], { env: isolated(home) })
     return home
   }
   function statusline(home: string, input: string) {
-    return spawnSync(process.execPath, ['--import', preload, entry, 'usage', 'statusline'],
-      { env: { ...env, AITK_TEST_HOME: home }, input, encoding: 'utf8', timeout: 15_000 })
+    return spawnSync(process.execPath, [entry, 'usage', 'statusline'], { env: isolated(home), input, encoding: 'utf8', timeout: 15_000 })
   }
   const quotaInput = JSON.stringify({ rate_limits: { seven_day: { used_percentage: 12, resets_at: Math.floor(Date.now() / 1000) + 86400 } } })
 

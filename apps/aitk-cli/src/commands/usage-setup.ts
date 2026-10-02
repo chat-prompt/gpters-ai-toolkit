@@ -128,6 +128,18 @@ function markConnected(home: string): void {
 
 const LOCK_STALE_MS = 60_000
 
+/** 잠금 주인 토큰(`<pid>-<uuid>`). 없거나 읽을 수 없으면 빈 문자열. */
+function readOwner(path: string): string {
+  try { return readFileSync(path, 'utf8') } catch { return '' }
+}
+
+/** 토큰의 pid가 살아 있는지. 주인을 모르면(owner 쓰기 전 죽음) 죽은 것으로 본다. */
+function ownerAlive(token: string): boolean {
+  const pid = Number.parseInt(token.split('-')[0] ?? '', 10)
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try { process.kill(pid, 0); return true } catch (err) { return (err as NodeJS.ErrnoException).code === 'EPERM' }
+}
+
 /** 동기 대기. 잠금 재시도 사이에만 쓴다. */
 function sleepSync(ms: number): void { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) }
 
@@ -156,14 +168,17 @@ export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 
     }
     let reclaimed = false
     try {
-      if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) {
+      // 1분 넘었고 주인 프로세스가 죽은 잠금만 회수한다. 살아 있는 잠금은 오래 걸려도 건드리지 않는다.
+      const seen = readOwner(owner)
+      if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS && !ownerAlive(seen)) {
         const grave = `${lock}.stale-${token}`
         renameSync(lock, grave)
-        if (Date.now() - statSync(grave).mtimeMs > LOCK_STALE_MS) {
+        // 옮긴 것이 판단한 그 잠금(같은 주인 토큰)일 때만 지운다. 그 사이 다른 프로세스가 새로 잡은 잠금이면 되돌린다.
+        if (readOwner(join(grave, 'owner')) === seen) {
           rmSync(grave, { recursive: true, force: true })
           reclaimed = true
         } else {
-          try { renameSync(grave, lock) } catch { rmSync(grave, { recursive: true, force: true }) }
+          try { renameSync(grave, lock) } catch { /* 또 다른 잠금이 생겼다 — 옮긴 잠금은 주인이 끝날 때까지 grave 에 둔다 */ }
         }
       }
     } catch (err) {
@@ -209,11 +224,13 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
     if (env.CLAUDE_CONFIG_DIR && resolve(env.CLAUDE_CONFIG_DIR) !== resolve(claudeDir)) return skip('config-dir')
     // ~/.claude 자체(또는 상위)가 dotfiles·클라우드 폴더로 연결돼 있으면 여러 머신이 같은 설정을 쓴다.
     if (realpathSync(claudeDir) !== join(realpathSync(home), '.claude')) return skip('symlink')
+    const paths = claudeUsagePaths(home)
+    // 잠금(폴더 생성)보다 먼저 거를 수 있는 것은 먼저 거른다 — 건너뛰면 아무것도 만들지 않는다.
+    if (isAutoSetupDeclined(home)) return skip('declined')
+    try { if (lstatSync(paths.settings).isSymbolicLink()) return skip('symlink') } catch { /* 없음 */ }
     const result = withSetupLock(home, false, (): UsageAutoSetupResult => {
       // 잠금 안에서 다시 판단한다 — 그 사이 uninstall이 끝났을 수 있다.
       if (isAutoSetupDeclined(home)) return skip('declined')
-      const paths = claudeUsagePaths(home)
-      try { if (lstatSync(paths.settings).isSymbolicLink()) return skip('symlink') } catch { /* 없음 */ }
       // 편집 중이거나 깨진 settings.json을 "표시줄 없음"으로 읽으면 직접 해제로 오판한다. 읽을 수 없으면 손대지 않는다.
       if (existsSync(paths.settings)) {
         const parsed: unknown = JSON.parse(readFileSync(paths.settings, 'utf8'))
