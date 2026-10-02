@@ -28,6 +28,7 @@ export function claudeUsagePaths(home = homedir()) {
     snapshot: join(directory, 'claude.json'),
     report: join(directory, 'report.json'),
     lock: join(directory, 'report.lock'),
+    declined: join(directory, 'auto-setup-declined.json'),
   }
 }
 
@@ -218,4 +219,22 @@ export function uninstallClaudeStatusline(home = homedir()): boolean {
     try { unlinkSync(file) } catch { /* 없음 */ }
   }
   return true
+}
+
+/**
+ * 사용자가 직접 해제했다는 표식. 자동 연결은 이 표식이 있으면 다시 켜지 않는다.
+ * 수동 `aitk usage setup`만 지운다.
+ */
+export function markAutoSetupDeclined(home = homedir(), now = Date.now()): void {
+  writeUsageJson(claudeUsagePaths(home).declined, { version: 1, declinedAt: new Date(now).toISOString() })
+}
+
+/** 수동 setup은 사용자의 명시적 선택이므로 이전 해제 표식을 지운다. */
+export function clearAutoSetupDeclined(home = homedir()): void {
+  try { unlinkSync(claudeUsagePaths(home).declined) } catch { /* 없음 */ }
+}
+
+/** 해제 표식이 있으면 자동 연결을 건너뛴다. 내용이 손상돼도 사용자의 해제 의사로 본다. */
+export function isAutoSetupDeclined(home = homedir()): boolean {
+  return existsSync(claudeUsagePaths(home).declined)
 }

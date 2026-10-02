@@ -83,7 +83,7 @@ Claude Code를 재시작하면 자동으로 활성화됩니다.
 - 요청 시 팀 스킬 검색 (`skill-suggest` 스킬, 대화 중 실행되는 훅 없음)
 - MCP 서버 자동 등록 (별도 `claude mcp add` 불필요)
 - 세션 종료 시 사용자 입력 수만 집계해 전송 (SessionEnd hook), 세션 시작 시 하루 한 번 사용량 보고
-- 주간 한도 수집: 플러그인 설치 후 아래 4단계의 `aitk usage setup`을 한 번 실행합니다
+- 주간 한도 수집: 세션 시작 훅이 화면을 바꾸지 않는 방식으로 자동 연결합니다(아래 4단계)
 
 ### OpenCode
 
@@ -127,17 +127,17 @@ npx @gpters/codex-plugin setup
 ## 4단계: Claude Code 주간 한도 수집 연결
 
 AX 대시보드의 주간 한도 지표는 Claude Code가 상태 표시줄 명령에 넘겨주는 공식 값에서만 얻을 수
-있습니다. 플러그인 설치 후 한 번 실행합니다:
-
-```bash
-aitk usage setup
-```
+있습니다. **aitk 0.7.23 이상과 플러그인이 깔려 있으면 따로 할 일이 없습니다.** 세션 시작 훅이 하루 한 번
+`aitk usage setup --auto`를 실행해 화면이 바뀌지 않는 방식으로 연결하고, 다음 세션부터 수집됩니다.
 
 - 상태 표시줄을 이미 쓰고 있으면 그대로 감싸기만 하므로 화면은 바뀌지 않습니다.
-- 상태 표시줄이 없으면 aitk 기본 한 줄(모델 · 컨텍스트 · 5시간/주간 한도)을 보여줄지 묻습니다.
-  아니오를 고르면 화면에는 아무것도 그리지 않고 한도만 수집합니다.
-- Claude Code를 재시작하면 적용됩니다. Claude Code 안에서 "usage 설정해줘"라고 해도 `usage-setup`
-  스킬이 같은 절차를 안내합니다. 되돌리려면 `aitk usage uninstall`.
+- 상태 표시줄이 없으면 화면에는 아무것도 그리지 않고 한도만 수집합니다.
+- 결과는 `~/.cache/gpters-aitk/usage-setup.log`에 남습니다. 끄려면 `aitk usage uninstall`
+  (이후 자동으로 다시 켜지지 않음), 처음부터 막으려면 `export AITK_USAGE_SETUP=0`.
+- aitk 기본 한 줄(모델 · 컨텍스트 · 5시간/주간 한도)을 화면에 보고 싶으면 직접
+  `aitk usage setup --display default`. Claude Code 안에서 "usage 설정해줘"라고 해도 `usage-setup`
+  스킬이 같은 절차를 안내합니다.
+- 에이전트 머신, command 형식이 아닌 상태 표시줄은 자동 연결하지 않습니다.
 - 보내는 값은 토큰 수·세션 수·플랜·모델별 사용량·주간 한도 사용률뿐입니다. 대화 내용·경로·세션 ID·
   인증 토큰은 보내지 않습니다.
 

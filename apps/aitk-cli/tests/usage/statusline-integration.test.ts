@@ -1,6 +1,6 @@
 /** 실제 CLI를 가짜 홈에서 실행해 stdin 전달·설정 복구·캐시 최소화를 검증한다. 서버로 보내지 않는다. */
-import { beforeAll, afterAll, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { beforeAll, afterAll, describe, expect, it } from 'vitest'
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -71,4 +71,175 @@ it('표시줄이 없으면 비대화형 setup은 --display를 요구하고, 고�
   cli(['uninstall'])
   expect(JSON.parse(readFileSync(settings, 'utf8'))).toEqual({ language: 'ko' })
   writeFileSync(settings, original)
+})
+
+describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570)', () => {
+  /** 테스트마다 새 홈을 만든다. 공유 홈(root)의 설치 상태와 섞이지 않게. */
+  function freshHome(settings?: unknown): string {
+    const home = mkdtempSync(join(root, 'home-'))
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    if (settings !== undefined) writeFileSync(join(home, '.claude/settings.json'), typeof settings === 'string' ? settings : JSON.stringify(settings))
+    return home
+  }
+  /** 실제 빌드를 그 홈에서 실행한다. 실패해도 예외 대신 결과를 돌려준다. */
+  function run(home: string, args: string[], extraEnv: NodeJS.ProcessEnv = {}, input?: string) {
+    return spawnSync(process.execPath, ['--import', preload, entry, 'usage', ...args],
+      { env: { ...env, AITK_TEST_HOME: home, ...extraEnv }, input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+  }
+  const settingsOf = (home: string) => readFileSync(join(home, '.claude/settings.json'), 'utf8')
+  const userRenderer = () => {
+    const renderer = join(root, 'renderer.mjs')
+    return { type: 'command', command: `${JSON.stringify(process.execPath)} ${JSON.stringify(renderer)}`, padding: 1 }
+  }
+  const plainInput = JSON.stringify({ model: { display_name: 'Claude Test' } })
+
+  it('기존 표시줄은 감싸서 연결하고 출력은 그대로다. 두 번째 실행은 바꾸지 않는다', () => {
+    const home = freshHome({ language: 'ko', statusLine: userRenderer() })
+    const first = run(home, ['setup', '--auto'])
+    expect(first.status).toBe(0)
+    expect(first.stderr).toContain('connected: 기존 상태 표시줄')
+    expect(run(home, ['statusline'], {}, plainInput).stdout).toBe('original:' + plainInput)
+    const second = run(home, ['setup', '--auto'])
+    expect(second.stderr).toContain('unchanged')
+    expect(JSON.parse(settingsOf(home)).language).toBe('ko')
+  })
+
+  it('표시줄이 없으면 묻지 않고 화면 표시 없이 연결한다', () => {
+    const home = freshHome({ language: 'ko' })
+    const result = run(home, ['setup', '--auto'])
+    expect(result.status).toBe(0)
+    expect(result.stderr).toContain('connected: 화면 표시 없이')
+    expect(JSON.parse(run(home, ['status']).stdout).statusline).toEqual({ kind: 'aitk', previous: null, display: 'none' })
+    expect(run(home, ['statusline'], {}, plainInput).stdout).toBe('')
+  })
+
+  it('settings.json이 아예 없어도 ~/.claude가 있으면 화면 표시 없이 연결한다', () => {
+    const home = freshHome()
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected: 화면 표시 없이')
+    expect(JSON.parse(settingsOf(home)).statusLine.command).toContain('usage statusline')
+  })
+
+  it('uninstall 뒤에는 자동 연결이 다시 켜지 않고, 직접 setup하면 다시 켜진다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    expect(run(home, ['uninstall']).stderr).toContain('will not reconnect')
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+    run(home, ['setup'])
+    run(home, ['uninstall'])
+    run(home, ['setup'])
+    // 직접 setup이 거부 표식을 지웠으니 이후 자동 실행은 정상 경로(이미 연결됨)를 탄다
+    expect(run(home, ['setup', '--auto']).stderr).toContain('unchanged')
+  })
+
+  it('건너뛰는 경우는 설정 파일을 한 바이트도 바꾸지 않는다', () => {
+    const cases: Array<{ settings: unknown; env?: NodeJS.ProcessEnv; reason: string; agent?: boolean }> = [
+      { settings: { statusLine: 'not-a-command' }, reason: 'unsupported' },
+      { settings: { statusLine: { type: 'static', text: 'hi' } }, reason: 'unsupported' },
+      { settings: { language: 'ko' }, env: { AITK_USAGE_SETUP: '0' }, reason: 'disabled' },
+      { settings: { language: 'ko' }, env: { AITK_USAGE_REPORT: '0' }, reason: 'report-disabled' },
+      { settings: { language: 'ko' }, agent: true, reason: 'agent' },
+    ]
+    for (const c of cases) {
+      const home = freshHome(c.settings)
+      if (c.agent) {
+        mkdirSync(join(home, '.config/aitk'), { recursive: true })
+        writeFileSync(join(home, '.config/aitk/agent.json'), JSON.stringify({ version: 1, agentId: 'test-agent', serverUrl: 'https://example.com' }))
+      }
+      const before = settingsOf(home)
+      const result = run(home, ['setup', '--auto'], c.env)
+      expect(result.status, c.reason).toBe(0)
+      expect(result.stderr, c.reason).toContain(`skipped: ${c.reason}`)
+      expect(settingsOf(home), c.reason).toBe(before)
+    }
+  })
+
+  it('~/.claude가 없으면 만들지 않는다 (Claude Code를 안 쓰는 사람)', () => {
+    const home = mkdtempSync(join(root, 'home-'))
+    const result = run(home, ['setup', '--auto'])
+    expect(result.stderr).toContain('skipped: no-claude')
+    expect(existsSync(join(home, '.claude'))).toBe(false)
+  })
+
+  it('깨진 settings.json은 덮어쓰지 않고 실패를 기록하되 exit 0이다', () => {
+    const home = freshHome('{ "language": "ko", ')
+    const result = run(home, ['setup', '--auto'])
+    expect(result.status).toBe(0)
+    expect(result.stderr).toContain('failed:')
+    expect(settingsOf(home)).toBe('{ "language": "ko", ')
+  })
+
+  it('aitk 설치 경로가 바뀌면 원래 표시줄을 지킨 채 명령 경로만 새 설치본으로 맞춘다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    // node 버전 전환·재설치로 aitk가 다른 경로에 깔린 상황
+    const moved = join(root, `moved-${Date.now()}.mjs`)
+    copyFileSync(entry, moved)
+    const result = spawnSync(process.execPath, ['--import', preload, moved, 'usage', 'setup', '--auto'],
+      { env: { ...env, AITK_TEST_HOME: home }, encoding: 'utf8' })
+    expect(result.stderr).toContain('refreshed')
+    expect(JSON.parse(settingsOf(home)).statusLine.command).toContain(moved)
+    expect(run(home, ['statusline'], {}, plainInput).stdout).toBe('original:' + plainInput)
+    run(home, ['uninstall'])
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+  })
+})
+
+describe('래퍼 실패 내성 — 자동 연결로 모두에게 깔리므로 원래 표시줄을 절대 깨지 않는다 (DEV-4570)', () => {
+  function wrapped(command: string): string {
+    const home = mkdtempSync(join(root, 'wrap-'))
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ statusLine: { type: 'command', command } }))
+    spawnSync(process.execPath, ['--import', preload, entry, 'usage', 'setup', '--auto'], { env: { ...env, AITK_TEST_HOME: home } })
+    return home
+  }
+  function statusline(home: string, input: string) {
+    return spawnSync(process.execPath, ['--import', preload, entry, 'usage', 'statusline'],
+      { env: { ...env, AITK_TEST_HOME: home }, input, encoding: 'utf8', timeout: 15_000 })
+  }
+  const quotaInput = JSON.stringify({ rate_limits: { seven_day: { used_percentage: 12, resets_at: Math.floor(Date.now() / 1000) + 86400 } } })
+
+  it('원래 명령이 출력 후 실패해도 그 출력을 그대로 내보내고 래퍼는 exit 0이다', () => {
+    const home = wrapped(`printf 'partial'; exit 3`)
+    const result = statusline(home, '{}')
+    expect(result.stdout).toBe('partial')
+    expect(result.status).toBe(0)
+  })
+
+  it('원래 명령이 없어져도 래퍼는 멈추거나 실패하지 않는다', () => {
+    const home = wrapped('/nonexistent/statusline-renderer')
+    const result = statusline(home, '{}')
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('')
+  })
+
+  it('원래 명령이 stdin을 읽지 않고 끝나도 출력이 보존된다', () => {
+    const home = wrapped(`printf 'no-stdin'`)
+    const result = statusline(home, quotaInput.repeat(2000))
+    expect(result.stdout).toBe('no-stdin')
+    expect(result.status).toBe(0)
+  })
+
+  it('한도 스냅샷을 저장할 수 없어도(권한 없음) 원래 출력은 그대로다', () => {
+    const home = wrapped(`printf 'kept'`)
+    const usageDir = join(home, '.claude/aitk-usage')
+    chmodSync(usageDir, 0o500)
+    try {
+      const result = statusline(home, quotaInput)
+      expect(result.stdout).toBe('kept')
+      expect(result.status).toBe(0)
+      expect(existsSync(join(usageDir, 'claude.json'))).toBe(false)
+    } finally {
+      chmodSync(usageDir, 0o700)
+    }
+  })
+
+  it('빈 입력·깨진 입력에도 원래 표시줄에 그대로 넘긴다', () => {
+    const home = wrapped(`cat`)
+    expect(statusline(home, '').stdout).toBe('')
+    expect(statusline(home, '{oops').stdout).toBe('{oops')
+  })
 })

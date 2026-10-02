@@ -19,11 +19,16 @@ let binDir: string
 let aitkLog: string
 let npmLog: string
 
-/** 가짜 aitk — 받은 인자를 기록한다. FAKE_SELF=1 이면 `upgrade --self` 를 아는 새 aitk */
+/**
+ * 가짜 aitk — 받은 인자를 기록한다. FAKE_SELF=1 이면 `upgrade --self` 를,
+ * FAKE_AUTO=1 이면 `usage setup --auto` 를 아는 새 aitk
+ */
 const FAKE_AITK = `#!/bin/bash
 echo "$*" >> "$AITK_LOG"
 case "$*" in
-  "--help") echo "  aitk usage report [--days <N>]" ;;
+  "--help") echo "  aitk usage report [--days <N>]"
+    [ "$FAKE_AUTO" = "1" ] && echo "  aitk usage setup [--display default|none] [--yes] [--auto] | status | uninstall" ;;
+  "usage setup --auto") echo "connected: 화면 표시 없이 주간 한도 수집만 연결했습니다." >&2 ;;
   "upgrade --help") [ "$FAKE_SELF" = "1" ] && echo "Usage: aitk upgrade [--self]" ;;
 esac
 exit 0
@@ -158,5 +163,38 @@ describe('SessionStart 훅 — aitk 자동 업그레이드', () => {
 
     expect(read(npmLog)).not.toContain('install')
     expect(cacheFile('self-update.log')).toContain('전역 설치본이 아니라')
+  })
+})
+
+describe('SessionStart 훅 — Claude 주간 한도 자동 연결 (DEV-4570)', () => {
+  it('--auto 를 아는 aitk 면 업그레이드 → 한도 연결 → 사용량 보고 순서로 부르고 결과를 로그에 남긴다', async () => {
+    installGlobalAitk()
+    await runHook({ FAKE_SELF: '1', FAKE_AUTO: '1' }, () => aitkCalls().includes('usage report --days 7'))
+
+    expect(aitkCalls()).toEqual(['upgrade --self', 'usage setup --auto', 'usage report --days 7'])
+    expect(cacheFile('usage-setup.log')).toContain('connected')
+  })
+
+  it('--auto 를 모르는 옛 aitk 에는 setup 을 부르지 않는다 (대화형 setup 으로 멈출 수 있다)', async () => {
+    installGlobalAitk()
+    await runHook({ FAKE_SELF: '1', FAKE_AUTO: '0' }, () => aitkCalls().includes('usage report --days 7'))
+
+    expect(aitkCalls()).not.toContain('usage setup --auto')
+    expect(cacheFile('usage-setup.log')).toBe('')
+  })
+
+  it('AITK_USAGE_REPORT=0 이면 한도 연결도 하지 않는다', async () => {
+    installGlobalAitk()
+    await runHook({ FAKE_SELF: '1', FAKE_AUTO: '1', AITK_USAGE_REPORT: '0' }, () => aitkCalls().length > 0)
+
+    expect(aitkCalls()).toEqual(['upgrade --self'])
+  })
+
+  it('같은 날 두 번째 세션에서는 한도 연결도 다시 부르지 않는다', async () => {
+    installGlobalAitk()
+    await runHook({ FAKE_SELF: '1', FAKE_AUTO: '1' }, () => aitkCalls().includes('usage report --days 7'))
+    await runHook({ FAKE_SELF: '1', FAKE_AUTO: '1' })
+
+    expect(aitkCalls().filter(call => call === 'usage setup --auto')).toHaveLength(1)
   })
 })

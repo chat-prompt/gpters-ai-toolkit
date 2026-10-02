@@ -13,14 +13,23 @@ description: Connect Claude Code weekly-limit collection to the AX dashboard whe
 설정 변경은 `~/.claude/settings.json`의 `statusLine` 한 항목뿐이고
 `aitk usage uninstall`로 원래대로 돌아간다.
 
+aitk 0.7.23부터는 플러그인 세션 시작 훅이 하루 한 번 `aitk usage setup --auto`로 화면이
+바뀌지 않는 방식(기존 표시줄 감싸기 또는 표시 없이 수집)을 자동 연결한다. 그래서 사용자가
+이 스킬을 부르는 건 대개 상태 확인, 기본 한 줄 보기로 바꾸기, 해제다.
+
+이것은 `aitk usage report`(사용량 보고)와 다르다. 보고는 플러그인 훅이 이미 하루 한 번 하므로
+크론·LaunchAgent를 추가하지 않는다 — 중복 전송이 되고, 주간 한도는 보고만으로 채워지지 않는다.
+
 ## 절차
 
-1. `aitk --version`이 0.7.18 이상인지 확인한다. 아니면 먼저
-   `npm i -g @gpters/aitk@latest && aitk upgrade`를 안내한다.
+1. `aitk --version`이 0.7.18 이상인지 확인한다(자동 연결은 0.7.23 이상). 아니면 먼저
+   `npm i -g @gpters/aitk@latest && aitk upgrade`를 안내한다. `usage setup` 명령이 없다는
+   오류도 옛 버전이라는 뜻이다 — `usage report`로 대신하지 않는다.
 2. `aitk usage status`를 실행해 `statusline.kind`를 읽는다. 읽기 전용이다.
    - `user`: 사용자가 만든 표시줄이 있다. 그대로 감싸기만 하므로 표시는 바뀌지 않는다.
    - `none`: 표시줄이 없다. 아래 3번처럼 먼저 물어본다.
-   - `aitk`: 이미 연결돼 있다. `display`와 `snapshot`을 보여주고 끝낸다. `snapshot`이
+   - `aitk`: 이미 연결돼 있다(자동 연결이면 `display: none`). `display`와 `snapshot`을 보여주고,
+     화면에 기본 한 줄을 보고 싶은지 묻는다. 원하면 `aitk usage setup --display default`. `snapshot`이
      계속 null이면 node/aitk 경로가 바뀐 것일 수 있다. `aitk usage setup`을 한 번 더
      실행하면 저장된 명령 경로가 현재 설치본으로 갱신된다.
    - 사용자가 해제를 원하면 `aitk usage uninstall`을 안내한다. 원래 표시줄 설정과

@@ -58,6 +58,8 @@ aitk usage report --dry-run  # 무엇을 보낼지 확인
 aitk usage report            # 지금 보내기
 ```
 
+같은 훅이 하루 한 번 Claude Code 주간 한도 수집도 자동 연결합니다(`aitk usage setup --auto`, aitk 0.7.23 이상). `~/.claude`가 있을 때만, 화면이 바뀌지 않는 방식으로 연결하며(기존 상태 표시줄은 감싸고, 없으면 수집만) 결과는 `~/.cache/gpters-aitk/usage-setup.log`에 남습니다. 끄려면 `export AITK_USAGE_SETUP=0` 또는 `aitk usage uninstall`.
+
 같은 훅이 하루 한 번 aitk 자동 업그레이드(`aitk upgrade --self`)도 합니다. npm에 더 높은 버전이 있고 aitk가 npm 전역 설치본일 때만 올리며, 결과는 `~/.cache/gpters-aitk/self-update.log`에 남습니다. 끄려면 `export AITK_AUTO_UPDATE=0`.
 
 ### 에이전트/런타임 상세 수집
