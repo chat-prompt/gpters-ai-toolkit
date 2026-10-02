@@ -243,12 +243,27 @@ export function uninstallClaudeStatusline(home = homedir()): boolean {
  * 수집 데이터 폴더(`~/.claude/aitk-usage`)를 통째로 지워도 의사가 남도록 aitk 설정 폴더에도 같이 둔다.
  * 수동 `aitk usage setup`만 지운다.
  */
-function declinedPaths(home: string): string[] {
+function declinedPaths(home: string): [primary: string, mirror: string] {
   return [claudeUsagePaths(home).declined, join(home, '.config', 'aitk', 'usage-auto-setup-declined.json')]
 }
 
-export function markAutoSetupDeclined(home = homedir(), now = Date.now()): void {
-  for (const path of declinedPaths(home)) writeUsageJson(path, { version: 1, declinedAt: new Date(now).toISOString() })
+/** 연결한 적이 있다는 기록. 수집 폴더를 지워도 남도록 aitk 설정 폴더에도 둔다. */
+function connectedPaths(home: string): [primary: string, mirror: string] {
+  return [claudeUsagePaths(home).connected, join(home, '.config', 'aitk', 'usage-connected.json')]
+}
+
+/**
+ * 첫 경로(`~/.claude/aitk-usage`)는 반드시 쓰고, 사본(`~/.config/aitk`)은 최선만 다한다.
+ * `~/.config`가 root 소유인 머신이 흔하다 — 사본 실패가 해제·연결 자체를 막으면 안 된다.
+ * @returns 사본을 쓰지 못했으면 false
+ */
+function writeMarker([primary, mirror]: [string, string], value: unknown): boolean {
+  writeUsageJson(primary, value)
+  try { writeUsageJson(mirror, value); return true } catch { return false }
+}
+
+export function markAutoSetupDeclined(home = homedir(), now = Date.now()): boolean {
+  return writeMarker(declinedPaths(home), { version: 1, declinedAt: new Date(now).toISOString() })
 }
 
 /** 수동 setup은 사용자의 명시적 선택이므로 이전 해제 표식을 지운다. */
@@ -259,4 +274,16 @@ export function clearAutoSetupDeclined(home = homedir()): void {
 /** 해제 표식이 하나라도 있으면 자동 연결을 건너뛴다. 내용이 손상돼도 사용자의 해제 의사로 본다. */
 export function isAutoSetupDeclined(home = homedir()): boolean {
   return declinedPaths(home).some(path => existsSync(path))
+}
+
+/** 연결 기록을 남긴다. 이미 있으면 그대로 둔다. */
+export function markConnected(home = homedir(), now = Date.now()): void {
+  const paths = connectedPaths(home)
+  if (paths.every(path => existsSync(path))) return
+  writeMarker(paths, { version: 1, connectedAt: new Date(now).toISOString() })
+}
+
+/** 연결한 적이 있는지. 옛 aitk uninstall·수집 폴더 삭제 뒤에도 남는 기록을 본다. */
+export function wasConnected(home = homedir()): boolean {
+  return connectedPaths(home).some(path => existsSync(path))
 }

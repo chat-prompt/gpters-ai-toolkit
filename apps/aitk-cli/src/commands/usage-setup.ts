@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
   claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, readClaudeStatuslineInstallation, uninstallClaudeStatusline, writeUsageJson, type StatuslineDisplay,
+  markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, wasConnected, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -78,7 +78,7 @@ export async function runUsageSetup(opts: UsageSetupOptions = {}): Promise<void>
     clearAutoSetupDeclined(home)
     return installed
   })
-  if (result === 'busy') error('다른 aitk usage setup이 실행 중입니다. 잠시 뒤 다시 실행하세요.')
+  if (result === 'busy') error(busyMessage(home))
   switch (result.mode) {
     case 'wrapped':
       info('기존 상태 표시줄은 그대로 두고 주간 한도만 수집하도록 연결했습니다.')
@@ -117,16 +117,16 @@ export interface UsageAutoSetupOptions {
   platform?: NodeJS.Platform
 }
 
-/**
- * 연결한 적이 있다는 기록. 옛 aitk(0.7.18~0.7.22)의 uninstall은 이 파일을 지우지 않으므로,
- * 연결 기록(statusline.json)은 없는데 이 파일만 남아 있으면 해제한 것으로 본다.
- */
-function markConnected(home: string): void {
-  const path = claudeUsagePaths(home).connected
-  if (!existsSync(path)) writeUsageJson(path, { version: 1, connectedAt: new Date().toISOString() })
-}
 
 const LOCK_STALE_MS = 60_000
+/** setup은 ms 단위로 끝난다. 이보다 오래된 잠금은 주인 pid가 살아 있어도(pid 재사용) 회수한다. */
+const LOCK_ABANDONED_MS = 10 * 60_000
+
+/** 사람이 친 명령이 잠금에 막혔을 때 직접 풀 수 있게 경로를 알려준다. */
+function busyMessage(home: string): string {
+  const lock = join(claudeUsagePaths(home).directory, 'setup.lock')
+  return `다른 aitk usage setup이 실행 중입니다. 잠시 뒤 다시 실행하세요. 계속 막히면: rm -rf '${lock}'`
+}
 
 /** 잠금 주인 토큰(`<pid>-<uuid>`). 없거나 읽을 수 없으면 빈 문자열. */
 function readOwner(path: string): string {
@@ -170,7 +170,8 @@ export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 
     try {
       // 1분 넘었고 주인 프로세스가 죽은 잠금만 회수한다. 살아 있는 잠금은 오래 걸려도 건드리지 않는다.
       const seen = readOwner(owner)
-      if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS && !ownerAlive(seen)) {
+      const age = Date.now() - statSync(lock).mtimeMs
+      if ((age > LOCK_STALE_MS && !ownerAlive(seen)) || age > LOCK_ABANDONED_MS) {
         const grave = `${lock}.stale-${token}`
         renameSync(lock, grave)
         // 옮긴 것이 판단한 그 잠금(같은 주인 토큰)일 때만 지운다. 그 사이 다른 프로세스가 새로 잡은 잠금이면 되돌린다.
@@ -238,7 +239,7 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
       }
       const state = inspectClaudeStatusline(home)
       if (state.kind === 'unsupported') return skip('unsupported')
-      if (state.kind !== 'aitk' && (readClaudeStatuslineInstallation(home) || existsSync(paths.connected))) {
+      if (state.kind !== 'aitk' && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
         // 연결한 적이 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸거나 옛 aitk로 uninstall했다. 다시 켜지 않는다.
         markAutoSetupDeclined(home)
         return skip('drifted')
@@ -274,9 +275,13 @@ export function formatUsageAutoSetup(result: UsageAutoSetupResult): string {
 export function runUsageUninstall(home = homedir()): boolean {
   const restored = withSetupLock(home, true, () => {
     // 표식을 먼저 남긴다 — 복원 중 실패해도 자동 연결이 다시 켜지지 않게.
-    markAutoSetupDeclined(home)
-    return uninstallClaudeStatusline(home)
+    // 표식 사본을 못 써도 복원은 한다. 해제는 어떤 경우에도 막히면 안 된다.
+    let mirrored = false
+    try { mirrored = markAutoSetupDeclined(home) } catch { /* 복원이 먼저다 */ }
+    const result = uninstallClaudeStatusline(home)
+    if (!mirrored) info(`해제 표식을 ~/.config/aitk 에 남기지 못했습니다. ~/.claude/aitk-usage 를 지우면 다음 날 다시 연결될 수 있습니다.`)
+    return result
   })
-  if (restored === 'busy') error('다른 aitk usage setup이 실행 중입니다. 잠시 뒤 다시 실행하세요.')
+  if (restored === 'busy') error(busyMessage(home))
   return restored
 }

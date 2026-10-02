@@ -9,7 +9,8 @@
 # 백그라운드로 떼어낸 뒤 즉시 반환합니다.
 #
 # 끄려면: AITK_USAGE_REPORT=0 (사용량 보고·한도 연결), AITK_AUTO_UPDATE=0 (자동 업그레이드),
-#         AITK_USAGE_SETUP=0 (한도 연결만)
+#         AITK_USAGE_SETUP=0 (한도 연결만). 한도 연결은 `aitk usage uninstall` 이 가장 확실하다 —
+#         연결 전에 실행해도 되고, GUI·IDE 에서 띄운 세션에도 적용된다(셸 env 는 안 갈 수 있다).
 
 STAMP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/gpters-aitk"
 STAMP="$STAMP_DIR/usage-report-last"

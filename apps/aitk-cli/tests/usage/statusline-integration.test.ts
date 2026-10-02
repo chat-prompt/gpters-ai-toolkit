@@ -21,6 +21,9 @@ beforeAll(() => {
   // 개발자 셸 설정이 자동 연결 판단을 바꾸지 않게 한다
   delete env.AITK_USAGE_SETUP
   delete env.CLAUDE_CONFIG_DIR
+  // 개발자 셸의 토큰·서버 주소로 테스트가 서버에 닿지 않게 한다
+  delete env.GPTERS_TOKEN
+  delete env.AITK_SERVER_URL
   execFileSync('bun', ['build', 'bin/aitk.ts', '--outfile', entry, '--target', 'node', '--format', 'esm'], { cwd: resolve('.'), stdio: 'pipe' })
   mkdirSync(join(root, '.claude/aitk-usage'), { recursive: true })
   const renderer = join(root, 'renderer.mjs')
@@ -68,6 +71,8 @@ it('setup → 기존 stdout 보존 → 공식 필드만 저장 → uninstall을 
   expect(JSON.parse(readFileSync(join(root, '.claude/aitk-usage/claude.json'), 'utf8'))).toEqual(stored)
   cli(['uninstall'])
   expect(JSON.parse(readFileSync(join(root, '.claude/settings.json'), 'utf8'))).toEqual(before)
+  // uninstall이 지운 보고 상태를 다시 심어 다음 테스트의 래퍼가 auto-report를 띄우지 않게 한다
+  writeFileSync(join(root, '.claude/aitk-usage/report.json'), JSON.stringify({ lastSuccessAt: new Date().toISOString(), lastAttemptAt: new Date().toISOString() }))
 })
 
 it('표시줄이 없으면 비대화형 setup은 --display를 요구하고, 고른 모드대로 그리거나 침묵한다', () => {
@@ -346,10 +351,18 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     writeFileSync(join(lock, 'owner'), `${process.pid}-live`)
     utimesSync(lock, old, old)
     expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: busy')
-    // 주인이 죽었으면 회수한다
+    // 주인 pid가 살아 있어도 10분 넘은 잠금은 버려진 것으로 본다 (pid 재사용)
+    const abandoned = new Date(Date.now() - 11 * 60_000)
+    utimesSync(lock, abandoned, abandoned)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
+    expect(existsSync(lock)).toBe(false)
+    run(home, ['uninstall'])
+    run(home, ['setup', '--display', 'none'])
+    mkdirSync(lock)
+    // 주인이 죽었으면 1분 뒤 회수한다
     writeFileSync(join(lock, 'owner'), '999999-dead')
     utimesSync(lock, old, old)
-    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
+    expect(run(home, ['setup', '--auto']).stderr).toContain('unchanged')
     expect(existsSync(lock)).toBe(false)
   })
 
@@ -366,6 +379,35 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     expect(existsSync(join(home, '.config/aitk/usage-auto-setup-declined.json'))).toBe(false)
   })
 
+  it('settings.json을 손으로 되돌리고 수집 폴더까지 지워도 다시 켜지 않는다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify(original))
+    rmSync(join(home, '.claude/aitk-usage'), { recursive: true, force: true })
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: drifted')
+    expect(JSON.parse(settingsOf(home))).toEqual(original)
+  })
+
+  it('~/.config에 쓸 수 없어도 uninstall은 원래 표시줄을 복원한다', () => {
+    const original = { language: 'ko', statusLine: userRenderer() }
+    const home = freshHome(original)
+    run(home, ['setup', '--auto'])
+    const config = join(home, '.config')
+    mkdirSync(config, { recursive: true })
+    rmSync(join(config, 'aitk'), { recursive: true, force: true })
+    chmodSync(config, 0o500)
+    try {
+      const result = run(home, ['uninstall'])
+      expect(result.status).toBe(0)
+      expect(result.stderr).toContain('~/.config/aitk')
+      expect(JSON.parse(settingsOf(home))).toEqual(original)
+      expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+    } finally {
+      chmodSync(config, 0o700)
+    }
+  })
+
   it('연결 전에 uninstall해 두면 처음부터 자동 연결하지 않는다 (env가 전달되지 않는 실행 환경용)', () => {
     const home = freshHome({ language: 'ko' })
     run(home, ['uninstall'])
@@ -380,7 +422,9 @@ describe('래퍼 실패 내성 — 자동 연결로 모두에게 깔리므로 �
     mkdirSync(join(home, '.claude'), { recursive: true })
     quietReports(home)
     writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ statusLine: { type: 'command', command } }))
-    spawnSync(process.execPath, [entry, 'usage', 'setup', '--auto'], { env: isolated(home) })
+    const setup = spawnSync(process.execPath, [entry, 'usage', 'setup', '--auto'], { env: isolated(home), encoding: 'utf8' })
+    // 연결이 조용히 실패하면 래퍼가 아무것도 안 하고 끝나 아래 테스트가 헛통과한다
+    expect(setup.stderr).toContain('connected')
     return home
   }
   function statusline(home: string, input: string) {
