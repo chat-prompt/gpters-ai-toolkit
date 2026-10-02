@@ -140,6 +140,11 @@ function ownerAlive(token: string): boolean {
   try { process.kill(pid, 0); return true } catch (err) { return (err as NodeJS.ErrnoException).code === 'EPERM' }
 }
 
+/** Claude Code를 실제로 쓰는 머신인지. aitk가 만든 흔적은 신호로 쓰지 않는다. */
+function usesClaudeCode(home: string): boolean {
+  return [join(home, '.claude', 'projects'), join(home, '.claude.json'), join(home, '.claude', 'settings.json')].some(path => existsSync(path))
+}
+
 /** 동기 대기. 잠금 재시도 사이에만 쓴다. */
 function sleepSync(ms: number): void { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) }
 
@@ -221,7 +226,9 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
     // 래퍼·저장 명령이 POSIX 셸(/bin/sh)을 전제한다. Windows에서는 원래 표시줄이 사라질 수 있다.
     if ((opts.platform ?? process.platform) === 'win32') return skip('platform')
     const claudeDir = join(home, '.claude')
-    if (!existsSync(claudeDir)) return skip('no-claude')
+    // ~/.claude 폴더만으로는 판단하지 않는다 — aitk 사용량 보고가 Codex만 쓰는 사람에게도 ~/.claude/aitk-usage를 만든다.
+    // Claude Code가 직접 만드는 것(대화 기록 폴더·사용자 설정 파일·settings.json)이 있어야 쓰는 사람으로 본다.
+    if (!usesClaudeCode(home)) return skip('no-claude')
     if (env.CLAUDE_CONFIG_DIR && resolve(env.CLAUDE_CONFIG_DIR) !== resolve(claudeDir)) return skip('config-dir')
     // ~/.claude 자체(또는 상위)가 dotfiles·클라우드 폴더로 연결돼 있으면 여러 머신이 같은 설정을 쓴다.
     if (realpathSync(claudeDir) !== join(realpathSync(home), '.claude')) return skip('symlink')
@@ -279,7 +286,7 @@ export function runUsageUninstall(home = homedir()): boolean {
     let mirrored = false
     try { mirrored = markAutoSetupDeclined(home) } catch { /* 복원이 먼저다 */ }
     const result = uninstallClaudeStatusline(home)
-    if (!mirrored) info(`해제 표식을 ~/.config/aitk 에 남기지 못했습니다. ~/.claude/aitk-usage 를 지우면 다음 날 다시 연결될 수 있습니다.`)
+    if (!mirrored) info('해제 표식 사본을 ~/.config/aitk 에 남기지 못했습니다. ~/.claude/aitk-usage 를 지우면 다음 날 다시 연결될 수 있습니다.')
     return result
   })
   if (restored === 'busy') error(busyMessage(home))

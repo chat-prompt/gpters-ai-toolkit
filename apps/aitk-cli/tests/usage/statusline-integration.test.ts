@@ -102,7 +102,8 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
   /** 테스트마다 새 홈을 만든다. 공유 홈(root)의 설치 상태와 섞이지 않게. */
   function freshHome(settings?: unknown): string {
     const home = mkdtempSync(join(root, 'home-'))
-    mkdirSync(join(home, '.claude'), { recursive: true })
+    // Claude Code가 만드는 대화 기록 폴더 — 이게 있어야 Claude Code 사용자로 본다
+    mkdirSync(join(home, '.claude/projects'), { recursive: true })
     quietReports(home)
     if (settings !== undefined) writeFileSync(join(home, '.claude/settings.json'), typeof settings === 'string' ? settings : JSON.stringify(settings))
     return home
@@ -185,6 +186,17 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
       expect(result.stderr, c.reason).toContain(`skipped: ${c.reason}`)
       expect(settingsOf(home), c.reason).toBe(before)
     }
+  })
+
+  it('aitk 보고가 만든 ~/.claude/aitk-usage만 있으면 Claude Code 사용자로 보지 않는다 (Codex만 쓰는 사람)', () => {
+    const home = mkdtempSync(join(root, 'home-'))
+    mkdirSync(join(home, '.claude/aitk-usage'), { recursive: true })
+    writeFileSync(join(home, '.claude/aitk-usage/aggregate.json'), '{}')
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: no-claude')
+    expect(existsSync(join(home, '.claude/settings.json'))).toBe(false)
+    // Claude Code가 사용자 설정 파일을 만들면 그때부터 연결한다
+    writeFileSync(join(home, '.claude.json'), '{}')
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
   })
 
   it('~/.claude가 없으면 만들지 않는다 (Claude Code를 안 쓰는 사람)', () => {
@@ -320,7 +332,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
 
   it('연결된 사람의 settings.json이 편집 중 깨져 있으면 해제로 오판하지 않는다', () => {
     const home = freshHome({ statusLine: userRenderer() })
-    run(home, ['setup', '--auto'])
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
     writeFileSync(join(home, '.claude/settings.json'), '{ "statusLine": ')
     expect(run(home, ['setup', '--auto']).stderr).toContain('failed:')
     expect(existsSync(join(home, '.claude/aitk-usage/auto-setup-declined.json'))).toBe(false)
@@ -392,7 +404,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
   it('~/.config에 쓸 수 없어도 uninstall은 원래 표시줄을 복원한다', () => {
     const original = { language: 'ko', statusLine: userRenderer() }
     const home = freshHome(original)
-    run(home, ['setup', '--auto'])
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
     const config = join(home, '.config')
     mkdirSync(config, { recursive: true })
     rmSync(join(config, 'aitk'), { recursive: true, force: true })
@@ -400,6 +412,7 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     try {
       const result = run(home, ['uninstall'])
       expect(result.status).toBe(0)
+      expect(result.stderr).toContain('Previous Claude statusline restored.')
       expect(result.stderr).toContain('~/.config/aitk')
       expect(JSON.parse(settingsOf(home))).toEqual(original)
       expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')

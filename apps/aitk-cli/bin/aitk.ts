@@ -635,6 +635,7 @@ async function main(): Promise<void> {
       else if (sub === 'uninstall') {
         info(runUsageUninstall() ? 'Previous Claude statusline restored.' : 'No matching AITK statusline to restore; settings preserved.')
         info('Automatic setup will not reconnect it. Run aitk usage setup to connect again.')
+        info('Restart Claude Code to apply; an already-open session may show no statusline until then.')
       } else if (sub === 'status') {
         jsonOut({ statusline: inspectClaudeStatusline(), installation: readClaudeStatuslineInstallation(), snapshot: readClaudeQuota(), report: readUsageJson(claudeUsagePaths().report) })
       } else if (sub === 'report') {
