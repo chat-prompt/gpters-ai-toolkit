@@ -531,6 +531,15 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     expect(JSON.parse(run(home, ['status']).stdout).statusline.display).toBe('default')
   })
 
+  it('운영 경로(저장 명령)로도 원래 명령의 출력·종료 코드를 그대로 돌려준다', () => {
+    const home = freshHome({ statusLine: { type: 'command', command: `printf 'partial'; exit 3` } })
+    run(home, ['setup', '--auto'])
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    const result = runStored(home, command, plainInput)
+    expect(result.stdout).toBe('partial')
+    expect(result.status).toBe(3)
+  })
+
   it('작은따옴표가 든 원래 명령도 기록 없이 정확히 되돌린다', () => {
     const original = { statusLine: { type: 'command', command: `printf '%s' "it's"`, padding: 2 } }
     const home = freshHome(original)
