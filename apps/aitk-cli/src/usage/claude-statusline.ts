@@ -128,6 +128,13 @@ export function inspectClaudeStatusline(home = homedir()): ClaudeStatuslineState
   // 빈 명령은 "표시줄 없음"과 구분할 수 없어 감싸면 화면이 바뀐다 — 지원하지 않는 설정으로 본다.
   if (!current || current.type !== 'command' || typeof current.command !== 'string' || !current.command.trim()) return { kind: 'unsupported' }
   const receipt = readClaudeStatuslineInstallation(home)
+  // aitk가 만든 새 형식 명령이면 기록이 없거나 어긋나도 aitk다. 원래 명령은 명령에 실어 둔 값이 정본이다.
+  const fromCommand = resolvePrevious(current, receipt)
+  if (fromCommand !== undefined) {
+    // 표시 모드: 기록이 같은 명령이면 기록을, 아니면 지금 화면 그대로(원래 표시줄이 없었으면 아무것도 안 그림).
+    const display = receipt && receipt.command === current.command ? receipt.display ?? 'default' : 'none'
+    return { kind: 'aitk', previous: fromCommand, display }
+  }
   if (receipt && current.command === receipt.command) {
     return { kind: 'aitk', previous: receipt.previous, display: receipt.display ?? 'default' }
   }

@@ -496,6 +496,18 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     expect(JSON.parse(run(home, ['status']).stdout).autoSetup).toEqual({ declined: true, connected: true })
   })
 
+  it('기록을 잃은 "표시 없음" 사용자가 직접 setup해도 기본 한 줄로 바뀌지 않는다', () => {
+    const home = freshHome({ language: 'ko' })
+    run(home, ['setup', '--auto'])
+    rmSync(join(home, '.claude/aitk-usage'), { recursive: true, force: true })
+    quietReports(home)
+    expect(JSON.parse(run(home, ['status']).stdout).statusline).toEqual({ kind: 'aitk', previous: null, display: 'none' })
+    run(home, ['setup'])
+    expect(JSON.parse(run(home, ['status']).stdout).statusline).toEqual({ kind: 'aitk', previous: null, display: 'none' })
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    expect(runStored(home, command, plainInput).stdout).toBe('')
+  })
+
   it('작은따옴표가 든 원래 명령도 기록 없이 정확히 되돌린다', () => {
     const original = { statusLine: { type: 'command', command: `printf '%s' "it's"`, padding: 2 } }
     const home = freshHome(original)
