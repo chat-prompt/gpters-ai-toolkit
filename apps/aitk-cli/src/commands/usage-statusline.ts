@@ -1,10 +1,12 @@
 /** Claude statusline stdin을 기존 표시줄에 전달하면서 공식 한도만 수집한다. */
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
-import { claudeUsagePaths, extractClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
+import { claudeUsagePaths, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
 import { shouldScheduleClaudeReport } from '../usage/claude-auto-report.js'
 
 const RENDERER_TIMEOUT_MS = 10_000
+/** 같은 한도 값이면 이 간격보다 자주 스냅샷을 다시 쓰지 않는다. 최신성 판단(15분)보다 충분히 짧다. */
+const SNAPSHOT_REFRESH_MS = 60_000
 
 /** 원본 입력은 메모리에서만 사용하고 기존 명령의 stdout은 그대로 전달한다. */
 export async function runUsageStatusline(): Promise<void> {
@@ -32,7 +34,11 @@ export async function runUsageStatusline(): Promise<void> {
     const data = JSON.parse(input.toString('utf8'))
     const quota = extractClaudeQuota(data)
     if (quota && process.env.AITK_USAGE_REPORT !== '0') {
-      writeUsageJson(claudeUsagePaths(home).snapshot, quota)
+      // 렌더마다 파일을 교체하지 않는다. 값이 바뀌었거나 관측 시각이 1분 넘게 지났을 때만 쓴다.
+      const stored = readClaudeQuota(home)
+      const stale = !stored || stored.usedPercent !== quota.usedPercent || stored.resetsAt !== quota.resetsAt
+        || Date.parse(quota.capturedAt) - Date.parse(stored.capturedAt) >= SNAPSHOT_REFRESH_MS
+      if (stale) writeUsageJson(claudeUsagePaths(home).snapshot, quota)
       if (shouldScheduleClaudeReport(home)) {
         const worker = spawn(process.execPath, [process.argv[1], 'usage', 'auto-report'], {
           detached: true, stdio: 'ignore',

@@ -307,8 +307,9 @@ Claude weekly limits:
   aitk usage setup --auto
                         Unattended path used by the plugin SessionStart hook: connects only
                         when nothing on screen changes (wraps an existing statusline, or
-                        collects with no display). Skips agent machines, unsupported
-                        statusLine settings and anyone who ran uninstall. Always exits 0.
+                        collects with no display). Skips agent machines, CLAUDE_CONFIG_DIR
+                        elsewhere, symlinked settings.json, unsupported statusLine settings,
+                        anyone who ran uninstall or removed it by hand. Always exits 0.
                         AITK_USAGE_SETUP=0 disables it.
   aitk usage status     Inspect local capture/report status
   aitk usage uninstall  Restore the previous statusline and stop automatic setup

@@ -8,7 +8,7 @@ GPTers AI Toolkit MCP 서버와 연동하여 팀 스킬을 검색하고 사용�
 - **MCP 서버 자동 연결**: 플러그인 설치 시 GPTers AI Toolkit MCP 서버(`https://ai-toolkit.gpters.org/api/mcp`)가 자동으로 등록됩니다. 별도의 `claude mcp add` 명령이 필요하지 않습니다.
 - **사용량 자동 보고**: 하루 한 번, 세션 시작 시 Claude Code와 Codex 사용량을 집계해 [AX 대시보드](https://ai-toolkit.gpters.org/ko/ax)로 보냅니다. `aitk` CLI가 설치돼 있어야 동작합니다.
 - **세션 집계 보고**: 세션이 끝난 뒤 실제 사용자 입력 수만 계산해 보냅니다. 대화 중 실행되는 훅이나 모델 컨텍스트 출력은 없습니다.
-- **주간 한도 수집 자동 연결**: 같은 SessionStart 훅이 하루 한 번 `aitk usage setup --auto`를 실행합니다(aitk 0.7.23 이상). 화면이 바뀌지 않는 경우만 연결합니다 — 기존 상태 표시줄은 감싸고, 없으면 아무것도 그리지 않고 수집만 합니다. 에이전트 머신·command 형식이 아닌 표시줄·`aitk usage uninstall`을 한 사람은 건너뜁니다. 결과는 `~/.cache/gpters-aitk/usage-setup.log`, 끄려면 `AITK_USAGE_SETUP=0`. 기본 한 줄을 보고 싶으면 "usage 설정해줘"(`usage-setup` 스킬)나 `aitk usage setup --display default`.
+- **주간 한도 수집 자동 연결**: 같은 SessionStart 훅이 하루 한 번 `aitk usage setup --auto`를 실행합니다(aitk 0.7.23 이상). 화면이 바뀌지 않는 경우만 연결합니다 — 기존 상태 표시줄은 감싸고, 없으면 아무것도 그리지 않고 수집만 합니다. 에이전트 머신·다른 `CLAUDE_CONFIG_DIR`·심링크된 `settings.json`·command 형식이 아닌 표시줄·`aitk usage uninstall`을 했거나 직접 뺀 사람은 건너뜁니다. 결과는 `~/.cache/gpters-aitk/usage-setup.log`, 끄려면 `AITK_USAGE_SETUP=0`. 기본 한 줄을 보고 싶으면 "usage 설정해줘"(`usage-setup` 스킬)나 `aitk usage setup --display default`.
 - **에이전트 텔레메트리 설정 지침**: 사용자가 요청하면 `agent-telemetry-setup` 스킬이 범위를 확인하고 macOS Keychain·launchd 기반 수집기를 안전하게 설치·진단·해제합니다. 자동 설치되지는 않습니다.
 
 ### aitk 자동 업그레이드

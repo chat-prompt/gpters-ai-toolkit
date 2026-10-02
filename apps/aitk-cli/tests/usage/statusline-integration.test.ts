@@ -1,6 +1,6 @@
 /** 실제 CLI를 가짜 홈에서 실행해 stdin 전달·설정 복구·캐시 최소화를 검증한다. 서버로 보내지 않는다. */
 import { beforeAll, afterAll, describe, expect, it } from 'vitest'
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -92,6 +92,12 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     return { type: 'command', command: `${JSON.stringify(process.execPath)} ${JSON.stringify(renderer)}`, padding: 1 }
   }
   const plainInput = JSON.stringify({ model: { display_name: 'Claude Test' } })
+  /** settings.json에 저장된 명령을 Claude Code처럼 /bin/sh로 실행한다. 래퍼의 홈은 테스트 홈으로 고정한다. */
+  function runStored(home: string, command: string, input: string) {
+    return spawnSync('/bin/sh', ['-c', command], {
+      env: { ...env, AITK_TEST_HOME: home, NODE_OPTIONS: `--import=${preload}` }, input, encoding: 'utf8', timeout: 15_000,
+    })
+  }
 
   it('기존 표시줄은 감싸서 연결하고 출력은 그대로다. 두 번째 실행은 바꾸지 않는다', () => {
     const home = freshHome({ language: 'ko', statusLine: userRenderer() })
@@ -181,10 +187,81 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     const result = spawnSync(process.execPath, ['--import', preload, moved, 'usage', 'setup', '--auto'],
       { env: { ...env, AITK_TEST_HOME: home }, encoding: 'utf8' })
     expect(result.stderr).toContain('refreshed')
-    expect(JSON.parse(settingsOf(home)).statusLine.command).toContain(moved)
-    expect(run(home, ['statusline'], {}, plainInput).stdout).toBe('original:' + plainInput)
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    expect(command).toContain(moved)
+    // 저장된 명령 자체를 Claude Code처럼 셸로 실행한다 (따옴표·경로가 실제로 동작하는지)
+    expect(runStored(home, command, plainInput).stdout).toBe('original:' + plainInput)
+    // node 버전 정리·aitk 삭제로 경로가 사라져도 원래 표시줄은 그대로 나온다
+    rmSync(moved)
+    const fallback = runStored(home, command, plainInput)
+    expect(fallback.status).toBe(0)
+    expect(fallback.stdout).toBe('original:' + plainInput)
     run(home, ['uninstall'])
     expect(JSON.parse(settingsOf(home))).toEqual(original)
+  })
+
+  it('표시 없이 연결된 사람은 경로가 사라져도 아무것도 그리지 않고 exit 0이다', () => {
+    const home = freshHome({ language: 'ko' })
+    const moved = join(root, `moved-none-${Date.now()}.mjs`)
+    copyFileSync(entry, moved)
+    spawnSync(process.execPath, ['--import', preload, moved, 'usage', 'setup', '--auto'], { env: { ...env, AITK_TEST_HOME: home } })
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    expect(runStored(home, command, plainInput).stdout).toBe('')
+    rmSync(moved)
+    const gone = runStored(home, command, plainInput)
+    expect(gone.status).toBe(0)
+    expect(gone.stdout).toBe('')
+  })
+
+  it('settings.json이 심링크면(dotfiles 공유) 자동 연결하지 않는다', () => {
+    const home = freshHome()
+    const shared = join(root, `dotfiles-${Date.now()}.json`)
+    writeFileSync(shared, JSON.stringify({ language: 'ko', statusLine: userRenderer() }))
+    symlinkSync(shared, join(home, '.claude/settings.json'))
+    const before = readFileSync(shared, 'utf8')
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: symlink')
+    expect(readFileSync(shared, 'utf8')).toBe(before)
+    expect(lstatSync(join(home, '.claude/settings.json')).isSymbolicLink()).toBe(true)
+  })
+
+  it('대상이 없는 심링크는 직접 setup해도 일반 파일로 덮어쓰지 않는다', () => {
+    const home = freshHome()
+    const link = join(home, '.claude/settings.json')
+    symlinkSync(join(root, 'missing-dotfiles/settings.json'), link)
+    const result = run(home, ['setup', '--display', 'none'])
+    expect(result.status).not.toBe(0)
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    expect(existsSync(join(home, '.claude/aitk-usage/statusline.json'))).toBe(false)
+  })
+
+  it('연결 뒤 사람이 settings.json에서 직접 뺐으면 다시 켜지 않는다', () => {
+    const home = freshHome({ language: 'ko', statusLine: userRenderer() })
+    run(home, ['setup', '--auto'])
+    // 사용자가 uninstall 대신 손으로 원래 명령으로 되돌림
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ language: 'ko', statusLine: userRenderer() }))
+    const before = settingsOf(home)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: drifted')
+    expect(settingsOf(home)).toBe(before)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+  })
+
+  it('CLAUDE_CONFIG_DIR이 다른 곳이면 ~/.claude를 건드리지 않고, 같은 곳이면 연결한다', () => {
+    const home = freshHome({ language: 'ko' })
+    const before = settingsOf(home)
+    expect(run(home, ['setup', '--auto'], { CLAUDE_CONFIG_DIR: join(root, 'bot-config') }).stderr).toContain('skipped: config-dir')
+    expect(settingsOf(home)).toBe(before)
+    expect(run(home, ['setup', '--auto'], { CLAUDE_CONFIG_DIR: join(home, '.claude') }).stderr).toContain('connected')
+  })
+
+  it('다른 setup이 도는 중이면 건너뛰고, 1분 넘은 잠금은 회수한다', () => {
+    const home = freshHome({ language: 'ko' })
+    const lock = join(home, '.claude/aitk-usage/setup.lock')
+    mkdirSync(lock, { recursive: true })
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: busy')
+    const old = new Date(Date.now() - 120_000)
+    utimesSync(lock, old, old)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
+    expect(existsSync(lock)).toBe(false)
   })
 })
 

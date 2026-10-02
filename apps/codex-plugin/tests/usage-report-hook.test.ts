@@ -27,7 +27,9 @@ const FAKE_AITK = `#!/bin/bash
 echo "$*" >> "$AITK_LOG"
 case "$*" in
   "--help") echo "  aitk usage report [--days <N>]"
-    [ "$FAKE_AUTO" = "1" ] && echo "  aitk usage setup [--display default|none] [--yes] [--auto] | status | uninstall" ;;
+    # 옛 aitk(0.7.18~0.7.22)의 실제 help 줄. 감지 패턴이 느슨해져 이 줄에 걸리면 안 된다
+    if [ "$FAKE_AUTO" = "1" ]; then echo "  aitk usage setup [--display default|none] [--yes] [--auto] | status | uninstall"
+    else echo "  aitk usage setup [--display default|none] [--yes] | status | uninstall"; fi ;;
   "usage setup --auto") echo "connected: 화면 표시 없이 주간 한도 수집만 연결했습니다." >&2 ;;
   "upgrade --help") [ "$FAKE_SELF" = "1" ] && echo "Usage: aitk upgrade [--self]" ;;
 esac

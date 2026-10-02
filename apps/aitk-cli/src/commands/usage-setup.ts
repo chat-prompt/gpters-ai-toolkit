@@ -5,14 +5,14 @@
  * 대화형이 아닐 때(스킬·스크립트)는 --display로 답을 받는다.
  * `--auto`는 플러그인 SessionStart 훅이 부르는 무인 경로로, 화면이 바뀌지 않는 경우만 연결한다.
  */
-import { existsSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
-  clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, uninstallClaudeStatusline, type StatuslineDisplay,
+  claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
+  markAutoSetupDeclined, readClaudeStatuslineInstallation, uninstallClaudeStatusline, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -69,9 +69,14 @@ export async function runUsageSetup(opts: UsageSetupOptions = {}): Promise<void>
     else if (stdin.isTTY && stdout.isTTY) display = await askDisplay()
     else error('상태 표시줄이 없습니다. 비대화형 환경에서는 --display default|none 으로 선택하세요.')
   }
-  const result = installClaudeStatusline(undefined, undefined, undefined, display ? { display } : {})
-  // 직접 실행한 setup은 이전에 uninstall로 남긴 자동 연결 거부를 푼다.
-  clearAutoSetupDeclined()
+  const home = homedir()
+  const result = withSetupLock(home, true, () => {
+    const installed = installClaudeStatusline(undefined, home, undefined, display ? { display } : {})
+    // 직접 실행한 setup은 이전에 uninstall로 남긴 자동 연결 거부를 푼다.
+    clearAutoSetupDeclined(home)
+    return installed
+  })
+  if (result === 'busy') error('다른 aitk usage setup이 실행 중입니다. 잠시 뒤 다시 실행하세요.')
   switch (result.mode) {
     case 'wrapped':
       info('기존 상태 표시줄은 그대로 두고 주간 한도만 수집하도록 연결했습니다.')
@@ -94,8 +99,13 @@ export type UsageAutoSetupResult =
   | { status: 'connected'; mode: 'wrapped' | 'none' }
   | { status: 'unchanged' }
   | { status: 'refreshed' }
-  | { status: 'skipped'; reason: 'disabled' | 'report-disabled' | 'agent' | 'no-claude' | 'declined' | 'unsupported' }
+  | { status: 'skipped'; reason: AutoSetupSkipReason }
   | { status: 'failed'; reason: string }
+
+/** 자동 연결을 건너뛴 이유. 로그에 그대로 남는다. */
+export type AutoSetupSkipReason =
+  | 'disabled' | 'report-disabled' | 'agent' | 'no-claude' | 'config-dir' | 'declined'
+  | 'drifted' | 'symlink' | 'unsupported' | 'busy'
 
 /** 테스트가 가짜 홈·실행 경로를 넘길 수 있게 한다. */
 export interface UsageAutoSetupOptions {
@@ -104,31 +114,71 @@ export interface UsageAutoSetupOptions {
   env?: NodeJS.ProcessEnv
 }
 
+const LOCK_STALE_MS = 60_000
+
+/**
+ * setup·uninstall을 한 프로세스씩만 돌게 한다. 디렉터리 생성은 원자적이라 잠금으로 쓴다.
+ * 자동 연결은 기다리지 않고 건너뛰고(`wait: false`), 사람이 친 명령은 잠깐 기다린다.
+ * 죽은 프로세스가 남긴 잠금은 1분 뒤 회수한다.
+ */
+export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 'busy' {
+  const lock = join(claudeUsagePaths(home).directory, 'setup.lock')
+  mkdirSync(dirname(lock), { recursive: true, mode: 0o700 })
+  const deadline = Date.now() + (wait ? 5_000 : 0)
+  for (;;) {
+    try { mkdirSync(lock); break } catch {
+      try { if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) { rmSync(lock, { recursive: true, force: true }); continue } } catch { continue }
+      if (Date.now() >= deadline) return 'busy'
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
+    }
+  }
+  try { return fn() } finally { rmSync(lock, { recursive: true, force: true }) }
+}
+
 /**
  * 무인 자동 연결. 화면이 바뀌지 않는 경우만 연결하고, 어떤 경우에도 예외를 던지지 않는다.
  *
  * - 기존 command 표시줄: 감싼다(출력 그대로)
  * - 표시줄 없음: `display: none`으로 연결한다(아무것도 그리지 않음)
  * - 이미 aitk: 이전 선택을 유지한 채 명령 경로만 현재 설치본으로 맞춘다(node·aitk 경로가 바뀌면 표시줄이 깨지므로)
- * - 끔(`AITK_USAGE_SETUP=0`·`AITK_USAGE_REPORT=0`), 에이전트 머신, `~/.claude` 없음, 사용자가 uninstall 함,
- *   command가 아닌 표시줄: 건너뛴다
+ * - 건너뜀: 끔(`AITK_USAGE_SETUP=0`·`AITK_USAGE_REPORT=0`), 에이전트 머신, `~/.claude` 없음,
+ *   `CLAUDE_CONFIG_DIR`이 다른 곳(실제로 안 쓰는 파일을 바꾸지 않게), uninstall 함,
+ *   연결 뒤 사용자가 settings.json을 직접 되돌림(drifted — 가장 분명한 거부 신호),
+ *   settings.json이 심링크(dotfiles로 여러 머신이 공유하면 이 머신 경로가 다른 머신 표시줄을 깬다),
+ *   command가 아닌 표시줄, 다른 setup이 도는 중
  */
 export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSetupResult {
   const home = opts.home ?? homedir()
   const env = opts.env ?? process.env
+  const skip = (reason: AutoSetupSkipReason): UsageAutoSetupResult => ({ status: 'skipped', reason })
   try {
-    if (env.AITK_USAGE_SETUP === '0') return { status: 'skipped', reason: 'disabled' }
-    if (env.AITK_USAGE_REPORT === '0') return { status: 'skipped', reason: 'report-disabled' }
+    if (env.AITK_USAGE_SETUP === '0') return skip('disabled')
+    if (env.AITK_USAGE_REPORT === '0') return skip('report-disabled')
     // 에이전트 머신은 개인 사용량을 보내지 않으므로 수집도 연결하지 않는다 (usage report와 같은 경계).
-    if (readAgentConfig(home)) return { status: 'skipped', reason: 'agent' }
-    if (!existsSync(join(home, '.claude'))) return { status: 'skipped', reason: 'no-claude' }
-    if (isAutoSetupDeclined(home)) return { status: 'skipped', reason: 'declined' }
-    const state = inspectClaudeStatusline(home)
-    if (state.kind === 'unsupported') return { status: 'skipped', reason: 'unsupported' }
-    const result = installClaudeStatusline(opts.entry, home, undefined, state.kind === 'none' ? { display: 'none' } : {})
-    if (result.mode === 'unchanged') return { status: 'unchanged' }
-    if (state.kind === 'aitk') return { status: 'refreshed' }
-    return { status: 'connected', mode: result.mode === 'wrapped' ? 'wrapped' : 'none' }
+    if (readAgentConfig(home)) return skip('agent')
+    const claudeDir = join(home, '.claude')
+    if (!existsSync(claudeDir)) return skip('no-claude')
+    if (env.CLAUDE_CONFIG_DIR && resolve(env.CLAUDE_CONFIG_DIR) !== resolve(claudeDir)) return skip('config-dir')
+    const result = withSetupLock(home, false, (): UsageAutoSetupResult => {
+      // 잠금 안에서 다시 판단한다 — 그 사이 uninstall이 끝났을 수 있다.
+      if (isAutoSetupDeclined(home)) return skip('declined')
+      const settings = claudeUsagePaths(home).settings
+      try { if (lstatSync(settings).isSymbolicLink()) return skip('symlink') } catch { /* 없음 */ }
+      const state = inspectClaudeStatusline(home)
+      if (state.kind === 'unsupported') return skip('unsupported')
+      if (state.kind !== 'aitk' && readClaudeStatuslineInstallation(home)) {
+        // 연결 기록은 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸다. 다시 켜지 않는다.
+        markAutoSetupDeclined(home)
+        return skip('drifted')
+      }
+      // 표시 모드를 늘 명시한다. 생략하면 기록이 사라진 경합에서 기본 한 줄(화면 변화)로 떨어진다.
+      const display: StatuslineDisplay = state.kind === 'aitk' ? state.display : 'none'
+      const installed = installClaudeStatusline(opts.entry, home, undefined, { display })
+      if (installed.mode === 'unchanged') return { status: 'unchanged' }
+      if (state.kind === 'aitk') return { status: 'refreshed' }
+      return { status: 'connected', mode: installed.mode === 'wrapped' ? 'wrapped' : 'none' }
+    })
+    return result === 'busy' ? skip('busy') : result
   } catch (err) {
     return { status: 'failed', reason: err instanceof Error ? err.message : String(err) }
   }
@@ -149,7 +199,11 @@ export function formatUsageAutoSetup(result: UsageAutoSetupResult): string {
 
 /** uninstall은 원래 표시줄을 복원하고, 자동 연결이 다시 켜지지 않게 표식을 남긴다. */
 export function runUsageUninstall(home = homedir()): boolean {
-  const restored = uninstallClaudeStatusline(home)
-  markAutoSetupDeclined(home)
+  const restored = withSetupLock(home, true, () => {
+    // 표식을 먼저 남긴다 — 복원 중 실패해도 자동 연결이 다시 켜지지 않게.
+    markAutoSetupDeclined(home)
+    return uninstallClaudeStatusline(home)
+  })
+  if (restored === 'busy') error('다른 aitk usage setup이 실행 중입니다. 잠시 뒤 다시 실행하세요.')
   return restored
 }

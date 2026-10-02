@@ -44,10 +44,11 @@ export function readUsageJson(path: string): unknown {
 export function writeUsageJson(path: string, value: unknown): void {
   let target = path
   let mode = 0o600
-  try {
-    if (lstatSync(path).isSymbolicLink()) target = realpathSync(path)
-    mode = statSync(target).mode & 0o777
-  } catch { /* 새 파일 */ }
+  let link = false
+  try { link = lstatSync(path).isSymbolicLink() } catch { /* 새 파일 */ }
+  // 대상이 없는 심링크를 일반 파일로 바꾸면 dotfiles 연결이 조용히 끊긴다. 쓰지 않고 멈춘다.
+  if (link) target = realpathSync(path)
+  try { mode = statSync(target).mode & 0o777 } catch { /* 새 파일 */ }
   mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
   const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`
   try {
@@ -157,6 +158,16 @@ export function renderDefaultStatusline(input: unknown, quota: ClaudeQuotaSnapsh
 /** 설정의 명령 문자열에 공백·따옴표·$가 있어도 경로 그대로 실행되게 한다. */
 function shellQuote(value: string): string { return `'${value.replace(/'/g, `'"'"'`)}'` }
 
+/**
+ * statusLine에 넣을 명령. node 버전 정리·aitk 삭제로 경로가 사라져도 원래 표시줄은 그대로 그리도록
+ * 경로가 있을 때만 래퍼를 실행하고, 없으면 원래 명령(없으면 아무것도 안 함)으로 넘어간다.
+ * 자동 연결은 동의 없이 모두에게 깔리므로, 다음 setup이 경로를 갱신할 때까지 화면이 비면 안 된다.
+ */
+export function buildStatuslineCommand(node: string, entry: string, previous: Record<string, unknown> | null): string {
+  const fallback = typeof previous?.command === 'string' ? `exec /bin/sh -c ${shellQuote(previous.command)}` : ':'
+  return `if [ -x ${shellQuote(node)} ] && [ -f ${shellQuote(entry)} ]; then exec ${shellQuote(node)} ${shellQuote(entry)} usage statusline; else ${fallback}; fi`
+}
+
 /** setup 결과. 메시지와 재시작 안내에만 쓴다. */
 export interface ClaudeStatuslineInstallResult {
   /** wrapped: 기존 표시줄 유지, default/none: 표시줄이 없어 aitk가 맡음, unchanged: 이미 같은 설치 */
@@ -182,7 +193,7 @@ export function installClaudeStatusline(
     throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
   }
   const previous = receipt && current?.command === receipt.command ? receipt.previous : current
-  const command = `${shellQuote(node)} ${shellQuote(resolve(entry))} usage statusline`
+  const command = buildStatuslineCommand(node, resolve(entry), previous ?? null)
   // 원래 표시줄이 없을 때만 표시 모드가 필요하다. 재설치에서 생략하면 이전 선택을 유지한다.
   const display: StatuslineDisplay | undefined = previous ? undefined : (options.display ?? receipt?.display ?? 'default')
   if (current?.command === command && receipt && (receipt.display ?? 'default') === (display ?? 'default')) return { mode: 'unchanged' }
