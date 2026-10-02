@@ -91,6 +91,14 @@ export function readClaudeQuota(home = homedir(), now = Date.now()): ClaudeQuota
   return parsed ? { ...parsed, capturedAt: value.capturedAt } : null
 }
 
+/**
+ * 래퍼가 aitk 기본 한 줄을 그리는지. 원래 표시줄이 없던 기록(previous null)에서 기본 모드를 고른 경우만이다.
+ * 감싸기 기록은 display가 없어도 기본 줄을 그리지 않는다. 래퍼와 inspect가 이 규칙 하나를 같이 쓴다.
+ */
+export function drawsDefaultLine(installation: { previous: Record<string, unknown> | null; display?: StatuslineDisplay }): boolean {
+  return installation.previous === null && (installation.display ?? 'default') === 'default'
+}
+
 /** 원래 표시줄이 없을 때 aitk가 무엇을 그릴지. `default`는 모델·컨텍스트·한도 한 줄, `none`은 수집만. */
 export type StatuslineDisplay = 'default' | 'none'
 
@@ -131,8 +139,8 @@ export function inspectClaudeStatusline(home = homedir()): ClaudeStatuslineState
   // aitk가 만든 새 형식 명령이면 기록이 없거나 어긋나도 aitk다. 원래 명령은 명령에 실어 둔 값이 정본이다.
   const fromCommand = resolvePrevious(current, receipt)
   if (fromCommand !== undefined) {
-    // 표시 모드: 기록이 같은 명령이면 기록을, 아니면 지금 화면 그대로(원래 표시줄이 없었으면 아무것도 안 그림).
-    const display = receipt && receipt.command === current.command ? receipt.display ?? 'default' : 'none'
+    // 표시 모드는 래퍼가 실제로 그리는 규칙과 같게 읽는다(usage-statusline의 drawsDefaultLine).
+    const display: StatuslineDisplay = receipt && drawsDefaultLine(receipt) ? 'default' : 'none'
     return { kind: 'aitk', previous: fromCommand, display }
   }
   if (receipt && current.command === receipt.command) {

@@ -502,10 +502,33 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     rmSync(join(home, '.claude/aitk-usage'), { recursive: true, force: true })
     quietReports(home)
     expect(JSON.parse(run(home, ['status']).stdout).statusline).toEqual({ kind: 'aitk', previous: null, display: 'none' })
-    run(home, ['setup'])
+    const setup = run(home, ['setup'])
+    expect(setup.status).toBe(0)
+    // 기록이 되살아나고 표시 모드는 none 그대로
+    expect(JSON.parse(readFileSync(join(home, '.claude/aitk-usage/statusline.json'), 'utf8')).display).toBe('none')
     expect(JSON.parse(run(home, ['status']).stdout).statusline).toEqual({ kind: 'aitk', previous: null, display: 'none' })
     const command = JSON.parse(settingsOf(home)).statusLine.command as string
-    expect(runStored(home, command, plainInput).stdout).toBe('')
+    const rendered = runStored(home, command, quotaInput)
+    expect(rendered.status).toBe(0)
+    expect(rendered.stdout).toBe('')
+    // 수집도 복구됐다
+    expect(existsSync(join(home, '.claude/aitk-usage/claude.json'))).toBe(true)
+  })
+
+  it('감싸기 기록에 표시 없음 형식 명령이 붙어 있어도(설정 되돌림) 기본 한 줄을 그리지 않고, inspect도 같게 읽는다', () => {
+    const home = freshHome({ language: 'ko' })
+    run(home, ['setup', '--auto'])
+    const noneCommand = JSON.parse(settingsOf(home)).statusLine.command as string
+    // 이후 사용자가 다른 표시줄을 감싸 연결했다가, 백업 복원 등으로 settings만 옛 명령으로 돌아간 상황
+    const receiptPath = join(home, '.claude/aitk-usage/statusline.json')
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
+    writeFileSync(receiptPath, JSON.stringify({ version: 1, command: 'something-else usage statusline', previous: userRenderer() }))
+    expect(runStored(home, noneCommand, plainInput).stdout).toBe('')
+    expect(JSON.parse(run(home, ['status']).stdout).statusline.display).toBe('none')
+    // 반대로 기록이 "원래 없음 + 기본 한 줄"이면 둘 다 기본 한 줄로 본다(사용자 선택을 지우지 않음)
+    writeFileSync(receiptPath, JSON.stringify({ ...receipt, command: 'something-else usage statusline', display: 'default' }))
+    expect(runStored(home, noneCommand, plainInput).stdout).toBe('Claude Test')
+    expect(JSON.parse(run(home, ['status']).stdout).statusline.display).toBe('default')
   })
 
   it('작은따옴표가 든 원래 명령도 기록 없이 정확히 되돌린다', () => {

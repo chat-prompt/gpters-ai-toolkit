@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
   claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, markConnected, parseHandedOverPrevious, readClaudeStatuslineInstallation, uninstallClaudeStatusline, wasConnected, type StatuslineDisplay,
+  markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, wasConnected, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -250,9 +250,8 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
       }
       const state = inspectClaudeStatusline(home)
       if (state.kind === 'unsupported') return skip('unsupported')
-      // 기록만 사라진 aitk 명령(새 형식)은 사람이 되돌린 게 아니다 — 아래 설치가 기록을 되살린다.
-      const ownCommand = state.kind === 'user' && parseHandedOverPrevious(state.command) !== null
-      if (state.kind !== 'aitk' && !ownCommand && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
+      // aitk가 만든 명령은 기록이 없어도 inspect가 aitk로 읽는다(아래 설치가 기록을 되살린다).
+      if (state.kind !== 'aitk' && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
         // 연결한 적이 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸거나 옛 aitk로 uninstall했다. 다시 켜지 않는다.
         markAutoSetupDeclined(home)
         return skip('drifted')
@@ -262,7 +261,7 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
       const installed = installClaudeStatusline(opts.entry, home, undefined, { display })
       markConnected(home)
       if (installed.mode === 'unchanged') return { status: 'unchanged' }
-      if (state.kind === 'aitk' || ownCommand) return { status: 'refreshed' }
+      if (state.kind === 'aitk') return { status: 'refreshed' }
       return { status: 'connected', mode: installed.mode === 'wrapped' ? 'wrapped' : 'none' }
     })
     return result === 'busy' ? skip('busy') : result

@@ -1,7 +1,7 @@
 /** Claude statusline stdin을 기존 표시줄에 전달하면서 공식 한도만 수집한다. */
 import { spawn } from 'node:child_process'
 import { constants, homedir } from 'node:os'
-import { STATUSLINE_PREVIOUS_ENV, claudeUsagePaths, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
+import { STATUSLINE_PREVIOUS_ENV, claudeUsagePaths, drawsDefaultLine, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
 import { shouldScheduleClaudeReport } from '../usage/claude-auto-report.js'
 
 const RENDERER_TIMEOUT_MS = 10_000
@@ -65,7 +65,7 @@ export async function runUsageStatusline(): Promise<void> {
       }
     }
     // 원래 표시줄이 없던 사용자: setup에서 고른 대로 기본 한 줄을 그리거나 아무것도 그리지 않는다.
-    if (previousCommand === undefined && (installation.display ?? 'default') === 'default') {
+    if (previousCommand === undefined && drawsDefaultLine(installation)) {
       process.stdout.write(renderDefaultStatusline(data, quota))
     }
   } catch { /* 입력 누락·캐시 실패가 기존 상태 표시줄을 깨뜨리지 않게 한다. */ }
