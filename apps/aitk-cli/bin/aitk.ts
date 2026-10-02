@@ -22,7 +22,7 @@ import { runUsageStatusline } from '../src/commands/usage-statusline.js'
 import { formatUsageAutoSetup, runUsageAutoSetup, runUsageSetup, runUsageUninstall } from '../src/commands/usage-setup.js'
 import { writeDailyUsageAggregate } from '../src/usage/usage-aggregate-cache.js'
 import { runAutomaticClaudeReport } from '../src/usage/claude-auto-report.js'
-import { readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson } from '../src/usage/claude-statusline.js'
+import { readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson, isAutoSetupDeclined, wasConnected } from '../src/usage/claude-statusline.js'
 import { runAgentTelemetryCollect } from '../src/commands/agent-telemetry.js'
 import {
   runAgentTelemetryDoctor,
@@ -633,11 +633,17 @@ async function main(): Promise<void> {
       else if (sub === 'setup' && flags['auto'] === 'true') info(formatUsageAutoSetup(runUsageAutoSetup()))
       else if (sub === 'setup') await runUsageSetup({ display: flags['display'], yes: flags['yes'] === 'true' })
       else if (sub === 'uninstall') {
-        info(runUsageUninstall() ? 'Previous Claude statusline restored.' : 'No matching AITK statusline to restore; settings preserved.')
-        info('Automatic setup will not reconnect it. Run aitk usage setup to connect again.')
+        const { restored, declined } = runUsageUninstall()
+        info(restored ? 'Previous Claude statusline restored.' : 'No matching AITK statusline to restore; settings preserved.')
+        if (declined) info('Automatic setup will not reconnect it. Run aitk usage setup to connect again.')
         info('Restart Claude Code to apply; an already-open session may show no statusline until then.')
       } else if (sub === 'status') {
-        jsonOut({ statusline: inspectClaudeStatusline(), installation: readClaudeStatuslineInstallation(), snapshot: readClaudeQuota(), report: readUsageJson(claudeUsagePaths().report) })
+        jsonOut({
+          statusline: inspectClaudeStatusline(), installation: readClaudeStatuslineInstallation(), snapshot: readClaudeQuota(),
+          report: readUsageJson(claudeUsagePaths().report),
+          // 자동 연결 판단에 쓰는 표식. declined면 사용자가 해제해 둔 상태다
+          autoSetup: { declined: isAutoSetupDeclined(), connected: wasConnected() },
+        })
       } else if (sub === 'report') {
         const days = flags['days'] ? parseInt(flags['days'], 10) : 7
         const dryRun = flags['dry-run'] === 'true'

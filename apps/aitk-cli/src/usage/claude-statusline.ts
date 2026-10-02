@@ -125,7 +125,8 @@ export function inspectClaudeStatusline(home = homedir()): ClaudeStatuslineState
   const settings = object(readUsageJson(paths.settings))
   const current = object(settings?.statusLine)
   if (settings?.statusLine == null) return { kind: 'none' }
-  if (!current || current.type !== 'command' || typeof current.command !== 'string') return { kind: 'unsupported' }
+  // 빈 명령은 "표시줄 없음"과 구분할 수 없어 감싸면 화면이 바뀐다 — 지원하지 않는 설정으로 본다.
+  if (!current || current.type !== 'command' || typeof current.command !== 'string' || !current.command.trim()) return { kind: 'unsupported' }
   const receipt = readClaudeStatuslineInstallation(home)
   if (receipt && current.command === receipt.command) {
     return { kind: 'aitk', previous: receipt.previous, display: receipt.display ?? 'default' }
@@ -179,9 +180,26 @@ export const STATUSLINE_PREVIOUS_ENV = 'AITK_STATUSLINE_PREVIOUS'
  * shellQuote의 역이다: 바깥 작은따옴표를 벗기고 `'"'"'`를 `'`로 되돌린다.
  */
 export function parseHandedOverPrevious(command: string): string | null {
-  if (!command.startsWith('if [ -x ') || !command.includes(' usage statusline; else ')) return null
-  const match = command.match(new RegExp(`${STATUSLINE_PREVIOUS_ENV}='((?:[^']|'"'"')*)' `))
-  return match ? match[1].replace(/'"'"'/g, "'") : null
+  const quoted = `'((?:[^']|'"'"')*)'`
+  const match = command.match(new RegExp(`^if \\[ -x ${quoted} \\] && \\[ -f ${quoted} \\]; then exec /usr/bin/env ${STATUSLINE_PREVIOUS_ENV}=${quoted} `))
+  if (!match) return null
+  const unquote = (value: string) => value.replace(/'"'"'/g, "'")
+  const [node, entry, original] = [unquote(match[1]), unquote(match[2]), unquote(match[3])]
+  // aitk가 만든 그대로일 때만 인정한다. 사용자가 뒤에 파이프·명령을 덧붙였다면 사용자 명령으로 보고 건드리지 않는다.
+  return buildStatuslineCommand(node, entry, original ? { command: original } : null) === command ? original : null
+}
+
+/**
+ * 지금 설정의 aitk 명령에 대한 원래 statusLine. 저장 명령이 넘기는 값을 정본으로 보고,
+ * 기록의 previous는 원래 명령이 같을 때만(부가 필드까지 되살리려고) 쓴다. 다른 머신에서 온 기록·중간 종료로
+ * 어긋난 기록으로 설정을 바꾸지 않는다. aitk 새 형식 명령이 아니면 undefined.
+ */
+export function resolvePrevious(current: Record<string, unknown> | null, receipt: ClaudeStatuslineInstallation | null): Record<string, unknown> | null | undefined {
+  const original = typeof current?.command === 'string' ? parseHandedOverPrevious(current.command) : null
+  if (original === null) return undefined
+  if (original === '') return null
+  if (receipt?.previous && receipt.previous.command === original) return receipt.previous
+  return { ...current, command: original }
 }
 
 /** setup 결과. 메시지와 재시작 안내에만 쓴다. */
@@ -205,13 +223,14 @@ export function installClaudeStatusline(
     throw new Error('Unsupported statusLine setting; existing settings were preserved.')
   }
   const receipt = readClaudeStatuslineInstallation(home)
+  if (typeof current?.command === 'string' && !current.command.trim()) throw new Error('Unsupported statusLine setting; existing settings were preserved.')
   let previous: Record<string, unknown> | null
-  if (receipt && current?.command === receipt.command) previous = receipt.previous
+  // 새 형식 aitk 명령이면 명령에 실어 둔 원래 명령이 정본이다(기록이 없거나 어긋나도).
+  const fromCommand = resolvePrevious(current, receipt)
+  if (fromCommand !== undefined) previous = fromCommand
+  else if (receipt && current?.command === receipt.command) previous = receipt.previous
   else if (typeof current?.command === 'string' && current.command.includes(' usage statusline')) {
-    // 기록이 사라진 aitk 명령: 새 형식이면 명령에 실어 둔 원래 명령으로 기록을 되살린다.
-    const original = parseHandedOverPrevious(current.command)
-    if (original === null) throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
-    previous = original === '' ? null : { ...current, command: original }
+    throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
   } else previous = current
   const command = buildStatuslineCommand(node, resolve(entry), previous ?? null)
   // 원래 표시줄이 없을 때만 표시 모드가 필요하다. 재설치에서 생략하면 이전 선택을 유지한다.
@@ -242,18 +261,14 @@ export function uninstallClaudeStatusline(home = homedir()): boolean {
   const settings = object(raw === null ? null : (() => { try { return JSON.parse(raw) } catch { return null } })())
   if (!settings) return false
   const current = object(settings.statusLine)
-  const command = current?.command
-  if (receipt && command === receipt.command) {
-    if (receipt.previous === null) delete settings.statusLine
-    else settings.statusLine = receipt.previous
-  } else {
-    // 연결 기록이 사라졌거나(수집 폴더 삭제·중간 종료) 다른 설치본의 명령이어도, 저장 명령이 aitk 형식이면
-    // 그 안에 실어 둔 원래 명령으로 되돌린다. 해제는 기록 유무와 상관없이 되어야 한다.
-    const original = typeof command === 'string' ? parseHandedOverPrevious(command) : null
-    if (original === null) return false
-    if (original === '') delete settings.statusLine
-    else settings.statusLine = { ...current, command: original }
-  }
+  // 새 형식이면 저장 명령에 실어 둔 원래 명령으로 되돌린다 — 기록이 사라졌거나 어긋나도 해제는 되어야 한다.
+  // 옛 형식(원래 명령을 싣지 않음)은 기록과 명령이 같을 때만 기록으로 되돌린다.
+  const fromCommand = resolvePrevious(current, receipt)
+  const previous = fromCommand !== undefined ? fromCommand
+    : receipt && current?.command === receipt.command ? receipt.previous : undefined
+  if (previous === undefined) return false
+  if (previous === null) delete settings.statusLine
+  else settings.statusLine = previous
   // 다른 프로세스가 바꾼 설정을 덮어쓰지 않는다.
   if (readFileSync(paths.settings, 'utf8') !== raw) throw new Error('Claude settings changed during uninstall. Retry.')
   writeUsageJson(paths.settings, settings)

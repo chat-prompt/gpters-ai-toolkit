@@ -462,6 +462,38 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     // 다른 머신에서 동기화돼 들어온 기록처럼 원래 명령이 다른 경우
     writeFileSync(receiptPath, JSON.stringify({ ...receipt, previous: { type: 'command', command: `printf 'other-machine'` } }))
     expect(runStored(home, command, plainInput).stdout).toBe('original:' + plainInput)
+    // 재설치·해제도 어긋난 기록이 아니라 저장 명령의 원래 명령을 따른다
+    run(home, ['setup', '--auto'])
+    expect(JSON.parse(settingsOf(home)).statusLine.command).toBe(command)
+    run(home, ['uninstall'])
+    expect(JSON.parse(settingsOf(home))).toEqual({ statusLine: userRenderer() })
+  })
+
+  it('사용자가 aitk 명령 뒤에 덧붙여 고쳤으면 자동으로 덮어쓰지 않는다', () => {
+    const home = freshHome({ statusLine: userRenderer() })
+    run(home, ['setup', '--auto'])
+    const settings = JSON.parse(settingsOf(home))
+    settings.statusLine.command = `${settings.statusLine.command} | sed 's/original:/custom:/'`
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify(settings))
+    const before = settingsOf(home)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: drifted')
+    expect(settingsOf(home)).toBe(before)
+  })
+
+  it('빈 command 표시줄은 감싸지 않는다 (표시줄 없음과 구분할 수 없어 화면이 바뀐다)', () => {
+    const home = freshHome({ statusLine: { type: 'command', command: '' } })
+    const before = settingsOf(home)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: unsupported')
+    expect(settingsOf(home)).toBe(before)
+  })
+
+  it('status는 해제·연결 표식을 보여준다 (스킬이 해제해 둔 사람에게 알릴 수 있게)', () => {
+    const home = freshHome({ language: 'ko' })
+    expect(JSON.parse(run(home, ['status']).stdout).autoSetup).toEqual({ declined: false, connected: false })
+    run(home, ['setup', '--auto'])
+    expect(JSON.parse(run(home, ['status']).stdout).autoSetup).toEqual({ declined: false, connected: true })
+    run(home, ['uninstall'])
+    expect(JSON.parse(run(home, ['status']).stdout).autoSetup).toEqual({ declined: true, connected: true })
   })
 
   it('작은따옴표가 든 원래 명령도 기록 없이 정확히 되돌린다', () => {

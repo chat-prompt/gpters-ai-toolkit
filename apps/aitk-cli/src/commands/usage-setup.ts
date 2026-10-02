@@ -191,9 +191,9 @@ export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 
         }
       }
     } catch (err) {
-      // 그 사이 잠금이 사라졌으면 바로 다시 잡아 본다. 그 밖의 오류는 던진다.
+      // 그 사이 잠금이 사라졌으면 바로 다시 잡아 본다. 회수 중 권한 오류는 잠금을 쓸 수 없는 것으로 본다.
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') reclaimed = true
-      else throw err
+      else throw new LockUnavailableError((err as Error).message)
     }
     if (reclaimed && attempt < 3) continue
     if (Date.now() >= deadline) return 'busy'
@@ -285,11 +285,13 @@ export function formatUsageAutoSetup(result: UsageAutoSetupResult): string {
 }
 
 /** uninstall은 원래 표시줄을 복원하고, 자동 연결이 다시 켜지지 않게 표식을 남긴다. */
-export function runUsageUninstall(home = homedir()): boolean {
+export function runUsageUninstall(home = homedir()): { restored: boolean; declined: boolean } {
+  let declined = false
   // 해제는 어떤 경우에도 막히면 안 된다. 표식을 먼저 남기고(복원 중 실패해도 다시 켜지지 않게), 표식이나
   // 잠금을 못 만들어도(수집 폴더 권한 없음 등) 설정 복원은 한다.
   const body = () => {
     const marked = markAutoSetupDeclined(home)
+    declined = marked.length > 0
     const result = uninstallClaudeStatusline(home)
     if (marked.length === 0) info('해제 표식을 남기지 못했습니다(~/.claude/aitk-usage, ~/.config/aitk 쓰기 실패). 자동 연결이 다시 켜질 수 있으니 AITK_USAGE_SETUP=0 도 설정하세요.')
     else if (marked.length === 1) info(`해제 표식을 한 곳에만 남겼습니다: ${marked[0]} — 이 파일을 지우면 다음 날 다시 연결될 수 있습니다.`)
@@ -302,5 +304,5 @@ export function runUsageUninstall(home = homedir()): boolean {
     restored = body()
   }
   if (restored === 'busy') error(busyMessage(home))
-  return restored
+  return { restored, declined }
 }

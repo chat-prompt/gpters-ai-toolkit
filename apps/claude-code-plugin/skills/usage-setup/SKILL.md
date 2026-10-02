@@ -25,7 +25,8 @@ aitk 0.7.23부터는 플러그인 세션 시작 훅이 하루 한 번 `aitk usag
 1. `aitk --version`이 0.7.18 이상인지 확인한다(자동 연결은 0.7.23 이상). 아니면 먼저
    `npm i -g @gpters/aitk@latest && aitk upgrade`를 안내한다. `usage setup` 명령이 없다는
    오류도 옛 버전이라는 뜻이다 — `usage report`로 대신하지 않는다.
-2. `aitk usage status`를 실행해 `statusline.kind`를 읽는다. 읽기 전용이다.
+2. `aitk usage status`를 실행해 `statusline.kind`와 `autoSetup`을 읽는다. 읽기 전용이다.
+   `autoSetup.declined`가 true면 사용자가 예전에 해제해 둔 상태다 — 다시 연결할지 먼저 확인한다.
    - `user`: 사용자가 만든 표시줄이 있다. 그대로 감싸기만 하므로 표시는 바뀌지 않는다.
    - `none`: 표시줄이 없다. 아래 3번처럼 먼저 물어본다.
    - `aitk`: 이미 연결돼 있다(자동 연결이면 `display: none`). `display`와 `snapshot`을 보여주고,
