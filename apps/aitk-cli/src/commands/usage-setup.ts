@@ -5,14 +5,15 @@
  * 대화형이 아닐 때(스킬·스크립트)는 --display로 답을 받는다.
  * `--auto`는 플러그인 SessionStart 훅이 부르는 무인 경로로, 화면이 바뀌지 않는 경우만 연결한다.
  */
-import { existsSync, lstatSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
   claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, readClaudeStatuslineInstallation, uninstallClaudeStatusline, type StatuslineDisplay,
+  markAutoSetupDeclined, readClaudeStatuslineInstallation, uninstallClaudeStatusline, writeUsageJson, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -72,6 +73,7 @@ export async function runUsageSetup(opts: UsageSetupOptions = {}): Promise<void>
   const home = homedir()
   const result = withSetupLock(home, true, () => {
     const installed = installClaudeStatusline(undefined, home, undefined, display ? { display } : {})
+    markConnected(home)
     // 직접 실행한 setup은 이전에 uninstall로 남긴 자동 연결 거부를 푼다.
     clearAutoSetupDeclined(home)
     return installed
@@ -105,34 +107,77 @@ export type UsageAutoSetupResult =
 /** 자동 연결을 건너뛴 이유. 로그에 그대로 남는다. */
 export type AutoSetupSkipReason =
   | 'disabled' | 'report-disabled' | 'agent' | 'no-claude' | 'config-dir' | 'declined'
-  | 'drifted' | 'symlink' | 'unsupported' | 'busy'
+  | 'drifted' | 'symlink' | 'unsupported' | 'busy' | 'platform'
 
 /** 테스트가 가짜 홈·실행 경로를 넘길 수 있게 한다. */
 export interface UsageAutoSetupOptions {
   home?: string
   entry?: string
   env?: NodeJS.ProcessEnv
+  platform?: NodeJS.Platform
+}
+
+/**
+ * 연결한 적이 있다는 기록. 옛 aitk(0.7.18~0.7.22)의 uninstall은 이 파일을 지우지 않으므로,
+ * 연결 기록(statusline.json)은 없는데 이 파일만 남아 있으면 해제한 것으로 본다.
+ */
+function markConnected(home: string): void {
+  const path = claudeUsagePaths(home).connected
+  if (!existsSync(path)) writeUsageJson(path, { version: 1, connectedAt: new Date().toISOString() })
 }
 
 const LOCK_STALE_MS = 60_000
 
+/** 동기 대기. 잠금 재시도 사이에만 쓴다. */
+function sleepSync(ms: number): void { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) }
+
 /**
  * setup·uninstall을 한 프로세스씩만 돌게 한다. 디렉터리 생성은 원자적이라 잠금으로 쓴다.
- * 자동 연결은 기다리지 않고 건너뛰고(`wait: false`), 사람이 친 명령은 잠깐 기다린다.
- * 죽은 프로세스가 남긴 잠금은 1분 뒤 회수한다.
+ * 자동 연결은 기다리지 않고 건너뛰고(`wait: false`), 사람이 친 명령은 최대 5초 기다린다.
+ *
+ * - 경합(EEXIST)만 재시도한다. 권한·디스크 오류는 그대로 던진다 — 재시도하면 끝나지 않는다.
+ * - 1분 넘은 잠금은 이름을 바꿔 회수한다. 바꾼 뒤 보니 방금 갱신된 잠금이면(다른 프로세스가 먼저
+ *   회수해 새로 잡은 것) 되돌려 놓고 기다린다.
+ * - 잠금 안에 소유 토큰을 두고, 자기 토큰일 때만 푼다.
  */
 export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 'busy' {
   const lock = join(claudeUsagePaths(home).directory, 'setup.lock')
+  const owner = join(lock, 'owner')
   mkdirSync(dirname(lock), { recursive: true, mode: 0o700 })
+  const token = `${process.pid}-${randomUUID()}`
   const deadline = Date.now() + (wait ? 5_000 : 0)
-  for (;;) {
-    try { mkdirSync(lock); break } catch {
-      try { if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) { rmSync(lock, { recursive: true, force: true }); continue } } catch { continue }
-      if (Date.now() >= deadline) return 'busy'
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
+  for (let attempt = 0; ; attempt++) {
+    try {
+      mkdirSync(lock)
+      writeFileSync(owner, token)
+      break
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
     }
+    let reclaimed = false
+    try {
+      if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) {
+        const grave = `${lock}.stale-${token}`
+        renameSync(lock, grave)
+        if (Date.now() - statSync(grave).mtimeMs > LOCK_STALE_MS) {
+          rmSync(grave, { recursive: true, force: true })
+          reclaimed = true
+        } else {
+          try { renameSync(grave, lock) } catch { rmSync(grave, { recursive: true, force: true }) }
+        }
+      }
+    } catch (err) {
+      // 그 사이 잠금이 사라졌으면 바로 다시 잡아 본다. 그 밖의 오류는 던진다.
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') reclaimed = true
+      else throw err
+    }
+    if (reclaimed && attempt < 3) continue
+    if (Date.now() >= deadline) return 'busy'
+    sleepSync(100)
   }
-  try { return fn() } finally { rmSync(lock, { recursive: true, force: true }) }
+  try { return fn() } finally {
+    try { if (readFileSync(owner, 'utf8') === token) rmSync(lock, { recursive: true, force: true }) } catch { /* 이미 없음 */ }
+  }
 }
 
 /**
@@ -141,10 +186,11 @@ export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 
  * - 기존 command 표시줄: 감싼다(출력 그대로)
  * - 표시줄 없음: `display: none`으로 연결한다(아무것도 그리지 않음)
  * - 이미 aitk: 이전 선택을 유지한 채 명령 경로만 현재 설치본으로 맞춘다(node·aitk 경로가 바뀌면 표시줄이 깨지므로)
- * - 건너뜀: 끔(`AITK_USAGE_SETUP=0`·`AITK_USAGE_REPORT=0`), 에이전트 머신, `~/.claude` 없음,
+ * - 건너뜀: 끔(`AITK_USAGE_SETUP=0`·`AITK_USAGE_REPORT=0`), 에이전트 머신, Windows, `~/.claude` 없음,
  *   `CLAUDE_CONFIG_DIR`이 다른 곳(실제로 안 쓰는 파일을 바꾸지 않게), uninstall 함,
  *   연결 뒤 사용자가 settings.json을 직접 되돌림(drifted — 가장 분명한 거부 신호),
- *   settings.json이 심링크(dotfiles로 여러 머신이 공유하면 이 머신 경로가 다른 머신 표시줄을 깬다),
+ *   settings.json이나 ~/.claude가 심링크(dotfiles로 여러 머신이 공유하면 이 머신 경로가 다른 머신 표시줄을 깬다),
+ *   settings.json을 읽을 수 없음(실패로 기록),
  *   command가 아닌 표시줄, 다른 setup이 도는 중
  */
 export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSetupResult {
@@ -156,24 +202,34 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
     if (env.AITK_USAGE_REPORT === '0') return skip('report-disabled')
     // 에이전트 머신은 개인 사용량을 보내지 않으므로 수집도 연결하지 않는다 (usage report와 같은 경계).
     if (readAgentConfig(home)) return skip('agent')
+    // 래퍼·저장 명령이 POSIX 셸(/bin/sh)을 전제한다. Windows에서는 원래 표시줄이 사라질 수 있다.
+    if ((opts.platform ?? process.platform) === 'win32') return skip('platform')
     const claudeDir = join(home, '.claude')
     if (!existsSync(claudeDir)) return skip('no-claude')
     if (env.CLAUDE_CONFIG_DIR && resolve(env.CLAUDE_CONFIG_DIR) !== resolve(claudeDir)) return skip('config-dir')
+    // ~/.claude 자체(또는 상위)가 dotfiles·클라우드 폴더로 연결돼 있으면 여러 머신이 같은 설정을 쓴다.
+    if (realpathSync(claudeDir) !== join(realpathSync(home), '.claude')) return skip('symlink')
     const result = withSetupLock(home, false, (): UsageAutoSetupResult => {
       // 잠금 안에서 다시 판단한다 — 그 사이 uninstall이 끝났을 수 있다.
       if (isAutoSetupDeclined(home)) return skip('declined')
-      const settings = claudeUsagePaths(home).settings
-      try { if (lstatSync(settings).isSymbolicLink()) return skip('symlink') } catch { /* 없음 */ }
+      const paths = claudeUsagePaths(home)
+      try { if (lstatSync(paths.settings).isSymbolicLink()) return skip('symlink') } catch { /* 없음 */ }
+      // 편집 중이거나 깨진 settings.json을 "표시줄 없음"으로 읽으면 직접 해제로 오판한다. 읽을 수 없으면 손대지 않는다.
+      if (existsSync(paths.settings)) {
+        const parsed: unknown = JSON.parse(readFileSync(paths.settings, 'utf8'))
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('settings.json is not a JSON object')
+      }
       const state = inspectClaudeStatusline(home)
       if (state.kind === 'unsupported') return skip('unsupported')
-      if (state.kind !== 'aitk' && readClaudeStatuslineInstallation(home)) {
-        // 연결 기록은 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸다. 다시 켜지 않는다.
+      if (state.kind !== 'aitk' && (readClaudeStatuslineInstallation(home) || existsSync(paths.connected))) {
+        // 연결한 적이 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸거나 옛 aitk로 uninstall했다. 다시 켜지 않는다.
         markAutoSetupDeclined(home)
         return skip('drifted')
       }
       // 표시 모드를 늘 명시한다. 생략하면 기록이 사라진 경합에서 기본 한 줄(화면 변화)로 떨어진다.
       const display: StatuslineDisplay = state.kind === 'aitk' ? state.display : 'none'
       const installed = installClaudeStatusline(opts.entry, home, undefined, { display })
+      markConnected(home)
       if (installed.mode === 'unchanged') return { status: 'unchanged' }
       if (state.kind === 'aitk') return { status: 'refreshed' }
       return { status: 'connected', mode: installed.mode === 'wrapped' ? 'wrapped' : 'none' }

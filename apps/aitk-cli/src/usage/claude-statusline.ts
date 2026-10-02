@@ -29,6 +29,7 @@ export function claudeUsagePaths(home = homedir()) {
     report: join(directory, 'report.json'),
     lock: join(directory, 'report.lock'),
     declined: join(directory, 'auto-setup-declined.json'),
+    connected: join(directory, 'connected.json'),
   }
 }
 
@@ -164,9 +165,14 @@ function shellQuote(value: string): string { return `'${value.replace(/'/g, `'"'
  * 자동 연결은 동의 없이 모두에게 깔리므로, 다음 setup이 경로를 갱신할 때까지 화면이 비면 안 된다.
  */
 export function buildStatuslineCommand(node: string, entry: string, previous: Record<string, unknown> | null): string {
-  const fallback = typeof previous?.command === 'string' ? `exec /bin/sh -c ${shellQuote(previous.command)}` : ':'
-  return `if [ -x ${shellQuote(node)} ] && [ -f ${shellQuote(entry)} ]; then exec ${shellQuote(node)} ${shellQuote(entry)} usage statusline; else ${fallback}; fi`
+  const original = typeof previous?.command === 'string' ? previous.command : ''
+  const fallback = original ? `exec /bin/sh -c ${shellQuote(original)}` : ':'
+  // 원래 명령을 환경 변수로도 넘긴다. 연결 기록(statusline.json)이 사라진 순간에도 래퍼가 원래 화면을 그릴 수 있게.
+  return `if [ -x ${shellQuote(node)} ] && [ -f ${shellQuote(entry)} ]; then exec /usr/bin/env ${STATUSLINE_PREVIOUS_ENV}=${shellQuote(original)} ${shellQuote(node)} ${shellQuote(entry)} usage statusline; else ${fallback}; fi`
 }
+
+/** 저장 명령이 래퍼에 넘기는 원래 표시줄 명령. 빈 값은 원래 표시줄이 없었다는 뜻이다. */
+export const STATUSLINE_PREVIOUS_ENV = 'AITK_STATUSLINE_PREVIOUS'
 
 /** setup 결과. 메시지와 재시작 안내에만 쓴다. */
 export interface ClaudeStatuslineInstallResult {

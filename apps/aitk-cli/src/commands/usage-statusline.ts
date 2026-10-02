@@ -1,7 +1,7 @@
 /** Claude statusline stdin을 기존 표시줄에 전달하면서 공식 한도만 수집한다. */
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
-import { claudeUsagePaths, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
+import { STATUSLINE_PREVIOUS_ENV, claudeUsagePaths, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
 import { shouldScheduleClaudeReport } from '../usage/claude-auto-report.js'
 
 const RENDERER_TIMEOUT_MS = 10_000
@@ -15,11 +15,18 @@ export async function runUsageStatusline(): Promise<void> {
   const input = Buffer.concat(chunks)
   const home = homedir()
   const installation = readClaudeStatuslineInstallation(home)
-  const previous = installation?.previous
+  // 연결 기록이 없으면(해제 직후·폴더 삭제·다른 머신에서 동기화된 설정) 수집하지 않고,
+  // 저장 명령이 넘겨준 원래 명령만 그린다. 기록 부재를 기본 한 줄 동의로 해석하지 않는다.
+  const handedOver = process.env[STATUSLINE_PREVIOUS_ENV]
+  const previousCommand = installation
+    ? (typeof installation.previous?.command === 'string' ? installation.previous.command : undefined)
+    : (handedOver || undefined)
+  const childEnv = { ...process.env }
+  delete childEnv[STATUSLINE_PREVIOUS_ENV]
   let rendered = Promise.resolve()
-  if (typeof previous?.command === 'string') {
+  if (previousCommand !== undefined) {
     rendered = new Promise<void>((done) => {
-      const renderer = spawn('/bin/sh', ['-c', previous.command as string], { stdio: ['pipe', 'inherit', 'inherit'] })
+      const renderer = spawn('/bin/sh', ['-c', previousCommand], { stdio: ['pipe', 'inherit', 'inherit'], env: childEnv })
       // 끝나지 않는 표시줄 명령이 래퍼를 붙잡지 않게 한다. Claude Code는 표시줄을 수백 ms마다 다시 부른다.
       const deadline = setTimeout(() => { try { renderer.kill('SIGKILL') } catch { /* 이미 종료 */ } }, RENDERER_TIMEOUT_MS)
       const finish = () => { clearTimeout(deadline); done() }
@@ -29,6 +36,8 @@ export async function runUsageStatusline(): Promise<void> {
       renderer.stdin.end(input)
     })
   }
+
+  if (!installation) { await rendered; return }
 
   try {
     const data = JSON.parse(input.toString('utf8'))
@@ -48,7 +57,7 @@ export async function runUsageStatusline(): Promise<void> {
       }
     }
     // 원래 표시줄이 없던 사용자: setup에서 고른 대로 기본 한 줄을 그리거나 아무것도 그리지 않는다.
-    if (!previous && (installation?.display ?? 'default') === 'default') {
+    if (previousCommand === undefined && (installation.display ?? 'default') === 'default') {
       process.stdout.write(renderDefaultStatusline(data, quota))
     }
   } catch { /* 입력 누락·캐시 실패가 기존 상태 표시줄을 깨뜨리지 않게 한다. */ }
