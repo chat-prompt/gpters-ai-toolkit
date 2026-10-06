@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { createLogger } from '../core/logger'
-import { db, catalogItems, users, axClientUsage, axUsageCollectorState } from '@gpters/db'
+import { db, catalogItems, users, orgMemberships, axClientUsage, axUsageCollectorState } from '@gpters/db'
 import { validateUsageReport } from '../features/ax/usage-report'
 import type { AxUsageReportRecord } from '../features/ax/usage-report'
 import { validateSkillExecutionReport, validateSkillExecutionStart } from '../features/ax/execution-report'
@@ -656,10 +656,8 @@ export async function deploySkill(
       }
     }
 
-    // Cross-org guard: only members of the owning org (or super_admin) may update.
-    // Mirrors the REST PUT guard in apps/web/app/api/catalog/[id]/route.ts.
-    const isSuperAdminUser = userRole && isSuperAdmin(userRole as UserRole)
-    if (!isSuperAdminUser && existingItem.orgId && existingItem.orgId !== orgId) {
+    const editError = await checkItemEditAccess(existingItem, { userId: authorId, userRole, orgId })
+    if (editError) {
       return {
         success: false,
         id,
@@ -667,7 +665,7 @@ export async function deploySkill(
         changelog: '',
         status: 'published',
         webUrl: '',
-        error: '다른 조직의 스킬은 수정할 수 없습니다.',
+        error: editError,
       }
     }
   }
@@ -980,16 +978,61 @@ export async function undeploySkill(
 }
 
 /**
+ * 기존 카탈로그 항목을 고칠 수 있는지 판정한다 — deploy_skill(업데이트)·add_files·remove_files 공통 규칙.
+ *
+ * - 로그인하지 않았으면 거절
+ * - 에이전트 클라이언트는 같은 조직의 자기 항목만
+ * - 사람은 항목 조직의 활성 구성원이면 누구나(조직 없는 항목은 로그인만), super_admin은 조직 무관
+ *
+ * 요청의 orgId는 활성 멤버십 하나만 고른 값이라, 그 값이 항목 조직과 다르면 항목 조직의 멤버십을
+ * 직접 확인한다 — 여러 조직에 속한 사람이 어느 조직이 골렸느냐에 따라 막히지 않게.
+ * REST PUT(`apps/web/app/api/catalog/[id]/route.ts`)은 아직 요청 org만 비교하고 역할 요건(CATALOG_EDIT)도 따로 둔다.
+ * 삭제(undeploy_skill)는 이 규칙을 쓰지 않고 작성자·admin만 허용한다.
+ *
+ * @returns 거절 사유, 허용이면 null
+ */
+async function checkItemEditAccess(
+  item: { authorId: string | null; orgId: string | null },
+  ctx: { userId?: string; userRole?: string; orgId?: string; agentOwnerOnly?: boolean }
+): Promise<string | null> {
+  if (!ctx.userId) {
+    return '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.'
+  }
+  if (ctx.agentOwnerOnly) {
+    if (!ctx.orgId || item.authorId !== ctx.userId || item.orgId !== ctx.orgId) {
+      return 'Agent deployment is limited to assets owned by its owner in the authorized organization'
+    }
+    return null
+  }
+  if (!item.orgId || item.orgId === ctx.orgId) return null
+  if (ctx.userRole && isSuperAdmin(ctx.userRole as UserRole)) return null
+  const [membership] = await db
+    .select({ orgId: orgMemberships.orgId })
+    .from(orgMemberships)
+    .where(and(
+      eq(orgMemberships.userId, ctx.userId),
+      eq(orgMemberships.orgId, item.orgId),
+      eq(orgMemberships.status, 'active')
+    ))
+    .limit(1)
+  return membership ? null : '다른 조직의 스킬은 수정할 수 없습니다.'
+}
+
+/**
  * Add files to an existing plugin (merge strategy: keep existing, overwrite same name, add new)
  *
  * @param input - Add files input with plugin ID and files array
- * @param userId - Authenticated user ID (required for ownership check)
- * @param userRole - Authenticated user's role (admin can override ownership check)
+ * @param userId - Authenticated user ID
+ * @param userRole - Authenticated user's role (super_admin may edit across orgs)
+ * @param orgId - User's current organization ID (same-org members may edit)
+ * @param agentOwnerOnly - Agent clients may only edit their owner's items
  */
 export async function addFiles(
   input: AddFilesInput,
   userId?: string,
-  userRole?: string
+  userRole?: string,
+  orgId?: string,
+  agentOwnerOnly = false
 ): Promise<AddFilesResponse> {
   const { id, files: newFiles } = input
 
@@ -998,6 +1041,7 @@ export async function addFiles(
       id: catalogItems.id,
       version: catalogItems.version,
       authorId: catalogItems.authorId,
+      orgId: catalogItems.orgId,
       files: catalogItems.files,
     })
     .from(catalogItems)
@@ -1019,7 +1063,8 @@ export async function addFiles(
 
   const item = existing[0]
 
-  if (!userId) {
+  const editError = await checkItemEditAccess(item, { userId, userRole, orgId, agentOwnerOnly })
+  if (editError) {
     return {
       success: false,
       id,
@@ -1028,20 +1073,7 @@ export async function addFiles(
       addedOrUpdated: [],
       totalFiles: 0,
       files: [],
-      error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
-    }
-  }
-
-  if (item.authorId !== userId && !isAdmin(userRole)) {
-    return {
-      success: false,
-      id,
-      version: item.version || '1.0.0',
-      previousVersion: item.version || '1.0.0',
-      addedOrUpdated: [],
-      totalFiles: 0,
-      files: [],
-      error: `본인이 배포한 플러그인만 수정할 수 있습니다. 소유자가 아닙니다.`,
+      error: editError,
     }
   }
 
@@ -1110,13 +1142,17 @@ export async function addFiles(
  * Remove files from an existing plugin by file name
  *
  * @param input - Remove files input with plugin ID and file names
- * @param userId - Authenticated user ID (required for ownership check)
- * @param userRole - Authenticated user's role (admin can override ownership check)
+ * @param userId - Authenticated user ID
+ * @param userRole - Authenticated user's role (super_admin may edit across orgs)
+ * @param orgId - User's current organization ID (same-org members may edit)
+ * @param agentOwnerOnly - Agent clients may only edit their owner's items
  */
 export async function removeFiles(
   input: RemoveFilesInput,
   userId?: string,
-  userRole?: string
+  userRole?: string,
+  orgId?: string,
+  agentOwnerOnly = false
 ): Promise<RemoveFilesResponse> {
   const { id, fileNames } = input
 
@@ -1125,6 +1161,7 @@ export async function removeFiles(
       id: catalogItems.id,
       version: catalogItems.version,
       authorId: catalogItems.authorId,
+      orgId: catalogItems.orgId,
       files: catalogItems.files,
     })
     .from(catalogItems)
@@ -1147,7 +1184,8 @@ export async function removeFiles(
 
   const item = existing[0]
 
-  if (!userId) {
+  const editError = await checkItemEditAccess(item, { userId, userRole, orgId, agentOwnerOnly })
+  if (editError) {
     return {
       success: false,
       id,
@@ -1157,21 +1195,7 @@ export async function removeFiles(
       notFound: [],
       totalFiles: 0,
       files: null,
-      error: '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.',
-    }
-  }
-
-  if (item.authorId !== userId && !isAdmin(userRole)) {
-    return {
-      success: false,
-      id,
-      version: item.version || '1.0.0',
-      previousVersion: item.version || '1.0.0',
-      removed: [],
-      notFound: [],
-      totalFiles: 0,
-      files: null,
-      error: `본인이 배포한 플러그인만 수정할 수 있습니다. 소유자가 아닙니다.`,
+      error: editError,
     }
   }
 
@@ -1807,7 +1831,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await addFiles(input, userId, userRole)
+        const result = await addFiles(input, userId, userRole, orgId, clientType === 'agent')
         return {
           content: [
             {
@@ -2026,7 +2050,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await removeFiles(input, userId, userRole)
+        const result = await removeFiles(input, userId, userRole, orgId, clientType === 'agent')
         return {
           content: [
             {

@@ -72,6 +72,7 @@ const { mockDb, mockCatalogItems, mockUsers, mockSuggestions } = vi.hoisted(() =
 vi.mock('@gpters/db', () => ({
   db: mockDb,
   catalogItems: mockCatalogItems,
+  orgMemberships: { userId: 'userId', orgId: 'orgId', status: 'status' },
   users: mockUsers,
   suggestions: mockSuggestions,
 }))
@@ -243,12 +244,36 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
     expect(result.error).toContain('인증이 필요합니다')
   })
 
+  it('lets a member of several orgs update when the request resolved to another org', async () => {
+    vi.mocked(db.select)
+      .mockReturnValueOnce(createMockChain([
+        { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-A' },
+      ]) as never)
+      .mockReturnValueOnce(createMockChain([{ orgId: 'org-A' }]) as never)
+      .mockReturnValue(createMockChain([]) as never)
+    vi.mocked(db.update).mockReturnValue({
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue(undefined),
+    } as never)
+
+    const result = await deploySkill(
+      { id: 'sample-skill', type: 'skill', name: 'Sample', content: 'new content', changelog: 'Update' },
+      'multi-org-user',
+      'viewer',
+      'org-B'
+    )
+
+    expect(result.success).toBe(true)
+    expect(db.update).toHaveBeenCalled()
+  })
+
   it('blocks cross-org updates', async () => {
-    // Existing skill belongs to org-A
-    const mockSelectChain = createMockChain([
-      { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-A' },
-    ])
-    vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+    // Existing skill belongs to org-A; caller has no active membership there
+    vi.mocked(db.select)
+      .mockReturnValueOnce(createMockChain([
+        { id: 'sample-skill', content: 'old content', version: '1.0.0', authorId: 'original-author', files: null, orgId: 'org-A' },
+      ]) as never)
+      .mockReturnValueOnce(createMockChain([]) as never)
 
     // Caller is from org-B (not super_admin)
     const result = await deploySkill(
