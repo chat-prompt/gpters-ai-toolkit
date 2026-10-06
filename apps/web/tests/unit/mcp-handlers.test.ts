@@ -66,6 +66,7 @@ const { mockDb, mockCatalogItems, mockUsers, mockSuggestions } = vi.hoisted(() =
 vi.mock('@gpters/db', () => ({
   db: mockDb,
   catalogItems: mockCatalogItems,
+  orgMemberships: { userId: 'userId', orgId: 'orgId', status: 'status' },
   users: mockUsers,
   suggestions: mockSuggestions,
 }))
@@ -164,6 +165,14 @@ import {
   listPrompts,
   getPrompt,
 } from '@/lib/mcp/handlers'
+
+// Membership lookups select only { orgId }; route them to `memberships`, everything else to `items`
+function mockSelectByQuery(items: unknown[], memberships: unknown[] = []) {
+  vi.mocked(mockDb.select).mockImplementation(((fields?: Record<string, unknown>) =>
+    fields && Object.keys(fields).length === 1 && 'orgId' in fields
+      ? createMockChain(memberships)
+      : createMockChain(items)) as never)
+}
 
 // Helper to create mock chain
 function createMockChain(result: unknown[] = []) {
@@ -891,19 +900,164 @@ describe('MCP Handlers', () => {
       expect(result.error).toContain('인증이 필요합니다')
     })
 
-    it('should fail if not owner', async () => {
+    it('should let a same-org member who is not the owner add files', async () => {
       const mockSelectChain = createMockChain([
-        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', files: [] },
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'viewer',
+        'org-1'
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.version).toBe('1.0.1')
+      expect(db.update).toHaveBeenCalled()
+    })
+
+    it('should reject a member of another org', async () => {
+      mockSelectByQuery([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] },
+      ])
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'admin',
+        'org-2'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('다른 조직의 스킬은 수정할 수 없습니다')
+      expect(db.update).not.toHaveBeenCalled()
+    })
+
+    it('should let super_admin edit across orgs', async () => {
+      const { isSuperAdmin } = await import('../../../../packages/lib/src/security/rbac')
+      vi.mocked(isSuperAdmin).mockReturnValueOnce(true)
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'super_admin',
+        'org-2'
+      )
+
+      expect(result.success).toBe(true)
+    })
+
+    it('should let a member of several orgs edit when the request resolved to another org', async () => {
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      mockSelectByQuery(
+        [{ id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] }],
+        [{ orgId: 'org-1' }]
+      )
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'viewer',
+        'org-2'
+      )
+
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject the owner after leaving the item\'s org', async () => {
+      mockSelectByQuery([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, orgId: 'org-1', files: [] },
+      ])
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'viewer',
+        'org-2'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('다른 조직의 스킬은 수정할 수 없습니다')
+      expect(db.update).not.toHaveBeenCalled()
+    })
+
+    it('should let agent clients edit their owner\'s item in the same org', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, orgId: 'org-1', files: [] },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'viewer',
+        'org-1',
+        true
+      )
+
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject agent clients on their owner\'s item in another org', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, orgId: 'org-1', files: [] },
       ])
       vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
 
       const result = await addFiles(
         { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
-        ownerUserId
+        ownerUserId,
+        'viewer',
+        'org-2',
+        true
       )
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('소유자가 아닙니다')
+      expect(db.update).not.toHaveBeenCalled()
+    })
+
+    it('should limit agent clients to their owner\'s items', async () => {
+      const mockSelectChain = createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] },
+      ])
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+
+      const result = await addFiles(
+        { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId,
+        'admin',
+        'org-1',
+        true
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('limited to assets owned by its owner')
+      expect(db.update).not.toHaveBeenCalled()
     })
   })
 
@@ -1039,6 +1193,57 @@ describe('MCP Handlers', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('인증이 필요합니다')
+    })
+
+    it('should let a same-org member who is not the owner remove files', async () => {
+      const mockSelectChain = createMockChain([
+        {
+          id: 'my-skill',
+          version: '1.0.0',
+          authorId: 'other-user',
+          orgId: 'org-1',
+          files: [{ name: 'a.md', content: 'aaa', type: 'reference' }],
+        },
+      ])
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['a.md'] },
+        ownerUserId,
+        'viewer',
+        'org-1'
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.removed).toEqual(['a.md'])
+    })
+
+    it('should reject a member of another org', async () => {
+      mockSelectByQuery([
+        {
+          id: 'my-skill',
+          version: '1.0.0',
+          authorId: 'other-user',
+          orgId: 'org-1',
+          files: [{ name: 'a.md', content: 'aaa', type: 'reference' }],
+        },
+      ])
+
+      const result = await removeFiles(
+        { id: 'my-skill', fileNames: ['a.md'] },
+        ownerUserId,
+        'viewer',
+        'org-2'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('다른 조직의 스킬은 수정할 수 없습니다')
+      expect(db.update).not.toHaveBeenCalled()
     })
   })
 
@@ -1275,6 +1480,44 @@ describe('MCP Handlers', () => {
 
       expect(result.content).toHaveLength(1)
       expect(result.isError).toBeFalsy()
+    })
+
+    it('should forward orgId to add_files and remove_files', async () => {
+      const item = {
+        id: 'my-skill',
+        version: '1.0.0',
+        authorId: 'other-user',
+        orgId: 'org-1',
+        files: [{ name: 'a.md', content: 'aaa', type: 'reference' }],
+      }
+      const mockUpdateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      }
+      mockSelectByQuery([item])
+      vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
+
+      const sameOrgAdd = await executeTool(
+        'add_files', { id: 'my-skill', files: [{ name: 'b.md', content: 'b' }] },
+        'user-123', 'viewer', 'org-1'
+      )
+      const otherOrgAdd = await executeTool(
+        'add_files', { id: 'my-skill', files: [{ name: 'b.md', content: 'b' }] },
+        'user-123', 'viewer', 'org-2'
+      )
+      const sameOrgRemove = await executeTool(
+        'remove_files', { id: 'my-skill', fileNames: ['a.md'] },
+        'user-123', 'viewer', 'org-1'
+      )
+      const otherOrgRemove = await executeTool(
+        'remove_files', { id: 'my-skill', fileNames: ['a.md'] },
+        'user-123', 'viewer', 'org-2'
+      )
+
+      expect(JSON.parse(sameOrgAdd.content[0].text).success).toBe(true)
+      expect(JSON.parse(otherOrgAdd.content[0].text).success).toBe(false)
+      expect(JSON.parse(sameOrgRemove.content[0].text).success).toBe(true)
+      expect(JSON.parse(otherOrgRemove.content[0].text).success).toBe(false)
     })
 
     it('should return error for add_files without required fields', async () => {
