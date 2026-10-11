@@ -19,10 +19,10 @@ import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runReportExecution, runReportExecutionStart } from '../src/commands/report-execution.js'
 import { runUsageReport } from '../src/commands/usage-report.js'
 import { runUsageStatusline } from '../src/commands/usage-statusline.js'
-import { runUsageSetup } from '../src/commands/usage-setup.js'
+import { formatUsageAutoSetup, runUsageAutoSetup, runUsageSetup, runUsageUninstall } from '../src/commands/usage-setup.js'
 import { writeDailyUsageAggregate } from '../src/usage/usage-aggregate-cache.js'
 import { runAutomaticClaudeReport } from '../src/usage/claude-auto-report.js'
-import { uninstallClaudeStatusline, readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson } from '../src/usage/claude-statusline.js'
+import { readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson, isAutoSetupDeclined, wasConnected } from '../src/usage/claude-statusline.js'
 import { runAgentTelemetryCollect } from '../src/commands/agent-telemetry.js'
 import {
   runAgentTelemetryDoctor,
@@ -96,7 +96,7 @@ Usage:
   aitk report-execution-start --skill-id <id> --agent <runtime> [--agent-id <id>] [options]
   aitk report-execution --skill-id <id> --status <status> --agent <runtime> [--agent-id <id>] [options]
   aitk usage report [--days 7] [--dry-run]
-  aitk usage setup [--display default|none] [--yes] | status | uninstall
+  aitk usage setup [--display default|none] [--yes] [--auto] | status | uninstall
   aitk agent-telemetry collect --agent <id> [--days 7] [--dry-run]
   aitk agent-telemetry install|upgrade|doctor|status|run|uninstall --agent <id> --source <source>
   aitk undeploy <id>
@@ -292,7 +292,7 @@ Options:
   usage: `aitk usage - Report local Claude Code / Codex token usage
 
 Usage: aitk usage report [--days <N>] [--dry-run]
-       aitk usage setup [--display default|none] [--yes]
+       aitk usage setup [--display default|none] [--yes] [--auto]
        aitk usage status | uninstall
 
 Aggregates token counts from local transcripts (~/.claude/projects,
@@ -304,8 +304,15 @@ Claude weekly limits:
   aitk usage setup      Connect the official statusline input, preserving your existing display.
                         Without a statusline it asks whether to show the aitk default line;
                         use --display default|none (or --yes) when not interactive.
+  aitk usage setup --auto
+                        Unattended path used by the plugin SessionStart hook: connects only
+                        when nothing on screen changes (wraps an existing statusline, or
+                        collects with no display). Skips agent machines, CLAUDE_CONFIG_DIR
+                        elsewhere, symlinked settings.json, unsupported statusLine settings,
+                        anyone who ran uninstall or removed it by hand. Always exits 0.
+                        AITK_USAGE_SETUP=0 disables it.
   aitk usage status     Inspect local capture/report status
-  aitk usage uninstall  Restore the previous statusline
+  aitk usage uninstall  Restore the previous statusline and stop automatic setup
   Restart Claude Code after setup. Automatic reporting starts after a response
   supplies seven_day limits. Each report rescans local transcripts: at most every
   5 minutes when the weekly percentage changes, otherwise hourly. AITK_USAGE_REPORT=0 disables it.
@@ -623,11 +630,20 @@ async function main(): Promise<void> {
       const sub = positional[0]
       if (sub === 'statusline') await runUsageStatusline()
       else if (sub === 'auto-report') await runAutomaticClaudeReport()
+      else if (sub === 'setup' && flags['auto'] === 'true') info(formatUsageAutoSetup(runUsageAutoSetup()))
       else if (sub === 'setup') await runUsageSetup({ display: flags['display'], yes: flags['yes'] === 'true' })
       else if (sub === 'uninstall') {
-        info(uninstallClaudeStatusline() ? 'Previous Claude statusline restored.' : 'No matching AITK statusline to restore; settings preserved.')
+        const { restored, declined } = runUsageUninstall()
+        info(restored ? 'Previous Claude statusline restored.' : 'No matching AITK statusline to restore; settings preserved.')
+        if (declined) info('Automatic setup will not reconnect it. Run aitk usage setup to connect again.')
+        info('Restart Claude Code to apply; an already-open session may show no statusline until then.')
       } else if (sub === 'status') {
-        jsonOut({ statusline: inspectClaudeStatusline(), installation: readClaudeStatuslineInstallation(), snapshot: readClaudeQuota(), report: readUsageJson(claudeUsagePaths().report) })
+        jsonOut({
+          statusline: inspectClaudeStatusline(), installation: readClaudeStatuslineInstallation(), snapshot: readClaudeQuota(),
+          report: readUsageJson(claudeUsagePaths().report),
+          // 자동 연결 판단에 쓰는 표식. declined면 사용자가 해제해 둔 상태다
+          autoSetup: { declined: isAutoSetupDeclined(), connected: wasConnected() },
+        })
       } else if (sub === 'report') {
         const days = flags['days'] ? parseInt(flags['days'], 10) : 7
         const dryRun = flags['dry-run'] === 'true'

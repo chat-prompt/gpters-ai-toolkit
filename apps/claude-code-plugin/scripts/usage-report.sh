@@ -1,13 +1,16 @@
 #!/bin/bash
-# SessionStart hook: 하루 한 번, 백그라운드로 두 가지를 합니다.
+# SessionStart hook: 하루 한 번, 백그라운드로 세 가지를 합니다.
 #   1. aitk 자동 업그레이드 — npm 에 새 버전이 있고 npm 전역 설치본이면 올립니다
-#   2. AI 클라이언트 사용량 집계·보고
+#   2. Claude 주간 한도 수집 자동 연결 — 화면이 바뀌지 않는 경우만 (`aitk usage setup --auto`)
+#   3. AI 클라이언트 사용량 집계·보고
 #
 # 집계는 트랜스크립트 전체(수 GB가 될 수 있음)를 훑으므로 세션마다 돌리면 안 되고,
 # 훅 타임아웃 안에 끝난다는 보장도 없습니다. 그래서 하루 한 번으로 제한하고
 # 백그라운드로 떼어낸 뒤 즉시 반환합니다.
 #
-# 끄려면: AITK_USAGE_REPORT=0 (사용량 보고), AITK_AUTO_UPDATE=0 (자동 업그레이드)
+# 끄려면: AITK_USAGE_REPORT=0 (사용량 보고·한도 연결), AITK_AUTO_UPDATE=0 (자동 업그레이드),
+#         AITK_USAGE_SETUP=0 (한도 연결만). 한도 연결은 `aitk usage uninstall` 이 가장 확실하다 —
+#         연결 전에 실행해도 되고, GUI·IDE 에서 띄운 세션에도 적용된다(셸 env 는 안 갈 수 있다).
 
 STAMP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/gpters-aitk"
 STAMP="$STAMP_DIR/usage-report-last"
@@ -88,6 +91,12 @@ if [ "${1:-}" = "--aitk-background" ]; then
     { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] aitk 자동 업그레이드"; self_update; } >"$STAMP_DIR/self-update.log" 2>&1
   fi
   if [ "${AITK_BG_REPORT:-0}" = "1" ]; then
+    # 한도 수집 연결은 보고보다 먼저 한다. 업그레이드로 막 생긴 기능이어도 같은 날 연결되게.
+    # `--auto` 를 아는 aitk 만 부른다 — 옛 aitk 는 모르는 플래그를 대화형 setup 으로 받아 멈출 수 있다.
+    # 판단(에이전트 머신·해제한 사람·지원 안 하는 설정 건너뛰기)은 aitk 가 하고 항상 exit 0 이다.
+    if "$AITK" --help 2>&1 | grep -q "usage setup.*--auto"; then
+      { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] aitk usage setup --auto"; "$AITK" usage setup --auto </dev/null; } >"$STAMP_DIR/usage-setup.log" 2>&1
+    fi
     "$AITK" usage report --days 7 >/dev/null 2>"$STAMP_DIR/last-run.log"
   fi
   exit 0

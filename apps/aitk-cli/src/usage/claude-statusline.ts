@@ -28,6 +28,8 @@ export function claudeUsagePaths(home = homedir()) {
     snapshot: join(directory, 'claude.json'),
     report: join(directory, 'report.json'),
     lock: join(directory, 'report.lock'),
+    declined: join(directory, 'auto-setup-declined.json'),
+    connected: join(directory, 'connected.json'),
   }
 }
 
@@ -43,10 +45,11 @@ export function readUsageJson(path: string): unknown {
 export function writeUsageJson(path: string, value: unknown): void {
   let target = path
   let mode = 0o600
-  try {
-    if (lstatSync(path).isSymbolicLink()) target = realpathSync(path)
-    mode = statSync(target).mode & 0o777
-  } catch { /* 새 파일 */ }
+  let link = false
+  try { link = lstatSync(path).isSymbolicLink() } catch { /* 새 파일 */ }
+  // 대상이 없는 심링크를 일반 파일로 바꾸면 dotfiles 연결이 조용히 끊긴다. 쓰지 않고 멈춘다.
+  if (link) target = realpathSync(path)
+  try { mode = statSync(target).mode & 0o777 } catch { /* 새 파일 */ }
   mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
   const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`
   try {
@@ -88,6 +91,14 @@ export function readClaudeQuota(home = homedir(), now = Date.now()): ClaudeQuota
   return parsed ? { ...parsed, capturedAt: value.capturedAt } : null
 }
 
+/**
+ * 래퍼가 aitk 기본 한 줄을 그리는지. 원래 표시줄이 없던 기록(previous null)에서 기본 모드를 고른 경우만이다.
+ * 감싸기 기록은 display가 없어도 기본 줄을 그리지 않는다. 래퍼와 inspect가 이 규칙 하나를 같이 쓴다.
+ */
+export function drawsDefaultLine(installation: { previous: Record<string, unknown> | null; display?: StatuslineDisplay }): boolean {
+  return installation.previous === null && (installation.display ?? 'default') === 'default'
+}
+
 /** 원래 표시줄이 없을 때 aitk가 무엇을 그릴지. `default`는 모델·컨텍스트·한도 한 줄, `none`은 수집만. */
 export type StatuslineDisplay = 'default' | 'none'
 
@@ -122,8 +133,16 @@ export function inspectClaudeStatusline(home = homedir()): ClaudeStatuslineState
   const settings = object(readUsageJson(paths.settings))
   const current = object(settings?.statusLine)
   if (settings?.statusLine == null) return { kind: 'none' }
-  if (!current || current.type !== 'command' || typeof current.command !== 'string') return { kind: 'unsupported' }
+  // 빈 명령은 "표시줄 없음"과 구분할 수 없어 감싸면 화면이 바뀐다 — 지원하지 않는 설정으로 본다.
+  if (!current || current.type !== 'command' || typeof current.command !== 'string' || !current.command.trim()) return { kind: 'unsupported' }
   const receipt = readClaudeStatuslineInstallation(home)
+  // aitk가 만든 새 형식 명령이면 기록이 없거나 어긋나도 aitk다. 원래 명령은 명령에 실어 둔 값이 정본이다.
+  const fromCommand = resolvePrevious(current, receipt)
+  if (fromCommand !== undefined) {
+    // 표시 모드는 래퍼가 실제로 그리는 규칙과 같게 읽는다(usage-statusline의 drawsDefaultLine).
+    const display: StatuslineDisplay = receipt && drawsDefaultLine(receipt) ? 'default' : 'none'
+    return { kind: 'aitk', previous: fromCommand, display }
+  }
   if (receipt && current.command === receipt.command) {
     return { kind: 'aitk', previous: receipt.previous, display: receipt.display ?? 'default' }
   }
@@ -156,6 +175,48 @@ export function renderDefaultStatusline(input: unknown, quota: ClaudeQuotaSnapsh
 /** 설정의 명령 문자열에 공백·따옴표·$가 있어도 경로 그대로 실행되게 한다. */
 function shellQuote(value: string): string { return `'${value.replace(/'/g, `'"'"'`)}'` }
 
+/**
+ * statusLine에 넣을 명령. node 버전 정리·aitk 삭제로 경로가 사라져도 원래 표시줄은 그대로 그리도록
+ * 경로가 있을 때만 래퍼를 실행하고, 없으면 원래 명령(없으면 아무것도 안 함)으로 넘어간다.
+ * 자동 연결은 동의 없이 모두에게 깔리므로, 다음 setup이 경로를 갱신할 때까지 화면이 비면 안 된다.
+ */
+export function buildStatuslineCommand(node: string, entry: string, previous: Record<string, unknown> | null): string {
+  const original = typeof previous?.command === 'string' ? previous.command : ''
+  const fallback = original ? `exec /bin/sh -c ${shellQuote(original)}` : ':'
+  // 원래 명령을 환경 변수로도 넘긴다. 연결 기록(statusline.json)이 사라진 순간에도 래퍼가 원래 화면을 그릴 수 있게.
+  return `if [ -x ${shellQuote(node)} ] && [ -f ${shellQuote(entry)} ]; then exec /usr/bin/env ${STATUSLINE_PREVIOUS_ENV}=${shellQuote(original)} ${shellQuote(node)} ${shellQuote(entry)} usage statusline; else ${fallback}; fi`
+}
+
+/** 저장 명령이 래퍼에 넘기는 원래 표시줄 명령. 빈 값은 원래 표시줄이 없었다는 뜻이다. */
+export const STATUSLINE_PREVIOUS_ENV = 'AITK_STATUSLINE_PREVIOUS'
+
+/**
+ * `buildStatuslineCommand`가 만든 명령에서 원래 명령을 꺼낸다. aitk 형식이 아니면 null, 원래 표시줄이 없었으면 ''.
+ * shellQuote의 역이다: 바깥 작은따옴표를 벗기고 `'"'"'`를 `'`로 되돌린다.
+ */
+export function parseHandedOverPrevious(command: string): string | null {
+  const quoted = `'((?:[^']|'"'"')*)'`
+  const match = command.match(new RegExp(`^if \\[ -x ${quoted} \\] && \\[ -f ${quoted} \\]; then exec /usr/bin/env ${STATUSLINE_PREVIOUS_ENV}=${quoted} `))
+  if (!match) return null
+  const unquote = (value: string) => value.replace(/'"'"'/g, "'")
+  const [node, entry, original] = [unquote(match[1]), unquote(match[2]), unquote(match[3])]
+  // aitk가 만든 그대로일 때만 인정한다. 사용자가 뒤에 파이프·명령을 덧붙였다면 사용자 명령으로 보고 건드리지 않는다.
+  return buildStatuslineCommand(node, entry, original ? { command: original } : null) === command ? original : null
+}
+
+/**
+ * 지금 설정의 aitk 명령에 대한 원래 statusLine. 저장 명령이 넘기는 값을 정본으로 보고,
+ * 기록의 previous는 원래 명령이 같을 때만(부가 필드까지 되살리려고) 쓴다. 다른 머신에서 온 기록·중간 종료로
+ * 어긋난 기록으로 설정을 바꾸지 않는다. aitk 새 형식 명령이 아니면 undefined.
+ */
+export function resolvePrevious(current: Record<string, unknown> | null, receipt: ClaudeStatuslineInstallation | null): Record<string, unknown> | null | undefined {
+  const original = typeof current?.command === 'string' ? parseHandedOverPrevious(current.command) : null
+  if (original === null) return undefined
+  if (original === '') return null
+  if (receipt?.previous && receipt.previous.command === original) return receipt.previous
+  return { ...current, command: original }
+}
+
 /** setup 결과. 메시지와 재시작 안내에만 쓴다. */
 export interface ClaudeStatuslineInstallResult {
   /** wrapped: 기존 표시줄 유지, default/none: 표시줄이 없어 aitk가 맡음, unchanged: 이미 같은 설치 */
@@ -177,11 +238,16 @@ export function installClaudeStatusline(
     throw new Error('Unsupported statusLine setting; existing settings were preserved.')
   }
   const receipt = readClaudeStatuslineInstallation(home)
-  if (current?.command !== receipt?.command && typeof current?.command === 'string' && current.command.includes(' usage statusline')) {
+  if (typeof current?.command === 'string' && !current.command.trim()) throw new Error('Unsupported statusLine setting; existing settings were preserved.')
+  let previous: Record<string, unknown> | null
+  // 새 형식 aitk 명령이면 명령에 실어 둔 원래 명령이 정본이다(기록이 없거나 어긋나도).
+  const fromCommand = resolvePrevious(current, receipt)
+  if (fromCommand !== undefined) previous = fromCommand
+  else if (receipt && current?.command === receipt.command) previous = receipt.previous
+  else if (typeof current?.command === 'string' && current.command.includes(' usage statusline')) {
     throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
-  }
-  const previous = receipt && current?.command === receipt.command ? receipt.previous : current
-  const command = `${shellQuote(node)} ${shellQuote(resolve(entry))} usage statusline`
+  } else previous = current
+  const command = buildStatuslineCommand(node, resolve(entry), previous ?? null)
   // 원래 표시줄이 없을 때만 표시 모드가 필요하다. 재설치에서 생략하면 이전 선택을 유지한다.
   const display: StatuslineDisplay | undefined = previous ? undefined : (options.display ?? receipt?.display ?? 'default')
   if (current?.command === command && receipt && (receipt.display ?? 'default') === (display ?? 'default')) return { mode: 'unchanged' }
@@ -208,14 +274,74 @@ export function uninstallClaudeStatusline(home = homedir()): boolean {
   const receipt = readClaudeStatuslineInstallation(home)
   const raw = existsSync(paths.settings) ? readFileSync(paths.settings, 'utf8') : null
   const settings = object(raw === null ? null : (() => { try { return JSON.parse(raw) } catch { return null } })())
-  if (!receipt || !settings || object(settings.statusLine)?.command !== receipt.command) return false
-  if (receipt.previous === null) delete settings.statusLine
-  else settings.statusLine = receipt.previous
+  if (!settings) return false
+  const current = object(settings.statusLine)
+  // 새 형식이면 저장 명령에 실어 둔 원래 명령으로 되돌린다 — 기록이 사라졌거나 어긋나도 해제는 되어야 한다.
+  // 옛 형식(원래 명령을 싣지 않음)은 기록과 명령이 같을 때만 기록으로 되돌린다.
+  const fromCommand = resolvePrevious(current, receipt)
+  const previous = fromCommand !== undefined ? fromCommand
+    : receipt && current?.command === receipt.command ? receipt.previous : undefined
+  if (previous === undefined) return false
+  if (previous === null) delete settings.statusLine
+  else settings.statusLine = previous
   // 다른 프로세스가 바꾼 설정을 덮어쓰지 않는다.
   if (readFileSync(paths.settings, 'utf8') !== raw) throw new Error('Claude settings changed during uninstall. Retry.')
   writeUsageJson(paths.settings, settings)
+  // 수집 폴더에 쓸 수 없어도 설정 복원은 끝났다. 남은 파일 정리는 최선만 다한다.
   for (const file of [paths.installation, paths.snapshot, paths.report, paths.lock]) {
     try { unlinkSync(file) } catch { /* 없음 */ }
   }
   return true
+}
+
+/**
+ * 사용자가 직접 해제했다는 표식. 자동 연결은 이 표식이 있으면 다시 켜지 않는다.
+ * 수집 데이터 폴더(`~/.claude/aitk-usage`)를 통째로 지워도 의사가 남도록 aitk 설정 폴더에도 같이 둔다.
+ * 수동 `aitk usage setup`만 지운다.
+ */
+function declinedPaths(home: string): [primary: string, mirror: string] {
+  return [claudeUsagePaths(home).declined, join(home, '.config', 'aitk', 'usage-auto-setup-declined.json')]
+}
+
+/** 연결한 적이 있다는 기록. 수집 폴더를 지워도 남도록 aitk 설정 폴더에도 둔다. */
+function connectedPaths(home: string): [primary: string, mirror: string] {
+  return [claudeUsagePaths(home).connected, join(home, '.config', 'aitk', 'usage-connected.json')]
+}
+
+/**
+ * 두 곳에 각각 시도한다. 한쪽 실패가 다른 쪽이나 해제·연결 자체를 막지 않게 한다
+ * (`~/.config`가 root 소유이거나 수집 폴더 권한이 바뀐 머신이 있다).
+ * @returns 실제로 쓴 곳의 수 (0~2)
+ */
+function writeMarker(paths: [string, string], value: unknown): string[] {
+  const written: string[] = []
+  for (const path of paths) { try { writeUsageJson(path, value); written.push(path) } catch { /* 다른 쪽을 시도 */ } }
+  return written
+}
+
+/** @returns 해제 표식을 실제로 남긴 경로들 */
+export function markAutoSetupDeclined(home = homedir(), now = Date.now()): string[] {
+  return writeMarker(declinedPaths(home), { version: 1, declinedAt: new Date(now).toISOString() })
+}
+
+/** 수동 setup은 사용자의 명시적 선택이므로 이전 해제 표식을 지운다. */
+export function clearAutoSetupDeclined(home = homedir()): void {
+  for (const path of declinedPaths(home)) { try { unlinkSync(path) } catch { /* 없음 */ } }
+}
+
+/** 해제 표식이 하나라도 있으면 자동 연결을 건너뛴다. 내용이 손상돼도 사용자의 해제 의사로 본다. */
+export function isAutoSetupDeclined(home = homedir()): boolean {
+  return declinedPaths(home).some(path => existsSync(path))
+}
+
+/** 연결 기록을 남긴다. 이미 있으면 그대로 둔다. */
+export function markConnected(home = homedir(), now = Date.now()): void {
+  const paths = connectedPaths(home)
+  if (paths.every(path => existsSync(path))) return
+  writeMarker(paths, { version: 1, connectedAt: new Date(now).toISOString() })
+}
+
+/** 연결한 적이 있는지. 옛 aitk uninstall·수집 폴더 삭제 뒤에도 남는 기록을 본다. */
+export function wasConnected(home = homedir()): boolean {
+  return connectedPaths(home).some(path => existsSync(path))
 }
