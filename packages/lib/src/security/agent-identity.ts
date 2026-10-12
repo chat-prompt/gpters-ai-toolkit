@@ -11,10 +11,12 @@ export interface AgentPrincipal {
   ownerUserId: string
   orgId: string
   allowDeploy: boolean
+  /** 토큰 조직의 항목을 작성자와 무관하게 수정할 수 있는지 */
+  allowOrgEdit: boolean
 }
 const hash = (token: string) => createHash('sha256').update(token).digest('hex')
 
-export async function issueAgentCredential(ownerUserId: string, agentId: string, allowDeploy: boolean, orgId?: string) {
+export async function issueAgentCredential(ownerUserId: string, agentId: string, allowDeploy: boolean, orgId?: string, allowOrgEdit = false) {
   if (!AGENT_ID_PATTERN.test(agentId)) throw new Error('Invalid agent ID')
   if (orgId !== undefined && (typeof orgId !== 'string' || !orgId.trim())) throw new Error('Invalid organization ID')
   const memberships = await db.select({ orgId: orgMemberships.orgId, email: users.email }).from(orgMemberships)
@@ -29,14 +31,14 @@ export async function issueAgentCredential(ownerUserId: string, agentId: string,
   const token = `aia_${randomBytes(32).toString('hex')}`
   const expiresAt = new Date(Date.now() + 90 * 86400_000)
   const [row] = await db.insert(aitkAgentCredentials).values({
-    agentId, ownerUserId, orgId: member.orgId, tokenHash: hash(token), allowDeploy, expiresAt,
+    agentId, ownerUserId, orgId: member.orgId, tokenHash: hash(token), allowDeploy, allowOrgEdit, expiresAt,
   }).onConflictDoUpdate({
     target: aitkAgentCredentials.agentId,
-    set: { tokenHash: hash(token), allowDeploy, expiresAt, isActive: true, updatedAt: new Date() },
+    set: { tokenHash: hash(token), allowDeploy, allowOrgEdit, expiresAt, isActive: true, updatedAt: new Date() },
     setWhere: and(eq(aitkAgentCredentials.ownerUserId, ownerUserId), eq(aitkAgentCredentials.orgId, member.orgId)),
   }).returning({ agentId: aitkAgentCredentials.agentId })
   if (!row) throw new Error('Agent identity belongs to another owner or organization')
-  return { token, agentId, orgId: member.orgId, expiresAt: expiresAt.toISOString(), allowDeploy }
+  return { token, agentId, orgId: member.orgId, expiresAt: expiresAt.toISOString(), allowDeploy, allowOrgEdit }
 }
 
 export async function authenticateAgent(token: string): Promise<AgentPrincipal | null> {
@@ -44,14 +46,15 @@ export async function authenticateAgent(token: string): Promise<AgentPrincipal |
   const [agent] = await db.select({
     agentId: aitkAgentCredentials.agentId, ownerUserId: aitkAgentCredentials.ownerUserId,
     orgId: aitkAgentCredentials.orgId, allowDeploy: aitkAgentCredentials.allowDeploy,
-    ownerEmail: users.email,
+    allowOrgEdit: aitkAgentCredentials.allowOrgEdit, ownerEmail: users.email,
   }).from(aitkAgentCredentials)
     .innerJoin(users, eq(users.id, aitkAgentCredentials.ownerUserId))
     .innerJoin(orgMemberships, and(eq(orgMemberships.userId, users.id), eq(orgMemberships.orgId, aitkAgentCredentials.orgId)))
     .where(and(eq(aitkAgentCredentials.tokenHash, hash(token)), eq(aitkAgentCredentials.isActive, true),
       gt(aitkAgentCredentials.expiresAt, new Date()), eq(users.accountStatus, 'active'), eq(orgMemberships.status, 'active'))).limit(1)
   if (!agent || !(await isAllowedAccountEmail(agent.ownerEmail))) return null
-  return { agentId: agent.agentId, ownerUserId: agent.ownerUserId, orgId: agent.orgId, allowDeploy: agent.allowDeploy }
+  return { agentId: agent.agentId, ownerUserId: agent.ownerUserId, orgId: agent.orgId, allowDeploy: agent.allowDeploy,
+    allowOrgEdit: agent.allowOrgEdit }
 }
 
 /** Owner-scoped inventory deliberately excludes token hashes and owner account details. */
@@ -60,6 +63,7 @@ export async function listAgentCredentials(ownerUserId: string) {
     agentId: aitkAgentCredentials.agentId,
     orgId: aitkAgentCredentials.orgId,
     allowDeploy: aitkAgentCredentials.allowDeploy,
+    allowOrgEdit: aitkAgentCredentials.allowOrgEdit,
     isActive: aitkAgentCredentials.isActive,
     expiresAt: aitkAgentCredentials.expiresAt,
     createdAt: aitkAgentCredentials.createdAt,
@@ -91,6 +95,8 @@ export async function recordAgentRequest(agentId: string, tool: string, status: 
 /** Explicit allowlist: personal usage, session reporting, identity management, deletes and admin tools are never allowed. */
 const READ_TOOLS = new Set(['semantic_search', 'search_plugins', 'get_plugin_content', 'list_plugins', 'get_plugins_by_category', 'check_updates'])
 const REPORT_TOOLS = new Set(['report_search_skip', 'report_skill_outcome', 'report_skill_execution_started', 'report_skill_execution'])
+/** Edits allowed with allowDeploy; the item-level scope (owner/org) is enforced by the handlers. */
+const EDIT_TOOLS = new Set(['deploy_skill', 'add_files', 'remove_files'])
 export function canAgentCall(agent: Pick<AgentPrincipal, 'allowDeploy'>, tool: string): boolean {
-  return READ_TOOLS.has(tool) || REPORT_TOOLS.has(tool) || (agent.allowDeploy && tool === 'deploy_skill')
+  return READ_TOOLS.has(tool) || REPORT_TOOLS.has(tool) || (agent.allowDeploy && EDIT_TOOLS.has(tool))
 }

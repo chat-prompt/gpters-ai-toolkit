@@ -1574,6 +1574,8 @@ export const aitkAgentCredentials = pgTable('aitk_agent_credentials', {
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull().unique(),
   allowDeploy: boolean('allow_deploy').notNull().default(false),
+  /** true면 작성자와 무관하게 토큰 조직의 항목을 수정할 수 있다(삭제·다른 조직은 계속 불가) */
+  allowOrgEdit: boolean('allow_org_edit').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -165,6 +165,9 @@ import {
   listPrompts,
   getPrompt,
 } from '@/lib/mcp/handlers'
+import { eq } from 'drizzle-orm'
+import { notifySlackDeploy } from '../../../../packages/lib/src/notifications/slack'
+import { createVersionSnapshot } from '../../../../packages/lib/src/versioning/skill-version'
 
 // Membership lookups select only { orgId }; route them to `memberships`, everything else to `items`
 function mockSelectByQuery(items: unknown[], memberships: unknown[] = []) {
@@ -1007,7 +1010,8 @@ describe('MCP Handlers', () => {
       ])
       const mockUpdateChain = {
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue(undefined),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'my-skill', name: 'My Skill', type: 'skill', version: '1.0.1', authorId: ownerUserId, orgId: 'org-1' }]),
       }
       vi.mocked(db.select).mockReturnValue(mockSelectChain as never)
       vi.mocked(db.update).mockReturnValue(mockUpdateChain as never)
@@ -1059,10 +1063,76 @@ describe('MCP Handlers', () => {
       expect(result.error).toContain('limited to assets owned by its owner')
       expect(db.update).not.toHaveBeenCalled()
     })
+    it('lets an org-scope agent edit another author\'s item, re-checking only the org at write time and notifying', async () => {
+      const row = { id: 'my-skill', name: 'My Skill', type: 'skill', version: '1.0.1', authorId: 'other-user', orgId: 'org-1', status: 'published', files: [] }
+      const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([row]) }
+      vi.mocked(db.update).mockReturnValue(updateChain as never)
+      vi.mocked(db.select).mockReturnValue(createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] },
+      ]) as never)
+      const result = await addFiles({ id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId, 'viewer', 'org-1', { scope: 'org', id: 'bbojjak' })
+      expect(result.success).toBe(true)
+      expect(updateChain.returning).toHaveBeenCalled()
+      expect(eq).toHaveBeenCalledWith(mockCatalogItems.orgId, 'org-1')
+      expect(eq).not.toHaveBeenCalledWith(mockCatalogItems.authorId, ownerUserId)
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(notifySlackDeploy).toHaveBeenCalledWith(expect.objectContaining({ id: 'my-skill', agentId: 'bbojjak', previousVersion: '1.0.0' }))
+    })
+
+    it('denies an org-scope agent on another organization\'s item', async () => {
+      vi.mocked(db.select).mockReturnValue(createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-2', files: [] },
+      ]) as never)
+      const result = await addFiles({ id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] },
+        ownerUserId, 'viewer', 'org-1', { scope: 'org', id: 'bbojjak' })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('limited to assets in the authorized organization')
+      expect(db.update).not.toHaveBeenCalled()
+    })
+
+    it('fails an owner-scope agent when ownership changes between the check and the write', async () => {
+      vi.mocked(db.select).mockReturnValue(createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: ownerUserId, orgId: 'org-1', files: [] },
+      ]) as never)
+      const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([]) }
+      vi.mocked(db.update).mockReturnValue(updateChain as never)
+      const result = await addFiles({ id: 'my-skill', files: [{ name: 'f.md', content: 'c' }] }, ownerUserId, 'viewer', 'org-1', true)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('ownership changed')
+      expect(eq).toHaveBeenCalledWith(mockCatalogItems.authorId, ownerUserId)
+      expect(createVersionSnapshot).not.toHaveBeenCalled()
+      expect(notifySlackDeploy).not.toHaveBeenCalled()
+    })
+
+    it('keeps agents in executeTool on the owner scope unless the route passes another scope', async () => {
+      vi.mocked(db.select).mockReturnValue(createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [] },
+      ]) as never)
+      const result = await executeTool('add_files', { id: 'my-skill', files: [{ name: 'f.md', content: 'c' }], agentId: 'bbojjak' },
+        ownerUserId, 'viewer', 'org-1', 'agent')
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('limited to assets owned by its owner')
+      expect(db.update).not.toHaveBeenCalled()
+    })
   })
 
   describe('removeFiles', () => {
     const ownerUserId = 'owner-user-123'
+
+    it('re-checks the agent org scope at write time and fails without side effects when it no longer matches', async () => {
+      vi.mocked(db.select).mockReturnValue(createMockChain([
+        { id: 'my-skill', version: '1.0.0', authorId: 'other-user', orgId: 'org-1', files: [{ name: 'a.md', content: 'a' }] },
+      ]) as never)
+      const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([]) }
+      vi.mocked(db.update).mockReturnValue(updateChain as never)
+      const result = await removeFiles({ id: 'my-skill', fileNames: ['a.md'] }, ownerUserId, 'viewer', 'org-1', { scope: 'org', id: 'bbojjak' })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('ownership changed')
+      expect(eq).toHaveBeenCalledWith(mockCatalogItems.orgId, 'org-1')
+      expect(createVersionSnapshot).not.toHaveBeenCalled()
+      expect(notifySlackDeploy).not.toHaveBeenCalled()
+    })
 
     it('should remove existing files', async () => {
       const existingFiles = [

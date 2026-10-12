@@ -33,6 +33,7 @@ export async function runAgent(sub: string | undefined, flags: Record<string, st
   if (url.origin !== serverUrl || url.protocol !== 'https:') throw new Error('An HTTPS origin is required')
   if (sub === 'authorize' && (!flags.output || !isAbsolute(flags.output))) throw new Error('--output must name an absolute private credential file path')
   if (flags.org === 'true') throw new Error('--org requires an organization ID')
+  if (flags['allow-org-edit'] === 'true' && flags['allow-deploy'] !== 'true') throw new Error('--allow-org-edit requires --allow-deploy')
   const fd = sub === 'authorize' ? openSync(flags.output, 'wx', 0o600) : undefined
   let written = false
   let issued = false
@@ -40,17 +41,18 @@ export async function runAgent(sub: string | undefined, flags: Record<string, st
     const response = await fetch(`${serverUrl}/api/agents/credentials`, {
       method: sub === 'authorize' ? 'POST' : sub === 'list' ? 'GET' : 'DELETE',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      ...(sub !== 'list' && { body: JSON.stringify(revokeAll ? { all: true } : { agentId: flags.agent, allowDeploy: flags['allow-deploy'] === 'true', ...(flags.org && { orgId: flags.org }) }) }),
+      ...(sub !== 'list' && { body: JSON.stringify(revokeAll ? { all: true } : { agentId: flags.agent, allowDeploy: flags['allow-deploy'] === 'true', allowOrgEdit: flags['allow-org-edit'] === 'true', ...(flags.org && { orgId: flags.org }) }) }),
       signal: AbortSignal.timeout(30_000),
     })
     if (!response.ok) throw new Error(`Agent ${sub} failed (HTTP ${response.status})`)
     issued = sub === 'authorize'
-    const body = await response.json() as { ok?: boolean; token?: string; agentId?: string; allowDeploy?: boolean; expiresAt?: string; orgId?: string; agents?: unknown[]; revoked?: number }
+    const body = await response.json() as { ok?: boolean; token?: string; agentId?: string; allowDeploy?: boolean; allowOrgEdit?: boolean; expiresAt?: string; orgId?: string; agents?: unknown[]; revoked?: number }
     if (body.ok !== true) throw new Error('Agent operation was not accepted')
     if (fd !== undefined) {
-      if (!/^aia_[a-f0-9]{64}$/.test(body.token ?? '') || body.agentId !== flags.agent || typeof body.orgId !== 'string' || typeof body.allowDeploy !== 'boolean' || !body.expiresAt || Date.parse(body.expiresAt) <= Date.now() || !Number.isFinite(Date.parse(body.expiresAt))) throw new Error('Invalid issued agent identity')
+      if (!/^aia_[a-f0-9]{64}$/.test(body.token ?? '') || body.agentId !== flags.agent || typeof body.orgId !== 'string' || typeof body.allowDeploy !== 'boolean' || (flags['allow-org-edit'] === 'true' && body.allowOrgEdit !== true) || !body.expiresAt || Date.parse(body.expiresAt) <= Date.now() || !Number.isFinite(Date.parse(body.expiresAt))) throw new Error('Invalid issued agent identity')
       writeFileSync(fd, JSON.stringify({ version: 1, agentId: body.agentId, token: body.token, serverUrl,
-        allowDeploy: body.allowDeploy, expiresAt: body.expiresAt, orgId: body.orgId }) + '\n')
+        allowDeploy: body.allowDeploy, ...(typeof body.allowOrgEdit === 'boolean' && { allowOrgEdit: body.allowOrgEdit }),
+        expiresAt: body.expiresAt, orgId: body.orgId }) + '\n')
       written = true
     }
     if (sub === 'list') { jsonOut({ ok: true, agents: body.agents }); return }

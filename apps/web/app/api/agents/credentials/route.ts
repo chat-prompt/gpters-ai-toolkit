@@ -40,11 +40,15 @@ export async function POST(request: NextRequest) {
   const input = await readInput(request)
   if (!input || typeof input.agentId !== 'string' || !AGENT_ID_PATTERN.test(input.agentId) ||
     (input.allowDeploy !== undefined && typeof input.allowDeploy !== 'boolean') ||
+    (input.allowOrgEdit !== undefined && typeof input.allowOrgEdit !== 'boolean') ||
+    // 조직 범위 수정은 수정 권한(allowDeploy)이 있을 때만 의미가 있다
+    (input.allowOrgEdit === true && input.allowDeploy !== true) ||
     (input.orgId !== undefined && (typeof input.orgId !== 'string' || !input.orgId.trim() || input.orgId.length > 200))) {
     return response({ error: 'Invalid agent identity request' }, 400)
   }
   try {
-    const credential = await issueAgentCredential(context.ownerUserId!, input.agentId, input.allowDeploy === true, input.orgId as string | undefined)
+    const credential = await issueAgentCredential(context.ownerUserId!, input.agentId, input.allowDeploy === true,
+      input.orgId as string | undefined, input.allowOrgEdit === true)
     return response({ ok: true, ...credential }, 201)
   } catch {
     return response({ error: 'Agent ownership conflict or owner access denied; select an active organization explicitly when you belong to several' }, 409)

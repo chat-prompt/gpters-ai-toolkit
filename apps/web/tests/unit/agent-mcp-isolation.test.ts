@@ -10,7 +10,7 @@ vi.mock('@gpters/lib/security', async (original) => {
   return { ...actual, authenticateAgent, recordAgentRequest }
 })
 vi.mock('@/lib/mcp', () => ({ executeTool, MCP_TOOLS: [
-  { name: 'semantic_search' }, { name: 'deploy_skill' }, { name: 'report_usage' }, { name: 'report_session_event' },
+  { name: 'semantic_search' }, { name: 'deploy_skill' }, { name: 'add_files' }, { name: 'report_usage' }, { name: 'report_session_event' },
 ] }))
 vi.mock('@/lib/utils/rate-limit', () => ({ withRateLimit: () => null, RateLimitPresets: { authenticated: {} } }))
 const { POST } = await import('../../app/api/agents/mcp/route')
@@ -23,18 +23,18 @@ const rpc = (tool: string, args: object = {}) => ({ jsonrpc: '2.0', id: 1, metho
 describe('agent MCP boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    authenticateAgent.mockResolvedValue({ agentId: 'example-agent', ownerUserId: 'owner', orgId: 'org', allowDeploy: false })
+    authenticateAgent.mockResolvedValue({ agentId: 'example-agent', ownerUserId: 'owner', orgId: 'org', allowDeploy: false, allowOrgEdit: false })
     recordAgentRequest.mockResolvedValue(undefined)
     executeTool.mockResolvedValue({ content: [{ type: 'text', text: '{"ok":true}' }] })
   })
-  it.each(['report_usage', 'report_session_event', 'undeploy_skill', 'create_plugin', 'delete_plugin', 'add_files'])('denies %s before executing or recording a human event', async (tool) => {
+  it.each(['report_usage', 'report_session_event', 'undeploy_skill', 'create_plugin', 'delete_plugin', 'add_files', 'remove_files'])('denies %s before executing or recording a human event', async (tool) => {
     expect((await POST(request(rpc(tool)))).status).toBe(403)
     expect(executeTool).not.toHaveBeenCalled()
     expect(recordAgentRequest).not.toHaveBeenCalled()
   })
   it('binds the actor from credentials and clamps privileges while retaining asset ownership', async () => {
     expect((await POST(request(rpc('semantic_search', { query: 'test', agentId: 'impersonated', userId: 'other' })))).status).toBe(200)
-    expect(executeTool).toHaveBeenCalledWith('semantic_search', expect.objectContaining({ agentId: 'example-agent' }), 'owner', 'viewer', 'org', 'agent')
+    expect(executeTool).toHaveBeenCalledWith('semantic_search', expect.objectContaining({ agentId: 'example-agent' }), 'owner', 'viewer', 'org', 'agent', 'owner')
     expect(recordAgentRequest).toHaveBeenCalledWith('example-agent', 'semantic_search', 'success', undefined, expect.any(String))
   })
   it.each([
@@ -51,9 +51,17 @@ describe('agent MCP boundary', () => {
   })
   it('requires explicit deployment capability', async () => {
     expect((await POST(request(rpc('deploy_skill')))).status).toBe(403)
-    authenticateAgent.mockResolvedValue({ agentId: 'example-agent', ownerUserId: 'owner', orgId: 'org', allowDeploy: true })
+    authenticateAgent.mockResolvedValue({ agentId: 'example-agent', ownerUserId: 'owner', orgId: 'org', allowDeploy: true, allowOrgEdit: false })
     expect((await POST(request(rpc('deploy_skill', { id: 'skill' })))).status).toBe(200)
     expect(recordAgentRequest).toHaveBeenCalledWith('example-agent', 'deploy_skill', 'started', 'skill', expect.any(String))
+    expect((await POST(request(rpc('add_files', { id: 'skill', files: [] })))).status).toBe(200)
+    expect(executeTool).toHaveBeenLastCalledWith('add_files', expect.anything(), 'owner', 'viewer', 'org', 'agent', 'owner')
+  })
+  it('passes the organization edit scope only when the credential allows it', async () => {
+    authenticateAgent.mockResolvedValue({ agentId: 'example-agent', ownerUserId: 'owner', orgId: 'org', allowDeploy: true, allowOrgEdit: true })
+    expect((await POST(request(rpc('deploy_skill', { id: 'skill' })))).status).toBe(200)
+    expect(executeTool).toHaveBeenCalledWith('deploy_skill', expect.objectContaining({ agentId: 'example-agent' }), 'owner', 'viewer', 'org', 'agent', 'org')
+    expect((await POST(request(rpc('undeploy_skill', { id: 'skill' })))).status).toBe(403)
   })
   it('records execution evidence without attributing it to the owner user', async () => {
     const report = { agentId: 'example-agent', attemptId: 'attempt' }
@@ -63,7 +71,7 @@ describe('agent MCP boundary', () => {
   })
   it('does not expose the owner as the acting user in whoami', async () => {
     const response = await POST(request({}, 'whoami'))
-    expect(await response.json()).toEqual({ success: true, actor: { type: 'agent', id: 'example-agent', allowDeploy: false, orgId: 'org' } })
+    expect(await response.json()).toEqual({ success: true, actor: { type: 'agent', id: 'example-agent', allowDeploy: false, allowOrgEdit: false, orgId: 'org' } })
   })
   it('does not advertise disallowed personal tools', async () => {
     const response = await POST(request({ jsonrpc: '2.0', id: 1, method: 'tools/list' }))
