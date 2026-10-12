@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { parseCredentialStore, readLocalCredential, storeLocalCredential, deleteLocalCredential, type CredentialStore } from './credential-store.js'
 
 export interface AgentAuthConfig { version: 1; agentId: string; serverUrl: string; credentialStore?: CredentialStore; orgId?: string }
-export interface AgentAuthGrant extends AgentAuthConfig { token: string; allowDeploy: boolean; expiresAt: string }
+export interface AgentAuthGrant extends AgentAuthConfig { token: string; allowDeploy: boolean; allowOrgEdit?: boolean; expiresAt: string }
 const TOKEN = /^aia_[a-f0-9]{64}$/
 const ID = /^[a-z0-9][a-z0-9._:-]{0,99}$/
 export const agentAuthPath = (home = homedir()) => join(home, '.config', 'aitk', 'agent.json')
@@ -56,8 +56,10 @@ export async function importAgentCredential(input: unknown, expectedServerUrl: s
     body: '{}', redirect: 'error', signal: AbortSignal.timeout(30_000),
   })
   if (!response.ok) throw new Error('Agent credential verification failed')
-  const identity = await response.json() as { success?: boolean; actor?: { type?: string; id?: string; allowDeploy?: boolean; orgId?: string } }
-  if (identity.success !== true || identity.actor?.type !== 'agent' || identity.actor.id !== grant.agentId || identity.actor.allowDeploy !== grant.allowDeploy || (grant.orgId !== undefined && identity.actor.orgId !== grant.orgId)) throw new Error('Agent identity mismatch')
+  const identity = await response.json() as { success?: boolean; actor?: { type?: string; id?: string; allowDeploy?: boolean; allowOrgEdit?: boolean; orgId?: string } }
+  if (identity.success !== true || identity.actor?.type !== 'agent' || identity.actor.id !== grant.agentId || identity.actor.allowDeploy !== grant.allowDeploy ||
+    (grant.allowOrgEdit !== undefined && (identity.actor.allowOrgEdit ?? false) !== grant.allowOrgEdit) ||
+    (grant.orgId !== undefined && identity.actor.orgId !== grant.orgId)) throw new Error('Agent identity mismatch')
   if (credentialStore === 'file') {
     storeLocalCredential('agent', grant.agentId, grant.token, home)
   } else {

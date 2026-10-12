@@ -65,6 +65,23 @@ describe('buildSlackMessage', () => {
     expect(text).toContain('Alice')
   })
 
+  it('shows the agent as deployer and names the original author when an agent updates an item', () => {
+    const payload = buildSlackMessage({ ...baseParams, previousVersion: '0.9.0', authorName: 'Owner', agentId: 'bbojjak', itemAuthorName: 'Alice' })
+    const text = JSON.stringify(payload.blocks)
+    expect(text).toContain('🤖 bbojjak (토큰 주인 Owner)')
+    expect(text).toContain('에이전트 수정 · 작성자 Alice')
+  })
+
+  it('keeps the agent edit note when the original author name is unknown', () => {
+    const text = JSON.stringify(buildSlackMessage({ ...baseParams, previousVersion: '0.9.0', agentId: 'bbojjak', itemAuthorName: '' }).blocks)
+    expect(text).toContain('에이전트 수정 · 작성자 알 수 없음')
+  })
+
+  it('does not add the agent edit note for human deploys', () => {
+    const text = JSON.stringify(buildSlackMessage({ ...baseParams, authorName: 'Alice', itemAuthorName: 'Bob' }).blocks)
+    expect(text).not.toContain('에이전트 수정')
+  })
+
   it('should show fallback when author name is missing', () => {
     const payload = buildSlackMessage({ ...baseParams, authorName: undefined })
     const text = JSON.stringify(payload.blocks)

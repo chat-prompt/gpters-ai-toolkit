@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return response({ error: 'Expected one request object' }, 400)
   const body = parsed as Record<string, unknown>
   const action = new URL(request.url).searchParams.get('action')
-  if (action === 'whoami') return response({ success: true, actor: { type: 'agent', id: agent.agentId, allowDeploy: agent.allowDeploy, orgId: agent.orgId } })
+  if (action === 'whoami') return response({ success: true, actor: { type: 'agent', id: agent.agentId, allowDeploy: agent.allowDeploy,
+    allowOrgEdit: agent.allowOrgEdit, orgId: agent.orgId } })
   const tools = MCP_TOOLS.filter((tool) => canAgentCall(agent, tool.name))
   if (action === 'tools') return response({ success: true, data: { tools } })
   const rpc = !action
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
   await recordAgentRequest(agent.agentId, tool, 'started', skillId, requestId)
   try {
     // Owner is the authorization/asset owner, never the event actor. No inherited admin override.
-    const result = await executeTool(tool, args, agent.ownerUserId, 'viewer', agent.orgId, 'agent')
+    const result = await executeTool(tool, args, agent.ownerUserId, 'viewer', agent.orgId, 'agent', agent.allowOrgEdit ? 'org' : 'owner')
     if (!result.isError && result._meta?.skillExecutionStart) {
       await recordSkillExecutionStart({ report: result._meta.skillExecutionStart })
     }

@@ -151,6 +151,7 @@ vi.mock('../../../../packages/lib/src/utils', () => ({
 const db = mockDb
 
 import { deploySkill } from '@/lib/mcp/handlers'
+import { eq } from 'drizzle-orm'
 import { determineVersion } from '../../../../packages/lib/src/versioning/version'
 
 /** Helper: create a fluent mock chain that resolves with the given rows */
@@ -187,6 +188,49 @@ describe('deploySkill — author check removed (EDU-7987 D1)', () => {
     expect(result.error).toContain('ownership changed')
     expect(db.select).toHaveBeenCalledTimes(1)
     expect(db.insert).not.toHaveBeenCalled()
+  })
+
+  it('lets an org-scope agent update another author asset in its organization, guarding only the org', async () => {
+    vi.mocked(db.select).mockReturnValue(createMockChain([
+      { id: 'sample-skill', content: 'old', version: '1.0.0', authorId: 'other-owner', orgId: 'org-1' },
+    ]) as never)
+    const updated = { id: 'sample-skill', name: 'Sample', content: 'new', version: '1.0.1', authorId: 'other-owner', orgId: 'org-1' }
+    const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([updated]) }
+    vi.mocked(db.update).mockReturnValue(updateChain as never)
+    const result = await deploySkill({ id: 'sample-skill', type: 'skill', name: 'Sample', content: 'new', changelog: 'Update' },
+      'agent-owner', 'viewer', 'org-1', { scope: 'org', id: 'bbojjak' })
+    expect(result.success).toBe(true)
+    // 작성자는 바꾸지 않는다 — update에 authorId를 넣지 않는다
+    expect(updateChain.set).toHaveBeenCalledWith(expect.not.objectContaining({ authorId: expect.anything() }))
+    // 쓰는 시점에 조직만 다시 건다 (작성자 조건은 없다)
+    expect(eq).toHaveBeenCalledWith(mockCatalogItems.orgId, 'org-1')
+    expect(eq).not.toHaveBeenCalledWith(mockCatalogItems.authorId, 'agent-owner')
+  })
+
+  it('fails an org-scope agent when the asset leaves its organization between the check and the write', async () => {
+    vi.mocked(db.select).mockReturnValue(createMockChain([
+      { id: 'sample-skill', content: 'old', version: '1.0.0', authorId: 'other-owner', orgId: 'org-1' },
+    ]) as never)
+    const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([]) }
+    vi.mocked(db.update).mockReturnValue(updateChain as never)
+    const result = await deploySkill({ id: 'sample-skill', type: 'skill', name: 'Sample', content: 'new', changelog: 'Update' },
+      'agent-owner', 'viewer', 'org-1', { scope: 'org', id: 'bbojjak' })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ownership changed')
+    expect(db.select).toHaveBeenCalledTimes(1)
+  })
+
+  it('denies an org-scope agent on an asset of another organization or without an organization', async () => {
+    for (const orgId of ['org-2', null]) {
+      vi.mocked(db.select).mockReturnValue(createMockChain([
+        { id: 'sample-skill', content: 'old', version: '1.0.0', authorId: 'other-owner', orgId },
+      ]) as never)
+      const result = await deploySkill({ id: 'sample-skill', type: 'skill', name: 'Sample', content: 'new' },
+        'agent-owner', 'viewer', 'org-1', { scope: 'org', id: 'bbojjak' })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('limited to assets in the authorized organization')
+    }
+    expect(db.update).not.toHaveBeenCalled()
   })
 
   it('lets a non-author org member update an existing skill', async () => {

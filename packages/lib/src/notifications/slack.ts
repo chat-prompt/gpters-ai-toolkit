@@ -43,8 +43,12 @@ export interface SlackDeployParams {
   previousVersion?: string
   /** Changelog description */
   changelog?: string | null
-  /** Name of the deployer */
+  /** Name of the deployer (for agent deploys, the agent token owner) */
   authorName?: string
+  /** Agent ID when an agent deployed — shown as the deployer */
+  agentId?: string
+  /** Author of the existing item when an agent updated it ('' when the name is unknown) */
+  itemAuthorName?: string
   /** Web URL for the deployed item */
   webUrl?: string
   /** Deploy status (published or draft) */
@@ -109,7 +113,7 @@ export async function summarizeContent(content: string): Promise<string | null> 
  * @returns Slack Block Kit payload
  */
 export function buildSlackMessage(params: SlackDeployParams, summary?: string | null): SlackPayload {
-  const { name, type, version, previousVersion, changelog, authorName, webUrl, status } = params
+  const { name, type, version, previousVersion, changelog, authorName, agentId, itemAuthorName, webUrl, status } = params
   const isUpdate = !!previousVersion
   const typeInfo = TYPE_LABELS[type] || { emoji: '\uD83D\uDCE6', label: type }
 
@@ -138,10 +142,20 @@ export function buildSlackMessage(params: SlackDeployParams, summary?: string | 
       type: 'section',
       fields: [
         { type: 'mrkdwn', text: `*\uD0C0\uC785:*\n${typeInfo.label}` },
-        { type: 'mrkdwn', text: `*\uBC30\uD3EC\uC790:*\n${authorName || '\uC54C \uC218 \uC5C6\uC74C'}` },
+        { type: 'mrkdwn', text: `*\uBC30\uD3EC\uC790:*\n${agentId
+          ? `\uD83E\uDD16 ${agentId}${authorName ? ` (\uD1A0\uD070 \uC8FC\uC778 ${authorName})` : ''}`
+          : authorName || '\uC54C \uC218 \uC5C6\uC74C'}` },
       ],
     },
   ]
+
+  // 에이전트가 기존 항목을 고쳤으면 작성자를 함께 알린다 — 프롬프트 주입 등으로 고쳐진 것을 작성자가 알아채게.
+  if (agentId && itemAuthorName !== undefined) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `\uD83E\uDD16 \uC5D0\uC774\uC804\uD2B8 \uC218\uC815 \u00B7 \uC791\uC131\uC790 ${itemAuthorName || '\uC54C \uC218 \uC5C6\uC74C'}` }],
+    })
+  }
 
   if (summary) {
     blocks.push({

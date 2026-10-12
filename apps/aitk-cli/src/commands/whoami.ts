@@ -10,7 +10,7 @@ import { info, error } from '../output.js'
 interface WhoamiResponse {
   /** 성공 여부 */
   success: boolean
-  actor?: { type: string; id: string; allowDeploy: boolean }
+  actor?: { type: string; id: string; allowDeploy: boolean; allowOrgEdit?: boolean }
   /** 사용자 정보 */
   user?: {
     /** 사용자 ID */
@@ -46,6 +46,7 @@ export async function runWhoami(): Promise<void> {
   if (data?.success && data.actor?.type === 'agent') {
     info(`Authenticated agent: ${data.actor.id}`)
     info(`Deploy permission: ${data.actor.allowDeploy ? 'enabled' : 'disabled'}`)
+    info(`Edit scope: ${data.actor.allowOrgEdit ? 'organization (any author)' : 'owner\'s items only'}`)
     return
   }
   if (!data?.success || !data.user) {

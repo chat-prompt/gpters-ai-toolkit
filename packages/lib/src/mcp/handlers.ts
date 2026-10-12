@@ -548,6 +548,81 @@ export async function deletePlugin(
 }
 
 /**
+ * 에이전트가 기존 항목을 고칠 수 있는 범위.
+ * - `owner`: 토큰 주인이 작성한 같은 조직 항목만 (기본)
+ * - `org`: 토큰 조직의 항목이면 작성자 무관 (자격증명 `allowOrgEdit`)
+ */
+export type AgentEditScope = 'owner' | 'org'
+
+/** 에이전트 요청 맥락. `true`는 `{ scope: 'owner' }`와 같다. */
+export type AgentEditContext = boolean | { scope: AgentEditScope; id?: string }
+
+function agentScopeOf(agent: AgentEditContext | undefined): AgentEditScope | null {
+  if (agent === true) return 'owner'
+  return agent ? agent.scope : null
+}
+
+/** 사용자 표시 이름. 알림용이라 실패하면 undefined */
+function resolveUserName(userId: string | null | undefined): Promise<string | undefined> {
+  return userId
+    ? db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1)
+        .then((rows) => rows[0]?.name || undefined)
+        .catch(() => undefined)
+    : Promise.resolve(undefined)
+}
+
+/**
+ * 항목의 파일 변경을 쓰고 갱신된 행을 돌려준다 — add_files·remove_files 공통.
+ *
+ * 에이전트면 확인한 범위(토큰 조직, owner 범위면 작성자까지)를 UPDATE 조건에 다시 걸고 그 결과 행만 쓴다.
+ * 확인 뒤 항목이 다른 조직으로 옮겨지거나 작성자가 바뀌어도 범위 밖 항목을 고치지 않는다(deploySkill과 같은 방식).
+ *
+ * @returns 갱신된 행. 에이전트 범위를 벗어나 아무것도 쓰지 않았으면 `false`
+ */
+async function writeItemFiles(
+  id: string,
+  set: { files: PluginFileWithType[] | null; version: string; changelog: string },
+  scope: AgentEditScope | null,
+  userId: string | undefined,
+  orgId: string | undefined
+): Promise<typeof catalogItems.$inferSelect | undefined | false> {
+  const update = db.update(catalogItems).set({ ...set, updatedAt: new Date() })
+    .where(and(eq(catalogItems.id, id), ...(scope ? [eq(catalogItems.orgId, orgId!)] : []),
+      ...(scope === 'owner' ? [eq(catalogItems.authorId, userId!)] : [])))
+  if (scope) {
+    const [row] = await update.returning()
+    return row ?? false
+  }
+  await update
+  const [row] = await db.select().from(catalogItems).where(eq(catalogItems.id, id)).limit(1)
+  return row
+}
+
+/** 에이전트가 파일을 고쳤을 때 배포 알림 — 에이전트와 원래 작성자를 표시한다 */
+function notifyAgentFileEdit(
+  row: typeof catalogItems.$inferSelect,
+  agentId: string | undefined,
+  ownerUserId: string | undefined,
+  previousVersion: string,
+  changelog: string
+): void {
+  Promise.all([resolveUserName(ownerUserId), resolveUserName(row.authorId).then((name) => name ?? '')])
+    .then(([authorName, itemAuthorName]) => notifySlackDeploy({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      version: row.version || previousVersion,
+      previousVersion,
+      changelog,
+      authorName,
+      agentId: agentId || 'agent',
+      itemAuthorName,
+      webUrl: `${getBaseUrl()}/${row.type}/${row.id}`,
+      status: row.status ?? undefined,
+    })).catch(() => {})
+}
+
+/**
  * Deploy a skill/agent/command to the marketplace
  * Handles both new deployments and updates with automatic versioning
  *
@@ -555,14 +630,17 @@ export async function deletePlugin(
  * @param authorId - Authenticated user ID (for setting ownership)
  * @param userRole - Authenticated user's role (admin can override ownership check)
  * @param orgId - User's current organization ID (for setting org ownership)
+ * @param agent - Agent request context; agents are limited to their edit scope
  */
 export async function deploySkill(
   input: DeploySkillInput,
   authorId?: string,
   userRole?: string,
   orgId?: string,
-  agentOwnerOnly = false
+  agent: AgentEditContext = false
 ): Promise<DeploySkillResponse> {
+  const agentScope = agentScopeOf(agent)
+  const agentId = typeof agent === 'object' ? agent.id : undefined
   const {
     type,
     name,
@@ -614,10 +692,12 @@ export async function deploySkill(
   const isUpdate = existing.length > 0
   const existingItem = isUpdate ? existing[0] : null
 
-  if (agentOwnerOnly && (!authorId || !orgId || (existingItem &&
-    (existingItem.authorId !== authorId || existingItem.orgId !== orgId)))) {
+  if (agentScope && (!authorId || !orgId || (existingItem && (existingItem.orgId !== orgId ||
+    (agentScope === 'owner' && existingItem.authorId !== authorId))))) {
     return { success: false, id, version: existingItem?.version || '0.0.0', changelog: '',
-      status: 'published', webUrl: '', error: 'Agent deployment is limited to assets owned by its owner in the authorized organization' }
+      status: 'published', webUrl: '', error: agentScope === 'owner'
+        ? 'Agent deployment is limited to assets owned by its owner in the authorized organization'
+        : 'Agent deployment is limited to assets in the authorized organization' }
   }
 
   // Validate required metadata for new deployments
@@ -754,11 +834,11 @@ export async function deploySkill(
         visibility: 'public',
         updatedAt: now,
       })
-      .where(and(eq(catalogItems.id, id), ...(agentOwnerOnly
-        ? [eq(catalogItems.authorId, authorId!), eq(catalogItems.orgId, orgId!)] : [])))
+      .where(and(eq(catalogItems.id, id), ...(agentScope ? [eq(catalogItems.orgId, orgId!)] : []),
+        ...(agentScope === 'owner' ? [eq(catalogItems.authorId, authorId!)] : [])))
 
     let agentUpdatedItem: typeof catalogItems.$inferSelect | undefined
-    if (agentOwnerOnly) {
+    if (agentScope) {
       ;[agentUpdatedItem] = await update.returning()
       if (!agentUpdatedItem) return { success: false, id, version: existingItem?.version || '0.0.0', changelog: '',
         status: 'published', webUrl: '', error: 'Agent asset ownership changed during deployment; no update was applied' }
@@ -767,7 +847,7 @@ export async function deploySkill(
     }
 
     // Use the guarded UPDATE result for agent snapshots; never read a newly transferred asset by ID.
-    const [updatedItem] = agentOwnerOnly ? [agentUpdatedItem] : await db
+    const [updatedItem] = agentScope ? [agentUpdatedItem] : await db
       .select()
       .from(catalogItems)
       .where(eq(catalogItems.id, id))
@@ -832,14 +912,11 @@ export async function deploySkill(
   }
 
   // Fire-and-forget Slack notification
-  const resolveAuthorName = authorId
-    ? db.select({ name: users.name }).from(users).where(eq(users.id, authorId)).limit(1)
-        .then((rows) => rows[0]?.name || undefined)
-        .catch(() => undefined)
-    : Promise.resolve(undefined)
-
-  resolveAuthorName.then((authorName) =>
-    notifySlackDeploy({
+  // 에이전트 배포는 배포자를 에이전트로 표시하고, 기존 항목이면 실제 작성자를 함께 알린다.
+  // 작성자 이름을 못 찾아도 에이전트 수정 표시는 남긴다('')
+  Promise.all([resolveUserName(authorId), agentScope && existingItem
+    ? resolveUserName(existingItem.authorId).then((name) => name ?? '') : undefined])
+    .then(([authorName, itemAuthorName]) => notifySlackDeploy({
       id,
       name,
       type,
@@ -847,11 +924,11 @@ export async function deploySkill(
       previousVersion: existingItem?.version || undefined,
       changelog: versionInfo.changelog,
       authorName,
+      ...(agentScope && { agentId: agentId || 'agent', itemAuthorName }),
       webUrl: response.webUrl,
       status,
       content: resolvedContent!,
-    })
-  ).catch(() => {})
+    })).catch(() => {})
 
   return response
 }
@@ -981,7 +1058,7 @@ export async function undeploySkill(
  * 기존 카탈로그 항목을 고칠 수 있는지 판정한다 — deploy_skill(업데이트)·add_files·remove_files 공통 규칙.
  *
  * - 로그인하지 않았으면 거절
- * - 에이전트 클라이언트는 같은 조직의 자기 항목만
+ * - 에이전트는 토큰 조직의 항목만 — `owner` 범위면 토큰 주인이 작성한 것만, `org` 범위면 작성자 무관
  * - 사람은 항목 조직의 활성 구성원이면 누구나(조직 없는 항목은 로그인만), super_admin은 조직 무관
  *
  * 요청의 orgId는 활성 멤버십 하나만 고른 값이라, 그 값이 항목 조직과 다르면 항목 조직의 멤버십을
@@ -993,12 +1070,18 @@ export async function undeploySkill(
  */
 async function checkItemEditAccess(
   item: { authorId: string | null; orgId: string | null },
-  ctx: { userId?: string; userRole?: string; orgId?: string; agentOwnerOnly?: boolean }
+  ctx: { userId?: string; userRole?: string; orgId?: string; agentScope?: AgentEditScope | null }
 ): Promise<string | null> {
   if (!ctx.userId) {
     return '인증이 필요합니다. MCP 연결이 올바르게 설정되어 있는지 확인해주세요.'
   }
-  if (ctx.agentOwnerOnly) {
+  if (ctx.agentScope === 'org') {
+    if (!ctx.orgId || item.orgId !== ctx.orgId) {
+      return 'Agent deployment is limited to assets in the authorized organization'
+    }
+    return null
+  }
+  if (ctx.agentScope) {
     if (!ctx.orgId || item.authorId !== ctx.userId || item.orgId !== ctx.orgId) {
       return 'Agent deployment is limited to assets owned by its owner in the authorized organization'
     }
@@ -1025,14 +1108,14 @@ async function checkItemEditAccess(
  * @param userId - Authenticated user ID
  * @param userRole - Authenticated user's role (super_admin may edit across orgs)
  * @param orgId - User's current organization ID (same-org members may edit)
- * @param agentOwnerOnly - Agent clients may only edit their owner's items
+ * @param agent - Agent request context; agents are limited to their edit scope
  */
 export async function addFiles(
   input: AddFilesInput,
   userId?: string,
   userRole?: string,
   orgId?: string,
-  agentOwnerOnly = false
+  agent: AgentEditContext = false
 ): Promise<AddFilesResponse> {
   const { id, files: newFiles } = input
 
@@ -1063,7 +1146,7 @@ export async function addFiles(
 
   const item = existing[0]
 
-  const editError = await checkItemEditAccess(item, { userId, userRole, orgId, agentOwnerOnly })
+  const editError = await checkItemEditAccess(item, { userId, userRole, orgId, agentScope: agentScopeOf(agent) })
   if (editError) {
     return {
       success: false,
@@ -1098,33 +1181,33 @@ export async function addFiles(
   const mergedFiles = Array.from(fileMap.values())
   const previousVersion = item.version || '1.0.0'
   const newVersion = incrementVersion(previousVersion, 'patch')
+  const changelog = `파일 추가/업데이트: ${addedOrUpdated.join(', ')}`
+  const scope = agentScopeOf(agent)
 
-  await db
-    .update(catalogItems)
-    .set({
-      files: mergedFiles,
-      version: newVersion,
-      changelog: `파일 추가/업데이트: ${addedOrUpdated.join(', ')}`,
-      updatedAt: new Date(),
-    })
-    .where(eq(catalogItems.id, id))
-
-  // Create version snapshot
-  const [updatedItem] = await db
-    .select()
-    .from(catalogItems)
-    .where(eq(catalogItems.id, id))
-    .limit(1)
+  const updatedItem = await writeItemFiles(id, { files: mergedFiles, version: newVersion, changelog }, scope, userId, orgId)
+  if (updatedItem === false) {
+    return {
+      success: false,
+      id,
+      version: previousVersion,
+      previousVersion,
+      addedOrUpdated: [],
+      totalFiles: 0,
+      files: [],
+      error: 'Agent asset ownership changed during the update; no change was applied',
+    }
+  }
 
   if (updatedItem) {
     await createVersionSnapshot(updatedItem, {
       version: newVersion,
       versionType: 'patch',
-      changelog: `파일 추가/업데이트: ${addedOrUpdated.join(', ')}`,
+      changelog,
       createdBy: userId,
     }).catch((err) => {
       log.error('Failed to create version snapshot', err)
     })
+    if (scope) notifyAgentFileEdit(updatedItem, typeof agent === 'object' ? agent.id : undefined, userId, previousVersion, changelog)
   }
 
   return {
@@ -1145,14 +1228,14 @@ export async function addFiles(
  * @param userId - Authenticated user ID
  * @param userRole - Authenticated user's role (super_admin may edit across orgs)
  * @param orgId - User's current organization ID (same-org members may edit)
- * @param agentOwnerOnly - Agent clients may only edit their owner's items
+ * @param agent - Agent request context; agents are limited to their edit scope
  */
 export async function removeFiles(
   input: RemoveFilesInput,
   userId?: string,
   userRole?: string,
   orgId?: string,
-  agentOwnerOnly = false
+  agent: AgentEditContext = false
 ): Promise<RemoveFilesResponse> {
   const { id, fileNames } = input
 
@@ -1184,7 +1267,7 @@ export async function removeFiles(
 
   const item = existing[0]
 
-  const editError = await checkItemEditAccess(item, { userId, userRole, orgId, agentOwnerOnly })
+  const editError = await checkItemEditAccess(item, { userId, userRole, orgId, agentScope: agentScopeOf(agent) })
   if (editError) {
     return {
       success: false,
@@ -1233,33 +1316,34 @@ export async function removeFiles(
   const remainingFiles = existingFiles.filter((f) => !removeSet.has(f.name))
   const newVersion = incrementVersion(previousVersion, 'patch')
   const resultFiles = remainingFiles.length > 0 ? remainingFiles : null
+  const changelog = `파일 삭제: ${removed.join(', ')}`
+  const scope = agentScopeOf(agent)
 
-  await db
-    .update(catalogItems)
-    .set({
-      files: resultFiles,
-      version: newVersion,
-      changelog: `파일 삭제: ${removed.join(', ')}`,
-      updatedAt: new Date(),
-    })
-    .where(eq(catalogItems.id, id))
-
-  // Create version snapshot
-  const [updatedItem] = await db
-    .select()
-    .from(catalogItems)
-    .where(eq(catalogItems.id, id))
-    .limit(1)
+  const updatedItem = await writeItemFiles(id, { files: resultFiles, version: newVersion, changelog }, scope, userId, orgId)
+  if (updatedItem === false) {
+    return {
+      success: false,
+      id,
+      version: previousVersion,
+      previousVersion,
+      removed: [],
+      notFound,
+      totalFiles: existingFiles.length,
+      files: existingFiles.length > 0 ? existingFiles : null,
+      error: 'Agent asset ownership changed during the update; no change was applied',
+    }
+  }
 
   if (updatedItem) {
     await createVersionSnapshot(updatedItem, {
       version: newVersion,
       versionType: 'patch',
-      changelog: `파일 삭제: ${removed.join(', ')}`,
+      changelog,
       createdBy: userId,
     }).catch((err) => {
       log.error('Failed to create version snapshot', err)
     })
+    if (scope) notifyAgentFileEdit(updatedItem, typeof agent === 'object' ? agent.id : undefined, userId, previousVersion, changelog)
   }
 
   return {
@@ -1433,14 +1517,25 @@ function isAdmin(userRole?: string): boolean {
   return hasRoleOrHigher(userRole as UserRole | undefined, 'admin')
 }
 
+/**
+ * MCP 도구 하나를 실행한다.
+ *
+ * @param clientType - `'agent'`면 에이전트 요청으로 보고 수정 범위를 제한한다
+ * @param agentEditScope - 에이전트 수정 범위. 생략하면 `owner`(토큰 주인 작성 항목만)
+ */
 export async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
   userId?: string,
   userRole?: string,
   orgId?: string,
-  clientType?: string
+  clientType?: string,
+  agentEditScope?: AgentEditScope
 ): Promise<McpToolResponse> {
+  // agentId는 에이전트 라우트가 서버에서 덮어쓴 값이다
+  const agent: AgentEditContext = clientType === 'agent'
+    ? { scope: agentEditScope ?? 'owner', id: typeof args.agentId === 'string' ? args.agentId : undefined }
+    : false
   // 관리자 도구 호출 차단
   const { isAdminTool } = await import('./tools')
   if (isAdminTool(toolName)) {
@@ -1750,7 +1845,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await deploySkill(input, userId, userRole, orgId, clientType === 'agent')
+        const result = await deploySkill(input, userId, userRole, orgId, agent)
 
         return {
           content: [
@@ -1831,7 +1926,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await addFiles(input, userId, userRole, orgId, clientType === 'agent')
+        const result = await addFiles(input, userId, userRole, orgId, agent)
         return {
           content: [
             {
@@ -2050,7 +2145,7 @@ export async function executeTool(
             isError: true,
           }
         }
-        const result = await removeFiles(input, userId, userRole, orgId, clientType === 'agent')
+        const result = await removeFiles(input, userId, userRole, orgId, agent)
         return {
           content: [
             {

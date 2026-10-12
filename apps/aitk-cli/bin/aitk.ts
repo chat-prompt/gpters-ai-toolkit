@@ -327,7 +327,7 @@ Examples:
 
   agent: `aitk agent - Separate human ownership from agent activity
 
-Owner: aitk agent authorize --agent <id> --output <private-file> [--allow-deploy] [--org <id>]
+Owner: aitk agent authorize --agent <id> --output <private-file> [--allow-deploy [--allow-org-edit]] [--org <id>]
 Owner inventory: aitk agent list
 Agent: aitk agent import --credential-stdin [--credential-store file|macos-keychain]
 Verify: aitk whoami / aitk agent status

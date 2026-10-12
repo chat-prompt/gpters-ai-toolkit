@@ -24,13 +24,15 @@ describe('agent credential owner boundary', () => {
   it('takes ownership only from authenticated user and defaults to no deployment', async () => {
     const result = await POST(request({ agentId: 'example-agent', ownerUserId: 'impersonated' }))
     expect(result.status).toBe(201)
-    expect(issueAgentCredential).toHaveBeenCalledWith('owner', 'example-agent', false, undefined)
+    expect(issueAgentCredential).toHaveBeenCalledWith('owner', 'example-agent', false, undefined, false)
     expect(await result.json()).toMatchObject({ ok: true, orgId: 'org' })
     expect(result.headers.get('cache-control')).toBe('private, no-store')
   })
   it('passes an explicit organization to the membership-checked issuer', async () => {
     expect((await POST(request({ agentId: 'example-agent', orgId: 'selected-org' }))).status).toBe(201)
-    expect(issueAgentCredential).toHaveBeenCalledWith('owner', 'example-agent', false, 'selected-org')
+    expect(issueAgentCredential).toHaveBeenCalledWith('owner', 'example-agent', false, 'selected-org', false)
+    expect((await POST(request({ agentId: 'example-agent', allowDeploy: true, allowOrgEdit: true }))).status).toBe(201)
+    expect(issueAgentCredential).toHaveBeenLastCalledWith('owner', 'example-agent', true, undefined, true)
     expect((await POST(request({ agentId: 'example-agent', orgId: '' }))).status).toBe(400)
     expect((await POST(request({ agentId: 'example-agent', orgId: 5 }))).status).toBe(400)
   })
@@ -39,6 +41,8 @@ describe('agent credential owner boundary', () => {
     expect((await POST(request({ agentId: 'example-agent' }))).status).toBe(401)
     expect((await POST(request({ agentId: '../someone' }))).status).toBe(400)
     expect((await POST(request({ agentId: 'example-agent', allowDeploy: 'true' }))).status).toBe(400)
+    expect((await POST(request({ agentId: 'example-agent', allowOrgEdit: 'true' }))).status).toBe(400)
+    expect((await POST(request({ agentId: 'example-agent', allowOrgEdit: true }))).status).toBe(400)
     expect(issueAgentCredential).not.toHaveBeenCalled()
   })
   it('reports ownership conflicts and revokes only within the owner scope', async () => {
