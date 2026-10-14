@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- {{TITLE}} = 웨비나 제목 -->
+<title>{{TITLE}} — 따라하기 가이드</title>
+<style>
+  :root { --bg: #ffffff; --card: #f6f8fa; --border: #d1d9e0; --text: #1f2328; --muted: #656d76; --accent: #0969da; --green: #1a7f37; --orange: #9a6700; --red: #d1242f; --purple: #8250df; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; }
+  .container { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+
+  .header { border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 32px; }
+  .header h1 { font-size: 26px; font-weight: 700; }
+  .header .sub { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .tag { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 3px 12px; font-size: 12px; color: var(--muted); }
+
+  /* Step blocks */
+  .step { margin-bottom: 48px; }
+  .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .step-num { background: var(--accent); color: var(--bg); font-weight: 800; font-size: 14px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step h2 { font-size: 20px; font-weight: 700; }
+  .step h3 { font-size: 16px; font-weight: 600; color: var(--accent); margin: 20px 0 8px; }
+
+  .what { background: rgba(88,166,255,0.06); border-left: 3px solid var(--accent); padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 14px; }
+  .what strong { color: var(--accent); }
+
+  /* Terminal simulation */
+  .terminal { background: #1e1e1e; border: 1px solid #444; border-radius: 8px; margin: 12px 0; overflow: hidden; }
+  .terminal-bar { background: #2d2d2d; padding: 6px 12px; display: flex; gap: 6px; align-items: center; }
+  .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .terminal-dot.r { background: #ff5f57; } .terminal-dot.y { background: #febc2e; } .terminal-dot.g { background: #28c840; }
+  .terminal-body { padding: 14px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.8; }
+  .terminal-body .cmd { color: var(--green); } .cmd::before { content: "$ "; color: var(--muted); }
+  .terminal-body .prompt { color: var(--orange); }
+  .terminal-body .input { color: #fff; }
+  .terminal-body .comment { color: #888; }
+  .terminal-body .output { color: var(--muted); }
+
+  /* Chat simulation (Telegram-style) */
+  .chat { background: #e8edf2; border: 1px solid #c9d1d9; border-radius: 8px; padding: 16px; margin: 12px 0; }
+  .chat-msg { margin: 8px 0; }
+  .chat-msg.user { text-align: right; }
+  .chat-msg .bubble { display: inline-block; max-width: 75%; padding: 8px 14px; border-radius: 12px; font-size: 14px; }
+  .chat-msg.bot .bubble { background: #fff; border: 1px solid #d1d9e0; border-radius: 4px 12px 12px 12px; color: #1f2328; }
+  .chat-msg.user .bubble { background: #dbeafe; border: 1px solid #93c5fd; border-radius: 12px 4px 12px 12px; color: #1e3a5f; }
+  .chat-name { font-size: 11px; color: var(--accent); margin-bottom: 2px; }
+
+  /* Frame images */
+  .frame { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 14px 0; }
+  .frame img { width: 100%; display: block; }
+  .frame-cap { padding: 8px 12px; font-size: 12px; color: var(--muted); background: var(--card); }
+  .frame-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+  @media (max-width: 600px) { .frame-row { grid-template-columns: 1fr; } }
+
+  /* Boxes */
+  code { background: var(--card); padding: 1px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--green); }
+  pre { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 10px 0; }
+  pre code { background: none; padding: 0; }
+  .warn { background: rgba(210,153,34,0.08); border: 1px solid rgba(210,153,34,0.25); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .warn::before { content: "⚠️ "; }
+  .tip { background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.25); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .tip::before { content: "💡 "; }
+  .ref { background: rgba(188,140,255,0.08); border: 1px solid rgba(188,140,255,0.25); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .ref::before { content: "📎 "; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th { background: var(--card); text-align: left; padding: 8px 12px; border: 1px solid var(--border); color: var(--accent); font-weight: 600; }
+  td { padding: 8px 12px; border: 1px solid var(--border); }
+
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+  .b-g { background: rgba(63,185,80,0.15); color: var(--green); }
+  .b-p { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .b-o { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .b-r { background: rgba(248,81,73,0.15); color: var(--red); }
+
+  ul, ol { padding-left: 22px; margin: 6px 0; } li { margin: 4px 0; font-size: 15px; }
+  .flow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0; padding: 12px; background: var(--card); border-radius: 8px; font-size: 14px; font-weight: 600; }
+  .flow .s { background: rgba(88,166,255,0.15); color: var(--accent); padding: 4px 12px; border-radius: 6px; }
+  .flow .a { color: var(--muted); }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  .star { background: linear-gradient(135deg, rgba(88,166,255,0.1), rgba(188,140,255,0.1)); border: 1px solid var(--accent); border-radius: 8px; padding: 18px 20px; margin: 32px 0; font-size: 15px; }
+  .footer { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 48px; color: var(--muted); font-size: 12px; text-align: center; }
+
+  .quote { border-left: 3px solid var(--muted); padding: 8px 14px; margin: 10px 0; font-size: 14px; color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!--
+  ============================================================
+  webinar-digest 템플릿 — 채우는 법
+  ============================================================
+  {{ ... }} 플레이스홀더를 실제 내용으로 교체하세요.
+  아래 STEP 블록은 사용 가능한 컴포넌트를 1개씩 보여주는 "샘플"입니다.
+  실제 작성 시 Step 10~13개로 늘리고, 필요한 컴포넌트만 골라 쓰세요.
+
+  컴포넌트 목록:
+    .what    → 이 Step에서 할 일/핵심 (Step마다 1개 권장)
+    .frame   → 슬라이드/시연 캡처 이미지 (frames/01_*.jpg ~ 12_*.jpg)
+    .terminal→ CLI 명령/입출력 시뮬레이션
+    .chat    → 메신저 대화 시뮬레이션
+    table    → 비교표
+    .flow    → 단계 흐름도
+    .tip / .warn / .ref → 팁 / 주의 / 참고
+    .quote   → 발표자 직접 인용 (반말 허용, 그 외엔 존댓말 통일)
+    .star    → 페이지 맨 끝 한 줄 요약
+  ============================================================
+-->
+
+<div class="header">
+  <!-- {{TITLE}} 제목 / {{DATE}} 날짜 / {{SPEAKER}} 공개 무대명·닉네임만 (실명 금지) -->
+  <h1>{{TITLE}}</h1>
+  <div class="sub">{{EVENT}} ({{DATE}}) — {{SPEAKER}} | 따라하기 가이드</div>
+  <div class="tags">
+    <span class="tag">원본: <a href="{{YOUTUBE_URL}}">YouTube</a></span>
+    <span class="tag">{{DURATION}}</span>
+    <span class="tag">슬라이드 + 시연 화면 캡처 포함</span>
+  </div>
+</div>
+
+<!-- 발표자 배경은 여기 .star 1줄로. "발표자는 일반인이다" 식 메타 서술 금지 -->
+<div class="star">
+  <strong>발표자:</strong> {{SPEAKER}} — {{직업/전공}} · {{입문 시점}} · {{현재 운영 상태}} · {{실제 적용 분야}}
+</div>
+
+<!-- ========== STEP 1 (실질 내용부터 시작. 자기소개를 Step으로 빼지 말 것) ========== -->
+<div class="step">
+  <div class="step-header"><div class="step-num">1</div><h2>{{Step 1 제목 — 존댓말/명사형}}</h2></div>
+
+  <div class="what"><strong>핵심:</strong> {{이 Step에서 알아야 할 한 가지}}</div>
+
+  <!-- 비교가 필요하면 table -->
+  <table>
+    <tr><th>{{항목}}</th><th>{{A}}</th><th>{{B}}</th></tr>
+    <tr><td>{{기준1}}</td><td>{{값}}</td><td>{{값}}</td></tr>
+  </table>
+
+  <!-- 발표자 인용은 .quote (원문 그대로, 반말 허용) -->
+  <div class="quote">"{{발표자 원문 인용}}" — {{SPEAKER}}</div>
+</div>
+
+<hr class="divider">
+
+<!-- ========== STEP 2 (이미지 + 터미널 샘플) ========== -->
+<div class="step">
+  <div class="step-header"><div class="step-num">2</div><h2>{{Step 2 제목}}</h2></div>
+
+  <div class="what"><strong>이 단계에서 할 일:</strong> {{한 문장}}</div>
+
+  <div class="frame">
+    <img src="frames/01_xxx.jpg" alt="{{캡처 설명}}">
+    <div class="frame-cap">{{프레임 캡션}}</div>
+  </div>
+
+  <h3>{{소제목}}</h3>
+  <div class="terminal">
+    <div class="terminal-bar"><div class="terminal-dot r"></div><div class="terminal-dot y"></div><div class="terminal-dot g"></div></div>
+    <div class="terminal-body">
+      <div class="comment"># {{설명 주석}}</div>
+      <div class="cmd">{{명령어}}</div>
+      <div class="output">{{출력}}</div>
+      <div class="prompt">? {{프롬프트}}</div>
+      <div class="input">→ {{입력}}</div>
+    </div>
+  </div>
+  <div class="warn">{{흔한 실수/주의}}</div>
+</div>
+
+<hr class="divider">
+
+<!-- ========== STEP 3 (메신저 + 흐름도 + 팁/참고 샘플) ========== -->
+<div class="step">
+  <div class="step-header"><div class="step-num">3</div><h2>{{Step 3 제목}}</h2></div>
+
+  <div class="what"><strong>이 단계에서 이해할 것:</strong> {{한 문장}}</div>
+
+  <div class="chat">
+    <div class="chat-msg user"><div class="bubble">{{사용자 메시지}}</div></div>
+    <div class="chat-msg bot"><div class="chat-name">{{봇 이름}}</div><div class="bubble">{{봇 응답}}</div></div>
+  </div>
+
+  <div class="flow">
+    <span class="s">{{단계1}}</span><span class="a">→</span>
+    <span class="s">{{단계2}}</span><span class="a">→</span>
+    <span class="s">{{단계3}}</span>
+  </div>
+
+  <div class="tip">{{실전 팁}}</div>
+  <div class="ref">{{참고/링크}}</div>
+</div>
+
+<!-- ... 필요한 만큼 Step 반복 (총 10~13개 권장). 마지막 Step은 "결론/언제 뭘 쓸지" ... -->
+
+<!-- STAR (페이지 맨 끝 한 줄 요약) -->
+<div class="star">
+  <strong>한 줄 요약:</strong> {{전체를 한 문장으로}}
+</div>
+
+<div class="footer">
+  {{EVENT}} ({{DATE}}) | {{SPEAKER}}<br>
+  자동 생성: {{GENERATED_DATE}}
+</div>
+
+</div>
+</body>
+</html>
