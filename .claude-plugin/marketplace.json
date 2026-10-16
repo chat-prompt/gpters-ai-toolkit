@@ -16,6 +16,16 @@
       },
       "homepage": "https://ai-toolkit.gpters.org",
       "category": "productivity"
+    },
+    {
+      "name": "linear-issues",
+      "source": "./apps/claude-code-mods/linear-issues",
+      "description": "내게 할당된 미완료 Linear 이슈를 패널에 띄우는 mod — /linear",
+      "author": {
+        "name": "GPTers",
+        "email": "contact@gpters.org"
+      },
+      "category": "productivity"
     }
   ]
 }
