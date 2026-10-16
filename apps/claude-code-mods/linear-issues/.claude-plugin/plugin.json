@@ -1,0 +1,30 @@
+{
+  "name": "linear-issues",
+  "version": "0.2.0",
+  "description": "내게 할당된 미완료 Linear 이슈를 패널에 띄운다",
+  "author": {
+    "name": "GPTers",
+    "email": "contact@gpters.org"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "autoOpenPath": {
+      "type": "string",
+      "title": "자동으로 열 폴더",
+      "description": "이 폴더 아래에서 세션을 시작하면 패널을 저절로 연다. 예: ~/Projects/my-team. 비우면 /linear 로만 연다.",
+      "default": ""
+    },
+    "refreshMinutes": {
+      "type": "number",
+      "title": "새로고침 간격(분)",
+      "description": "패널을 한 번 연 뒤 이슈를 다시 불러오는 간격. 1~1440, 1 미만이면 5.",
+      "default": 5
+    },
+    "mcpServer": {
+      "type": "string",
+      "title": "Linear MCP 서버 이름",
+      "description": "claude mcp list 에 보이는 Linear 서버 이름 그대로.",
+      "default": "linear"
+    }
+  }
+}
