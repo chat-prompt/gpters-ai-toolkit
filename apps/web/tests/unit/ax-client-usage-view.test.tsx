@@ -6,7 +6,7 @@
  * 서비스 비중 게이지는 항목마다 Claude Code 몫을 보여준다.
  */
 
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AxClientUsageData, AxMemberServiceRow } from '../../../../packages/lib/src/features/ax/types'
 import { ClientUsagePanel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
@@ -162,5 +162,26 @@ describe('도움말과 늘 보이는 경고', () => {
     const notice = screen.getByText(/활성 보고/)
     expect(notice.closest('[role=tooltip]')).toBeNull()
     expect(screen.getByText('수집된 사용량과 등록된 구독이 없습니다.')).toBeInTheDocument()
+  })
+})
+
+describe('도움말 닫기와 오래된 시트 경고', () => {
+  it('Esc 로 닫히고(포인터를 올린 채여도), 포인터가 떠나면 다시 열 수 있다', () => {
+    render(<ClientUsagePanel days={7} data={data([person('홍길동', 'Claude Code', 2)])} />)
+    const button = screen.getByRole('button', { name: '서비스 비중 기준' })
+    const tooltip = document.getElementById(button.getAttribute('aria-describedby')!)!
+    fireEvent.mouseEnter(button.parentElement!)
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(tooltip).toHaveAttribute('data-dismissed', 'true')
+    fireEvent.mouseLeave(button.parentElement!)
+    expect(tooltip).not.toHaveAttribute('data-dismissed')
+  })
+
+  it('데이터가 있어도 시트가 31일 넘게 지났으면 경고는 도움말 밖에 보인다', () => {
+    const base = data([person('홍길동', 'Claude Code', 2)])
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString()
+    render(<ClientUsagePanel days={7} data={{ ...base, subscriptions: { ...base.subscriptions!, syncedAt: old } }} />)
+    const outside = screen.getAllByText(/40일 지남/).filter((element) => !element.closest('[role=tooltip]'))
+    expect(outside).toHaveLength(1)
   })
 })

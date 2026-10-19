@@ -11,7 +11,7 @@
  * "보고 없음"으로 밝힌다. 구독 없이 사용 중인 줄도 남긴다 — 그 차이가 다음 달 구독을 정하는 신호다.
  */
 
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
@@ -139,6 +139,9 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
               reportingMembers={data.reportingMembers}
               internalMembers={data.internalMembers}
             />
+            {data.subscriptions && !isSheetStale(data.subscriptions.syncedAt) && (
+              <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />
+            )}
             <p className="mt-3 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
               수집된 사용량과 등록된 구독이 없습니다.
             </p>
@@ -982,22 +985,30 @@ function isSheetStale(syncedAt: string | null): boolean {
  * - 본문은 버튼이 아니라 가장 가까운 `relative` 조상(호출하는 줄)의 왼쪽 아래에 붙는다 — 버튼이 줄 끝에 있어도
  *   좁은 화면 오른쪽으로 넘치지 않게. 그래서 호출하는 줄에 `relative` 를 단다.
  * - 버튼과 본문 사이 간격은 투명한 위쪽 여백으로 만들어 호버 영역에 넣는다 — 본문으로 옮겨 가도 닫히지 않는다.
- * - Esc 로 닫는다(포커스를 놓는다).
+ * - Esc 로 닫는다 — 포인터를 올린 채여도 닫히고, 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있다.
  *
  * @param label - 버튼의 접근성 이름
  * @param children - 도움말 내용
  */
 function InfoTip({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()
+  // Esc 로 닫은 상태. 포인터를 올린 채로도 닫혀야 해서(WCAG 1.4.13) CSS 호버와 별개로 든다.
+  // 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있게 푼다
+  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDismissed(true)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   return (
-    <div className="group/info inline-flex">
+    <div className="group/info inline-flex" onMouseLeave={() => setDismissed(false)} onBlur={() => setDismissed(false)}>
       <button
         type="button"
         aria-label={label}
         aria-describedby={id}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') event.currentTarget.blur()
-        }}
         className="flex size-4 items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px] text-[var(--text-muted)] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
       >
         ?
@@ -1005,7 +1016,10 @@ function InfoTip({ label, children }: { label: string; children: ReactNode }) {
       <div
         id={id}
         role="tooltip"
-        className="invisible absolute left-0 top-full z-30 w-96 max-w-[calc(100vw-3rem)] pt-2 font-sans text-xs font-normal normal-case leading-relaxed tracking-normal opacity-0 group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100"
+        data-dismissed={dismissed || undefined}
+        className={`invisible absolute left-0 top-full z-30 w-96 max-w-[calc(100vw-3rem)] pt-2 font-sans text-xs font-normal normal-case leading-relaxed tracking-normal opacity-0 group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100 ${
+          dismissed ? '!invisible !opacity-0' : ''
+        }`}
       >
         <div className="rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 text-[var(--text-primary)] shadow-lg">
           {children}
