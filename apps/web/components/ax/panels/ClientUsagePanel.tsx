@@ -290,8 +290,9 @@ function ServiceShareGauges({
     const entries = Object.entries(vendor(client)?.monthlyByCurrency ?? {})
     return entries.length === 1 ? entries[0] : null
   }
-  const claudeCost = singleCurrency('claude-code')
-  const codexCost = singleCurrency('codex')
+  // 한쪽에만 구독이 있으면 그쪽 통화로 다른 쪽을 0으로 본다(합칠 통화가 하나뿐이라 환산이 없다)
+  const claudeCost = singleCurrency('claude-code') ?? (singleCurrency('codex') ? [singleCurrency('codex')![0], 0] as const : null)
+  const codexCost = singleCurrency('codex') ?? (claudeCost ? [claudeCost[0], 0] as const : null)
 
   const items: ShareItem[] = [
     ...(subscriptions
@@ -346,6 +347,37 @@ function gaugeArc(from: number, to: number): string {
 }
 
 /**
+ * 게이지 두 조각의 구간
+ *
+ * 둥근 끝(stroke/2)이 틈을 덮지 않게 경계 양쪽을 틈 + 두께만큼 비운다. 두 몫이 모두 양수면 경계를
+ * 그 여백의 두 배 안쪽으로 당겨, 작은 몫(예: 3%)도 짧은 호로 남는다 — 비우기만 하면 4% 안팎 아래 몫은
+ * 통째로 사라진다. 정확한 값은 가운데 숫자와 아래 값이 전한다.
+ *
+ * @param share - Claude Code 몫 (0~1)
+ */
+export function gaugeSegments(share: number): Array<{ client: AxUsageClient; from: number; to: number }> {
+  if (share <= 0) return [{ client: 'codex', from: 0, to: 1 }]
+  if (share >= 1) return [{ client: 'claude-code', from: 0, to: 1 }]
+  const pad = (GAUGE.gap + GAUGE.stroke) / (Math.PI * GAUGE.r) / 2
+  const boundary = Math.min(Math.max(share, 2 * pad), 1 - 2 * pad)
+  return [
+    { client: 'claude-code', from: 0, to: boundary - pad },
+    { client: 'codex', from: boundary + pad, to: 1 },
+  ]
+}
+
+/**
+ * 몫 표기 — 0·100 에 붙은 양수 몫을 반올림으로 0%·100% 라고 쓰지 않는다
+ *
+ * @param share - 0~1
+ */
+export function formatShare(share: number): string {
+  if (share > 0 && share < 0.005) return '<1%'
+  if (share < 1 && share > 0.995) return '>99%'
+  return `${Math.round(share * 100)}%`
+}
+
+/**
  * 반원 게이지 하나 — 왼쪽부터 Claude Code, 오른쪽이 Codex
  *
  * @param item - 항목 이름과 두 값
@@ -355,33 +387,26 @@ function ShareGauge({ item }: { item: ShareItem }) {
   const share = item.claude / total
   const width = GAUGE.r * 2 + GAUGE.stroke
   const height = GAUGE.r + GAUGE.stroke
-  // 둥근 끝(stroke/2)이 틈을 덮지 않게 틈 + 두께만큼 호를 비운다
-  const pad = (GAUGE.gap + GAUGE.stroke) / (Math.PI * GAUGE.r) / 2
-  const segments = [
-    { client: 'claude-code' as const, from: 0, to: share, value: item.claude },
-    { client: 'codex' as const, from: share, to: 1, value: item.codex },
-  ].filter((segment) => segment.to - segment.from > 0)
-  const tip = `${item.label} · Claude Code ${item.format(item.claude)} (${Math.round(share * 100)}%) · Codex ${item.format(item.codex)} (${Math.round((1 - share) * 100)}%)`
+  const segments = gaugeSegments(share)
+  const tip = `${item.label} · Claude Code ${item.format(item.claude)} (${formatShare(share)}) · Codex ${item.format(item.codex)} (${formatShare(1 - share)})`
 
   return (
-    <figure className="min-w-0" title={tip}>
+    <figure className="min-w-0">
       <svg viewBox={`0 0 ${width} ${height}`} className="mx-auto block w-full max-w-[140px]" role="img" aria-label={tip}>
         {/* 트랙 */}
         <path d={gaugeArc(0, 1)} fill="none" stroke="var(--bg-tertiary)" strokeWidth={GAUGE.stroke} strokeLinecap="round" />
         {segments.map((segment) => {
-          const from = segments.length > 1 && segment.from > 0 ? segment.from + pad : segment.from
-          const to = segments.length > 1 && segment.to < 1 ? segment.to - pad : segment.to
-          if (to <= from) return null
           return (
             <path
               key={segment.client}
-              d={gaugeArc(from, to)}
+              data-client={segment.client}
+              d={gaugeArc(segment.from, segment.to)}
               fill="none"
               stroke={SHARE_COLORS[segment.client]}
               strokeWidth={GAUGE.stroke}
               strokeLinecap="round"
             >
-              <title>{`${CLIENT_LABELS[segment.client]} ${item.format(segment.value)}`}</title>
+              <title>{`${CLIENT_LABELS[segment.client]} ${item.format(segment.client === 'claude-code' ? item.claude : item.codex)}`}</title>
             </path>
           )
         })}
@@ -391,10 +416,11 @@ function ShareGauge({ item }: { item: ShareItem }) {
           textAnchor="middle"
           className="fill-[var(--text-primary)] font-mono text-[15px] tabular-nums"
         >
-          {Math.round(share * 100)}%
+          {formatShare(share)}
         </text>
       </svg>
-      <figcaption className="mt-1 text-center">
+      {/* 스크린리더는 svg 의 aria-label 로 같은 내용을 읽으므로 캡션은 겹쳐 읽지 않게 숨긴다 */}
+      <figcaption aria-hidden className="mt-1 text-center">
         <span className="block text-xs text-[var(--text-secondary)]">{item.label}</span>
         <span className="mt-0.5 flex items-center justify-center gap-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
           {(['claude-code', 'codex'] as const).map((client) => (
