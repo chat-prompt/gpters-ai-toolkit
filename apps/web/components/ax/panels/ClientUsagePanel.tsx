@@ -55,6 +55,16 @@ const CLIENT_BY_VENDOR: Record<string, AxUsageClient> = {
  */
 const STALE_AFTER_DAYS = 31
 
+/**
+ * 서비스 비중 게이지의 두 색 — 브랜드 주황(Claude Code)과 짙은 하늘색(Codex).
+ * dataviz 검증기로 라이트(#ffffff)·다크(#0c0c0d) 표면 모두 통과(정상 시각 ΔE 31, 색약 ΔE 23).
+ * 다크 테마의 밝은 토큰(#F26522·#38bdf8)은 다크 표면 밝기 대역을 넘어 쓰지 않는다
+ */
+const SHARE_COLORS: Record<AxUsageClient, string> = {
+  'claude-code': '#D95A1E',
+  codex: '#0284c7',
+}
+
 /** 이 일수 안에 결제되면 경고 톤으로 표시한다 — 뽀밋이 DM 과 같은 기준 */
 const DUE_SOON_DAYS = 7
 
@@ -97,7 +107,10 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
         )}
         {data.byClient.length > 0 || (data.subscriptions?.byVendor.length ?? 0) > 0 ? (
           <div className="mt-3">
-            <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
+            <ServiceShareGauges rows={data.byClient} subscriptions={data.subscriptions} />
+            <div className="mt-6">
+              <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
+            </div>
           </div>
         ) : (
           <p className="mt-3 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
@@ -118,9 +131,10 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
 
       {/* 내부 계정 전수 수집 상태 — 관리자에게만 데이터가 내려온다. 매일 볼 표가 아니라 접어 둔다 */}
       {data.participation !== null && (
-        <details className="group">
+        // 이름 붙은 그룹이다 — 그냥 `group` 이면 안쪽 도움말의 group-hover 가 표 전체 호버에 반응한다
+        <details className="group/participation">
           <summary className="cursor-pointer list-none font-mono text-[11px] tabular-nums text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-            <span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>
+            <span className="mr-1 inline-block transition-transform group-open/participation:rotate-90">›</span>
             수집 참여 상태 · 정상 보고 {formatCount(data.participation.filter((row) => row.status === 'reporting').length)}/
             {formatCount(data.participation.length)}명
           </summary>
@@ -155,7 +169,6 @@ const PARTICIPATION_SOURCE: Record<AxUsageParticipationRow['source'], string> = 
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
   const helpId = useId()
-  const active = rows.filter((row) => row.status === 'reporting').length
   // pill과 표 모두 나쁜 상태부터 좋은 상태 순이다.
   const statusCounts = AX_USAGE_PARTICIPATION_STATUS_ORDER
     .map((status) => ({ status, count: rows.filter((row) => row.status === status).length }))
@@ -164,26 +177,25 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        <div className="group relative">
+        <div className="group/help relative">
           <button
             type="button"
             aria-describedby={helpId}
             className="flex items-center gap-1.5 rounded focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
           >
-            수집 참여 상태
+            판정 기준
             <span aria-hidden className="flex size-4 items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px]">?</span>
           </button>
           <div
             id={helpId}
             role="tooltip"
-            className="invisible absolute left-0 top-full z-30 mt-2 w-96 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 font-sans text-xs leading-relaxed text-[var(--text-primary)] opacity-0 shadow-lg group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+            className="invisible absolute left-0 top-full z-30 mt-2 w-96 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 font-sans text-xs leading-relaxed text-[var(--text-primary)] opacity-0 shadow-lg group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100"
           >
             <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
             <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
             <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
           </div>
         </div>
-        <p>· 사내 계정 중 정상 보고 {formatCount(active)}/{formatCount(rows.length)}명</p>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {statusCounts.map(({ status, count }) => (
@@ -243,6 +255,157 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         </table>
       </div>
     </div>
+  )
+}
+
+/** 게이지 한 개의 값 */
+interface ShareItem {
+  label: string
+  claude: number
+  codex: number
+  format: (value: number) => string
+}
+
+/**
+ * 서비스 비중 게이지 — 좌석·월 비용·인원·세션·토큰마다 Claude Code 와 Codex 가 차지하는 몫
+ *
+ * 두 조각짜리 부분-전체라 반원 게이지로 한눈에 보이게 하고, 비율이 비슷해도 읽히게
+ * 두 값을 숫자로 함께 적는다. 표는 바로 아래에 그대로 있다.
+ *
+ * @param rows - 클라이언트별 사용량
+ * @param subscriptions - 구독 현황. 못 읽었으면 좌석·월 비용 게이지는 뺀다
+ */
+function ServiceShareGauges({
+  rows,
+  subscriptions,
+}: {
+  rows: AxClientUsageClientRow[]
+  subscriptions: AxSubscriptionData | null
+}) {
+  const usage = (client: AxUsageClient) => rows.find((row) => row.client === client)
+  const vendor = (client: AxUsageClient) =>
+    subscriptions?.byVendor.find((item) => CLIENT_BY_VENDOR[item.vendor] === client)
+  // 통화가 섞이면 환율로 합치지 않으므로 같은 단일 통화일 때만 비용 게이지를 그린다
+  const singleCurrency = (client: AxUsageClient) => {
+    const entries = Object.entries(vendor(client)?.monthlyByCurrency ?? {})
+    return entries.length === 1 ? entries[0] : null
+  }
+  const claudeCost = singleCurrency('claude-code')
+  const codexCost = singleCurrency('codex')
+
+  const items: ShareItem[] = [
+    ...(subscriptions
+      ? [{ label: '좌석', claude: vendor('claude-code')?.seats ?? 0, codex: vendor('codex')?.seats ?? 0, format: formatCount }]
+      : []),
+    ...(claudeCost && codexCost && claudeCost[0] === codexCost[0]
+      ? [{ label: '월 비용', claude: claudeCost[1], codex: codexCost[1], format: (value: number) => formatMoney(value, claudeCost[0]).replace(/\.00$/, '') }]
+      : []),
+    { label: '사용 인원', claude: usage('claude-code')?.members ?? 0, codex: usage('codex')?.members ?? 0, format: formatCount },
+    { label: '세션', claude: usage('claude-code')?.sessions ?? 0, codex: usage('codex')?.sessions ?? 0, format: formatCount },
+    { label: '토큰', claude: usage('claude-code')?.totalTokens ?? 0, codex: usage('codex')?.totalTokens ?? 0, format: formatTokens },
+  ].filter((item) => item.claude + item.codex > 0)
+
+  if (items.length === 0) return null
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-[var(--text-muted)]">
+        <span>서비스 비중 · 가운데 숫자는 Claude Code 몫</span>
+        {(['claude-code', 'codex'] as const).map((client) => (
+          <span key={client} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+            <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: SHARE_COLORS[client] }} />
+            {CLIENT_LABELS[client]}
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {items.map((item) => <ShareGauge key={item.label} item={item} />)}
+      </div>
+    </div>
+  )
+}
+
+/** 게이지 기하 — 반지름·두께·조각 사이 틈(px) */
+const GAUGE = { r: 44, stroke: 10, gap: 2 }
+
+/**
+ * 반원 위 비율 `f`(0~1, 왼쪽→오른쪽) 지점 좌표
+ *
+ * @param f - 반원 위 위치
+ */
+function gaugePoint(f: number): string {
+  const angle = Math.PI * (1 - f)
+  const cx = GAUGE.r + GAUGE.stroke / 2
+  const cy = GAUGE.r + GAUGE.stroke / 2
+  return `${(cx + GAUGE.r * Math.cos(angle)).toFixed(2)} ${(cy - GAUGE.r * Math.sin(angle)).toFixed(2)}`
+}
+
+/** 반원의 [from, to] 구간 호 */
+function gaugeArc(from: number, to: number): string {
+  return `M ${gaugePoint(from)} A ${GAUGE.r} ${GAUGE.r} 0 0 1 ${gaugePoint(to)}`
+}
+
+/**
+ * 반원 게이지 하나 — 왼쪽부터 Claude Code, 오른쪽이 Codex
+ *
+ * @param item - 항목 이름과 두 값
+ */
+function ShareGauge({ item }: { item: ShareItem }) {
+  const total = item.claude + item.codex
+  const share = item.claude / total
+  const width = GAUGE.r * 2 + GAUGE.stroke
+  const height = GAUGE.r + GAUGE.stroke
+  // 둥근 끝(stroke/2)이 틈을 덮지 않게 틈 + 두께만큼 호를 비운다
+  const pad = (GAUGE.gap + GAUGE.stroke) / (Math.PI * GAUGE.r) / 2
+  const segments = [
+    { client: 'claude-code' as const, from: 0, to: share, value: item.claude },
+    { client: 'codex' as const, from: share, to: 1, value: item.codex },
+  ].filter((segment) => segment.to - segment.from > 0)
+  const tip = `${item.label} · Claude Code ${item.format(item.claude)} (${Math.round(share * 100)}%) · Codex ${item.format(item.codex)} (${Math.round((1 - share) * 100)}%)`
+
+  return (
+    <figure className="min-w-0" title={tip}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="mx-auto block w-full max-w-[140px]" role="img" aria-label={tip}>
+        {/* 트랙 */}
+        <path d={gaugeArc(0, 1)} fill="none" stroke="var(--bg-tertiary)" strokeWidth={GAUGE.stroke} strokeLinecap="round" />
+        {segments.map((segment) => {
+          const from = segments.length > 1 && segment.from > 0 ? segment.from + pad : segment.from
+          const to = segments.length > 1 && segment.to < 1 ? segment.to - pad : segment.to
+          if (to <= from) return null
+          return (
+            <path
+              key={segment.client}
+              d={gaugeArc(from, to)}
+              fill="none"
+              stroke={SHARE_COLORS[segment.client]}
+              strokeWidth={GAUGE.stroke}
+              strokeLinecap="round"
+            >
+              <title>{`${CLIENT_LABELS[segment.client]} ${item.format(segment.value)}`}</title>
+            </path>
+          )
+        })}
+        <text
+          x={width / 2}
+          y={height - 2}
+          textAnchor="middle"
+          className="fill-[var(--text-primary)] font-mono text-[15px] tabular-nums"
+        >
+          {Math.round(share * 100)}%
+        </text>
+      </svg>
+      <figcaption className="mt-1 text-center">
+        <span className="block text-xs text-[var(--text-secondary)]">{item.label}</span>
+        <span className="mt-0.5 flex items-center justify-center gap-2 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+          {(['claude-code', 'codex'] as const).map((client) => (
+            <span key={client} className="flex items-center gap-1">
+              <span aria-hidden className="size-1.5 rounded-full" style={{ backgroundColor: SHARE_COLORS[client] }} />
+              {item.format(client === 'claude-code' ? item.claude : item.codex)}
+            </span>
+          ))}
+        </span>
+      </figcaption>
+    </figure>
   )
 }
 
@@ -489,9 +652,7 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
     )
   }
 
-  const sorted = sort === 'renewal'
-    ? rows
-    : [...rows].sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.service.localeCompare(b.service))
+  const groups = groupByPerson(rows, sort)
   const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
   const unused = rows.filter((row) => row.subscription && row.trackable && !row.usage).length
   const unsubscribed = rows.filter((row) => !row.subscription).length
@@ -516,7 +677,7 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
                   : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              {value === 'renewal' ? '결제일순' : '이름순'}
+              {value === 'renewal' ? '결제 임박순' : '이름순'}
             </button>
           ))}
         </div>
@@ -540,15 +701,16 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
-            {sorted.map((row, index) => {
-              // 이름순에서는 같은 사람이 이어지는 줄의 이름을 비워 사람 단위 묶음이 보이게 한다
-              const repeated = sort === 'name' && index > 0 && sorted[index - 1].name === row.name
-              return (
+            {groups.flatMap((group, groupIndex) =>
+              group.map((row, index) => (
                 <tr
                   key={`${row.name}-${row.service}-${row.subscription?.plan ?? 'none'}-${index}`}
-                  className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
+                  className={`transition-colors duration-200 hover:bg-[var(--bg-secondary)] ${
+                    // 사람이 바뀌는 줄은 굵은 선으로 묶음 경계를 드러낸다
+                    index === 0 && groupIndex > 0 ? 'border-t-2 border-t-[var(--border-hover)]' : ''
+                  }`}
                 >
-                  <td className={`${TD} text-[var(--text-primary)] whitespace-nowrap`}>{repeated ? '' : row.name}</td>
+                  <td className={`${TD} align-top text-[var(--text-primary)] whitespace-nowrap`}>{index === 0 ? row.name : ''}</td>
                   <td className={`${TD} text-[var(--text-secondary)] whitespace-nowrap`}>
                     <PlanCell row={row} />
                   </td>
@@ -577,12 +739,37 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
                     )}
                   </td>
                 </tr>
-              )
-            })}
+              ))
+            )}
           </tbody>
         </table>
       </div>
     </div>
+  )
+}
+
+/** 한 사람의 줄 묶음 안 순서 — 결제일이 가까운 구독부터, 구독 없는 사용은 뒤로 */
+function renewalOrder(row: AxMemberServiceRow): number {
+  return row.subscription?.daysLeft ?? Number.POSITIVE_INFINITY
+}
+
+/**
+ * 줄을 사람 단위로 묶는다
+ *
+ * 결제 임박순이면 묶음끼리는 그 사람의 가장 가까운 결제일 순이다 — 결제일로 줄을 흩으면
+ * 같은 사람의 Claude·Codex 가 멀리 떨어져 한 사람을 한눈에 볼 수 없다.
+ *
+ * @param rows - 구성원 × 서비스 줄
+ * @param sort - 묶음 정렬 기준
+ */
+function groupByPerson(rows: AxMemberServiceRow[], sort: PeopleSort): AxMemberServiceRow[][] {
+  const byName = new Map<string, AxMemberServiceRow[]>()
+  for (const row of rows) byName.set(row.name, [...(byName.get(row.name) ?? []), row])
+  const groups = [...byName.values()].map((group) =>
+    [...group].sort((a, b) => renewalOrder(a) - renewalOrder(b) || a.service.localeCompare(b.service))
+  )
+  return groups.sort((a, b) =>
+    (sort === 'renewal' ? renewalOrder(a[0]) - renewalOrder(b[0]) : 0) || a[0].name.localeCompare(b[0].name, 'ko')
   )
 }
 
