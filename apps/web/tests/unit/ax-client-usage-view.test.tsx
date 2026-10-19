@@ -177,6 +177,20 @@ describe('도움말 닫기와 오래된 시트 경고', () => {
     expect(tooltip).not.toHaveAttribute('data-dismissed')
   })
 
+  it('Esc 는 열린 도움말만 닫는다 — 다른 도움말은 처음 열 때 그대로 나타난다', () => {
+    render(<ClientUsagePanel days={7} data={data([person('홍길동', 'Claude Code', 2)])} />)
+    const tooltipOf = (name: string) => {
+      const button = screen.getByRole('button', { name })
+      return { button, tooltip: document.getElementById(button.getAttribute('aria-describedby')!)! }
+    }
+    const first = tooltipOf('서비스 비중 기준')
+    const second = tooltipOf('주기 평균 기준')
+    fireEvent.mouseEnter(first.button.parentElement!)
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(first.tooltip).toHaveAttribute('data-dismissed', 'true')
+    expect(second.tooltip).not.toHaveAttribute('data-dismissed')
+  })
+
   it('데이터가 있어도 시트가 31일 넘게 지났으면 경고는 도움말 밖에 보인다', () => {
     const base = data([person('홍길동', 'Claude Code', 2)])
     const old = new Date(Date.now() - 40 * 86_400_000).toISOString()

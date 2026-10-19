@@ -11,7 +11,7 @@
  * "보고 없음"으로 밝힌다. 구독 없이 사용 중인 줄도 남긴다 — 그 차이가 다음 달 구독을 정하는 신호다.
  */
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
@@ -994,17 +994,31 @@ function InfoTip({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()
   // Esc 로 닫은 상태. 포인터를 올린 채로도 닫혀야 해서(WCAG 1.4.13) CSS 호버와 별개로 든다.
   // 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있게 푼다
+  // Esc 는 지금 열린 도움말(포인터가 올라가 있거나 포커스가 있는 것)만 닫는다 — 다른 도움말까지 닫힌 상태로 남기면
+  // 처음 열 때 나타나지 않는다
   const [dismissed, setDismissed] = useState(false)
+  const pointer = useRef(false)
+  const focus = useRef(false)
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDismissed(true)
+      if (event.key === 'Escape' && (pointer.current || focus.current)) setDismissed(true)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+  const leave = (which: typeof pointer) => {
+    which.current = false
+    if (!pointer.current && !focus.current) setDismissed(false)
+  }
 
   return (
-    <div className="group/info inline-flex" onMouseLeave={() => setDismissed(false)} onBlur={() => setDismissed(false)}>
+    <div
+      className="group/info inline-flex"
+      onMouseEnter={() => { pointer.current = true }}
+      onMouseLeave={() => leave(pointer)}
+      onFocus={() => { focus.current = true }}
+      onBlur={() => leave(focus)}
+    >
       <button
         type="button"
         aria-label={label}
