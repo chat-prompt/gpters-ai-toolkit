@@ -45,7 +45,7 @@ describe('AX 패널 레지스트리', () => {
       'skill-diff', 'skill-duplicates',
     ])
     expect(metas.filter((meta) => meta.parentId === 'client-usage').map((meta) => meta.id)).toEqual([
-      'subscriptions',
+      'subscriptions', 'subscription-renewals',
     ])
   })
 

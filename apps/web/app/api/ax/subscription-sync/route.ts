@@ -7,6 +7,9 @@
  *
  * 운영 DB 자격 증명을 봇 호스트에 두지 않으려고 만든 좁은 쓰기 경로다(DEV-4486).
  * 카드 정보가 서버로 오지 않게 `slack_id`·`card_last4` 열이 있는 CSV 는 거절한다.
+ *
+ * `GET` 은 같은 토큰으로 구독 갱신 결정표(대시보드 「구독 갱신」 패널과 같은 데이터)를 돌려준다.
+ * 뽀밋이가 결제일 전에 읽어 DM 으로 보낸다(EDU-11519). `withinDays` 로 결제일이 가까운 것만 거른다.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto'
@@ -14,6 +17,7 @@ import { eq, inArray } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, axSubscriptions } from '@/lib/db'
+import { subscriptionRenewalsPanel } from '@/lib/features/ax'
 import {
   parseCsvLine,
   parseRosterCsv,
@@ -71,6 +75,24 @@ function isSubscriptionKeyConflict(cause: unknown): boolean {
 
 const error = (message: string, status: number, details?: string[]) =>
   NextResponse.json(details ? { error: message, details } : { error: message }, { status, headers: NO_STORE })
+
+export async function GET(request: NextRequest) {
+  const auth = authorize(request.headers.get('authorization'))
+  if (auth === 'unconfigured') return error('Subscription sync is not configured', 503)
+  if (auth === 'unauthorized') return error('Unauthorized', 401)
+
+  const raw = request.nextUrl.searchParams.get('withinDays')
+  // 빈 값(`?withinDays=`)을 Number('') = 0 으로 읽으면 "오늘 결제분만"이 돼 DM 이 조용히 비므로 기본값으로 본다
+  const withinDays = raw === null || raw.trim() === '' ? 31 : Number(raw)
+  if (!Number.isInteger(withinDays) || withinDays < 0 || withinDays > 31) {
+    return error('withinDays must be an integer between 0 and 31', 400)
+  }
+
+  const result = await subscriptionRenewalsPanel.load({ days: 7, isAdmin: true })
+  if (result.status !== 'ok' || !result.data) return error('Failed to load subscription renewals', 500)
+  const rows = result.data.rows.filter((row) => row.daysLeft <= withinDays)
+  return NextResponse.json({ generatedAt: result.generatedAt, withinDays, rows }, { headers: NO_STORE })
+}
 
 export async function POST(request: NextRequest) {
   const auth = authorize(request.headers.get('authorization'))

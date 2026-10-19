@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
   /** false 면 로컬 postgres-js 처럼 batch 가 없어 transaction 경로를 탄다 */
   hasBatch: true,
   transaction: vi.fn(async (run: (tx: unknown) => Promise<void>) => run({})),
+  renewals: vi.fn(),
 }))
+
+vi.mock('@/lib/features/ax', () => ({ subscriptionRenewalsPanel: { load: mocks.renewals } }))
 
 vi.mock('drizzle-orm', () => ({
   eq: (_column: unknown, value: unknown) => ({ eq: value }),
@@ -33,7 +36,7 @@ vi.mock('@/lib/db', () => ({
   },
 }))
 
-const { POST } = await import('../../app/api/ax/subscription-sync/route')
+const { GET, POST } = await import('../../app/api/ax/subscription-sync/route')
 
 const TOKEN = 'bbomit-sync-token'
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -211,5 +214,45 @@ describe('POST /api/ax/subscription-sync', () => {
       expect((await POST(request({ mode: 'apply', csv: roster, approvedPlanHash: plan.planHash }))).status).toBe(500)
       errorLog.mockRestore()
     })
+  })
+})
+
+describe('GET /api/ax/subscription-sync (구독 갱신 결정표)', () => {
+  const get = (query = '', token: string | null = TOKEN) =>
+    GET(new NextRequest(`http://localhost/api/ax/subscription-sync${query}`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    }))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv('AX_SUBSCRIPTION_SYNC_TOKEN_SHA256', sha256(TOKEN))
+    mocks.renewals.mockResolvedValue({
+      status: 'ok',
+      generatedAt: '2026-10-19T03:00:00.000Z',
+      data: { rows: [{ ownerName: '홍길동', daysLeft: 2 }, { ownerName: '김철수', daysLeft: 20 }] },
+    })
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('같은 토큰으로만 읽고, 관리자 범위로 불러온다', async () => {
+    expect((await get('', null)).status).toBe(401)
+    expect((await get('', 'wrong')).status).toBe(401)
+    const response = await get()
+    expect(response.status).toBe(200)
+    expect(mocks.renewals).toHaveBeenCalledWith({ days: 7, isAdmin: true })
+    expect((await response.json()).rows).toHaveLength(2)
+  })
+
+  it('withinDays 로 결제일이 가까운 것만 돌려준다', async () => {
+    const json = await (await get('?withinDays=7')).json()
+    expect(json).toMatchObject({ withinDays: 7, rows: [{ ownerName: '홍길동' }] })
+    expect((await (await get('?withinDays=')).json()).withinDays).toBe(31)
+    expect((await get('?withinDays=abc')).status).toBe(400)
+    expect((await get('?withinDays=32')).status).toBe(400)
+  })
+
+  it('패널 조회가 실패하면 500', async () => {
+    mocks.renewals.mockResolvedValue({ status: 'error', data: null })
+    expect((await get()).status).toBe(500)
   })
 })

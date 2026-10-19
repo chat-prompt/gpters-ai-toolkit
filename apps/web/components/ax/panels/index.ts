@@ -18,6 +18,7 @@ import { SkillDiffPanel } from './SkillDiffPanel'
 import { SkillDuplicatesPanel } from './SkillDuplicatesPanel'
 import { VercelProjectsPanel } from './VercelProjectsPanel'
 import { SubscriptionsPanel } from './SubscriptionsPanel'
+import { SubscriptionRenewalsPanel } from './SubscriptionRenewalsPanel'
 import { ClientUsagePanel } from './ClientUsagePanel'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { AgentIncidentPanel } from './AgentIncidentPanel'
@@ -46,6 +47,7 @@ const AX_PANEL_VIEWS: Record<string, AxPanelView> = {
   'skill-duplicates': SkillDuplicatesPanel,
   'vercel-deployments': VercelProjectsPanel,
   subscriptions: SubscriptionsPanel,
+  'subscription-renewals': SubscriptionRenewalsPanel,
   'client-usage': ClientUsagePanel,
   'agent-activity': AgentActivityPanel,
   'agent-incidents': AgentIncidentPanel,

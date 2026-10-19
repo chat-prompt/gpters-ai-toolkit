@@ -23,6 +23,7 @@ import { skillDiffPanel } from './skill-diff'
 import { skillDuplicatesPanel } from './skill-duplicates'
 import { vercelDeploymentsPanel } from './vercel'
 import { subscriptionsPanel } from './subscriptions'
+import { subscriptionRenewalsPanel } from './subscription-renewals'
 import { clientUsagePanel } from './usage'
 import { agentActivityPanel } from './agent-activity'
 import { activityGrassPanel } from './activity-grass'
@@ -47,6 +48,7 @@ export const AX_PANELS: AxPanel[] = [
   skillDuplicatesPanel,
   clientUsagePanel,
   subscriptionsPanel,
+  subscriptionRenewalsPanel,
   vercelDeploymentsPanel,
   // 탭으로 노출하지 않는 보조 패널 — 요약 하단 365일 잔디의 데이터 소스
   activityGrassPanel,
