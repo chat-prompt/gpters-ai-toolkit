@@ -42,6 +42,19 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   }),
 }))
 
+// 구독 절은 각자 테스트가 있다. 여기서는 db.select 순서를 건드리지 않게 로더를 대체한다
+const subscriptionMocks = vi.hoisted(() => ({
+  subscriptions: vi.fn(),
+  renewals: vi.fn(),
+}))
+vi.mock('../../../../packages/lib/src/features/ax/subscriptions', () => ({
+  subscriptionsPanel: { load: subscriptionMocks.subscriptions },
+}))
+vi.mock('../../../../packages/lib/src/features/ax/subscription-renewals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../packages/lib/src/features/ax/subscription-renewals')>()),
+  loadRenewalData: subscriptionMocks.renewals,
+}))
+
 const { clientUsagePanel } = await import('../../../../packages/lib/src/features/ax/usage')
 const { db } = await import('@gpters/db')
 
@@ -89,6 +102,8 @@ const MEMBER = { days: 30, isAdmin: false }
 describe('clientUsagePanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    subscriptionMocks.subscriptions.mockResolvedValue({ status: 'not_configured', data: null })
+    subscriptionMocks.renewals.mockResolvedValue(null)
     // 참여율 분모는 도메인이 설정된 경우에만 붙는다 — 기본 테스트는 분모 없이 돈다
     delete process.env.INTERNAL_ORGANIZATION_DOMAIN
     delete process.env.AX_USAGE_EXCLUDED_EMAILS
@@ -485,5 +500,76 @@ describe('clientUsagePanel', () => {
 
     expect(result.status).toBe('error')
     expect(result.data).toBeNull()
+  })
+})
+
+describe('clientUsagePanel — 구독 합치기', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.INTERNAL_ORGANIZATION_DOMAIN
+    delete process.env.AX_USAGE_EXCLUDED_EMAILS
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-03T00:00:00Z'))
+  })
+  afterEach(() => vi.useRealTimers())
+
+  const subscriptionData = (members: unknown[] | null) => ({
+    status: 'ok',
+    data: { syncedAt: null, activeSeats: 1, monthlyByCurrency: { USD: 100 }, byVendor: [], members },
+    highlights: [{ label: '월 구독 비용', value: '$100' }],
+  })
+
+  it('관리자에게는 구독과 사용량을 사람 × 서비스로 합친 줄을 준다', async () => {
+    queueRows([row({ memberName: '진우 (소파)', client: 'codex' })])
+    subscriptionMocks.subscriptions.mockResolvedValue(subscriptionData([
+      { ownerName: '진우', vendor: 'OpenAI', plan: 'Pro5x', amount: 100, currency: 'USD', billingCycle: 'monthly', renewalDay: 5, payer: '본인', status: 'active' },
+    ]))
+    subscriptionMocks.renewals.mockResolvedValue({ rows: [] })
+
+    const result = await clientUsagePanel.load({ days: 7, isAdmin: true })
+
+    expect(result.data?.people).toEqual([expect.objectContaining({
+      name: '진우 (소파)',
+      service: 'Codex',
+      subscription: expect.objectContaining({ plan: 'Pro5x', nextRenewal: '2026-08-05', daysLeft: 2 }),
+      usage: expect.objectContaining({ limitUsedPercent: 34 }),
+    })])
+    expect(result.highlights?.map((item) => item.label)).toContain('월 구독 비용')
+  })
+
+  it('관리자가 아니면 구성원 줄을 주지 않고 갱신 데이터도 읽지 않는다', async () => {
+    queueRows([row()])
+    subscriptionMocks.subscriptions.mockResolvedValue(subscriptionData(null))
+
+    const result = await clientUsagePanel.load({ days: 7, isAdmin: false })
+
+    expect(result.data?.people).toBeNull()
+    expect(result.data?.subscriptions).not.toBeNull()
+    expect(subscriptionMocks.renewals).not.toHaveBeenCalled()
+  })
+
+  it('구독을 못 읽어도 사용량은 그대로 보여준다', async () => {
+    queueRows([row()])
+    subscriptionMocks.subscriptions.mockResolvedValue({ status: 'error', data: null })
+
+    const result = await clientUsagePanel.load({ days: 7, isAdmin: true })
+
+    expect(result.status).toBe('ok')
+    expect(result.data?.subscriptions).toBeNull()
+    expect(result.data?.byClient).toHaveLength(1)
+    // 빈 구독으로 합치면 모두 "구독 없음"이 된다 — 표를 만들지 않고 실패를 알린다
+    expect(result.data?.people).toBeNull()
+    expect(result.data?.peopleError).toBe(true)
+  })
+
+  it('결제 주기 회차를 못 읽으면 "회차 없음"이 아니라 조회 실패로 표시하게 알린다', async () => {
+    queueRows([row()])
+    subscriptionMocks.subscriptions.mockResolvedValue(subscriptionData([]))
+    subscriptionMocks.renewals.mockResolvedValue(null)
+
+    const result = await clientUsagePanel.load({ days: 7, isAdmin: true })
+
+    expect(result.data?.cycleError).toBe(true)
+    expect(result.data?.peopleError).toBe(false)
   })
 })

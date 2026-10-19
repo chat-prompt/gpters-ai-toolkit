@@ -1359,6 +1359,36 @@ export const axUsageCollectorState = pgTable('ax_usage_collector_state', {
 export type AxUsageCollectorStateRecord = typeof axUsageCollectorState.$inferSelect
 export type NewAxUsageCollectorStateRecord = typeof axUsageCollectorState.$inferInsert
 
+/**
+ * 주간 한도 회차별 최댓값 (EDU-11519)
+ *
+ * `ax_client_usage` 는 UTC 하루 단위 행을 덮어써서, 같은 날 한도가 초기화되면 초기화 직전 값이 사라진다.
+ * 이 테이블은 보고를 받을 때마다 (사용자, 클라이언트, 초기화 시각) 회차의 최댓값만 올려 둔다.
+ * 서버가 받은 시각이 초기화 시각보다 앞선 보고만 반영한다 — 초기화 뒤에 다시 온 지난 스냅샷은 넣지 않는다.
+ */
+export const axUsageLimitWindows = pgTable('ax_usage_limit_windows', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  client: axUsageClientEnum('client').notNull(),
+  /** 클라이언트가 보고한 초기화 시각 그대로 */
+  resetsAt: timestamp('resets_at', { withTimezone: true }).notNull(),
+  /** 보고 시점의 표시명. ax_subscriptions.owner_name 과 잇는 키 */
+  memberName: text('member_name').notNull(),
+  /** 이 회차에서 받은 사용률의 최댓값 (0~100) */
+  maxUsedPercent: numeric('max_used_percent', { precision: 5, scale: 2 }).notNull(),
+  firstReportedAt: timestamp('first_reported_at', { withTimezone: true }).defaultNow().notNull(),
+  /** 최댓값을 마지막으로 확인한 보고 시각. 초기화 시각과 멀수록 마지막 날 사용량이 덜 반영됐다 */
+  lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).defaultNow().notNull(),
+  /** 값과 무관하게 이 회차를 마지막으로 받은 시각. 초기화 전 회차가 둘일 때 진행 중인 쪽을 고른다 */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.client, table.resetsAt] }),
+  index('ax_usage_limit_windows_resets_at_idx').on(table.resetsAt),
+])
+
+export type AxUsageLimitWindowRecord = typeof axUsageLimitWindows.$inferSelect
+
 /** 검증 가능한 스킬 실행 결과 — 기존 apply/skip 자기보고와 분리한다 */
 export const axExecutionSourceEnum = pgEnum('ax_execution_source', ['aitk', 'bbopters-shared'])
 export const axExecutionStatusEnum = pgEnum('ax_execution_status', [

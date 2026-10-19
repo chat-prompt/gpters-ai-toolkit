@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { createLogger } from '../core/logger'
-import { db, catalogItems, users, orgMemberships, axClientUsage, axUsageCollectorState } from '@gpters/db'
+import { db, catalogItems, users, orgMemberships, axClientUsage, axUsageCollectorState, axUsageLimitWindows } from '@gpters/db'
 import { validateUsageReport } from '../features/ax/usage-report'
 import type { AxUsageReportRecord } from '../features/ax/usage-report'
 import { validateSkillExecutionReport, validateSkillExecutionStart } from '../features/ax/execution-report'
@@ -1409,6 +1409,8 @@ export async function reportUsage(
   args: Record<string, unknown>,
   userId?: string
 ): Promise<ReportUsageResponse> {
+  // 회차 기록은 "초기화 전에 받았는가"로 거른다. DB 처리 도중 초기화 시각을 넘겨도 받은 시각으로 판정하도록 먼저 잡는다
+  const receivedAt = new Date()
   if (!userId) {
     return { success: false, error: '인증이 필요합니다' }
   }
@@ -1427,7 +1429,7 @@ export async function reportUsage(
   let updated = 0
 
   for (const record of validation.payload.records) {
-    const values = toUsageRow(record, userId, memberName)
+    const values = toUsageRow(record, userId, memberName, receivedAt)
 
     const [existing] = await db
       .select({ id: axClientUsage.id })
@@ -1453,6 +1455,8 @@ export async function reportUsage(
   // 사용량이 0건이어도 수집기가 설치·승인된 상태로 정상 실행됐다는 사실은 남긴다.
   // 이 heartbeat가 없으면 관리자 화면은 "미사용"과 "미설치"를 구분할 수 없다.
   const now = new Date()
+  await recordLimitWindows(validation.payload.records, userId, memberName, receivedAt)
+
   const collectorState = {
     userId,
     memberName,
@@ -1479,15 +1483,71 @@ export async function reportUsage(
 }
 
 /**
+ * 주간 한도 회차별 최댓값을 올린다 (EDU-11519)
+ *
+ * `ax_client_usage` 는 하루 단위로 덮어써서 초기화 직전 값이 사라지므로 회차마다 따로 남긴다.
+ * 받은 시각이 초기화 시각 이후인 보고는 지난 스냅샷을 다시 보낸 것이라 넣지 않는다.
+ * 이 기록이 실패해도(0045 적용 전 등) 사용량 보고는 성공시킨다 — 부가 지표가 본 보고를 막지 않게.
+ *
+ * @param records - 검증된 레코드
+ * @param userId - 인증 사용자 ID
+ * @param memberName - 서버가 유도한 팀원 표시명 스냅샷
+ * @param receivedAt - 서버가 보고를 받은 시각 (DB 처리 전)
+ */
+async function recordLimitWindows(
+  records: AxUsageReportRecord[],
+  userId: string,
+  memberName: string,
+  receivedAt: Date
+): Promise<void> {
+  // 여러 날 레코드가 같은 회차 한도를 싣고 오므로 회차마다 최댓값 하나로 줄인다
+  const windows = new Map<string, { client: AxUsageReportRecord['client']; resetsAt: Date; percent: number }>()
+  for (const record of records) {
+    if (record.limitUsedPercent == null || !record.limitResetsAt) continue
+    const resetsAt = new Date(record.limitResetsAt)
+    if (!(resetsAt > receivedAt)) continue
+    const key = `${record.client}\u0000${resetsAt.getTime()}`
+    const seen = windows.get(key)
+    if (!seen || record.limitUsedPercent > seen.percent) windows.set(key, { client: record.client, resetsAt, percent: record.limitUsedPercent })
+  }
+
+  for (const { client, resetsAt, percent } of windows.values()) {
+    const value = percent.toFixed(2)
+    try {
+      await db
+        .insert(axUsageLimitWindows)
+        .values({ userId, client, resetsAt, memberName, maxUsedPercent: value, firstReportedAt: receivedAt, lastReportedAt: receivedAt, lastSeenAt: receivedAt })
+        .onConflictDoUpdate({
+          target: [axUsageLimitWindows.userId, axUsageLimitWindows.client, axUsageLimitWindows.resetsAt],
+          set: {
+            memberName,
+            maxUsedPercent: sql`greatest(${axUsageLimitWindows.maxUsedPercent}, ${value}::numeric)`,
+            // 마지막 보고 시각은 최댓값을 다시 확인한 보고에서만 옮긴다 — 다른 머신의 낮은 옛 스냅샷이
+            // "마지막 날까지 반영됐다"처럼 보이게 하지 않는다
+            // 같은 값이면 늦은 쪽을 남긴다 — 동시 보고가 역순으로 저장돼도 시각이 과거로 돌아가지 않게
+            lastReportedAt: sql`case
+              when ${value}::numeric > ${axUsageLimitWindows.maxUsedPercent} then ${receivedAt.toISOString()}::timestamptz
+              when ${value}::numeric = ${axUsageLimitWindows.maxUsedPercent} then greatest(${axUsageLimitWindows.lastReportedAt}, ${receivedAt.toISOString()}::timestamptz)
+              else ${axUsageLimitWindows.lastReportedAt} end`,
+            lastSeenAt: sql`greatest(${axUsageLimitWindows.lastSeenAt}, ${receivedAt.toISOString()}::timestamptz)`,
+          },
+        })
+    } catch (err) {
+      log.warn('AX limit window not recorded', { client, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+}
+
+/**
  * 검증을 통과한 레코드를 `ax_client_usage` 행으로 옮긴다
  *
  * @param record - 검증된 레코드
  * @param userId - 인증 사용자 ID
  * @param memberName - 서버가 유도한 팀원 표시명 스냅샷
+ * @param now - 서버가 보고를 받은 시각. 회차 기록과 같은 기준으로 "초기화 전 보고"를 가른다
  * @returns insert·update 양쪽에 그대로 쓰는 값
  */
-function toUsageRow(record: AxUsageReportRecord, userId: string, memberName: string) {
-  const now = new Date()
+function toUsageRow(record: AxUsageReportRecord, userId: string, memberName: string, now: Date) {
   return {
     userId,
     memberName,

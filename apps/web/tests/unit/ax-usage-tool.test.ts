@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState } = vi.hoisted(() => ({
+const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState, mockAxUsageLimitWindows } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -24,6 +24,7 @@ const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState } = vi.h
     periodStart: 'periodStart',
   },
   mockAxUsageCollectorState: { userId: 'collector.userId' },
+  mockAxUsageLimitWindows: { userId: 'window.userId', client: 'window.client', resetsAt: 'window.resetsAt', maxUsedPercent: 'window.max' },
 }))
 
 vi.mock('@gpters/db', () => ({
@@ -33,6 +34,7 @@ vi.mock('@gpters/db', () => ({
   suggestions: {},
   axClientUsage: mockAxClientUsage,
   axUsageCollectorState: mockAxUsageCollectorState,
+  axUsageLimitWindows: mockAxUsageLimitWindows,
 }))
 
 vi.mock('drizzle-orm', () => ({
@@ -117,9 +119,14 @@ function stubWrites() {
   const insertedValues: Record<string, unknown>[] = []
   const updatedValues: Record<string, unknown>[] = []
   const collectorValues: Record<string, unknown>[] = []
+  const windowValues: Record<string, unknown>[] = []
 
   mockDb.insert.mockImplementation((table: unknown) => ({
     values: vi.fn().mockImplementation((values: Record<string, unknown>) => {
+      if (table === mockAxUsageLimitWindows) {
+        windowValues.push(values)
+        return { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) }
+      }
       if (table === mockAxUsageCollectorState) {
         collectorValues.push(values)
         return { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) }
@@ -135,7 +142,7 @@ function stubWrites() {
     }),
   }))
 
-  return { insertedValues, updatedValues, collectorValues }
+  return { insertedValues, updatedValues, collectorValues, windowValues }
 }
 
 describe('report_usage', () => {
@@ -284,6 +291,81 @@ describe('report_usage', () => {
 
       expect(writes.insertedValues[0].limitUsedPercent).toBe('43.00')
       expect(writes.insertedValues[0].limitResetsAt).toBeInstanceOf(Date)
+    })
+  })
+
+  describe('주간 한도 회차', () => {
+    it('초기화 전 보고는 회차 최댓값 테이블에 올린다 — 하루 단위 행이 덮여도 남는다', async () => {
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[]])
+      const writes = stubWrites()
+
+      await reportUsage({ records: [record({ limitUsedPercent: 43, limitResetsAt: '2099-01-01T00:00:00.000Z' })] }, 'user-1')
+
+      expect(writes.windowValues).toEqual([expect.objectContaining({
+        userId: 'user-1', client: 'codex', memberName: '현진우', maxUsedPercent: '43.00',
+        resetsAt: new Date('2099-01-01T00:00:00.000Z'),
+      })])
+    })
+
+    it('초기화 시각이 지난 보고·한도 없는 보고는 올리지 않는다', async () => {
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[], []])
+      const writes = stubWrites()
+
+      await reportUsage({ records: [record(), claudeRecord()] }, 'user-1')
+
+      expect(writes.windowValues).toHaveLength(0)
+    })
+
+    it('여러 날 레코드가 같은 회차를 실으면 최댓값 하나만 올린다', async () => {
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[], []])
+      const writes = stubWrites()
+      const resetsAt = '2099-01-01T00:00:00.000Z'
+
+      await reportUsage({ records: [
+        record({ limitUsedPercent: 30, limitResetsAt: resetsAt }),
+        record({ periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-08-08T00:00:00.000Z', limitUsedPercent: 70, limitResetsAt: resetsAt }),
+      ] }, 'user-1')
+
+      expect(writes.windowValues).toHaveLength(1)
+      expect(writes.windowValues[0].maxUsedPercent).toBe('70.00')
+    })
+
+    it('받은 뒤 DB 처리 중에 초기화 시각을 넘겨도 초기화 전 보고로 남긴다', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      try {
+        vi.setSystemTime(new Date('2026-10-19T09:59:59.000Z'))
+        const queue: unknown[][] = [[{ name: '현진우', email: 'primadonna@gpters.org' }], []]
+        mockDb.select.mockImplementation(() => {
+          // 사용자·기존 행 조회가 끝날 즈음 초기화 시각(10:00)을 넘긴다
+          vi.setSystemTime(new Date('2026-10-19T10:00:05.000Z'))
+          return selectChain(queue.shift() ?? [])
+        })
+        const writes = stubWrites()
+
+        await reportUsage({ records: [record({ limitUsedPercent: 90, limitResetsAt: '2026-10-19T10:00:00.000Z' })] }, 'user-1')
+
+        expect(writes.windowValues).toEqual([expect.objectContaining({
+          maxUsedPercent: '90.00',
+          lastReportedAt: new Date('2026-10-19T09:59:59.000Z'),
+          lastSeenAt: new Date('2026-10-19T09:59:59.000Z'),
+        })])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('회차 기록이 실패해도(테이블 적용 전) 사용량 보고는 성공한다', async () => {
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[]])
+      const writes = stubWrites()
+      const insert = mockDb.insert.getMockImplementation()!
+      mockDb.insert.mockImplementation((table: unknown) => table === mockAxUsageLimitWindows
+        ? { values: () => ({ onConflictDoUpdate: vi.fn().mockRejectedValue(new Error('relation does not exist')) }) }
+        : insert(table))
+
+      const result = await reportUsage({ records: [record({ limitResetsAt: '2099-01-01T00:00:00.000Z' })] }, 'user-1')
+
+      expect(result).toMatchObject({ success: true, inserted: 1 })
+      expect(writes.collectorValues).toHaveLength(1)
     })
   })
 

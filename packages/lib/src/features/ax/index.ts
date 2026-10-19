@@ -33,6 +33,7 @@ export {
 } from './skill-duplicates'
 export { vercelDeploymentsPanel } from './vercel'
 export { subscriptionsPanel } from './subscriptions'
+export * from './subscription-renewals'
 export { clientUsagePanel } from './usage'
 export { agentActivityPanel } from './agent-activity'
 export { activityGrassPanel } from './activity-grass'
