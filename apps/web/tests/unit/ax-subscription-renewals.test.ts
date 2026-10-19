@@ -269,6 +269,8 @@ describe('buildMemberServiceRows', () => {
       now
     )
     expect(rows[0]).toMatchObject({ name: '조효희 (타타)', usage: { totalTokens: 100 } })
+    // 옛 이름 보고가 "구독 없이 사용" 줄로 남지 않는다
+    expect(rows).toHaveLength(1)
   })
 
   it('수집 경로가 없는 벤더, 이름 없는 구독은 수집 대상이 아니다(누락으로 보지 않는다)', () => {
@@ -292,6 +294,20 @@ describe('buildMemberServiceRows', () => {
       now
     )
     expect(rows.map((row) => row.name)).toEqual(['박수오 (소파)', '박수오 (소파)'])
+  })
+
+  it('수집 대상이 아닌 사람 구독도 계정 표시명으로 맞추고, 공용 구독은 그대로 둔다', () => {
+    const rows = buildMemberServiceRows(
+      [member({ memberName: '박수오 (소파)' })],
+      [subscription({ ownerName: '박수오' }), subscription({ ownerName: '박수오', vendor: 'Cursor', plan: 'Pro' }), subscription({ ownerName: '공용(박수오)' })],
+      [],
+      now
+    )
+    expect(rows.map((row) => [row.name, row.service])).toEqual([
+      ['공용(박수오)', 'Claude Code'],
+      ['박수오 (소파)', 'Claude Code'],
+      ['박수오 (소파)', 'Cursor'],
+    ])
   })
 
   it('한 사용 보고는 한 구독에만 붙는다', () => {

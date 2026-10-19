@@ -267,16 +267,16 @@ export function buildMemberServiceRows(
     // 이름 없는 구독은 import 가 공용으로 다루므로 같이 본다
     const shared = owner === '' || owner.startsWith('공용')
     const trackable = client !== null && !shared
-    // 같은 사람의 보고가 여럿이면(옛 이름 행 + 인증 계정 행) 가장 최근 것을 붙인다 — 입력은 토큰 순이라 첫 매칭이 최신이 아니다
-    const member = trackable
-      ? usageMembers
-          .filter((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
-          .reduce<AxClientUsageMemberRow | undefined>(
-            (latest, candidate) => (!latest || (candidate.lastReportedAt ?? '') > (latest.lastReportedAt ?? '') ? candidate : latest),
-            undefined
-          )
-      : undefined
-    if (member) used.add(member)
+    // 같은 사람의 보고가 여럿이면(옛 이름 행 + 인증 계정 행) 가장 최근 것을 붙인다 — 입력은 토큰 순이라 첫 매칭이 최신이 아니다.
+    // 나머지도 이 구독의 것으로 소비한다. 남겨 두면 "구독 없이 사용" 줄이 거짓으로 생긴다
+    const candidates = trackable
+      ? usageMembers.filter((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
+      : []
+    const member = candidates.reduce<AxClientUsageMemberRow | undefined>(
+      (latest, candidate) => (!latest || (candidate.lastReportedAt ?? '') > (latest.lastReportedAt ?? '') ? candidate : latest),
+      undefined
+    )
+    for (const candidate of candidates) used.add(candidate)
     const renewal = renewals.find((row) =>
       row.ownerName === owner && row.vendor === sub.vendor && row.plan === sub.plan && row.renewalDay === sub.renewalDay
     )
@@ -317,7 +317,7 @@ export function buildMemberServiceRows(
 
   // 사용 보고가 없는 줄은 로스터 이름(`박수오`)이라, 같은 사람의 다른 줄이 쓰는 계정 표시명(`박수오 (소파)`)으로 맞춘다
   for (const row of rows) {
-    if (row.usage || !row.trackable) continue
+    if (row.usage || row.subscription?.shared) continue
     const sibling = rows.find((other) => other.usage && samePerson(other.name, row.name))
     if (sibling) row.name = sibling.name
   }

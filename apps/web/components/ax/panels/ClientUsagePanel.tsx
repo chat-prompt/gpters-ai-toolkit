@@ -89,7 +89,12 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
           reportingMembers={data.reportingMembers}
           internalMembers={data.internalMembers}
         />
-        {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
+        {data.subscriptions ? (
+          <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />
+        ) : (
+          // 구독을 못 읽으면 좌석·월 비용이 "—"로 남는다 — 구독이 없는 것과 구분되게 밝힌다
+          <p className="mt-1 font-mono text-[11px] text-[var(--accent-orange)]">구독 데이터를 불러오지 못했습니다</p>
+        )}
         {data.byClient.length > 0 || (data.subscriptions?.byVendor.length ?? 0) > 0 ? (
           <div className="mt-3">
             <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
@@ -344,7 +349,9 @@ function ServiceTable({
                 <td className={`${TD} text-[var(--text-primary)]`}>{label}</td>
                 <td className={`text-right ${TD} font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(vendor.seats)}</td>
                 <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-primary)]`}>{formatMoneyMap(vendor.monthlyByCurrency)}</td>
-                <td colSpan={5} className={`${TD} text-right text-xs text-[var(--text-muted)]`}>사용 보고 없음</td>
+                <td colSpan={5} className={`${TD} text-right text-xs text-[var(--text-muted)]`}>
+                  {CLIENT_BY_VENDOR[vendor.vendor] ? '사용 보고 없음' : '사용량 수집 대상 아님'}
+                </td>
               </tr>
             ))}
         </tbody>
@@ -632,7 +639,10 @@ function CurrentLimitCell({ row }: { row: AxMemberServiceRow }) {
 
 /** 주기 평균 칸 — 회차 수가 표본 크기다. 회차별 값은 호버로 */
 function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleError: boolean }) {
-  if (!row.subscription || !row.trackable) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  // 연간 결제·결제일 없는 구독은 결제 주기가 정의되지 않는다 — "회차 없음"이 아니다
+  if (!row.subscription || !row.trackable || row.subscription.nextRenewal === null) {
+    return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  }
   if (cycleError) return <span className="text-[11px] text-[var(--accent-orange)]">조회 실패</span>
   if (row.cycleAveragePercent === null) return <span className="text-[11px] text-[var(--text-muted)]">회차 없음</span>
   const detail = row.cycleWeeks
