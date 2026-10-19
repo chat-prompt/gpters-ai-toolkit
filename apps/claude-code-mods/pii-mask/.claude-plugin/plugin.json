@@ -1,0 +1,24 @@
+{
+  "name": "pii-mask",
+  "version": "0.5.0",
+  "description": "도구 결과를 Claude가 읽기 전에 가린다: 권한 없는 요청자·외부 워크스페이스·가림모드면 개인정보까지, 그 밖은 토큰·키만",
+  "author": {
+    "name": "GPTers",
+    "email": "contact@gpters.org"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "piiAllowedIds": {
+      "type": "string",
+      "title": "개인정보를 볼 수 있는 Slack User ID",
+      "description": "쉼표로 구분. 예: U0XXXXXXXXX,U0YYYYYYYYY. 비우면 사람이 보낸 슬랙 요청은 전부 전화번호·이메일까지 가린다(봇·발신자 없는 메시지는 토큰·키만). 관리자가 번호를 보려면 워크스페이스 ID도 채운다.",
+      "default": ""
+    },
+    "homeWorkspaceId": {
+      "type": "string",
+      "title": "우리 Slack 워크스페이스 Team ID",
+      "description": "예: T0XXXXXXXXX. 이 워크스페이스 밖에서 온 요청은 발신자와 상관없이 개인정보까지 가린다.",
+      "default": ""
+    }
+  }
+}
