@@ -794,9 +794,14 @@ export interface AxClientUsageData {
   subscriptions: AxSubscriptionData | null
   /**
    * 구성원 × 서비스 한 줄 표 — 구독·결제 주기 사용률·현재 사용량을 한 사람 한 서비스로 합친다.
-   * 관리자에게만 채워지고 그 외에는 null
+   * 관리자에게만 채워지고 그 외에는 null. 구독을 못 읽었으면(peopleError) 만들지 않는다 —
+   * 빈 구독으로 합치면 모든 사용이 "구독 없음"으로 보여 실측과 구분되지 않는다
    */
   people: AxMemberServiceRow[] | null
+  /** 관리자 화면에서 구독 데이터를 못 읽어 구성원 × 구독 표를 만들지 못했는지 */
+  peopleError: boolean
+  /** 결제 주기 회차를 못 읽었는지. true 면 주기 평균 칸은 "회차 없음"이 아니라 조회 실패다 */
+  cycleError: boolean
 }
 
 /** 결제 주기 안에서 초기화된 주간 한도 한 회차 */
@@ -846,6 +851,11 @@ export interface AxMemberServiceRow {
   name: string
   /** 서비스 표시명 (Claude Code / Codex / 그 밖의 벤더명) */
   service: string
+  /**
+   * 사용 보고·결제 주기 평균을 기대할 수 있는 줄인지 — 수집 클라이언트가 있는 벤더의 사람 구독,
+   * 또는 사용 보고 줄. false 면 빈 칸은 누락이 아니라 원래 수집 대상이 아니다(공용·이름 없음·다른 SaaS)
+   */
+  trackable: boolean
   subscription: {
     vendor: string
     plan: string

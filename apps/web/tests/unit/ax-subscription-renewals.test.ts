@@ -258,6 +258,42 @@ describe('buildMemberServiceRows', () => {
     ])
   })
 
+  it('같은 사람의 보고가 여럿이면 토큰이 많은 옛 보고가 아니라 가장 최근 보고를 붙인다', () => {
+    const rows = buildMemberServiceRows(
+      [
+        member({ memberName: '타타', totalTokens: 1000, lastReportedAt: '2026-10-18T00:00:00.000Z' }),
+        member({ memberName: '조효희 (타타)', totalTokens: 100, lastReportedAt: '2026-10-19T00:00:00.000Z' }),
+      ],
+      [subscription({ ownerName: '타타' })],
+      [],
+      now
+    )
+    expect(rows[0]).toMatchObject({ name: '조효희 (타타)', usage: { totalTokens: 100 } })
+  })
+
+  it('수집 경로가 없는 벤더, 이름 없는 구독은 수집 대상이 아니다(누락으로 보지 않는다)', () => {
+    const rows = buildMemberServiceRows([], [
+      subscription({ vendor: 'Cursor', plan: 'Pro' }),
+      subscription({ ownerName: null }),
+      subscription(),
+    ], [], now)
+    expect(rows.map((row) => [row.name, row.service, row.trackable, row.subscription?.shared])).toEqual([
+      ['미지정', 'Claude Code', false, true],
+      ['홍길동', 'Claude Code', true, false],
+      ['홍길동', 'Cursor', false, false],
+    ])
+  })
+
+  it('사용 보고 없는 줄의 로스터 이름을 같은 사람의 계정 표시명으로 맞춘다', () => {
+    const rows = buildMemberServiceRows(
+      [member({ memberName: '박수오 (소파)' })],
+      [subscription({ ownerName: '박수오' }), subscription({ ownerName: '박수오', vendor: 'OpenAI', plan: 'Pro5x' })],
+      [],
+      now
+    )
+    expect(rows.map((row) => row.name)).toEqual(['박수오 (소파)', '박수오 (소파)'])
+  })
+
   it('한 사용 보고는 한 구독에만 붙는다', () => {
     const rows = buildMemberServiceRows(
       [member()],

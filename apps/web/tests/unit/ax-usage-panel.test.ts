@@ -557,5 +557,19 @@ describe('clientUsagePanel — 구독 합치기', () => {
     expect(result.status).toBe('ok')
     expect(result.data?.subscriptions).toBeNull()
     expect(result.data?.byClient).toHaveLength(1)
+    // 빈 구독으로 합치면 모두 "구독 없음"이 된다 — 표를 만들지 않고 실패를 알린다
+    expect(result.data?.people).toBeNull()
+    expect(result.data?.peopleError).toBe(true)
+  })
+
+  it('결제 주기 회차를 못 읽으면 "회차 없음"이 아니라 조회 실패로 표시하게 알린다', async () => {
+    queueRows([row()])
+    subscriptionMocks.subscriptions.mockResolvedValue(subscriptionData([]))
+    subscriptionMocks.renewals.mockResolvedValue(null)
+
+    const result = await clientUsagePanel.load({ days: 7, isAdmin: true })
+
+    expect(result.data?.cycleError).toBe(true)
+    expect(result.data?.peopleError).toBe(false)
   })
 })

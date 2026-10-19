@@ -264,9 +264,17 @@ export function buildMemberServiceRows(
   const rows: AxMemberServiceRow[] = subscriptions.map((sub) => {
     const owner = sub.ownerName?.trim() ?? ''
     const client = CLIENT_BY_VENDOR[sub.vendor] ?? null
-    const shared = owner.startsWith('공용')
-    const member = client && owner && !shared
-      ? usageMembers.find((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
+    // 이름 없는 구독은 import 가 공용으로 다루므로 같이 본다
+    const shared = owner === '' || owner.startsWith('공용')
+    const trackable = client !== null && !shared
+    // 같은 사람의 보고가 여럿이면(옛 이름 행 + 인증 계정 행) 가장 최근 것을 붙인다 — 입력은 토큰 순이라 첫 매칭이 최신이 아니다
+    const member = trackable
+      ? usageMembers
+          .filter((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
+          .reduce<AxClientUsageMemberRow | undefined>(
+            (latest, candidate) => (!latest || (candidate.lastReportedAt ?? '') > (latest.lastReportedAt ?? '') ? candidate : latest),
+            undefined
+          )
       : undefined
     if (member) used.add(member)
     const renewal = renewals.find((row) =>
@@ -277,6 +285,7 @@ export function buildMemberServiceRows(
     return {
       name: member?.memberName ?? (owner || '미지정'),
       service: client ? CLIENT_LABELS[client] : sub.vendor,
+      trackable,
       subscription: {
         vendor: sub.vendor,
         plan: sub.plan,
@@ -298,11 +307,19 @@ export function buildMemberServiceRows(
     rows.push({
       name: member.memberName,
       service: CLIENT_LABELS[member.client],
+      trackable: true,
       subscription: null,
       cycleWeeks: [],
       cycleAveragePercent: null,
       usage: toUsage(member),
     })
+  }
+
+  // 사용 보고가 없는 줄은 로스터 이름(`박수오`)이라, 같은 사람의 다른 줄이 쓰는 계정 표시명(`박수오 (소파)`)으로 맞춘다
+  for (const row of rows) {
+    if (row.usage || !row.trackable) continue
+    const sibling = rows.find((other) => other.usage && samePerson(other.name, row.name))
+    if (sibling) row.name = sibling.name
   }
 
   const order = (row: AxMemberServiceRow) => row.subscription?.daysLeft ?? Number.POSITIVE_INFINITY

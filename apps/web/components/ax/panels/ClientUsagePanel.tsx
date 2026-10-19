@@ -102,7 +102,12 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
       </div>
 
       {/* 구성원 × 구독 — 관리자에게만 데이터가 내려온다 */}
-      {data.people !== null && <PeopleTable rows={data.people} />}
+      {data.people !== null && <PeopleTable rows={data.people} cycleError={data.cycleError} />}
+      {data.peopleError && (
+        <p className="border-l-2 border-[var(--accent-orange)] pl-4 text-sm text-[var(--text-secondary)]">
+          구독 데이터를 불러오지 못해 구성원 × 구독 표를 만들지 못했습니다. 사용량은 위 요약에 그대로 있습니다.
+        </p>
+      )}
 
       {data.byModel.length > 0 && <ModelTable rows={data.byModel} total={data.totalTokens} />}
 
@@ -464,8 +469,9 @@ type PeopleSort = 'renewal' | 'name'
  * 구독 없이 사용하는 줄을 따로 세어 위에 밝힌다.
  *
  * @param rows - 다음 결제일이 가까운 순으로 정렬된 줄
+ * @param cycleError - 결제 주기 회차를 못 읽었으면 true — 주기 평균 칸을 "조회 실패"로 쓴다
  */
-function PeopleTable({ rows }: { rows: AxMemberServiceRow[] }) {
+function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleError: boolean }) {
   const [sort, setSort] = useState<PeopleSort>('renewal')
 
   if (rows.length === 0) {
@@ -480,7 +486,7 @@ function PeopleTable({ rows }: { rows: AxMemberServiceRow[] }) {
     ? rows
     : [...rows].sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.service.localeCompare(b.service))
   const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
-  const unused = rows.filter((row) => row.subscription && !row.subscription.shared && !row.usage).length
+  const unused = rows.filter((row) => row.subscription && row.trackable && !row.usage).length
   const unsubscribed = rows.filter((row) => !row.subscription).length
 
   return (
@@ -549,7 +555,7 @@ function PeopleTable({ rows }: { rows: AxMemberServiceRow[] }) {
                     <CurrentLimitCell row={row} />
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
-                    <CycleAverageCell row={row} />
+                    <CycleAverageCell row={row} cycleError={cycleError} />
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-secondary)]`}>
                     {row.usage ? formatTokens(row.usage.totalTokens) : EMPTY}
@@ -557,7 +563,7 @@ function PeopleTable({ rows }: { rows: AxMemberServiceRow[] }) {
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
                     {row.usage?.lastReportedAt ? (
                       <span className="text-[var(--text-muted)]">{formatDate(row.usage.lastReportedAt)}</span>
-                    ) : row.subscription && !row.subscription.shared ? (
+                    ) : row.subscription && row.trackable ? (
                       <span className="text-xs text-[var(--accent-orange)]">보고 없음</span>
                     ) : (
                       <span className="text-[var(--text-muted)]">{EMPTY}</span>
@@ -625,8 +631,9 @@ function CurrentLimitCell({ row }: { row: AxMemberServiceRow }) {
 }
 
 /** 주기 평균 칸 — 회차 수가 표본 크기다. 회차별 값은 호버로 */
-function CycleAverageCell({ row }: { row: AxMemberServiceRow }) {
-  if (!row.subscription || row.subscription.shared) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleError: boolean }) {
+  if (!row.subscription || !row.trackable) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  if (cycleError) return <span className="text-[11px] text-[var(--accent-orange)]">조회 실패</span>
   if (row.cycleAveragePercent === null) return <span className="text-[11px] text-[var(--text-muted)]">회차 없음</span>
   const detail = row.cycleWeeks
     .map((week) => `${formatDateTime(week.resetsAt)} 초기화 ${week.usedPercent}% (마지막 보고 ${formatDateTime(week.reportedAt)})`)

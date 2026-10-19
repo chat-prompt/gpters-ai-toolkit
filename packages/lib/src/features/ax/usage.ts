@@ -531,9 +531,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
         members,
         participation,
         subscriptions,
-        people: members !== null
-          ? buildMemberServiceRows(members, subscriptions?.members ?? [], renewalData?.rows ?? [], new Date())
+        people: members !== null && subscriptions?.members
+          ? buildMemberServiceRows(members, subscriptions.members, renewalData?.rows ?? [], new Date())
           : null,
+        peopleError: members !== null && !subscriptions?.members,
+        cycleError: ctx.isAdmin && renewalData === null,
       },
       [
         ...(internalMembers !== null
