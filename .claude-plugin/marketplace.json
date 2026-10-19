@@ -26,6 +26,16 @@
         "email": "contact@gpters.org"
       },
       "category": "productivity"
+    },
+    {
+      "name": "pii-mask",
+      "source": "./apps/claude-code-mods/pii-mask",
+      "description": "봇이 도구 결과를 읽기 전에 API 키·토큰을 가리고, 권한 없는 요청자·외부 워크스페이스·가림모드면 전화번호·이메일까지 가리는 mod",
+      "author": {
+        "name": "GPTers",
+        "email": "contact@gpters.org"
+      },
+      "category": "security"
     }
   ]
 }
