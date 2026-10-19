@@ -1,9 +1,9 @@
 /**
- * AX Dashboard — 구독 갱신 결정표 패널
+ * AX Dashboard — 구독 갱신 결정표
  *
  * 다음 결제일 전에 "이 사람이 이번 결제 주기 동안 주간 한도를 얼마나 썼나"를 보여준다.
- * 다음 달 구독(유지·변경·해지)을 정하는 근거이고, 뽀밋이가 같은 데이터를 DM 으로 보낸다
- * (`GET /api/ax/subscription-sync`).
+ * 다음 달 구독(유지·변경·해지)을 정하는 근거다. 「클라이언트」 패널이 구성원 × 서비스 표에 합쳐
+ * 보여주고(`buildMemberServiceRows`), 뽀밋이가 같은 데이터를 DM 으로 보낸다(`GET /api/ax/subscription-sync`).
  *
  * 주간 사용률은 **한도가 초기화되기 전에 받은 보고의 값**이다. `ax_client_usage` 는 수집기가
  * 보낸 하루 단위 행마다 그 시점의 주간 한도 스냅샷(`limitUsedPercent`, `limitResetsAt`)을
@@ -17,13 +17,19 @@
  * 7일로 맞추지 않는다.
  *
  * 사람 기준이다 — 사용자 이름이 있는 Anthropic·OpenAI 구독만 대상이고(로스터의 `공용(…)` 구독은 뺀다),
- * 구독 이름과 사용량 보고자 이름(`owner_name` = `member_name`)이 같아야 이어진다.
+ * 로스터 이름과 계정 표시명은 괄호 별칭까지 같은 사람으로 본다(`박수오` = `박수오 (소파)`, `타타` = `조효희 (타타)`).
  */
 
 import { db, axClientUsage, axSubscriptions, axUsageLimitWindows } from '@gpters/db'
 import { and, eq, gte, isNotNull } from 'drizzle-orm'
-import type { AxPanel, AxPanelContext, AxPanelMeta, AxPanelResult, AxUsageClient } from './types'
-import { panelOk, panelError } from './panel'
+import type {
+  AxClientUsageMemberRow,
+  AxMemberServiceRow,
+  AxRenewalRow,
+  AxSubscriptionMemberRow,
+  AxSubscriptionRenewalData,
+  AxUsageClient,
+} from './types'
 import { KST_OFFSET_MS, kstDateKey, startOfKstDay } from './kst'
 import { createLogger } from '../../core/logger'
 
@@ -38,50 +44,10 @@ const CLIENT_BY_VENDOR: Record<string, AxUsageClient> = {
   OpenAI: 'codex',
 }
 
-const meta: AxPanelMeta = {
-  id: 'subscription-renewals',
-  title: '구독 갱신',
-  description: '결제일 전 이번 주기 동안의 주간 한도 사용률 — 다음 달 구독을 정하는 근거',
-  source: '구독 로스터 + 수집기 주간 한도 보고',
-  visibility: 'admin',
-  parentId: 'client-usage',
-  usesPeriod: false,
-}
-
-/** 결제 주기 안에서 초기화된 한 회차 */
-export interface AxRenewalWeek {
-  /** 주간 한도 초기화 시각 (ISO 8601) */
-  resetsAt: string
-  /** 초기화 전에 받은 사용률의 최댓값 (0~100) */
-  usedPercent: number
-  /** 초기화 전 마지막 보고 시각 (ISO 8601). 초기화 시각과 멀수록 마지막 날 사용량이 덜 반영됐다 */
-  reportedAt: string
-}
-
-/** 구독 한 건의 갱신 결정 근거 */
-export interface AxRenewalRow {
-  ownerName: string
-  vendor: string
-  plan: string
-  amount: number
-  currency: string
-  renewalDay: number
-  /** 다음 결제일 (KST, YYYY-MM-DD) */
-  nextRenewal: string
-  /** 다음 결제일까지 남은 일수. 오늘이면 0 */
-  daysLeft: number
-  /** 이번 결제 주기에서 초기화된 회차들 (오래된 순) */
-  weeks: AxRenewalWeek[]
-  /** `weeks` 의 평균 사용률. 보고된 주가 없으면 null — 0과 구분한다 */
-  averagePercent: number | null
-  /** 아직 초기화되지 않은 회차의 사용률. 보고가 없으면 null */
-  currentPercent: number | null
-}
-
-/** 구독 갱신 패널 데이터 */
-export interface AxSubscriptionRenewalData {
-  /** 다음 결제일이 가까운 순 */
-  rows: AxRenewalRow[]
+/** 클라이언트 표시명 */
+const CLIENT_LABELS: Record<AxUsageClient, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
 }
 
 /** 계산에 필요한 구독 필드 */
@@ -105,6 +71,33 @@ export interface RenewalUsageInput {
   syncedAt: Date
   /** 값과 무관하게 이 회차를 마지막으로 받은 시각. 없으면 syncedAt (하루 단위 행) */
   seenAt?: Date
+}
+
+/** 초기화 전에 받은 보고 한 건 */
+type Report = { resetsAt: Date; usedPercent: number; reportedAt: Date; seenAt: Date }
+
+/** 한 회차. reportedAt 은 최댓값을 보고한 시각, lastSeenAt 은 가장 늦은 보고 시각(진행 중 회차 고르기용) */
+type Window = { resetsAt: Date; usedPercent: number; reportedAt: Date; lastSeenAt: Date }
+
+/**
+ * 같은 사람인지 가르는 이름 키 — 전체 이름, 괄호 앞 이름, 괄호 안 별칭
+ *
+ * 로스터는 `타타`, 계정 표시명은 `조효희 (타타)`처럼 적힌다.
+ * ponytail: 별칭이 겹치는 두 사람은 구분하지 못한다. 그런 일이 생기면 로스터에 user_id 를 둔다.
+ *
+ * @param name - 로스터 이름 또는 계정 표시명
+ */
+export function personNameKeys(name: string): string[] {
+  const trimmed = name.trim()
+  const match = trimmed.match(/^(.*?)\s*\(([^)]*)\)\s*$/)
+  const keys = match ? [trimmed, match[1].trim(), match[2].trim()] : [trimmed]
+  return keys.filter((key) => key.length > 0)
+}
+
+/** 두 이름이 같은 사람을 가리키는지 (이름 키가 하나라도 겹치면) */
+export function samePerson(a: string, b: string): boolean {
+  const keys = new Set(personNameKeys(a))
+  return personNameKeys(b).some((key) => keys.has(key))
 }
 
 /**
@@ -134,6 +127,40 @@ export function renewalCycle(renewalDay: number, now: Date): { previous: Date; n
   return { previous: renewalOn(year, nextMonth - 1, renewalDay), next: renewalOn(year, nextMonth, renewalDay) }
 }
 
+/** 다음 결제일까지 남은 일수. 오늘이면 0 */
+function daysUntil(next: Date, now: Date): number {
+  return Math.round((next.getTime() - startOfKstDay(now).getTime()) / DAY_MS)
+}
+
+/**
+ * 초기화 시각이 1시간 안으로 이어지는 보고를 한 회차로 묶는다(보고마다 초 단위로 흔들릴 수 있다).
+ * 정렬한 뒤 묶고 대표 시각은 회차의 마지막 초기화 시각으로 둬서, 입력 순서와 무관하게 같은 결과를 낸다.
+ *
+ * @param reports - 한 사람·한 클라이언트의 보고
+ */
+function clusterWindows(reports: Report[]): Window[] {
+  const sorted = [...reports].sort((a, b) => a.resetsAt.getTime() - b.resetsAt.getTime())
+  const windows: Window[] = []
+  for (const item of sorted) {
+    const last = windows[windows.length - 1]
+    if (last && item.resetsAt.getTime() - last.resetsAt.getTime() <= HOUR_MS) {
+      last.resetsAt = item.resetsAt
+      if (item.seenAt > last.lastSeenAt) last.lastSeenAt = item.seenAt
+      // 보고 시각은 최댓값을 보고한 행의 것만 쓴다 — 낮은 옛 스냅샷의 늦은 시각을 붙이면
+      // 최댓값을 더 늦게 확인한 것처럼 보인다
+      if (item.usedPercent > last.usedPercent) {
+        last.usedPercent = item.usedPercent
+        last.reportedAt = item.reportedAt
+      } else if (item.usedPercent === last.usedPercent && item.reportedAt > last.reportedAt) {
+        last.reportedAt = item.reportedAt
+      }
+    } else {
+      windows.push({ resetsAt: item.resetsAt, usedPercent: item.usedPercent, reportedAt: item.reportedAt, lastSeenAt: item.seenAt })
+    }
+  }
+  return windows
+}
+
 /**
  * 구독과 사용량 보고로 갱신 결정표를 만든다 (DB 없이 테스트하는 순수 함수)
  *
@@ -147,43 +174,16 @@ export function buildRenewalRows(
   now: Date
 ): AxRenewalRow[] {
   // (이름, 클라이언트) 별로 초기화 전에 받은 보고만 모은다
-  const byOwner = new Map<string, Array<{ resetsAt: Date; usedPercent: number; reportedAt: Date; seenAt: Date }>>()
+  const byOwner = new Map<string, { name: string; client: AxUsageClient; reports: Report[] }>()
   for (const row of usage) {
     if (!row.limitResetsAt || row.limitUsedPercent === null || row.syncedAt >= row.limitResetsAt) continue
     const usedPercent = Number(row.limitUsedPercent)
     if (!Number.isFinite(usedPercent)) continue
-    const key = `${row.memberName.trim()}\u0000${row.client}`
-    const list = byOwner.get(key) ?? []
-    list.push({ resetsAt: row.limitResetsAt, usedPercent, reportedAt: row.syncedAt, seenAt: row.seenAt ?? row.syncedAt })
-    byOwner.set(key, list)
-  }
-
-  // 초기화 시각이 1시간 안으로 이어지는 보고를 한 회차로 묶는다(보고마다 초 단위로 흔들릴 수 있다).
-  // 정렬한 뒤 묶고 대표 시각은 회차의 마지막 초기화 시각으로 둬서, 입력 순서와 무관하게 같은 결과를 낸다
-  // reportedAt 은 최댓값을 보고한 시각, lastSeenAt 은 그 회차의 가장 늦은 보고 시각(진행 중 회차 고르기용)
-  type Window = { resetsAt: Date; usedPercent: number; reportedAt: Date; lastSeenAt: Date }
-  const windowsByOwner = new Map<string, Window[]>()
-  for (const [key, list] of byOwner) {
-    list.sort((a, b) => a.resetsAt.getTime() - b.resetsAt.getTime())
-    const windows: Window[] = []
-    for (const item of list) {
-      const last = windows[windows.length - 1]
-      if (last && item.resetsAt.getTime() - last.resetsAt.getTime() <= HOUR_MS) {
-        last.resetsAt = item.resetsAt
-        if (item.seenAt > last.lastSeenAt) last.lastSeenAt = item.seenAt
-        // 보고 시각은 최댓값을 보고한 행의 것만 쓴다 — 낮은 옛 스냅샷의 늦은 시각을 붙이면
-        // 최댓값을 더 늦게 확인한 것처럼 보인다
-        if (item.usedPercent > last.usedPercent) {
-          last.usedPercent = item.usedPercent
-          last.reportedAt = item.reportedAt
-        } else if (item.usedPercent === last.usedPercent && item.reportedAt > last.reportedAt) {
-          last.reportedAt = item.reportedAt
-        }
-      } else {
-        windows.push({ resetsAt: item.resetsAt, usedPercent: item.usedPercent, reportedAt: item.reportedAt, lastSeenAt: item.seenAt })
-      }
-    }
-    windowsByOwner.set(key, windows)
+    const name = row.memberName.trim()
+    const key = `${name}\u0000${row.client}`
+    const entry = byOwner.get(key) ?? { name, client: row.client, reports: [] }
+    entry.reports.push({ resetsAt: row.limitResetsAt, usedPercent, reportedAt: row.syncedAt, seenAt: row.seenAt ?? row.syncedAt })
+    byOwner.set(key, entry)
   }
 
   const rows: AxRenewalRow[] = []
@@ -193,7 +193,12 @@ export function buildRenewalRows(
     if (!owner || owner.startsWith('공용') || !client || sub.renewalDay === null || sub.billingCycle !== 'monthly') continue
 
     const { previous, next } = renewalCycle(sub.renewalDay, now)
-    const mine = windowsByOwner.get(`${owner}\u0000${client}`) ?? []
+    // 같은 사람이 계정 표시명과 로스터 이름을 다르게 쓸 수 있어 별칭까지 맞는 보고를 모두 모은다
+    const mine = clusterWindows(
+      [...byOwner.values()]
+        .filter((entry) => entry.client === client && samePerson(owner, entry.name))
+        .flatMap((entry) => entry.reports)
+    )
 
     const weeks = mine
       .filter((week) => week.resetsAt >= previous && week.resetsAt <= now)
@@ -216,7 +221,7 @@ export function buildRenewalRows(
       currency: sub.currency,
       renewalDay: sub.renewalDay,
       nextRenewal: kstDateKey(next),
-      daysLeft: Math.round((next.getTime() - startOfKstDay(now).getTime()) / DAY_MS),
+      daysLeft: daysUntil(next, now),
       weeks,
       averagePercent: weeks.length > 0
         ? Math.round((weeks.reduce((sum, week) => sum + week.usedPercent, 0) / weeks.length) * 10) / 10
@@ -229,6 +234,82 @@ export function buildRenewalRows(
 }
 
 /**
+ * 구성원 × 서비스 한 줄 표를 만든다 (DB 없이 테스트하는 순수 함수)
+ *
+ * 구독 한 건마다 한 줄을 만들고 같은 사람·같은 클라이언트의 사용 보고를 붙인다.
+ * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등).
+ *
+ * @param usageMembers - 클라이언트 패널의 팀원별 최신 사용량
+ * @param subscriptions - 활성 구독 전체 (공용·연간 포함)
+ * @param renewals - 갱신 결정표 (사람 구독만)
+ * @param now - 기준 시각
+ * @returns 다음 결제일이 가까운 순. 결제일이 없는 줄은 뒤로
+ */
+export function buildMemberServiceRows(
+  usageMembers: AxClientUsageMemberRow[],
+  subscriptions: AxSubscriptionMemberRow[],
+  renewals: AxRenewalRow[],
+  now: Date
+): AxMemberServiceRow[] {
+  const used = new Set<AxClientUsageMemberRow>()
+  const toUsage = (member: AxClientUsageMemberRow): AxMemberServiceRow['usage'] => ({
+    plan: member.plan,
+    totalTokens: member.totalTokens,
+    sessions: member.sessions,
+    limitUsedPercent: member.limitUsedPercent,
+    limitResetsAt: member.limitResetsAt,
+    lastReportedAt: member.lastReportedAt,
+  })
+
+  const rows: AxMemberServiceRow[] = subscriptions.map((sub) => {
+    const owner = sub.ownerName?.trim() ?? ''
+    const client = CLIENT_BY_VENDOR[sub.vendor] ?? null
+    const shared = owner.startsWith('공용')
+    const member = client && owner && !shared
+      ? usageMembers.find((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
+      : undefined
+    if (member) used.add(member)
+    const renewal = renewals.find((row) =>
+      row.ownerName === owner && row.vendor === sub.vendor && row.plan === sub.plan && row.renewalDay === sub.renewalDay
+    )
+    const cycle = sub.renewalDay !== null && sub.billingCycle === 'monthly' ? renewalCycle(sub.renewalDay, now) : null
+
+    return {
+      name: member?.memberName ?? (owner || '미지정'),
+      service: client ? CLIENT_LABELS[client] : sub.vendor,
+      subscription: {
+        vendor: sub.vendor,
+        plan: sub.plan,
+        amount: sub.amount,
+        currency: sub.currency,
+        payer: sub.payer,
+        shared,
+        nextRenewal: cycle ? kstDateKey(cycle.next) : null,
+        daysLeft: cycle ? daysUntil(cycle.next, now) : null,
+      },
+      cycleWeeks: renewal?.weeks ?? [],
+      cycleAveragePercent: renewal?.averagePercent ?? null,
+      usage: member ? toUsage(member) : null,
+    }
+  })
+
+  for (const member of usageMembers) {
+    if (used.has(member)) continue
+    rows.push({
+      name: member.memberName,
+      service: CLIENT_LABELS[member.client],
+      subscription: null,
+      cycleWeeks: [],
+      cycleAveragePercent: null,
+      usage: toUsage(member),
+    })
+  }
+
+  const order = (row: AxMemberServiceRow) => row.subscription?.daysLeft ?? Number.POSITIVE_INFINITY
+  return rows.sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name, 'ko') || a.service.localeCompare(b.service))
+}
+
+/**
  * 회차별 최댓값 테이블(0045)을 사용량 보고 행 모양으로 읽는다.
  *
  * `ax_client_usage` 의 하루 단위 행은 같은 날 초기화되면 직전 값을 잃으므로 이 테이블이 보완한다.
@@ -238,7 +319,7 @@ export function buildRenewalRows(
  */
 async function loadLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
   try {
-    const rows = await db
+    return await db
       .select({
         memberName: axUsageLimitWindows.memberName,
         client: axUsageLimitWindows.client,
@@ -249,7 +330,6 @@ async function loadLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
       })
       .from(axUsageLimitWindows)
       .where(gte(axUsageLimitWindows.resetsAt, since))
-    return rows
   } catch (err) {
     log.warn('주간 한도 회차 테이블을 읽지 못해 하루 단위 보고만 씁니다', {
       error: err instanceof Error ? err.message : String(err),
@@ -259,14 +339,15 @@ async function loadLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
 }
 
 /**
- * 구독 갱신 패널 로드. 개인 식별 데이터라 관리자 전용이다.
+ * 구독 갱신 결정표를 읽는다. 개인 식별 데이터라 관리자 경로에서만 부른다.
+ *
+ * @returns 실패하면 null — 호출하는 쪽이 사용량 화면 전체를 막지 않게 한다
  */
-async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxSubscriptionRenewalData>> {
-  if (!ctx.isAdmin) return panelError(meta, '관리자만 볼 수 있습니다')
+export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | null> {
   try {
     const now = new Date()
     const since = new Date(now.getTime() - 40 * DAY_MS)
-    const [subscriptions, usage] = await Promise.all([
+    const [subscriptions, usage, windows] = await Promise.all([
       db.select().from(axSubscriptions).where(eq(axSubscriptions.status, 'active')),
       // 가장 긴 결제 주기(31일) + 진행 중인 한 주를 덮는다
       db
@@ -282,18 +363,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxSubscriptionRe
           isNotNull(axClientUsage.limitUsedPercent),
           gte(axClientUsage.limitResetsAt, since)
         )),
+      loadLimitWindows(since),
     ])
-
-    const rows = buildRenewalRows(subscriptions, [...usage, ...(await loadLimitWindows(since))], now)
-    const dueThisWeek = rows.filter((row) => row.daysLeft <= 7).length
-    return panelOk(meta, { rows }, [
-      { label: '7일 안 결제', value: dueThisWeek.toLocaleString('ko-KR'), hint: '건' },
-      { label: '대상 구독', value: rows.length.toLocaleString('ko-KR'), hint: '건' },
-    ])
+    return { rows: buildRenewalRows(subscriptions, [...usage, ...windows], now) }
   } catch (err) {
-    log.error('구독 갱신 패널 조회 실패', err)
-    return panelError(meta, '구독 갱신 데이터를 불러오지 못했습니다')
+    log.error('구독 갱신 데이터 조회 실패', err)
+    return null
   }
 }
-
-export const subscriptionRenewalsPanel: AxPanel<AxSubscriptionRenewalData> = { meta, load }

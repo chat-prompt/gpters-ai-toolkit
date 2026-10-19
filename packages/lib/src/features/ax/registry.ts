@@ -22,8 +22,6 @@ import { sharedSkillsPanel } from './shared-skills'
 import { skillDiffPanel } from './skill-diff'
 import { skillDuplicatesPanel } from './skill-duplicates'
 import { vercelDeploymentsPanel } from './vercel'
-import { subscriptionsPanel } from './subscriptions'
-import { subscriptionRenewalsPanel } from './subscription-renewals'
 import { clientUsagePanel } from './usage'
 import { agentActivityPanel } from './agent-activity'
 import { activityGrassPanel } from './activity-grass'
@@ -46,9 +44,8 @@ export const AX_PANELS: AxPanel[] = [
   sharedSkillsPanel,
   skillDiffPanel,
   skillDuplicatesPanel,
+  // 구독 현황·갱신은 별도 탭 없이 「클라이언트」 패널이 함께 불러 한 화면에 합친다
   clientUsagePanel,
-  subscriptionsPanel,
-  subscriptionRenewalsPanel,
   vercelDeploymentsPanel,
   // 탭으로 노출하지 않는 보조 패널 — 요약 하단 365일 잔디의 데이터 소스
   activityGrassPanel,

@@ -1,5 +1,7 @@
 /**
- * AX Dashboard — 팀원별 구독 패널
+ * AX Dashboard — 팀원별 구독 데이터
+ *
+ * 별도 탭이 아니라 「클라이언트」 패널(`usage.ts`)이 불러 사용량과 한 화면에 합친다.
  *
  * `import-ax-subscriptions.ts` 스크립트로 「지니파이(주) 결제 내역」 `구독 로스터` 탭에서 옮겨진
  * `ax_subscriptions` 테이블을 읽어 벤더별 집계와 (관리자 전용) 팀원별 상세를 보여준다.

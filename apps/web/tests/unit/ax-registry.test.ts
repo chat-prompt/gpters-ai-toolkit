@@ -44,9 +44,8 @@ describe('AX 패널 레지스트리', () => {
       'skill-opportunities', 'skill-retention', 'journey-insights', 'agent-activity', 'agent-incidents', 'agent-monitoring', 'incident-history', 'agent-observations', 'shared-skills',
       'skill-diff', 'skill-duplicates',
     ])
-    expect(metas.filter((meta) => meta.parentId === 'client-usage').map((meta) => meta.id)).toEqual([
-      'subscriptions', 'subscription-renewals',
-    ])
+    // 구독 현황·갱신은 하위 탭 없이 「클라이언트」 한 화면에 합쳤다
+    expect(metas.filter((meta) => meta.parentId === 'client-usage').map((meta) => meta.id)).toEqual([])
   })
 
   it('모든 패널이 메타데이터를 빠짐없이 채운다', () => {

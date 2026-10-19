@@ -790,6 +790,87 @@ export interface AxClientUsageData {
   members: AxClientUsageMemberRow[] | null
   /** 내부 계정 전원의 수집 참여 상태. 관리자에게만 채워지고 그 외에는 null */
   participation: AxUsageParticipationRow[] | null
+  /** 구독 현황 (벤더별 좌석·월 비용). 구독 데이터를 못 읽으면 null */
+  subscriptions: AxSubscriptionData | null
+  /**
+   * 구성원 × 서비스 한 줄 표 — 구독·결제 주기 사용률·현재 사용량을 한 사람 한 서비스로 합친다.
+   * 관리자에게만 채워지고 그 외에는 null
+   */
+  people: AxMemberServiceRow[] | null
+}
+
+/** 결제 주기 안에서 초기화된 주간 한도 한 회차 */
+export interface AxRenewalWeek {
+  /** 주간 한도 초기화 시각 (ISO 8601) */
+  resetsAt: string
+  /** 초기화 전에 받은 사용률의 최댓값 (0~100) */
+  usedPercent: number
+  /** 최댓값을 보고한 시각 (ISO 8601). 초기화 시각과 멀수록 마지막 날 사용량이 덜 반영됐다 */
+  reportedAt: string
+}
+
+/** 구독 한 건의 갱신 결정 근거 (뽀밋이 DM 도 같은 모양을 받는다) */
+export interface AxRenewalRow {
+  ownerName: string
+  vendor: string
+  plan: string
+  amount: number
+  currency: string
+  renewalDay: number
+  /** 다음 결제일 (KST, YYYY-MM-DD) */
+  nextRenewal: string
+  /** 다음 결제일까지 남은 일수. 오늘이면 0 */
+  daysLeft: number
+  /** 이번 결제 주기에서 초기화된 회차들 (오래된 순) */
+  weeks: AxRenewalWeek[]
+  /** `weeks` 의 평균 사용률. 보고된 회차가 없으면 null — 0과 구분한다 */
+  averagePercent: number | null
+  /** 아직 초기화되지 않은 회차의 사용률. 보고가 없으면 null */
+  currentPercent: number | null
+}
+
+/** 구독 갱신 결정표 데이터 */
+export interface AxSubscriptionRenewalData {
+  /** 다음 결제일이 가까운 순 */
+  rows: AxRenewalRow[]
+}
+
+/**
+ * 구성원 × 서비스 한 줄 (관리자 전용)
+ *
+ * 구독만 있고 사용 보고가 없으면 `usage` 가, 사용은 하는데 로스터에 구독이 없으면
+ * `subscription` 이 null 이다. 둘을 0으로 채우지 않는다 — 그 차이가 이 표의 신호다.
+ */
+export interface AxMemberServiceRow {
+  /** 표시 이름. 사용 보고가 있으면 계정 표시명, 없으면 로스터 이름 */
+  name: string
+  /** 서비스 표시명 (Claude Code / Codex / 그 밖의 벤더명) */
+  service: string
+  subscription: {
+    vendor: string
+    plan: string
+    amount: number
+    currency: string
+    payer: string | null
+    /** 로스터의 `공용(…)` 구독 */
+    shared: boolean
+    /** 다음 결제일 (KST, YYYY-MM-DD). 결제일이 없거나 연간 결제면 null */
+    nextRenewal: string | null
+    daysLeft: number | null
+  } | null
+  /** 이번 결제 주기에 초기화된 회차들. 구독이 없거나 사람 구독이 아니면 빈 배열 */
+  cycleWeeks: AxRenewalWeek[]
+  /** `cycleWeeks` 평균. 보고된 회차가 없으면 null */
+  cycleAveragePercent: number | null
+  usage: {
+    plan: string | null
+    totalTokens: number
+    sessions: number
+    /** 지금 주간 한도 사용률. 수집하지 못했으면 null */
+    limitUsedPercent: number | null
+    limitResetsAt: string | null
+    lastReportedAt: string | null
+  } | null
 }
 
 /** 에이전트 텔레메트리 소스. */

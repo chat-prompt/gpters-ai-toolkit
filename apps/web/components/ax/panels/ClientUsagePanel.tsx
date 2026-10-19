@@ -1,26 +1,29 @@
 'use client'
 
 /**
- * AX 대시보드 — 클라이언트 사용량 패널 본문
+ * AX 대시보드 — 클라이언트 패널 본문
  *
- * 위는 클라이언트별 요약, 가운데는 모델별 사용량, 아래는 팀원별 상세다.
+ * 사용량·구독 현황·구독 갱신을 한 화면에 둔다. 위에서부터
+ * 서비스별 요약(좌석·월 비용·사용량) → 구성원 × 구독(관리자) → 모델별 사용량 → 수집 참여 상태(접힘).
  *
  * Codex는 롤아웃, Claude Code는 statusline usage cache에서 주간 한도 스냅샷을 수집한다.
- * 한도 캐시를 얻지 못한 값은 0%가 아니라 "미수집"으로 명확히 밝힌다.
+ * 한도 캐시를 얻지 못한 값은 0%가 아니라 "미수집"으로, 구독은 있는데 사용 보고가 없으면
+ * "보고 없음"으로 밝힌다. 구독 없이 사용 중인 줄도 남긴다 — 그 차이가 다음 달 구독을 정하는 신호다.
  */
 
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
-  AxClientUsageMemberRow,
+  AxMemberServiceRow,
+  AxSubscriptionData,
   AxUsageParticipationRow,
   AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
 import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
-import { formatCount, formatDate, formatDateTime } from '../format'
+import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyMap } from '../format'
 
 /** 클라이언트 표시명 */
 const CLIENT_LABELS: Record<AxUsageClient, string> = {
@@ -36,6 +39,24 @@ const TH = 'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-m
 
 /** 표 본문칸 공통 여백 */
 const TD = 'py-2.5 px-3'
+
+/** 구독 벤더 → 사용량을 보고하는 클라이언트 */
+const CLIENT_BY_VENDOR: Record<string, AxUsageClient> = {
+  Anthropic: 'claude-code',
+  OpenAI: 'codex',
+}
+
+/**
+ * 이 기간(일)을 넘게 갱신되지 않았으면 구독 데이터를 오래된 자료로 본다.
+ *
+ * 구독 데이터의 정본은 「지니파이(주) 결제 내역」 `구독 로스터` 탭이고, 이 표는 사본이다.
+ * 갱신 담당과 주기가 **최하영 · 월 1회**로 확정돼서(DEV-4319, 2026-09-06) 기준을 그 주기에 맞춘다.
+ * 31일이면 "이번 달 갱신이 빠졌다"일 때만 켜진다.
+ */
+const STALE_AFTER_DAYS = 31
+
+/** 이 일수 안에 결제되면 경고 톤으로 표시한다 — 뽀밋이 DM 과 같은 기준 */
+const DUE_SOON_DAYS = 7
 
 /**
  * 토큰 수를 짧게 표기
@@ -53,9 +74,9 @@ function formatTokens(n: number): string {
 }
 
 /**
- * 클라이언트 사용량 패널 화면
+ * 클라이언트 패널 화면
  *
- * @param data - 사용량 집계. members가 null이면 팀원별 상세를 렌더하지 않는다
+ * @param data - 사용량·구독 집계. people·participation이 null이면(관리자 아님) 개인 영역을 그리지 않는다
  */
 export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) {
   return (
@@ -68,24 +89,36 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
           reportingMembers={data.reportingMembers}
           internalMembers={data.internalMembers}
         />
-        {data.byClient.length > 0 ? (
+        {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
+        {data.byClient.length > 0 || (data.subscriptions?.byVendor.length ?? 0) > 0 ? (
           <div className="mt-3">
-            <ClientTable rows={data.byClient} total={data.totalTokens} />
+            <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
           </div>
         ) : (
           <p className="mt-3 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
-            수집된 사용량이 없습니다.
+            수집된 사용량과 등록된 구독이 없습니다.
           </p>
         )}
       </div>
 
+      {/* 구성원 × 구독 — 관리자에게만 데이터가 내려온다 */}
+      {data.people !== null && <PeopleTable rows={data.people} />}
+
       {data.byModel.length > 0 && <ModelTable rows={data.byModel} total={data.totalTokens} />}
 
-      {/* 내부 계정 전수 수집 상태 — 관리자에게만 데이터가 내려온다 */}
-      {data.participation !== null && <ParticipationTable rows={data.participation} />}
-
-      {/* 팀원별 상세 — 관리자에게만 데이터가 내려온다 */}
-      {data.members !== null && <MemberTable members={data.members} />}
+      {/* 내부 계정 전수 수집 상태 — 관리자에게만 데이터가 내려온다. 매일 볼 표가 아니라 접어 둔다 */}
+      {data.participation !== null && (
+        <details className="group">
+          <summary className="cursor-pointer list-none font-mono text-[11px] tabular-nums text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+            <span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>
+            수집 참여 상태 · 정상 보고 {formatCount(data.participation.filter((row) => row.status === 'reporting').length)}/
+            {formatCount(data.participation.length)}명
+          </summary>
+          <div className="mt-3">
+            <ParticipationTable rows={data.participation} />
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -204,30 +237,51 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
 }
 
 /**
- * 클라이언트별 요약 표
+ * 서비스별 요약 표 — 구독(좌석·월 비용)과 사용량(인원·세션·토큰·주간 한도)을 한 줄에 둔다
  *
  * 한도 값이 있으면 퍼센트를, 최신 스냅샷이 없으면 "미수집"을 보여준다.
+ * 사용량을 보고하지 않는 벤더의 구독도 줄로 남긴다.
  *
- * @param rows - 클라이언트별 집계
+ * @param rows - 클라이언트별 사용량 집계
  * @param total - 전체 토큰 합계 (비율 계산용)
+ * @param subscriptions - 구독 현황. 못 읽었으면 null
  */
-function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: number }) {
+function ServiceTable({
+  rows,
+  total,
+  subscriptions,
+}: {
+  rows: AxClientUsageClientRow[]
+  total: number
+  subscriptions: AxSubscriptionData | null
+}) {
+  const vendors = subscriptions?.byVendor ?? []
+  const vendorFor = (client: AxUsageClient) =>
+    vendors.find((vendor) => CLIENT_BY_VENDOR[vendor.vendor] === client)
+  const unmatchedVendors = vendors.filter((vendor) => !rows.some((row) => CLIENT_BY_VENDOR[vendor.vendor] === row.client))
+  const clientsWithoutUsage = (['claude-code', 'codex'] as AxUsageClient[]).filter(
+    (client) => !rows.some((row) => row.client === client) && vendorFor(client)
+  )
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="border-b border-[var(--border-subtle)]">
-            <th className={`text-left ${TD} ${TH} w-[24%]`}>클라이언트</th>
-            <th className={`text-right ${TD} ${TH} w-20`}>인원</th>
+            <th className={`text-left ${TD} ${TH} w-[20%]`}>서비스</th>
+            <th className={`text-right ${TD} ${TH} w-16`}>좌석</th>
+            <th className={`text-right ${TD} ${TH}`}>월 비용</th>
+            <th className={`text-right ${TD} ${TH} w-16`}>인원</th>
             <th className={`text-right ${TD} ${TH} w-20`}>세션</th>
-            <th className={`text-right ${TD} ${TH} w-24`}>토큰</th>
+            <th className={`text-right ${TD} ${TH} w-20`}>토큰</th>
             <th className={`text-left ${TD} ${TH}`}>비중</th>
-            <th className={`text-right ${TD} ${TH} w-[18%]`}>주간 한도</th>
+            <th className={`text-right ${TD} ${TH} w-[14%]`}>주간 한도</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border-subtle)]">
           {rows.map((row) => {
             const ratio = total > 0 ? Math.min(1, row.totalTokens / total) : 0
+            const vendor = vendorFor(row.client)
             return (
               <tr
                 key={row.client}
@@ -235,6 +289,13 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
               >
                 <td className={`${TD} text-[var(--text-primary)]`}>
                   {CLIENT_LABELS[row.client] ?? row.client}
+                  {vendor && <span className="ml-2 text-xs text-[var(--text-muted)]">{vendor.vendor}</span>}
+                </td>
+                <td className={`text-right ${TD} font-mono tabular-nums text-[var(--text-secondary)]`}>
+                  {vendor ? formatCount(vendor.seats) : EMPTY}
+                </td>
+                <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-primary)]`}>
+                  {vendor ? formatMoneyMap(vendor.monthlyByCurrency) : EMPTY}
                 </td>
                 <td
                   className={`text-right ${TD} font-mono tabular-nums text-[var(--text-secondary)]`}
@@ -253,7 +314,7 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
                 </td>
                 <td className={TD}>
                   <div className="flex items-center gap-3">
-                    <div className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+                    <div className="h-1.5 min-w-[64px] flex-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
                       <div
                         className="h-full rounded-full bg-[var(--brand-primary)]"
                         style={{ width: `${ratio * 100}%` }}
@@ -270,6 +331,17 @@ function ClientTable({ rows, total }: { rows: AxClientUsageClientRow[]; total: n
               </tr>
             )
           })}
+          {/* 구독은 있는데 이번 주 사용 보고가 없는 클라이언트, 사용량을 보고하지 않는 벤더 */}
+          {[...clientsWithoutUsage.map((client) => ({ key: client, label: CLIENT_LABELS[client], vendor: vendorFor(client)! })),
+            ...unmatchedVendors.filter((vendor) => !CLIENT_BY_VENDOR[vendor.vendor]).map((vendor) => ({ key: vendor.vendor, label: vendor.vendor, vendor }))]
+            .map(({ key, label, vendor }) => (
+              <tr key={key} className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]">
+                <td className={`${TD} text-[var(--text-primary)]`}>{label}</td>
+                <td className={`text-right ${TD} font-mono tabular-nums text-[var(--text-secondary)]`}>{formatCount(vendor.seats)}</td>
+                <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-primary)]`}>{formatMoneyMap(vendor.monthlyByCurrency)}</td>
+                <td colSpan={5} className={`${TD} text-right text-xs text-[var(--text-muted)]`}>사용 보고 없음</td>
+              </tr>
+            ))}
         </tbody>
       </table>
 
@@ -381,94 +453,115 @@ function ModelTable({
   )
 }
 
+/** 구성원 × 구독 표 정렬 */
+type PeopleSort = 'renewal' | 'name'
+
 /**
- * 팀원별 사용량 상세 표 (관리자 전용) — 최신 한도 스냅샷이 없으면 미수집으로 밝힌다
+ * 구성원 × 구독 표 (관리자 전용)
  *
- * @param members - 팀원별 사용량
+ * 한 줄 = 한 사람의 한 서비스. 구독(결제일·금액), 이번 결제 주기의 주간 한도 평균,
+ * 지금 주간 한도와 최근 사용량을 함께 둔다. 구독만 있고 사용 보고가 없는 줄과
+ * 구독 없이 사용하는 줄을 따로 세어 위에 밝힌다.
+ *
+ * @param rows - 다음 결제일이 가까운 순으로 정렬된 줄
  */
-function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
-  if (members.length === 0) {
+function PeopleTable({ rows }: { rows: AxMemberServiceRow[] }) {
+  const [sort, setSort] = useState<PeopleSort>('renewal')
+
+  if (rows.length === 0) {
     return (
       <p className="border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
-        팀원별 사용 내역이 없습니다.
+        구성원별 구독·사용 내역이 없습니다.
       </p>
     )
   }
 
-  const sorted = [...members].sort(
-    (a, b) =>
-      a.memberName.localeCompare(b.memberName, 'ko') || b.totalTokens - a.totalTokens
-  )
+  const sorted = sort === 'renewal'
+    ? rows
+    : [...rows].sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.service.localeCompare(b.service))
+  const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
+  const unused = rows.filter((row) => row.subscription && !row.subscription.shared && !row.usage).length
+  const unsubscribed = rows.filter((row) => !row.subscription).length
 
   return (
     <div>
-      <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        팀원별 상세 {formatCount(sorted.length)}건
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+          구성원 × 구독 {formatCount(rows.length)}줄 · {DUE_SOON_DAYS}일 안 결제 {formatCount(dueSoon)} · 사용 보고 없는 구독{' '}
+          {formatCount(unused)} · 구독 없이 사용 {formatCount(unsubscribed)}
+        </p>
+        <div role="group" aria-label="정렬" className="flex rounded-full border border-[var(--border-subtle)] p-0.5 text-[11px]">
+          {(['renewal', 'name'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={sort === value}
+              onClick={() => setSort(value)}
+              className={`rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${
+                sort === value
+                  ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              {value === 'renewal' ? '결제일순' : '이름순'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="mt-2 max-w-[72ch] text-xs leading-relaxed text-[var(--text-secondary)]">
+        주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.
+        수집기는 하루 한 번 보고하므로 마지막 날 사용량은 덜 잡힐 수 있습니다 — 값에 마우스를 올리면 회차별 값이 보입니다.
       </p>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[920px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
-              <th className={`text-left ${TD} ${TH} w-[16%]`}>사용자</th>
-              <th className={`text-left ${TD} ${TH} w-[18%]`}>클라이언트</th>
-              <th className={`text-left ${TD} ${TH} w-[20%]`}>플랜</th>
-              <th className={`text-right ${TD} ${TH}`}>세션</th>
+              <th className={`text-left ${TD} ${TH}`}>사용자</th>
+              <th className={`text-left ${TD} ${TH}`}>서비스 · 플랜</th>
+              <th className={`text-right ${TD} ${TH}`}>다음 결제</th>
+              <th className={`text-right ${TD} ${TH}`}>금액</th>
+              <th className={`text-right ${TD} ${TH}`}>이번 주 한도</th>
+              <th className={`text-right ${TD} ${TH}`}>주기 평균</th>
               <th className={`text-right ${TD} ${TH}`}>토큰</th>
-              <th className={`text-right ${TD} ${TH}`}>주간 한도</th>
-              <th className={`text-right ${TD} ${TH}`}>리셋</th>
               <th className={`text-right ${TD} ${TH}`}>마지막 보고</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
-            {sorted.map((member, index) => {
-              const previous = index > 0 ? sorted[index - 1] : null
-              // 같은 사람이 이어지는 줄은 이름을 비운다 — 사람 단위 묶음이 보이게
-              const repeated = previous !== null && previous.memberName === member.memberName
-
+            {sorted.map((row, index) => {
+              // 이름순에서는 같은 사람이 이어지는 줄의 이름을 비워 사람 단위 묶음이 보이게 한다
+              const repeated = sort === 'name' && index > 0 && sorted[index - 1].name === row.name
               return (
                 <tr
-                  key={`${member.userId ?? `legacy:${member.memberName}`}-${member.client}`}
+                  key={`${row.name}-${row.service}-${row.subscription?.plan ?? 'none'}-${index}`}
                   className="transition-colors duration-200 hover:bg-[var(--bg-secondary)]"
                 >
-                  <td className={`${TD} text-[var(--text-primary)]`}>
-                    {repeated ? '' : member.memberName}
+                  <td className={`${TD} text-[var(--text-primary)] whitespace-nowrap`}>{repeated ? '' : row.name}</td>
+                  <td className={`${TD} text-[var(--text-secondary)] whitespace-nowrap`}>
+                    <PlanCell row={row} />
                   </td>
-                  <td className={`${TD} text-[var(--text-secondary)]`}>
-                    {CLIENT_LABELS[member.client] ?? member.client}
+                  <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
+                    <RenewalCell row={row} />
                   </td>
-                  <td className={`${TD} text-[var(--text-secondary)]`}>{member.plan ?? EMPTY}</td>
-                  <td
-                    className={`text-right ${TD} font-mono tabular-nums text-[var(--text-secondary)]`}
-                  >
-                    {formatCount(member.sessions)}
+                  <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-secondary)]`}>
+                    {row.subscription ? formatMoney(row.subscription.amount, row.subscription.currency) : EMPTY}
                   </td>
-                  <td
-                    className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-primary)]`}
-                  >
-                    {formatTokens(member.totalTokens)}
+                  <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
+                    <CurrentLimitCell row={row} />
                   </td>
-                  <td
-                    className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap ${
-                      member.limitUsedPercent !== null && member.limitUsedPercent >= 80
-                        ? 'text-[var(--accent-orange)]'
-                        : 'text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    {member.limitUsedPercent !== null
-                      ? `${member.limitUsedPercent}%`
-                      : '미수집'}
+                  <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
+                    <CycleAverageCell row={row} />
                   </td>
-                  <td
-                    className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-muted)]`}
-                  >
-                    {member.limitResetsAt !== null
-                      ? formatDateTime(member.limitResetsAt)
-                      : '미수집'}
+                  <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-secondary)]`}>
+                    {row.usage ? formatTokens(row.usage.totalTokens) : EMPTY}
                   </td>
-                  <td
-                    className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap text-[var(--text-muted)]`}
-                  >
-                    {member.lastReportedAt !== null ? formatDate(member.lastReportedAt) : EMPTY}
+                  <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
+                    {row.usage?.lastReportedAt ? (
+                      <span className="text-[var(--text-muted)]">{formatDate(row.usage.lastReportedAt)}</span>
+                    ) : row.subscription && !row.subscription.shared ? (
+                      <span className="text-xs text-[var(--accent-orange)]">보고 없음</span>
+                    ) : (
+                      <span className="text-[var(--text-muted)]">{EMPTY}</span>
+                    )}
                   </td>
                 </tr>
               )
@@ -477,6 +570,72 @@ function MemberTable({ members }: { members: AxClientUsageMemberRow[] }) {
         </table>
       </div>
     </div>
+  )
+}
+
+/** 서비스 · 플랜 칸 — 구독 플랜, 대신 결제하는 사람, 구독 없이 쓰는 경우의 실제 플랜 */
+function PlanCell({ row }: { row: AxMemberServiceRow }) {
+  if (!row.subscription) {
+    return (
+      <>
+        {row.service} {row.usage?.plan ?? ''}
+        <span className="ml-2 text-xs text-[var(--text-muted)]">구독 없음</span>
+      </>
+    )
+  }
+  const payer = row.subscription.payer
+  return (
+    <>
+      {row.service} {row.subscription.plan}
+      {row.subscription.shared && <span className="ml-2 text-xs text-[var(--text-muted)]">공용</span>}
+      {payer && payer !== '본인' && <span className="ml-2 text-xs text-[var(--text-muted)]">{payer} 결제</span>}
+    </>
+  )
+}
+
+/** 다음 결제 칸 — KST 날짜 문자열을 그대로 쓴다(Date 로 바꾸면 브라우저 시간대에 따라 하루가 밀린다) */
+function RenewalCell({ row }: { row: AxMemberServiceRow }) {
+  const nextRenewal = row.subscription?.nextRenewal
+  const daysLeft = row.subscription?.daysLeft
+  if (!nextRenewal || daysLeft == null) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  const [, month, day] = nextRenewal.split('-').map(Number)
+  return (
+    <>
+      <span className="text-[var(--text-secondary)]">{`${month}. ${day}.`}</span>{' '}
+      <span className={daysLeft <= DUE_SOON_DAYS ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}>
+        {daysLeft === 0 ? '오늘' : `D-${daysLeft}`}
+      </span>
+    </>
+  )
+}
+
+/** 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집 */
+function CurrentLimitCell({ row }: { row: AxMemberServiceRow }) {
+  if (!row.usage) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  const percent = row.usage.limitUsedPercent
+  if (percent === null) return <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
+  return (
+    <span
+      title={row.usage.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
+      className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
+    >
+      {percent}%
+    </span>
+  )
+}
+
+/** 주기 평균 칸 — 회차 수가 표본 크기다. 회차별 값은 호버로 */
+function CycleAverageCell({ row }: { row: AxMemberServiceRow }) {
+  if (!row.subscription || row.subscription.shared) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  if (row.cycleAveragePercent === null) return <span className="text-[11px] text-[var(--text-muted)]">회차 없음</span>
+  const detail = row.cycleWeeks
+    .map((week) => `${formatDateTime(week.resetsAt)} 초기화 ${week.usedPercent}% (마지막 보고 ${formatDateTime(week.reportedAt)})`)
+    .join('\n')
+  return (
+    <span title={detail}>
+      <span className="text-[var(--text-primary)]">{row.cycleAveragePercent}%</span>{' '}
+      <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{row.cycleWeeks.length}회</span>
+    </span>
   )
 }
 
@@ -523,4 +682,44 @@ function PeriodNotice({
       {syncedAt !== null && ` · 수집 ${formatDate(syncedAt)}`}
     </p>
   )
+}
+
+/**
+ * 구독 데이터 기준 시각 안내
+ *
+ * 구독 숫자는 시트에서 마지막으로 넘어온 시점의 것이다.
+ * 오래됐거나 넘어온 적이 없으면 배경색이 아니라 글자색만 경고 톤으로 바꾼다.
+ *
+ * @param syncedAt - 시트에서 마지막으로 반영된 시각 (ISO 8601). 이력이 없으면 null
+ */
+export function SyncedAtNotice({ syncedAt }: { syncedAt: string | null }) {
+  const daysAgo = syncedAt === null ? null : daysSince(syncedAt)
+  const isStale = daysAgo === null || daysAgo >= STALE_AFTER_DAYS
+
+  const label =
+    syncedAt === null || daysAgo === null
+      ? '구독 시트 갱신 이력 없음'
+      : `구독 시트 반영 ${formatDate(syncedAt)}${daysAgo >= STALE_AFTER_DAYS ? ` · ${daysAgo}일 지남` : ''}`
+
+  return (
+    <p
+      className={`mt-1 font-mono text-[11px] tabular-nums ${
+        isStale ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'
+      }`}
+    >
+      {label}
+    </p>
+  )
+}
+
+/**
+ * 오늘까지 며칠 지났는지
+ *
+ * @param iso - ISO 8601 시각 문자열
+ * @returns 경과 일수. 파싱할 수 없으면 null
+ */
+function daysSince(iso: string): number | null {
+  const time = new Date(iso).getTime()
+  if (Number.isNaN(time)) return null
+  return Math.max(0, Math.floor((Date.now() - time) / 86_400_000))
 }

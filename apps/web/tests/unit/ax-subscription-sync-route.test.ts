@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   renewals: vi.fn(),
 }))
 
-vi.mock('@/lib/features/ax', () => ({ subscriptionRenewalsPanel: { load: mocks.renewals } }))
+vi.mock('@/lib/features/ax', () => ({ loadRenewalData: mocks.renewals }))
 
 vi.mock('drizzle-orm', () => ({
   eq: (_column: unknown, value: unknown) => ({ eq: value }),
@@ -226,20 +226,16 @@ describe('GET /api/ax/subscription-sync (구독 갱신 결정표)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('AX_SUBSCRIPTION_SYNC_TOKEN_SHA256', sha256(TOKEN))
-    mocks.renewals.mockResolvedValue({
-      status: 'ok',
-      generatedAt: '2026-10-19T03:00:00.000Z',
-      data: { rows: [{ ownerName: '홍길동', daysLeft: 2 }, { ownerName: '김철수', daysLeft: 20 }] },
-    })
+    mocks.renewals.mockResolvedValue({ rows: [{ ownerName: '홍길동', daysLeft: 2 }, { ownerName: '김철수', daysLeft: 20 }] })
   })
   afterEach(() => vi.unstubAllEnvs())
 
-  it('같은 토큰으로만 읽고, 관리자 범위로 불러온다', async () => {
+  it('같은 토큰으로만 읽는다', async () => {
     expect((await get('', null)).status).toBe(401)
     expect((await get('', 'wrong')).status).toBe(401)
     const response = await get()
     expect(response.status).toBe(200)
-    expect(mocks.renewals).toHaveBeenCalledWith({ days: 7, isAdmin: true })
+    expect(mocks.renewals).toHaveBeenCalledTimes(1)
     expect((await response.json()).rows).toHaveLength(2)
   })
 
@@ -251,8 +247,8 @@ describe('GET /api/ax/subscription-sync (구독 갱신 결정표)', () => {
     expect((await get('?withinDays=32')).status).toBe(400)
   })
 
-  it('패널 조회가 실패하면 500', async () => {
-    mocks.renewals.mockResolvedValue({ status: 'error', data: null })
+  it('조회가 실패하면 500', async () => {
+    mocks.renewals.mockResolvedValue(null)
     expect((await get()).status).toBe(500)
   })
 })

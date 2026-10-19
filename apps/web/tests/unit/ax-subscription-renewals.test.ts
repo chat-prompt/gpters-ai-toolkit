@@ -9,7 +9,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-const { buildRenewalRows, renewalCycle } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
+const { buildMemberServiceRows, buildRenewalRows, personNameKeys, renewalCycle, samePerson } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
 
 /** KST 시각 → Date */
 const kst = (text: string) => new Date(`${text}+09:00`)
@@ -197,5 +197,79 @@ describe('buildRenewalRows', () => {
   it('결제일이 가까운 순으로 정렬한다', () => {
     const rows = buildRenewalRows([sub({ ownerName: '나중', renewalDay: 5 }), sub({ ownerName: '먼저', renewalDay: 20 })], [], now)
     expect(rows.map((row) => [row.ownerName, row.daysLeft])).toEqual([['먼저', 1], ['나중', 17]])
+  })
+})
+
+describe('같은 사람 판정 — 로스터 이름과 계정 표시명', () => {
+  it('괄호 앞 이름과 괄호 안 별칭을 모두 같은 사람으로 본다', () => {
+    expect(personNameKeys('조효희 (타타)')).toEqual(['조효희 (타타)', '조효희', '타타'])
+    expect(samePerson('타타', '조효희 (타타)')).toBe(true)
+    expect(samePerson('박수오', '박수오 (소파)')).toBe(true)
+    expect(samePerson('박수오', '박수진')).toBe(false)
+  })
+
+  it('갱신 결정표도 별칭으로 보고를 잇는다', () => {
+    const now = kst('2026-10-19T12:00:00')
+    const [row] = buildRenewalRows([sub({ ownerName: '타타' })], [
+      report('2026-10-14T10:00:00', '2026-10-13T09:00:00', 66, { memberName: '조효희 (타타)' }),
+    ], now)
+    expect(row.averagePercent).toBe(66)
+  })
+})
+
+describe('buildMemberServiceRows', () => {
+  const now = kst('2026-10-19T12:00:00')
+  const member = (overrides: Record<string, unknown> = {}) => ({
+    userId: 'u1', memberName: '홍길동', client: 'claude-code' as const, plan: 'Claude Max 20x',
+    totalTokens: 1000, sessions: 3, limitUsedPercent: 40, limitResetsAt: null, lastReportedAt: '2026-10-19T00:00:00.000Z',
+    ...overrides,
+  })
+  const subscription = (overrides: Record<string, unknown> = {}) => ({
+    ownerName: '홍길동', vendor: 'Anthropic', plan: 'Max20x', amount: 200, currency: 'USD',
+    billingCycle: 'monthly' as const, renewalDay: 25, payer: '본인', status: 'active' as const,
+    ...overrides,
+  })
+
+  it('구독에 같은 사람·같은 클라이언트의 사용량과 결제 주기 평균을 붙인다', () => {
+    const renewals = buildRenewalRows([subscription()], [
+      report('2026-10-14T10:00:00', '2026-10-13T09:00:00', 70),
+    ], now)
+    const [row] = buildMemberServiceRows([member()], [subscription()], renewals, now)
+    expect(row).toMatchObject({
+      name: '홍길동',
+      service: 'Claude Code',
+      subscription: { plan: 'Max20x', nextRenewal: '2026-10-25', daysLeft: 6, shared: false },
+      cycleAveragePercent: 70,
+      usage: { limitUsedPercent: 40, totalTokens: 1000 },
+    })
+  })
+
+  it('사용 보고 없는 구독, 구독 없는 사용, 공용 구독을 각각 한 줄로 남긴다', () => {
+    const rows = buildMemberServiceRows(
+      [member({ memberName: '김철수', client: 'codex', plan: 'plus' })],
+      [subscription(), subscription({ ownerName: '공용(뽀짝이)', renewalDay: 10 })],
+      [],
+      now
+    )
+    expect(rows.map((row) => [row.name, row.service, row.subscription?.shared ?? null, row.usage !== null])).toEqual([
+      ['홍길동', 'Claude Code', false, false],
+      ['공용(뽀짝이)', 'Claude Code', true, false],
+      ['김철수', 'Codex', null, true],
+    ])
+  })
+
+  it('한 사용 보고는 한 구독에만 붙는다', () => {
+    const rows = buildMemberServiceRows(
+      [member()],
+      [subscription(), subscription({ plan: 'Max5x', renewalDay: 3 })],
+      [],
+      now
+    )
+    expect(rows.filter((row) => row.usage !== null)).toHaveLength(1)
+  })
+
+  it('연간 결제·결제일 없는 구독은 다음 결제일 없이 뒤로 보낸다', () => {
+    const rows = buildMemberServiceRows([], [subscription({ billingCycle: 'yearly' }), subscription({ ownerName: '이영희', renewalDay: 3 })], [], now)
+    expect(rows.map((row) => [row.name, row.subscription?.daysLeft ?? null])).toEqual([['이영희', 15], ['홍길동', null]])
   })
 })

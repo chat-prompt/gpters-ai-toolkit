@@ -8,7 +8,7 @@
  * 운영 DB 자격 증명을 봇 호스트에 두지 않으려고 만든 좁은 쓰기 경로다(DEV-4486).
  * 카드 정보가 서버로 오지 않게 `slack_id`·`card_last4` 열이 있는 CSV 는 거절한다.
  *
- * `GET` 은 같은 토큰으로 구독 갱신 결정표(대시보드 「구독 갱신」 패널과 같은 데이터)를 돌려준다.
+ * `GET` 은 같은 토큰으로 구독 갱신 결정표(대시보드 「클라이언트」 구성원 × 구독 표와 같은 계산)를 돌려준다.
  * 뽀밋이가 결제일 전에 읽어 DM 으로 보낸다(EDU-11519). `withinDays` 로 결제일이 가까운 것만 거른다.
  */
 
@@ -17,7 +17,7 @@ import { eq, inArray } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, axSubscriptions } from '@/lib/db'
-import { subscriptionRenewalsPanel } from '@/lib/features/ax'
+import { loadRenewalData } from '@/lib/features/ax'
 import {
   parseCsvLine,
   parseRosterCsv,
@@ -88,10 +88,10 @@ export async function GET(request: NextRequest) {
     return error('withinDays must be an integer between 0 and 31', 400)
   }
 
-  const result = await subscriptionRenewalsPanel.load({ days: 7, isAdmin: true })
-  if (result.status !== 'ok' || !result.data) return error('Failed to load subscription renewals', 500)
-  const rows = result.data.rows.filter((row) => row.daysLeft <= withinDays)
-  return NextResponse.json({ generatedAt: result.generatedAt, withinDays, rows }, { headers: NO_STORE })
+  const data = await loadRenewalData()
+  if (!data) return error('Failed to load subscription renewals', 500)
+  const rows = data.rows.filter((row) => row.daysLeft <= withinDays)
+  return NextResponse.json({ generatedAt: new Date().toISOString(), withinDays, rows }, { headers: NO_STORE })
 }
 
 export async function POST(request: NextRequest) {

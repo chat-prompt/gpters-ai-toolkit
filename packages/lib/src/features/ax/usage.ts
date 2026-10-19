@@ -30,6 +30,8 @@ import type {
 } from './types'
 import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from './types'
 import { panelOk, panelError, panelNotConfigured } from './panel'
+import { subscriptionsPanel } from './subscriptions'
+import { buildMemberServiceRows, loadRenewalData } from './subscription-renewals'
 import { createLogger } from '../../core/logger'
 
 const log = createLogger('ax-usage')
@@ -37,8 +39,8 @@ const log = createLogger('ax-usage')
 const meta: AxPanelMeta = {
   id: 'client-usage',
   title: '클라이언트',
-  description: '팀원별 AI 코딩 도구 사용량과 주간 한도 소진율',
-  source: '각 팀원 로컬 수집기',
+  description: '팀원별 AI 코딩 도구 사용량·주간 한도와 구독·결제 주기 사용률',
+  source: '각 팀원 로컬 수집기 + 구독 로스터',
   visibility: 'org',
   usesPeriod: false,
 }
@@ -363,7 +365,14 @@ function formatTokens(n: number): string {
  */
 async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageData>> {
   try {
-    const [allRows, internal] = await Promise.all([loadUsageRows(), loadInternalMembers()])
+    // 구독은 같은 화면의 다른 절이다. 구독 쪽이 실패해도 사용량은 그대로 보여준다(각 로더가 오류를 삼킨다)
+    const [allRows, internal, subscriptionResult, renewalData] = await Promise.all([
+      loadUsageRows(),
+      loadInternalMembers(),
+      subscriptionsPanel.load(ctx),
+      ctx.isAdmin ? loadRenewalData() : Promise.resolve(null),
+    ])
+    const subscriptions = subscriptionResult.status === 'ok' ? subscriptionResult.data : null
     const internalMemberRows = internal?.members ?? null
     // 공용 계정은 분모·참여 상태뿐 아니라 사용량·활성 인원에서도 뺀다 — 어느 한쪽에만
     // 남으면 오류 복구 경로에서 활성 인원이 전체 구성원보다 많아진다.
@@ -521,6 +530,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
         byModel,
         members,
         participation,
+        subscriptions,
+        people: members !== null
+          ? buildMemberServiceRows(members, subscriptions?.members ?? [], renewalData?.rows ?? [], new Date())
+          : null,
       },
       [
         ...(internalMembers !== null
@@ -542,6 +555,9 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
           value: activeReporterCount.toLocaleString('ko-KR'),
           hint: '명',
         },
+        ...(subscriptionResult.status === 'ok' && subscriptionResult.highlights?.[0]
+          ? [subscriptionResult.highlights[0]]
+          : []),
       ]
     )
   } catch (err) {
