@@ -285,21 +285,29 @@ function ServiceShareGauges({
   const usage = (client: AxUsageClient) => rows.find((row) => row.client === client)
   const vendor = (client: AxUsageClient) =>
     subscriptions?.byVendor.find((item) => CLIENT_BY_VENDOR[item.vendor] === client)
-  // 통화가 섞이면 환율로 합치지 않으므로 같은 단일 통화일 때만 비용 게이지를 그린다
-  const singleCurrency = (client: AxUsageClient) => {
+  // 통화가 섞이면 환율로 합치지 않으므로 두 쪽이 같은 단일 통화일 때만 비용 게이지를 그린다.
+  // 구독이 아예 없는 쪽만 0으로 본다 — 통화가 여럿인 쪽을 0으로 바꾸면 거짓 0%/100% 가 된다
+  const cost = (client: AxUsageClient): { currency: string; amount: number } | 'none' | 'mixed' => {
     const entries = Object.entries(vendor(client)?.monthlyByCurrency ?? {})
-    return entries.length === 1 ? entries[0] : null
+    if (entries.length === 0) return 'none'
+    return entries.length === 1 ? { currency: entries[0][0], amount: entries[0][1] } : 'mixed'
   }
-  // 한쪽에만 구독이 있으면 그쪽 통화로 다른 쪽을 0으로 본다(합칠 통화가 하나뿐이라 환산이 없다)
-  const claudeCost = singleCurrency('claude-code') ?? (singleCurrency('codex') ? [singleCurrency('codex')![0], 0] as const : null)
-  const codexCost = singleCurrency('codex') ?? (claudeCost ? [claudeCost[0], 0] as const : null)
+  const claudeCost = cost('claude-code')
+  const codexCost = cost('codex')
+  const costCurrency =
+    claudeCost === 'mixed' || codexCost === 'mixed'
+      ? null
+      : claudeCost !== 'none' && codexCost !== 'none'
+        ? (claudeCost.currency === codexCost.currency ? claudeCost.currency : null)
+        : claudeCost !== 'none' ? claudeCost.currency : codexCost !== 'none' ? codexCost.currency : null
+  const amountOf = (value: ReturnType<typeof cost>) => (typeof value === 'object' ? value.amount : 0)
 
   const items: ShareItem[] = [
     ...(subscriptions
       ? [{ label: '좌석', claude: vendor('claude-code')?.seats ?? 0, codex: vendor('codex')?.seats ?? 0, format: formatCount }]
       : []),
-    ...(claudeCost && codexCost && claudeCost[0] === codexCost[0]
-      ? [{ label: '월 비용', claude: claudeCost[1], codex: codexCost[1], format: (value: number) => formatMoney(value, claudeCost[0]).replace(/\.00$/, '') }]
+    ...(costCurrency
+      ? [{ label: '월 비용', claude: amountOf(claudeCost), codex: amountOf(codexCost), format: (value: number) => formatMoney(value, costCurrency).replace(/\.00$/, '') }]
       : []),
     { label: '사용 인원', claude: usage('claude-code')?.members ?? 0, codex: usage('codex')?.members ?? 0, format: formatCount },
     { label: '세션', claude: usage('claude-code')?.sessions ?? 0, codex: usage('codex')?.sessions ?? 0, format: formatCount },
@@ -373,7 +381,7 @@ export function gaugeSegments(share: number): Array<{ client: AxUsageClient; fro
  */
 export function formatShare(share: number): string {
   if (share > 0 && share < 0.005) return '<1%'
-  if (share < 1 && share > 0.995) return '>99%'
+  if (share < 1 && share >= 0.995) return '>99%'
   return `${Math.round(share * 100)}%`
 }
 

@@ -72,6 +72,26 @@ describe('클라이언트 화면', () => {
   })
 })
 
+describe('월 비용 게이지', () => {
+  const withVendors = (byVendor: NonNullable<AxClientUsageData['subscriptions']>['byVendor']) => {
+    const base = data([])
+    return { ...base, subscriptions: { ...base.subscriptions!, byVendor } }
+  }
+
+  it('한쪽에만 구독이 있으면 그 통화로 100% 를 그린다', () => {
+    render(<ClientUsagePanel days={7} data={withVendors([{ vendor: 'Anthropic', seats: 3, monthlyByCurrency: { USD: 300 } }])} />)
+    expect(screen.getByRole('img', { name: /월 비용 · Claude Code US\$300 \(100%\)/ })).toBeInTheDocument()
+  })
+
+  it('통화가 섞인 쪽이 있으면 0으로 바꾸지 않고 비용 게이지를 뺀다', () => {
+    render(<ClientUsagePanel days={7} data={withVendors([
+      { vendor: 'Anthropic', seats: 3, monthlyByCurrency: { USD: 300, KRW: 20000 } },
+      { vendor: 'OpenAI', seats: 1, monthlyByCurrency: { USD: 100 } },
+    ])} />)
+    expect(screen.queryByRole('img', { name: /월 비용/ })).toBeNull()
+  })
+})
+
 describe('서비스 비중 게이지 기하', () => {
   it('작은 몫도 조각이 사라지지 않는다 — 1:99, 3:97, 97:3, 99:1', () => {
     for (const share of [0.01, 0.03, 0.97, 0.99]) {
@@ -91,6 +111,7 @@ describe('서비스 비중 게이지 기하', () => {
   it('0·100 에 붙은 양수 몫을 0%·100% 로 쓰지 않는다', () => {
     expect(formatShare(0.004)).toBe('<1%')
     expect(formatShare(0.996)).toBe('>99%')
+    expect(formatShare(0.995)).toBe('>99%')
     expect(formatShare(0)).toBe('0%')
     expect(formatShare(0.61)).toBe('61%')
   })
