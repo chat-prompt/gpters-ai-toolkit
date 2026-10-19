@@ -11,7 +11,7 @@
  * "보고 없음"으로 밝힌다. 구독 없이 사용 중인 줄도 남긴다 — 그 차이가 다음 달 구독을 정하는 신호다.
  */
 
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
@@ -92,22 +92,32 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
   return (
     <div className="space-y-10">
       <div>
-        <PeriodNotice
-          periodStart={data.periodStart}
-          periodEnd={data.periodEnd}
-          syncedAt={data.syncedAt}
-          reportingMembers={data.reportingMembers}
-          internalMembers={data.internalMembers}
-        />
-        {data.subscriptions ? (
-          <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />
-        ) : (
+        {/* 상태 경고(구독 조회 실패·시트 갱신 지연)는 늘 보이게, 평소의 기준 시각·읽는 법은 도움말에 둔다 */}
+        {!data.subscriptions ? (
           // 구독을 못 읽으면 좌석·월 비용이 "—"로 남는다 — 구독이 없는 것과 구분되게 밝힌다
-          <p className="mt-1 font-mono text-[11px] text-[var(--accent-orange)]">구독 데이터를 불러오지 못했습니다</p>
-        )}
+          <p className="mb-3 font-mono text-[11px] text-[var(--accent-orange)]">구독 데이터를 불러오지 못했습니다</p>
+        ) : isSheetStale(data.subscriptions.syncedAt) ? (
+          <div className="mb-3"><SyncedAtNotice syncedAt={data.subscriptions.syncedAt} /></div>
+        ) : null}
         {data.byClient.length > 0 || (data.subscriptions?.byVendor.length ?? 0) > 0 ? (
           <div className="mt-3">
-            <ServiceShareGauges rows={data.byClient} subscriptions={data.subscriptions} />
+            <ServiceShareGauges
+              rows={data.byClient}
+              subscriptions={data.subscriptions}
+              info={
+                <>
+                  <PeriodNotice
+                    periodStart={data.periodStart}
+                    periodEnd={data.periodEnd}
+                    syncedAt={data.syncedAt}
+                    reportingMembers={data.reportingMembers}
+                    internalMembers={data.internalMembers}
+                  />
+                  {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
+                  <p className="mt-2">게이지 가운데 숫자는 Claude Code 몫이고, 아래는 두 서비스의 값입니다.</p>
+                </>
+              }
+            />
             <div className="mt-6">
               <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
             </div>
@@ -274,13 +284,17 @@ interface ShareItem {
  *
  * @param rows - 클라이언트별 사용량
  * @param subscriptions - 구독 현황. 못 읽었으면 좌석·월 비용 게이지는 뺀다
+ * @param info - 제목 옆 도움말에 넣을 설명
  */
 function ServiceShareGauges({
   rows,
   subscriptions,
+  info,
 }: {
   rows: AxClientUsageClientRow[]
   subscriptions: AxSubscriptionData | null
+  /** 「서비스 비중」 옆 도움말 내용 — 집계 구간·기준 시각·읽는 법 */
+  info: ReactNode
 }) {
   const usage = (client: AxUsageClient) => rows.find((row) => row.client === client)
   const vendor = (client: AxUsageClient) =>
@@ -319,7 +333,10 @@ function ServiceShareGauges({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-[var(--text-muted)]">
-        <span>서비스 비중 · 가운데 숫자는 Claude Code 몫</span>
+        <div className="flex items-center gap-1.5">
+          서비스 비중
+          <InfoTip label="서비스 비중 기준">{info}</InfoTip>
+        </div>
         {(['claude-code', 'codex'] as const).map((client) => (
           <span key={client} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
             <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: SHARE_COLORS[client] }} />
@@ -676,7 +693,8 @@ type PeopleSort = 'renewal' | 'name'
  * @param cycleError - 결제 주기 회차를 못 읽었으면 true — 주기 평균 칸을 "조회 실패"로 쓴다
  */
 function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleError: boolean }) {
-  const [sort, setSort] = useState<PeopleSort>('renewal')
+  // 기본은 이름순 — 사람을 찾아 보는 표다. 결제가 임박한 사람은 결제 임박순으로 바꿔 본다
+  const [sort, setSort] = useState<PeopleSort>('name')
 
   if (rows.length === 0) {
     return (
@@ -694,12 +712,18 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-        <p className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-          구성원 × 구독 {formatCount(rows.length)}줄 · {DUE_SOON_DAYS}일 안 결제 {formatCount(dueSoon)} · 사용 보고 없는 구독{' '}
-          {formatCount(unused)} · 구독 없이 사용 {formatCount(unsubscribed)}
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+          <span>
+            구성원 × 구독 {formatCount(rows.length)}줄 · {DUE_SOON_DAYS}일 안 결제 {formatCount(dueSoon)} · 사용 보고 없는 구독{' '}
+            {formatCount(unused)} · 구독 없이 사용 {formatCount(unsubscribed)}
+          </span>
+          <InfoTip label="주기 평균 기준">
+            <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
+            <p className="mt-2">수집기는 하루 한 번 보고하므로 마지막 날 사용량은 덜 잡힐 수 있습니다. 주기 평균 값에 마우스를 올리면 회차별 값이 보입니다.</p>
+          </InfoTip>
+        </div>
         <div role="group" aria-label="정렬" className="flex rounded-full border border-[var(--border-subtle)] p-0.5 text-[11px]">
-          {(['renewal', 'name'] as const).map((value) => (
+          {(['name', 'renewal'] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -716,10 +740,6 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
           ))}
         </div>
       </div>
-      <p className="mt-2 max-w-[72ch] text-xs leading-relaxed text-[var(--text-secondary)]">
-        주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.
-        수집기는 하루 한 번 보고하므로 마지막 날 사용량은 덜 잡힐 수 있습니다 — 값에 마우스를 올리면 회차별 값이 보입니다.
-      </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[920px] text-sm">
           <thead>
@@ -960,4 +980,41 @@ function daysSince(iso: string): number | null {
   const time = new Date(iso).getTime()
   if (Number.isNaN(time)) return null
   return Math.max(0, Math.floor((Date.now() - time) / 86_400_000))
+}
+
+/** 구독 시트가 갱신 주기를 넘겨 오래됐거나 반영된 적이 없는지 — 그때는 경고를 늘 보이게 한다 */
+function isSheetStale(syncedAt: string | null): boolean {
+  const daysAgo = syncedAt === null ? null : daysSince(syncedAt)
+  return daysAgo === null || daysAgo >= STALE_AFTER_DAYS
+}
+
+/**
+ * "?" 도움말 — 읽는 법·기준 시각처럼 늘 펼쳐 둘 필요 없는 설명을 호버·포커스 때만 보여준다
+ *
+ * 이름 붙은 그룹(`group/info`)이라 바깥의 다른 group 호버에 반응하지 않는다.
+ *
+ * @param label - 버튼의 접근성 이름
+ * @param children - 도움말 내용
+ */
+function InfoTip({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <div className="group/info relative inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        aria-describedby={id}
+        className="flex size-4 items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px] text-[var(--text-muted)] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
+      >
+        ?
+      </button>
+      <div
+        id={id}
+        role="tooltip"
+        className="invisible absolute left-0 top-full z-30 mt-2 w-96 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 font-sans text-xs font-normal normal-case leading-relaxed tracking-normal text-[var(--text-primary)] opacity-0 shadow-lg group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100"
+      >
+        {children}
+      </div>
+    </div>
+  )
 }

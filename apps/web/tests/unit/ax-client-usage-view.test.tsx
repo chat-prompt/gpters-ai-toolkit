@@ -5,7 +5,7 @@
  * 서비스 비중 게이지는 항목마다 Claude Code 몫을 보여준다.
  */
 
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AxClientUsageData, AxMemberServiceRow } from '../../../../packages/lib/src/features/ax/types'
 import { ClientUsagePanel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
@@ -48,21 +48,44 @@ function data(people: AxMemberServiceRow[]): AxClientUsageData {
 }
 
 describe('클라이언트 화면', () => {
-  it('구성원 줄을 사람 단위로 묶고, 묶음은 그 사람의 가장 가까운 결제일 순이다', () => {
-    render(<ClientUsagePanel days={7} data={data([
-      // 결제일순으로 흩어진 입력 — 홍길동의 Claude(D-2)와 Codex(D-20) 사이에 김철수(D-5)가 끼어 있다
-      person('홍길동', 'Claude Code', 2),
-      person('김철수', 'Claude Code', 5),
-      person('홍길동', 'Codex', 20),
-    ])} />)
-
+  // 결제일순으로 흩어진 입력 — 홍길동의 Claude(D-2)와 Codex(D-20) 사이에 김철수(D-5)가 끼어 있다
+  const scattered = () => [
+    person('홍길동', 'Claude Code', 2),
+    person('김철수', 'Claude Code', 5),
+    person('홍길동', 'Codex', 20),
+  ]
+  const peopleCells = () => {
     const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
-    const rows = within(table).getAllByRole('row').slice(1)
-    expect(rows.map((row) => within(row).getAllByRole('cell').slice(0, 2).map((cell) => cell.textContent))).toEqual([
+    return within(table).getAllByRole('row').slice(1)
+      .map((row) => within(row).getAllByRole('cell').slice(0, 2).map((cell) => cell.textContent))
+  }
+
+  it('구성원 줄은 기본이 이름순이고 사람 단위로 묶는다', () => {
+    render(<ClientUsagePanel days={7} data={data(scattered())} />)
+    expect(screen.getByRole('button', { name: '이름순' })).toHaveAttribute('aria-pressed', 'true')
+    expect(peopleCells()).toEqual([
+      ['김철수', 'Claude Code Pro'],
+      ['홍길동', 'Claude Code Pro'],
+      ['', 'Codex Pro'],
+    ])
+  })
+
+  it('결제 임박순이면 묶음은 그 사람의 가장 가까운 결제일 순이다', () => {
+    render(<ClientUsagePanel days={7} data={data(scattered())} />)
+    fireEvent.click(screen.getByRole('button', { name: '결제 임박순' }))
+    expect(peopleCells()).toEqual([
       ['홍길동', 'Claude Code Pro'],
       ['', 'Codex Pro'],
       ['김철수', 'Claude Code Pro'],
     ])
+  })
+
+  it('읽는 법·기준 시각은 도움말로 들어가고, 시트 반영 기록이 없으면 경고는 늘 보인다', () => {
+    render(<ClientUsagePanel days={7} data={data([person('홍길동', 'Claude Code', 2)])} />)
+    expect(screen.getByRole('button', { name: '서비스 비중 기준' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '주기 평균 기준' })).toBeInTheDocument()
+    // data() 의 syncedAt 은 null — 갱신 이력 없음은 상태 경고라 도움말 밖에도 한 번 더 보인다
+    expect(screen.getAllByText('구독 시트 갱신 이력 없음')).toHaveLength(2)
   })
 
   it('서비스 비중 게이지는 항목마다 Claude Code 몫과 두 값을 함께 보여준다', () => {
