@@ -1,7 +1,8 @@
 /**
  * AX 대시보드 — 클라이언트 화면 (EDU-11519)
  *
- * 구성원 × 구독 표는 사람 단위로 묶고, 묶음끼리는 그 사람의 가장 가까운 결제일 순이다.
+ * 구성원 × 구독 표는 사람 단위로 묶는다. 기본은 이름순, 결제 임박순이면 묶음끼리 그 사람의 가장 가까운 결제일 순이다.
+ * 평소 설명은 "?" 도움말에 두고, 상태 경고(구독 조회 실패·시트 갱신 지연)와 빈 화면의 기준 시각은 펼쳐 둔다.
  * 서비스 비중 게이지는 항목마다 Claude Code 몫을 보여준다.
  */
 
@@ -137,5 +138,29 @@ describe('서비스 비중 게이지 기하', () => {
     expect(formatShare(0.995)).toBe('>99%')
     expect(formatShare(0)).toBe('0%')
     expect(formatShare(0.61)).toBe('61%')
+  })
+})
+
+describe('도움말과 늘 보이는 경고', () => {
+  const recent = () => new Date(Date.now() - 2 * 86_400_000).toISOString()
+
+  it('시트가 최근에 반영됐으면 반영일은 도움말 안에만 있다', () => {
+    const base = data([person('홍길동', 'Claude Code', 2)])
+    render(<ClientUsagePanel days={7} data={{ ...base, subscriptions: { ...base.subscriptions!, syncedAt: recent() } }} />)
+    expect(screen.getAllByText(/구독 시트 반영/)).toHaveLength(1)
+    expect(screen.getByText(/구독 시트 반영/).closest('[role=tooltip]')).not.toBeNull()
+  })
+
+  it('구독을 못 읽으면 실패 안내는 도움말 밖에 보인다', () => {
+    render(<ClientUsagePanel days={7} data={{ ...data([]), subscriptions: null }} />)
+    expect(screen.getByText('구독 데이터를 불러오지 못했습니다').closest('[role=tooltip]')).toBeNull()
+  })
+
+  it('사용량·구독이 모두 비면 집계 구간·활성 보고를 펼쳐 둔다 — 수집 누락과 실제 0건을 가르는 근거', () => {
+    const base = data([])
+    render(<ClientUsagePanel days={7} data={{ ...base, byClient: [], subscriptions: { ...base.subscriptions!, byVendor: [], syncedAt: recent() } }} />)
+    const notice = screen.getByText(/활성 보고/)
+    expect(notice.closest('[role=tooltip]')).toBeNull()
+    expect(screen.getByText('수집된 사용량과 등록된 구독이 없습니다.')).toBeInTheDocument()
   })
 })

@@ -100,12 +100,12 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
           <div className="mb-3"><SyncedAtNotice syncedAt={data.subscriptions.syncedAt} /></div>
         ) : null}
         {data.byClient.length > 0 || (data.subscriptions?.byVendor.length ?? 0) > 0 ? (
-          <div className="mt-3">
-            <ServiceShareGauges
-              rows={data.byClient}
-              subscriptions={data.subscriptions}
-              info={
-                <>
+          <div>
+            {/* 제목 줄은 게이지가 없어도 그린다 — 도움말 안의 기준 시각이 게이지와 함께 사라지지 않게 */}
+            <div className="relative flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-[var(--text-muted)]">
+              <div className="flex items-center gap-1.5">
+                서비스 비중
+                <InfoTip label="서비스 비중 기준">
                   <PeriodNotice
                     periodStart={data.periodStart}
                     periodEnd={data.periodEnd}
@@ -115,17 +115,34 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
                   />
                   {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
                   <p className="mt-2">게이지 가운데 숫자는 Claude Code 몫이고, 아래는 두 서비스의 값입니다.</p>
-                </>
-              }
-            />
+                </InfoTip>
+              </div>
+              {(['claude-code', 'codex'] as const).map((client) => (
+                <span key={client} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                  <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: SHARE_COLORS[client] }} />
+                  {CLIENT_LABELS[client]}
+                </span>
+              ))}
+            </div>
+            <ServiceShareGauges rows={data.byClient} subscriptions={data.subscriptions} />
             <div className="mt-6">
               <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
             </div>
           </div>
         ) : (
-          <p className="mt-3 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
-            수집된 사용량과 등록된 구독이 없습니다.
-          </p>
+          <>
+            {/* 비어 있을 때는 기준 시각이 "수집 누락"과 "실제 0건"을 가르는 근거라 펼쳐 둔다 */}
+            <PeriodNotice
+              periodStart={data.periodStart}
+              periodEnd={data.periodEnd}
+              syncedAt={data.syncedAt}
+              reportingMembers={data.reportingMembers}
+              internalMembers={data.internalMembers}
+            />
+            <p className="mt-3 border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
+              수집된 사용량과 등록된 구독이 없습니다.
+            </p>
+          </>
         )}
       </div>
 
@@ -178,7 +195,6 @@ const PARTICIPATION_SOURCE: Record<AxUsageParticipationRow['source'], string> = 
 
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
-  const helpId = useId()
   // pill과 표 모두 나쁜 상태부터 좋은 상태 순이다.
   const statusCounts = AX_USAGE_PARTICIPATION_STATUS_ORDER
     .map((status) => ({ status, count: rows.filter((row) => row.status === status).length }))
@@ -186,26 +202,13 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-        <div className="group/help relative">
-          <button
-            type="button"
-            aria-describedby={helpId}
-            className="flex items-center gap-1.5 rounded focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
-          >
-            판정 기준
-            <span aria-hidden className="flex size-4 items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px]">?</span>
-          </button>
-          <div
-            id={helpId}
-            role="tooltip"
-            className="invisible absolute left-0 top-full z-30 mt-2 w-96 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 font-sans text-xs leading-relaxed text-[var(--text-primary)] opacity-0 shadow-lg group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100"
-          >
-            <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
-            <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
-            <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
-          </div>
-        </div>
+      <div className="relative flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        판정 기준
+        <InfoTip label="수집 참여 상태 판정 기준">
+          <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
+          <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
+          <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
+        </InfoTip>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {statusCounts.map(({ status, count }) => (
@@ -284,17 +287,13 @@ interface ShareItem {
  *
  * @param rows - 클라이언트별 사용량
  * @param subscriptions - 구독 현황. 못 읽었으면 좌석·월 비용 게이지는 뺀다
- * @param info - 제목 옆 도움말에 넣을 설명
  */
 function ServiceShareGauges({
   rows,
   subscriptions,
-  info,
 }: {
   rows: AxClientUsageClientRow[]
   subscriptions: AxSubscriptionData | null
-  /** 「서비스 비중」 옆 도움말 내용 — 집계 구간·기준 시각·읽는 법 */
-  info: ReactNode
 }) {
   const usage = (client: AxUsageClient) => rows.find((row) => row.client === client)
   const vendor = (client: AxUsageClient) =>
@@ -332,18 +331,6 @@ function ServiceShareGauges({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-[var(--text-muted)]">
-        <div className="flex items-center gap-1.5">
-          서비스 비중
-          <InfoTip label="서비스 비중 기준">{info}</InfoTip>
-        </div>
-        {(['claude-code', 'codex'] as const).map((client) => (
-          <span key={client} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-            <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: SHARE_COLORS[client] }} />
-            {CLIENT_LABELS[client]}
-          </span>
-        ))}
-      </div>
       <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {items.map((item) => <ShareGauge key={item.label} item={item} />)}
       </div>
@@ -712,7 +699,7 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        <div className="relative flex flex-wrap items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
           <span>
             구성원 × 구독 {formatCount(rows.length)}줄 · {DUE_SOON_DAYS}일 안 결제 {formatCount(dueSoon)} · 사용 보고 없는 구독{' '}
             {formatCount(unused)} · 구독 없이 사용 {formatCount(unsubscribed)}
@@ -952,7 +939,7 @@ function PeriodNotice({
  */
 export function SyncedAtNotice({ syncedAt }: { syncedAt: string | null }) {
   const daysAgo = syncedAt === null ? null : daysSince(syncedAt)
-  const isStale = daysAgo === null || daysAgo >= STALE_AFTER_DAYS
+  const isStale = isSheetStale(syncedAt)
 
   const label =
     syncedAt === null || daysAgo === null
@@ -991,7 +978,11 @@ function isSheetStale(syncedAt: string | null): boolean {
 /**
  * "?" 도움말 — 읽는 법·기준 시각처럼 늘 펼쳐 둘 필요 없는 설명을 호버·포커스 때만 보여준다
  *
- * 이름 붙은 그룹(`group/info`)이라 바깥의 다른 group 호버에 반응하지 않는다.
+ * - 이름 붙은 그룹(`group/info`)이라 바깥의 다른 group 호버에 반응하지 않는다.
+ * - 본문은 버튼이 아니라 가장 가까운 `relative` 조상(호출하는 줄)의 왼쪽 아래에 붙는다 — 버튼이 줄 끝에 있어도
+ *   좁은 화면 오른쪽으로 넘치지 않게. 그래서 호출하는 줄에 `relative` 를 단다.
+ * - 버튼과 본문 사이 간격은 투명한 위쪽 여백으로 만들어 호버 영역에 넣는다 — 본문으로 옮겨 가도 닫히지 않는다.
+ * - Esc 로 닫는다(포커스를 놓는다).
  *
  * @param label - 버튼의 접근성 이름
  * @param children - 도움말 내용
@@ -999,11 +990,14 @@ function isSheetStale(syncedAt: string | null): boolean {
 function InfoTip({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()
   return (
-    <div className="group/info relative inline-flex">
+    <div className="group/info inline-flex">
       <button
         type="button"
         aria-label={label}
         aria-describedby={id}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') event.currentTarget.blur()
+        }}
         className="flex size-4 items-center justify-center rounded-full border border-[var(--border-hover)] text-[10px] text-[var(--text-muted)] focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)]"
       >
         ?
@@ -1011,9 +1005,11 @@ function InfoTip({ label, children }: { label: string; children: ReactNode }) {
       <div
         id={id}
         role="tooltip"
-        className="invisible absolute left-0 top-full z-30 mt-2 w-96 max-w-[calc(100vw-3rem)] rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 font-sans text-xs font-normal normal-case leading-relaxed tracking-normal text-[var(--text-primary)] opacity-0 shadow-lg group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100"
+        className="invisible absolute left-0 top-full z-30 w-96 max-w-[calc(100vw-3rem)] pt-2 font-sans text-xs font-normal normal-case leading-relaxed tracking-normal opacity-0 group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100"
       >
-        {children}
+        <div className="rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] p-3 text-[var(--text-primary)] shadow-lg">
+          {children}
+        </div>
       </div>
     </div>
   )
