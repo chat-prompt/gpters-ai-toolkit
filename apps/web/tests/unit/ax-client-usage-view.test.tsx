@@ -306,6 +306,24 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     expect(rowOf('김민수 (둘째)').getByText('미연결 · 설정 폴더가 심링크')).toBeInTheDocument()
   })
 
+  it('사용 보고가 없어도 첫 수신 대기 같은 정상 상태를 보여주고, Codex 줄에는 Claude 상태를 붙이지 않는다', () => {
+    const waiting = {
+      statusline: 'aitk' as const, autoSetup: 'connected:none', autoSetupAt: new Date().toISOString(), snapshotAt: null,
+      observedAt: new Date().toISOString(),
+    }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([{ ...person('홍길동', 'Claude Code', 3), usage: null }, { ...person('홍길동', 'Codex', 3), usage: null }]),
+          participation: [participant('홍길동', '0.7.25', waiting)],
+        }}
+        days={7}
+      />
+    )
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getAllByText('연결됨 · 첫 수신 대기')).toHaveLength(1)
+  })
+
   it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {
     const shared = person('공용(팀)', 'Claude Code', 3)
     const symlink = { statusline: 'none' as const, autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null }

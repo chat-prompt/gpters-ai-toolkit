@@ -295,6 +295,8 @@ function StatusWithSource({ label, tone, source }: { label: string; tone: string
       <button
         type="button"
         aria-describedby={id}
+        // Safari 는 버튼을 눌러도 포커스를 주지 않는다 — 누르면 툴팁이 열리게 직접 준다
+        onClick={(event) => event.currentTarget.focus()}
         className={`cursor-help underline decoration-dotted underline-offset-4 focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${tone}`}
       >
         {label}
@@ -1014,13 +1016,15 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
  */
 function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow }) {
   const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
-  const warning = capture?.warn ? <span className="block text-[11px] text-[var(--accent-orange)]">{capture.label}</span> : null
-  if (!row.usage) return warning ?? <span className="text-[var(--text-muted)]">{EMPTY}</span>
-  const percent = row.usage.limitUsedPercent
+  const percent = row.usage?.limitUsedPercent ?? null
   if (percent === null) {
     // 상태는 다른 머신에서 왔을 수 있다 — 값이 없는 칸에 "수집 중"을 쓰면 모순이라 미수집으로 둔다
-    const label = capture && !capture.label.startsWith('수집 중') ? capture.label : '미수집'
-    return warning ?? <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
+    const label = capture && !capture.label.startsWith('수집 중') ? capture.label : row.usage ? '미수집' : EMPTY
+    return (
+      <span className={`text-[11px] ${capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>
+        {label}
+      </span>
+    )
   }
   return (
     <>
@@ -1030,7 +1034,10 @@ function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collect
       >
         {percent}%
       </span>
-      {warning}
+      {/* 날짜가 붙은 경고는 지난 관측이다 — 지금 값 아래에 두면 지금 상태처럼 읽힌다 */}
+      {capture?.warn && !capture.label.endsWith('관측)') && (
+        <span className="block text-[11px] text-[var(--accent-orange)]">{capture.label}</span>
+      )}
     </>
   )
 }
