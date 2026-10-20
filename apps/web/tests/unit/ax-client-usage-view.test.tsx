@@ -214,21 +214,28 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     return { ...row, usage: { ...row.usage!, limitUsedPercent: null } }
   }
 
-  it('이름 아래 aitk 버전을 두고, 팀 최고 버전보다 낮으면 주황색이다 — 수집 참여 상태 표에는 없다', () => {
+  it('aitk 버전은 수집 참여 상태 표에 두고, 팀 최고 버전보다 낮으면 주황색이다', () => {
     render(
       <ClientUsagePanel
         data={{
-          ...data([person('최신', 'Claude Code', 3), person('구버전', 'Claude Code', 3), person('모름', 'Claude Code', 3)]),
+          ...data([person('최신', 'Claude Code', 3)]),
           participation: [participant('최신', '0.7.24'), participant('구버전', '0.7.9 이하'), participant('모름', null)],
         }}
         days={7}
       />
     )
-    expect(screen.getByText('aitk 0.7.24').className).not.toContain('accent-orange')
-    expect(screen.getByText('aitk 0.7.9 이하').className).toContain('accent-orange')
-    expect(screen.getAllByText(/^aitk /)).toHaveLength(2)
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('마지막 로그인'))!
+    expect(within(table).getByText('0.7.24').className).not.toContain('accent-orange')
+    expect(within(table).getByText('0.7.9 이하').className).toContain('accent-orange')
+    expect(screen.queryByText(/^aitk 0\./)).toBeNull()
     expect(screen.queryByRole('columnheader', { name: 'Claude 한도' })).toBeNull()
-    expect(screen.queryByRole('columnheader', { name: 'aitk' })).toBeNull()
+  })
+
+  it('판정 근거는 칸 대신 상태에 붙은 툴팁이다', () => {
+    render(<ClientUsagePanel data={{ ...data([]), participation: [participant('최신', '0.7.24')] }} days={7} />)
+    expect(screen.queryByRole('columnheader', { name: '판정 근거' })).toBeNull()
+    const status = screen.getByRole('button', { name: '정상 보고' })
+    expect(document.getElementById(status.getAttribute('aria-describedby')!)).toHaveTextContent('판정 근거 · 수집기 점검 신호')
   })
 
   it('Claude Code 줄은 한도를 못 받으면 미수집 대신 연결 상태를 쓰고, Codex 줄은 그대로 미수집이다', () => {
@@ -247,8 +254,6 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     expect(screen.getByText('미연결 · 설정 폴더가 심링크').className).toContain('accent-orange')
     expect(screen.getByText('상태 미보고')).toBeInTheDocument()
     expect(screen.getAllByText('미수집')).toHaveLength(1)
-    // 같은 사람의 두 줄 중 첫 줄에만 버전이 붙는다
-    expect(screen.getAllByText('aitk 0.7.25')).toHaveLength(1)
   })
 
   it('사용 보고가 없어도, 예전 한도 값이 남아 있어도 지금 미연결이면 경고를 보여준다', () => {
@@ -266,28 +271,31 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
     expect(within(table).getByText('10%')).toBeInTheDocument()
   })
+
   it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {
     const shared = person('공용(팀)', 'Claude Code', 3)
+    const symlink = { statusline: 'none' as const, autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null }
     render(
       <ClientUsagePanel
         data={{
           ...data([
             { ...person('타타', 'Claude Code', 3), usage: null },
-            person('김민수', 'Codex', 3),
-            { ...shared, subscription: { ...shared.subscription!, shared: true } },
+            { ...person('김민수', 'Claude Code', 3), usage: null },
+            { ...shared, usage: null, subscription: { ...shared.subscription!, shared: true } },
           ]),
           participation: [
-            participant('조효희 (타타)', '0.7.24'),
-            participant('김민수', '0.7.25'),
-            participant('김민수 (둘째)', '0.7.20'),
-            participant('공용(팀)', '0.7.9 이하'),
+            participant('조효희 (타타)', '0.7.24', symlink),
+            participant('김민수', '0.7.25', symlink),
+            participant('김민수 (둘째)', '0.7.20', symlink),
+            participant('공용(팀)', '0.7.9 이하', symlink),
           ],
         }}
         days={7}
       />
     )
-    expect(screen.getByText('aitk 0.7.24')).toBeInTheDocument()
-    expect(screen.getAllByText(/^aitk /)).toHaveLength(1)
+    // 타타만 이어진다 — 김민수는 후보가 둘, 공용 구독은 사람이 아니다
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getAllByText('미연결 · 설정 폴더가 심링크')).toHaveLength(1)
   })
 })
 
