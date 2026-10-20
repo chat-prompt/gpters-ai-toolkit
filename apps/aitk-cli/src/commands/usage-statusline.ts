@@ -1,7 +1,7 @@
 /** Claude statusline stdin을 기존 표시줄에 전달하면서 공식 한도만 수집한다. */
 import { spawn } from 'node:child_process'
 import { constants, homedir } from 'node:os'
-import { STATUSLINE_PREVIOUS_ENV, claudeUsagePaths, drawsDefaultLine, extractClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
+import { STATUSLINE_PREVIOUS_ENV, claudeUsagePaths, drawsDefaultLine, extractClaudeQuota, mergeClaudeQuota, readClaudeQuota, readClaudeStatuslineInstallation, readUsageJson, renderDefaultStatusline, writeUsageJson } from '../usage/claude-statusline.js'
 import { shouldScheduleClaudeReport } from '../usage/claude-auto-report.js'
 
 const RENDERER_TIMEOUT_MS = 10_000
@@ -49,7 +49,9 @@ export async function runUsageStatusline(): Promise<void> {
 
   try {
     const data = JSON.parse(input.toString('utf8'))
-    const quota = extractClaudeQuota(data)
+    const observed = extractClaudeQuota(data)
+    // 낮은 옛 값을 든 세션이 스냅샷을 내리지 않게 같은 회차의 최댓값으로 맞춘다 (표시도 이 값)
+    const quota = observed && mergeClaudeQuota(readUsageJson(claudeUsagePaths(home).snapshot), observed)
     if (quota && process.env.AITK_USAGE_REPORT !== '0') {
       // 렌더마다 파일을 교체하지 않는다. 값이 바뀌었거나 관측 시각이 1분 넘게 지났을 때만 쓴다.
       const stored = readClaudeQuota(home)

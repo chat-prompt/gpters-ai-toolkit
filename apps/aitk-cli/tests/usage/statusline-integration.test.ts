@@ -650,6 +650,19 @@ describe('래퍼 실패 내성 — 자동 연결로 모두에게 깔리므로 �
     expect(JSON.parse(readFileSync(snapshot, 'utf8')).usedPercent).toBe(13)
   })
 
+  it('예전 값을 든 다른 세션이 그려도 같은 회차의 스냅샷 사용률은 내려가지 않는다', () => {
+    const home = wrapped(`printf 'x'`)
+    const snapshot = join(home, '.claude/aitk-usage/claude.json')
+    const resetsAt = Math.floor(Date.now() / 1000) + 86400
+    const at = (used: number, reset = resetsAt) => JSON.stringify({ rate_limits: { seven_day: { used_percentage: used, resets_at: reset } } })
+    statusline(home, at(35))
+    statusline(home, at(29))
+    expect(JSON.parse(readFileSync(snapshot, 'utf8')).usedPercent).toBe(35)
+    // 초기화로 회차가 바뀌면 낮은 새 값을 그대로 쓴다
+    statusline(home, at(2, resetsAt + 7 * 86400))
+    expect(JSON.parse(readFileSync(snapshot, 'utf8')).usedPercent).toBe(2)
+  })
+
   it('빈 입력·깨진 입력에도 원래 표시줄에 그대로 넘긴다', () => {
     const home = wrapped(`cat`)
     expect(statusline(home, '').stdout).toBe('')

@@ -820,6 +820,22 @@ export interface AxRenewalWeek {
   reportedAt: string
 }
 
+/**
+ * 회차의 마지막 보고가 초기화보다 이 시간 넘게 이르면 끝 무렵 사용량이 빠진 것으로 본다.
+ * 그 회차 값은 실제보다 낮다 — 대시보드는 「끝 무렵 미수집」으로, 뽀밋이 저사용 알림은 근거와 함께 적는다
+ */
+export const LATE_REPORT_GAP_HOURS = 24
+
+/** 회차의 마지막 보고가 초기화보다 몇 시간 일렀는지 (표시용 반올림) */
+export function reportGapHours(week: AxRenewalWeek): number {
+  return Math.round((Date.parse(week.resetsAt) - Date.parse(week.reportedAt)) / 3_600_000)
+}
+
+/** 끝 무렵이 빠진 회차인지 — 반올림 전 시간차로 판정한다(24시간 20분은 늦은 것) */
+export function isLateReport(week: AxRenewalWeek): boolean {
+  return Date.parse(week.resetsAt) - Date.parse(week.reportedAt) > LATE_REPORT_GAP_HOURS * 3_600_000
+}
+
 /** 구독 한 건의 갱신 결정 근거 (뽀밋이 DM 도 같은 모양을 받는다) */
 export interface AxRenewalRow {
   ownerName: string

@@ -4,7 +4,7 @@ import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, syml
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  claudeUsagePaths, extractClaudeQuota, inspectClaudeStatusline, installClaudeStatusline, readClaudeQuota,
+  claudeUsagePaths, extractClaudeQuota, inspectClaudeStatusline, installClaudeStatusline, mergeClaudeQuota, readClaudeQuota,
   readClaudeStatuslineInstallation, readUsageJson, renderDefaultStatusline, uninstallClaudeStatusline, writeUsageJson,
 } from '../../src/usage/claude-statusline.js'
 import { readDailyUsageAggregate, writeDailyUsageAggregate } from '../../src/usage/usage-aggregate-cache.js'
@@ -283,4 +283,25 @@ it('기존 일일 캐시를 무시하고 새 사용량과 새 Codex 한도를 �
   ], async rows => { sent = rows })
   expect(sent.map(row => row.inputTokens)).toEqual([200, 300])
   expect(sent[1].limitUsedPercent).toBe(2)
+})
+
+describe('스냅샷 합치기', () => {
+  const next = (usedPercent: number, resetsAt = '2026-10-22T20:00:00.000Z') => ({
+    version: 1 as const, source: 'claude-code-statusline' as const, capturedAt: '2026-10-20T06:09:16.000Z', usedPercent, resetsAt,
+  })
+
+  it('같은 회차면 옛 세션의 낮은 값이 저장값을 내리지 않고, 관측 시각도 저장값 그대로 둔다', () => {
+    const stored = { ...next(35), capturedAt: '2026-10-20T06:00:00.000Z' }
+    expect(mergeClaudeQuota(stored, next(29))).toEqual(stored)
+    expect(mergeClaudeQuota(next(29), next(35))).toEqual(next(35))
+  })
+
+  it('저장값이 15분 넘게 오래됐으면 같은 회차라도 낮은 새 값을 쓴다 (플랜 상향 등 실제 하락)', () => {
+    expect(mergeClaudeQuota({ ...next(35), capturedAt: '2026-10-20T05:50:00.000Z' }, next(29))).toEqual(next(29))
+  })
+
+  it('회차가 바뀌었거나 저장값이 없으면 새 값을 그대로 쓴다', () => {
+    expect(mergeClaudeQuota(next(90, '2026-10-15T20:00:00.000Z'), next(2))).toEqual(next(2))
+    expect(mergeClaudeQuota(null, next(2))).toEqual(next(2))
+  })
 })

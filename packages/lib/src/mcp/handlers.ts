@@ -17,7 +17,7 @@ import { hasRoleOrHigher, isSuperAdmin, type UserRole } from '../security/rbac'
 import { notifySlackDeploy } from '../notifications/slack'
 
 const log = createLogger('mcp-handler')
-import { ilike, or, eq, and, sql, inArray, desc } from 'drizzle-orm'
+import { ilike, or, eq, and, gt, sql, inArray, desc } from 'drizzle-orm'
 import type {
   SearchPluginsInput,
   GetPluginContentInput,
@@ -1428,8 +1428,11 @@ export async function reportUsage(
   let inserted = 0
   let updated = 0
 
+  // 회차별 최댓값을 먼저 갱신해 두고, 하루 단위 행의 한도는 그 값으로 맞춘다(아래 carryLimit)
+  await recordLimitWindows(validation.payload.records, userId, memberName, receivedAt)
+
   for (const record of validation.payload.records) {
-    const values = toUsageRow(record, userId, memberName, receivedAt)
+    const values = carryLimit(toUsageRow(record, userId, memberName, receivedAt), await currentLimitWindow(userId, record.client, receivedAt))
 
     const [existing] = await db
       .select({ id: axClientUsage.id })
@@ -1455,7 +1458,6 @@ export async function reportUsage(
   // 사용량이 0건이어도 수집기가 설치·승인된 상태로 정상 실행됐다는 사실은 남긴다.
   // 이 heartbeat가 없으면 관리자 화면은 "미사용"과 "미설치"를 구분할 수 없다.
   const now = new Date()
-  await recordLimitWindows(validation.payload.records, userId, memberName, receivedAt)
 
   const collectorState = {
     userId,
@@ -1572,6 +1574,75 @@ function toUsageRow(record: AxUsageReportRecord, userId: string, memberName: str
     syncedAt: now,
     updatedAt: now,
   }
+}
+
+/** 초기화 시각이 이만큼 안에서 다르면 같은 회차다 (구독 갱신 결정표의 clusterWindows 와 같다) */
+const SAME_WINDOW_MS = 60 * 60 * 1000
+
+/**
+ * 이 사람·클라이언트의 진행 중 회차. 조기 초기화로 둘 이상이면 초기화 시각이 늦은 쪽이 새 회차다.
+ * 읽지 못하면(0045 전 등) 채우지 않고 보고는 그대로 저장한다 — recordLimitWindows 와 같은 원칙
+ */
+async function currentLimitWindow(
+  userId: string,
+  client: AxUsageReportRecord['client'],
+  receivedAt: Date
+): Promise<{ resetsAt: Date; maxUsedPercent: string } | undefined> {
+  try {
+    const windows = await db
+      .select({ resetsAt: axUsageLimitWindows.resetsAt, maxUsedPercent: axUsageLimitWindows.maxUsedPercent })
+      .from(axUsageLimitWindows)
+      .where(
+        and(
+          eq(axUsageLimitWindows.userId, userId),
+          eq(axUsageLimitWindows.client, client),
+          // 같은 회차로 묶일 흔들린 행이 먼저 만료됐어도 최댓값에 넣으려고 1시간 앞까지 읽는다
+          gt(axUsageLimitWindows.resetsAt, new Date(receivedAt.getTime() - SAME_WINDOW_MS))
+        )
+      )
+      .orderBy(desc(axUsageLimitWindows.resetsAt))
+    // 진행 중인 것(과 1시간)만이라 한 사람·클라이언트에 많아야 한 주치 행이다 — 잘라 읽지 않는다
+    const [latest] = windows
+    if (!latest || latest.resetsAt <= receivedAt) return undefined
+    // 초기화 시각이 몇 초씩 흔들려 한 회차가 여러 행으로 남는다 — 가장 늦은 회차에서 1시간 안의 행을 합친다
+    const same = windows.filter((w) => latest.resetsAt.getTime() - w.resetsAt.getTime() <= SAME_WINDOW_MS)
+    const max = Math.max(...same.map((w) => Number(w.maxUsedPercent)))
+    return { resetsAt: latest.resetsAt, maxUsedPercent: max.toFixed(2) }
+  } catch (err) {
+    log.warn('진행 중 회차를 읽지 못해 한도를 채우지 않고 저장합니다', { error: err instanceof Error ? err.message : String(err) })
+    return undefined
+  }
+}
+
+/**
+ * 하루 단위 행의 주간 한도를 진행 중 회차의 최댓값으로 맞춘다.
+ *
+ * 한 머신에 세션이 여럿이면 예전 사용률을 든 세션이 낮은 값을 보내고(35% → 29%),
+ * 세션 시작 직후 보고는 스냅샷이 오래돼 한도 없이 온다. 행은 보고마다 덮어써지고 대시보드는
+ * 최신 행만 읽으므로, 그대로 두면 「이번 주 한도」가 내려가거나 비어 보인다(2026-10-20 실측).
+ * 회차별 최댓값(ax_usage_limit_windows)은 줄지 않으니, 아직 초기화 전인 그 값을 쓴다.
+ *
+ * ponytail: 같은 회차 안에서 실제로 내려가는 경우(주 중 플랜 상향)는 초기화까지 이전 최댓값으로 보인다 — 회차 기록이
+ * greatest 라 원래도 그렇다. 드물어서 두고, 생기면 플랜 문자열을 회차 키에 넣는다.
+ * ponytail: 같은 사람·클라이언트의 보고 둘이 거의 동시에 오면 늦게 쓰는 쪽이 조회 전 값으로 덮을 수 있다.
+ * 회차 기록은 greatest 라 안전하고 다음 보고가 행을 바로잡는다. 자주 보이면 UPDATE 를 조건부(greatest)로 바꾼다.
+ *
+ * @param values - 이번 보고로 만든 행
+ * @param window - 이 사람·클라이언트의 진행 중 회차 중 가장 최근에 보고된 것 (없으면 undefined)
+ */
+export function carryLimit<T extends { limitUsedPercent: string | null; limitResetsAt: Date | null }>(
+  values: T,
+  window: { resetsAt: Date; maxUsedPercent: string } | undefined
+): T {
+  if (!window) return values
+  const carried = { ...values, limitUsedPercent: window.maxUsedPercent, limitResetsAt: window.resetsAt }
+  if (values.limitUsedPercent === null || !values.limitResetsAt) return carried
+  const diff = values.limitResetsAt.getTime() - window.resetsAt.getTime()
+  // 조기 초기화 뒤 옛 머신이 지난 회차 값을 보내면(초기화 시각이 1시간 넘게 이름) 새 회차 값으로 둔다
+  if (diff < -SAME_WINDOW_MS) return carried
+  // 같은 회차(1시간 안 흔들림)에서 더 낮으면 최댓값으로. 더 늦은 회차(회차 기록 쓰기 실패)는 그대로 둔다
+  const sameWindow = Math.abs(diff) <= SAME_WINDOW_MS
+  return sameWindow && Number(window.maxUsedPercent) > Number(values.limitUsedPercent) ? carried : values
 }
 
 /**
