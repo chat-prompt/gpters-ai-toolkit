@@ -1464,6 +1464,10 @@ export async function reportUsage(
     recordCount: validation.payload.records.length,
     lastReportedAt: now,
     updatedAt: now,
+    // 옛 aitk 는 연결 상태를 보내지 않는다. 그때는 이전 값을 지우지 않는다
+    ...(validation.payload.limitCapture
+      ? { limitCapture: { ...validation.payload.limitCapture, observedAt: now.toISOString() } }
+      : {}),
   }
   await db
     .insert(axUsageCollectorState)

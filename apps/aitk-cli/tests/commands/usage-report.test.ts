@@ -13,6 +13,9 @@ vi.mock('../../src/usage/codex.js', () => ({ collectCodex: async () => collected
 vi.mock('../../src/client.js', () => ({ jsonRpcCall: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }) }))
 vi.mock('../../src/agent-auth.js', () => ({ readAgentConfig: vi.fn(() => null) }))
 vi.mock('../../src/auth.js', () => ({ resolveToken: vi.fn(() => 'tok') }))
+// 실제 홈의 Claude 설정을 읽지 않는다
+const CAPTURE = { statusline: 'aitk', autoSetup: 'unchanged', autoSetupAt: null, snapshotAt: null }
+vi.mock('../../src/usage/claude-statusline.js', () => ({ readLimitCapture: vi.fn(() => CAPTURE) }))
 vi.mock('../../src/output.js', () => ({
   jsonOut: vi.fn(),
   info: vi.fn(),
@@ -75,7 +78,7 @@ describe('aitk usage report', () => {
 
     expect(jsonRpcCall).toHaveBeenCalledWith(
       'tools/call',
-      { name: 'report_usage', arguments: { records: [RECORD] } },
+      { name: 'report_usage', arguments: { records: [RECORD], limitCapture: CAPTURE } },
       'tok'
     )
   })
@@ -85,7 +88,7 @@ describe('aitk usage report', () => {
 
     expect(jsonRpcCall).not.toHaveBeenCalled()
     expect(resolveToken).not.toHaveBeenCalled()
-    expect(jsonOut).toHaveBeenCalledWith({ records: [RECORD] })
+    expect(jsonOut).toHaveBeenCalledWith({ records: [RECORD], limitCapture: CAPTURE })
   })
 
   it('집계 구간이 계약 상한(90일)을 넘으면 보내기 전에 막는다', async () => {
@@ -100,7 +103,7 @@ describe('aitk usage report', () => {
 
     await runUsageReport({ days: 7, dryRun: true })
 
-    expect(jsonOut).toHaveBeenCalledWith({ records: [{ ...RECORD, client: 'codex' }] })
+    expect(jsonOut).toHaveBeenCalledWith({ records: [{ ...RECORD, client: 'codex' }], limitCapture: CAPTURE })
   })
 
   it('사용량이 0건이어도 수집기 상태를 알 수 있도록 빈 records를 보낸다', async () => {
@@ -111,7 +114,7 @@ describe('aitk usage report', () => {
 
     expect(jsonRpcCall).toHaveBeenCalledWith(
       'tools/call',
-      { name: 'report_usage', arguments: { records: [] } },
+      { name: 'report_usage', arguments: { records: [], limitCapture: CAPTURE } },
       'tok'
     )
   })

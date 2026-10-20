@@ -7,6 +7,7 @@ import { resolveToken } from '../auth.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { jsonOut, info, error } from '../output.js'
 import { collectClaudeCode } from '../usage/claude-code.js'
+import { readLimitCapture, type ClaudeLimitCapture } from '../usage/claude-statusline.js'
 import { collectCodex } from '../usage/codex.js'
 import type { UsageRecord } from '../usage/types.js'
 
@@ -61,11 +62,16 @@ export async function collectUsageRecords(days: number): Promise<UsageRecord[]> 
   return records
 }
 
+/** 한도 연결 상태는 부가 정보다. 읽다 실패해도 사용량 보고는 보낸다 */
+function safeLimitCapture(): ClaudeLimitCapture | null {
+  try { return readLimitCapture() } catch { return null }
+}
+
 /** 인증 실패와 MCP 도구 수준의 거부도 실패로 돌려 자동 보고가 재시도할 수 있게 한다. */
 export async function sendUsageRecords(records: UsageRecord[]): Promise<unknown> {
   const token = resolveToken()
   if (!token) throw new Error('Auth required. Run "aitk login" first.')
-  const result = await jsonRpcCall('tools/call', { name: 'report_usage', arguments: { records } }, token)
+  const result = await jsonRpcCall('tools/call', { name: 'report_usage', arguments: { records, limitCapture: safeLimitCapture() } }, token)
   if (!result.ok) throw new Error(result.error ?? 'Usage report failed')
   const body = result.data as { isError?: boolean; content?: Array<{ type: string; text?: string }> } | undefined
   if (body?.isError) throw new Error('Usage report rejected by server')
@@ -87,7 +93,8 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<UsageRec
   }
   try {
     const records = await collectUsageRecords(opts.days)
-    if (opts.dryRun) { jsonOut({ records }); return records }
+    // dry-run도 실제로 보낼 값을 모두 보여준다
+    if (opts.dryRun) { jsonOut({ records, limitCapture: safeLimitCapture() }); return records }
     const result = await sendUsageRecords(records)
     if (records.length === 0) info('No local usage found for the period. Collector status reported.')
     jsonOut(result)

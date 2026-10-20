@@ -1,4 +1,6 @@
 import type { AxAgentTaskTrace } from './agent-task-events'
+import type { AxLimitCapture } from './usage-report'
+
 /**
  * AX Dashboard — 공용 타입
  *
@@ -761,6 +763,8 @@ export interface AxUsageParticipationRow {
   /** 최근 30일 aitk 요청의 버전(User-Agent). 요청이 없으면 null */
   aitkVersion: string | null
   clients: AxUsageClient[]
+  /** Claude 한도 수집 연결 상태 (aitk 0.7.25+ 보고). 보낸 적이 없으면 null */
+  limitCapture: AxLimitCapture | null
   source: 'collector' | 'usage_report' | 'legacy_usage' | 'authorization' | 'none'
 }
 

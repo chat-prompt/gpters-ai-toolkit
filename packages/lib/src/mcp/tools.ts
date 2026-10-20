@@ -582,7 +582,7 @@ deploy_skill로 모든 파일을 한 번에 전달하기 어려울 때 유용합
     description: `AI 코딩 클라이언트 사용량 집계를 기록합니다 (AX 대시보드 · 클라이언트 사용량 패널).
 
 aitk CLI가 각 팀원 머신의 로컬 트랜스크립트를 집계해 호출합니다.
-보내는 값은 집계 수치와 플랜 문자열뿐입니다 — 대화 내용·파일 경로·인증 토큰은 보내지 않습니다.
+보내는 값은 집계 수치와 플랜 문자열, Claude 한도 수집 연결 상태(고정 코드와 시각)뿐입니다 — 대화 내용·파일 경로·인증 토큰은 보내지 않습니다.
 
 누구의 사용량인지는 서버가 인증 세션에서 정합니다. 이름을 인자로 보낼 수 없습니다.
 (클라이언트, periodStart)가 같으면 덮어씁니다 — 같은 구간을 다시 보내도 총량이 부풀지 않습니다.
@@ -654,6 +654,16 @@ Codex는 최신 rollout 스냅샷이 있을 때만 보고합니다. 수집하지
               'limitUsedPercent',
               'limitResetsAt',
             ],
+          },
+        },
+        limitCapture: {
+          type: ['object', 'null'],
+          description: 'Claude 한도 수집 연결 상태 (aitk 0.7.25+). 형식이 틀리면 버리고 보고는 받는다. 보내지 않거나 null이면 이전 값을 유지한다',
+          properties: {
+            statusline: { type: 'string', enum: ['none', 'user', 'aitk', 'unsupported'], description: 'settings.json statusLine 상태' },
+            autoSetup: { type: ['string', 'null'], description: '마지막 aitk usage setup --auto 결과 코드 (예: "connected:wrapped", "skipped:symlink")' },
+            autoSetupAt: { type: ['string', 'null'], description: '자동 연결 시각 (ISO 8601)' },
+            snapshotAt: { type: ['string', 'null'], description: '상태 표시줄이 주간 한도를 마지막으로 받은 시각 (ISO 8601)' },
           },
         },
       },

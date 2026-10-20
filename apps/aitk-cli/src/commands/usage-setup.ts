@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
   claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, wasConnected, type StatuslineDisplay,
+  markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, usesClaudeCode, wasConnected, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -144,10 +144,6 @@ function ownerAlive(token: string): boolean {
 }
 
 /** Claude Code를 실제로 쓰는 머신인지. aitk가 만든 흔적은 신호로 쓰지 않는다. */
-function usesClaudeCode(home: string): boolean {
-  return [join(home, '.claude', 'projects'), join(home, '.claude.json'), join(home, '.claude', 'settings.json')].some(path => existsSync(path))
-}
-
 /** 동기 대기. 잠금 재시도 사이에만 쓴다. */
 function sleepSync(ms: number): void { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) }
 
@@ -267,6 +263,18 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
     return result === 'busy' ? skip('busy') : result
   } catch (err) {
     return { status: 'failed', reason: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * 서버에 보낼 결과 코드. 실패 사유는 경로가 섞일 수 있어 `failed`로만 남긴다.
+ * 남기지 않을 때는 null — Claude를 안 쓰는 머신(no-claude)은 보낼 게 없고, 경합(busy)은 이전 결과를 덮지 않는다.
+ */
+export function autoSetupResultCode(result: UsageAutoSetupResult): string | null {
+  switch (result.status) {
+    case 'connected': return `connected:${result.mode}`
+    case 'skipped': return result.reason === 'no-claude' || result.reason === 'busy' ? null : `skipped:${result.reason}`
+    default: return result.status
   }
 }
 
