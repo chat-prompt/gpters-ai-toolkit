@@ -196,8 +196,28 @@ const PARTICIPATION_SOURCE: Record<AxUsageParticipationRow['source'], string> = 
   none: '활성 승인 기록 없음',
 }
 
+/**
+ * 두 버전을 숫자 단위로 비교한다(`0.7.9` < `0.7.24`). 숫자가 아닌 꼬리(`-beta`)는 무시한다.
+ *
+ * @returns a가 낮으면 음수, 같으면 0, 높으면 양수
+ */
+export function compareVersions(a: string, b: string): number {
+  const parse = (version: string) => version.split('.').map((part) => parseInt(part, 10) || 0)
+  const [left, right] = [parse(a), parse(b)]
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
+  // npm 최신을 서버에서 따로 묻지 않는다 — 팀에서 가장 높은 버전보다 낮은 마지막 관측 버전을 주황색으로 둔다.
+  const newestAitk = rows
+    .map((row) => row.aitkVersion)
+    .filter((version): version is string => version !== null)
+    .reduce<string | null>((max, version) => (max === null || compareVersions(version, max) > 0 ? version : max), null)
   // pill과 표 모두 나쁜 상태부터 좋은 상태 순이다.
   const statusCounts = AX_USAGE_PARTICIPATION_STATUS_ORDER
     .map((status) => ({ status, count: rows.filter((row) => row.status === status).length }))
@@ -211,6 +231,7 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
           <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
           <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
           <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
+          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 요청에 찍힌 버전입니다(0.7.9 이하는 버전을 보내지 않던 aitk). 머신이 여러 대면 마지막으로 요청한 머신만 보이고, 업그레이드 뒤 아직 요청이 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
         </InfoTip>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -224,14 +245,15 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         ))}
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[840px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH} w-[18%]`}>사용자</th>
               <th className={`text-left ${TD} ${TH} w-[20%]`}>상태</th>
               <th className={`text-left ${TD} ${TH} w-[17%]`}>클라이언트</th>
-              <th className={`text-right ${TD} ${TH}`}>마지막 보고</th>
-              <th className={`text-right ${TD} ${TH}`}>마지막 로그인</th>
+              <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>aitk</th>
+              <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 보고</th>
+              <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 로그인</th>
               <th className={`text-left ${TD} ${TH} w-[18%]`}>판정 근거</th>
             </tr>
           </thead>
@@ -255,10 +277,19 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
                       ? row.clients.map((client) => CLIENT_LABELS[client]).join(', ')
                       : EMPTY}
                   </td>
-                  <td className={`text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
+                  <td
+                    className={`whitespace-nowrap ${TD} font-mono text-xs tabular-nums ${
+                      row.aitkVersion && newestAitk && compareVersions(row.aitkVersion, newestAitk) < 0
+                        ? 'text-[var(--accent-orange)]'
+                        : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {row.aitkVersion ?? EMPTY}
+                  </td>
+                  <td className={`whitespace-nowrap text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastReportedAt ? formatDateTime(row.lastReportedAt) : EMPTY}
                   </td>
-                  <td className={`text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
+                  <td className={`whitespace-nowrap text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastLoginAt ? formatDate(row.lastLoginAt) : EMPTY}
                   </td>
                   <td className={`${TD} text-xs text-[var(--text-secondary)]`}>

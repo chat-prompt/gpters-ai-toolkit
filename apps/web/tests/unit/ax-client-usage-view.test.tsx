@@ -9,7 +9,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AxClientUsageData, AxMemberServiceRow } from '../../../../packages/lib/src/features/ax/types'
-import { ClientUsagePanel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
+import { ClientUsagePanel, compareVersions, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
 
 const person = (name: string, service: string, daysLeft: number | null): AxMemberServiceRow => ({
   name,
@@ -197,5 +197,36 @@ describe('도움말 닫기와 오래된 시트 경고', () => {
     render(<ClientUsagePanel days={7} data={{ ...base, subscriptions: { ...base.subscriptions!, syncedAt: old } }} />)
     const outside = screen.getAllByText(/40일 지남/).filter((element) => !element.closest('[role=tooltip]'))
     expect(outside).toHaveLength(1)
+  })
+})
+
+describe('수집 참여 상태 aitk 열', () => {
+  it('팀 최고 버전보다 낮은 마지막 관측 버전만 주황색이다', () => {
+    const participant = (userId: string, aitkVersion: string | null) => ({
+      userId, memberName: userId, status: 'reporting' as const, lastReportedAt: null, lastLoginAt: null,
+      aitkVersion, clients: [], source: 'collector' as const,
+    })
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([]),
+          participation: [participant('최신', '0.7.24'), participant('구버전', '0.7.9 이하'), participant('모름', null)],
+        }}
+        days={7}
+      />
+    )
+    expect(screen.getByText('0.7.24').className).not.toContain('accent-orange')
+    expect(screen.getByText('0.7.9 이하').className).toContain('accent-orange')
+  })
+})
+
+describe('compareVersions', () => {
+  it('자리마다 숫자로 비교한다', () => {
+    expect(compareVersions('0.7.9', '0.7.24')).toBeLessThan(0)
+    expect(compareVersions('0.8.0', '0.7.24')).toBeGreaterThan(0)
+    expect(compareVersions('0.7.24', '0.7.24')).toBe(0)
+    expect(compareVersions('0.7', '0.7.0')).toBe(0)
+    // User-Agent 이전 aitk 표시는 0.7.9로 읽힌다
+    expect(compareVersions('0.7.9 이하', '0.7.10')).toBeLessThan(0)
   })
 })
