@@ -281,6 +281,31 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     expect(within(table).getByText('10%')).toBeInTheDocument()
   })
 
+  it('값이 있어도 한도 미수신 경고를 함께 두고, 값이 없는데 수집 중이라고 쓰지 않고, 정확히 같은 이름을 먼저 잇는다', () => {
+    const stale = { statusline: 'aitk' as const, autoSetup: 'unchanged', autoSetupAt: null, snapshotAt: null }
+    const fresh = { ...stale, snapshotAt: new Date().toISOString() }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([person('홍길동', 'Claude Code', 3), noLimit('김철수', 'Claude Code'), noLimit('김민수 (둘째)', 'Claude Code')]),
+          participation: [
+            participant('홍길동', '0.7.25', stale),
+            participant('김철수', '0.7.25', fresh),
+            participant('김민수', '0.7.25', stale),
+            participant('김민수 (둘째)', '0.7.25', { ...stale, statusline: 'none', autoSetup: 'skipped:symlink' }),
+          ],
+        }}
+        days={7}
+      />
+    )
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    const rowOf = (name: string) => within(within(table).getByText(name).closest('tr')!)
+    expect(rowOf('홍길동').getByText('10%')).toBeInTheDocument()
+    expect(rowOf('홍길동').getByText('연결됨 · 한도 미수신')).toBeInTheDocument()
+    expect(rowOf('김철수').getByText('미수집')).toBeInTheDocument()
+    expect(rowOf('김민수 (둘째)').getByText('미연결 · 설정 폴더가 심링크')).toBeInTheDocument()
+  })
+
   it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {
     const shared = person('공용(팀)', 'Claude Code', 3)
     const symlink = { statusline: 'none' as const, autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null }
@@ -294,7 +319,7 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
           ]),
           participation: [
             participant('조효희 (타타)', '0.7.24', symlink),
-            participant('김민수', '0.7.25', symlink),
+            participant('김민수 (첫째)', '0.7.25', symlink),
             participant('김민수 (둘째)', '0.7.20', symlink),
             participant('공용(팀)', '0.7.9 이하', symlink),
           ],
@@ -302,7 +327,7 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
         days={7}
       />
     )
-    // 타타만 이어진다 — 김민수는 후보가 둘, 공용 구독은 사람이 아니다
+    // 타타만 이어진다 — 김민수는 정확히 같은 이름 없이 후보가 둘, 공용 구독은 사람이 아니다
     const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
     expect(within(table).getAllByText('미연결 · 설정 폴더가 심링크')).toHaveLength(1)
     expect(within(within(table).getByText('타타').closest('tr')!).getByText('미연결 · 설정 폴더가 심링크')).toBeInTheDocument()

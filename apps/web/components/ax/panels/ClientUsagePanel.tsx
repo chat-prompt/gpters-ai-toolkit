@@ -333,8 +333,8 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         판정 기준
         <InfoTip label="수집 참여 상태 판정 기준">
           <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
-          <p className="mt-2">상태에 마우스를 올리거나 눌러 포커스를 주면 판정 근거(수집기 점검 신호·승인 기록 등)가 보입니다.</p>
-          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
+          <p className="mt-2">상태에 마우스를 올리거나 키보드로 포커스하면 판정 근거(수집기 점검 신호·승인 기록 등)가 보입니다.</p>
+          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 사용량 보고를 꺼 둔 사람은 비어 있습니다. 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 업그레이드 뒤 아직 보고가 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
           <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
           <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
         </InfoTip>
@@ -842,7 +842,8 @@ function PeopleTable({
   // 공용 구독은 사람이 아니고, 후보가 둘 이상이면(동명이인·별칭 겹침) 엉뚱한 사람에게 붙이지 않고 비운다
   const collectorFor = (row: AxMemberServiceRow): AxUsageParticipationRow | undefined => {
     if (row.subscription?.shared) return undefined
-    const matches = participation.filter((candidate) => samePerson(candidate.memberName, row.name))
+    const exact = participation.filter((candidate) => candidate.memberName === row.name)
+    const matches = exact.length > 0 ? exact : participation.filter((candidate) => samePerson(candidate.memberName, row.name))
     return matches.length === 1 ? matches[0] : undefined
   }
   const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
@@ -1009,7 +1010,7 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
 /**
  * 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집.
  * Claude Code 줄은 수집 연결 상태를 함께 쓴다: 값이 없으면 미수집 대신 상태를, 사용 보고가 없어도 미연결 사유를,
- * 예전 값이 남아 있어도 지금 미연결이면 그 경고를 값 아래에 둔다.
+ * 값이 있어도 지금 연결 경고(미연결·한도 미수신)가 있으면 값 아래에 둔다 — 머신이 여러 대면 둘이 함께 참일 수 있다.
  */
 function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow }) {
   const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
@@ -1017,7 +1018,9 @@ function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collect
   if (!row.usage) return warning ?? <span className="text-[var(--text-muted)]">{EMPTY}</span>
   const percent = row.usage.limitUsedPercent
   if (percent === null) {
-    return warning ?? <span className="text-[11px] text-[var(--text-muted)]">{capture?.label ?? '미수집'}</span>
+    // 상태는 다른 머신에서 왔을 수 있다 — 값이 없는 칸에 "수집 중"을 쓰면 모순이라 미수집으로 둔다
+    const label = capture && !capture.label.startsWith('수집 중') ? capture.label : '미수집'
+    return warning ?? <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
   }
   return (
     <>
@@ -1027,7 +1030,7 @@ function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collect
       >
         {percent}%
       </span>
-      {capture?.label.startsWith('미연결') && warning}
+      {warning}
     </>
   )
 }
