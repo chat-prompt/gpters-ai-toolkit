@@ -200,23 +200,169 @@ describe('도움말 닫기와 오래된 시트 경고', () => {
   })
 })
 
-describe('수집 참여 상태 aitk 열', () => {
-  it('팀 최고 버전보다 낮은 마지막 관측 버전만 주황색이다', () => {
-    const participant = (userId: string, aitkVersion: string | null) => ({
-      userId, memberName: userId, status: 'reporting' as const, lastReportedAt: null, lastLoginAt: null,
-      aitkVersion, clients: [], limitCapture: null, source: 'collector' as const,
-    })
+describe('구성원 × 구독 표의 수집기 상태', () => {
+  const participant = (
+    memberName: string,
+    aitkVersion: string | null,
+    limitCapture: AxUsageParticipationRow['limitCapture'] = null
+  ): AxUsageParticipationRow => ({
+    userId: memberName, memberName, status: 'reporting', lastReportedAt: null, lastLoginAt: null,
+    aitkVersion, clients: ['claude-code'], limitCapture, source: 'collector',
+  })
+  const noLimit = (name: string, service: string): AxMemberServiceRow => {
+    const row = person(name, service, 3)
+    return { ...row, usage: { ...row.usage!, limitUsedPercent: null } }
+  }
+
+  it('aitk 버전은 수집 참여 상태 표에 두고, 팀 최고 버전보다 낮으면 주황색이다', () => {
     render(
       <ClientUsagePanel
         data={{
-          ...data([]),
+          ...data([person('최신', 'Claude Code', 3)]),
           participation: [participant('최신', '0.7.24'), participant('구버전', '0.7.9 이하'), participant('모름', null)],
         }}
         days={7}
       />
     )
-    expect(screen.getByText('0.7.24').className).not.toContain('accent-orange')
-    expect(screen.getByText('0.7.9 이하').className).toContain('accent-orange')
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('마지막 로그인'))!
+    expect(within(table).getByText('0.7.24').className).not.toContain('accent-orange')
+    expect(within(table).getByText('0.7.9 이하').className).toContain('accent-orange')
+    expect(screen.queryByText(/^aitk 0\./)).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Claude 한도' })).toBeNull()
+  })
+
+  it('판정 근거는 칸 대신 상태에 붙은 툴팁이다', () => {
+    render(<ClientUsagePanel data={{ ...data([]), participation: [participant('최신', '0.7.24')] }} days={7} />)
+    expect(screen.queryByRole('columnheader', { name: '판정 근거' })).toBeNull()
+    const status = screen.getByRole('button', { name: '정상 보고' })
+    const tooltip = document.getElementById(status.getAttribute('aria-describedby')!)!
+    expect(tooltip).toHaveTextContent('판정 근거 · 수집기 점검 신호')
+    // 누르면 포커스가 간다(Safari 는 클릭으로 버튼에 포커스를 주지 않는다). 포인터를 올린 채 Esc 로 닫고, 포커스는 버튼에 남는다
+    fireEvent.click(status)
+    expect(document.activeElement).toBe(status)
+    fireEvent.mouseEnter(status.parentElement!)
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(tooltip).toHaveAttribute('data-dismissed', 'true')
+    expect(document.activeElement).toBe(status)
+    // 툴팁은 같은 호버 영역 안이다 — 버튼에서 툴팁으로 옮겨 가도 그룹을 떠나지 않는다
+    expect(status.parentElement).toContainElement(tooltip)
+  })
+
+  it('Claude Code 줄은 한도를 못 받으면 미수집 대신 연결 상태를 쓰고, Codex 줄은 그대로 미수집이다', () => {
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([noLimit('홍길동', 'Claude Code'), noLimit('홍길동', 'Codex'), noLimit('김철수', 'Claude Code')]),
+          participation: [
+            participant('홍길동', '0.7.25', { statusline: 'none', autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null }),
+            participant('김철수', '0.7.24'),
+          ],
+        }}
+        days={7}
+      />
+    )
+    expect(screen.getByText('미연결 · 설정 폴더가 심링크').className).toContain('accent-orange')
+    expect(screen.getByText('상태 미보고')).toBeInTheDocument()
+    expect(screen.getAllByText('미수집')).toHaveLength(1)
+  })
+
+  it('사용 보고가 없어도, 예전 한도 값이 남아 있어도 지금 미연결이면 경고를 보여준다', () => {
+    const drifted = { statusline: 'none' as const, autoSetup: 'skipped:drifted', autoSetupAt: null, snapshotAt: null }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([{ ...person('홍길동', 'Claude Code', 3), usage: null }, person('김철수', 'Claude Code', 3)]),
+          participation: [participant('홍길동', '0.7.25', drifted), participant('김철수', '0.7.25', drifted)],
+        }}
+        days={7}
+      />
+    )
+    expect(screen.getAllByText('미연결 · 연결 뒤 직접 되돌림')).toHaveLength(2)
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getByText('10%')).toBeInTheDocument()
+  })
+
+  it('값이 있어도 한도 미수신 경고를 함께 두고, 값이 없는데 수집 중이라고 쓰지 않고, 정확히 같은 이름을 먼저 잇는다', () => {
+    const stale = { statusline: 'aitk' as const, autoSetup: 'unchanged', autoSetupAt: null, snapshotAt: null }
+    const fresh = { ...stale, snapshotAt: new Date().toISOString() }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([person('홍길동', 'Claude Code', 3), noLimit('김철수', 'Claude Code'), noLimit('김민수 (둘째)', 'Claude Code')]),
+          participation: [
+            participant('홍길동', '0.7.25', stale),
+            participant('김철수', '0.7.25', fresh),
+            participant('김민수', '0.7.25', stale),
+            participant('김민수 (둘째)', '0.7.25', { ...stale, statusline: 'none', autoSetup: 'skipped:symlink' }),
+          ],
+        }}
+        days={7}
+      />
+    )
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    const rowOf = (name: string) => within(within(table).getByText(name).closest('tr')!)
+    expect(rowOf('홍길동').getByText('10%')).toBeInTheDocument()
+    expect(rowOf('홍길동').getByText('연결됨 · 한도 미수신')).toBeInTheDocument()
+    expect(rowOf('김철수').getByText('미수집')).toBeInTheDocument()
+    expect(rowOf('김민수 (둘째)').getByText('미연결 · 설정 폴더가 심링크')).toBeInTheDocument()
+  })
+
+  it('사용 보고가 없어도 첫 수신 대기 같은 정상 상태를 보여주고, Codex 줄에는 Claude 상태를 붙이지 않는다', () => {
+    const waiting = {
+      statusline: 'aitk' as const, autoSetup: 'connected:none', autoSetupAt: new Date().toISOString(), snapshotAt: null,
+      observedAt: new Date().toISOString(),
+    }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([{ ...person('홍길동', 'Claude Code', 3), usage: null }, { ...person('홍길동', 'Codex', 3), usage: null }]),
+          participation: [participant('홍길동', '0.7.25', waiting)],
+        }}
+        days={7}
+      />
+    )
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getAllByText('연결됨 · 첫 수신 대기')).toHaveLength(1)
+  })
+
+  it('지난 관측 경고는 지금 한도 값 아래에 붙이지 않는다', () => {
+    const old = { statusline: 'none' as const, autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null, observedAt: '2026-10-01T00:00:00.000Z' }
+    render(
+      <ClientUsagePanel
+        data={{ ...data([person('홍길동', 'Claude Code', 3)]), participation: [{ ...participant('홍길동', '0.7.25', old), lastReportedAt: '2026-10-19T00:00:00.000Z' }] }}
+        days={7}
+      />
+    )
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getByText('10%')).toBeInTheDocument()
+    expect(within(table).queryByText(/미연결/)).toBeNull()
+  })
+
+  it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {
+    const shared = person('공용(팀)', 'Claude Code', 3)
+    const symlink = { statusline: 'none' as const, autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([
+            { ...person('타타', 'Claude Code', 3), usage: null },
+            { ...person('김민수', 'Claude Code', 3), usage: null },
+            { ...shared, usage: null, subscription: { ...shared.subscription!, shared: true } },
+          ]),
+          participation: [
+            participant('조효희 (타타)', '0.7.24', symlink),
+            participant('김민수 (첫째)', '0.7.25', symlink),
+            participant('김민수 (둘째)', '0.7.20', symlink),
+            participant('공용(팀)', '0.7.9 이하', symlink),
+          ],
+        }}
+        days={7}
+      />
+    )
+    // 타타만 이어진다 — 김민수는 정확히 같은 이름 없이 후보가 둘, 공용 구독은 사람이 아니다
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getAllByText('미연결 · 설정 폴더가 심링크')).toHaveLength(1)
+    expect(within(within(table).getByText('타타').closest('tr')!).getByText('미연결 · 설정 폴더가 심링크')).toBeInTheDocument()
   })
 })
 

@@ -1211,3 +1211,24 @@ export interface AxUnusedSkillsData {
   /** 등록자별 후보 수 — 누구에게 묶어서 물을지 정하는 근거 */
   byAuthor: Array<{ authorName: string | null; count: number }>
 }
+
+/**
+ * 같은 사람인지 가르는 이름 키 — 전체 이름, 괄호 앞 이름, 괄호 안 별칭
+ *
+ * 로스터는 `타타`, 계정 표시명은 `조효희 (타타)`처럼 적힌다.
+ * ponytail: 별칭이 겹치는 두 사람은 구분하지 못한다. 그런 일이 생기면 로스터에 user_id 를 둔다.
+ *
+ * @param name - 로스터 이름 또는 계정 표시명
+ */
+export function personNameKeys(name: string): string[] {
+  const trimmed = name.trim()
+  const match = trimmed.match(/^(.*?)\s*\(([^)]*)\)\s*$/)
+  const keys = match ? [trimmed, match[1].trim(), match[2].trim()] : [trimmed]
+  return keys.filter((key) => key.length > 0)
+}
+
+/** 두 이름이 같은 사람을 가리키는지 (이름 키가 하나라도 겹치면) */
+export function samePerson(a: string, b: string): boolean {
+  const keys = new Set(personNameKeys(a))
+  return personNameKeys(b).some((key) => keys.has(key))
+}

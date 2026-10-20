@@ -21,7 +21,7 @@ import type {
   AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
-import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from '@/lib/features/ax'
+import { AX_USAGE_PARTICIPATION_STATUS_ORDER, samePerson } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyMap } from '../format'
 
@@ -150,7 +150,9 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
       </div>
 
       {/* 구성원 × 구독 — 관리자에게만 데이터가 내려온다 */}
-      {data.people !== null && <PeopleTable rows={data.people} cycleError={data.cycleError} />}
+      {data.people !== null && (
+        <PeopleTable rows={data.people} cycleError={data.cycleError} participation={data.participation ?? []} />
+      )}
       {data.peopleError && (
         <p className="border-l-2 border-[var(--accent-orange)] pl-4 text-sm text-[var(--text-secondary)]">
           구독 데이터를 불러오지 못해 구성원 × 구독 표를 만들지 못했습니다. 사용량은 위 요약에 그대로 있습니다.
@@ -278,17 +280,40 @@ export function limitCaptureLabel(
   return status
 }
 
-/** Claude 한도 수집 연결 상태 칸 */
-function LimitCaptureCell({ row }: { row: AxUsageParticipationRow }) {
-  const capture = limitCaptureLabel(row)
+/**
+ * 수집 참여 상태 값 — 판정 근거는 칸을 따로 두지 않고 호버·포커스 때 띄운다.
+ *
+ * 표가 가로 스크롤 영역 안이라 아래로 띄우면 마지막 줄에서 잘린다 — 넓은 화면은 같은 높이 오른쪽(클라이언트 칸 위),
+ * 좁은 화면은 오른쪽이 스크롤 영역 밖이라 위쪽(윗줄 위)에 둔다. 버튼과 본문 사이 간격은 투명한 여백이라
+ * 포인터를 본문으로 옮겨도 닫히지 않는다.
+ */
+function StatusWithSource({ label, tone, source }: { label: string; tone: string; source: string }) {
+  const id = useId()
+  const { dismissed, handlers } = useEscDismiss()
   return (
-    <td
-      className={`whitespace-nowrap ${TD} text-xs ${
-        capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'
-      }`}
-    >
-      {capture?.label ?? EMPTY}
-    </td>
+    <span className="group/status relative inline-flex" {...handlers}>
+      <button
+        type="button"
+        aria-describedby={id}
+        // Safari 는 버튼을 눌러도 포커스를 주지 않는다 — 누르면 툴팁이 열리게 직접 준다
+        onClick={(event) => event.currentTarget.focus()}
+        className={`cursor-help underline decoration-dotted underline-offset-4 focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${tone}`}
+      >
+        {label}
+      </button>
+      <span
+        id={id}
+        role="tooltip"
+        data-dismissed={dismissed || undefined}
+        className={`invisible absolute bottom-full left-0 z-30 w-max max-w-[11rem] pb-1 opacity-0 transition-opacity duration-150 group-hover/status:visible group-hover/status:opacity-100 group-focus-within/status:visible group-focus-within/status:opacity-100 sm:bottom-auto sm:left-full sm:top-1/2 sm:max-w-none sm:-translate-y-1/2 sm:pb-0 sm:pl-2 ${
+          dismissed ? '!invisible !opacity-0' : ''
+        }`}
+      >
+        <span className="block rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] shadow-lg sm:whitespace-nowrap">
+          판정 근거 · {source}
+        </span>
+      </span>
+    </span>
   )
 }
 
@@ -310,10 +335,10 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         판정 기준
         <InfoTip label="수집 참여 상태 판정 기준">
           <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
+          <p className="mt-2">상태에 마우스를 올리거나 키보드로 포커스하면 판정 근거(수집기 점검 신호·승인 기록 등)가 보입니다.</p>
+          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 사용량 보고를 꺼 둔 사람은 비어 있습니다. 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 업그레이드 뒤 아직 보고가 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
           <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
           <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
-          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 사용량 보고를 꺼 둔 사람은 비어 있습니다. 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 업그레이드 뒤 아직 보고가 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
-          <p className="mt-2">Claude 한도는 상태 표시줄이 Claude Code에서 주간 한도를 받는지입니다(aitk 0.7.25부터 보고). 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 연결 첫날은 첫 수신 대기로 둡니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를 적습니다. 머신이 여러 대면 마지막으로 보고한 머신 기준이고, 날짜가 붙은 값은 그날 관측한 이전 상태입니다.</p>
         </InfoTip>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -327,17 +352,15 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         ))}
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[1000px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH} w-[18%]`}>사용자</th>
-              <th className={`text-left ${TD} ${TH} w-[20%]`}>상태</th>
-              <th className={`text-left ${TD} ${TH} w-[17%]`}>클라이언트</th>
+              <th className={`text-left ${TD} ${TH} w-[22%]`}>상태</th>
+              <th className={`text-left ${TD} ${TH} w-[22%]`}>클라이언트</th>
               <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>aitk</th>
-              <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>Claude 한도</th>
               <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 보고</th>
               <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 로그인</th>
-              <th className={`text-left ${TD} ${TH} w-[18%]`}>판정 근거</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -354,7 +377,9 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
                   }`}
                 >
                   <td className={`${TD} text-[var(--text-primary)]`}>{row.memberName}</td>
-                  <td className={`${TD} ${status.tone}`}>{status.label}</td>
+                  <td className={TD}>
+                    <StatusWithSource label={status.label} tone={status.tone} source={PARTICIPATION_SOURCE[row.source]} />
+                  </td>
                   <td className={`${TD} text-[var(--text-secondary)]`}>
                     {row.clients.length > 0
                       ? row.clients.map((client) => CLIENT_LABELS[client]).join(', ')
@@ -369,15 +394,11 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
                   >
                     {row.aitkVersion ?? EMPTY}
                   </td>
-                  <LimitCaptureCell row={row} />
                   <td className={`whitespace-nowrap text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastReportedAt ? formatDateTime(row.lastReportedAt) : EMPTY}
                   </td>
                   <td className={`whitespace-nowrap text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastLoginAt ? formatDate(row.lastLoginAt) : EMPTY}
-                  </td>
-                  <td className={`${TD} text-xs text-[var(--text-secondary)]`}>
-                    {PARTICIPATION_SOURCE[row.source]}
                   </td>
                 </tr>
               )
@@ -796,8 +817,17 @@ type PeopleSort = 'renewal' | 'name'
  *
  * @param rows - 다음 결제일이 가까운 순으로 정렬된 줄
  * @param cycleError - 결제 주기 회차를 못 읽었으면 true — 주기 평균 칸을 "조회 실패"로 쓴다
+ * @param participation - 수집 참여 상태 행. 표시 이름으로 이어 Claude 한도 연결 상태를 붙인다
  */
-function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleError: boolean }) {
+function PeopleTable({
+  rows,
+  cycleError,
+  participation,
+}: {
+  rows: AxMemberServiceRow[]
+  cycleError: boolean
+  participation: AxUsageParticipationRow[]
+}) {
   // 기본은 이름순 — 사람을 찾아 보는 표다. 결제가 임박한 사람은 결제 임박순으로 바꿔 본다
   const [sort, setSort] = useState<PeopleSort>('name')
 
@@ -810,6 +840,14 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
   }
 
   const groups = groupByPerson(rows, sort)
+  // 사용 보고가 붙은 줄은 계정 표시명, 아닌 줄은 로스터 이름(`타타`)이다 — 서버와 같은 이름 규칙으로 잇는다.
+  // 공용 구독은 사람이 아니고, 후보가 둘 이상이면(동명이인·별칭 겹침) 엉뚱한 사람에게 붙이지 않고 비운다
+  const collectorFor = (row: AxMemberServiceRow): AxUsageParticipationRow | undefined => {
+    if (row.subscription?.shared) return undefined
+    const exact = participation.filter((candidate) => candidate.memberName === row.name)
+    const matches = exact.length > 0 ? exact : participation.filter((candidate) => samePerson(candidate.memberName, row.name))
+    return matches.length === 1 ? matches[0] : undefined
+  }
   const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
   const unused = rows.filter((row) => row.subscription && row.trackable && !row.usage).length
   const unsubscribed = rows.filter((row) => !row.subscription).length
@@ -825,6 +863,7 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
             <p className="mt-2">수집기는 하루 한 번 보고하므로 마지막 날 사용량은 덜 잡힐 수 있습니다. 주기 평균 값에 마우스를 올리면 회차별 값이 보입니다.</p>
+            <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
         </div>
         <div role="group" aria-label="정렬" className="flex rounded-full border border-[var(--border-subtle)] p-0.5 text-[11px]">
@@ -869,7 +908,9 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
                     index === 0 && groupIndex > 0 ? 'border-t-2 border-t-[var(--border-hover)]' : ''
                   }`}
                 >
-                  <td className={`${TD} align-top text-[var(--text-primary)] whitespace-nowrap`}>{index === 0 ? row.name : ''}</td>
+                  <td className={`${TD} align-top text-[var(--text-primary)] whitespace-nowrap`}>
+                    {index === 0 ? row.name : ''}
+                  </td>
                   <td className={`${TD} text-[var(--text-secondary)] whitespace-nowrap`}>
                     <PlanCell row={row} />
                   </td>
@@ -880,7 +921,7 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
                     {row.subscription ? formatMoney(row.subscription.amount, row.subscription.currency) : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
-                    <CurrentLimitCell row={row} />
+                    <CurrentLimitCell row={row} collector={collectorFor(row)} />
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
                     <CycleAverageCell row={row} cycleError={cycleError} />
@@ -968,18 +1009,36 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
   )
 }
 
-/** 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집 */
-function CurrentLimitCell({ row }: { row: AxMemberServiceRow }) {
-  if (!row.usage) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
-  const percent = row.usage.limitUsedPercent
-  if (percent === null) return <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
+/**
+ * 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집.
+ * Claude Code 줄은 수집 연결 상태를 함께 쓴다: 값이 없으면 미수집 대신 상태를, 사용 보고가 없어도 미연결 사유를,
+ * 값이 있어도 지금 연결 경고(미연결·한도 미수신)가 있으면 값 아래에 둔다 — 머신이 여러 대면 둘이 함께 참일 수 있다.
+ */
+function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow }) {
+  const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
+  const percent = row.usage?.limitUsedPercent ?? null
+  if (percent === null) {
+    // 상태는 다른 머신에서 왔을 수 있다 — 값이 없는 칸에 "수집 중"을 쓰면 모순이라 미수집으로 둔다
+    const label = capture && !capture.label.startsWith('수집 중') ? capture.label : row.usage ? '미수집' : EMPTY
+    return (
+      <span className={`text-[11px] ${capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}>
+        {label}
+      </span>
+    )
+  }
   return (
-    <span
-      title={row.usage.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
-      className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
-    >
-      {percent}%
-    </span>
+    <>
+      <span
+        title={row.usage?.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
+        className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
+      >
+        {percent}%
+      </span>
+      {/* 날짜가 붙은 경고는 지난 관측이다 — 지금 값 아래에 두면 지금 상태처럼 읽힌다 */}
+      {capture?.warn && !capture.label.endsWith('관측)') && (
+        <span className="block text-[11px] text-[var(--accent-orange)]">{capture.label}</span>
+      )}
+    </>
   )
 }
 
@@ -1107,33 +1166,10 @@ function isSheetStale(syncedAt: string | null): boolean {
  */
 function InfoTip({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()
-  // Esc 로 닫은 상태. 포인터를 올린 채로도 닫혀야 해서(WCAG 1.4.13) CSS 호버와 별개로 든다.
-  // 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있게 푼다
-  // Esc 는 지금 열린 도움말(포인터가 올라가 있거나 포커스가 있는 것)만 닫는다 — 다른 도움말까지 닫힌 상태로 남기면
-  // 처음 열 때 나타나지 않는다
-  const [dismissed, setDismissed] = useState(false)
-  const pointer = useRef(false)
-  const focus = useRef(false)
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && (pointer.current || focus.current)) setDismissed(true)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
-  const leave = (which: typeof pointer) => {
-    which.current = false
-    if (!pointer.current && !focus.current) setDismissed(false)
-  }
+  const { dismissed, handlers } = useEscDismiss()
 
   return (
-    <div
-      className="group/info inline-flex"
-      onMouseEnter={() => { pointer.current = true }}
-      onMouseLeave={() => leave(pointer)}
-      onFocus={() => { focus.current = true }}
-      onBlur={() => leave(focus)}
-    >
+    <div className="group/info inline-flex" {...handlers}>
       <button
         type="button"
         aria-label={label}
@@ -1156,4 +1192,40 @@ function InfoTip({ label, children }: { label: string; children: ReactNode }) {
       </div>
     </div>
   )
+}
+
+/**
+ * 호버·포커스로 여는 툴팁을 Esc 로 닫는 상태 (WCAG 1.4.13)
+ *
+ * 툴팁을 감싼 요소에 `handlers` 를 펼치고, `dismissed` 면 CSS 호버와 상관없이 숨긴다.
+ */
+function useEscDismiss() {
+  // Esc 로 닫은 상태. 포인터를 올린 채로도 닫혀야 해서(WCAG 1.4.13) CSS 호버와 별개로 든다.
+  // 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있게 푼다
+  // Esc 는 지금 열린 도움말(포인터가 올라가 있거나 포커스가 있는 것)만 닫는다 — 다른 도움말까지 닫힌 상태로 남기면
+  // 처음 열 때 나타나지 않는다
+  const [dismissed, setDismissed] = useState(false)
+  const pointer = useRef(false)
+  const focus = useRef(false)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (pointer.current || focus.current)) setDismissed(true)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+  const leave = (which: typeof pointer) => {
+    which.current = false
+    if (!pointer.current && !focus.current) setDismissed(false)
+  }
+
+  return {
+    dismissed,
+    handlers: {
+      onMouseEnter: () => { pointer.current = true },
+      onMouseLeave: () => leave(pointer),
+      onFocus: () => { focus.current = true },
+      onBlur: () => leave(focus),
+    },
+  }
 }
