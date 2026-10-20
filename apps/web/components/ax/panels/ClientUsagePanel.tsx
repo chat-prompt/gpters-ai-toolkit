@@ -150,7 +150,9 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
       </div>
 
       {/* 구성원 × 구독 — 관리자에게만 데이터가 내려온다 */}
-      {data.people !== null && <PeopleTable rows={data.people} cycleError={data.cycleError} />}
+      {data.people !== null && (
+        <PeopleTable rows={data.people} cycleError={data.cycleError} participation={data.participation ?? []} />
+      )}
       {data.peopleError && (
         <p className="border-l-2 border-[var(--accent-orange)] pl-4 text-sm text-[var(--text-secondary)]">
           구독 데이터를 불러오지 못해 구성원 × 구독 표를 만들지 못했습니다. 사용량은 위 요약에 그대로 있습니다.
@@ -278,27 +280,8 @@ export function limitCaptureLabel(
   return status
 }
 
-/** Claude 한도 수집 연결 상태 칸 */
-function LimitCaptureCell({ row }: { row: AxUsageParticipationRow }) {
-  const capture = limitCaptureLabel(row)
-  return (
-    <td
-      className={`whitespace-nowrap ${TD} text-xs ${
-        capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'
-      }`}
-    >
-      {capture?.label ?? EMPTY}
-    </td>
-  )
-}
-
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
-  // npm 최신을 서버에서 따로 묻지 않는다 — 팀에서 가장 높은 버전보다 낮은 마지막 관측 버전을 주황색으로 둔다.
-  const newestAitk = rows
-    .map((row) => row.aitkVersion)
-    .filter((version): version is string => version !== null)
-    .reduce<string | null>((max, version) => (max === null || compareVersions(version, max) > 0 ? version : max), null)
   // pill과 표 모두 나쁜 상태부터 좋은 상태 순이다.
   const statusCounts = AX_USAGE_PARTICIPATION_STATUS_ORDER
     .map((status) => ({ status, count: rows.filter((row) => row.status === status).length }))
@@ -312,8 +295,6 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
           <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
           <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
           <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
-          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 사용량 보고를 꺼 둔 사람은 비어 있습니다. 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 업그레이드 뒤 아직 보고가 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
-          <p className="mt-2">Claude 한도는 상태 표시줄이 Claude Code에서 주간 한도를 받는지입니다(aitk 0.7.25부터 보고). 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 연결 첫날은 첫 수신 대기로 둡니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를 적습니다. 머신이 여러 대면 마지막으로 보고한 머신 기준이고, 날짜가 붙은 값은 그날 관측한 이전 상태입니다.</p>
         </InfoTip>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -327,14 +308,12 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         ))}
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[1000px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH} w-[18%]`}>사용자</th>
               <th className={`text-left ${TD} ${TH} w-[20%]`}>상태</th>
               <th className={`text-left ${TD} ${TH} w-[17%]`}>클라이언트</th>
-              <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>aitk</th>
-              <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>Claude 한도</th>
               <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 보고</th>
               <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 로그인</th>
               <th className={`text-left ${TD} ${TH} w-[18%]`}>판정 근거</th>
@@ -360,16 +339,6 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
                       ? row.clients.map((client) => CLIENT_LABELS[client]).join(', ')
                       : EMPTY}
                   </td>
-                  <td
-                    className={`whitespace-nowrap ${TD} font-mono text-xs tabular-nums ${
-                      row.aitkVersion && newestAitk && compareVersions(row.aitkVersion, newestAitk) < 0
-                        ? 'text-[var(--accent-orange)]'
-                        : 'text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {row.aitkVersion ?? EMPTY}
-                  </td>
-                  <LimitCaptureCell row={row} />
                   <td className={`whitespace-nowrap text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastReportedAt ? formatDateTime(row.lastReportedAt) : EMPTY}
                   </td>
@@ -796,8 +765,17 @@ type PeopleSort = 'renewal' | 'name'
  *
  * @param rows - 다음 결제일이 가까운 순으로 정렬된 줄
  * @param cycleError - 결제 주기 회차를 못 읽었으면 true — 주기 평균 칸을 "조회 실패"로 쓴다
+ * @param participation - 수집 참여 상태 행. 표시 이름으로 이어 aitk 버전과 Claude 한도 연결 상태를 붙인다
  */
-function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleError: boolean }) {
+function PeopleTable({
+  rows,
+  cycleError,
+  participation,
+}: {
+  rows: AxMemberServiceRow[]
+  cycleError: boolean
+  participation: AxUsageParticipationRow[]
+}) {
   // 기본은 이름순 — 사람을 찾아 보는 표다. 결제가 임박한 사람은 결제 임박순으로 바꿔 본다
   const [sort, setSort] = useState<PeopleSort>('name')
 
@@ -810,6 +788,13 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
   }
 
   const groups = groupByPerson(rows, sort)
+  // 두 표 모두 계정 표시명을 쓴다 — 사용 보고가 없는 로스터 이름은 이어지지 않고 빈 칸으로 남는다
+  const collectorByName = new Map(participation.map((row) => [row.memberName, row]))
+  // npm 최신을 서버에서 따로 묻지 않는다 — 팀에서 가장 높은 버전보다 낮은 마지막 관측 버전을 주황색으로 둔다.
+  const newestAitk = participation
+    .map((row) => row.aitkVersion)
+    .filter((version): version is string => version !== null)
+    .reduce<string | null>((max, version) => (max === null || compareVersions(version, max) > 0 ? version : max), null)
   const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
   const unused = rows.filter((row) => row.subscription && row.trackable && !row.usage).length
   const unsubscribed = rows.filter((row) => !row.subscription).length
@@ -825,6 +810,8 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
             <p className="mt-2">수집기는 하루 한 번 보고하므로 마지막 날 사용량은 덜 잡힐 수 있습니다. 주기 평균 값에 마우스를 올리면 회차별 값이 보입니다.</p>
+            <p className="mt-2">이름 아래 버전은 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 aitk 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
+            <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
         </div>
         <div role="group" aria-label="정렬" className="flex rounded-full border border-[var(--border-subtle)] p-0.5 text-[11px]">
@@ -869,7 +856,14 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
                     index === 0 && groupIndex > 0 ? 'border-t-2 border-t-[var(--border-hover)]' : ''
                   }`}
                 >
-                  <td className={`${TD} align-top text-[var(--text-primary)] whitespace-nowrap`}>{index === 0 ? row.name : ''}</td>
+                  <td className={`${TD} align-top text-[var(--text-primary)] whitespace-nowrap`}>
+                    {index === 0 && (
+                      <>
+                        {row.name}
+                        <AitkVersion version={collectorByName.get(row.name)?.aitkVersion ?? null} newest={newestAitk} />
+                      </>
+                    )}
+                  </td>
                   <td className={`${TD} text-[var(--text-secondary)] whitespace-nowrap`}>
                     <PlanCell row={row} />
                   </td>
@@ -880,7 +874,7 @@ function PeopleTable({ rows, cycleError }: { rows: AxMemberServiceRow[]; cycleEr
                     {row.subscription ? formatMoney(row.subscription.amount, row.subscription.currency) : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
-                    <CurrentLimitCell row={row} />
+                    <CurrentLimitCell row={row} collector={collectorByName.get(row.name)} />
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
                     <CycleAverageCell row={row} cycleError={cycleError} />
@@ -968,11 +962,38 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
   )
 }
 
-/** 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집 */
-function CurrentLimitCell({ row }: { row: AxMemberServiceRow }) {
+/** 이름 아래 aitk 버전 — 팀 최고 버전보다 낮으면 주황색 */
+function AitkVersion({ version, newest }: { version: string | null; newest: string | null }) {
+  if (!version) return null
+  const outdated = newest !== null && compareVersions(version, newest) < 0
+  return (
+    <span
+      className={`block font-mono text-[11px] tabular-nums ${
+        outdated ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'
+      }`}
+    >
+      aitk {version}
+    </span>
+  )
+}
+
+/**
+ * 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집.
+ * Claude Code 줄은 미수집 대신 수집 연결 상태(미연결 사유 등)를 쓴다.
+ */
+function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow }) {
   if (!row.usage) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
   const percent = row.usage.limitUsedPercent
-  if (percent === null) return <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
+  if (percent === null) {
+    const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
+    return (
+      <span
+        className={`text-[11px] ${capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}
+      >
+        {capture?.label ?? '미수집'}
+      </span>
+    )
+  }
   return (
     <span
       title={row.usage.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}

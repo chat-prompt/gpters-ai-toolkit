@@ -200,23 +200,52 @@ describe('도움말 닫기와 오래된 시트 경고', () => {
   })
 })
 
-describe('수집 참여 상태 aitk 열', () => {
-  it('팀 최고 버전보다 낮은 마지막 관측 버전만 주황색이다', () => {
-    const participant = (userId: string, aitkVersion: string | null) => ({
-      userId, memberName: userId, status: 'reporting' as const, lastReportedAt: null, lastLoginAt: null,
-      aitkVersion, clients: [], limitCapture: null, source: 'collector' as const,
-    })
+describe('구성원 × 구독 표의 수집기 상태', () => {
+  const participant = (
+    memberName: string,
+    aitkVersion: string | null,
+    limitCapture: AxUsageParticipationRow['limitCapture'] = null
+  ): AxUsageParticipationRow => ({
+    userId: memberName, memberName, status: 'reporting', lastReportedAt: null, lastLoginAt: null,
+    aitkVersion, clients: ['claude-code'], limitCapture, source: 'collector',
+  })
+  const noLimit = (name: string, service: string): AxMemberServiceRow => {
+    const row = person(name, service, 3)
+    return { ...row, usage: { ...row.usage!, limitUsedPercent: null } }
+  }
+
+  it('이름 아래 aitk 버전을 두고, 팀 최고 버전보다 낮으면 주황색이다 — 수집 참여 상태 표에는 없다', () => {
     render(
       <ClientUsagePanel
         data={{
-          ...data([]),
+          ...data([person('최신', 'Claude Code', 3), person('구버전', 'Claude Code', 3), person('모름', 'Claude Code', 3)]),
           participation: [participant('최신', '0.7.24'), participant('구버전', '0.7.9 이하'), participant('모름', null)],
         }}
         days={7}
       />
     )
-    expect(screen.getByText('0.7.24').className).not.toContain('accent-orange')
-    expect(screen.getByText('0.7.9 이하').className).toContain('accent-orange')
+    expect(screen.getByText('aitk 0.7.24').className).not.toContain('accent-orange')
+    expect(screen.getByText('aitk 0.7.9 이하').className).toContain('accent-orange')
+    expect(screen.getAllByText(/^aitk /)).toHaveLength(2)
+    expect(screen.queryByRole('columnheader', { name: 'Claude 한도' })).toBeNull()
+  })
+
+  it('Claude Code 줄은 한도를 못 받으면 미수집 대신 연결 상태를 쓰고, Codex 줄은 그대로 미수집이다', () => {
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([noLimit('홍길동', 'Claude Code'), noLimit('홍길동', 'Codex'), noLimit('김철수', 'Claude Code')]),
+          participation: [
+            participant('홍길동', '0.7.25', { statusline: 'none', autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null }),
+            participant('김철수', '0.7.24'),
+          ],
+        }}
+        days={7}
+      />
+    )
+    expect(screen.getByText('미연결 · 설정 폴더가 심링크').className).toContain('accent-orange')
+    expect(screen.getByText('상태 미보고')).toBeInTheDocument()
+    expect(screen.getAllByText('미수집')).toHaveLength(1)
   })
 })
 
