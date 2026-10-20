@@ -237,8 +237,9 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     const status = screen.getByRole('button', { name: '정상 보고' })
     const tooltip = document.getElementById(status.getAttribute('aria-describedby')!)!
     expect(tooltip).toHaveTextContent('판정 근거 · 수집기 점검 신호')
-    // 포인터를 올린 채 Esc 로 닫고, 포커스는 버튼에 남는다
-    status.focus()
+    // 누르면 포커스가 간다(Safari 는 클릭으로 버튼에 포커스를 주지 않는다). 포인터를 올린 채 Esc 로 닫고, 포커스는 버튼에 남는다
+    fireEvent.click(status)
+    expect(document.activeElement).toBe(status)
     fireEvent.mouseEnter(status.parentElement!)
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
     expect(tooltip).toHaveAttribute('data-dismissed', 'true')
@@ -322,6 +323,19 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     )
     const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
     expect(within(table).getAllByText('연결됨 · 첫 수신 대기')).toHaveLength(1)
+  })
+
+  it('지난 관측 경고는 지금 한도 값 아래에 붙이지 않는다', () => {
+    const old = { statusline: 'none' as const, autoSetup: 'skipped:symlink', autoSetupAt: null, snapshotAt: null, observedAt: '2026-10-01T00:00:00.000Z' }
+    render(
+      <ClientUsagePanel
+        data={{ ...data([person('홍길동', 'Claude Code', 3)]), participation: [{ ...participant('홍길동', '0.7.25', old), lastReportedAt: '2026-10-19T00:00:00.000Z' }] }}
+        days={7}
+      />
+    )
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getByText('10%')).toBeInTheDocument()
+    expect(within(table).queryByText(/미연결/)).toBeNull()
   })
 
   it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {

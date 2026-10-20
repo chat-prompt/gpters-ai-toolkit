@@ -1029,7 +1029,7 @@ function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collect
   return (
     <>
       <span
-        title={row.usage.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
+        title={row.usage?.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
         className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
       >
         {percent}%
