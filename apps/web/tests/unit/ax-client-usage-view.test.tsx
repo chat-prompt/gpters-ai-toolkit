@@ -228,6 +228,7 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     expect(screen.getByText('aitk 0.7.9 이하').className).toContain('accent-orange')
     expect(screen.getAllByText(/^aitk /)).toHaveLength(2)
     expect(screen.queryByRole('columnheader', { name: 'Claude 한도' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'aitk' })).toBeNull()
   })
 
   it('Claude Code 줄은 한도를 못 받으면 미수집 대신 연결 상태를 쓰고, Codex 줄은 그대로 미수집이다', () => {
@@ -246,6 +247,24 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     expect(screen.getByText('미연결 · 설정 폴더가 심링크').className).toContain('accent-orange')
     expect(screen.getByText('상태 미보고')).toBeInTheDocument()
     expect(screen.getAllByText('미수집')).toHaveLength(1)
+    // 같은 사람의 두 줄 중 첫 줄에만 버전이 붙는다
+    expect(screen.getAllByText('aitk 0.7.25')).toHaveLength(1)
+  })
+
+  it('사용 보고가 없어도, 예전 한도 값이 남아 있어도 지금 미연결이면 경고를 보여준다', () => {
+    const drifted = { statusline: 'none' as const, autoSetup: 'skipped:drifted', autoSetupAt: null, snapshotAt: null }
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([{ ...person('홍길동', 'Claude Code', 3), usage: null }, person('김철수', 'Claude Code', 3)]),
+          participation: [participant('홍길동', '0.7.25', drifted), participant('김철수', '0.7.25', drifted)],
+        }}
+        days={7}
+      />
+    )
+    expect(screen.getAllByText('미연결 · 연결 뒤 직접 되돌림')).toHaveLength(2)
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
+    expect(within(table).getByText('10%')).toBeInTheDocument()
   })
   it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {
     const shared = person('공용(팀)', 'Claude Code', 3)

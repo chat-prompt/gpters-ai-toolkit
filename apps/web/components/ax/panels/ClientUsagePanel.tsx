@@ -984,28 +984,27 @@ function AitkVersion({ version, newest }: { version: string | null; newest: stri
 
 /**
  * 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집.
- * Claude Code 줄은 미수집 대신 수집 연결 상태(미연결 사유 등)를 쓴다.
+ * Claude Code 줄은 수집 연결 상태를 함께 쓴다: 값이 없으면 미수집 대신 상태를, 사용 보고가 없어도 미연결 사유를,
+ * 예전 값이 남아 있어도 지금 미연결이면 그 경고를 값 아래에 둔다.
  */
 function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow }) {
-  if (!row.usage) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
+  const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
+  const warning = capture?.warn ? <span className="block text-[11px] text-[var(--accent-orange)]">{capture.label}</span> : null
+  if (!row.usage) return warning ?? <span className="text-[var(--text-muted)]">{EMPTY}</span>
   const percent = row.usage.limitUsedPercent
   if (percent === null) {
-    const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
-    return (
-      <span
-        className={`text-[11px] ${capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}`}
-      >
-        {capture?.label ?? '미수집'}
-      </span>
-    )
+    return warning ?? <span className="text-[11px] text-[var(--text-muted)]">{capture?.label ?? '미수집'}</span>
   }
   return (
-    <span
-      title={row.usage.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
-      className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
-    >
-      {percent}%
-    </span>
+    <>
+      <span
+        title={row.usage.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
+        className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
+      >
+        {percent}%
+      </span>
+      {capture?.label.startsWith('미연결') && warning}
+    </>
   )
 }
 
