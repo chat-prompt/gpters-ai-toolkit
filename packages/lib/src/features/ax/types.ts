@@ -838,6 +838,10 @@ export interface AxRenewalRow {
   averagePercent: number | null
   /** 아직 초기화되지 않은 회차의 사용률. 보고가 없으면 null */
   currentPercent: number | null
+  /** 아직 초기화되지 않은 회차가 초기화되는 시각 (ISO). 보고가 없으면 null — 뽀밋이가 주말 초기화분을 금요일에 미리 알린다 */
+  currentResetsAt: string | null
+  /** 결제 주기와 무관하게 지난 8일 안에 초기화된 회차 (오래된 순). 뽀밋이 저사용 알림용 */
+  recentWeeks: AxRenewalWeek[]
 }
 
 /** 구독 갱신 결정표 데이터 */

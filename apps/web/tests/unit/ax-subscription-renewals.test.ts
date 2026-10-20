@@ -80,7 +80,7 @@ describe('buildRenewalRows', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
       ownerName: '홍길동', nextRenewal: '2026-10-25', daysLeft: 6, amount: 200,
-      averagePercent: 60, currentPercent: 35,
+      averagePercent: 60, currentPercent: 35, currentResetsAt: kst('2026-10-21T10:00:00').toISOString(),
     })
     expect(rows[0].weeks.map((week) => week.usedPercent)).toEqual([80, 40, 60])
     // 보고 시각은 최댓값(80)을 보고한 행의 것
@@ -166,7 +166,17 @@ describe('buildRenewalRows', () => {
 
   it('보고가 없으면 평균은 0이 아니라 null이다', () => {
     const [row] = buildRenewalRows([sub()], [], now)
-    expect(row).toMatchObject({ weeks: [], averagePercent: null, currentPercent: null })
+    expect(row).toMatchObject({ weeks: [], averagePercent: null, currentPercent: null, currentResetsAt: null, recentWeeks: [] })
+  })
+
+  it('결제일 직전에 끝난 회차는 weeks 에서 빠져도 recentWeeks 에 남고, 8일 지난 회차는 빠진다', () => {
+    // 결제일 18일 → 이번 주기는 10/18 00:00 부터. 10/17 에 끝난 회차는 지난 주기다
+    const [row] = buildRenewalRows([sub({ renewalDay: 18 })], [
+      report('2026-10-17T22:00:00', '2026-10-17T09:00:00', 3),
+      report('2026-10-11T10:00:00', '2026-10-10T09:00:00', 50),
+    ], now)
+    expect(row.weeks).toEqual([])
+    expect(row.recentWeeks.map((week) => [week.resetsAt, week.usedPercent])).toEqual([[kst('2026-10-17T22:00:00').toISOString(), 3]])
   })
 
   it('사람·벤더·클라이언트가 맞는 보고만 잇는다', () => {
