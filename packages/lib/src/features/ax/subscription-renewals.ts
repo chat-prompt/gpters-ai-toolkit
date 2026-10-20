@@ -89,7 +89,7 @@ type Report = { resetsAt: Date; usedPercent: number; reportedAt: Date; seenAt: D
  * 한 회차. reportedAt 은 최댓값을 보고한 시각, lastSeenAt 은 가장 늦은 보고 시각(진행 중 회차 고르기용),
  * endedAt 은 실제로 끝난 시각 — 보통 resetsAt, 벤더가 일찍 초기화했으면 다음 회차가 시작된 시각
  */
-type Window = { resetsAt: Date; usedPercent: number; reportedAt: Date; firstSeenAt: Date; lastSeenAt: Date; endedAt: Date }
+type Window = { resetsAt: Date; firstResetsAt: Date; startedAt: Date; usedPercent: number; reportedAt: Date; firstSeenAt: Date; lastSeenAt: Date; endedAt: Date }
 
 // 화면(클라이언트)도 같은 규칙으로 사람을 잇는다 — DB 를 부르지 않는 types.ts 에 둔다
 export { personNameKeys, samePerson } from './types'
@@ -150,12 +150,28 @@ function clusterWindows(reports: Report[]): Window[] {
         last.reportedAt = item.reportedAt
       }
     } else {
-      windows.push({ resetsAt: item.resetsAt, usedPercent: item.usedPercent, reportedAt: item.reportedAt, firstSeenAt: item.firstSeenAt, lastSeenAt: item.seenAt, endedAt: item.resetsAt })
+      windows.push({ resetsAt: item.resetsAt, firstResetsAt: item.resetsAt, startedAt: new Date(item.resetsAt.getTime() - WEEK_MS), usedPercent: item.usedPercent, reportedAt: item.reportedAt, firstSeenAt: item.firstSeenAt, lastSeenAt: item.seenAt, endedAt: item.resetsAt })
     }
   }
   // 묶는 동안 대표 초기화 시각이 늦춰졌을 수 있어 끝난 시각을 다시 맞춘다
   for (const window of windows) window.endedAt = window.resetsAt
   return markEarlyResets(windows)
+}
+
+/**
+ * 회차 사용률을 7일 기준으로 환산한다 — 사용률 ÷ 회차가 실제로 이어진 일수 × 7 (추정).
+ *
+ * 조기 초기화 회차는 7일을 못 채워 실측이 낮다(2026-10 하영 Codex: 회차마다 30~95% 인데 7일 환산 평균 약 138%).
+ * 분모는 마지막 관측이 아니라 회차가 실제로 이어진 기간이다 — 1.2일에 75% 까지 쓰고 쉬었다가 4.1일에 초기화된
+ * 회차를 1.2일로 나누면 448% 로 부푼다. 1일 미만 회차는 흔들림이 커서 환산하지 않는다(null).
+ * 7일을 채운 회차는 실측 그대로다. 100% 를 넘어도 자르지 않는다 — "이 속도면 한도에 걸린다"는 신호다.
+ * 흔들림으로 7일을 몇 초 넘긴 회차도 실측 그대로다.
+ */
+function projectWeek(week: Window): number | null {
+  const days = (week.endedAt.getTime() - week.startedAt.getTime()) / DAY_MS
+  if (days < 1) return null
+  // 반올림하지 않는다 — 봇이 20%·25% 이하를 판정하는데 20.04 를 20.0 으로 만들면 기준을 넘은 회차를 알린다. 표시에서 반올림
+  return days >= 7 ? week.usedPercent : (week.usedPercent / days) * 7
 }
 
 /**
@@ -175,7 +191,8 @@ function markEarlyResets(windows: Window[]): Window[] {
     const next = windows[i + 1]
     // 끝난 시각은 이 회차를 마지막으로 받은 시각보다 이르지 않다 — Claude 는 "다음 초기화 − 7일" 이 실제 시작과
     // 어긋난 회차가 있다(10/15 04:00 예정 회차를 10/15 01:34 까지 받았는데 다음 회차 계산 시작은 10/13 01:00)
-    const endedAt = Math.max(next.resetsAt.getTime() - WEEK_MS, window.lastSeenAt.getTime())
+    // 다음 회차의 시작도 묶인 초기화 시각 중 가장 이른 것 기준(이 회차 시작과 같은 기준 — 흔들림이 경계를 옮기지 않게)
+    const endedAt = Math.max(next.firstResetsAt.getTime() - WEEK_MS, window.lastSeenAt.getTime())
     // 새 회차를 예정보다 일찍 실제로 받았어야 한다 — 마지막 날 쓰지 않은 것만으로는 조기 초기화가 아니다.
     // 새 회차를 받은 뒤로 이 회차 보고가 하나라도 오면 나란한 회차(계정 둘)다
     const early = endedAt < window.resetsAt.getTime() - EARLY_RESET_MIN_MS
@@ -183,6 +200,18 @@ function markEarlyResets(windows: Window[]): Window[] {
       && next.firstSeenAt.getTime() < window.resetsAt.getTime() - EARLY_RESET_MIN_MS
       && window.lastSeenAt.getTime() <= next.firstSeenAt.getTime()
     if (early) window.endedAt = new Date(endedAt)
+  }
+  // 회차 시작 = 묶인 초기화 시각 중 가장 이른 것 − 7일(몇 초 흔들림이 기간을 줄여 1일 경계에서 빠지지 않게).
+  // 다만 앞 회차가 그보다 6시간 넘게 늦게 끝났으면 그때부터다 — Claude 는 회차가 7일이 아닐 때가 있어
+  // "초기화 − 7일" 이 실제 시작보다 며칠 이를 수 있다. 6시간 안쪽은 나란한 회차(계정 둘, 2시간 간격)라 무시한다
+  for (let i = 0; i < windows.length; i++) {
+    const window = windows[i]
+    const computed = window.firstResetsAt.getTime() - WEEK_MS
+    const previousEnd = i > 0 ? windows[i - 1].endedAt.getTime() : Number.NEGATIVE_INFINITY
+    // 앞 회차가 끝나기 6시간 넘게 전부터 이 회차를 받고 있었으면 두 회차가 겹친 것(계정 둘) — 옮기지 않는다
+    const later = previousEnd > computed + EARLY_RESET_MIN_MS && previousEnd < window.firstResetsAt.getTime() - EARLY_RESET_MIN_MS
+      && window.firstSeenAt.getTime() >= previousEnd - EARLY_RESET_MIN_MS
+    window.startedAt = new Date(later ? previousEnd : computed)
   }
   return windows
 }
@@ -228,8 +257,10 @@ export function buildRenewalRows(
 
     const toWeek = (week: Window) => ({
       resetsAt: week.resetsAt.toISOString(),
+      startedAt: week.startedAt.toISOString(),
       endedAt: week.endedAt.toISOString(),
       usedPercent: week.usedPercent,
+      projectedPercent: projectWeek(week),
       reportedAt: week.reportedAt.toISOString(),
     })
     // 회차가 끝난 시점은 실제로 끝난 시각(조기 초기화면 그때)으로 센다
@@ -238,8 +269,8 @@ export function buildRenewalRows(
     const recentWeeks = mine
       .filter((week) => week.endedAt <= now && week.endedAt.getTime() >= now.getTime() - RECENT_WEEKS_DAYS * DAY_MS)
       .map(toWeek)
-    // 조기 초기화된 회차는 7일을 다 채우지 못해 사용률이 낮게 나온다 — 평균에 넣지 않는다(목록에는 남긴다)
-    const fullWeeks = weeks.filter((week) => week.endedAt === week.resetsAt)
+    // 조기 초기화 회차도 7일 환산값으로 평균에 넣는다. 1일 미만 회차는 환산하지 않아 빠진다
+    const projected = weeks.map((week) => week.projectedPercent).filter((value): value is number => value !== null)
     // 아직 끝나지 않은 회차가 둘 이상이면 가장 최근에 보고된 쪽이 진행 중이다.
     // 꺼져 있던 머신이 끝난 회차의 옛 스냅샷을 더 늦게 보내면 그 회차를 고를 수 있다 — 드문 경우라 그대로 둔다
     const current = mine
@@ -256,8 +287,8 @@ export function buildRenewalRows(
       nextRenewal: kstDateKey(next),
       daysLeft: daysUntil(next, now),
       weeks,
-      averagePercent: fullWeeks.length > 0
-        ? Math.round((fullWeeks.reduce((sum, week) => sum + week.usedPercent, 0) / fullWeeks.length) * 10) / 10
+      averagePercent: projected.length > 0
+        ? Math.round((projected.reduce((sum, value) => sum + value, 0) / projected.length) * 10) / 10
         : null,
       currentPercent: current?.usedPercent ?? null,
       currentResetsAt: current?.resetsAt.toISOString() ?? null,

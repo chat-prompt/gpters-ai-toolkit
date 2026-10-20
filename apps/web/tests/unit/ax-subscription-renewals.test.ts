@@ -131,8 +131,10 @@ describe('buildRenewalRows', () => {
     ], now)
     expect(row.weeks).toEqual([{
       resetsAt: kst('2026-10-14T10:00:00').toISOString(),
+      startedAt: kst('2026-10-07T10:00:00').toISOString(),
       endedAt: kst('2026-10-14T10:00:00').toISOString(),
       usedPercent: 90,
+      projectedPercent: 90,
       reportedAt: kst('2026-10-14T09:55:00').toISOString(),
     }])
   })
@@ -177,7 +179,7 @@ describe('buildRenewalRows', () => {
     expect(row.currentPercent).toBe(90)
   })
 
-  it('벤더가 일찍 초기화한 회차는 다음 회차가 시작된 시각에 끝난 것으로 보고 평균에서 뺀다 (Codex 10/20 실측 모양)', () => {
+  it('벤더가 일찍 초기화한 회차는 다음 회차가 시작된 시각에 끝난 것으로 보고 7일 환산해 평균에 넣는다 (Codex 10/20 실측 모양)', () => {
     // A: 10/26 08:58 예정, 10/20 15:30 에 42% 가 마지막. B: 10/20 15:35 에 처음 보고, 7일 뒤 10/27 15:35 초기화 예정
     const later = kst('2026-10-21T12:00:00')
     const [row] = buildRenewalRows([sub({ vendor: 'OpenAI', plan: 'Pro5x', renewalDay: 5 })], [
@@ -189,8 +191,9 @@ describe('buildRenewalRows', () => {
       [60, kst('2026-10-19T10:00:00').toISOString()],
       [42, kst('2026-10-20T15:35:00').toISOString()],
     ])
-    // 4.3일 만에 끝난 42% 는 7일 회차와 섞지 않는다
-    expect(row.averagePercent).toBe(60)
+    // 1.3일 만에 끝난 42% 는 7일로 환산하면 230.5% — 7일을 채운 60% 와 평균
+    expect(row.weeks.map((week) => week.projectedPercent && Math.round(week.projectedPercent * 10) / 10)).toEqual([60, 230.5])
+    expect(row.averagePercent).toBe(145.2)
     expect(row).toMatchObject({ currentPercent: 3, currentResetsAt: kst('2026-10-27T15:35:00').toISOString() })
   })
 
@@ -200,9 +203,12 @@ describe('buildRenewalRows', () => {
       report('2026-10-15T04:00:00', '2026-10-15T01:34:00', 48),
       { ...report('2026-10-20T01:00:00', '2026-10-19T09:00:00', 81), firstSeenAt: kst('2026-10-15T02:00:00') },
     ], kst('2026-10-21T12:00:00'))
-    // 예정보다 2.4시간 이른 것은 조기 초기화가 아니다 — 7일 회차로 평균에 든다
+    // 예정보다 2.4시간 이른 것은 조기 초기화가 아니다
     expect(row.weeks.map((week) => week.endedAt === week.resetsAt)).toEqual([true, true])
-    expect(row.averagePercent).toBe(64.5)
+    // 다만 다음 회차는 앞 회차가 끝난 10/15 04:00 에 시작해 4.9일 만에 끝났다 — 81% 를 7일로 환산(116.3)해 평균
+    expect(row.weeks[1].startedAt).toBe(kst('2026-10-15T04:00:00').toISOString())
+    expect(row.weeks[1].projectedPercent).toBeCloseTo(81 / 4.875 * 7, 6)
+    expect(row.averagePercent).toBe(82.2)
   })
 
   it('나란한 회차가 새 회차 첫 보고 30분 뒤에 보고되면 조기 초기화가 아니고 진행 중 사용률도 그대로다', () => {
@@ -221,7 +227,77 @@ describe('buildRenewalRows', () => {
       { ...report('2026-10-20T01:00:00', '2026-10-19T09:00:00', 81), firstSeenAt: kst('2026-10-16T09:00:00') },
     ], kst('2026-10-21T12:00:00'))
     expect(row.weeks.map((week) => week.endedAt === week.resetsAt)).toEqual([true, true])
-    expect(row.averagePercent).toBe(55.5)
+    // 30% 는 7일 그대로, 81% 는 4.9일 회차라 7일 환산 116.3
+    expect(row.averagePercent).toBe(73.2)
+  })
+
+  it('7일 환산 분모는 마지막 관측이 아니라 회차가 실제로 이어진 기간이고, 1일 미만 회차는 환산하지 않는다', () => {
+    const later = kst('2026-10-21T12:00:00')
+    const codex = (resetsAt: string, syncedAt: string, percent: number, firstSeen: string) =>
+      ({ ...report(resetsAt, syncedAt, percent, { client: 'codex' as const }), firstSeenAt: kst(firstSeen) })
+    const [row] = buildRenewalRows([sub({ vendor: 'OpenAI', plan: 'Pro5x', renewalDay: 5 })], [
+      // 10/7 13:17 시작 회차: 1.2일째 75% 뒤 쉬었다가 4.14일째(10/11 16:38) 초기화 → 75 ÷ 4.14 × 7 ≈ 126.8
+      codex('2026-10-14T13:17:00', '2026-10-08T17:25:00', 75, '2026-10-07T14:00:00'),
+      // 10/11 16:38 시작 회차: 0.5일 만에 초기화 → 환산 안 함
+      codex('2026-10-18T16:38:00', '2026-10-12T02:00:00', 5, '2026-10-11T17:00:00'),
+      codex('2026-10-19T04:38:00', '2026-10-13T09:00:00', 30, '2026-10-12T04:40:00'),
+    ], later)
+    expect(row.weeks.map((week) => week.projectedPercent && Math.round(week.projectedPercent * 10) / 10)).toEqual([126.8, null, 30])
+    expect(row.averagePercent).toBe(78.4)
+  })
+
+  it('초기화 시각이 몇 초 흔들려도 7일 환산 기간이 줄지 않고(1일 경계), 판정용 값은 반올림하지 않는다', () => {
+    const later = kst('2026-10-21T12:00:00')
+    const codex = (resetsAt: string, syncedAt: string, percent: number, firstSeen: string) =>
+      ({ ...report(resetsAt, syncedAt, percent, { client: 'codex' as const }), firstSeenAt: kst(firstSeen) })
+    const [row] = buildRenewalRows([sub({ vendor: 'OpenAI', plan: 'Pro5x', renewalDay: 5 })], [
+      // 10/18 00:00 시작(예정 10/25 00:00), 정확히 하루 뒤 10/19 00:00 에 조기 초기화. 같은 회차 보고 하나는 3초 늦은 예정 시각
+      codex('2026-10-25T00:00:00', '2026-10-18T20:00:00', 4, '2026-10-18T01:00:00'),
+      codex('2026-10-25T00:00:03', '2026-10-18T21:00:00', 4, '2026-10-18T02:00:00'),
+      codex('2026-10-26T00:00:00', '2026-10-19T09:00:00', 1, '2026-10-19T00:10:00'),
+    ], later)
+    expect(row.weeks[0].projectedPercent).toBeCloseTo(28, 6)
+    // 20.04% 는 20.0 으로 반올림되지 않는다 — 실측 15%, 5일 5시간 45분
+    const [edge] = buildRenewalRows([sub({ vendor: 'OpenAI', plan: 'Pro5x', renewalDay: 5 })], [
+      codex('2026-10-25T00:00:00', '2026-10-20T09:00:00', 15, '2026-10-18T01:00:00'),
+      codex('2026-10-30T05:45:00', '2026-10-21T09:00:00', 1, '2026-10-23T05:46:00'),
+    ], kst('2026-10-24T12:00:00'))
+    expect(edge.weeks[0].projectedPercent).toBeGreaterThan(20)
+  })
+
+  it('다음 회차의 초기화 시각이 흔들려도 이 회차 끝은 가장 이른 시각 기준이라 1일 미만 회차가 환산되지 않는다', () => {
+    const later = kst('2026-10-21T12:00:00')
+    const codex = (resetsAt: string, syncedAt: string, percent: number, firstSeen: string) =>
+      ({ ...report(resetsAt, syncedAt, percent, { client: 'codex' as const }), firstSeenAt: kst(firstSeen) })
+    const [row] = buildRenewalRows([sub({ vendor: 'OpenAI', plan: 'Pro5x', renewalDay: 5 })], [
+      // A: 10/18 00:00 시작. B 의 예정 시각이 10/25 23:59:59 / 10/26 00:00:02 로 흔들림 → A 는 23시간 59분 59초
+      codex('2026-10-25T00:00:00', '2026-10-18T20:00:00', 2, '2026-10-18T01:00:00'),
+      codex('2026-10-25T23:59:59', '2026-10-19T09:00:00', 1, '2026-10-19T00:10:00'),
+      codex('2026-10-26T00:00:02', '2026-10-19T10:00:00', 1, '2026-10-19T00:20:00'),
+    ], later)
+    expect(row.weeks[0].projectedPercent).toBeNull()
+  })
+
+  it('8시간 어긋난 두 계정 회차가 함께 보고되면 서로의 시작을 옮기지 않는다', () => {
+    const both = (resetsAt: string, syncedAt: string, percent: number, firstSeen: string) =>
+      ({ ...report(resetsAt, syncedAt, percent), seenAt: kst(syncedAt), firstSeenAt: kst(firstSeen) })
+    const [row] = buildRenewalRows([sub()], [
+      both('2026-10-09T05:00:00', '2026-10-09T04:00:00', 73, '2026-10-02T06:00:00'),
+      both('2026-10-09T13:00:00', '2026-10-09T12:00:00', 62, '2026-10-02T14:00:00'),
+      both('2026-10-16T05:00:00', '2026-10-16T04:00:00', 79, '2026-10-09T06:00:00'),
+      both('2026-10-16T13:00:00', '2026-10-16T12:00:00', 14, '2026-10-09T14:00:00'),
+    ], kst('2026-10-19T12:00:00'))
+    expect(row.weeks.map((week) => week.projectedPercent)).toEqual([73, 62, 79, 14])
+  })
+
+  it('나란히 보고되는 두 회차(2시간 간격)는 서로의 시작을 옮기지 않는다', () => {
+    const [row] = buildRenewalRows([sub()], [
+      report('2026-10-09T05:00:00', '2026-10-09T04:00:00', 73),
+      report('2026-10-09T07:00:00', '2026-10-09T06:50:00', 62),
+      report('2026-10-16T05:00:00', '2026-10-16T04:00:00', 79),
+      report('2026-10-16T07:00:00', '2026-10-16T06:50:00', 44),
+    ], kst('2026-10-19T12:00:00'))
+    expect(row.weeks.map((week) => week.projectedPercent)).toEqual([73, 62, 79, 44])
   })
 
   it('나란히 보고되는 두 회차(2시간 간격)는 조기 초기화로 보지 않는다', () => {
