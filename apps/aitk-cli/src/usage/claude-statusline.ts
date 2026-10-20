@@ -79,6 +79,23 @@ export function extractClaudeQuota(input: unknown, now = Date.now()): ClaudeQuot
   return { version: 1, source: 'claude-code-statusline', capturedAt: new Date(now).toISOString(), usedPercent: used, resetsAt: date.toISOString() }
 }
 
+/**
+ * 새 입력을 저장된 스냅샷과 합친다. 같은 회차(초기화 시각)면 사용률을 낮추지 않는다.
+ *
+ * 세션마다 statusline 입력이 오는데, 한동안 응답이 없던 세션은 예전 사용률을 들고 다시 그린다.
+ * 그 값으로 덮으면 35% → 29% 처럼 내려가 보고된다(2026-10-20 실측). 한 회차 안에서 사용률은 줄지 않으므로
+ * 저장값이 더 크고 아직 신선하면(15분 안) 저장값을 관측 시각까지 그대로 둔다 — 시각을 새로 하면 오래전 값이
+ * 방금 본 값처럼 보고된다. 오래된 저장값은 고집하지 않는다(플랜 상향처럼 같은 회차에서 실제로 내려가는 경우
+ * 보고가 회차 끝까지 멈춘다). 그때 옛 세션 값이 들어가도 서버가 회차 최댓값으로 채운다. 회차가 바뀌면 새 값을 쓴다.
+ */
+export function mergeClaudeQuota(stored: unknown, next: ClaudeQuotaSnapshot): ClaudeQuotaSnapshot {
+  const value = object(stored)
+  const age = typeof value?.capturedAt === 'string' ? Date.parse(next.capturedAt) - Date.parse(value.capturedAt) : NaN
+  const keep = value?.resetsAt === next.resetsAt && typeof value.usedPercent === 'number' && value.usedPercent > next.usedPercent
+    && age >= 0 && age <= CLAUDE_QUOTA_MAX_AGE_MS
+  return keep ? { ...next, usedPercent: value.usedPercent as number, capturedAt: value.capturedAt as string } : next
+}
+
 /** 파일 mtime 대신 실제 관측 시각과 리셋 시각으로 최신성을 판단한다. */
 export function readClaudeQuota(home = homedir(), now = Date.now()): ClaudeQuotaSnapshot | null {
   const value = object(readUsageJson(claudeUsagePaths(home).snapshot))

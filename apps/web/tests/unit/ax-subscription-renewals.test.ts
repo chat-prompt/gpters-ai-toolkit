@@ -9,7 +9,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-const { buildMemberServiceRows, buildRenewalRows, personNameKeys, renewalCycle, samePerson } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
+const { buildMemberServiceRows, buildRenewalRows, personNameKeys, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
 
 /** KST 시각 → Date */
 const kst = (text: string) => new Date(`${text}+09:00`)
@@ -32,6 +32,18 @@ const report = (resetsAt: string, syncedAt: string, percent: number | string | n
   limitResetsAt: kst(resetsAt),
   syncedAt: kst(syncedAt),
   ...overrides,
+})
+
+describe('dailyRowsBeforeWindows', () => {
+  it('회차 기록을 시작한 뒤의 하루 단위 행은 빼고(채운 행의 보고 시각이 끝 무렵 미수집을 가리지 않게), 그 전 행은 남긴다', () => {
+    const daily = [
+      { syncedAt: kst('2026-10-14T09:00:00') },
+      { syncedAt: kst('2026-10-22T19:00:00') },
+    ]
+    const windows = [{ firstReportedAt: kst('2026-10-19T17:16:00') }, { firstReportedAt: kst('2026-10-20T09:00:00') }]
+    expect(dailyRowsBeforeWindows(daily, windows)).toEqual([daily[0]])
+    expect(dailyRowsBeforeWindows(daily, [])).toEqual(daily)
+  })
 })
 
 describe('renewalCycle', () => {

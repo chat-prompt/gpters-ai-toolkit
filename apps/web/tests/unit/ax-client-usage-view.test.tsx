@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AxClientUsageData, AxMemberServiceRow, AxUsageParticipationRow } from '../../../../packages/lib/src/features/ax/types'
+import { isLateReport } from '../../../../packages/lib/src/features/ax/types'
 import { ClientUsagePanel, compareVersions, limitCaptureLabel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
 
 const person = (name: string, service: string, daysLeft: number | null): AxMemberServiceRow => ({
@@ -87,6 +88,27 @@ describe('클라이언트 화면', () => {
     expect(screen.getByRole('button', { name: '주기 평균 기준' })).toBeInTheDocument()
     // data() 의 syncedAt 은 null — 갱신 이력 없음은 상태 경고라 도움말 밖에도 한 번 더 보인다
     expect(screen.getAllByText('구독 시트 갱신 이력 없음')).toHaveLength(2)
+  })
+
+  it('주기 평균은 마지막 보고가 초기화보다 24시간 넘게 이른 회차를 「끝 무렵 미수집」으로 센다', () => {
+    const row = {
+      ...person('홍길동', 'Claude Code', 2),
+      cycleAveragePercent: 66,
+      cycleWeeks: [
+        { resetsAt: '2026-10-08T20:00:00.000Z', usedPercent: 93, reportedAt: '2026-10-08T19:00:00.000Z' },
+        { resetsAt: '2026-10-15T20:00:00.000Z', usedPercent: 39, reportedAt: '2026-10-13T23:55:00.000Z' },
+      ],
+    }
+    render(<ClientUsagePanel days={7} data={data([row])} />)
+    const cell = screen.getByText('끝 무렵 미수집 1회').parentElement!
+    expect(cell.getAttribute('title')).toContain('초기화 44시간 전까지만 잡힘')
+    expect(cell.getAttribute('title')).not.toMatch(/93% \([^)]*잡힘/)
+  })
+
+  it('끝 무렵 판정은 반올림 전 시간차로 — 24시간 20분은 늦고, 정확히 24시간은 아니다', () => {
+    const week = (reportedAt: string) => ({ resetsAt: '2026-10-15T20:00:00.000Z', usedPercent: 10, reportedAt })
+    expect(isLateReport(week('2026-10-14T19:40:00.000Z'))).toBe(true)
+    expect(isLateReport(week('2026-10-14T20:00:00.000Z'))).toBe(false)
   })
 
   it('서비스 비중 게이지는 항목마다 Claude Code 몫과 두 값을 함께 보여준다', () => {

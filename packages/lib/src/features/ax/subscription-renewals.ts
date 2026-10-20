@@ -317,6 +317,26 @@ export function buildMemberServiceRows(
 }
 
 /**
+ * 회차 기록(0045)을 시작한 뒤의 하루 단위 행은 뺀다.
+ *
+ * 그 뒤의 보고는 모두 회차 기록에도 남는다. 그런데 하루 단위 행의 한도는 서버가 진행 중 회차 최댓값으로 채우고
+ * (`carryLimit`) 보고 시각은 채운 시각이라, 섞으면 이틀 전에 관측한 값이 "1시간 전까지 잡힌 값"처럼 보여
+ * 「끝 무렵 미수집」 경고가 사라진다. 회차 기록의 마지막 보고 시각은 최댓값을 실제로 다시 본 보고에서만 움직인다.
+ * 그 전 회차는 하루 단위 행이 유일한 근거라 남긴다.
+ *
+ * ponytail: 회차 기록 쓰기만 실패한 보고는 하루 단위 행에만 남아 빠진다(recordLimitWindows 가 실패를 삼킨다).
+ * 실패 로그가 보이면 그 회차를 하루 단위 행으로 보완한다.
+ *
+ * @param usage - 하루 단위 행
+ * @param windows - 회차 기록 (firstReportedAt 이 가장 이른 것이 기록 시작 시각)
+ */
+export function dailyRowsBeforeWindows<T extends { syncedAt: Date }>(usage: T[], windows: Array<{ firstReportedAt: Date }>): T[] {
+  if (windows.length === 0) return usage
+  const since = Math.min(...windows.map((w) => w.firstReportedAt.getTime()))
+  return usage.filter((row) => row.syncedAt.getTime() < since)
+}
+
+/**
  * 회차별 최댓값 테이블(0045)을 사용량 보고 행 모양으로 읽는다.
  *
  * `ax_client_usage` 의 하루 단위 행은 같은 날 초기화되면 직전 값을 잃으므로 이 테이블이 보완한다.
@@ -324,7 +344,7 @@ export function buildMemberServiceRows(
  *
  * @param since - 이 시각 이후에 초기화되는 회차만
  */
-async function loadLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
+async function loadLimitWindows(since: Date): Promise<Array<RenewalUsageInput & { firstReportedAt: Date }>> {
   try {
     return await db
       .select({
@@ -334,6 +354,7 @@ async function loadLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
         limitResetsAt: axUsageLimitWindows.resetsAt,
         syncedAt: axUsageLimitWindows.lastReportedAt,
         seenAt: axUsageLimitWindows.lastSeenAt,
+        firstReportedAt: axUsageLimitWindows.firstReportedAt,
       })
       .from(axUsageLimitWindows)
       .where(gte(axUsageLimitWindows.resetsAt, since))
@@ -372,7 +393,7 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
         )),
       loadLimitWindows(since),
     ])
-    return { rows: buildRenewalRows(subscriptions, [...usage, ...windows], now) }
+    return { rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows], now) }
   } catch (err) {
     log.error('구독 갱신 데이터 조회 실패', err)
     return null

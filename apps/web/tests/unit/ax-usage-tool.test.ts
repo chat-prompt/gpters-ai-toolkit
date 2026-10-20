@@ -24,7 +24,7 @@ const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState, mockAxU
     periodStart: 'periodStart',
   },
   mockAxUsageCollectorState: { userId: 'collector.userId' },
-  mockAxUsageLimitWindows: { userId: 'window.userId', client: 'window.client', resetsAt: 'window.resetsAt', maxUsedPercent: 'window.max' },
+  mockAxUsageLimitWindows: { userId: 'window.userId', client: 'window.client', resetsAt: 'window.resetsAt', maxUsedPercent: 'window.max', lastSeenAt: 'window.lastSeenAt' },
 }))
 
 vi.mock('@gpters/db', () => ({
@@ -45,6 +45,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((column: unknown, value: unknown) => ({ column, value })),
   and: vi.fn((...conditions: unknown[]) => ({ conditions })),
   sql: vi.fn(),
+  gt: vi.fn(),
   inArray: vi.fn(),
   desc: vi.fn(),
 }))
@@ -60,7 +61,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
 
 // `@/lib/mcp/handlers`는 배럴을 거치므로 무관한 모듈까지 끌어온다. 계약 테스트와 같이
 // 구현 파일을 직접 가리켜 모의 대상을 이 파일에서 만지는 것만으로 좁힌다.
-import { reportUsage, executeTool } from '../../../../packages/lib/src/mcp/handlers'
+import { carryLimit, reportUsage, executeTool } from '../../../../packages/lib/src/mcp/handlers'
 
 /** 검증을 통과하는 최소 레코드 */
 function record(overrides: Record<string, unknown> = {}) {
@@ -99,18 +100,21 @@ function selectChain(result: unknown[]) {
   return {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
+    // 진행 중 회차 조회는 orderBy 에서 끝난다
+    orderBy: vi.fn().mockResolvedValue(result),
     limit: vi.fn().mockResolvedValue(result),
   }
 }
 
 /**
- * 사용자 조회 → 기존 행 조회 순서로 select를 답하게 만든다
+ * 사용자 조회 → 레코드마다 (진행 중 회차 조회, 기존 행 조회) 순서로 select를 답하게 만든다
  *
  * @param user - users 테이블 조회 결과 (없으면 빈 배열)
  * @param existingRows - 레코드마다의 기존 행 조회 결과
+ * @param windows - 레코드마다의 진행 중 회차 조회 결과 (생략하면 없음)
  */
-function stubSelect(user: unknown[], existingRows: unknown[][]) {
-  const queue = [user, ...existingRows]
+function stubSelect(user: unknown[], existingRows: unknown[][], windows: unknown[][] = []) {
+  const queue = [user, ...existingRows.flatMap((rows, i) => [windows[i] ?? [], rows])]
   mockDb.select.mockImplementation(() => selectChain(queue.shift() ?? []))
 }
 
@@ -410,5 +414,102 @@ describe('report_usage', () => {
       expect(response.isError).toBe(true)
       expect(JSON.parse(response.content[0].text).success).toBe(false)
     })
+  })
+})
+
+describe('carryLimit — 하루 단위 행의 한도를 진행 중 회차 최댓값으로', () => {
+  const resetsAt = new Date('2026-10-22T20:00:00.000Z')
+  const window = { resetsAt, maxUsedPercent: '35.00' }
+  const row = (limitUsedPercent: string | null, limitResetsAt: Date | null = resetsAt) => ({ limitUsedPercent, limitResetsAt })
+
+  it('같은 회차에서 낮은 값(예전 세션)은 최댓값으로 올린다', () => {
+    expect(carryLimit(row('29.00'), window)).toEqual(row('35.00'))
+  })
+
+  it('한도 없이 온 보고(세션 시작 직후)는 진행 중 회차 값으로 채운다', () => {
+    expect(carryLimit(row(null, null), window)).toEqual(row('35.00'))
+  })
+
+  it('더 높은 값, 다른 회차 값, 진행 중 회차가 없는 경우는 그대로 둔다', () => {
+    expect(carryLimit(row('40.00'), window)).toEqual(row('40.00'))
+    const next = new Date('2026-10-29T20:00:00.000Z')
+    expect(carryLimit(row('2.00', next), window)).toEqual(row('2.00', next))
+    expect(carryLimit(row(null, null), undefined)).toEqual(row(null, null))
+  })
+
+  it('초기화 시각이 몇 초 흔들려도 같은 회차로 보고, 더 높은 새 값은 낮추지 않는다', () => {
+    const jitter = new Date(resetsAt.getTime() - 3_000)
+    expect(carryLimit(row('40.00', jitter), window)).toEqual(row('40.00', jitter))
+    expect(carryLimit(row('30.00', jitter), window)).toEqual(row('35.00'))
+  })
+
+  it('진행 중 회차는 1시간 안에서 흔들린 행들의 최댓값이다', async () => {
+    const jitter = new Date(resetsAt.getTime() - 3_000)
+    stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[{ id: 'row-1' }]], [[
+      { resetsAt, maxUsedPercent: '30.00' },
+      { resetsAt: jitter, maxUsedPercent: '40.00' },
+    ]])
+    const writes = stubWrites()
+
+    await reportUsage({ records: [claudeRecord()] }, 'user-1')
+
+    expect(writes.updatedValues[0]).toMatchObject({ limitUsedPercent: '40.00', limitResetsAt: resetsAt })
+  })
+
+  it('흔들린 행 하나가 먼저 만료돼도(두 초기화 시각 사이 수신) 그 값을 최댓값에 넣고, 모두 만료됐으면 채우지 않는다', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(resetsAt.getTime() + 1_000))
+      const later = new Date(resetsAt.getTime() + 3_000)
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[{ id: 'row-1' }]], [[
+        { resetsAt: later, maxUsedPercent: '40.00' },
+        { resetsAt, maxUsedPercent: '80.00' },
+      ]])
+      const writes = stubWrites()
+      await reportUsage({ records: [claudeRecord()] }, 'user-1')
+      expect(writes.updatedValues[0]).toMatchObject({ limitUsedPercent: '80.00', limitResetsAt: later })
+
+      vi.setSystemTime(new Date(later.getTime() + 1_000))
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[{ id: 'row-1' }]], [[
+        { resetsAt: later, maxUsedPercent: '40.00' },
+      ]])
+      const after = stubWrites()
+      await reportUsage({ records: [claudeRecord()] }, 'user-1')
+      expect(after.updatedValues[0]).toMatchObject({ limitUsedPercent: null })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('조기 초기화 뒤 옛 머신이 지난 회차 값을 보내도 새 회차 값으로 둔다', () => {
+    const old = new Date('2026-10-21T20:00:00.000Z')
+    expect(carryLimit(row('95.00', old), { resetsAt, maxUsedPercent: '12.00' })).toEqual(row('12.00'))
+  })
+
+  it('진행 중 회차를 읽지 못해도 보고는 채우지 않은 값으로 저장한다', async () => {
+    const queue: unknown[][] = [[{ name: '현진우', email: 'primadonna@gpters.org' }]]
+    let call = 0
+    mockDb.select.mockImplementation(() => {
+      call++
+      // 두 번째 select(진행 중 회차)만 실패시킨다
+      if (call === 2) return { from: () => ({ where: () => ({ orderBy: () => Promise.reject(new Error('relation does not exist')) }) }) }
+      return selectChain(queue.shift() ?? [])
+    })
+    const writes = stubWrites()
+
+    const result = await reportUsage({ records: [claudeRecord({ limitUsedPercent: 12, limitResetsAt: resetsAt.toISOString() })] }, 'user-1')
+
+    expect(result.success).toBe(true)
+    expect(writes.insertedValues[0]).toMatchObject({ limitUsedPercent: '12.00' })
+  })
+
+  it('report_usage 는 회차 기록을 먼저 갱신하고, 덮어쓸 행에 최댓값을 싣는다', async () => {
+    stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[{ id: 'row-1' }]], [[window]])
+    const writes = stubWrites()
+
+    const result = await reportUsage({ records: [claudeRecord()] }, 'user-1')
+
+    expect(result.success).toBe(true)
+    expect(writes.updatedValues[0]).toMatchObject({ limitUsedPercent: '35.00', limitResetsAt: resetsAt })
   })
 })
