@@ -17,7 +17,7 @@ import { SearchableCatalog } from '@/components/catalog/SearchableCatalog'
 
 describe('SearchableCatalog layering', () => {
   it('keeps the search controls above later animated sections', () => {
-    render(<SearchableCatalog catalog={[]} />)
+    render(<SearchableCatalog catalog={[]} mods={[]} />)
 
     const searchInput = screen.getByPlaceholderText('Search skills, agents, commands...')
     const searchControls = searchInput.parentElement?.parentElement

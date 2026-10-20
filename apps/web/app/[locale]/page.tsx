@@ -5,6 +5,7 @@
  * 이어지게 한다 — 이 화면에서 사람들이 가장 먼저 하는 일이 찾기이기 때문이다.
  */
 import { getCatalog } from '@/lib/core/catalog'
+import { getMods } from '@/lib/core/mods'
 import { SearchableCatalog } from '@/components/catalog/SearchableCatalog'
 import { ServerHeader } from '@/components/layout/ServerHeader'
 import { Footer } from '@/components/layout/Footer'
@@ -43,7 +44,7 @@ export default async function Home({
           <p className="page-subtitle whitespace-pre-line">{t('hero.description')}</p>
         </header>
 
-        <SearchableCatalog catalog={catalog} />
+        <SearchableCatalog catalog={catalog} mods={getMods()} />
       </main>
 
       <Footer />

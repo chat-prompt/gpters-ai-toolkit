@@ -2,6 +2,10 @@
  * 카탈로그 컴포넌트 타입
  */
 import type { CatalogItemSummary, ItemType, Difficulty } from '@/lib/core/types'
+import type { ModSummary } from '@/lib/core/mods'
+
+/** 유형 필터 값 — mod 는 카탈로그 항목이 아니라 마켓플레이스에서 오므로 따로 둔다 */
+export type CatalogFilter = ItemType | 'mod' | 'all'
 
 /**
  * SearchableCatalog props
@@ -9,6 +13,8 @@ import type { CatalogItemSummary, ItemType, Difficulty } from '@/lib/core/types'
 export interface SearchableCatalogProps {
   /** 화면에 뿌릴 카탈로그 항목 전체 */
   catalog: CatalogItemSummary[]
+  /** 팀 마켓플레이스에 올라간 mod */
+  mods: ModSummary[]
 }
 
 /**
@@ -57,7 +63,7 @@ export interface UseSearchFiltersOptions {
 export interface UseSearchFiltersReturn {
   searchQuery: string
   setSearchQuery: (query: string) => void
-  activeFilter: ItemType | 'all'
+  activeFilter: CatalogFilter
   selectedTags: string[]
   selectedDifficulty: Difficulty | ''
   selectedPlatform: string | null
@@ -67,7 +73,7 @@ export interface UseSearchFiltersReturn {
   filteredCatalog: CatalogItemSummary[]
   didYouMean: string[]
   hasActiveFilters: boolean
-  handleTypeFilter: (type: ItemType | 'all') => void
+  handleTypeFilter: (type: CatalogFilter) => void
   handleTagToggle: (tag: string) => void
   handleDifficultyChange: (difficulty: Difficulty | '') => void
   handlePlatformChange: (platform: string | null) => void
