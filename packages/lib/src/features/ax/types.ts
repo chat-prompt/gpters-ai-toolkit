@@ -812,10 +812,25 @@ export interface AxClientUsageData {
 
 /** 결제 주기 안에서 초기화된 주간 한도 한 회차 */
 export interface AxRenewalWeek {
-  /** 주간 한도 초기화 시각 (ISO 8601) */
+  /** 주간 한도 초기화 예정 시각 (ISO 8601) */
   resetsAt: string
+  /**
+   * 회차가 시작된 시각 (ISO 8601) — 보통 resetsAt − 7일, 앞 회차가 그보다 늦게 끝났으면 그때.
+   * 옛 응답에는 없다
+   */
+  startedAt?: string
+  /**
+   * 실제로 끝난 시각 (ISO 8601). 보통 resetsAt 과 같고, 벤더가 일찍 초기화했으면 더 이르다(조기 초기화).
+   * 조기 초기화된 회차는 7일을 다 채우지 못해 평균에는 7일 환산값으로 들어간다
+   */
+  endedAt: string
   /** 초기화 전에 받은 사용률의 최댓값 (0~100) */
   usedPercent: number
+  /**
+   * 7일 환산 사용률 (추정) — usedPercent ÷ 실제로 이어진 일수 × 7. 7일을 채운 회차는 usedPercent 와 같고,
+   * 조기 초기화 회차는 더 크다. 100 을 넘을 수 있다. 1일 미만 회차는 null. 반올림하지 않은 값이다 — 표시할 때 반올림한다
+   */
+  projectedPercent: number | null
   /** 최댓값을 보고한 시각 (ISO 8601). 초기화 시각과 멀수록 마지막 날 사용량이 덜 반영됐다 */
   reportedAt: string
 }
@@ -826,14 +841,36 @@ export interface AxRenewalWeek {
  */
 export const LATE_REPORT_GAP_HOURS = 24
 
-/** 회차의 마지막 보고가 초기화보다 몇 시간 일렀는지 (표시용 반올림) */
+/** 회차의 마지막 보고가 실제로 끝난 시각보다 몇 시간 일렀는지 (표시용 반올림) */
 export function reportGapHours(week: AxRenewalWeek): number {
-  return Math.round((Date.parse(week.resetsAt) - Date.parse(week.reportedAt)) / 3_600_000)
+  return Math.round((Date.parse(week.endedAt ?? week.resetsAt) - Date.parse(week.reportedAt)) / 3_600_000)
 }
 
-/** 끝 무렵이 빠진 회차인지 — 반올림 전 시간차로 판정한다(24시간 20분은 늦은 것) */
+/**
+ * 끝 무렵이 빠진 회차인지 — 실제로 끝난 시각 기준, 반올림 전 시간차로 판정한다(24시간 20분은 늦은 것).
+ * 조기 초기화된 회차를 예정 시각과 비교하면 며칠이 빈 것처럼 보이는 오탐이 난다
+ */
 export function isLateReport(week: AxRenewalWeek): boolean {
-  return Date.parse(week.resetsAt) - Date.parse(week.reportedAt) > LATE_REPORT_GAP_HOURS * 3_600_000
+  return Date.parse(week.endedAt ?? week.resetsAt) - Date.parse(week.reportedAt) > LATE_REPORT_GAP_HOURS * 3_600_000
+}
+
+/** 벤더가 예정보다 일찍 초기화한 회차인지. endedAt 이 없는 옛 응답은 아니라고 본다 */
+export function isEarlyReset(week: AxRenewalWeek): boolean {
+  return Boolean(week.endedAt) && week.endedAt !== week.resetsAt
+}
+
+/**
+ * 평균·판정에 쓰는 회차 값 — 7일 환산값. 환산 못 한 회차(1일 미만)는 null.
+ * 환산 필드가 없는 응답에서는 조기 초기화 회차를 빼고(null), 두 필드 다 없는 옛 응답만 실측(뽀밋이와 같은 규칙)
+ */
+export function judgedWeekPercent(week: AxRenewalWeek): number | null {
+  if (week.projectedPercent !== undefined) return week.projectedPercent
+  return isEarlyReset(week) ? null : week.usedPercent
+}
+
+/** 7일 환산 사용률 표시용 (소수 한 자리) */
+export function formatProjectedPercent(value: number): number {
+  return Math.round(value * 10) / 10
 }
 
 /** 구독 한 건의 갱신 결정 근거 (뽀밋이 DM 도 같은 모양을 받는다) */
@@ -850,7 +887,7 @@ export interface AxRenewalRow {
   daysLeft: number
   /** 이번 결제 주기에서 초기화된 회차들 (오래된 순) */
   weeks: AxRenewalWeek[]
-  /** `weeks` 의 평균 사용률. 보고된 회차가 없으면 null — 0과 구분한다 */
+  /** `weeks` 의 7일 환산 사용률 평균 (추정). 환산할 회차(1일 이상)가 없으면 null — 0과 구분한다 */
   averagePercent: number | null
   /** 아직 초기화되지 않은 회차의 사용률. 보고가 없으면 null */
   currentPercent: number | null
@@ -896,7 +933,7 @@ export interface AxMemberServiceRow {
   } | null
   /** 이번 결제 주기에 초기화된 회차들. 구독이 없거나 사람 구독이 아니면 빈 배열 */
   cycleWeeks: AxRenewalWeek[]
-  /** `cycleWeeks` 평균. 보고된 회차가 없으면 null */
+  /** `cycleWeeks` 의 7일 환산 평균 (추정). 환산할 회차가 없으면 null */
   cycleAveragePercent: number | null
   usage: {
     plan: string | null
