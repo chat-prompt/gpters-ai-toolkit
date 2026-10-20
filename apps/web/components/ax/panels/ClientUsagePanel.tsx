@@ -21,7 +21,7 @@ import type {
   AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
-import { AX_USAGE_PARTICIPATION_STATUS_ORDER, LATE_REPORT_GAP_HOURS, isLateReport, reportGapHours, samePerson } from '@/lib/features/ax'
+import { AX_USAGE_PARTICIPATION_STATUS_ORDER, LATE_REPORT_GAP_HOURS, isEarlyReset, isLateReport, reportGapHours, samePerson } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyMap } from '../format'
 
@@ -862,7 +862,7 @@ function PeopleTable({
           </span>
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
-            <p className="mt-2">회차의 마지막 보고가 초기화보다 {LATE_REPORT_GAP_HOURS}시간 넘게 이르면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 「끝 무렵 미수집」으로 표시합니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다.</p>
+            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 「끝 무렵 미수집」으로 표시합니다. 벤더가 예정보다 일찍 초기화한 회차는 7일을 다 채우지 못해 평균에서 빼고 「조기 초기화 제외」로 적습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
         </div>
@@ -1049,20 +1049,35 @@ function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleE
     return <span className="text-[var(--text-muted)]">{EMPTY}</span>
   }
   if (cycleError) return <span className="text-[11px] text-[var(--accent-orange)]">조회 실패</span>
-  if (row.cycleAveragePercent === null) return <span className="text-[11px] text-[var(--text-muted)]">회차 없음</span>
-  const late = row.cycleWeeks.filter(isLateReport).length
+  const full = row.cycleWeeks.filter((week) => !isEarlyReset(week))
+  const early = row.cycleWeeks.length - full.length
+  if (row.cycleWeeks.length === 0) return <span className="text-[11px] text-[var(--text-muted)]">회차 없음</span>
+  // 조기 초기화 회차는 평균에서 빠지므로 끝 무렵 미수집도 평균에 든 회차만 센다
+  const late = full.filter(isLateReport).length
   const detail = row.cycleWeeks
     .map((week) => {
-      const note = isLateReport(week) ? ` · 초기화 ${reportGapHours(week)}시간 전까지만 잡힘` : ''
-      return `${formatDateTime(week.resetsAt)} 초기화 ${week.usedPercent}% (마지막 보고 ${formatDateTime(week.reportedAt)}${note})`
+      const gap = isLateReport(week) ? ` · 끝나기 ${reportGapHours(week)}시간 전까지만 잡힘` : ''
+      if (!isEarlyReset(week)) {
+        return `${formatDateTime(week.resetsAt)} 초기화 ${week.usedPercent}% (마지막 보고 ${formatDateTime(week.reportedAt)}${gap})`
+      }
+      const days = Math.round(((Date.parse(week.endedAt) - Date.parse(week.resetsAt)) / 86_400_000 + 7) * 10) / 10
+      return `${formatDateTime(week.endedAt)} 조기 초기화(${days}일 만, 예정 ${formatDateTime(week.resetsAt)}) ${week.usedPercent}% · 평균 제외 (마지막 보고 ${formatDateTime(week.reportedAt)}${gap})`
     })
     .join('\n')
   return (
     <span title={detail}>
-      <span className="text-[var(--text-primary)]">{row.cycleAveragePercent}%</span>{' '}
-      <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{row.cycleWeeks.length}회</span>
+      {row.cycleAveragePercent === null
+        ? <span className="text-[11px] text-[var(--text-muted)]">7일 회차 없음</span>
+        : (
+          <>
+            <span className="text-[var(--text-primary)]">{row.cycleAveragePercent}%</span>{' '}
+            <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{full.length}회</span>
+          </>
+        )}
       {/* 끝 무렵이 빠진 회차는 실제보다 낮다 — 평균을 그대로 믿지 않게 */}
       {late > 0 && <span className="block text-[11px] text-[var(--accent-orange)]">끝 무렵 미수집 {late}회</span>}
+      {/* 벤더가 일찍 초기화한 회차는 7일을 못 채워 평균에서 뺐다는 것만 알린다 — 경고가 아니다 */}
+      {early > 0 && <span className="block text-[11px] text-[var(--text-muted)]">조기 초기화 {early}회 제외</span>}
     </span>
   )
 }

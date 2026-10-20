@@ -812,8 +812,13 @@ export interface AxClientUsageData {
 
 /** 결제 주기 안에서 초기화된 주간 한도 한 회차 */
 export interface AxRenewalWeek {
-  /** 주간 한도 초기화 시각 (ISO 8601) */
+  /** 주간 한도 초기화 예정 시각 (ISO 8601) */
   resetsAt: string
+  /**
+   * 실제로 끝난 시각 (ISO 8601). 보통 resetsAt 과 같고, 벤더가 일찍 초기화했으면 더 이르다(조기 초기화).
+   * 조기 초기화된 회차는 7일을 다 채우지 못해 평균에서 뺀다
+   */
+  endedAt: string
   /** 초기화 전에 받은 사용률의 최댓값 (0~100) */
   usedPercent: number
   /** 최댓값을 보고한 시각 (ISO 8601). 초기화 시각과 멀수록 마지막 날 사용량이 덜 반영됐다 */
@@ -826,14 +831,22 @@ export interface AxRenewalWeek {
  */
 export const LATE_REPORT_GAP_HOURS = 24
 
-/** 회차의 마지막 보고가 초기화보다 몇 시간 일렀는지 (표시용 반올림) */
+/** 회차의 마지막 보고가 실제로 끝난 시각보다 몇 시간 일렀는지 (표시용 반올림) */
 export function reportGapHours(week: AxRenewalWeek): number {
-  return Math.round((Date.parse(week.resetsAt) - Date.parse(week.reportedAt)) / 3_600_000)
+  return Math.round((Date.parse(week.endedAt) - Date.parse(week.reportedAt)) / 3_600_000)
 }
 
-/** 끝 무렵이 빠진 회차인지 — 반올림 전 시간차로 판정한다(24시간 20분은 늦은 것) */
+/**
+ * 끝 무렵이 빠진 회차인지 — 실제로 끝난 시각 기준, 반올림 전 시간차로 판정한다(24시간 20분은 늦은 것).
+ * 조기 초기화된 회차를 예정 시각과 비교하면 며칠이 빈 것처럼 보이는 오탐이 난다
+ */
 export function isLateReport(week: AxRenewalWeek): boolean {
-  return Date.parse(week.resetsAt) - Date.parse(week.reportedAt) > LATE_REPORT_GAP_HOURS * 3_600_000
+  return Date.parse(week.endedAt) - Date.parse(week.reportedAt) > LATE_REPORT_GAP_HOURS * 3_600_000
+}
+
+/** 벤더가 예정보다 일찍 초기화한 회차인지 */
+export function isEarlyReset(week: AxRenewalWeek): boolean {
+  return week.endedAt !== week.resetsAt
 }
 
 /** 구독 한 건의 갱신 결정 근거 (뽀밋이 DM 도 같은 모양을 받는다) */
@@ -850,7 +863,7 @@ export interface AxRenewalRow {
   daysLeft: number
   /** 이번 결제 주기에서 초기화된 회차들 (오래된 순) */
   weeks: AxRenewalWeek[]
-  /** `weeks` 의 평균 사용률. 보고된 회차가 없으면 null — 0과 구분한다 */
+  /** `weeks` 중 7일을 채운(조기 초기화가 아닌) 회차의 평균 사용률. 그런 회차가 없으면 null — 0과 구분한다 */
   averagePercent: number | null
   /** 아직 초기화되지 않은 회차의 사용률. 보고가 없으면 null */
   currentPercent: number | null
@@ -896,7 +909,7 @@ export interface AxMemberServiceRow {
   } | null
   /** 이번 결제 주기에 초기화된 회차들. 구독이 없거나 사람 구독이 아니면 빈 배열 */
   cycleWeeks: AxRenewalWeek[]
-  /** `cycleWeeks` 평균. 보고된 회차가 없으면 null */
+  /** `cycleWeeks` 중 조기 초기화가 아닌 회차의 평균. 그런 회차가 없으면 null */
   cycleAveragePercent: number | null
   usage: {
     plan: string | null

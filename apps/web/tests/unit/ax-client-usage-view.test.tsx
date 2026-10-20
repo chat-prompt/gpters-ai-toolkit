@@ -95,18 +95,46 @@ describe('클라이언트 화면', () => {
       ...person('홍길동', 'Claude Code', 2),
       cycleAveragePercent: 66,
       cycleWeeks: [
-        { resetsAt: '2026-10-08T20:00:00.000Z', usedPercent: 93, reportedAt: '2026-10-08T19:00:00.000Z' },
-        { resetsAt: '2026-10-15T20:00:00.000Z', usedPercent: 39, reportedAt: '2026-10-13T23:55:00.000Z' },
+        { resetsAt: '2026-10-08T20:00:00.000Z', endedAt: '2026-10-08T20:00:00.000Z', usedPercent: 93, reportedAt: '2026-10-08T19:00:00.000Z' },
+        { resetsAt: '2026-10-15T20:00:00.000Z', endedAt: '2026-10-15T20:00:00.000Z', usedPercent: 39, reportedAt: '2026-10-13T23:55:00.000Z' },
       ],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
     const cell = screen.getByText('끝 무렵 미수집 1회').parentElement!
-    expect(cell.getAttribute('title')).toContain('초기화 44시간 전까지만 잡힘')
+    expect(cell.getAttribute('title')).toContain('끝나기 44시간 전까지만 잡힘')
     expect(cell.getAttribute('title')).not.toMatch(/93% \([^)]*잡힘/)
   })
 
+  it('조기 초기화 회차는 평균에서 빠졌다고 적고, 끝 무렵 미수집으로 세지 않는다', () => {
+    const row = {
+      ...person('홍길동', 'Codex', 2),
+      cycleAveragePercent: 60,
+      cycleWeeks: [
+        { resetsAt: '2026-10-19T01:00:00.000Z', endedAt: '2026-10-19T01:00:00.000Z', usedPercent: 60, reportedAt: '2026-10-19T00:00:00.000Z' },
+        // 10/25 23:58 예정이던 회차가 10/20 06:35 에 끝났다. 마지막 보고는 끝나기 5분 전
+        { resetsAt: '2026-10-25T23:58:00.000Z', endedAt: '2026-10-20T06:35:00.000Z', usedPercent: 42, reportedAt: '2026-10-20T06:30:00.000Z' },
+      ],
+    }
+    render(<ClientUsagePanel days={7} data={data([row])} />)
+    const cell = screen.getByText('조기 초기화 1회 제외').parentElement!
+    expect(within(cell).getByText('1회')).toBeInTheDocument()
+    expect(within(cell).getByText('60%')).toBeInTheDocument()
+    expect(within(cell).queryByText(/끝 무렵 미수집/)).toBeNull()
+    expect(cell.getAttribute('title')).toMatch(/조기 초기화\(1\.3일 만, 예정 [^)]+\) 42% · 평균 제외/)
+  })
+
+  it('7일 회차가 없고 조기 초기화만 있으면 평균 대신 「7일 회차 없음」만 쓰고 0회는 적지 않는다', () => {
+    const row = {
+      ...person('홍길동', 'Codex', 2),
+      cycleWeeks: [{ resetsAt: '2026-10-25T23:58:00.000Z', endedAt: '2026-10-20T06:35:00.000Z', usedPercent: 42, reportedAt: '2026-10-20T06:30:00.000Z' }],
+    }
+    render(<ClientUsagePanel days={7} data={data([row])} />)
+    const cell = screen.getByText('7일 회차 없음').closest('td')!
+    expect(cell.textContent).toBe('7일 회차 없음조기 초기화 1회 제외')
+  })
+
   it('끝 무렵 판정은 반올림 전 시간차로 — 24시간 20분은 늦고, 정확히 24시간은 아니다', () => {
-    const week = (reportedAt: string) => ({ resetsAt: '2026-10-15T20:00:00.000Z', usedPercent: 10, reportedAt })
+    const week = (reportedAt: string) => ({ resetsAt: '2026-10-15T20:00:00.000Z', endedAt: '2026-10-15T20:00:00.000Z', usedPercent: 10, reportedAt })
     expect(isLateReport(week('2026-10-14T19:40:00.000Z'))).toBe(true)
     expect(isLateReport(week('2026-10-14T20:00:00.000Z'))).toBe(false)
   })
