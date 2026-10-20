@@ -19,10 +19,10 @@ import { runReportOutcome } from '../src/commands/report-outcome.js'
 import { runReportExecution, runReportExecutionStart } from '../src/commands/report-execution.js'
 import { runUsageReport } from '../src/commands/usage-report.js'
 import { runUsageStatusline } from '../src/commands/usage-statusline.js'
-import { formatUsageAutoSetup, runUsageAutoSetup, runUsageSetup, runUsageUninstall } from '../src/commands/usage-setup.js'
+import { autoSetupResultCode, formatUsageAutoSetup, runUsageAutoSetup, runUsageSetup, runUsageUninstall } from '../src/commands/usage-setup.js'
 import { writeDailyUsageAggregate } from '../src/usage/usage-aggregate-cache.js'
 import { runAutomaticClaudeReport } from '../src/usage/claude-auto-report.js'
-import { readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson, isAutoSetupDeclined, wasConnected } from '../src/usage/claude-statusline.js'
+import { readClaudeQuota, readClaudeStatuslineInstallation, inspectClaudeStatusline, claudeUsagePaths, readUsageJson, isAutoSetupDeclined, recordAutoSetupResult, wasConnected } from '../src/usage/claude-statusline.js'
 import { runAgentTelemetryCollect } from '../src/commands/agent-telemetry.js'
 import {
   runAgentTelemetryDoctor,
@@ -630,7 +630,13 @@ async function main(): Promise<void> {
       const sub = positional[0]
       if (sub === 'statusline') await runUsageStatusline()
       else if (sub === 'auto-report') await runAutomaticClaudeReport()
-      else if (sub === 'setup' && flags['auto'] === 'true') info(formatUsageAutoSetup(runUsageAutoSetup()))
+      else if (sub === 'setup' && flags['auto'] === 'true') {
+        const result = runUsageAutoSetup()
+        const code = autoSetupResultCode(result)
+        // 결과 기록은 부가 정보다. 쓰지 못해도 훅을 깨뜨리지 않는다(항상 exit 0)
+        if (code) try { recordAutoSetupResult(code) } catch { /* 수집 폴더 쓰기 실패 */ }
+        info(formatUsageAutoSetup(result))
+      }
       else if (sub === 'setup') await runUsageSetup({ display: flags['display'], yes: flags['yes'] === 'true' })
       else if (sub === 'uninstall') {
         const { restored, declined } = runUsageUninstall()

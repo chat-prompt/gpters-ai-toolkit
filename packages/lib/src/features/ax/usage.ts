@@ -219,7 +219,8 @@ const LEGACY_AITK_VERSION = '0.7.9 이하'
  * 사람별로 최근 aitk 요청의 버전을 읽는다.
  *
  * aitk는 모든 요청에 User-Agent `aitk/<버전>`을 붙이고(`apps/aitk-cli/src/client.ts`),
- * `/api/mcp`가 감사 로그에 남긴다. 감사 로그에는 사용자 ID가 없어 access token으로 잇는다.
+ * `/api/mcp`가 감사 로그에 남긴다. 사용량 보고(`report_usage`) 요청만 본다 — 한 사람이 aitk를 여러 개
+ * 깔아 두면 검색·스킬은 새 aitk로, 세션 시작 훅(업그레이드·한도 연결·보고)은 옛 aitk로 도는 일이 실제로 있다. 감사 로그에는 사용자 ID가 없어 access token으로 잇는다.
  * 자동 업그레이드는 머신 밖에 흔적을 남기지 않으므로, 이 값이 업그레이드가 실제로 퍼졌는지의 근거다.
  * User-Agent는 0.7.10(#88)부터 붙었다. 그 전 aitk는 Node 기본값 `node`로 오므로
  * 클라이언트 이름이 `aitk CLI`인 `node`는 0.7.9 이하로 표시한다.
@@ -234,6 +235,7 @@ async function loadAitkVersions(now: number): Promise<Map<string, string>> {
     .from(mcpAuditLogs)
     .innerJoin(oauthAccessTokens, eq(oauthAccessTokens.id, mcpAuditLogs.accessTokenId))
     .where(and(
+      eq(mcpAuditLogs.tool, 'report_usage'),
       or(
         like(mcpAuditLogs.userAgent, 'aitk/%'),
         and(eq(mcpAuditLogs.userAgent, 'node'), eq(mcpAuditLogs.clientName, 'aitk CLI')),
@@ -350,6 +352,7 @@ async function loadParticipation(
             userId: member.id,
             memberName: member.name?.trim() || member.email.split('@')[0],
             status: !recent ? 'stale' : collector.recordCount === 0 ? 'not_using' : 'reporting',
+            limitCapture: collector.limitCapture ?? null,
             lastReportedAt,
             lastLoginAt: toIso(member.lastLoginAt),
             aitkVersion: aitkVersions.get(member.id) ?? null,
@@ -369,6 +372,7 @@ async function loadParticipation(
             lastLoginAt: toIso(member.lastLoginAt),
             aitkVersion: aitkVersions.get(member.id) ?? null,
             clients: Array.from(usage.clients),
+            limitCapture: null,
             source: usage.source,
           }
         }
@@ -381,6 +385,7 @@ async function loadParticipation(
           lastLoginAt: toIso(member.lastLoginAt),
           aitkVersion: aitkVersions.get(member.id) ?? null,
           clients: [],
+          limitCapture: null,
           source: authorized.has(member.id) ? 'authorization' : 'none',
         }
       })

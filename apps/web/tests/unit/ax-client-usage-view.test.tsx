@@ -8,8 +8,8 @@
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { AxClientUsageData, AxMemberServiceRow } from '../../../../packages/lib/src/features/ax/types'
-import { ClientUsagePanel, compareVersions, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
+import type { AxClientUsageData, AxMemberServiceRow, AxUsageParticipationRow } from '../../../../packages/lib/src/features/ax/types'
+import { ClientUsagePanel, compareVersions, limitCaptureLabel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
 
 const person = (name: string, service: string, daysLeft: number | null): AxMemberServiceRow => ({
   name,
@@ -204,7 +204,7 @@ describe('수집 참여 상태 aitk 열', () => {
   it('팀 최고 버전보다 낮은 마지막 관측 버전만 주황색이다', () => {
     const participant = (userId: string, aitkVersion: string | null) => ({
       userId, memberName: userId, status: 'reporting' as const, lastReportedAt: null, lastLoginAt: null,
-      aitkVersion, clients: [], source: 'collector' as const,
+      aitkVersion, clients: [], limitCapture: null, source: 'collector' as const,
     })
     render(
       <ClientUsagePanel
@@ -228,5 +228,62 @@ describe('compareVersions', () => {
     expect(compareVersions('0.7', '0.7.0')).toBe(0)
     // User-Agent 이전 aitk 표시는 0.7.9로 읽힌다
     expect(compareVersions('0.7.9 이하', '0.7.10')).toBeLessThan(0)
+  })
+})
+
+describe('limitCaptureLabel', () => {
+  const NOW = Date.parse('2026-10-20T00:00:00Z')
+  const capture = (overrides: Partial<NonNullable<AxUsageParticipationRow['limitCapture']>>) => ({
+    statusline: 'aitk' as const, autoSetup: 'unchanged', autoSetupAt: null, snapshotAt: null, ...overrides,
+  })
+  const claude = (limitCapture: AxUsageParticipationRow['limitCapture'], lastReportedAt: string | null = null) => ({
+    clients: ['claude-code' as const], limitCapture, lastReportedAt,
+  })
+
+  it('Claude Code를 안 쓰면 빈 칸, 옛 aitk면 실패로 단정하지 않는다', () => {
+    expect(limitCaptureLabel({ clients: ['codex'], limitCapture: null, lastReportedAt: null }, NOW)).toBeNull()
+    expect(limitCaptureLabel(claude(null), NOW)).toEqual({ label: '상태 미보고', warn: false })
+  })
+
+  it('최근 7일 안에 한도를 받았으면 수집 중, 연결만 됐으면 미수신', () => {
+    expect(limitCaptureLabel(claude(capture({ snapshotAt: '2026-10-19T00:00:00Z' })), NOW)).toEqual({ label: '수집 중', warn: false })
+    expect(limitCaptureLabel(claude(capture({ snapshotAt: '2026-10-01T00:00:00Z' })), NOW)).toEqual({ label: '연결됨 · 한도 미수신', warn: true })
+  })
+
+  it('연결이 안 됐으면 자동 연결을 건너뛴 이유를 붙인다', () => {
+    expect(limitCaptureLabel(claude(capture({ statusline: 'user', autoSetup: 'skipped:symlink' })), NOW))
+      .toEqual({ label: '미연결 · 설정 폴더가 심링크', warn: true })
+    expect(limitCaptureLabel(claude(capture({ statusline: 'none', autoSetup: 'failed' })), NOW))
+      .toEqual({ label: '미연결 · 연결 실패', warn: true })
+    expect(limitCaptureLabel(claude(capture({ statusline: 'none', autoSetup: null })), NOW))
+      .toEqual({ label: '미연결', warn: true })
+  })
+
+  it('지금 미연결이면 어제 받은 한도보다 미연결이 우선한다', () => {
+    expect(limitCaptureLabel(claude(capture({ statusline: 'user', autoSetup: 'skipped:drifted', snapshotAt: '2026-10-19T00:00:00Z' })), NOW))
+      .toEqual({ label: '미연결 · 연결 뒤 직접 되돌림', warn: true })
+  })
+
+  it('신선도는 상태를 받은 시각 기준이고, 연결 첫날은 경고하지 않는다', () => {
+    // 10일 전 보고 때 하루 전 한도를 받았다 — 지금 보고가 끊겼어도 그때는 수집 중이었다
+    expect(limitCaptureLabel(claude(capture({ snapshotAt: '2026-10-09T00:00:00Z', observedAt: '2026-10-10T00:00:00Z' }), '2026-10-10T00:00:00Z'), NOW))
+      .toEqual({ label: '수집 중', warn: false })
+    expect(limitCaptureLabel(claude(capture({ autoSetup: 'connected:wrapped', autoSetupAt: '2026-10-19T23:00:00Z', observedAt: '2026-10-19T23:00:05Z' })), NOW))
+      .toEqual({ label: '연결됨 · 첫 수신 대기', warn: false })
+    // 다음 날부터는 매일 unchanged가 새 시각으로 남는다 — 한 번도 못 받았으면 경고한다
+    expect(limitCaptureLabel(claude(capture({ autoSetup: 'unchanged', autoSetupAt: '2026-10-21T00:00:00Z', observedAt: '2026-10-21T00:00:05Z' })), NOW))
+      .toEqual({ label: '연결됨 · 한도 미수신', warn: true })
+  })
+
+  it('Codex 전용 머신이 마지막으로 보고해도 보존된 Claude 진단을 관측 날짜와 함께 보여준다', () => {
+    const kept = capture({ statusline: 'user', autoSetup: 'skipped:symlink', observedAt: '2026-10-10T00:00:00Z' })
+    expect(limitCaptureLabel({ clients: ['codex'], limitCapture: kept, lastReportedAt: '2026-10-19T00:00:00Z' }, NOW)?.label)
+      .toMatch(/^미연결 · 설정 폴더가 심링크 \(.+ 관측\)$/)
+  })
+
+  it('마지막 보고보다 하루 넘게 이른 관측이면 관측 날짜를 붙인다 — 옛 aitk 보고가 이전 값을 남긴 경우', () => {
+    const old = capture({ statusline: 'none', autoSetup: null, observedAt: '2026-10-10T00:00:00Z' })
+    expect(limitCaptureLabel(claude(old, '2026-10-19T00:00:00Z'), NOW)?.label).toMatch(/^미연결 \(.+ 관측\)$/)
+    expect(limitCaptureLabel(claude(old, '2026-10-10T12:00:00Z'), NOW)?.label).toBe('미연결')
   })
 })

@@ -34,7 +34,7 @@
     "db:migrate:collector-interval-child": "tsx scripts/apply-agent-collector-interval-migration.ts",
     "db:migrate:collector-interval-production": "tsx scripts/apply-agent-collector-interval-migration.ts --production",
     "db:backfill:sessionless-skills": "tsx scripts/backfill-sessionless-skill-events.ts",
-    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts tests/sessionless-skill-events-guard.test.ts tests/skill-journey-guard.test.ts tests/agent-collector-interval-guard.test.ts tests/catalog-health-snapshot-guard.test.ts tests/session-fk-guard.test.ts tests/cron-runs-guard.test.ts tests/ax-subscriptions-key-guard.test.ts tests/agent-credential-org-edit-guard.test.ts tests/usage-limit-windows-guard.test.ts",
+    "test:ax-child-guard": "tsx --test tests/ax-child-guard.test.ts tests/agent-telemetry-collector-guard.test.ts tests/sessionless-skill-events-guard.test.ts tests/skill-journey-guard.test.ts tests/agent-collector-interval-guard.test.ts tests/catalog-health-snapshot-guard.test.ts tests/session-fk-guard.test.ts tests/cron-runs-guard.test.ts tests/ax-subscriptions-key-guard.test.ts tests/agent-credential-org-edit-guard.test.ts tests/usage-limit-windows-guard.test.ts tests/collector-limit-capture-guard.test.ts",
     "db:migrate:session-fk-child": "tsx scripts/apply-session-fk-migration.ts",
     "db:migrate:session-fk-production": "tsx scripts/apply-session-fk-migration.ts --production",
     "db:migrate:cron-runs-child": "tsx scripts/apply-cron-runs-migration.ts",
@@ -44,7 +44,9 @@
     "db:migrate:agent-org-edit-child": "tsx scripts/apply-agent-credential-org-edit-migration.ts",
     "db:migrate:agent-org-edit-production": "tsx scripts/apply-agent-credential-org-edit-migration.ts --production",
     "db:migrate:usage-limit-windows-child": "tsx scripts/apply-usage-limit-windows-migration.ts",
-    "db:migrate:usage-limit-windows-production": "tsx scripts/apply-usage-limit-windows-migration.ts --production"
+    "db:migrate:usage-limit-windows-production": "tsx scripts/apply-usage-limit-windows-migration.ts --production",
+    "db:migrate:collector-limit-capture-child": "tsx scripts/apply-collector-limit-capture-migration.ts",
+    "db:migrate:collector-limit-capture-production": "tsx scripts/apply-collector-limit-capture-migration.ts --production"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

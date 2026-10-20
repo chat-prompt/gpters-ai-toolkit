@@ -211,6 +211,87 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
+/** 자동 연결을 건너뛴 이유 (aitk `AutoSetupSkipReason`) */
+const LIMIT_SKIP_LABELS: Record<string, string> = {
+  symlink: '설정 폴더가 심링크',
+  'config-dir': 'CLAUDE_CONFIG_DIR 사용',
+  declined: '직접 해제함',
+  drifted: '연결 뒤 직접 되돌림',
+  unsupported: '표시줄 형식 미지원',
+  disabled: '자동 연결 꺼 둠',
+  agent: '에이전트 머신',
+  platform: 'Windows',
+}
+
+/** 한도를 이 기간 안에 받았으면 수집 중으로 본다 — 주간 한도라 일주일에 한 번은 Claude Code를 연다는 가정 */
+const LIMIT_SNAPSHOT_FRESH_MS = 7 * 86_400_000
+
+/**
+ * Claude 주간 한도 수집 연결 상태를 한 줄로 만든다. Claude Code를 안 쓰는 사람은 null(빈 칸).
+ *
+ * 지금의 미연결 상태가 과거 한도 수신보다 우선한다 — 어제 받은 한도가 있어도 오늘 연결을 되돌렸으면 미연결이다.
+ * 옛 aitk 보고는 상태를 보내지 않아 이전 관측이 남으므로, 마지막 보고보다 하루 넘게 이른 관측이면 날짜를 붙인다.
+ *
+ * @param row - 참여 상태 행
+ * @param now - 기준 시각 (테스트용)
+ * @returns 표시 문구와 경고 여부
+ */
+export function limitCaptureLabel(
+  row: Pick<AxUsageParticipationRow, 'clients' | 'limitCapture' | 'lastReportedAt'>,
+  now = Date.now()
+): { label: string; warn: boolean } | null {
+  const capture = row.limitCapture
+  // 보존된 상태가 있으면 이번 보고가 Codex 전용 머신에서 왔어도 보여준다(아래에서 관측 날짜를 붙인다)
+  if (!capture) {
+    // aitk 0.7.25 전에는 연결 상태를 보내지 않는다 — 실패로 단정하지 않는다
+    return row.clients.includes('claude-code') ? { label: '상태 미보고', warn: false } : null
+  }
+  // 신선도는 화면을 연 시각이 아니라 상태를 받은 시각 기준이다 — 보고가 끊긴 사람을 "미수신"으로 오판하지 않는다
+  const at = capture.observedAt ? new Date(capture.observedAt).getTime() : now
+  const status = ((): { label: string; warn: boolean } => {
+    if (capture.statusline !== 'aitk') {
+      const skipped = capture.autoSetup?.startsWith('skipped:') ? capture.autoSetup.slice('skipped:'.length) : null
+      if (skipped) return { label: `미연결 · ${LIMIT_SKIP_LABELS[skipped] ?? skipped}`, warn: true }
+      if (capture.autoSetup === 'failed') return { label: '미연결 · 연결 실패', warn: true }
+      return { label: '미연결', warn: true }
+    }
+    if (capture.snapshotAt && at - new Date(capture.snapshotAt).getTime() <= LIMIT_SNAPSHOT_FRESH_MS) {
+      return { label: '수집 중', warn: false }
+    }
+    // 같은 훅이 연결 직후 보고하므로 새로 연결한 날은 표시줄이 아직 한 번도 안 그려졌다 — 경고하지 않는다.
+    // 이미 연결된 머신은 매일 `unchanged`를 새 시각으로 남기므로 `connected:*`일 때만 유예한다
+    if (
+      !capture.snapshotAt &&
+      capture.autoSetup?.startsWith('connected:') &&
+      capture.autoSetupAt &&
+      at - new Date(capture.autoSetupAt).getTime() <= 86_400_000
+    ) {
+      return { label: '연결됨 · 첫 수신 대기', warn: false }
+    }
+    return { label: '연결됨 · 한도 미수신', warn: true }
+  })()
+  const observed = capture.observedAt ? new Date(capture.observedAt).getTime() : null
+  const reported = row.lastReportedAt ? new Date(row.lastReportedAt).getTime() : null
+  if (observed !== null && reported !== null && reported - observed > 86_400_000) {
+    return { ...status, label: `${status.label} (${formatDate(capture.observedAt!)} 관측)` }
+  }
+  return status
+}
+
+/** Claude 한도 수집 연결 상태 칸 */
+function LimitCaptureCell({ row }: { row: AxUsageParticipationRow }) {
+  const capture = limitCaptureLabel(row)
+  return (
+    <td
+      className={`whitespace-nowrap ${TD} text-xs ${
+        capture?.warn ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'
+      }`}
+    >
+      {capture?.label ?? EMPTY}
+    </td>
+  )
+}
+
 /** 내부 계정 전원의 수집 참여 상태 (관리자 전용) */
 function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
   // npm 최신을 서버에서 따로 묻지 않는다 — 팀에서 가장 높은 버전보다 낮은 마지막 관측 버전을 주황색으로 둔다.
@@ -231,7 +312,8 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
           <p>정상 보고는 최근 7일 안에 사용량이 도착한 상태입니다. AITK 업그레이드만으로 즉시 바뀌지는 않습니다.</p>
           <p className="mt-2">자동 보고는 플러그인이 설치된 Claude Code·Codex의 새 세션 시작 시 하루 한 번 시도하며, 로그인과 로컬 사용 기록이 필요합니다.</p>
           <p className="mt-2">승인 후 수집 미확인은 아직 보고가 없다는 뜻이며, 최근 사용 기록 없음은 수집기가 응답했지만 사용량이 0건이라는 뜻입니다.</p>
-          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 요청에 찍힌 버전입니다(0.7.9 이하는 버전을 보내지 않던 aitk). 머신이 여러 대면 마지막으로 요청한 머신만 보이고, 업그레이드 뒤 아직 요청이 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
+          <p className="mt-2">aitk는 최근 30일 동안 그 사람의 마지막 사용량 보고에 찍힌 버전입니다(세션 시작 훅이 실제로 쓰는 aitk, 0.7.9 이하는 버전을 보내지 않던 aitk). 사용량 보고를 꺼 둔 사람은 비어 있습니다. 머신이 여러 대면 마지막으로 보고한 머신만 보이고, 업그레이드 뒤 아직 보고가 없으면 이전 버전으로 남습니다. 팀에서 가장 높은 버전보다 낮으면 주황색입니다.</p>
+          <p className="mt-2">Claude 한도는 상태 표시줄이 Claude Code에서 주간 한도를 받는지입니다(aitk 0.7.25부터 보고). 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 연결 첫날은 첫 수신 대기로 둡니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를 적습니다. 머신이 여러 대면 마지막으로 보고한 머신 기준이고, 날짜가 붙은 값은 그날 관측한 이전 상태입니다.</p>
         </InfoTip>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -245,13 +327,14 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
         ))}
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[840px] text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
               <th className={`text-left ${TD} ${TH} w-[18%]`}>사용자</th>
               <th className={`text-left ${TD} ${TH} w-[20%]`}>상태</th>
               <th className={`text-left ${TD} ${TH} w-[17%]`}>클라이언트</th>
               <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>aitk</th>
+              <th className={`whitespace-nowrap text-left ${TD} ${TH}`}>Claude 한도</th>
               <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 보고</th>
               <th className={`whitespace-nowrap text-right ${TD} ${TH}`}>마지막 로그인</th>
               <th className={`text-left ${TD} ${TH} w-[18%]`}>판정 근거</th>
@@ -286,6 +369,7 @@ function ParticipationTable({ rows }: { rows: AxUsageParticipationRow[] }) {
                   >
                     {row.aitkVersion ?? EMPTY}
                   </td>
+                  <LimitCaptureCell row={row} />
                   <td className={`whitespace-nowrap text-right ${TD} font-mono text-xs tabular-nums text-[var(--text-muted)]`}>
                     {row.lastReportedAt ? formatDateTime(row.lastReportedAt) : EMPTY}
                   </td>

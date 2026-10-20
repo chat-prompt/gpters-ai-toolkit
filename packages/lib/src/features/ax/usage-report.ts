@@ -4,7 +4,7 @@
  * aitk CLI가 각 팀원 머신에서 집계해 서버로 보내는 payload의 정본이다.
  * CLI(보내는 쪽)와 API 라우트(받는 쪽)가 이 파일 하나를 함께 본다.
  *
- * **보내는 값의 범위**: 집계 수치와 플랜 문자열뿐이다.
+ * **보내는 값의 범위**: 집계 수치와 플랜 문자열, Claude 한도 수집 연결 상태(고정 코드와 시각)뿐이다.
  * 대화 내용, 파일 경로, 인증 토큰은 이 계약에 자리가 없다 — 그런 필드를 추가하지 말 것.
  */
 
@@ -60,6 +60,58 @@ export interface AxUsageReportRecord {
 export interface AxUsageReportPayload {
   /** 비어 있어도 유효하다. 빈 배열은 수집기는 정상 실행됐지만 사용량이 없다는 점검 신호다 */
   records: AxUsageReportRecord[]
+  /** Claude 한도 수집 연결 상태. 옛 aitk 이거나 형식이 맞지 않으면 null (보고 자체는 거부하지 않는다) */
+  limitCapture: AxLimitCapture | null
+}
+
+/**
+ * Claude 주간 한도 수집 연결 상태 (aitk `readLimitCapture`)
+ *
+ * 고정 코드와 시각만 받는다. 자유 문구가 들어올 자리가 없도록 코드 형식을 여기서 제한한다.
+ */
+export interface AxLimitCapture {
+  /** settings.json 의 statusLine 상태 */
+  statusline: 'none' | 'user' | 'aitk' | 'unsupported'
+  /** 마지막 자동 연결 결과 (`connected:wrapped`·`unchanged`·`skipped:symlink`·`failed` 등) */
+  autoSetup: string | null
+  autoSetupAt: string | null
+  /** 표시줄이 Claude Code 에서 주간 한도를 마지막으로 받은 시각 */
+  snapshotAt: string | null
+  /**
+   * 서버가 이 상태를 받은 시각. 저장할 때 서버가 채운다 — 옛 aitk 보고는 상태를 보내지 않아 이전 값이 남으므로,
+   * 화면이 "지금 보고와 다른 시점의 관측"을 구분하는 근거다
+   */
+  observedAt?: string
+}
+
+const LIMIT_CAPTURE_STATUSLINES = ['none', 'user', 'aitk', 'unsupported'] as const
+/** aitk `AUTO_SETUP_CODES`와 같은 목록. 모르는 코드는 자유 문구가 섞일 수 있어 받지 않는다 */
+const AUTO_SETUP_CODES: ReadonlySet<string> = new Set([
+  'connected:wrapped', 'connected:none', 'unchanged', 'refreshed', 'failed',
+  ...['disabled', 'report-disabled', 'agent', 'config-dir', 'declined', 'drifted', 'symlink', 'unsupported', 'platform']
+    .map((reason) => `skipped:${reason}`),
+])
+
+/**
+ * 연결 상태를 검증한다. 부가 정보라 틀려도 보고를 거부하지 않는다 — 형식이 틀리면 null, 모르는 결과 코드는 그 필드만 null
+ *
+ * @param input - `limitCapture` 인자
+ * @returns 통과한 값 또는 null
+ */
+export function parseLimitCapture(input: unknown): AxLimitCapture | null {
+  if (typeof input !== 'object' || input === null) return null
+  const v = input as Record<string, unknown>
+  if (!LIMIT_CAPTURE_STATUSLINES.includes(v.statusline as AxLimitCapture['statusline'])) return null
+  for (const field of ['autoSetupAt', 'snapshotAt'] as const) {
+    if (v[field] !== null && !isIsoDate(v[field])) return null
+  }
+  return {
+    statusline: v.statusline as AxLimitCapture['statusline'],
+    // 모르는 코드(서버보다 새 aitk 의 새 사유 또는 자유 문구)는 그 필드만 버리고 나머지 진단은 받는다
+    autoSetup: typeof v.autoSetup === 'string' && AUTO_SETUP_CODES.has(v.autoSetup) ? v.autoSetup : null,
+    autoSetupAt: v.autoSetupAt === null ? null : new Date(v.autoSetupAt as string).toISOString(),
+    snapshotAt: v.snapshotAt === null ? null : new Date(v.snapshotAt as string).toISOString(),
+  }
 }
 
 /** 검증 결과 */
@@ -187,5 +239,11 @@ export function validateUsageReport(input: unknown): AxUsageReportValidation {
     seen.add(key)
   }
 
-  return { ok: true, payload: { records: records as AxUsageReportRecord[] } }
+  return {
+    ok: true,
+    payload: {
+      records: records as AxUsageReportRecord[],
+      limitCapture: parseLimitCapture((input as Record<string, unknown>).limitCapture),
+    },
+  }
 }

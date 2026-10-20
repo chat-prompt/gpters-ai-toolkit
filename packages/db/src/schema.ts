@@ -1350,6 +1350,18 @@ export const axUsageCollectorState = pgTable('ax_usage_collector_state', {
   /** 이번 점검에서 받은 레코드 수. 0이면 수집기는 정상이나 최근 사용량이 없다는 뜻 */
   recordCount: integer('record_count').notNull().default(0),
   lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).defaultNow().notNull(),
+  /**
+   * Claude 주간 한도 수집 연결 상태 (EDU-11519). aitk 0.7.25+ 가 보고마다 싣는다.
+   * 옛 aitk 는 보내지 않으므로 null 이며, 보내지 않은 보고는 이전 값을 덮지 않는다
+   */
+  limitCapture: jsonb('limit_capture').$type<{
+    statusline: 'none' | 'user' | 'aitk' | 'unsupported'
+    autoSetup: string | null
+    autoSetupAt: string | null
+    snapshotAt: string | null
+    /** 서버가 받은 시각 */
+    observedAt?: string
+  }>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (table) => [

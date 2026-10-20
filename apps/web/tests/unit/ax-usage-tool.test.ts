@@ -247,6 +247,20 @@ describe('report_usage', () => {
       })
     })
 
+    it('한도 연결 상태는 보냈을 때만 점검 상태에 싣는다 — 옛 aitk 보고가 이전 값을 지우지 않는다', async () => {
+      const capture = { statusline: 'aitk', autoSetup: 'unchanged', autoSetupAt: null, snapshotAt: '2026-10-19T09:00:00.000Z' }
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [])
+      let writes = stubWrites()
+      await reportUsage({ records: [], limitCapture: capture }, 'user-1')
+      // 서버가 받은 시각을 붙여 둔다 — 옛 aitk 보고 뒤에도 언제 관측한 상태인지 구분한다
+      expect(writes.collectorValues[0]).toMatchObject({ limitCapture: { ...capture, observedAt: expect.any(String) } })
+
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [])
+      writes = stubWrites()
+      await reportUsage({ records: [] }, 'user-1')
+      expect(writes.collectorValues[0]).not.toHaveProperty('limitCapture')
+    })
+
     it('같은 (인증 사용자, 클라이언트, 구간)이 있으면 update 한다 — 행이 늘지 않는다', async () => {
       stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[{ id: 'row-1' }]])
       const writes = stubWrites()

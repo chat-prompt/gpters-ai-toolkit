@@ -30,6 +30,7 @@ export function claudeUsagePaths(home = homedir()) {
     lock: join(directory, 'report.lock'),
     declined: join(directory, 'auto-setup-declined.json'),
     connected: join(directory, 'connected.json'),
+    autoSetup: join(directory, 'auto-setup.json'),
   }
 }
 
@@ -344,4 +345,76 @@ export function markConnected(home = homedir(), now = Date.now()): void {
 /** 연결한 적이 있는지. 옛 aitk uninstall·수집 폴더 삭제 뒤에도 남는 기록을 본다. */
 export function wasConnected(home = homedir()): boolean {
   return connectedPaths(home).some(path => existsSync(path))
+}
+
+/**
+ * Claude Code를 쓰는 머신인지. ~/.claude 폴더만으로는 판단하지 않는다 — aitk 사용량 보고가
+ * Codex만 쓰는 사람에게도 ~/.claude/aitk-usage를 만든다. Claude Code가 직접 만드는 것을 본다.
+ */
+export function usesClaudeCode(home = homedir()): boolean {
+  return [join(home, '.claude', 'projects'), join(home, '.claude.json'), join(home, '.claude', 'settings.json')].some(path => existsSync(path))
+}
+
+/** 자동 연결을 건너뛴 이유 중 서버에 남기는 것. no-claude·busy는 남기지 않는다 */
+const RECORDED_SKIP_REASONS = ['disabled', 'report-disabled', 'agent', 'config-dir', 'declined', 'drifted', 'symlink', 'unsupported', 'platform'] as const
+
+/** 서버로 보낼 수 있는 자동 연결 결과 코드. 서버(`parseLimitCapture`)도 같은 목록만 받는다 */
+export const AUTO_SETUP_CODES: ReadonlySet<string> = new Set([
+  'connected:wrapped', 'connected:none', 'unchanged', 'refreshed', 'failed',
+  ...RECORDED_SKIP_REASONS.map(reason => `skipped:${reason}`),
+])
+
+/**
+ * 서버로 보내는 Claude 한도 수집 연결 상태. 대시보드가 "왜 한도가 안 들어오는지"를 머신에 들어가지 않고 보게 한다.
+ * 고정된 코드와 시각만 담는다 — 오류 문구·경로·명령은 넣지 않는다.
+ */
+export interface ClaudeLimitCapture {
+  /** settings.json의 statusLine 상태 */
+  statusline: ClaudeStatuslineState['kind']
+  /** 마지막 자동 연결 결과 (`AUTO_SETUP_CODES` 중 하나). 기록이 없으면 null */
+  autoSetup: string | null
+  autoSetupAt: string | null
+  /** 표시줄이 Claude Code에서 주간 한도를 마지막으로 받은 시각. 받은 적이 없으면 null */
+  snapshotAt: string | null
+}
+
+/**
+ * 자동 연결 결과를 남긴다. 훅 로그는 머신에만 있어 서버가 볼 수 없다.
+ * Claude Code를 안 쓰는 머신(에이전트·Windows 건너뛰기 포함)에는 ~/.claude를 만들지 않는다.
+ */
+export function recordAutoSetupResult(code: string, home = homedir(), now = Date.now()): void {
+  if (!AUTO_SETUP_CODES.has(code) || !usesClaudeCode(home)) return
+  writeUsageJson(claudeUsagePaths(home).autoSetup, { version: 1, at: new Date(now).toISOString(), result: code })
+}
+
+/**
+ * 사용량 보고에 실어 보낼 연결 상태를 읽는다. 설정을 바꾸지 않는다.
+ *
+ * 모르면 null을 보낸다 — 서버는 null이면 이전 값을 그대로 둔다. Claude Code를 안 쓰는 머신의 보고가
+ * 다른 머신의 진단을 지우거나, 잠깐 못 읽은 settings.json을 "표시줄 없음"으로 오판하지 않게 한다.
+ */
+export function readLimitCapture(home = homedir(), env: NodeJS.ProcessEnv = process.env): ClaudeLimitCapture | null {
+  // Claude Code가 다른 설정 폴더를 쓰면 기본 경로의 연결·스냅샷은 지금 상태가 아니다.
+  // 자동 연결도 이 경우 건너뛰므로(`skipped:config-dir`) "실제로 쓰는 설정에는 연결 없음"으로 보낸다.
+  // 기본 경로에 흔적이 없어도(처음부터 별도 폴더만 쓴 머신) 그 폴더가 있으면 Claude Code를 쓰는 것이다.
+  if (env.CLAUDE_CONFIG_DIR && resolve(env.CLAUDE_CONFIG_DIR) !== resolve(join(home, '.claude'))) {
+    return existsSync(env.CLAUDE_CONFIG_DIR)
+      ? { statusline: 'none', autoSetup: 'skipped:config-dir', autoSetupAt: null, snapshotAt: null }
+      : null
+  }
+  if (!usesClaudeCode(home)) return null
+  const paths = claudeUsagePaths(home)
+  if (existsSync(paths.settings)) {
+    try { if (!object(JSON.parse(readFileSync(paths.settings, 'utf8')))) return null } catch { return null }
+  }
+  const auto = object(readUsageJson(paths.autoSetup))
+  const snapshot = object(readUsageJson(paths.snapshot))
+  const iso = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null
+  const autoSetup = typeof auto?.result === 'string' && AUTO_SETUP_CODES.has(auto.result) ? auto.result : null
+  return {
+    statusline: inspectClaudeStatusline(home).kind,
+    autoSetup,
+    autoSetupAt: autoSetup ? iso(auto?.at) : null,
+    snapshotAt: iso(snapshot?.capturedAt),
+  }
 }

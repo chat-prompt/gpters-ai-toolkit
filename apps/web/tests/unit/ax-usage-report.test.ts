@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { validateUsageReport } from '../../../../packages/lib/src/features/ax/usage-report'
+import { parseLimitCapture, validateUsageReport } from '../../../../packages/lib/src/features/ax/usage-report'
 
 /** 통과하는 최소 레코드 */
 function record(overrides: Record<string, unknown> = {}) {
@@ -52,7 +52,7 @@ describe('validateUsageReport', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.payload).not.toHaveProperty('memberName')
-      expect(Object.keys(result.payload)).toEqual(['records'])
+      expect(Object.keys(result.payload)).toEqual(['records', 'limitCapture'])
     }
   })
 
@@ -91,7 +91,7 @@ describe('validateUsageReport', () => {
   })
 
   it('빈 배열은 수집기 점검 신호로 허용하고 과도한 건수는 거부한다', () => {
-    expect(validateUsageReport({ records: [] })).toEqual({ ok: true, payload: { records: [] } })
+    expect(validateUsageReport({ records: [] })).toEqual({ ok: true, payload: { records: [], limitCapture: null } })
     const many = Array.from({ length: 21 }, (_, i) =>
       record({ periodStart: `2026-07-${String(i + 1).padStart(2, '0')}T00:00:00.000Z` })
     )
@@ -101,5 +101,35 @@ describe('validateUsageReport', () => {
   it('본문이 객체가 아니거나 records가 없으면 거부한다', () => {
     expect(expectErrors(null).join()).toContain('객체')
     expect(expectErrors({}).join()).toContain('records')
+  })
+})
+
+describe('parseLimitCapture', () => {
+  const capture = {
+    statusline: 'user',
+    autoSetup: 'skipped:symlink',
+    autoSetupAt: '2026-10-20T00:00:00.000Z',
+    snapshotAt: null,
+  }
+
+  it('고정 코드와 시각만 받아들인다', () => {
+    expect(parseLimitCapture(capture)).toEqual(capture)
+    expect(validateUsageReport({ records: [], limitCapture: capture })).toEqual({
+      ok: true,
+      payload: { records: [], limitCapture: capture },
+    })
+  })
+
+  it('형식이 틀리면 보고는 받되 연결 상태만 버린다', () => {
+    // 자유 문구(경로가 섞일 수 있는 실패 사유)·모르는 사유는 그 필드만 버리고 나머지 진단은 받는다
+    expect(parseLimitCapture({ ...capture, autoSetup: 'failed: /Users/someone/.claude' })).toEqual({ ...capture, autoSetup: null })
+    expect(parseLimitCapture({ ...capture, autoSetup: 'skipped:private-project' })).toEqual({ ...capture, autoSetup: null })
+    expect(parseLimitCapture({ ...capture, statusline: 'other' })).toBeNull()
+    expect(parseLimitCapture({ ...capture, snapshotAt: 'yesterday' })).toBeNull()
+    expect(parseLimitCapture(undefined)).toBeNull()
+    expect(validateUsageReport({ records: [], limitCapture: 'x' })).toEqual({
+      ok: true,
+      payload: { records: [], limitCapture: null },
+    })
   })
 })
