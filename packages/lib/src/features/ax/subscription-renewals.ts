@@ -38,6 +38,8 @@ const log = createLogger('ax-subscription-renewals')
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
+/** `recentWeeks` 에 싣는 기간 — 뽀밋이 저사용 알림이 며칠 밀려도 따라잡을 만큼 */
+const RECENT_WEEKS_DAYS = 8
 
 /** 구독 벤더 → 사용량을 보고하는 클라이언트 */
 const CLIENT_BY_VENDOR: Record<string, AxUsageClient> = {
@@ -183,13 +185,16 @@ export function buildRenewalRows(
         .flatMap((entry) => entry.reports)
     )
 
-    const weeks = mine
-      .filter((week) => week.resetsAt >= previous && week.resetsAt <= now)
-      .map((week) => ({
-        resetsAt: week.resetsAt.toISOString(),
-        usedPercent: week.usedPercent,
-        reportedAt: week.reportedAt.toISOString(),
-      }))
+    const toWeek = (week: Window) => ({
+      resetsAt: week.resetsAt.toISOString(),
+      usedPercent: week.usedPercent,
+      reportedAt: week.reportedAt.toISOString(),
+    })
+    const weeks = mine.filter((week) => week.resetsAt >= previous && week.resetsAt <= now).map(toWeek)
+    // 결제일이 막 지나 weeks 에서 빠진 회차도 저사용 알림이 놓치지 않게 결제 주기와 무관하게 따로 싣는다
+    const recentWeeks = mine
+      .filter((week) => week.resetsAt <= now && week.resetsAt.getTime() >= now.getTime() - RECENT_WEEKS_DAYS * DAY_MS)
+      .map(toWeek)
     // 아직 초기화 전인 회차가 둘 이상이면(벤더가 초기화 시각을 앞당김) 가장 최근에 보고된 쪽이 진행 중이다.
     // 꺼져 있던 머신이 끝난 회차의 옛 스냅샷을 더 늦게 보내면 그 회차를 고를 수 있다 — 드문 경우라 그대로 둔다
     const current = mine
@@ -210,6 +215,8 @@ export function buildRenewalRows(
         ? Math.round((weeks.reduce((sum, week) => sum + week.usedPercent, 0) / weeks.length) * 10) / 10
         : null,
       currentPercent: current?.usedPercent ?? null,
+      currentResetsAt: current?.resetsAt.toISOString() ?? null,
+      recentWeeks,
     })
   }
 
