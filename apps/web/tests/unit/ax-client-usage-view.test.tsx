@@ -247,6 +247,29 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     expect(screen.getByText('상태 미보고')).toBeInTheDocument()
     expect(screen.getAllByText('미수집')).toHaveLength(1)
   })
+  it('로스터 이름(별칭)도 계정 표시명과 잇고, 후보가 둘이거나 공용 구독이면 붙이지 않는다', () => {
+    const shared = person('공용(팀)', 'Claude Code', 3)
+    render(
+      <ClientUsagePanel
+        data={{
+          ...data([
+            { ...person('타타', 'Claude Code', 3), usage: null },
+            person('김민수', 'Codex', 3),
+            { ...shared, subscription: { ...shared.subscription!, shared: true } },
+          ]),
+          participation: [
+            participant('조효희 (타타)', '0.7.24'),
+            participant('김민수', '0.7.25'),
+            participant('김민수 (둘째)', '0.7.20'),
+            participant('공용(팀)', '0.7.9 이하'),
+          ],
+        }}
+        days={7}
+      />
+    )
+    expect(screen.getByText('aitk 0.7.24')).toBeInTheDocument()
+    expect(screen.getAllByText(/^aitk /)).toHaveLength(1)
+  })
 })
 
 describe('compareVersions', () => {

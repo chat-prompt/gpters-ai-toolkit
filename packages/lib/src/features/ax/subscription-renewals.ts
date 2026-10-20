@@ -31,6 +31,7 @@ import type {
   AxUsageClient,
 } from './types'
 import { KST_OFFSET_MS, kstDateKey, startOfKstDay } from './kst'
+import { samePerson } from './types'
 import { createLogger } from '../../core/logger'
 
 const log = createLogger('ax-subscription-renewals')
@@ -79,26 +80,8 @@ type Report = { resetsAt: Date; usedPercent: number; reportedAt: Date; seenAt: D
 /** 한 회차. reportedAt 은 최댓값을 보고한 시각, lastSeenAt 은 가장 늦은 보고 시각(진행 중 회차 고르기용) */
 type Window = { resetsAt: Date; usedPercent: number; reportedAt: Date; lastSeenAt: Date }
 
-/**
- * 같은 사람인지 가르는 이름 키 — 전체 이름, 괄호 앞 이름, 괄호 안 별칭
- *
- * 로스터는 `타타`, 계정 표시명은 `조효희 (타타)`처럼 적힌다.
- * ponytail: 별칭이 겹치는 두 사람은 구분하지 못한다. 그런 일이 생기면 로스터에 user_id 를 둔다.
- *
- * @param name - 로스터 이름 또는 계정 표시명
- */
-export function personNameKeys(name: string): string[] {
-  const trimmed = name.trim()
-  const match = trimmed.match(/^(.*?)\s*\(([^)]*)\)\s*$/)
-  const keys = match ? [trimmed, match[1].trim(), match[2].trim()] : [trimmed]
-  return keys.filter((key) => key.length > 0)
-}
-
-/** 두 이름이 같은 사람을 가리키는지 (이름 키가 하나라도 겹치면) */
-export function samePerson(a: string, b: string): boolean {
-  const keys = new Set(personNameKeys(a))
-  return personNameKeys(b).some((key) => keys.has(key))
-}
+// 화면(클라이언트)도 같은 규칙으로 사람을 잇는다 — DB 를 부르지 않는 types.ts 에 둔다
+export { personNameKeys, samePerson } from './types'
 
 /**
  * 주어진 달의 결제일 0시(KST). 그 달에 없는 날(31일 등)은 말일로 당긴다.

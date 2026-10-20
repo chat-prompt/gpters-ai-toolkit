@@ -21,7 +21,7 @@ import type {
   AxUsageParticipationStatus,
   AxUsageClient,
 } from '@/lib/features/ax'
-import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from '@/lib/features/ax'
+import { AX_USAGE_PARTICIPATION_STATUS_ORDER, samePerson } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyMap } from '../format'
 
@@ -788,8 +788,13 @@ function PeopleTable({
   }
 
   const groups = groupByPerson(rows, sort)
-  // 두 표 모두 계정 표시명을 쓴다 — 사용 보고가 없는 로스터 이름은 이어지지 않고 빈 칸으로 남는다
-  const collectorByName = new Map(participation.map((row) => [row.memberName, row]))
+  // 사용 보고가 붙은 줄은 계정 표시명, 아닌 줄은 로스터 이름(`타타`)이다 — 서버와 같은 이름 규칙으로 잇는다.
+  // 공용 구독은 사람이 아니고, 후보가 둘 이상이면(동명이인·별칭 겹침) 엉뚱한 사람에게 붙이지 않고 비운다
+  const collectorFor = (row: AxMemberServiceRow): AxUsageParticipationRow | undefined => {
+    if (row.subscription?.shared) return undefined
+    const matches = participation.filter((candidate) => samePerson(candidate.memberName, row.name))
+    return matches.length === 1 ? matches[0] : undefined
+  }
   // npm 최신을 서버에서 따로 묻지 않는다 — 팀에서 가장 높은 버전보다 낮은 마지막 관측 버전을 주황색으로 둔다.
   const newestAitk = participation
     .map((row) => row.aitkVersion)
@@ -860,7 +865,7 @@ function PeopleTable({
                     {index === 0 && (
                       <>
                         {row.name}
-                        <AitkVersion version={collectorByName.get(row.name)?.aitkVersion ?? null} newest={newestAitk} />
+                        <AitkVersion version={collectorFor(row)?.aitkVersion ?? null} newest={newestAitk} />
                       </>
                     )}
                   </td>
@@ -874,7 +879,7 @@ function PeopleTable({
                     {row.subscription ? formatMoney(row.subscription.amount, row.subscription.currency) : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
-                    <CurrentLimitCell row={row} collector={collectorByName.get(row.name)} />
+                    <CurrentLimitCell row={row} collector={collectorFor(row)} />
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
                     <CycleAverageCell row={row} cycleError={cycleError} />
