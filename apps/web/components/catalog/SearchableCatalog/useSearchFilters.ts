@@ -3,13 +3,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/i18n/navigation'
-import { TAGS, type ItemType, type Difficulty } from '@/lib/core/types'
+import { TAGS, type Difficulty } from '@/lib/core/types'
 import {
   naturalLanguageSearch,
   extractKeywords,
   getDidYouMeanSuggestions,
 } from '@/lib/search/search-utils'
-import type { UseSearchFiltersOptions, UseSearchFiltersReturn } from './types'
+import type { CatalogFilter, UseSearchFiltersOptions, UseSearchFiltersReturn } from './types'
 
 export function useSearchFilters({
   catalog,
@@ -20,8 +20,8 @@ export function useSearchFilters({
 
   // Initialize state from URL params
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
-  const [activeFilter, setActiveFilter] = useState<ItemType | 'all'>(
-    (searchParams.get('type') as ItemType | 'all') || 'all'
+  const [activeFilter, setActiveFilter] = useState<CatalogFilter>(
+    (searchParams.get('type') as CatalogFilter) || 'all'
   )
   const [selectedTags, setSelectedTags] = useState<string[]>(
     searchParams.get('tags')?.split(',').filter(Boolean) || []
@@ -67,7 +67,7 @@ export function useSearchFilters({
 
   // Handlers that update both state and URL
   const handleTypeFilter = useCallback(
-    (type: ItemType | 'all') => {
+    (type: CatalogFilter) => {
       setActiveFilter(type)
       updateURL({ type: type === 'all' ? null : type })
     },

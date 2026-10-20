@@ -11,9 +11,10 @@ import { TAGS, DIFFICULTY_LABELS, type Difficulty, type ItemType } from '@/lib/c
 import { SKILL_PLATFORMS, PLATFORM_LABELS } from '@/lib/security/client-type'
 import { SearchAutocomplete } from '../SearchAutocomplete'
 import { ItemCard } from './ItemCard'
+import { ModCard } from './ModCard'
 import { SectionHeader } from './SectionHeader'
 import { useSearchFilters } from './useSearchFilters'
-import type { SearchableCatalogProps } from './types'
+import type { CatalogFilter, SearchableCatalogProps } from './types'
 
 /** 선택된 알약 버튼 — 강조색 대신 명암을 뒤집는다 */
 const PILL_ACTIVE = 'border-transparent bg-[var(--text-primary)] text-[var(--bg-primary)]'
@@ -26,13 +27,14 @@ const PILL_IDLE =
  * 검색·필터가 붙은 카탈로그
  *
  * @param catalog - 화면에 뿌릴 카탈로그 항목 전체
+ * @param mods - 팀 마켓플레이스에 올라간 mod
  *
  * @example
  * ```tsx
- * <SearchableCatalog catalog={catalogItems} />
+ * <SearchableCatalog catalog={catalogItems} mods={getMods()} />
  * ```
  */
-export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
+export function SearchableCatalog({ catalog, mods }: SearchableCatalogProps) {
   const {
     searchQuery,
     setSearchQuery,
@@ -63,14 +65,23 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
     totalPackages,
   } = useSearchFilters({ catalog })
 
+  // mod 에는 태그·난이도·플랫폼이 없어 상세 필터가 걸리면 빼고, 검색어는 이름·설명에서 찾는다
+  const modQuery = searchQuery.trim().toLowerCase()
+  const filteredMods =
+    hasActiveFilters || (activeFilter !== 'all' && activeFilter !== 'mod')
+      ? []
+      : mods.filter((mod) => `${mod.name} ${mod.description}`.toLowerCase().includes(modQuery))
+  const showMods = filteredMods.length > 0
+
   /** 유형 필터 버튼 — 라벨과 전체 개수 */
-  const typeFilters: { value: ItemType | 'all'; label: string; count: number }[] = [
-    { value: 'all', label: 'All', count: catalog.length },
+  const typeFilters: { value: CatalogFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: catalog.length + mods.length },
     { value: 'skill', label: 'Skills', count: totalSkills },
     { value: 'agent', label: 'Agents', count: totalAgents },
     { value: 'command', label: 'Commands', count: totalCommands },
     { value: 'hook', label: 'Hooks', count: totalHooks },
     { value: 'package', label: 'Packages', count: totalPackages },
+    { value: 'mod', label: 'Mods', count: mods.length },
   ]
 
   /** 현재 필터에 걸린 유형별 목록 */
@@ -246,7 +257,7 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
 
       {/* 개수 밴드 — 칸 사이는 1px 선으로만 나눈다 */}
       <div
-        className="reveal mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px rounded-2xl overflow-hidden bg-[var(--border-subtle)]"
+        className="reveal mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px rounded-2xl overflow-hidden bg-[var(--border-subtle)]"
         style={{ '--ax-delay': '160ms' } as React.CSSProperties}
       >
         {sections.map((section) => (
@@ -257,11 +268,17 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
             <p className="eyebrow mt-2">{section.title}</p>
           </div>
         ))}
+        <div className="bg-[var(--bg-primary)] px-5 py-4">
+          <p className="font-mono text-2xl leading-none tabular-nums tracking-tight text-[var(--text-primary)]">
+            {filteredMods.length}
+          </p>
+          <p className="eyebrow mt-2">Mods</p>
+        </div>
       </div>
 
       {(searchQuery || hasActiveFilters) && (
         <p className="mt-3 font-mono text-xs tabular-nums text-[var(--text-muted)]">
-          {filteredCatalog.length} / {catalog.length}
+          {filteredCatalog.length + filteredMods.length} / {catalog.length + mods.length}
         </p>
       )}
 
@@ -277,8 +294,19 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
           </section>
         ))}
 
+        {showMods && (
+          <section className="mb-12">
+            <SectionHeader title="Mods" count={filteredMods.length} />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredMods.map((mod) => (
+                <ModCard key={mod.name} mod={mod} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* 빈 결과 */}
-        {filteredCatalog.length === 0 && (
+        {visibleSections.length === 0 && !showMods && (
           <div className="py-20 text-center">
             <p className="text-[var(--text-secondary)]">
               {searchQuery
@@ -288,7 +316,8 @@ export function SearchableCatalog({ catalog }: SearchableCatalogProps) {
                   : 'No items yet'}
             </p>
 
-            {didYouMean.length > 0 && (
+            {/* 추천은 카탈로그 항목이라 Mods 필터 안에서는 눌러도 0건이다 */}
+            {didYouMean.length > 0 && activeFilter !== 'mod' && (
               <div className="mt-6">
                 <p className="eyebrow mb-2.5">Did you mean</p>
                 <div className="flex flex-wrap justify-center gap-2">
