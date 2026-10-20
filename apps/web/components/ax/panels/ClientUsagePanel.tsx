@@ -281,17 +281,20 @@ export function limitCaptureLabel(
 }
 
 /**
- * 수집 참여 상태 값 — 판정 근거는 칸을 따로 두지 않고 호버·포커스 때 오른쪽에 띄운다.
- * 표가 가로 스크롤 영역 안이라 아래로 띄우면 마지막 줄에서 잘린다 — 같은 높이 오른쪽(클라이언트 칸 위)에 둔다.
+ * 수집 참여 상태 값 — 판정 근거는 칸을 따로 두지 않고 호버·포커스 때 띄운다.
+ *
+ * 표가 가로 스크롤 영역 안이라 아래로 띄우면 마지막 줄에서 잘린다 — 넓은 화면은 같은 높이 오른쪽(클라이언트 칸 위),
+ * 좁은 화면은 오른쪽이 스크롤 영역 밖이라 위쪽(윗줄 위)에 둔다. 버튼과 본문 사이 간격은 투명한 여백이라
+ * 포인터를 본문으로 옮겨도 닫히지 않는다.
  */
 function StatusWithSource({ label, tone, source }: { label: string; tone: string; source: string }) {
   const id = useId()
+  const { dismissed, handlers } = useEscDismiss()
   return (
-    <span className="group/status relative inline-flex">
+    <span className="group/status relative inline-flex" {...handlers}>
       <button
         type="button"
         aria-describedby={id}
-        onKeyDown={(event) => { if (event.key === 'Escape') event.currentTarget.blur() }}
         className={`cursor-help underline decoration-dotted underline-offset-4 focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${tone}`}
       >
         {label}
@@ -299,9 +302,14 @@ function StatusWithSource({ label, tone, source }: { label: string; tone: string
       <span
         id={id}
         role="tooltip"
-        className="pointer-events-none invisible absolute left-full top-1/2 z-30 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] opacity-0 shadow-lg transition-opacity duration-150 group-hover/status:visible group-hover/status:opacity-100 group-focus-within/status:visible group-focus-within/status:opacity-100"
+        data-dismissed={dismissed || undefined}
+        className={`invisible absolute bottom-full left-0 z-30 w-max max-w-[11rem] pb-1 opacity-0 transition-opacity duration-150 group-hover/status:visible group-hover/status:opacity-100 group-focus-within/status:visible group-focus-within/status:opacity-100 sm:bottom-auto sm:left-full sm:top-1/2 sm:max-w-none sm:-translate-y-1/2 sm:pb-0 sm:pl-2 ${
+          dismissed ? '!invisible !opacity-0' : ''
+        }`}
       >
-        판정 근거 · {source}
+        <span className="block rounded-md border border-[var(--border-hover)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] shadow-lg sm:whitespace-nowrap">
+          판정 근거 · {source}
+        </span>
       </span>
     </span>
   )
@@ -1148,33 +1156,10 @@ function isSheetStale(syncedAt: string | null): boolean {
  */
 function InfoTip({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()
-  // Esc 로 닫은 상태. 포인터를 올린 채로도 닫혀야 해서(WCAG 1.4.13) CSS 호버와 별개로 든다.
-  // 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있게 푼다
-  // Esc 는 지금 열린 도움말(포인터가 올라가 있거나 포커스가 있는 것)만 닫는다 — 다른 도움말까지 닫힌 상태로 남기면
-  // 처음 열 때 나타나지 않는다
-  const [dismissed, setDismissed] = useState(false)
-  const pointer = useRef(false)
-  const focus = useRef(false)
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && (pointer.current || focus.current)) setDismissed(true)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
-  const leave = (which: typeof pointer) => {
-    which.current = false
-    if (!pointer.current && !focus.current) setDismissed(false)
-  }
+  const { dismissed, handlers } = useEscDismiss()
 
   return (
-    <div
-      className="group/info inline-flex"
-      onMouseEnter={() => { pointer.current = true }}
-      onMouseLeave={() => leave(pointer)}
-      onFocus={() => { focus.current = true }}
-      onBlur={() => leave(focus)}
-    >
+    <div className="group/info inline-flex" {...handlers}>
       <button
         type="button"
         aria-label={label}
@@ -1197,4 +1182,40 @@ function InfoTip({ label, children }: { label: string; children: ReactNode }) {
       </div>
     </div>
   )
+}
+
+/**
+ * 호버·포커스로 여는 툴팁을 Esc 로 닫는 상태 (WCAG 1.4.13)
+ *
+ * 툴팁을 감싼 요소에 `handlers` 를 펼치고, `dismissed` 면 CSS 호버와 상관없이 숨긴다.
+ */
+function useEscDismiss() {
+  // Esc 로 닫은 상태. 포인터를 올린 채로도 닫혀야 해서(WCAG 1.4.13) CSS 호버와 별개로 든다.
+  // 포인터가 떠나거나 포커스가 빠지면 다시 열 수 있게 푼다
+  // Esc 는 지금 열린 도움말(포인터가 올라가 있거나 포커스가 있는 것)만 닫는다 — 다른 도움말까지 닫힌 상태로 남기면
+  // 처음 열 때 나타나지 않는다
+  const [dismissed, setDismissed] = useState(false)
+  const pointer = useRef(false)
+  const focus = useRef(false)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (pointer.current || focus.current)) setDismissed(true)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+  const leave = (which: typeof pointer) => {
+    which.current = false
+    if (!pointer.current && !focus.current) setDismissed(false)
+  }
+
+  return {
+    dismissed,
+    handlers: {
+      onMouseEnter: () => { pointer.current = true },
+      onMouseLeave: () => leave(pointer),
+      onFocus: () => { focus.current = true },
+      onBlur: () => leave(focus),
+    },
+  }
 }

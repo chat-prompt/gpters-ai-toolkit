@@ -235,7 +235,16 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     render(<ClientUsagePanel data={{ ...data([]), participation: [participant('최신', '0.7.24')] }} days={7} />)
     expect(screen.queryByRole('columnheader', { name: '판정 근거' })).toBeNull()
     const status = screen.getByRole('button', { name: '정상 보고' })
-    expect(document.getElementById(status.getAttribute('aria-describedby')!)).toHaveTextContent('판정 근거 · 수집기 점검 신호')
+    const tooltip = document.getElementById(status.getAttribute('aria-describedby')!)!
+    expect(tooltip).toHaveTextContent('판정 근거 · 수집기 점검 신호')
+    // 포인터를 올린 채 Esc 로 닫고, 포커스는 버튼에 남는다
+    status.focus()
+    fireEvent.mouseEnter(status.parentElement!)
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(tooltip).toHaveAttribute('data-dismissed', 'true')
+    expect(document.activeElement).toBe(status)
+    // 툴팁은 같은 호버 영역 안이다 — 버튼에서 툴팁으로 옮겨 가도 그룹을 떠나지 않는다
+    expect(status.parentElement).toContainElement(tooltip)
   })
 
   it('Claude Code 줄은 한도를 못 받으면 미수집 대신 연결 상태를 쓰고, Codex 줄은 그대로 미수집이다', () => {
@@ -296,6 +305,7 @@ describe('구성원 × 구독 표의 수집기 상태', () => {
     // 타타만 이어진다 — 김민수는 후보가 둘, 공용 구독은 사람이 아니다
     const table = screen.getAllByRole('table').find((element) => within(element).queryByText('다음 결제'))!
     expect(within(table).getAllByText('미연결 · 설정 폴더가 심링크')).toHaveLength(1)
+    expect(within(within(table).getByText('타타').closest('tr')!).getByText('미연결 · 설정 폴더가 심링크')).toBeInTheDocument()
   })
 })
 
