@@ -11,10 +11,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@gpters/db', () => ({
-  db: { select: vi.fn() },
+  db: { select: vi.fn(), selectDistinctOn: vi.fn() },
   axClientUsage: { name: 'ax_client_usage', userId: 'user_id', periodStart: 'period_start' },
   axUsageCollectorState: { name: 'ax_usage_collector_state' },
+  mcpAuditLogs: {
+    userAgent: 'mcp_audit_logs.user_agent',
+    accessTokenId: 'mcp_audit_logs.access_token_id',
+    createdAt: 'mcp_audit_logs.created_at',
+    clientName: 'mcp_audit_logs.client_name',
+  },
   oauthAccessTokens: {
+    id: 'oauth_access_tokens.id',
     userId: 'oauth_access_tokens.user_id',
     isActive: 'oauth_access_tokens.is_active',
     expiresAt: 'oauth_access_tokens.expires_at',
@@ -61,7 +68,7 @@ const { db } = await import('@gpters/db')
 /** 어떤 체이닝에도 자신을 돌려주고, await 하면 결과를 내는 쿼리 빌더 */
 function builder(result: unknown) {
   const stub: Record<string, unknown> = {}
-  for (const method of ['from', 'where', 'orderBy', 'limit']) {
+  for (const method of ['from', 'innerJoin', 'where', 'orderBy', 'limit']) {
     stub[method] = vi.fn(() => stub)
   }
   stub.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
@@ -446,8 +453,24 @@ describe('clientUsagePanel', () => {
       )
       .mockReturnValueOnce(builder([]) as never)
 
+    vi.mocked(db.selectDistinctOn).mockReset()
+    vi.mocked(db.selectDistinctOn).mockReturnValueOnce(
+      builder([
+        { userId: 'u-reporting', userAgent: 'aitk/0.7.24' },
+        { userId: 'u-stale', userAgent: 'node', clientName: 'aitk CLI' },
+        { userId: 'u-unused', userAgent: 'Mozilla/5.0' },
+      ]) as never
+    )
+
     const result = await clientUsagePanel.load(ADMIN)
     const byId = new Map(result.data!.participation!.map((item) => [item.userId, item]))
+
+    // aitk 버전은 User-Agent에서 읽고, 형식이 다르거나 요청이 없으면 null이다.
+    expect(byId.get('u-reporting')?.aitkVersion).toBe('0.7.24')
+    // User-Agent를 붙이기 전(0.7.10 미만) aitk는 Node 기본값 `node`로 온다.
+    expect(byId.get('u-stale')?.aitkVersion).toBe('0.7.9 이하')
+    expect(byId.get('u-unused')?.aitkVersion).toBeNull()
+    expect(byId.get('u-unapproved')?.aitkVersion).toBeNull()
 
     expect(byId.get('u-reporting')?.status).toBe('reporting')
     expect(byId.get('u-unused')?.status).toBe('not_using')
@@ -474,6 +497,29 @@ describe('clientUsagePanel', () => {
       value: '2',
       hint: '명',
     })
+  })
+
+  it('aitk 버전 조회가 실패해도 참여 상태는 버전 없이 그대로 보여준다', async () => {
+    process.env.INTERNAL_ORGANIZATION_DOMAIN = 'gpters.org'
+    vi.mocked(db.select).mockReset()
+    vi.mocked(db.select)
+      .mockReturnValueOnce(builder([row({ userId: 'user-1' })]) as never)
+      .mockReturnValueOnce(
+        builder([{ id: 'user-1', email: 'member01@gpters.org', name: '구성원', lastLoginAt: null }]) as never
+      )
+      .mockReturnValueOnce(builder([]) as never)
+      .mockReturnValueOnce(builder([]) as never)
+      .mockReturnValueOnce(builder([]) as never)
+    vi.mocked(db.selectDistinctOn).mockReset()
+    vi.mocked(db.selectDistinctOn).mockImplementationOnce(() => {
+      throw new Error('감사 로그 조회 실패')
+    })
+
+    const result = await clientUsagePanel.load(ADMIN)
+
+    expect(result.data!.participation).toEqual([
+      expect.objectContaining({ userId: 'user-1', status: 'reporting', aitkVersion: null }),
+    ])
   })
 
   it('모델별 사용량을 내림차순으로 합산한다', async () => {

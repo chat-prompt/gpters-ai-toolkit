@@ -758,6 +758,8 @@ export interface AxUsageParticipationRow {
   status: AxUsageParticipationStatus
   lastReportedAt: string | null
   lastLoginAt: string | null
+  /** 최근 30일 aitk 요청의 버전(User-Agent). 요청이 없으면 null */
+  aitkVersion: string | null
   clients: AxUsageClient[]
   source: 'collector' | 'usage_report' | 'legacy_usage' | 'authorization' | 'none'
 }

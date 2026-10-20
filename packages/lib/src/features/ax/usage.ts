@@ -12,11 +12,12 @@ import {
   db,
   axClientUsage,
   axUsageCollectorState,
+  mcpAuditLogs,
   oauthAccessTokens,
   oauthRefreshTokens,
   users,
 } from '@gpters/db'
-import { and, desc, eq, ilike } from 'drizzle-orm'
+import { and, desc, eq, gte, ilike, like, or } from 'drizzle-orm'
 import type {
   AxPanel,
   AxPanelContext,
@@ -209,6 +210,45 @@ function isActiveAuthorization(row: {
   return !Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() > now
 }
 
+/** aitk 버전을 찾아볼 최근 기간. 이보다 오래 요청이 없으면 지금 버전을 모른다고 본다 */
+const AITK_VERSION_LOOKBACK_MS = 30 * 86_400_000
+/** User-Agent를 보내기 전(0.7.10 미만) aitk의 표시. 버전 비교에서는 0.7.9로 읽힌다 */
+const LEGACY_AITK_VERSION = '0.7.9 이하'
+
+/**
+ * 사람별로 최근 aitk 요청의 버전을 읽는다.
+ *
+ * aitk는 모든 요청에 User-Agent `aitk/<버전>`을 붙이고(`apps/aitk-cli/src/client.ts`),
+ * `/api/mcp`가 감사 로그에 남긴다. 감사 로그에는 사용자 ID가 없어 access token으로 잇는다.
+ * 자동 업그레이드는 머신 밖에 흔적을 남기지 않으므로, 이 값이 업그레이드가 실제로 퍼졌는지의 근거다.
+ * User-Agent는 0.7.10(#88)부터 붙었다. 그 전 aitk는 Node 기본값 `node`로 오므로
+ * 클라이언트 이름이 `aitk CLI`인 `node`는 0.7.9 이하로 표시한다.
+ */
+async function loadAitkVersions(now: number): Promise<Map<string, string>> {
+  const rows = await db
+    .selectDistinctOn([oauthAccessTokens.userId], {
+      userId: oauthAccessTokens.userId,
+      userAgent: mcpAuditLogs.userAgent,
+      clientName: mcpAuditLogs.clientName,
+    })
+    .from(mcpAuditLogs)
+    .innerJoin(oauthAccessTokens, eq(oauthAccessTokens.id, mcpAuditLogs.accessTokenId))
+    .where(and(
+      or(
+        like(mcpAuditLogs.userAgent, 'aitk/%'),
+        and(eq(mcpAuditLogs.userAgent, 'node'), eq(mcpAuditLogs.clientName, 'aitk CLI')),
+      ),
+      gte(mcpAuditLogs.createdAt, new Date(now - AITK_VERSION_LOOKBACK_MS)),
+    ))
+    .orderBy(oauthAccessTokens.userId, desc(mcpAuditLogs.createdAt))
+  const versions = new Map<string, string>()
+  for (const row of rows) {
+    const version = row.userAgent === 'node' ? LEGACY_AITK_VERSION : row.userAgent?.match(/^aitk\/(\S+)/)?.[1]
+    if (version) versions.set(row.userId, version)
+  }
+  return versions
+}
+
 /**
  * 관리자에게 보여줄 내부 계정 전원의 참여 상태를 만든다.
  *
@@ -221,7 +261,7 @@ async function loadParticipation(
   cutoff: number
 ): Promise<AxUsageParticipationRow[] | null> {
   try {
-    const [collectorRows, accessRows, refreshRows] = await Promise.all([
+    const [collectorRows, accessRows, refreshRows, aitkVersions] = await Promise.all([
       // 롤링 배포 중에는 웹 코드가 마이그레이션보다 먼저 뜰 수 있다. 신규 테이블만
       // 없을 때는 기존 사용량·승인 근거로 상태 표를 계속 보여준다.
       (async () => {
@@ -246,6 +286,15 @@ async function loadParticipation(
           expiresAt: oauthRefreshTokens.expiresAt,
         })
         .from(oauthRefreshTokens),
+      // 버전은 보조 정보다. 감사 로그를 못 읽어도 참여 상태는 그대로 보여준다.
+      (async () => {
+        try {
+          return await loadAitkVersions(Date.now())
+        } catch (err) {
+          log.warn('aitk 버전 조회 실패 — 버전 없이 참여 상태를 계산한다', { err })
+          return new Map<string, string>()
+        }
+      })(),
     ])
 
     const now = Date.now()
@@ -303,6 +352,7 @@ async function loadParticipation(
             status: !recent ? 'stale' : collector.recordCount === 0 ? 'not_using' : 'reporting',
             lastReportedAt,
             lastLoginAt: toIso(member.lastLoginAt),
+            aitkVersion: aitkVersions.get(member.id) ?? null,
             clients: collector.clients,
             source: 'collector',
           }
@@ -317,6 +367,7 @@ async function loadParticipation(
             status: recent ? 'reporting' : 'stale',
             lastReportedAt: usage.lastReportedAt,
             lastLoginAt: toIso(member.lastLoginAt),
+            aitkVersion: aitkVersions.get(member.id) ?? null,
             clients: Array.from(usage.clients),
             source: usage.source,
           }
@@ -328,6 +379,7 @@ async function loadParticipation(
           status: authorized.has(member.id) ? 'not_installed' : 'not_approved',
           lastReportedAt: null,
           lastLoginAt: toIso(member.lastLoginAt),
+          aitkVersion: aitkVersions.get(member.id) ?? null,
           clients: [],
           source: authorized.has(member.id) ? 'authorization' : 'none',
         }
