@@ -275,15 +275,64 @@ describe('setup --auto — 플러그인 훅이 부르는 무인 연결 (DEV-4570
     expect(existsSync(join(home, '.claude/aitk-usage/statusline.json'))).toBe(false)
   })
 
-  it('연결 뒤 사람이 settings.json에서 직접 뺐으면 다시 켜지 않는다', () => {
+  it('연결 뒤 settings.json에서 표시줄을 지웠으면 다시 켜지 않는다', () => {
     const home = freshHome({ language: 'ko', statusLine: userRenderer() })
     run(home, ['setup', '--auto'])
-    // 사용자가 uninstall 대신 손으로 원래 명령으로 되돌림
-    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ language: 'ko', statusLine: userRenderer() }))
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ language: 'ko' }))
     const before = settingsOf(home)
     expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: drifted')
     expect(settingsOf(home)).toBe(before)
     expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+  })
+
+  it('다른 앱이 표시줄을 다른 명령으로 덮어쓰면 그 명령을 다시 감싼다 (화면은 그 앱 그대로)', () => {
+    const home = freshHome({ language: 'ko' })
+    run(home, ['setup', '--auto'])
+    // Clawd on Desk 같은 앱이 실행될 때 statusLine을 자기 명령으로 바꿔 씀
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ language: 'ko', statusLine: { type: 'command', command: `printf 'desk-pet'`, padding: 2 } }))
+    const result = run(home, ['setup', '--auto'])
+    expect(result.stderr).toContain('connected')
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    expect(command).toContain(' usage statusline')
+    expect(runStored(home, command, quotaInput).stdout).toBe('desk-pet')
+    expect(JSON.parse(readFileSync(join(home, '.claude/aitk-usage/claude.json'), 'utf8')).usedPercent).toBe(12)
+    // 그 앱이 같은 명령을 다시 써도(재실행마다 덮어씀) 또 감싼다
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ language: 'ko', statusLine: { type: 'command', command: `printf 'desk-pet'`, padding: 2 } }))
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
+    // uninstall은 그 앱의 표시줄로 되돌리고, 여전히 끄는 길이다
+    run(home, ['uninstall'])
+    expect(JSON.parse(settingsOf(home))).toEqual({ language: 'ko', statusLine: { type: 'command', command: `printf 'desk-pet'`, padding: 2 } })
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: declined')
+  })
+
+  it('사람이 원래 명령으로 손으로 되돌려도 다시 감싼다 (화면은 같고, 끄는 길은 uninstall)', () => {
+    const home = freshHome({ language: 'ko', statusLine: userRenderer() })
+    run(home, ['setup', '--auto'])
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify({ language: 'ko', statusLine: userRenderer() }))
+    expect(run(home, ['setup', '--auto']).stderr).toContain('connected')
+    const command = JSON.parse(settingsOf(home)).statusLine.command as string
+    expect(runStored(home, command, plainInput).stdout).toBe('original:' + plainInput)
+  })
+
+  it('aitk 명령의 공백만 바꿔 고쳐도 남의 표시줄로 감싸지 않는다', () => {
+    const home = freshHome({ language: 'ko' })
+    run(home, ['setup', '--display', 'default'])
+    const settings = JSON.parse(settingsOf(home))
+    settings.statusLine.command = (settings.statusLine.command as string).replace(' usage statusline', ' usage  statusline')
+    writeFileSync(join(home, '.claude/settings.json'), JSON.stringify(settings))
+    const before = settingsOf(home)
+    expect(run(home, ['setup', '--auto']).stderr).toContain('skipped: drifted')
+    expect(settingsOf(home)).toBe(before)
+    // 옛 직접 호출 형식을 고친 것(탭·따옴표), 원래 명령 환경 변수만 남긴 것도 같다 — 설정·기록을 건드리지 않는다
+    for (const command of [`'node' '/x/aitk.js' usage\tstatusline`, `"node" "/x/aitk.js" "usage" "statusline"`, `AITK_STATUSLINE_PREVIOUS= sh -c 'x'`]) {
+      const legacy = freshHome({ language: 'ko' })
+      run(legacy, ['setup', '--display', 'default'])
+      const receipt = readFileSync(join(legacy, '.claude/aitk-usage/statusline.json'), 'utf8')
+      writeFileSync(join(legacy, '.claude/settings.json'), JSON.stringify({ language: 'ko', statusLine: { type: 'command', command } }))
+      expect(run(legacy, ['setup', '--auto']).stderr).toContain('skipped: drifted')
+      expect(JSON.parse(settingsOf(legacy)).statusLine.command).toBe(command)
+      expect(readFileSync(join(legacy, '.claude/aitk-usage/statusline.json'), 'utf8')).toBe(receipt)
+    }
   })
 
   it('CLAUDE_CONFIG_DIR이 다른 곳이면 ~/.claude를 건드리지 않고, 같은 곳이면 연결한다', () => {

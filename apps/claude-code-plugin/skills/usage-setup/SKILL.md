@@ -57,6 +57,9 @@ aitk 0.7.23부터는 플러그인 세션 시작 훅이 하루 한 번 `aitk usag
    허용하라고 안내한다. Codex 설정 파일은 직접 편집하지 않는다.
 7. 확인: `aitk usage report --days 7 --dry-run`에서 client별(`claude-code`, `codex`) `limitUsedPercent`가
    숫자로 나오면 수집되는 것이다. 바로 대시보드에 반영하려면 `aitk usage report --days 7`을 한 번 보낸다.
+   Claude는 Pro·Max 구독으로 로그인했을 때만 값이 있다 — 구독이 없으면 비는 게 정상이니 Codex 값만으로 보낸다.
+   `statusline.kind`가 `user`인데 예전에 연결했던 사람이면 대개 다른 앱(Clawd on Desk 등)이 표시줄을 덮어쓴 것이다.
+   그 앱을 지울 필요 없이 `aitk usage setup`으로 다시 감싸면 된다(0.7.27부터는 다음 날 자동으로 감싼다).
 
 ## 경계
 
