@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import {
   claudeUsagePaths, clearAutoSetupDeclined, inspectClaudeStatusline, installClaudeStatusline, isAutoSetupDeclined,
-  markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, usesClaudeCode, wasConnected, type StatuslineDisplay,
+  looksLikeAitkStatusline, markAutoSetupDeclined, markConnected, readClaudeStatuslineInstallation, uninstallClaudeStatusline, usesClaudeCode, wasConnected, type StatuslineDisplay,
 } from '../usage/claude-statusline.js'
 import { readAgentConfig } from '../agent-auth.js'
 import { error, info } from '../output.js'
@@ -206,9 +206,10 @@ export function withSetupLock<T>(home: string, wait: boolean, fn: () => T): T | 
  * - 기존 command 표시줄: 감싼다(출력 그대로)
  * - 표시줄 없음: `display: none`으로 연결한다(아무것도 그리지 않음)
  * - 이미 aitk: 이전 선택을 유지한 채 명령 경로만 현재 설치본으로 맞춘다(node·aitk 경로가 바뀌면 표시줄이 깨지므로)
+ * - 연결 기록이 남은 채 다른 명령으로 바뀜(다른 앱이 덮어씀): 그 명령을 다시 감싼다
  * - 건너뜀: 끔(`AITK_USAGE_SETUP=0`·`AITK_USAGE_REPORT=0`), 에이전트 머신, Windows, `~/.claude` 없음,
  *   `CLAUDE_CONFIG_DIR`이 다른 곳(실제로 안 쓰는 파일을 바꾸지 않게), uninstall 함,
- *   연결 뒤 사용자가 settings.json을 직접 되돌림(drifted — 가장 분명한 거부 신호),
+ *   연결 뒤 표시줄을 지움·aitk 명령을 손으로 고침·옛 uninstall(drifted — 거부 신호),
  *   settings.json이나 ~/.claude가 심링크(dotfiles로 여러 머신이 공유하면 이 머신 경로가 다른 머신 표시줄을 깬다),
  *   settings.json을 읽을 수 없음(실패로 기록),
  *   command가 아닌 표시줄, 다른 setup이 도는 중
@@ -247,8 +248,13 @@ export function runUsageAutoSetup(opts: UsageAutoSetupOptions = {}): UsageAutoSe
       const state = inspectClaudeStatusline(home)
       if (state.kind === 'unsupported') return skip('unsupported')
       // aitk가 만든 명령은 기록이 없어도 inspect가 aitk로 읽는다(아래 설치가 기록을 되살린다).
-      if (state.kind !== 'aitk' && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
-        // 연결한 적이 있는데 설정에서 빠졌다 = 사람이 직접 되돌렸거나 옛 aitk로 uninstall했다. 다시 켜지 않는다.
+      // 연결 기록이 남은 채 다른 명령으로 바뀌었다 = 다른 앱(Clawd on Desk 등)이 표시줄을 덮어썼거나 사람이 바꿨다.
+      // 어느 쪽이든 감싸기는 화면을 바꾸지 않으므로 다시 감싼다. 끄는 길은 uninstall(해제 표식)이다.
+      const replaced = state.kind === 'user' && readClaudeStatuslineInstallation(home) !== null
+        && !looksLikeAitkStatusline(state.command)
+      if (state.kind !== 'aitk' && !replaced && (readClaudeStatuslineInstallation(home) || wasConnected(home))) {
+        // 연결한 적이 있는데 설정에서 빠졌다 = 표시줄을 지웠거나, aitk 명령을 손으로 고쳤거나,
+        // 옛 aitk로 uninstall했다(연결 기록까지 지운다). 다시 켜지 않는다.
         markAutoSetupDeclined(home)
         return skip('drifted')
       }

@@ -209,6 +209,15 @@ export function buildStatuslineCommand(node: string, entry: string, previous: Re
 export const STATUSLINE_PREVIOUS_ENV = 'AITK_STATUSLINE_PREVIOUS'
 
 /**
+ * aitk 래퍼(새·옛 형식)를 손으로 고친 명령까지 넓게 알아본다. 공백만 바꿔도 셸에서는 같은 명령이라
+ * 정확한 비교로는 놓친다. 이런 명령을 남의 표시줄로 감싸면 래퍼가 자기 자신을 원래 명령으로 부른다.
+ * 따옴표·역슬래시는 셸이 벗기므로 지우고 본다(`"usage" "statusline"`도 같은 호출).
+ */
+export function looksLikeAitkStatusline(command: string): boolean {
+  return /\busage\s+statusline\b/.test(command.replace(/['"\\]/g, '')) || command.includes(STATUSLINE_PREVIOUS_ENV)
+}
+
+/**
  * `buildStatuslineCommand`가 만든 명령에서 원래 명령을 꺼낸다. aitk 형식이 아니면 null, 원래 표시줄이 없었으면 ''.
  * shellQuote의 역이다: 바깥 작은따옴표를 벗기고 `'"'"'`를 `'`로 되돌린다.
  */
@@ -262,7 +271,7 @@ export function installClaudeStatusline(
   const fromCommand = resolvePrevious(current, receipt)
   if (fromCommand !== undefined) previous = fromCommand
   else if (receipt && current?.command === receipt.command) previous = receipt.previous
-  else if (typeof current?.command === 'string' && current.command.includes(' usage statusline')) {
+  else if (typeof current?.command === 'string' && looksLikeAitkStatusline(current.command)) {
     throw new Error('AITK statusline backup is missing; restore the previous statusLine before installing.')
   } else previous = current
   const command = buildStatuslineCommand(node, resolve(entry), previous ?? null)

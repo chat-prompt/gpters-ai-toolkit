@@ -53,8 +53,10 @@ Claude Code나 Codex에 그대로 붙여 넣으면 에이전트가 버전·계�
    - ~/.codex/config.toml 이나 hooks.json 을 직접 편집하지 않는다.
 6. 나에게 "Claude Code·Codex 를 완전히 종료했다가 다시 열고, 각각 아무 질문이나 하나 보내 주세요" 라고 안내하고 기다린다.
 7. 확인하고 지금 한 번 보내기
-   - aitk usage report --days 7 --dry-run 결과에서 client 별(claude-code, codex) limitUsedPercent 가 숫자로 나오는지 본다.
-   - 나오면: aitk usage report --days 7  로 한 번 보낸다.
+   - aitk usage report --days 7 --dry-run 결과에서 client 별(claude-code, codex) limitUsedPercent 를 본다.
+   - 하나라도 숫자가 나오면 aitk usage report --days 7 로 한 번 보낸다. 나머지 하나가 비어 있어도 멈추지 않는다.
+     (Claude 는 Pro·Max 구독으로 로그인했을 때만 값이 있다. 구독이 없거나 API 키로 쓰면 비는 게 정상이다.)
+   - 둘 다 비어 있을 때만 멈추고 보고한다.
 8. 아래 결과 블록만 출력한다. 이메일·토큰·파일 경로는 넣지 않는다.
 
 [aitk 설치·주간 한도 수집 결과]
@@ -193,7 +195,9 @@ AX 대시보드의 주간 한도 지표는 Claude Code가 상태 표시줄 명�
   `aitk usage setup --display default`. Claude Code 안에서 "usage 설정해줘"라고 해도 `usage-setup`
   스킬이 같은 절차를 안내합니다.
 - 에이전트 머신, `CLAUDE_CONFIG_DIR`을 다른 곳으로 쓰는 경우, `settings.json`이 심링크(dotfiles 공유)인 경우,
-  command 형식이 아닌 상태 표시줄, 연결 뒤 `settings.json`에서 직접 뺀 경우는 자동 연결하지 않습니다.
+  command 형식이 아닌 상태 표시줄, 연결 뒤 `settings.json`에서 표시줄을 지운 경우는 자동 연결하지 않습니다.
+  다른 앱(Clawd on Desk 등)이 표시줄을 자기 명령으로 덮어쓰거나 직접 다른 명령으로 바꾸면, 다음 날 첫 세션에 그 명령을
+  다시 감쌉니다(aitk 0.7.27 이상, 화면은 그대로). 수집을 끄려면 `aitk usage uninstall`을 씁니다.
 - node·aitk 경로가 사라져도 원래 상태 표시줄은 그대로 나옵니다(다음 날 첫 세션에 경로를 다시 맞춤).
 - Codex 주간 한도는 따로 켤 것이 없습니다. 보고할 때 `~/.codex/sessions`에서 함께 읽습니다. Codex만 쓰면
   `npx @gpters/codex-plugin setup --user`로 보고 훅을 깔고, 다음 Codex 실행 때 훅 승인을 허용해야 보고가 돕니다.
