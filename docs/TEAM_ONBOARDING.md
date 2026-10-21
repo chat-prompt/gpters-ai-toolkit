@@ -16,6 +16,60 @@ GPTers AI Toolkit은 팀이 만든 스킬, 에이전트, 커맨드를 공유하�
 
 ---
 
+## 빠른 시작: 에이전트에게 붙여 넣기
+
+처음 설치, 업그레이드, 주간 한도가 대시보드에 안 잡힐 때 모두 아래 프롬프트 하나로 됩니다.
+Claude Code나 Codex에 그대로 붙여 넣으면 에이전트가 버전·계정·도구를 보고 필요한 단계만 진행하고,
+마지막에 결과 블록을 출력합니다. aitk가 아직 없어도 됩니다. 아래 1~4단계는 같은 내용을 손으로 하는 방법입니다.
+
+```text
+팀 AI Toolkit(aitk)을 설치·최신화하고, AX 대시보드에 Claude·Codex 주간 한도 수집을 연결하려고 한다. 내가 쓰는 도구(Claude Code, Codex 중 해당하는 것)를 기준으로 아래 순서대로 하고, 막히면 우회하지 말고 그 지점에서 멈춰 보고해.
+
+1. 현재 상태 확인 (읽기만)
+   - aitk --version   (명령이 없으면 "미설치"로 적고 2번으로)
+   - which -a aitk  (여러 개면 전부 센다)
+   - 내가 쓰는 도구 확인: ~/.claude/projects 와 ~/.codex/sessions 중 최근 7일 안에 바뀐 파일이 있는 쪽
+2. 최신으로 올리기
+   - npm install -g @gpters/aitk@latest
+   - aitk upgrade   (Claude Code·Codex 플러그인도 함께 갱신된다)
+   - aitk --version 이 올라갔는지 다시 확인한다. which -a aitk 의 첫 번째가 여전히 옛 버전이면 그 사실을 보고한다.
+   - EACCES 같은 권한 오류가 나면 sudo 로 밀어붙이지 말고 오류 한 줄을 보고한다.
+3. 계정 확인
+   - aitk whoami 로 나온 이름이 나(이 컴퓨터 주인)인지 나에게 확인받는다. 이메일은 출력에 옮겨 적지 않는다.
+   - 로그인이 안 돼 있거나 다른 사람이면: 나에게 aitk login --device 를 직접 실행해 브라우저에서 회사 Google 계정으로 승인하라고 안내하고 기다린다.
+4. Claude Code 를 쓰면 — 플러그인과 주간 한도 수집
+   - claude plugin list 에 gpters-ai-toolkit 이 없으면 아래 "3단계: Claude Code" 의 설치 명령을 나에게 안내한다.
+   - aitk usage status 를 실행해 statusline.kind, autoSetup, snapshot 을 읽는다.
+   - kind 가 user(이미 내 표시줄이 있음): aitk usage setup  — 표시는 그대로 두고 수집만 붙는다.
+   - kind 가 none(표시줄 없음): 나에게 "aitk 기본 표시줄 보기(모델·컨텍스트·5시간/주간 한도 한 줄)" 와 "표시 없이 수집만" 중 무엇을 원하는지 먼저 묻고,
+     aitk usage setup --display default  또는  aitk usage setup --display none
+   - kind 가 aitk 인데 snapshot 이 null: aitk usage setup 을 한 번 더 실행해 명령 경로를 갱신한다.
+   - autoSetup.declined 가 true: 예전에 내가 끈 상태다. 다시 켤지 나에게 묻는다.
+   - kind 가 unsupported: 설정을 건드리지 말고 보고만 한다.
+   - ~/.claude/settings.json 을 직접 편집하지 않는다. aitk 명령만 쓴다.
+5. Codex 를 쓰면 — 플러그인과 보고 훅
+   - ~/.codex/hooks.json 에 gpters-usage-report 가 없으면: npx --yes @gpters/codex-plugin@latest setup --user
+   - 나에게 "다음에 Codex 를 열 때 gpters-usage-report 훅 승인을 물으면 허용해 주세요" 라고 안내한다.
+   - ~/.codex/config.toml 이나 hooks.json 을 직접 편집하지 않는다.
+6. 나에게 "Claude Code·Codex 를 완전히 종료했다가 다시 열고, 각각 아무 질문이나 하나 보내 주세요" 라고 안내하고 기다린다.
+7. 확인하고 지금 한 번 보내기
+   - aitk usage report --days 7 --dry-run 결과에서 client 별(claude-code, codex) limitUsedPercent 가 숫자로 나오는지 본다.
+   - 나오면: aitk usage report --days 7  로 한 번 보낸다.
+8. 아래 결과 블록만 출력한다. 이메일·토큰·파일 경로는 넣지 않는다.
+
+[aitk 설치·주간 한도 수집 결과]
+- aitk 버전: 이전 → 현재
+- aitk 설치본 개수(which -a):
+- whoami 본인 맞음: 예/아니오
+- Claude: statusline.kind / limitUsedPercent (안 쓰면 "안 씀")
+- Codex: 훅 설치·승인 여부 / limitUsedPercent (안 쓰면 "안 씀")
+- 막힌 곳 (없으면 "없음"):
+```
+
+설치 뒤에 한도가 다시 안 잡히면 Claude Code 안에서 "주간 한도가 대시보드에 안 잡혀"라고 하면 `usage-setup` 스킬이 같은 점검을 합니다.
+
+---
+
 ## 1단계: 로그인
 
 npx로 바로 실행할 수 있습니다. 브라우저에서 Google 로그인 후 토큰이 자동 저장됩니다:
@@ -124,7 +178,7 @@ npx @gpters/codex-plugin setup
 ---
 
 
-## 4단계: Claude Code 주간 한도 수집 연결
+## 4단계: 주간 한도 수집 연결 (Claude Code · Codex)
 
 AX 대시보드의 주간 한도 지표는 Claude Code가 상태 표시줄 명령에 넘겨주는 공식 값에서만 얻을 수
 있습니다. **aitk 0.7.23 이상과 플러그인이 깔려 있으면 따로 할 일이 없습니다.** 세션 시작 훅이 하루 한 번
@@ -141,6 +195,8 @@ AX 대시보드의 주간 한도 지표는 Claude Code가 상태 표시줄 명�
 - 에이전트 머신, `CLAUDE_CONFIG_DIR`을 다른 곳으로 쓰는 경우, `settings.json`이 심링크(dotfiles 공유)인 경우,
   command 형식이 아닌 상태 표시줄, 연결 뒤 `settings.json`에서 직접 뺀 경우는 자동 연결하지 않습니다.
 - node·aitk 경로가 사라져도 원래 상태 표시줄은 그대로 나옵니다(다음 날 첫 세션에 경로를 다시 맞춤).
+- Codex 주간 한도는 따로 켤 것이 없습니다. 보고할 때 `~/.codex/sessions`에서 함께 읽습니다. Codex만 쓰면
+  `npx @gpters/codex-plugin setup --user`로 보고 훅을 깔고, 다음 Codex 실행 때 훅 승인을 허용해야 보고가 돕니다.
 - 보내는 값은 토큰 수·세션 수·플랜·모델별 사용량·주간 한도 사용률뿐입니다. 대화 내용·경로·세션 ID·
   인증 토큰은 보내지 않습니다.
 

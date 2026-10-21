@@ -1,6 +1,6 @@
 ---
 name: usage-setup
-description: Connect Claude Code weekly-limit collection to the AX dashboard when a user asks to set up, check, or remove aitk usage statusline collection. Keeps an existing statusline untouched and asks before showing the aitk default line.
+description: Connect Claude Code and Codex weekly-limit collection to the AX dashboard when a user asks to set up, check, fix, or remove aitk usage collection (e.g. "주간 한도가 대시보드에 안 잡혀"). Keeps an existing statusline untouched and asks before showing the aitk default line.
 ---
 
 # Usage setup
@@ -25,6 +25,10 @@ aitk 0.7.23부터는 플러그인 세션 시작 훅이 하루 한 번 `aitk usag
 1. `aitk --version`이 0.7.18 이상인지 확인한다(자동 연결은 0.7.23 이상). 아니면 먼저
    `npm i -g @gpters/aitk@latest && aitk upgrade`를 안내한다. `usage setup` 명령이 없다는
    오류도 옛 버전이라는 뜻이다 — `usage report`로 대신하지 않는다.
+   올린 뒤에도 버전이 그대로면 `which -a aitk`로 설치본이 여럿인지 본다(node 버전 관리 도구마다 따로
+   깔린 경우). 권한 오류(EACCES)면 sudo로 밀지 말고 사용자에게 알린다.
+   `aitk whoami`의 이름이 이 컴퓨터 주인인지 사용자에게 확인받는다 — 로그인이 비어 있으면 aitk가
+   다른 경로의 토큰을 물려받아 남의 이름으로 보고할 수 있다. 아니면 `aitk login --device`를 안내한다.
 2. `aitk usage status`를 실행해 `statusline.kind`와 `autoSetup`을 읽는다. 읽기 전용이다.
    `autoSetup.declined`가 true면 사용자가 예전에 해제해 둔 상태다 — 다시 연결할지 먼저 확인한다.
    - `user`: 사용자가 만든 표시줄이 있다. 그대로 감싸기만 하므로 표시는 바뀌지 않는다.
@@ -46,6 +50,13 @@ aitk 0.7.23부터는 플러그인 세션 시작 훅이 하루 한 번 `aitk usag
    - 수집만: `aitk usage setup --display none`
 5. Claude Code를 재시작해야 적용된다고 알린다. 첫 응답 뒤 `aitk usage status`의
    `snapshot`에 `usedPercent`가 보이면 연결된 것이다.
+6. Codex도 쓰면(`~/.codex/sessions`에 최근 파일이 있으면) Codex 한도는 따로 켤 것이 없다 — 보고할 때
+   세션 기록에서 함께 읽는다. 다만 Codex만 쓰는 사람은 Codex 쪽 보고 훅이 있어야 보고가 돈다.
+   `~/.codex/hooks.json`에 `gpters-usage-report`가 없으면 사용자 승인 뒤
+   `npx --yes @gpters/codex-plugin@latest setup --user`를 실행하고, 다음 Codex 실행 때 훅 승인을
+   허용하라고 안내한다. Codex 설정 파일은 직접 편집하지 않는다.
+7. 확인: `aitk usage report --days 7 --dry-run`에서 client별(`claude-code`, `codex`) `limitUsedPercent`가
+   숫자로 나오면 수집되는 것이다. 바로 대시보드에 반영하려면 `aitk usage report --days 7`을 한 번 보낸다.
 
 ## 경계
 
