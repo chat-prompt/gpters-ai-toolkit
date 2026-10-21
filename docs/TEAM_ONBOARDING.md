@@ -32,7 +32,7 @@ Claude Code나 Codex에 그대로 붙여 넣으면 에이전트가 버전·계�
 2. 최신으로 올리기
    - npm install -g @gpters/aitk@latest
    - aitk upgrade   (Claude Code·Codex 플러그인도 함께 갱신된다)
-   - aitk --version 이 올라갔는지 다시 확인한다. which -a aitk 의 첫 번째가 여전히 옛 버전이면 그 사실을 보고한다.
+   - aitk --version 이 0.7.27 이상인지 다시 확인한다. which -a aitk 의 첫 번째가 여전히 옛 버전이면 그 사실을 보고한다.
    - EACCES 같은 권한 오류가 나면 sudo 로 밀어붙이지 말고 오류 한 줄을 보고한다.
 3. 계정 확인
    - aitk whoami 로 나온 이름을 결과 블록에 적고 다음 단계로 넘어간다. 이메일은 옮겨 적지 않는다.
@@ -41,10 +41,11 @@ Claude Code나 Codex에 그대로 붙여 넣으면 에이전트가 버전·계�
    - claude plugin list 에 gpters-ai-toolkit 이 없으면 아래 "3단계: Claude Code" 의 설치 명령을 나에게 안내한다.
    - aitk usage status 를 실행해 statusline.kind, autoSetup, snapshot 을 읽는다.
    - kind 가 user(이미 내 표시줄이 있음): aitk usage setup  — 표시는 그대로 두고 수집만 붙는다.
+     Clawd on Desk 같은 다른 앱이 표시줄을 쓰고 있어도 그 앱을 지우지 않는다. aitk 가 그 앱 표시줄을 감싼다.
    - kind 가 none(표시줄 없음): 나에게 "aitk 기본 표시줄 보기(모델·컨텍스트·5시간/주간 한도 한 줄)" 와 "표시 없이 수집만" 중 무엇을 원하는지 먼저 묻고,
      aitk usage setup --display default  또는  aitk usage setup --display none
    - kind 가 aitk 인데 snapshot 이 null: aitk usage setup 을 한 번 더 실행해 명령 경로를 갱신한다.
-   - autoSetup 이 declined(예전에 내가 끈 상태)여도 이번 요청이 다시 켜는 것이므로 aitk usage setup 을 실행한다.
+   - autoSetup 이 declined 나 drifted(예전에 꺼진 상태)여도 이번 요청이 다시 켜는 것이므로 aitk usage setup 을 실행한다.
    - kind 가 unsupported: 설정을 건드리지 말고 보고만 한다.
    - ~/.claude/settings.json 을 직접 편집하지 않는다. aitk 명령만 쓴다.
 5. Codex 를 쓰면 — 플러그인과 보고 훅
@@ -63,8 +64,9 @@ Claude Code나 Codex에 그대로 붙여 넣으면 에이전트가 버전·계�
 - aitk 버전: 이전 → 현재
 - aitk 설치본 개수(which -a):
 - aitk 로그인 이름(whoami):
-- Claude: statusline.kind / limitUsedPercent (안 쓰면 "안 씀")
+- Claude: statusline.kind / limitUsedPercent (안 쓰면 "안 씀", 구독 없으면 "구독 없음")
 - Codex: 훅 설치·승인 여부 / limitUsedPercent (안 쓰면 "안 씀")
+- 보고 전송: 함 / 안 함
 - 막힌 곳 (없으면 "없음"):
 ```
 
