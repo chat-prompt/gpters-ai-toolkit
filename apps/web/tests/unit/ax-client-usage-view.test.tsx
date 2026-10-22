@@ -62,6 +62,24 @@ describe('클라이언트 화면', () => {
       .map((row) => within(row).getAllByRole('cell').slice(0, 2).map((cell) => cell.textContent))
   }
 
+  it('서비스 표의 주기 평균은 이번 주 스냅샷이 없어도 보이고, 둘 다 없으면 미수집이다', () => {
+    const base = data([])
+    render(<ClientUsagePanel days={7} data={{ ...base, byClient: [
+      { ...base.byClient[0], reportsLimit: false, avgLimitUsedPercent: 80 },
+      { ...base.byClient[1], reportsLimit: false, avgLimitUsedPercent: null },
+    ] }} />)
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('주기 평균'))!
+    const cells = within(table).getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell').at(-1)!.textContent)
+    expect(cells).toEqual(['80%', '미수집'])
+  })
+
+  it('결제 주기 회차를 못 읽으면 서비스 표의 주기 평균은 조회 실패다', () => {
+    render(<ClientUsagePanel days={7} data={{ ...data([]), cycleError: true }} />)
+    const table = screen.getAllByRole('table').find((element) => within(element).queryByText('주기 평균'))!
+    const cells = within(table).getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell').at(-1)!.textContent)
+    expect(cells).toEqual(['조회 실패', '조회 실패'])
+  })
+
   it('구성원 줄은 기본이 이름순이고 사람 단위로 묶는다', () => {
     render(<ClientUsagePanel days={7} data={data(scattered())} />)
     expect(screen.getByRole('button', { name: '이름순' })).toHaveAttribute('aria-pressed', 'true')
