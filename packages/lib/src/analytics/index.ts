@@ -38,6 +38,13 @@ export {
 } from './skill-text-retention'
 export { recordAgentTelemetryBatch } from './agent-telemetry'
 export {
+  agentLimitClientForSource,
+  recordAgentLimitSnapshot,
+  validateAgentLimitSnapshot,
+  type AgentLimitClient,
+  type AgentLimitSnapshot,
+} from './agent-limits'
+export {
   AgentTelemetryCollectorConflictError,
   authenticateAgentTelemetryCollector,
   enrollAgentTelemetryCollector,

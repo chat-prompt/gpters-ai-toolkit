@@ -1258,6 +1258,8 @@ export const axSubscriptions = pgTable('ax_subscriptions', {
   billingCycle: axBillingCycleEnum('billing_cycle').notNull().default('monthly'),
   status: axSubscriptionStatusEnum('status').notNull().default('active'),
   note: text('note'),
+  // account_key(0047)는 아직 여기 두지 않는다 — 운영 DB 적용 전에 머지되면 `select()` 가 없는 열을 읽어 깨진다.
+  // 시트 동기화가 이 열을 쓰는 PR 에서 0047 운영 적용을 확인한 뒤 더한다.
   /** 마지막 import 시각 */
   syncedAt: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -1400,6 +1402,36 @@ export const axUsageLimitWindows = pgTable('ax_usage_limit_windows', {
 ])
 
 export type AxUsageLimitWindowRecord = typeof axUsageLimitWindows.$inferSelect
+
+/**
+ * 공용 구독 계정의 주간 한도 회차별 최댓값 (EDU-11519)
+ *
+ * 봇이 쓰는 공용·서포트 구독은 한 사람에게 묶이지 않아 `ax_usage_limit_windows`(사용자 기준)로 잇지 못한다.
+ * 보고에 계정 해시가 실려 오면 (클라이언트, 계정, 초기화 시각) 회차의 최댓값만 올려 둔다.
+ * `ax_subscriptions.account_key` 와 같은 해시로 구독 행과 잇는다.
+ * account_key 형식 CHECK(`^[a-f0-9]{64}$`)는 SQL(0047)에만 둔다 — 이 파일은 check() 를 쓰지 않는다.
+ */
+export const axAccountLimitWindows = pgTable('ax_account_limit_windows', {
+  client: axUsageClientEnum('client').notNull(),
+  /** 소문자·trim 한 계정 이메일의 sha256 hex. 원문 이메일은 저장하지 않는다 */
+  accountKey: text('account_key').notNull(),
+  /** 클라이언트가 보고한 초기화 시각 그대로 */
+  resetsAt: timestamp('resets_at', { withTimezone: true }).notNull(),
+  /** 이 회차에서 받은 사용률의 최댓값 (0~100) */
+  maxUsedPercent: numeric('max_used_percent', { precision: 5, scale: 2 }).notNull(),
+  firstReportedAt: timestamp('first_reported_at', { withTimezone: true }).defaultNow().notNull(),
+  /** 최댓값을 마지막으로 확인한 보고 시각. 의미는 ax_usage_limit_windows 와 같다 */
+  lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).defaultNow().notNull(),
+  /** 값과 무관하게 이 회차를 마지막으로 받은 시각. 의미는 ax_usage_limit_windows 와 같다 */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  /** 이 회차를 보고한 agentId 들 */
+  agentIds: text('agent_ids').array().default([]).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.client, table.accountKey, table.resetsAt] }),
+  index('ax_account_limit_windows_resets_at_idx').on(table.resetsAt),
+])
+
+export type AxAccountLimitWindowRecord = typeof axAccountLimitWindows.$inferSelect
 
 /** 검증 가능한 스킬 실행 결과 — 기존 apply/skip 자기보고와 분리한다 */
 export const axExecutionSourceEnum = pgEnum('ax_execution_source', ['aitk', 'bbopters-shared'])

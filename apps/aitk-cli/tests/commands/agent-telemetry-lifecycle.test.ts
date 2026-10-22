@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandRunner } from '../../src/agent-telemetry/installation.js'
 
 vi.mock('../../src/auth.js', () => ({ resolveToken: vi.fn(() => 'user-oauth-token') }))
+// 실제 claude 를 띄우지 않는다 — 한도 측정 자체는 tests/agent-telemetry/limit-probe.test.ts 가 본다
+vi.mock('../../src/agent-telemetry/limit-probe.js', () => ({
+  probeAgentLimit: vi.fn(async () => ({ ok: false, reason: 'unsupported-source' })),
+  sendAgentLimitSnapshot: vi.fn(async () => true),
+}))
 vi.mock('../../src/output.js', () => ({
   jsonOut: vi.fn(),
   error: vi.fn((message: string) => { throw new Error(message) }),
@@ -22,6 +27,7 @@ import { agentTelemetryInstallPath, readAgentTelemetryInstallation } from '../..
 import { writeAgentTelemetryCheckpoint } from '../../src/agent-telemetry/checkpoint.js'
 import { jsonOut } from '../../src/output.js'
 import { resolveToken } from '../../src/auth.js'
+import { sendAgentLimitSnapshot } from '../../src/agent-telemetry/limit-probe.js'
 
 let root = ''
 let sessionsDir = ''
@@ -239,6 +245,29 @@ describe('agent telemetry lifecycle commands', () => {
     expect(existsSync(agentTelemetryInstallPath('test-agent', 'openclaw', root))).toBe(false)
     expect(storedCollectorToken).toBe('')
     expect(existsSync(checkpointDir)).toBe(true)
+  })
+
+  it('run은 사용량을 보낸 뒤 계정 한도를 보내고, 한도 전송이 실패해도 수집은 성공한다 — doctor 건강에도 넣지 않는다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.0',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+    })
+    const snapshot = {
+      agentId: 'test-agent', collectorInstanceId: 'collector-test', client: 'claude-code' as const, accountKey: 'a'.repeat(64),
+      usedPercent: 65, resetsAt: '2026-08-30T00:00:00.000Z', observedAt: '2026-08-27T01:00:00.000Z',
+    }
+    const limitProbe = vi.fn(async () => ({ ok: true as const, snapshot }))
+    vi.mocked(sendAgentLimitSnapshot).mockRejectedValueOnce(new Error('limit snapshot HTTP 500'))
+
+    await expect(runAgentTelemetryRun({ ...lifecycle(), limitProbe })).resolves.toBeUndefined()
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/agent-telemetry'))).toBe(true)
+    expect(limitProbe).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'test-agent', source: 'openclaw', stateDir: checkpointDir }))
+    expect(sendAgentLimitSnapshot).toHaveBeenCalledWith(snapshot, expect.any(String), COLLECTOR_TOKEN)
+
+    await runAgentTelemetryDoctor({ ...lifecycle(), now: new Date('2026-08-27T02:00:00Z'), collectorVersion: '0.7.0', cliScriptPath: cliPath, nodePath, limitProbe: vi.fn(async () => ({ ok: false as const, reason: 'no-account' as const })) })
+    const doctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { checks: Record<string, unknown> }
+    expect(doctor.checks.limitProbe).toEqual({ ok: false, reason: 'no-account' })
   })
 
   it('upgrade는 설치 기록의 CLI 경로·버전을 실행 중인 CLI로 바꾸고 credential·checkpoint·collector ID를 보존한다', async () => {
