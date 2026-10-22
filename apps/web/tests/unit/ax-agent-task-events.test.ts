@@ -20,6 +20,19 @@ describe('agent task evidence',()=>{
   const trace=buildAgentTaskTraces([row()],start,end)[0]
   expect(trace.events.some(e=>e.phase==='delivery')).toBe(false)
  })
+ it('대문자 UUID 이벤트 ID 를 자격증명으로 오판하지 않는다 — UUID 가 아닌 대문자 토큰은 계속 거부한다',()=>{
+  const fixture=JSON.parse(readFileSync(resolve(process.cwd(),'../../infra/ax-local/fixtures/agent-telemetry-bbodoong.json'),'utf8'))
+  const upper={...event,eventId:'7212D92D-3963-49CC-B192-AA7C8406626A'}
+  const child={...event,eventId:'77191851-9E1E-46F6-A6FE-4D8A8805EDDD',parentEventId:upper.eventId}
+  expect(validateAgentTelemetryBatch({...fixture,collection:{...fixture.collection,taskEvents:[upper,child]}}).ok).toBe(true)
+  // 스키마가 아니라 민감값 검사에서 걸려야 한다 — UUID 가 아닌 대문자 토큰, UUID 앞뒤에 덧붙인 값
+  for (const collectorVersion of ['AA7C8406626A', '7212D92D-3963-49CC-B192-AA7C8406626A-SECRETKEY1', 'X 7212D92D-3963-49CC-B192-AA7C8406626A']) {
+   const result=validateAgentTelemetryBatch({...fixture,runtime:{...fixture.runtime,collectorVersion}})
+   expect(result.ok).toBe(false)
+   if (!result.ok) expect(result.errors).toEqual(['$.runtime.collectorVersion: forbidden PII, path, or credential pattern'])
+  }
+ })
+
  it('accepts result-only tool batches and optional events, preserving old batches',()=>{
   const fixture=JSON.parse(readFileSync(resolve(process.cwd(),'../../infra/ax-local/fixtures/agent-telemetry-bbodoong.json'),'utf8'))
   expect(validateAgentTelemetryBatch(fixture).ok).toBe(true)
