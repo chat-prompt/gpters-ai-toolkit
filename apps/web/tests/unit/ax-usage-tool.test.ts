@@ -418,7 +418,8 @@ describe('report_usage', () => {
 })
 
 describe('carryLimit — 하루 단위 행의 한도를 진행 중 회차 최댓값으로', () => {
-  const resetsAt = new Date('2026-10-22T20:00:00.000Z')
+  // 실제 시각보다 늘 뒤여야 진행 중 회차로 읽힌다 — 날짜를 박아 두면 그날이 지나 깨진다(10/23)
+  const resetsAt = new Date('2099-10-22T20:00:00.000Z')
   const window = { resetsAt, maxUsedPercent: '35.00' }
   const row = (limitUsedPercent: string | null, limitResetsAt: Date | null = resetsAt) => ({ limitUsedPercent, limitResetsAt })
 
@@ -432,7 +433,7 @@ describe('carryLimit — 하루 단위 행의 한도를 진행 중 회차 최댓
 
   it('더 높은 값, 다른 회차 값, 진행 중 회차가 없는 경우는 그대로 둔다', () => {
     expect(carryLimit(row('40.00'), window)).toEqual(row('40.00'))
-    const next = new Date('2026-10-29T20:00:00.000Z')
+    const next = new Date(resetsAt.getTime() + 7 * 86_400_000)
     expect(carryLimit(row('2.00', next), window)).toEqual(row('2.00', next))
     expect(carryLimit(row(null, null), undefined)).toEqual(row(null, null))
   })

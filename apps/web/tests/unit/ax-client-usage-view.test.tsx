@@ -141,7 +141,7 @@ describe('클라이언트 화면', () => {
   })
 
   it('주간 한도 색 기준 — 주기 평균은 20% 미만·100% 초과, 이번 주는 이어진 일수만큼의 속도(하루 20/7%·100/7%)', () => {
-    expect([19.9, 20, 100, 100.1].map(weekAverageTone)).toEqual(['low', null, null, 'over'])
+    expect([19.9, 20, 99.9, 100].map(weekAverageTone)).toEqual(['low', null, null, 'over'])
     const now = Date.parse('2026-10-22T00:00:00Z')
     const resetsIn = (days: number) => new Date(now + days * 86_400_000).toISOString()
     // 3.5일 지남(3.5일 남음): 10% 이상·50% 이하가 보통
@@ -356,7 +356,9 @@ describe('클라이언트 화면', () => {
     expect(cell.getAttribute('data-tip')).toMatch(/^이 속도면 주간 한도를 넘음\n7일 미만 1회 · 7일 환산\(추정\)\n/)
     expect(screen.getByText('145.3%').className).toContain('accent-orange')
     expect(cell.getAttribute('data-tip')).not.toMatch(/끝 무렵 미수집/)
-    expect(cell.getAttribute('data-tip')).toMatch(/조기 초기화 42% \(예정 [^)]+\) → 7일 환산 230\.5%/)
+    expect(cell.getAttribute('data-tip')).toMatch(/조기 초기화 42% \(예정 [^)]+\) → 7일 환산 230\.5% \(평균에는 100%\)/)
+    // 100% 이하 회차에는 붙이지 않는다
+    expect(cell.getAttribute('data-tip')).not.toMatch(/60% \(평균에는/)
   })
 
   it('1일 미만 조기 초기화 회차만 있으면 평균 대신 「환산할 회차 없음」만 쓰고 0회는 적지 않는다', () => {

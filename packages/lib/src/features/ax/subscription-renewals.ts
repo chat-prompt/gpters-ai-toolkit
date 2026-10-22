@@ -43,6 +43,8 @@ const HOUR_MS = 3_600_000
 const WEEK_MS = 7 * DAY_MS
 /** 예정보다 이만큼 넘게 일찍 끝나야 조기 초기화로 본다 — 초기화 시각 흔들림·나란한 회차와 가른다 */
 const EARLY_RESET_MIN_MS = 6 * HOUR_MS
+/** 평균에 넣을 회차 값의 상한(%) — 7일 환산이 100% 를 넘어도 평균에는 한도(100%)만큼만 */
+export const AVERAGE_CAP_PERCENT = 100
 /** `recentWeeks` 에 싣는 기간 — 뽀밋이 저사용 알림이 며칠 밀려도 따라잡을 만큼 */
 const RECENT_WEEKS_DAYS = 8
 
@@ -175,7 +177,9 @@ function clusterWindows(reports: Report[]): Window[] {
  * 조기 초기화 회차는 7일을 못 채워 실측이 낮다(2026-10 하영 Codex: 회차마다 30~95% 인데 7일 환산 평균 약 138%).
  * 분모는 마지막 관측이 아니라 회차가 실제로 이어진 기간이다 — 1.2일에 75% 까지 쓰고 쉬었다가 4.1일에 초기화된
  * 회차를 1.2일로 나누면 448% 로 부푼다. 1일 미만 회차는 흔들림이 커서 환산하지 않는다(null).
- * 7일을 채운 회차는 실측 그대로다. 100% 를 넘어도 자르지 않는다 — "이 속도면 한도에 걸린다"는 신호다.
+ * 7일을 채운 회차는 실측 그대로다. 회차 값은 100% 를 넘어도 자르지 않는다 — "이 속도면 한도에 걸린다"는 신호다.
+ * 다만 평균(averagePercent)에는 100% 로 잘라 넣는다 — 조기 초기화 회차 하나(2.6일에 94% → 251%)가 사람·서비스
+ * 평균을 한도 위로 끌어올리지 않게(2026-10-23 하영 결정). 한도 이상은 다 「한도에 걸림」이라 그 너머 크기는 판정에 쓰지 않는다.
  * 흔들림으로 7일을 몇 초 넘긴 회차도 실측 그대로다.
  */
 function projectWeek(week: Window): number | null {
@@ -282,8 +286,11 @@ export function buildRenewalRows(
     const recentWeeks = mine
       .filter((week) => week.endedAt <= now && week.endedAt.getTime() >= now.getTime() - RECENT_WEEKS_DAYS * DAY_MS)
       .map(toWeek)
-    // 조기 초기화 회차도 7일 환산값으로 평균에 넣는다. 1일 미만 회차는 환산하지 않아 빠진다
-    const projected = weeks.map((week) => week.projectedPercent).filter((value): value is number => value !== null)
+    // 조기 초기화 회차도 7일 환산값으로 평균에 넣되 100% 로 자른다. 1일 미만 회차는 환산하지 않아 빠진다
+    const projected = weeks
+      .map((week) => week.projectedPercent)
+      .filter((value): value is number => value !== null)
+      .map((value) => Math.min(value, AVERAGE_CAP_PERCENT))
     // 아직 끝나지 않은 회차가 둘 이상이면 가장 최근에 보고된 쪽이 진행 중이다.
     // 꺼져 있던 머신이 끝난 회차의 옛 스냅샷을 더 늦게 보내면 그 회차를 고를 수 있다 — 드문 경우라 그대로 둔다
     const current = mine

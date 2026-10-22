@@ -105,9 +105,12 @@ export function weekPaceTone(percent: number, resetsAt: string | null | undefine
   return null
 }
 
-/** 7일 기준 값(주기 평균)의 톤 — 20% 미만이면 덜 씀, 100% 를 넘으면 넘침 */
+/**
+ * 7일 기준 값(주기 평균)의 톤 — 20% 미만이면 덜 씀, 100% 이상이면 넘침.
+ * 평균은 회차마다 100% 로 잘라 내므로(서버) 100% 는 「모든 회차가 한도에 걸렸다」는 뜻이다
+ */
 export function weekAverageTone(percent: number): WeekTone {
-  return percent < LOW_WEEKLY_PERCENT ? 'low' : percent > FULL_WEEKLY_PERCENT ? 'over' : null
+  return percent < LOW_WEEKLY_PERCENT ? 'low' : percent >= FULL_WEEKLY_PERCENT ? 'over' : null
 }
 
 const toneClass = (tone: WeekTone, base = 'text-[var(--text-secondary)]') => (tone ? 'text-[var(--accent-orange)]' : base)
@@ -1104,8 +1107,8 @@ function PeopleTable({
           </span>
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
-            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값 옆에 *를 붙이고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
-            <p className="mt-2">주황색은 사용량 기준입니다. 주기 평균은 주 {LOW_WEEKLY_PERCENT}% 미만(덜 씀)이거나 {FULL_WEEKLY_PERCENT}%를 넘으면(한도 초과 속도) 주황색입니다. 이번 주 한도는 회차가 이어진 일수만큼의 속도로 봅니다 — 하루 {LOW_WEEKLY_PERCENT}/7% 에 못 미치거나 하루 {FULL_WEEKLY_PERCENT}/7% 를 넘으면 주황색입니다. 다음 결제는 {DUE_SOON_DAYS}일 안이면 주황색입니다.</p>
+            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값 옆에 *를 붙이고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 환산값이 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이며, 평균에는 100%로 잘라 넣습니다(호버에 「평균에는 100%」). 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
+            <p className="mt-2">주황색은 사용량 기준입니다. 주기 평균은 주 {LOW_WEEKLY_PERCENT}% 미만(덜 씀)이거나 {FULL_WEEKLY_PERCENT}%(회차마다 100%로 자른 평균의 최대 — 모든 회차가 한도에 걸림)면 주황색입니다. 이번 주 한도는 회차가 이어진 일수만큼의 속도로 봅니다 — 하루 {LOW_WEEKLY_PERCENT}/7% 에 못 미치거나 하루 {FULL_WEEKLY_PERCENT}/7% 를 넘으면 주황색입니다. 다음 결제는 {DUE_SOON_DAYS}일 안이면 주황색입니다.</p>
             <p className="mt-2">공용·서포트 구독은 그 계정을 쓰는 봇의 수집기가 매시간 잰 값입니다(aitk 0.7.28부터). 서비스 · 플랜 칸에 측정한 봇을 적고, 서비스별 주기 평균(사람 평균)에는 넣지 않습니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
@@ -1333,7 +1336,9 @@ function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleE
         ? `${formatDateTime(end)} 조기 초기화 ${week.usedPercent}% (${days ? `${days}, ` : ''}예정 ${formatDateTime(week.resetsAt)})`
         : `${formatDateTime(week.resetsAt)} 초기화 ${week.usedPercent}%${days && value !== week.usedPercent ? ` (${days})` : ''}`
       const projection = value === week.usedPercent ? '' : value === null ? ' → 환산 안 함(1일 미만 또는 환산값 없음)' : ` → 7일 환산 ${formatProjectedPercent(value)}%`
-      return `${base}${projection} (${seen})`
+      // 평균에는 한도(100%)까지만 넣는다 — 회차 값은 그대로 보여 주되 평균에 쓴 값을 밝힌다
+      const capped = value !== null && value > 100 ? ' (평균에는 100%)' : ''
+      return `${base}${projection}${capped} (${seen})`
     })
     .join('\n')
   // 부가 설명은 호버 맨 위에 — 끝 무렵이 빠진 회차는 실제보다 낮다(경고), 7일 미만 회차는 7일 환산(추정)으로 들어갔다

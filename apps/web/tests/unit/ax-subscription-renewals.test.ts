@@ -193,7 +193,8 @@ describe('buildRenewalRows', () => {
     ])
     // 1.3일 만에 끝난 42% 는 7일로 환산하면 230.5% — 7일을 채운 60% 와 평균
     expect(row.weeks.map((week) => week.projectedPercent && Math.round(week.projectedPercent * 10) / 10)).toEqual([60, 230.5])
-    expect(row.averagePercent).toBe(145.2)
+    // 평균에는 회차 값을 100% 로 잘라 넣는다 — (60 + 100) / 2
+    expect(row.averagePercent).toBe(80)
     expect(row).toMatchObject({ currentPercent: 3, currentResetsAt: kst('2026-10-27T15:35:00').toISOString() })
   })
 
@@ -208,7 +209,7 @@ describe('buildRenewalRows', () => {
     // 다만 다음 회차는 앞 회차가 끝난 10/15 04:00 에 시작해 4.9일 만에 끝났다 — 81% 를 7일로 환산(116.3)해 평균
     expect(row.weeks[1].startedAt).toBe(kst('2026-10-15T04:00:00').toISOString())
     expect(row.weeks[1].projectedPercent).toBeCloseTo(81 / 4.875 * 7, 6)
-    expect(row.averagePercent).toBe(82.2)
+    expect(row.averagePercent).toBe(74) // 100% 넘는 회차는 평균에 100%
   })
 
   it('나란한 회차가 새 회차 첫 보고 30분 뒤에 보고되면 조기 초기화가 아니고 진행 중 사용률도 그대로다', () => {
@@ -228,7 +229,7 @@ describe('buildRenewalRows', () => {
     ], kst('2026-10-21T12:00:00'))
     expect(row.weeks.map((week) => week.endedAt === week.resetsAt)).toEqual([true, true])
     // 30% 는 7일 그대로, 81% 는 4.9일 회차라 7일 환산 116.3
-    expect(row.averagePercent).toBe(73.2)
+    expect(row.averagePercent).toBe(65) // 100% 넘는 회차는 평균에 100%
   })
 
   it('7일 환산 분모는 마지막 관측이 아니라 회차가 실제로 이어진 기간이고, 1일 미만 회차는 환산하지 않는다', () => {
@@ -243,7 +244,7 @@ describe('buildRenewalRows', () => {
       codex('2026-10-19T04:38:00', '2026-10-13T09:00:00', 30, '2026-10-12T04:40:00'),
     ], later)
     expect(row.weeks.map((week) => week.projectedPercent && Math.round(week.projectedPercent * 10) / 10)).toEqual([126.8, null, 30])
-    expect(row.averagePercent).toBe(78.4)
+    expect(row.averagePercent).toBe(65) // (100 + 30) / 2 — 126.8% 는 평균에 100%
   })
 
   it('초기화 시각이 몇 초 흔들려도 7일 환산 기간이 줄지 않고(1일 경계), 판정용 값은 반올림하지 않는다', () => {
