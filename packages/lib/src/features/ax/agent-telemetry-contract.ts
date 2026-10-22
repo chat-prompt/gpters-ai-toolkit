@@ -175,9 +175,16 @@ const FORBIDDEN_VALUES = [
   /\b(?:sk|ghp|github_pat)-?[A-Za-z0-9_-]{12,}/i,
 ]
 
+/**
+ * UUID 는 무작위 16진수라 개인정보·자격증명을 담을 수 없다. Claude Code 는 작업 이벤트 ID 를 대문자 UUID 로 남기는데
+ * 마지막 덩어리가 글자로 시작하면(`…-AA7C8406626A`) 첫 패턴(대문자 토큰)에 걸려 배치 전체가 거부되고
+ * 그 pending 배치에 막혀 수집기가 멈췄다(2026-10-12 뽀짝이). 값 전체가 UUID 일 때만 검사를 건너뛴다
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function sensitivePaths(value: unknown, path = '$', found: string[] = []): string[] {
   if (typeof value === 'string') {
-    if (FORBIDDEN_VALUES.some((pattern) => pattern.test(value))) found.push(path)
+    if (!UUID.test(value) && FORBIDDEN_VALUES.some((pattern) => pattern.test(value))) found.push(path)
   } else if (Array.isArray(value)) {
     value.forEach((item, index) => sensitivePaths(item, `${path}[${index}]`, found))
   } else if (value && typeof value === 'object') {
