@@ -65,6 +65,7 @@ export function isPublicRoute(pathname: string): boolean {
     strippedPath.startsWith('/api/cron') ||
     strippedPath === '/api/ax/agent-telemetry' ||
     strippedPath === '/api/ax/agent-telemetry/enroll' ||
+    strippedPath === '/api/ax/agent-telemetry/limits' ||
     // Agent reports authenticate their scoped Bearer credential inside the route.
     // Keep dashboard reads and human review writes behind the session boundary.
     strippedPath === '/api/ax/agent-reports' ||

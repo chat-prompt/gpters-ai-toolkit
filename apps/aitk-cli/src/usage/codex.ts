@@ -45,6 +45,60 @@ interface RolloutEntry {
 }
 
 /**
+ * 롤아웃 한도 묶음에서 주간(10080분) 한도를 꺼낸다
+ *
+ * @param limits - token_count 줄의 rate_limits
+ * @param at - 그 줄의 시각 (ms)
+ * @returns 주간 한도가 없으면 undefined, 값이 깨졌으면 둘 다 null
+ */
+function weeklyLimit(
+  limits: NonNullable<NonNullable<RolloutEntry['payload']>['rate_limits']>,
+  at: number
+): { usedPercent: number | null; resetsAt: string | null } | undefined {
+  const weekly = [limits.primary, limits.secondary].find(limit => limit?.window_minutes === 10080)
+  if (!weekly) return undefined
+  const percent = weekly.used_percent
+  const resets = weekly.resets_at
+  const resetMs = typeof resets === 'number' ? resets * 1000 : NaN
+  const valid = typeof percent === 'number' && Number.isFinite(percent) && percent >= 0 && percent <= 100
+    && Number.isFinite(resetMs) && resetMs > at && Number.isFinite(new Date(resetMs).getTime())
+  return valid ? { usedPercent: percent as number, resetsAt: new Date(resetMs).toISOString() } : { usedPercent: null, resetsAt: null }
+}
+
+/**
+ * Codex 홈의 롤아웃에서 가장 최근 주간 한도 스냅샷 하나를 읽는다 (봇 수집기용)
+ *
+ * 토큰 집계와 무관하게 한도만 본다. 한도는 계정에 걸리므로 그 홈을 쓴 모든 세션이 같은 계정 값을 남긴다.
+ *
+ * @param codexHome - Codex 홈 (`~/.codex` 또는 봇의 CODEX_HOME)
+ * @param since - 이보다 오래된 롤아웃은 보지 않는다
+ * @returns 관측 시각과 함께. 없거나 값이 깨졌으면 null
+ */
+export async function latestCodexLimit(
+  codexHome: string,
+  since: Date
+): Promise<{ usedPercent: number; resetsAt: string; observedAt: string } | null> {
+  const files = await findJsonlFiles(join(codexHome, 'sessions'), since, (name) => name.startsWith('rollout-'))
+  let latest: { usedPercent: number; resetsAt: string; observedAt: string } | null = null
+  let latestAt = Number.NEGATIVE_INFINITY
+  for (const file of files) {
+    await scanJsonl(file, (line) => line.includes(TOKEN_HINT), (raw) => {
+      const entry = raw as RolloutEntry
+      const limits = entry.payload?.type === 'token_count' ? entry.payload.rate_limits : undefined
+      const at = Date.parse(String(entry.timestamp))
+      if (!limits || !Number.isFinite(at) || at <= latestAt || at < since.getTime()) return
+      const weekly = weeklyLimit(limits, at)
+      if (!weekly) return
+      latestAt = at
+      latest = weekly.usedPercent !== null && weekly.resetsAt !== null
+        ? { usedPercent: weekly.usedPercent, resetsAt: weekly.resetsAt, observedAt: new Date(at).toISOString() }
+        : null
+    })
+  }
+  return latest
+}
+
+/**
  * ~/.codex/auth.json에서 ChatGPT 플랜 코드만 꺼낸다
  *
  * id_token은 그 자체가 OpenAI 계정 자격증명이다. 로컬에서 payload만 디코딩해
@@ -161,16 +215,11 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
         // A quota-only event (or repeated usage snapshot) can still carry a newer weekly limit.
         const limits = payload.rate_limits
         if (at >= startMs && limits && at > limitAt) {
-          const weekly = [limits.primary, limits.secondary].find(limit => limit?.window_minutes === 10080)
+          const weekly = weeklyLimit(limits, at)
           if (weekly) {
             limitAt = at
-            const percent = weekly.used_percent
-            const resets = weekly.resets_at
-            const resetMs = typeof resets === 'number' ? resets * 1000 : NaN
-            const valid = typeof percent === 'number' && Number.isFinite(percent) && percent >= 0 && percent <= 100
-              && Number.isFinite(resetMs) && resetMs > at && Number.isFinite(new Date(resetMs).getTime())
-            limitUsedPercent = valid ? percent as number : null
-            limitResetsAt = valid ? new Date(resetMs).toISOString() : null
+            limitUsedPercent = weekly.usedPercent
+            limitResetsAt = weekly.resetsAt
           }
         }
 
