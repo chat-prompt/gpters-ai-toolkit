@@ -153,6 +153,13 @@ subscription is judged per account no matter how many agents use it.
 - `codex`: reads the newest rollout `rate_limits` after the last account switch.
   The first run after an account switch reports `no-limit` until a new session runs.
 - `hermes`: not measured yet (`unsupported-source`).
+- cswap (0.7.29+): when `cswap` is installed, `claude-code`/`openclaw` runs also
+  read `cswap list --json` and send every registered account's 7-day usage. It
+  never switches accounts; cswap itself skips tokens owned by the active account
+  or a live session. A value whose fresh fetch failed (locked keychain) is sent
+  only if cswap's last good fetch is under 3 hours old. `doctor` shows
+  `cswapAccounts` (`accountKeyPrefix`, `usedPercent`, `resetsAt`, `observedAt`
+  per account, or `reason` = `cswap-not-found`/`cswap-failed`).
 
 `doctor` shows `limitProbe` but does not count it toward `ok`. Expected values:
 `{ ok: true, client, accountKeyPrefix, usedPercent, resetsAt }`, or `ok: false`

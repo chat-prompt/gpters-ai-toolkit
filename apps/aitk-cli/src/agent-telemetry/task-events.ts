@@ -45,7 +45,9 @@ export function collectTaskEvents(agent: string, source: string, previous?: Agen
   const path = taskJournalPath(agent, source, home)
   if (!existsSync(path)) return { events: [], checkpoint: previous }
   const info = statSync(path)
-  if (previous && (previous.dev !== String(info.dev) || previous.ino !== String(info.ino) || info.size < previous.offset)) throw new Error('Task journal changed: preserve its checkpoint and inspect rotation')
+  // device 번호는 비교하지 않는다 — macOS 는 볼륨을 다시 마운트하면 같은 파일의 st_dev 가 바뀐다(2026-09-28 뽀케터:
+  // inode·크기 그대로인데 이 검사에 걸려 매시간 수집이 멈췄다). 같은 경로의 inode·크기로 회전을 가린다
+  if (previous && (previous.ino !== String(info.ino) || info.size < previous.offset)) throw new Error('Task journal changed: preserve its checkpoint and inspect rotation')
   const offset = previous?.offset ?? 0
   // Bound each read and batch; unread complete records remain for the next run.
   const handle = openSync(path, 'r')

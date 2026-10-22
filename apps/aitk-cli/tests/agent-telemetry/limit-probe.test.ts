@@ -12,7 +12,9 @@ import {
   accountKey,
   claudeConfigDirFor,
   parseClaudeWeeklyLimit,
+  parseCswapAccounts,
   probeAgentLimit,
+  probeCswapAccounts,
   readCodexAccountEmail,
 } from '../../src/agent-telemetry/limit-probe.js'
 
@@ -203,6 +205,52 @@ describe('계정 주간 한도 측정', () => {
       },
     })
     expect(result).toMatchObject({ ok: true, snapshot: { usedPercent: 65 } })
+  })
+
+  // cswap 0.26 `list --json` 모양 (값은 합성)
+  const CSWAP = JSON.stringify({ schemaVersion: 1, activeAccountNumber: 2, accounts: [
+    { number: 1, email: 'A@x.com', usage: { sevenDay: { pct: 30, resetsAt: '2026-10-24T11:00:00+00:00' } }, lastGoodFetchedAt: '2026-10-20T00:00:00Z' },
+    // 키체인이 잠겨 지금 조회 실패 — 2시간 전 성공값은 쓴다
+    { number: 2, email: 'b@x.com', usage: 'keychain_unavailable', lastGoodUsage: { sevenDay: { pct: 41, resetsAt: '2026-10-25T00:00:00+00:00' } }, lastGoodFetchedAt: '2026-10-22T01:00:00Z' },
+    // 4시간 전 성공값은 버린다
+    { number: 3, email: 'c@x.com', usage: null, lastGoodUsage: { sevenDay: { pct: 8, resetsAt: '2026-10-25T00:00:00+00:00' } }, lastGoodFetchedAt: '2026-10-21T23:00:00Z' },
+    // 이미 지난 회차는 버린다
+    { number: 4, email: 'd@x.com', usage: { sevenDay: { pct: 50, resetsAt: '2026-10-21T00:00:00+00:00' } } },
+  ] })
+
+  it('cswap: 계정마다 지금 조회값, 없으면 3시간 안의 마지막 성공값을 쓰고 지난 회차는 뺀다', () => {
+    expect(parseCswapAccounts(CSWAP, NOW)).toEqual([
+      { email: 'A@x.com', usedPercent: 30, resetsAt: '2026-10-24T11:00:00.000Z', observedAt: NOW.toISOString() },
+      { email: 'b@x.com', usedPercent: 41, resetsAt: '2026-10-25T00:00:00.000Z', observedAt: '2026-10-22T01:00:00.000Z' },
+    ])
+  })
+
+  it('cswap: 미래 관측·8일 넘는 초기화·null 항목은 그 계정만 빼고 나머지는 쓴다', () => {
+    const output = JSON.stringify({ accounts: [
+      null,
+      { email: 'f@x.com', usage: null, lastGoodUsage: { sevenDay: { pct: 5, resetsAt: '2026-10-25T00:00:00Z' } }, lastGoodFetchedAt: '2026-10-23T00:00:00Z' },
+      { email: 'g@x.com', usage: { sevenDay: { pct: 5, resetsAt: '2026-11-01T00:00:00Z' } } },
+      { email: 'h@x.com', usage: { sevenDay: { pct: 9, resetsAt: '2026-10-25T00:00:00Z' } } },
+    ] })
+    expect(parseCswapAccounts(output, NOW).map((a) => a.email)).toEqual(['h@x.com'])
+    expect(parseCswapAccounts(JSON.stringify({ accounts: 'x' }), NOW)).toEqual([])
+  })
+
+  it('cswap: list --json 만 부르고(계정을 바꾸지 않는다) 이메일은 계정 키로만 싣는다', async () => {
+    const run = vi.fn(async () => CSWAP)
+    const result = await probeCswapAccounts({ agentId: 'b', collectorInstanceId: 'c', source: 'openclaw', sessionsDir: '/x', stateDir: temp(), home: '/h', now: NOW, run })
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(run.mock.calls[0].slice(0, 2)).toEqual(['cswap', ['list', '--json']])
+    expect(result).toMatchObject({ ok: true, snapshots: [{ accountKey: accountKey('a@x.com'), usedPercent: 30 }, { accountKey: accountKey('b@x.com') }] })
+    expect(JSON.stringify(result)).not.toContain('@')
+  })
+
+  it('cswap: 없으면 cswap-not-found, Codex·Hermes 는 재지 않는다', async () => {
+    const missing = vi.fn(async () => { throw Object.assign(new Error('x'), { code: 'ENOENT' }) })
+    expect(await probeCswapAccounts({ agentId: 'b', collectorInstanceId: 'c', source: 'claude-code', sessionsDir: '/h/.claude/projects', stateDir: temp(), home: '/h', now: NOW, run: missing }))
+      .toEqual({ ok: false, reason: 'cswap-not-found' })
+    expect(await probeCswapAccounts({ agentId: 'b', collectorInstanceId: 'c', source: 'codex', sessionsDir: '/x', stateDir: temp(), home: '/h', now: NOW }))
+      .toEqual({ ok: false, reason: 'unsupported-source' })
   })
 
   it('Hermes 는 아직 재지 않는다', async () => {
