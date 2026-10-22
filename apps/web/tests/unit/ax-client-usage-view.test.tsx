@@ -7,10 +7,18 @@
  */
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AxClientUsageData, AxMemberServiceRow, AxUsageParticipationRow } from '../../../../packages/lib/src/features/ax/types'
 import { isLateReport } from '../../../../packages/lib/src/features/ax/types'
 import { ClientUsagePanel, compareVersions, limitCaptureLabel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
+
+/** 화면에 보이는 글자만 — 화면 낭독기용 sr-only 설명은 뺀다 */
+const visibleText = (element: Element) => {
+  const clone = element.cloneNode(true) as Element
+  clone.querySelectorAll('.sr-only').forEach((node) => node.remove())
+  return clone.textContent ?? ''
+}
+const HIDDEN = { ignore: '.sr-only, script, style' }
 
 const person = (name: string, service: string, daysLeft: number | null): AxMemberServiceRow => ({
   name,
@@ -121,12 +129,85 @@ describe('클라이언트 화면', () => {
       shared('공용(gpters.ai)', { agentIds: [], currentPercent: null, currentResetsAt: null, lastSeenAt: null }),
     ])} />)
     const bot = screen.getByText('공용(뽀짝이)').closest('tr')!
-    expect(within(bot).getByText('봇 bbojjak·tujjak')).toBeInTheDocument()
+    // 공용·측정 봇은 서비스 · 플랜 호버로
+    expect(within(bot).getByText(/Claude Code Max5x/).getAttribute('data-tip')).toBe('공용 구독\n측정: bbojjak·tujjak')
+    expect(visibleText(bot)).not.toMatch(/bbojjak/)
+    expect(bot.querySelector('.sr-only')!.textContent).toContain('측정: bbojjak·tujjak')
     expect(within(bot).getByText('42%')).toBeInTheDocument()
     expect(within(bot).queryByText('보고 없음')).toBeNull()
     const empty = screen.getByText('공용(gpters.ai)').closest('tr')!
     expect(within(empty).getByText('측정 없음')).toBeInTheDocument()
     expect(within(empty).getByText('보고 없음')).toBeInTheDocument()
+  })
+
+  it('다음 결제는 날짜만 쓰고 남은 일수는 호버로, 대신 결제한 사람도 호버로', () => {
+    const row: AxMemberServiceRow = { ...person('홍길동', 'Claude Code', 2), subscription: { ...person('홍길동', 'Claude Code', 2).subscription!, payer: '김결제' } }
+    render(<ClientUsagePanel days={7} data={data([row])} />)
+    const tr = screen.getByText('홍길동').closest('tr')!
+    const date = within(tr).getByText('10. 25.')
+    expect(date.getAttribute('data-tip')).toBe('D-2')
+    expect(date.className).toContain('accent-orange')
+    expect(visibleText(tr)).not.toMatch(/D-2|김결제/)
+    expect(within(tr).getByText(/Claude Code Pro/).getAttribute('data-tip')).toBe('김결제 결제')
+    // 화면 낭독기는 설명을 칸과 함께 읽는다
+    expect(date.querySelector('.sr-only')!.textContent).toBe(' (D-2)')
+  })
+
+  it('칸 설명은 마우스를 올리거나 포커스하면 바로 뜨고, 상자로 옮겨 가는 동안·포커스가 남은 동안 유지되며, 떠나거나 Esc 면 닫힌다', () => {
+    vi.useFakeTimers()
+    try {
+      render(<ClientUsagePanel days={7} data={data([person('홍길동', 'Claude Code', 2)])} />)
+      const date = screen.getByText('10. 25.')
+      expect(screen.queryByText('D-2', HIDDEN)).toBeNull()
+      fireEvent.mouseEnter(date)
+      expect(screen.getByText('D-2', HIDDEN)).toBeInTheDocument()
+      // 칸에서 상자로 옮겨 가면 유지
+      fireEvent.mouseLeave(date)
+      fireEvent.mouseEnter(screen.getByText('D-2', HIDDEN).closest('[data-placement]')!)
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(screen.getByText('D-2', HIDDEN)).toBeInTheDocument()
+      // 상자에서도 떠나면 닫힌다
+      fireEvent.mouseLeave(screen.getByText('D-2', HIDDEN).closest('[data-placement]')!)
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(screen.queryByText('D-2', HIDDEN)).toBeNull()
+      // 포커스가 남아 있으면 마우스가 떠나도 유지, Esc 면 닫힌다
+      act(() => { date.focus() })
+      fireEvent.mouseEnter(date)
+      fireEvent.mouseLeave(date)
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(screen.getByText('D-2', HIDDEN)).toBeInTheDocument()
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(screen.queryByText('D-2', HIDDEN)).toBeNull()
+      act(() => { date.blur(); date.focus() })
+      expect(screen.getByText('D-2', HIDDEN)).toBeInTheDocument()
+      // 호버 중에 포커스가 들어왔다 나가도(mouseenter → focus → blur) 포인터가 남아 있으면 유지
+      act(() => { date.blur() })
+      act(() => { vi.advanceTimersByTime(500) })
+      fireEvent.mouseEnter(date)
+      act(() => { date.focus() })
+      act(() => { date.blur() })
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(screen.getByText('D-2', HIDDEN)).toBeInTheDocument()
+      // 표를 가로로 스크롤해도(Tab 으로 화면 밖 칸에 들어갈 때 브라우저가 스스로 스크롤) 닫히지 않고 칸을 따라간다
+      const scroller = date.closest('.overflow-x-auto')!
+      const box = () => screen.getByText('D-2', HIDDEN).closest('[data-placement]') as HTMLElement
+      const before = box().style.left
+      const rect = (left: number, width: number) => ({ left, right: left + width, top: 100, bottom: 120, width, height: 20, x: left, y: 100, toJSON: () => ({}) } as DOMRect)
+      vi.spyOn(box().parentElement!, 'getBoundingClientRect').mockReturnValue(rect(0, 1000))
+      vi.spyOn(date, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 340, top: 100, bottom: 120, width: 40, height: 20, x: 300, y: 100, toJSON: () => ({}) } as DOMRect)
+      fireEvent.scroll(scroller)
+      expect(screen.getByText('D-2', HIDDEN)).toBeInTheDocument()
+      expect(box().style.left).not.toBe(before)
+      // 실제 위치(jsdom 은 0)로 되돌려 아래 배치 확인과 섞이지 않게
+      vi.restoreAllMocks()
+      fireEvent.scroll(scroller)
+      // 상자는 포인터를 받는다 — pointer-events-none 이 빠졌는지
+      expect(screen.getByText('D-2', HIDDEN).closest('[data-placement]')!.className).not.toContain('pointer-events-none')
+    } finally {
+      vi.useRealTimers()
+    }
+    // jsdom 은 칸이 화면 맨 위(0)라 위쪽 공간이 없다 — 아래로 띄운다
+    expect(document.querySelector('[data-placement]')!.getAttribute('data-placement')).toBe('below')
   })
 
   it('결정표를 못 읽으면 공용 줄은 측정 없음·보고 없음이 아니라 조회 실패로 쓰고 미보고로 세지 않는다', () => {
@@ -153,9 +234,13 @@ describe('클라이언트 화면', () => {
       ],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('끝 무렵 미수집 1회').parentElement!
-    expect(cell.getAttribute('title')).toContain('끝나기 44시간 전까지만 잡힘')
-    expect(cell.getAttribute('title')).not.toMatch(/93% \([^)]*잡힘/)
+    // 경고는 칸에 쓰지 않고 값 색과 호버 맨 위 줄로
+    const cell = screen.getByText('66%').closest('[data-tip]')!
+    expect(cell.getAttribute('data-tip')).toMatch(/^끝 무렵 미수집 1회 — 실제보다 낮을 수 있음\n/)
+    expect(visibleText(cell)).not.toMatch(/끝 무렵 미수집/)
+    expect(screen.getByText('66%').className).toContain('accent-orange')
+    expect(cell.getAttribute('data-tip')).toContain('끝나기 44시간 전까지만 잡힘')
+    expect(cell.getAttribute('data-tip')).not.toMatch(/93% \([^)]*잡힘/)
   })
 
   it('조기 초기화 회차는 7일 환산으로 평균에 들어갔다고 적고, 끝 무렵 미수집으로 세지 않는다', () => {
@@ -169,11 +254,11 @@ describe('클라이언트 화면', () => {
       ],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('7일 미만 1회 · 7일 환산').parentElement!
-    expect(within(cell).getByText('2회')).toBeInTheDocument()
-    expect(within(cell).getByText('145.3%')).toBeInTheDocument()
-    expect(within(cell).queryByText(/끝 무렵 미수집/)).toBeNull()
-    expect(cell.getAttribute('title')).toMatch(/조기 초기화 42% \(예정 [^)]+\) → 7일 환산 230\.5%/)
+    const cell = screen.getByText('145.3%').closest('[data-tip]')!
+    expect(within(cell as HTMLElement).getByText('2회')).toBeInTheDocument()
+    expect(cell.getAttribute('data-tip')).toMatch(/^7일 미만 1회 · 7일 환산\(추정\)\n/)
+    expect(cell.getAttribute('data-tip')).not.toMatch(/끝 무렵 미수집/)
+    expect(cell.getAttribute('data-tip')).toMatch(/조기 초기화 42% \(예정 [^)]+\) → 7일 환산 230\.5%/)
   })
 
   it('1일 미만 조기 초기화 회차만 있으면 평균 대신 「환산할 회차 없음」만 쓰고 0회는 적지 않는다', () => {
@@ -183,8 +268,9 @@ describe('클라이언트 화면', () => {
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
     const cell = screen.getByText('환산할 회차 없음').closest('td')!
-    expect(cell.textContent).toBe('환산할 회차 없음환산 제외 1회')
-    expect(cell.querySelector('[title]')!.getAttribute('title')).toContain('환산 안 함(1일 미만 또는 환산값 없음)')
+    expect(visibleText(cell)).toBe('환산할 회차 없음')
+    expect(cell.querySelector('[data-tip]')!.getAttribute('data-tip')).toMatch(/^환산 제외 1회\n/)
+    expect(cell.querySelector('[data-tip]')!.getAttribute('data-tip')).toContain('환산 안 함(1일 미만 또는 환산값 없음)')
   })
 
   it('환산 필드가 없는 옛 응답은 실측으로 세고 끝 무렵 경고도 그대로다', () => {
@@ -197,10 +283,10 @@ describe('클라이언트 화면', () => {
       ] as unknown as AxMemberServiceRow['cycleWeeks'],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('66%').parentElement!
-    expect(within(cell).getByText('2회')).toBeInTheDocument()
-    expect(within(cell).getByText('끝 무렵 미수집 1회')).toBeInTheDocument()
-    expect(cell.getAttribute('title')).not.toMatch(/NaN|undefined/)
+    const cell = screen.getByText('66%').closest('[data-tip]')!
+    expect(within(cell as HTMLElement).getByText('2회')).toBeInTheDocument()
+    expect(cell.getAttribute('data-tip')).toContain('끝 무렵 미수집 1회')
+    expect(cell.getAttribute('data-tip')).not.toMatch(/NaN|undefined/)
   })
 
   it('끝 무렵 판정은 반올림 전 시간차로 — 24시간 20분은 늦고, 정확히 24시간은 아니다', () => {

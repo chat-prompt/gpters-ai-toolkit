@@ -11,7 +11,7 @@
  * "보고 없음"으로 밝힌다. 구독 없이 사용 중인 줄도 남긴다 — 그 차이가 다음 달 구독을 정하는 신호다.
  */
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from 'react'
 import type {
   AxClientUsageClientRow,
   AxClientUsageData,
@@ -24,6 +24,7 @@ import type {
 import { AX_USAGE_PARTICIPATION_STATUS_ORDER, LATE_REPORT_GAP_HOURS, formatProjectedPercent, isEarlyReset, isLateReport, judgedWeekPercent, reportGapHours, samePerson } from '@/lib/features/ax'
 import type { AxPanelViewProps } from './types'
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyMap } from '../format'
+import { TIP_BOX } from './primitives'
 
 /** 클라이언트 표시명 */
 const CLIENT_LABELS: Record<AxUsageClient, string> = {
@@ -65,8 +66,100 @@ const SHARE_COLORS: Record<AxUsageClient, string> = {
   codex: '#0284c7',
 }
 
+/** 호버하면 설명이 나오는 칸 — 점선 밑줄로 알린다 */
+const HOVER_CUE = 'cursor-help underline decoration-dotted decoration-[var(--border-hover)] underline-offset-4'
 /** 이 일수 안에 결제되면 경고 톤으로 표시한다 — 뽀밋이 DM 과 같은 기준 */
 const DUE_SOON_DAYS = 7
+
+/** 구성원 표의 칸 툴팁을 띄우는 함수 — 표 바깥(가로 스크롤 밖)에 한 개만 그린다 */
+const CellTipContext = createContext<{
+  show: (element: HTMLElement, lines: string[], via: 'pointer' | 'focus') => void
+  /** 칸에서 포인터·포커스가 떠났다 — 툴팁 위로 옮겨 가는 사이 닫히지 않게 잠깐 기다렸다 닫는다 */
+  leave: (which: 'pointer' | 'focus') => void
+  /** Esc — 바로 닫는다 */
+  hide: () => void
+} | null>(null)
+
+/**
+ * 호버·포커스하면 바로 뜨는 칸 설명 (브라우저 title 은 1초 가까이 늦게 뜬다)
+ *
+ * @param lines - 설명 줄. 빈 줄은 빼고, 없으면 밑줄·툴팁 없이 그대로 그린다
+ */
+function CellTip({ lines, className, children }: { lines: string[]; className?: string; children: ReactNode }) {
+  const tip = useContext(CellTipContext)
+  const shown = lines.filter((line) => line !== '')
+  if (shown.length === 0 || !tip) return <span className={className}>{children}</span>
+  const open = (event: MouseEvent<HTMLSpanElement> | FocusEvent<HTMLSpanElement>) => tip.show(event.currentTarget, shown, event.type === 'focus' ? 'focus' : 'pointer')
+  return (
+    <span
+      tabIndex={0}
+      data-tip={shown.join('\n')}
+      onMouseEnter={open}
+      onFocus={open}
+      onMouseLeave={() => tip.leave('pointer')}
+      onBlur={() => tip.leave('focus')}
+      onKeyDown={(event) => { if (event.key === 'Escape') tip.hide() }}
+      className={`relative ${HOVER_CUE} focus-visible:outline-2 focus-visible:outline-[var(--brand-primary)] ${className ?? ''}`}
+    >
+      {children}
+      {/* 툴팁 상자는 aria-hidden — 화면 낭독기는 이 설명을 칸 내용과 함께 읽는다. 칸이 relative 라 표 밖으로 페이지를 늘리지 않는다 */}
+      <span className="sr-only">{` (${shown.join(', ')})`}</span>
+    </span>
+  )
+}
+
+/** 포인터를 올릴 수 있는 툴팁 상자 — TIP_BOX 의 pointer-events-none 은 클래스를 덧붙여도 CSS 순서상 이기므로 뺀다 */
+const HOVERABLE_TIP_BOX = TIP_BOX.replace('pointer-events-none', '').trim()
+
+/** 칸 툴팁 위치 — 표 컨테이너 기준 */
+interface CellTipState {
+  /** 칸 가로 중심 */
+  left: number
+  /** 칸 윗변·아랫변 */
+  top: number
+  bottom: number
+  /** 칸 윗변의 화면(뷰포트) 기준 위치 — 위쪽 공간이 모자라면 아래로 띄운다 */
+  viewportTop: number
+  wrapWidth: number
+  lines: string[]
+}
+
+/**
+ * 칸 툴팁 상자 — 칸 위(공간이 모자라면 아래), 가로 가운데, 표 폭 안으로 민다. 긴 줄은 접는다(375 폭에서 페이지가 넘치지 않게)
+ *
+ * 상자 크기를 잰 뒤 위치를 DOM 에 바로 적는다 — 상태로 두면 그리는 사이 한 번 더 렌더된다.
+ * 포인터를 상자 위로 옮겨도 닫히지 않는다(WCAG 1.4.13 — 긴 회차 설명을 확대해 따라 읽을 수 있게).
+ */
+function CellTipBox({ tip, onPointer }: { tip: CellTipState | null; onPointer: (inside: boolean) => void }) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const box = boxRef.current
+    if (!box || !tip) return
+    const { width, height } = box.getBoundingClientRect()
+    const half = width / 2
+    // 상단 헤더(약 72px)까지 고려해 위에 다 안 들어가면 칸 아래에 둔다
+    const below = tip.viewportTop - height - 8 < 80
+    box.style.left = `${Math.min(Math.max(tip.left, half), Math.max(half, tip.wrapWidth - half))}px`
+    box.style.top = `${below ? tip.bottom + 8 : tip.top - 8}px`
+    box.style.transform = below ? 'translateX(-50%)' : 'translate(-50%, -100%)'
+    box.dataset.placement = below ? 'below' : 'above'
+  }, [tip])
+  if (!tip) return null
+  const [title, ...rest] = tip.lines
+  return (
+    <div
+      ref={boxRef}
+      aria-hidden
+      onMouseEnter={() => onPointer(true)}
+      onMouseLeave={() => onPointer(false)}
+      className={`${HOVERABLE_TIP_BOX} absolute z-20 w-max whitespace-pre-line`}
+      style={{ left: tip.left, top: tip.top, maxWidth: Math.min(512, tip.wrapWidth) }}
+    >
+      <p className="text-[var(--text-primary)]">{title}</p>
+      {rest.map((line, index) => <p key={index} className="mt-0.5 text-[var(--text-secondary)]">{line}</p>)}
+    </div>
+  )
+}
 
 /**
  * 토큰 수를 짧게 표기
@@ -836,6 +929,56 @@ function PeopleTable({
 }) {
   // 기본은 이름순 — 사람을 찾아 보는 표다. 결제가 임박한 사람은 결제 임박순으로 바꿔 본다
   const [sort, setSort] = useState<PeopleSort>('name')
+  // 칸 툴팁은 가로 스크롤 영역 밖에 하나만 띄운다 — 안에 두면 첫 줄 툴팁이 잘린다
+  const tipRef = useRef<HTMLDivElement>(null)
+  const [tip, setTip] = useState<CellTipState | null>(null)
+  // 칸 포인터·칸 포커스·상자 포인터 중 하나라도 남아 있으면 열어 둔다 (InfoTip 의 useEscDismiss 와 같은 규칙)
+  const holding = useRef({ pointer: false, focus: false, box: false })
+  // 지금 툴팁을 띄운 칸 — 같은 칸에 포인터와 포커스가 함께 있으면 둘 다 유지한다
+  const holder = useRef<HTMLElement | null>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { holder.current = null; setTip(null) } }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    }
+  }, [])
+  const cellTip = useMemo(() => {
+    /** 칸 위치를 표 컨테이너 기준으로 잰다. lines 를 안 주면 지금 내용 그대로 위치만 바꾼다 */
+    const place = (element: HTMLElement, lines?: string[]) => {
+      const wrap = tipRef.current
+      if (!wrap) return
+      const cell = element.getBoundingClientRect()
+      const base = wrap.getBoundingClientRect()
+      const next = { left: cell.left - base.left + cell.width / 2, top: cell.top - base.top, bottom: cell.bottom - base.top, viewportTop: cell.top, wrapWidth: base.width }
+      setTip((current) => (lines ? { ...next, lines } : current && { ...next, lines: current.lines }))
+    }
+    // 칸과 상자 사이 8px 를 지나는 동안 닫히지 않게 잠깐 기다린다
+    const closeSoon = () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+      closeTimer.current = setTimeout(() => {
+        const { pointer, focus, box } = holding.current
+        if (!pointer && !focus && !box) { holder.current = null; setTip(null) }
+      }, 150)
+    }
+    return {
+      leave: (which: 'pointer' | 'focus') => { holding.current[which] = false; closeSoon() },
+      box: (inside: boolean) => { holding.current.box = inside; if (!inside) closeSoon() },
+      hide: () => { holder.current = null; setTip(null) },
+      show: (element: HTMLElement, lines: string[], via: 'pointer' | 'focus') => {
+        if (closeTimer.current) clearTimeout(closeTimer.current)
+        // 다른 칸으로 옮겨 가면 새로 센다. 같은 칸이면 다른 쪽(포인터·포커스) 상태를 지우지 않는다
+        if (holder.current !== element) holding.current = { pointer: false, focus: element === document.activeElement, box: false }
+        holder.current = element
+        holding.current[via] = true
+        place(element, lines)
+      },
+      // 표를 가로로 스크롤하면(Tab 으로 화면 밖 칸에 들어갈 때 브라우저가 스스로 스크롤한다) 띄운 칸을 따라간다
+      follow: () => { if (holder.current) place(holder.current) },
+    }
+  }, [])
 
   if (rows.length === 0) {
     return (
@@ -860,7 +1003,9 @@ function PeopleTable({
   const unsubscribed = rows.filter((row) => !row.subscription).length
 
   return (
-    <div>
+    <CellTipContext.Provider value={cellTip}>
+    <div ref={tipRef} className="relative">
+      <CellTipBox tip={tip} onPointer={cellTip.box} />
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <div className="relative flex flex-wrap items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
           <span>
@@ -869,7 +1014,7 @@ function PeopleTable({
           </span>
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
-            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 「끝 무렵 미수집」으로 표시합니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다.</p>
+            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값을 주황색으로 쓰고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
             <p className="mt-2">공용·서포트 구독은 그 계정을 쓰는 봇의 수집기가 매시간 잰 값입니다(aitk 0.7.28부터). 서비스 · 플랜 칸에 측정한 봇을 적고, 서비스별 주기 평균(사람 평균)에는 넣지 않습니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
@@ -892,7 +1037,8 @@ function PeopleTable({
           ))}
         </div>
       </div>
-      <div className="mt-3 overflow-x-auto">
+      {/* 가로로 스크롤하면 칸만 움직인다 — 툴팁이 띄운 칸을 따라가게 다시 잰다 */}
+      <div className="mt-3 overflow-x-auto" onScroll={cellTip.follow}>
         <table className="w-full min-w-[920px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
@@ -953,6 +1099,7 @@ function PeopleTable({
         </table>
       </div>
     </div>
+    </CellTipContext.Provider>
   )
 }
 
@@ -997,15 +1144,16 @@ function PlanCell({ row }: { row: AxMemberServiceRow }) {
     )
   }
   const payer = row.subscription.payer
+  // 결제·수집 정보는 호버로 — 칸에는 서비스·플랜만 둔다
+  const details = [
+    row.subscription.shared ? '공용 구독' : null,
+    row.account && row.account.agentIds.length > 0 ? `측정: ${row.account.agentIds.join('·')}` : null,
+    payer && payer !== '본인' ? `${payer} 결제` : null,
+  ].filter((line): line is string => line !== null)
   return (
-    <>
+    <CellTip lines={details}>
       {row.service} {row.subscription.plan}
-      {row.subscription.shared && <span className="ml-2 text-xs text-[var(--text-muted)]">공용</span>}
-      {row.account && row.account.agentIds.length > 0 && (
-        <span className="ml-2 text-xs text-[var(--text-muted)]">봇 {row.account.agentIds.join('·')}</span>
-      )}
-      {payer && payer !== '본인' && <span className="ml-2 text-xs text-[var(--text-muted)]">{payer} 결제</span>}
-    </>
+    </CellTip>
   )
 }
 
@@ -1015,13 +1163,14 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
   const daysLeft = row.subscription?.daysLeft
   if (!nextRenewal || daysLeft == null) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
   const [, month, day] = nextRenewal.split('-').map(Number)
+  // 남은 일수는 호버로 — 임박한 결제는 날짜 색으로 드러낸다
   return (
-    <>
-      <span className="text-[var(--text-secondary)]">{`${month}. ${day}.`}</span>{' '}
-      <span className={daysLeft <= DUE_SOON_DAYS ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}>
-        {daysLeft === 0 ? '오늘' : `D-${daysLeft}`}
-      </span>
-    </>
+    <CellTip
+      lines={[daysLeft === 0 ? '오늘' : `D-${daysLeft}`]}
+      className={daysLeft <= DUE_SOON_DAYS ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
+    >
+      {`${month}. ${day}.`}
+    </CellTip>
   )
 }
 
@@ -1100,22 +1249,24 @@ function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleE
       return `${base}${projection} (${seen})`
     })
     .join('\n')
+  // 부가 설명은 호버 맨 위에 — 끝 무렵이 빠진 회차는 실제보다 낮다(경고), 7일 미만 회차는 7일 환산(추정)으로 들어갔다
+  const notes = [
+    late > 0 ? `끝 무렵 미수집 ${late}회 — 실제보다 낮을 수 있음` : null,
+    short > 0 ? `7일 미만 ${short}회 · 7일 환산(추정)` : null,
+    excluded > 0 ? `환산 제외 ${excluded}회` : null,
+  ].filter((line): line is string => line !== null)
   return (
-    <span title={detail}>
+    <CellTip lines={[...notes, ...detail.split('\n')]}>
       {row.cycleAveragePercent === null
         ? <span className="text-[11px] text-[var(--text-muted)]">환산할 회차 없음</span>
         : (
           <>
-            <span className="text-[var(--text-primary)]">{row.cycleAveragePercent}%</span>{' '}
+            {/* 끝 무렵이 빠진 회차가 있으면 값을 경고색으로 — 이유는 호버에 */}
+            <span className={late > 0 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}>{row.cycleAveragePercent}%</span>{' '}
             <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{projected.length}회</span>
           </>
         )}
-      {/* 끝 무렵이 빠진 회차는 실제보다 낮다 — 평균을 그대로 믿지 않게 */}
-      {late > 0 && <span className="block text-[11px] text-[var(--accent-orange)]">끝 무렵 미수집 {late}회</span>}
-      {/* 7일을 못 채운 회차는 7일 환산(추정)으로 평균에 들어갔다는 것만 알린다 — 경고가 아니다 */}
-      {short > 0 && <span className="block text-[11px] text-[var(--text-muted)]">7일 미만 {short}회 · 7일 환산</span>}
-      {excluded > 0 && <span className="block text-[11px] text-[var(--text-muted)]">환산 제외 {excluded}회</span>}
-    </span>
+    </CellTip>
   )
 }
 
