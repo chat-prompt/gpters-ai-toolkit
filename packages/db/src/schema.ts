@@ -1258,8 +1258,12 @@ export const axSubscriptions = pgTable('ax_subscriptions', {
   billingCycle: axBillingCycleEnum('billing_cycle').notNull().default('monthly'),
   status: axSubscriptionStatusEnum('status').notNull().default('active'),
   note: text('note'),
-  // account_key(0047)는 아직 여기 두지 않는다 — 운영 DB 적용 전에 머지되면 `select()` 가 없는 열을 읽어 깨진다.
-  // 시트 동기화가 이 열을 쓰는 PR 에서 0047 운영 적용을 확인한 뒤 더한다.
+  /**
+   * 공용·서포트 구독 계정 이메일의 sha256 hex (소문자·trim 후, 0047). 원문 이메일은 저장하지 않는다.
+   * 구독 시트 동기화가 공용·서포트 행에만 싣고, `ax_account_limit_windows.account_key` 와 잇는다.
+   * 형식은 DB CHECK(`^[a-f0-9]{64}$`)가 막는다
+   */
+  accountKey: text('account_key'),
   /** 마지막 import 시각 */
   syncedAt: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
