@@ -16,12 +16,13 @@
  * Codex 는 초기화 간격이 7일이 아닌 회차가 실측에 있다(2026-10 확인). 회차 수를 그대로 보여주고
  * 7일로 맞추지 않는다.
  *
- * 사람 기준이다 — 사용자 이름이 있는 Anthropic·OpenAI 구독만 대상이고(로스터의 `공용(…)` 구독은 뺀다),
- * 로스터 이름과 계정 표시명은 괄호 별칭까지 같은 사람으로 본다(`박수오` = `박수오 (소파)`, `타타` = `조효희 (타타)`).
+ * 사람 구독은 로스터 이름과 계정 표시명을 괄호 별칭까지 같은 사람으로 본다(`박수오` = `박수오 (소파)`, `타타` = `조효희 (타타)`).
+ * 봇이 쓰는 공용·서포트 구독은 사람에게 묶이지 않아 계정 키(가입 이메일 해시)로 `ax_account_limit_windows` 회차를 잇는다.
+ * 계정 키가 없는 공용·서포트 구독은 뺀다.
  */
 
-import { db, axClientUsage, axSubscriptions, axUsageLimitWindows } from '@gpters/db'
-import { and, eq, gte, isNotNull } from 'drizzle-orm'
+import { db, axAccountLimitWindows, axClientUsage, axSubscriptions, axUsageLimitWindows } from '@gpters/db'
+import { and, eq, gte, isNotNull, sql } from 'drizzle-orm'
 import type {
   AxClientUsageMemberRow,
   AxMemberServiceRow,
@@ -57,6 +58,9 @@ const CLIENT_LABELS: Record<AxUsageClient, string> = {
   codex: 'Codex',
 }
 
+/** 사람이 아니라 봇·팀이 쓰는 구독 — 로스터 이름이 `공용(…)`·`서포트` 로 시작하거나 비었다 (뽀밋이 isSharedAccount 와 같다) */
+export const isSharedOwner = (owner: string | null | undefined): boolean => /^(공용|서포트)/.test(owner?.trim() ?? '') || !owner?.trim()
+
 /** 계산에 필요한 구독 필드 */
 export interface RenewalSubscriptionInput {
   ownerName: string | null
@@ -66,11 +70,18 @@ export interface RenewalSubscriptionInput {
   currency: string
   renewalDay: number | null
   billingCycle: 'monthly' | 'yearly'
+  /** 공용·서포트 구독의 계정 키 (0047). 있으면 이름 대신 이 키로 봇 회차를 잇는다 */
+  accountKey?: string | null
 }
 
 /** 계산에 필요한 사용량 보고 필드 */
 export interface RenewalUsageInput {
+  /** 사람 보고의 이름. 계정 회차(`accountKey`)면 빈 문자열 */
   memberName: string
+  /** 봇 수집기가 잰 계정 회차의 계정 키 (`ax_account_limit_windows`) */
+  accountKey?: string
+  /** 그 계정 회차를 보고한 봇 */
+  agentIds?: string[]
   client: AxUsageClient
   limitUsedPercent: number | string | null
   limitResetsAt: Date | null
@@ -228,15 +239,16 @@ export function buildRenewalRows(
   usage: RenewalUsageInput[],
   now: Date
 ): AxRenewalRow[] {
-  // (이름, 클라이언트) 별로 초기화 전에 받은 보고만 모은다
-  const byOwner = new Map<string, { name: string; client: AxUsageClient; reports: Report[] }>()
+  // (이름 또는 계정 키, 클라이언트) 별로 초기화 전에 받은 보고만 모은다
+  const byOwner = new Map<string, { name: string; accountKey?: string; client: AxUsageClient; reports: Report[]; agentIds: Set<string> }>()
   for (const row of usage) {
     if (!row.limitResetsAt || row.limitUsedPercent === null || row.syncedAt >= row.limitResetsAt) continue
     const usedPercent = Number(row.limitUsedPercent)
     if (!Number.isFinite(usedPercent)) continue
     const name = row.memberName.trim()
-    const key = `${name}\u0000${row.client}`
-    const entry = byOwner.get(key) ?? { name, client: row.client, reports: [] }
+    const key = `${row.accountKey ? `key:${row.accountKey}` : name}\u0000${row.client}`
+    const entry = byOwner.get(key) ?? { name, accountKey: row.accountKey, client: row.client, reports: [], agentIds: new Set<string>() }
+    for (const agentId of row.agentIds ?? []) entry.agentIds.add(agentId)
     entry.reports.push({ resetsAt: row.limitResetsAt, usedPercent, reportedAt: row.syncedAt, seenAt: row.seenAt ?? row.syncedAt, firstSeenAt: row.firstSeenAt ?? row.syncedAt })
     byOwner.set(key, entry)
   }
@@ -245,15 +257,16 @@ export function buildRenewalRows(
   for (const sub of subscriptions) {
     const owner = sub.ownerName?.trim()
     const client = CLIENT_BY_VENDOR[sub.vendor]
-    if (!owner || owner.startsWith('공용') || !client || sub.renewalDay === null || sub.billingCycle !== 'monthly') continue
+    const accountKey = sub.accountKey ?? null
+    const shared = isSharedOwner(owner)
+    if (!owner || (shared && !accountKey) || !client || sub.renewalDay === null || sub.billingCycle !== 'monthly') continue
 
     const { previous, next } = renewalCycle(sub.renewalDay, now)
-    // 같은 사람이 계정 표시명과 로스터 이름을 다르게 쓸 수 있어 별칭까지 맞는 보고를 모두 모은다
-    const mine = clusterWindows(
-      [...byOwner.values()]
-        .filter((entry) => entry.client === client && samePerson(owner, entry.name))
-        .flatMap((entry) => entry.reports)
-    )
+    // 공용·서포트는 계정 키로, 사람은 계정 표시명과 로스터 이름이 다를 수 있어 별칭까지 맞는 보고를 모두 모은다
+    const entries = [...byOwner.values()].filter((entry) => entry.client === client && (shared
+      ? entry.accountKey === accountKey
+      : !entry.accountKey && samePerson(owner, entry.name)))
+    const mine = clusterWindows(entries.flatMap((entry) => entry.reports))
 
     const toWeek = (week: Window) => ({
       resetsAt: week.resetsAt.toISOString(),
@@ -293,6 +306,9 @@ export function buildRenewalRows(
       currentPercent: current?.usedPercent ?? null,
       currentResetsAt: current?.resetsAt.toISOString() ?? null,
       recentWeeks,
+      shared,
+      agentIds: [...new Set(entries.flatMap((entry) => [...entry.agentIds]))].sort(),
+      lastSeenAt: mine.reduce<Date | null>((latest, week) => (!latest || week.lastSeenAt > latest ? week.lastSeenAt : latest), null)?.toISOString() ?? null,
     })
   }
 
@@ -302,7 +318,7 @@ export function buildRenewalRows(
 /**
  * 서비스(클라이언트)별로 사람 구독의 주기 평균을 다시 평균한다 (DB 없이 테스트하는 순수 함수)
  *
- * 주기 평균이 아직 없는 구독(완료 회차 없음)은 빼고, 사람마다 같은 무게로 센다.
+ * 주기 평균이 아직 없는 구독(완료 회차 없음)과 봇이 쓰는 공용·서포트 구독은 빼고, 사람마다 같은 무게로 센다.
  * 한 사람이 같은 서비스 구독을 둘 가지면(결제일이 다르면 값도 다르다) 그 사람 안에서 먼저 평균한다.
  *
  * @param renewals - 갱신 결정표
@@ -313,7 +329,7 @@ export function averageCycleByClient(renewals: AxRenewalRow[]): Partial<Record<A
   const byPerson = new Map<string, { client: AxUsageClient; values: number[] }>()
   for (const row of renewals) {
     const client = CLIENT_BY_VENDOR[row.vendor]
-    if (!client || row.averagePercent === null) continue
+    if (!client || row.averagePercent === null || row.shared) continue
     const key = `${row.ownerName}\u0000${client}`
     byPerson.set(key, { client, values: [...(byPerson.get(key)?.values ?? []), row.averagePercent] })
   }
@@ -354,11 +370,12 @@ export function buildMemberServiceRows(
     const owner = sub.ownerName?.trim() ?? ''
     const client = CLIENT_BY_VENDOR[sub.vendor] ?? null
     // 이름 없는 구독은 import 가 공용으로 다루므로 같이 본다
-    const shared = owner === '' || owner.startsWith('공용')
-    const trackable = client !== null && !shared
+    const shared = isSharedOwner(owner)
+    // 공용·서포트는 계정 키가 있으면 봇 수집기 회차로 판정한다
+    const trackable = client !== null && (!shared || sub.hasAccountKey)
     // 같은 사람의 보고가 여럿이면(옛 이름 행 + 인증 계정 행) 가장 최근 것을 붙인다 — 입력은 토큰 순이라 첫 매칭이 최신이 아니다.
     // 나머지도 이 구독의 것으로 소비한다. 남겨 두면 "구독 없이 사용" 줄이 거짓으로 생긴다
-    const candidates = trackable
+    const candidates = trackable && !shared
       ? usageMembers.filter((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
       : []
     const member = candidates.reduce<AxClientUsageMemberRow | undefined>(
@@ -388,6 +405,10 @@ export function buildMemberServiceRows(
       cycleWeeks: renewal?.weeks ?? [],
       cycleAveragePercent: renewal?.averagePercent ?? null,
       usage: member ? toUsage(member) : null,
+      // 봇 수집기가 잰 계정 회차 — 사람 줄은 사용 보고(usage)가 같은 역할을 한다
+      account: shared && trackable
+        ? { agentIds: renewal?.agentIds ?? [], currentPercent: renewal?.currentPercent ?? null, currentResetsAt: renewal?.currentResetsAt ?? null, lastSeenAt: renewal?.lastSeenAt ?? null }
+        : null,
     }
   })
 
@@ -401,6 +422,7 @@ export function buildMemberServiceRows(
       cycleWeeks: [],
       cycleAveragePercent: null,
       usage: toUsage(member),
+      account: null,
     })
   }
 
@@ -467,6 +489,31 @@ async function loadLimitWindows(since: Date): Promise<Array<RenewalUsageInput & 
 }
 
 /**
+ * 봇 수집기가 잰 계정 회차 테이블(0047)을 사용량 보고 행 모양으로 읽는다.
+ *
+ * 실패를 삼키지 않는다 — 빈 결과로 두면 공용 행이 「측정 없음」으로 보여 조회 실패와 실제 미측정을 가르지 못한다.
+ * 던지면 `loadRenewalData` 가 null 을 돌려 화면이 「조회 실패」로 쓴다(0047 은 운영에 적용돼 있다).
+ *
+ * @param since - 이 시각 이후에 초기화되는 회차만
+ */
+function loadAccountLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
+  return db
+    .select({
+      memberName: sql<string>`''`,
+      accountKey: axAccountLimitWindows.accountKey,
+      agentIds: axAccountLimitWindows.agentIds,
+      client: axAccountLimitWindows.client,
+      limitUsedPercent: axAccountLimitWindows.maxUsedPercent,
+      limitResetsAt: axAccountLimitWindows.resetsAt,
+      syncedAt: axAccountLimitWindows.lastReportedAt,
+      seenAt: axAccountLimitWindows.lastSeenAt,
+      firstSeenAt: axAccountLimitWindows.firstReportedAt,
+    })
+    .from(axAccountLimitWindows)
+    .where(gte(axAccountLimitWindows.resetsAt, since))
+}
+
+/**
  * 구독 갱신 결정표를 읽는다. 개인 식별 데이터라 사람별 행은 관리자에게만 내보낸다(집계값은 모두에게).
  *
  * @returns 실패하면 null — 호출하는 쪽이 사용량 화면 전체를 막지 않게 한다
@@ -475,7 +522,7 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
   try {
     const now = new Date()
     const since = new Date(now.getTime() - 40 * DAY_MS)
-    const [subscriptions, usage, windows] = await Promise.all([
+    const [subscriptions, usage, windows, accountWindows] = await Promise.all([
       db.select().from(axSubscriptions).where(eq(axSubscriptions.status, 'active')),
       // 가장 긴 결제 주기(31일) + 진행 중인 한 주를 덮는다
       db
@@ -492,8 +539,9 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
           gte(axClientUsage.limitResetsAt, since)
         )),
       loadLimitWindows(since),
+      loadAccountLimitWindows(since),
     ])
-    return { rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows], now) }
+    return { rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now) }
   } catch (err) {
     log.error('구독 갱신 데이터 조회 실패', err)
     return null

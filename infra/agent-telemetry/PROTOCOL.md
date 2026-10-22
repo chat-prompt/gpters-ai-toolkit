@@ -140,6 +140,28 @@ hosts/sources. Each host pulls the approved commit and applies this procedure.
 There is no unattended polling of GitHub `main`, and adding a new agent to
 OpenClaw/Hermes alone does not create its private inventory or authorization.
 
+## Weekly limit probe (AITK 0.7.28+)
+
+Each `run` also measures the weekly limit of the account the agent is signed in
+to and sends it as `(client, account key, resets at)`. The account key is
+`sha256(lower(trim(email)))`; the raw email never leaves the host. The dashboard
+joins it to the subscription roster row with the same key, so a shared
+subscription is judged per account no matter how many agents use it.
+
+- `claude-code`/`openclaw`: one short `claude -p --model haiku` call per run
+  (a tiny share of the 5-hour limit), using the installation's Claude config dir.
+- `codex`: reads the newest rollout `rate_limits` after the last account switch.
+  The first run after an account switch reports `no-limit` until a new session runs.
+- `hermes`: not measured yet (`unsupported-source`).
+
+`doctor` shows `limitProbe` but does not count it toward `ok`. Expected values:
+`{ ok: true, client, accountKeyPrefix, usedPercent, resetsAt }`, or `ok: false`
+with `reason` = `no-account` (not signed in to a subscription), `no-limit` (no
+limit in the output yet), `claude-not-found`, `probe-failed`, `account-changed`
+(the account switched mid-measurement; the next run retries) or
+`unsupported-source`. Report `accountKeyPrefix` and `usedPercent` in the
+operations thread so the operator can match agents that share one account.
+
 ## Verify and produce evidence
 
 The reusable verifier requires a clean installed manifest matching the approved

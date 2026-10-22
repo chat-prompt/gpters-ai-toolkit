@@ -9,7 +9,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-const { buildMemberServiceRows, buildRenewalRows, personNameKeys, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
+const { averageCycleByClient, buildMemberServiceRows, buildRenewalRows, personNameKeys, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
 
 /** KST 시각 → Date */
 const kst = (text: string) => new Date(`${text}+09:00`)
@@ -380,7 +380,7 @@ describe('buildMemberServiceRows', () => {
   })
   const subscription = (overrides: Record<string, unknown> = {}) => ({
     ownerName: '홍길동', vendor: 'Anthropic', plan: 'Max20x', amount: 200, currency: 'USD',
-    billingCycle: 'monthly' as const, renewalDay: 25, payer: '본인', status: 'active' as const,
+    billingCycle: 'monthly' as const, renewalDay: 25, payer: '본인', status: 'active' as const, hasAccountKey: false,
     ...overrides,
   })
 
@@ -477,5 +477,56 @@ describe('buildMemberServiceRows', () => {
   it('연간 결제·결제일 없는 구독은 다음 결제일 없이 뒤로 보낸다', () => {
     const rows = buildMemberServiceRows([], [subscription({ billingCycle: 'yearly' }), subscription({ ownerName: '이영희', renewalDay: 3 })], [], now)
     expect(rows.map((row) => [row.name, row.subscription?.daysLeft ?? null])).toEqual([['이영희', 15], ['홍길동', null]])
+  })
+})
+
+describe('공용·서포트 구독 — 계정 키로 봇 수집기 회차를 잇는다', () => {
+  const now = kst('2026-10-19T12:00:00')
+  const KEY = 'a'.repeat(64)
+  const shared = (overrides: Record<string, unknown> = {}) => sub({ ownerName: '공용(뽀짝이)', plan: 'Max5x', accountKey: KEY, ...overrides })
+  const account = (resetsAt: string, syncedAt: string, percent: number, overrides: Record<string, unknown> = {}) =>
+    report(resetsAt, syncedAt, percent, { memberName: '', accountKey: KEY, agentIds: ['bbojjak'], ...overrides })
+
+  it('같은 계정을 여러 봇이 보고하면 한 회차로 묶고 봇을 모두 적는다. 사람 보고·다른 계정은 붙지 않는다', () => {
+    const rows = buildRenewalRows([shared(), sub()], [
+      account('2026-10-14T10:00:00', '2026-10-13T09:00:00', 50),
+      account('2026-10-14T10:00:00', '2026-10-13T10:00:00', 55, { agentIds: ['tujjak'] }),
+      account('2026-10-21T10:00:00', '2026-10-19T09:00:00', 12),
+      account('2026-10-14T10:00:00', '2026-10-13T09:00:00', 99, { accountKey: 'b'.repeat(64) }),
+      // 이름이 같아도 사람 보고는 공용 구독에 붙지 않고, 계정 회차는 사람 구독에 붙지 않는다
+      report('2026-10-14T10:00:00', '2026-10-13T09:00:00', 70, { memberName: '공용(뽀짝이)' }),
+      report('2026-10-14T10:00:00', '2026-10-13T09:00:00', 30),
+    ], now)
+    const [person, bot] = [rows.find((row) => !row.shared)!, rows.find((row) => row.shared)!]
+    expect(bot).toMatchObject({ ownerName: '공용(뽀짝이)', averagePercent: 55, currentPercent: 12, agentIds: ['bbojjak', 'tujjak'] })
+    expect(bot.lastSeenAt).toBe(kst('2026-10-19T09:00:00').toISOString())
+    expect(person).toMatchObject({ averagePercent: 30, agentIds: [], shared: false })
+  })
+
+  it('계정 키가 없는 공용·서포트 구독은 뺀다', () => {
+    expect(buildRenewalRows([shared({ accountKey: null }), shared({ ownerName: '서포트', accountKey: undefined })], [], now)).toEqual([])
+  })
+
+  it('서비스별 평균은 사람 구독만 — 공용 구독은 넣지 않는다', () => {
+    const rows = buildRenewalRows([shared({ plan: 'Max20x' }), sub()], [
+      account('2026-10-14T10:00:00', '2026-10-13T09:00:00', 90),
+      report('2026-10-14T10:00:00', '2026-10-13T09:00:00', 30),
+    ], now)
+    expect(averageCycleByClient(rows)).toEqual({ 'claude-code': 30 })
+  })
+
+  it('구성원 표: 계정 키가 있으면 수집 대상이고 봇 측정을 붙인다. 서포트도 공용이다', () => {
+    const subscriptions = [
+      { ...shared(), amount: 100, payer: '홍지연', status: 'active' as const, hasAccountKey: true },
+      { ...shared({ ownerName: '서포트', accountKey: null }), amount: 200, payer: null, status: 'active' as const, hasAccountKey: false },
+    ]
+    const renewals = buildRenewalRows(subscriptions, [account('2026-10-21T10:00:00', '2026-10-19T09:00:00', 12)], now)
+    const rows = buildMemberServiceRows([], subscriptions, renewals, now)
+    const bot = rows.find((row) => row.name === '공용(뽀짝이)')!
+    expect(bot).toMatchObject({
+      trackable: true, usage: null, subscription: { shared: true },
+      account: { agentIds: ['bbojjak'], currentPercent: 12, lastSeenAt: kst('2026-10-19T09:00:00').toISOString() },
+    })
+    expect(rows.find((row) => row.name === '서포트')).toMatchObject({ trackable: false, account: null, subscription: { shared: true } })
   })
 })

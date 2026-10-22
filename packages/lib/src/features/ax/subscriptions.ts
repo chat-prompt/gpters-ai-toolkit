@@ -128,6 +128,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxSubscriptionDa
           renewalDay: row.renewalDay,
           payer: row.payer,
           status: row.status,
+          hasAccountKey: Boolean(row.accountKey),
         }))
       : null
 

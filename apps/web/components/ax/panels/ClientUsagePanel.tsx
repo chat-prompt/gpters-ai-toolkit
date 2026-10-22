@@ -855,7 +855,8 @@ function PeopleTable({
     return matches.length === 1 ? matches[0] : undefined
   }
   const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
-  const unused = rows.filter((row) => row.subscription && row.trackable && !row.usage).length
+  // 공용 줄의 측정은 결정표에서 온다 — 결정표를 못 읽었으면 미보고로 세지 않는다
+  const unused = rows.filter((row) => row.subscription && row.trackable && !lastReportOf(row) && !(cycleError && row.subscription.shared)).length
   const unsubscribed = rows.filter((row) => !row.subscription).length
 
   return (
@@ -869,6 +870,7 @@ function PeopleTable({
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
             <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 「끝 무렵 미수집」으로 표시합니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다.</p>
+            <p className="mt-2">공용·서포트 구독은 그 계정을 쓰는 봇의 수집기가 매시간 잰 값입니다(aitk 0.7.28부터). 서비스 · 플랜 칸에 측정한 봇을 적고, 서비스별 주기 평균(사람 평균)에는 넣지 않습니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
         </div>
@@ -927,7 +929,7 @@ function PeopleTable({
                     {row.subscription ? formatMoney(row.subscription.amount, row.subscription.currency) : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
-                    <CurrentLimitCell row={row} collector={collectorFor(row)} />
+                    <CurrentLimitCell row={row} collector={collectorFor(row)} cycleError={cycleError} />
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
                     <CycleAverageCell row={row} cycleError={cycleError} />
@@ -936,10 +938,10 @@ function PeopleTable({
                     {row.usage ? formatTokens(row.usage.totalTokens) : EMPTY}
                   </td>
                   <td className={`text-right ${TD} font-mono tabular-nums whitespace-nowrap`}>
-                    {row.usage?.lastReportedAt ? (
-                      <span className="text-[var(--text-muted)]">{formatDate(row.usage.lastReportedAt)}</span>
+                    {lastReportOf(row) ? (
+                      <span className="text-[var(--text-muted)]">{formatDate(lastReportOf(row) ?? '')}</span>
                     ) : row.subscription && row.trackable ? (
-                      <span className="text-xs text-[var(--accent-orange)]">보고 없음</span>
+                      <span className="text-xs text-[var(--accent-orange)]">{cycleError && row.subscription.shared ? '조회 실패' : '보고 없음'}</span>
                     ) : (
                       <span className="text-[var(--text-muted)]">{EMPTY}</span>
                     )}
@@ -952,6 +954,11 @@ function PeopleTable({
       </div>
     </div>
   )
+}
+
+/** 마지막 보고 — 사람 줄은 사용 보고, 공용·서포트 줄은 봇 수집기의 마지막 측정 */
+function lastReportOf(row: AxMemberServiceRow): string | null {
+  return row.usage?.lastReportedAt ?? row.account?.lastSeenAt ?? null
 }
 
 /** 한 사람의 줄 묶음 안 순서 — 결제일이 가까운 구독부터, 구독 없는 사용은 뒤로 */
@@ -994,6 +1001,9 @@ function PlanCell({ row }: { row: AxMemberServiceRow }) {
     <>
       {row.service} {row.subscription.plan}
       {row.subscription.shared && <span className="ml-2 text-xs text-[var(--text-muted)]">공용</span>}
+      {row.account && row.account.agentIds.length > 0 && (
+        <span className="ml-2 text-xs text-[var(--text-muted)]">봇 {row.account.agentIds.join('·')}</span>
+      )}
       {payer && payer !== '본인' && <span className="ml-2 text-xs text-[var(--text-muted)]">{payer} 결제</span>}
     </>
   )
@@ -1020,7 +1030,22 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
  * Claude Code 줄은 수집 연결 상태를 함께 쓴다: 값이 없으면 미수집 대신 상태를, 사용 보고가 없어도 미연결 사유를,
  * 값이 있어도 지금 연결 경고(미연결·한도 미수신)가 있으면 값 아래에 둔다 — 머신이 여러 대면 둘이 함께 참일 수 있다.
  */
-function CurrentLimitCell({ row, collector }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow }) {
+function CurrentLimitCell({ row, collector, cycleError = false }: { row: AxMemberServiceRow; collector?: AxUsageParticipationRow; cycleError?: boolean }) {
+  // 계정 키가 있는 공용 줄은 결정표를 못 읽으면 account 가 비어 온다 — 미측정이 아니라 조회 실패다
+  if (cycleError && row.subscription?.shared && row.trackable) return <span className="text-[11px] text-[var(--accent-orange)]">조회 실패</span>
+  if (row.account) {
+    // 공용·서포트 줄은 봇 수집기가 잰 계정 값이다 — 사람 수집 상태(표시줄 연결)와 무관하다
+    const { currentPercent, currentResetsAt } = row.account
+    if (currentPercent === null) return <span className="text-[11px] text-[var(--text-muted)]">측정 없음</span>
+    return (
+      <span
+        title={currentResetsAt ? `초기화 ${formatDateTime(currentResetsAt)}` : undefined}
+        className={currentPercent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
+      >
+        {currentPercent}%
+      </span>
+    )
+  }
   const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
   const percent = row.usage?.limitUsedPercent ?? null
   if (percent === null) {
