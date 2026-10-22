@@ -300,6 +300,29 @@ export function buildRenewalRows(
 }
 
 /**
+ * 서비스(클라이언트)별로 사람 구독의 주기 평균을 다시 평균한다 (DB 없이 테스트하는 순수 함수)
+ *
+ * 주기 평균이 아직 없는 구독(완료 회차 없음)은 빼고, 사람마다 같은 무게로 센다.
+ * 한 사람이 같은 서비스 구독을 둘 가지면(결제일이 다르면 값도 다르다) 그 사람 안에서 먼저 평균한다.
+ *
+ * @param renewals - 갱신 결정표
+ * @returns 클라이언트 → 평균(소수 첫째 자리). 값이 하나도 없는 클라이언트는 키가 없다
+ */
+export function averageCycleByClient(renewals: AxRenewalRow[]): Partial<Record<AxUsageClient, number>> {
+  const mean = (list: number[]) => list.reduce((sum, value) => sum + value, 0) / list.length
+  const byPerson = new Map<string, { client: AxUsageClient; values: number[] }>()
+  for (const row of renewals) {
+    const client = CLIENT_BY_VENDOR[row.vendor]
+    if (!client || row.averagePercent === null) continue
+    const key = `${row.ownerName}\u0000${client}`
+    byPerson.set(key, { client, values: [...(byPerson.get(key)?.values ?? []), row.averagePercent] })
+  }
+  const values = new Map<AxUsageClient, number[]>()
+  for (const person of byPerson.values()) values.set(person.client, [...(values.get(person.client) ?? []), mean(person.values)])
+  return Object.fromEntries([...values].map(([client, list]) => [client, Math.round(mean(list) * 10) / 10]))
+}
+
+/**
  * 구성원 × 서비스 한 줄 표를 만든다 (DB 없이 테스트하는 순수 함수)
  *
  * 구독 한 건마다 한 줄을 만들고 같은 사람·같은 클라이언트의 사용 보고를 붙인다.
@@ -444,7 +467,7 @@ async function loadLimitWindows(since: Date): Promise<Array<RenewalUsageInput & 
 }
 
 /**
- * 구독 갱신 결정표를 읽는다. 개인 식별 데이터라 관리자 경로에서만 부른다.
+ * 구독 갱신 결정표를 읽는다. 개인 식별 데이터라 사람별 행은 관리자에게만 내보낸다(집계값은 모두에게).
  *
  * @returns 실패하면 null — 호출하는 쪽이 사용량 화면 전체를 막지 않게 한다
  */

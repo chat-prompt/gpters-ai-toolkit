@@ -32,7 +32,7 @@ import type {
 import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from './types'
 import { panelOk, panelError, panelNotConfigured } from './panel'
 import { subscriptionsPanel } from './subscriptions'
-import { buildMemberServiceRows, loadRenewalData } from './subscription-renewals'
+import { averageCycleByClient, buildMemberServiceRows, loadRenewalData } from './subscription-renewals'
 import { createLogger } from '../../core/logger'
 
 const log = createLogger('ax-usage')
@@ -427,7 +427,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
       loadUsageRows(),
       loadInternalMembers(),
       subscriptionsPanel.load(ctx),
-      ctx.isAdmin ? loadRenewalData() : Promise.resolve(null),
+      // 서비스별 주기 평균(집계값)은 모두에게 보여준다. 사람별 회차는 아래에서 관리자에게만 싣는다
+      loadRenewalData(),
     ])
     const subscriptions = subscriptionResult.status === 'ok' ? subscriptionResult.data : null
     const internalMemberRows = internal?.members ?? null
@@ -497,6 +498,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
       }
     }
 
+    const cycleAverages = averageCycleByClient(renewalData?.rows ?? [])
     const byClient: AxClientUsageClientRow[] = Array.from(clientAgg.entries())
       .map(([client, agg]) => ({
         client,
@@ -504,10 +506,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
         totalTokens: agg.tokens,
         sessions: agg.sessions,
         reportsLimit: agg.limits.length > 0,
-        avgLimitUsedPercent:
-          agg.limits.length > 0
-            ? Math.round((agg.limits.reduce((a, b) => a + b, 0) / agg.limits.length) * 10) / 10
-            : null,
+        avgLimitUsedPercent: cycleAverages[client] ?? null,
       }))
       .sort((a, b) => b.totalTokens - a.totalTokens)
 
@@ -592,7 +591,8 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
           ? buildMemberServiceRows(members, subscriptions.members, renewalData?.rows ?? [], new Date())
           : null,
         peopleError: members !== null && !subscriptions?.members,
-        cycleError: ctx.isAdmin && renewalData === null,
+        // 서비스별 주기 평균도 이 데이터로 만든다 — 실패를 "회차 없음"과 가르려면 비관리자에게도 알린다
+        cycleError: renewalData === null,
       },
       [
         ...(internalMembers !== null

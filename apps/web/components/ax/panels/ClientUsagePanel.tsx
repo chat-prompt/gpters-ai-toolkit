@@ -115,6 +115,7 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
                   />
                   {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
                   <p className="mt-2">게이지 가운데 숫자는 Claude Code 몫이고, 아래는 두 서비스의 값입니다.</p>
+                  <p className="mt-2">표의 주기 평균은 구독마다 지난 결제일 이후 회차별 주간 한도 사용률(7일을 못 채운 회차는 7일 환산 추정)을 평균하고, 그 값을 사람마다 같은 무게로 다시 평균한 것입니다. 끝난 회차가 아직 없는 구독은 빠집니다.</p>
                 </InfoTip>
               </div>
               {(['claude-code', 'codex'] as const).map((client) => (
@@ -126,7 +127,7 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
             </div>
             <ServiceShareGauges rows={data.byClient} subscriptions={data.subscriptions} />
             <div className="mt-6">
-              <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} />
+              <ServiceTable rows={data.byClient} total={data.totalTokens} subscriptions={data.subscriptions} cycleError={data.cycleError} />
             </div>
           </div>
         ) : (
@@ -587,23 +588,26 @@ function ShareGauge({ item }: { item: ShareItem }) {
 }
 
 /**
- * 서비스별 요약 표 — 구독(좌석·월 비용)과 사용량(인원·세션·토큰·주간 한도)을 한 줄에 둔다
+ * 서비스별 요약 표 — 구독(좌석·월 비용)과 사용량(인원·세션·토큰·주간 한도 주기 평균)을 한 줄에 둔다
  *
- * 한도 값이 있으면 퍼센트를, 최신 스냅샷이 없으면 "미수집"을 보여준다.
+ * 주기 평균이 있으면 퍼센트를, 최신 스냅샷이 없으면 "미수집"을 보여준다.
  * 사용량을 보고하지 않는 벤더의 구독도 줄로 남긴다.
  *
  * @param rows - 클라이언트별 사용량 집계
  * @param total - 전체 토큰 합계 (비율 계산용)
  * @param subscriptions - 구독 현황. 못 읽었으면 null
+ * @param cycleError - 결제 주기 회차를 못 읽었으면 true — 주기 평균 칸을 "조회 실패"로 쓴다
  */
 function ServiceTable({
   rows,
   total,
   subscriptions,
+  cycleError,
 }: {
   rows: AxClientUsageClientRow[]
   total: number
   subscriptions: AxSubscriptionData | null
+  cycleError: boolean
 }) {
   const vendors = subscriptions?.byVendor ?? []
   const vendorFor = (client: AxUsageClient) =>
@@ -625,7 +629,7 @@ function ServiceTable({
             <th className={`text-right ${TD} ${TH} w-20`}>세션</th>
             <th className={`text-right ${TD} ${TH} w-20`}>토큰</th>
             <th className={`text-left ${TD} ${TH}`}>비중</th>
-            <th className={`text-right ${TD} ${TH} w-[14%]`}>주간 한도</th>
+            <th className={`text-right ${TD} ${TH} w-[14%]`}>주기 평균</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -676,7 +680,7 @@ function ServiceTable({
                   </div>
                 </td>
                 <td className={`text-right ${TD} whitespace-nowrap`}>
-                  <LimitCell row={row} />
+                  <LimitCell row={row} cycleError={cycleError} />
                 </td>
               </tr>
             )
@@ -702,7 +706,7 @@ function ServiceTable({
         색이 text-muted가 아니라 text-secondary인 이유: 이 문장은 타임스탬프 같은 곁가지가 아니라
         표의 빈 칸을 해석하는 데 필요한 설명이라 대비 4.5:1을 넘겨야 한다.
       */}
-      {rows.some((row) => row.client === 'claude-code' && !row.reportsLimit) && (
+      {rows.some((row) => row.client === 'claude-code' && !row.reportsLimit && row.avgLimitUsedPercent === null) && (
         <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
           Claude Code의 토큰·세션 사용량은 수집되고 있습니다. 미수집은 주간 한도와 리셋 시각을
           받지 못했다는 뜻입니다. 이 값은 로컬 상태 표시줄의 한도 캐시가 최근 15분 안에 갱신된
@@ -715,16 +719,18 @@ function ServiceTable({
 }
 
 /**
- * 주간 한도 칸
+ * 주기 평균 칸 — 사람별 주간 한도 주기 평균의 평균
  *
  * @param row - 클라이언트별 집계 한 줄
+ * @param cycleError - 결제 주기 회차를 못 읽었는지
  */
-function LimitCell({ row }: { row: AxClientUsageClientRow }) {
-  if (!row.reportsLimit) {
-    return <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
-  }
+function LimitCell({ row, cycleError }: { row: AxClientUsageClientRow; cycleError: boolean }) {
+  if (cycleError) return <span className="text-[11px] text-[var(--accent-orange)]">조회 실패</span>
+  // 끝난 회차의 주기 평균은 이번 주 스냅샷이 없어도 보여준다
   if (row.avgLimitUsedPercent === null) {
-    return <span className="font-mono text-[var(--text-muted)]">{EMPTY}</span>
+    return row.reportsLimit
+      ? <span className="font-mono text-[var(--text-muted)]">{EMPTY}</span>
+      : <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
   }
   return (
     <span

@@ -152,8 +152,37 @@ describe('clientUsagePanel', () => {
     expect(codex.members).toBe(2)
     expect(codex.sessions).toBe(5)
     expect(codex.totalTokens).toBe(2000)
-    // 34 + 50 의 평균
-    expect(codex.avgLimitUsedPercent).toBe(42)
+    // 주기 평균이 없으면 현재 스냅샷(34, 50)으로 대신하지 않는다
+    expect(codex.reportsLimit).toBe(true)
+    expect(codex.avgLimitUsedPercent).toBeNull()
+  })
+
+  it('서비스별 주간 한도는 사람별 주기 평균의 평균이고, 관리자가 아니어도 집계값은 받는다', async () => {
+    const renewal = (ownerName: string, vendor: string, averagePercent: number | null) => ({
+      ownerName, vendor, plan: 'Max5x', amount: 100, currency: 'USD', renewalDay: 1,
+      nextRenewal: '2026-09-01', daysLeft: 22, weeks: [], averagePercent,
+      currentPercent: null, currentResetsAt: null, recentWeeks: [],
+    })
+    subscriptionMocks.renewals.mockResolvedValue({
+      rows: [
+        renewal('진우', 'OpenAI', 20),
+        renewal('다혜', 'OpenAI', 50.5),
+        renewal('하영', 'OpenAI', null),
+        renewal('진우', 'Anthropic', 80),
+        // 같은 사람의 같은 서비스 구독 둘(결제일이 달라 값도 다름)은 그 사람 안에서 먼저 평균한다 → 진우 70
+        renewal('진우', 'Anthropic', 60),
+        renewal('다혜', 'Anthropic', 40),
+      ],
+    })
+    queueRows([row(), row({ client: 'claude-code', plan: 'Claude Max 5x', limitUsedPercent: '10.00' })])
+
+    const result = await clientUsagePanel.load(MEMBER)
+    const byClient = Object.fromEntries(result.data!.byClient.map((c) => [c.client, c.avgLimitUsedPercent]))
+    // (20 + 50.5) / 2 — 주기 평균이 없는 구독은 빠진다. 현재 스냅샷(34·10)은 쓰지 않는다
+    expect(byClient.codex).toBe(35.3)
+    // (70 + 40) / 2 — 구독 셋을 그대로 평균하면 60이 된다
+    expect(byClient['claude-code']).toBe(55)
+    expect(result.data!.people).toBeNull()
   })
 
   it('기존 Claude 보고에 한도 스냅샷이 없으면 null로 남고 reportsLimit이 false다', async () => {
@@ -192,7 +221,6 @@ describe('clientUsagePanel', () => {
     const claude = result.data!.byClient.find((c) => c.client === 'claude-code')!
 
     expect(claude.reportsLimit).toBe(true)
-    expect(claude.avgLimitUsedPercent).toBe(63)
     expect(result.data!.members![0].limitResetsAt).toBe('2026-08-13T20:00:00.000Z')
   })
 
@@ -583,15 +611,18 @@ describe('clientUsagePanel — 구독 합치기', () => {
     expect(result.highlights?.map((item) => item.label)).toContain('월 구독 비용')
   })
 
-  it('관리자가 아니면 구성원 줄을 주지 않고 갱신 데이터도 읽지 않는다', async () => {
+  it('관리자가 아니면 구성원 줄을 주지 않는다 — 갱신 데이터는 서비스별 집계에만 쓴다', async () => {
     queueRows([row()])
     subscriptionMocks.subscriptions.mockResolvedValue(subscriptionData(null))
+    subscriptionMocks.renewals.mockResolvedValue(null)
 
     const result = await clientUsagePanel.load({ days: 7, isAdmin: false })
 
     expect(result.data?.people).toBeNull()
     expect(result.data?.subscriptions).not.toBeNull()
-    expect(subscriptionMocks.renewals).not.toHaveBeenCalled()
+    expect(subscriptionMocks.renewals).toHaveBeenCalled()
+    // 갱신 데이터를 못 읽으면 비관리자에게도 알린다 — 서비스 칸이 "회차 없음"이 아니라 조회 실패가 된다
+    expect(result.data?.cycleError).toBe(true)
   })
 
   it('구독을 못 읽어도 사용량은 그대로 보여준다', async () => {

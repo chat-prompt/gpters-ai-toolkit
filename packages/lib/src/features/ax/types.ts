@@ -708,7 +708,7 @@ export interface AxClientUsageClientRow {
   sessions: number
   /** 이 클라이언트가 주간 한도 사용률을 보고하는지 */
   reportsLimit: boolean
-  /** 한도를 보고한 사람들의 평균 사용률. reportsLimit이 false면 null */
+  /** 사람 구독별 주기 평균(회차별 7일 환산 평균)을 다시 평균한 값. 완료 회차가 하나도 없으면 null */
   avgLimitUsedPercent: number | null
 }
 
@@ -806,7 +806,7 @@ export interface AxClientUsageData {
   people: AxMemberServiceRow[] | null
   /** 관리자 화면에서 구독 데이터를 못 읽어 구성원 × 구독 표를 만들지 못했는지 */
   peopleError: boolean
-  /** 결제 주기 회차를 못 읽었는지. true 면 주기 평균 칸은 "회차 없음"이 아니라 조회 실패다 */
+  /** 결제 주기 회차를 못 읽었는지(관리자·비관리자 모두). true 면 주기 평균 칸은 "회차 없음"이 아니라 조회 실패다 */
   cycleError: boolean
 }
 
