@@ -96,8 +96,19 @@ describe('subscriptionsPanel', () => {
         renewalDay: 11,
         payer: '본인',
         status: 'active',
+        hasAccountKey: false,
       },
     ])
+  })
+
+  it('공용 구독의 계정 키는 있는지만 싣고 값은 보내지 않는다', async () => {
+    const key = 'f'.repeat(64)
+    queueRows([memberRow({ ownerName: '공용(뽀짝이)', accountKey: key })])
+
+    const result = await subscriptionsPanel.load({ days: 30, isAdmin: true })
+
+    expect(result.data!.members![0].hasAccountKey).toBe(true)
+    expect(JSON.stringify(result)).not.toContain(key)
   })
 
   it('yearly 구독은 12로 나눠 월 환산한다', async () => {

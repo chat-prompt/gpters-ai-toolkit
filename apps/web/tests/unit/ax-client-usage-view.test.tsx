@@ -23,6 +23,7 @@ const person = (name: string, service: string, daysLeft: number | null): AxMembe
   cycleWeeks: [],
   cycleAveragePercent: null,
   usage: { plan: null, totalTokens: 10, sessions: 1, limitUsedPercent: 10, limitResetsAt: null, lastReportedAt: '2026-10-19T00:00:00.000Z' },
+  account: null,
 })
 
 function data(people: AxMemberServiceRow[]): AxClientUsageData {
@@ -106,6 +107,40 @@ describe('클라이언트 화면', () => {
     expect(screen.getByRole('button', { name: '주기 평균 기준' })).toBeInTheDocument()
     // data() 의 syncedAt 은 null — 갱신 이력 없음은 상태 경고라 도움말 밖에도 한 번 더 보인다
     expect(screen.getAllByText('구독 시트 갱신 이력 없음')).toHaveLength(2)
+  })
+
+  it('공용 구독 줄은 봇 수집기 측정을 쓴다 — 측정한 봇, 이번 주 값, 마지막 측정. 측정 전이면 「측정 없음」·「보고 없음」', () => {
+    const shared = (name: string, account: AxMemberServiceRow['account']): AxMemberServiceRow => ({
+      ...person(name, 'Claude Code', 5),
+      subscription: { ...person(name, 'Claude Code', 5).subscription!, shared: true, plan: 'Max5x' },
+      usage: null,
+      account,
+    })
+    render(<ClientUsagePanel days={7} data={data([
+      shared('공용(뽀짝이)', { agentIds: ['bbojjak', 'tujjak'], currentPercent: 42, currentResetsAt: null, lastSeenAt: '2026-10-21T00:00:00.000Z' }),
+      shared('공용(gpters.ai)', { agentIds: [], currentPercent: null, currentResetsAt: null, lastSeenAt: null }),
+    ])} />)
+    const bot = screen.getByText('공용(뽀짝이)').closest('tr')!
+    expect(within(bot).getByText('봇 bbojjak·tujjak')).toBeInTheDocument()
+    expect(within(bot).getByText('42%')).toBeInTheDocument()
+    expect(within(bot).queryByText('보고 없음')).toBeNull()
+    const empty = screen.getByText('공용(gpters.ai)').closest('tr')!
+    expect(within(empty).getByText('측정 없음')).toBeInTheDocument()
+    expect(within(empty).getByText('보고 없음')).toBeInTheDocument()
+  })
+
+  it('결정표를 못 읽으면 공용 줄은 측정 없음·보고 없음이 아니라 조회 실패로 쓰고 미보고로 세지 않는다', () => {
+    const row: AxMemberServiceRow = {
+      ...person('공용(뽀짝이)', 'Claude Code', 5),
+      subscription: { ...person('공용(뽀짝이)', 'Claude Code', 5).subscription!, shared: true },
+      usage: null,
+      account: { agentIds: [], currentPercent: null, currentResetsAt: null, lastSeenAt: null },
+    }
+    render(<ClientUsagePanel days={7} data={{ ...data([row]), cycleError: true }} />)
+    const tr = screen.getByText('공용(뽀짝이)').closest('tr')!
+    expect(within(tr).getAllByText('조회 실패')).toHaveLength(3)
+    expect(within(tr).queryByText('측정 없음')).toBeNull()
+    expect(screen.getByText(/사용 보고 없는 구독 0/)).toBeInTheDocument()
   })
 
   it('주기 평균은 마지막 보고가 초기화보다 24시간 넘게 이른 회차를 「끝 무렵 미수집」으로 센다', () => {

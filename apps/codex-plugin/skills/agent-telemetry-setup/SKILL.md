@@ -85,6 +85,12 @@ Run both commands after installation or after runtime/CLI upgrades:
 ```
 
 `doctor` must report `ok: true`; it must not send data or advance a checkpoint.
+From AITK 0.7.28, `doctor` also shows `limitProbe` — the weekly limit of the
+account this agent is signed in to, with only the first 8 hex digits of the
+account key. It is not part of `ok`. Report `accountKeyPrefix`, `usedPercent`
+and `resetsAt`, or the `reason` when `ok` is false (meanings in
+`infra/agent-telemetry/PROTOCOL.md` › Weekly limit probe). Never print the
+account email.
 If the user requests an immediate upload, use `run` once and check the JSON body
 for `ok: true`. Do not treat exit code alone as proof of server acceptance.
 

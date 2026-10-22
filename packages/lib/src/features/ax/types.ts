@@ -689,6 +689,8 @@ export interface AxSubscriptionMemberRow {
   /** 결제 주체 — "본인" 또는 대신 결제하는 사람 이름 */
   payer: string | null
   status: 'active' | 'canceled'
+  /** 계정 키(0047)가 있는 공용·서포트 구독 — 키 값은 화면에 보내지 않는다 */
+  hasAccountKey: boolean
 }
 
 /** AI 코딩 클라이언트 종류 */
@@ -895,6 +897,12 @@ export interface AxRenewalRow {
   currentResetsAt: string | null
   /** 결제 주기와 무관하게 지난 8일 안에 초기화된 회차 (오래된 순). 뽀밋이 저사용 알림용 */
   recentWeeks: AxRenewalWeek[]
+  /** 봇이 쓰는 공용·서포트 구독 — 계정 키로 봇 수집기 회차를 이었다. 서비스별 사람 평균에서 뺀다 */
+  shared: boolean
+  /** 이 구독 계정의 회차를 보고한 봇 (공용·서포트만, 이름순) */
+  agentIds: string[]
+  /** 이 구독의 회차를 마지막으로 받은 시각 (ISO). 없으면 null */
+  lastSeenAt: string | null
 }
 
 /** 구독 갱신 결정표 데이터 */
@@ -935,6 +943,16 @@ export interface AxMemberServiceRow {
   cycleWeeks: AxRenewalWeek[]
   /** `cycleWeeks` 의 7일 환산 평균 (추정). 환산할 회차가 없으면 null */
   cycleAveragePercent: number | null
+  /** 계정 키가 있는 공용·서포트 구독의 봇 수집기 측정. 사람 줄·계정 키 없는 줄은 null */
+  account: {
+    /** 이 계정 회차를 보고한 봇 */
+    agentIds: string[]
+    /** 진행 중 회차 사용률. 측정이 없으면 null */
+    currentPercent: number | null
+    currentResetsAt: string | null
+    /** 마지막 측정 시각. 한 번도 없으면 null */
+    lastSeenAt: string | null
+  } | null
   usage: {
     plan: string | null
     totalTokens: number
