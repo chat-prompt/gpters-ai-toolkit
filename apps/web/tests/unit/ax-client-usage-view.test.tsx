@@ -121,12 +121,26 @@ describe('클라이언트 화면', () => {
       shared('공용(gpters.ai)', { agentIds: [], currentPercent: null, currentResetsAt: null, lastSeenAt: null }),
     ])} />)
     const bot = screen.getByText('공용(뽀짝이)').closest('tr')!
-    expect(within(bot).getByText('봇 bbojjak·tujjak')).toBeInTheDocument()
+    // 공용·측정 봇은 서비스 · 플랜 호버로
+    expect(within(bot).getByText(/Claude Code Max5x/).getAttribute('title')).toBe('공용 구독\n측정: bbojjak·tujjak')
+    expect(within(bot).queryByText(/bbojjak/)).toBeNull()
     expect(within(bot).getByText('42%')).toBeInTheDocument()
     expect(within(bot).queryByText('보고 없음')).toBeNull()
     const empty = screen.getByText('공용(gpters.ai)').closest('tr')!
     expect(within(empty).getByText('측정 없음')).toBeInTheDocument()
     expect(within(empty).getByText('보고 없음')).toBeInTheDocument()
+  })
+
+  it('다음 결제는 날짜만 쓰고 남은 일수는 호버로, 대신 결제한 사람도 호버로', () => {
+    const row: AxMemberServiceRow = { ...person('홍길동', 'Claude Code', 2), subscription: { ...person('홍길동', 'Claude Code', 2).subscription!, payer: '김결제' } }
+    render(<ClientUsagePanel days={7} data={data([row])} />)
+    const tr = screen.getByText('홍길동').closest('tr')!
+    const date = within(tr).getByText('10. 25.')
+    expect(date.getAttribute('title')).toBe('D-2')
+    expect(date.className).toContain('accent-orange')
+    expect(within(tr).queryByText('D-2')).toBeNull()
+    expect(within(tr).getByText(/Claude Code Pro/).getAttribute('title')).toBe('김결제 결제')
+    expect(within(tr).queryByText(/김결제/)).toBeNull()
   })
 
   it('결정표를 못 읽으면 공용 줄은 측정 없음·보고 없음이 아니라 조회 실패로 쓰고 미보고로 세지 않는다', () => {
@@ -153,7 +167,11 @@ describe('클라이언트 화면', () => {
       ],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('끝 무렵 미수집 1회').parentElement!
+    // 경고는 칸에 쓰지 않고 값 색과 호버 맨 위 줄로
+    const cell = screen.getByText('66%').closest('[title]')!
+    expect(cell.getAttribute('title')).toMatch(/^끝 무렵 미수집 1회 — 실제보다 낮을 수 있음\n/)
+    expect(cell.textContent).not.toMatch(/끝 무렵 미수집/)
+    expect(screen.getByText('66%').className).toContain('accent-orange')
     expect(cell.getAttribute('title')).toContain('끝나기 44시간 전까지만 잡힘')
     expect(cell.getAttribute('title')).not.toMatch(/93% \([^)]*잡힘/)
   })
@@ -169,10 +187,10 @@ describe('클라이언트 화면', () => {
       ],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('7일 미만 1회 · 7일 환산').parentElement!
-    expect(within(cell).getByText('2회')).toBeInTheDocument()
-    expect(within(cell).getByText('145.3%')).toBeInTheDocument()
-    expect(within(cell).queryByText(/끝 무렵 미수집/)).toBeNull()
+    const cell = screen.getByText('145.3%').closest('[title]')!
+    expect(within(cell as HTMLElement).getByText('2회')).toBeInTheDocument()
+    expect(cell.getAttribute('title')).toMatch(/^7일 미만 1회 · 7일 환산\(추정\)\n/)
+    expect(cell.getAttribute('title')).not.toMatch(/끝 무렵 미수집/)
     expect(cell.getAttribute('title')).toMatch(/조기 초기화 42% \(예정 [^)]+\) → 7일 환산 230\.5%/)
   })
 
@@ -183,7 +201,8 @@ describe('클라이언트 화면', () => {
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
     const cell = screen.getByText('환산할 회차 없음').closest('td')!
-    expect(cell.textContent).toBe('환산할 회차 없음환산 제외 1회')
+    expect(cell.textContent).toBe('환산할 회차 없음')
+    expect(cell.querySelector('[title]')!.getAttribute('title')).toMatch(/^환산 제외 1회\n/)
     expect(cell.querySelector('[title]')!.getAttribute('title')).toContain('환산 안 함(1일 미만 또는 환산값 없음)')
   })
 
@@ -197,9 +216,9 @@ describe('클라이언트 화면', () => {
       ] as unknown as AxMemberServiceRow['cycleWeeks'],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('66%').parentElement!
-    expect(within(cell).getByText('2회')).toBeInTheDocument()
-    expect(within(cell).getByText('끝 무렵 미수집 1회')).toBeInTheDocument()
+    const cell = screen.getByText('66%').closest('[title]')!
+    expect(within(cell as HTMLElement).getByText('2회')).toBeInTheDocument()
+    expect(cell.getAttribute('title')).toContain('끝 무렵 미수집 1회')
     expect(cell.getAttribute('title')).not.toMatch(/NaN|undefined/)
   })
 

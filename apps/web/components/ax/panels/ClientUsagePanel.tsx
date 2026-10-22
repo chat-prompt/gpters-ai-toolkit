@@ -65,6 +65,8 @@ const SHARE_COLORS: Record<AxUsageClient, string> = {
   codex: '#0284c7',
 }
 
+/** 호버하면 설명이 나오는 칸 — 점선 밑줄로 알린다 */
+const HOVER_CUE = 'cursor-help underline decoration-dotted decoration-[var(--border-hover)] underline-offset-4'
 /** 이 일수 안에 결제되면 경고 톤으로 표시한다 — 뽀밋이 DM 과 같은 기준 */
 const DUE_SOON_DAYS = 7
 
@@ -869,7 +871,7 @@ function PeopleTable({
           </span>
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
-            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 「끝 무렵 미수집」으로 표시합니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다.</p>
+            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값을 주황색으로 쓰고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
             <p className="mt-2">공용·서포트 구독은 그 계정을 쓰는 봇의 수집기가 매시간 잰 값입니다(aitk 0.7.28부터). 서비스 · 플랜 칸에 측정한 봇을 적고, 서비스별 주기 평균(사람 평균)에는 넣지 않습니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
@@ -997,15 +999,16 @@ function PlanCell({ row }: { row: AxMemberServiceRow }) {
     )
   }
   const payer = row.subscription.payer
+  // 결제·수집 정보는 호버로 — 칸에는 서비스·플랜만 둔다
+  const details = [
+    row.subscription.shared ? '공용 구독' : null,
+    row.account && row.account.agentIds.length > 0 ? `측정: ${row.account.agentIds.join('·')}` : null,
+    payer && payer !== '본인' ? `${payer} 결제` : null,
+  ].filter((line): line is string => line !== null)
   return (
-    <>
+    <span title={details.join('\n') || undefined} className={details.length > 0 ? HOVER_CUE : undefined}>
       {row.service} {row.subscription.plan}
-      {row.subscription.shared && <span className="ml-2 text-xs text-[var(--text-muted)]">공용</span>}
-      {row.account && row.account.agentIds.length > 0 && (
-        <span className="ml-2 text-xs text-[var(--text-muted)]">봇 {row.account.agentIds.join('·')}</span>
-      )}
-      {payer && payer !== '본인' && <span className="ml-2 text-xs text-[var(--text-muted)]">{payer} 결제</span>}
-    </>
+    </span>
   )
 }
 
@@ -1015,13 +1018,14 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
   const daysLeft = row.subscription?.daysLeft
   if (!nextRenewal || daysLeft == null) return <span className="text-[var(--text-muted)]">{EMPTY}</span>
   const [, month, day] = nextRenewal.split('-').map(Number)
+  // 남은 일수는 호버로 — 임박한 결제는 날짜 색으로 드러낸다
   return (
-    <>
-      <span className="text-[var(--text-secondary)]">{`${month}. ${day}.`}</span>{' '}
-      <span className={daysLeft <= DUE_SOON_DAYS ? 'text-[var(--accent-orange)]' : 'text-[var(--text-muted)]'}>
-        {daysLeft === 0 ? '오늘' : `D-${daysLeft}`}
-      </span>
-    </>
+    <span
+      title={daysLeft === 0 ? '오늘' : `D-${daysLeft}`}
+      className={`${HOVER_CUE} ${daysLeft <= DUE_SOON_DAYS ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}
+    >
+      {`${month}. ${day}.`}
+    </span>
   )
 }
 
@@ -1100,21 +1104,23 @@ function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleE
       return `${base}${projection} (${seen})`
     })
     .join('\n')
+  // 부가 설명은 호버 맨 위에 — 끝 무렵이 빠진 회차는 실제보다 낮다(경고), 7일 미만 회차는 7일 환산(추정)으로 들어갔다
+  const notes = [
+    late > 0 ? `끝 무렵 미수집 ${late}회 — 실제보다 낮을 수 있음` : null,
+    short > 0 ? `7일 미만 ${short}회 · 7일 환산(추정)` : null,
+    excluded > 0 ? `환산 제외 ${excluded}회` : null,
+  ].filter((line): line is string => line !== null)
   return (
-    <span title={detail}>
+    <span title={[...notes, ...(notes.length > 0 ? [''] : []), detail].join('\n')} className={HOVER_CUE}>
       {row.cycleAveragePercent === null
         ? <span className="text-[11px] text-[var(--text-muted)]">환산할 회차 없음</span>
         : (
           <>
-            <span className="text-[var(--text-primary)]">{row.cycleAveragePercent}%</span>{' '}
+            {/* 끝 무렵이 빠진 회차가 있으면 값을 경고색으로 — 이유는 호버에 */}
+            <span className={late > 0 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}>{row.cycleAveragePercent}%</span>{' '}
             <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{projected.length}회</span>
           </>
         )}
-      {/* 끝 무렵이 빠진 회차는 실제보다 낮다 — 평균을 그대로 믿지 않게 */}
-      {late > 0 && <span className="block text-[11px] text-[var(--accent-orange)]">끝 무렵 미수집 {late}회</span>}
-      {/* 7일을 못 채운 회차는 7일 환산(추정)으로 평균에 들어갔다는 것만 알린다 — 경고가 아니다 */}
-      {short > 0 && <span className="block text-[11px] text-[var(--text-muted)]">7일 미만 {short}회 · 7일 환산</span>}
-      {excluded > 0 && <span className="block text-[11px] text-[var(--text-muted)]">환산 제외 {excluded}회</span>}
     </span>
   )
 }
