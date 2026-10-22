@@ -140,3 +140,36 @@ describe('summarizeRosterSync', () => {
     expect(summarizeRosterSync(planRosterSync(noPayer, emptyPayer), emptyPayer).unchanged).toBe(true)
   })
 })
+
+describe('account_key 열 (EDU-11519)', () => {
+  const KEY = 'a'.repeat(64)
+  const WITH_KEY = 'name,account,plan,price_usd,renewal_day,payer,account_key'
+  const existing: ExistingSubscriptionValues[] = [{
+    id: 'a', vendor: 'Anthropic', plan: 'Max5x', ownerName: '공용(뽀짝이)', renewalDay: 10, payer: '홍지연', amount: '100.00',
+    currency: 'USD', billingCycle: 'monthly', status: 'active', note: null, accountKey: null,
+  }]
+
+  it('있으면 계정 키를 싣고, 비면 null, 원문 이메일은 거부한다', () => {
+    const { rows, errors } = parseRosterCsv([
+      WITH_KEY,
+      `공용(뽀짝이),anthropic,Max5x,100,10,홍지연,${KEY.toUpperCase()}`,
+      '홍길동,anthropic,Max20x,200,6,본인,',
+      '잘못,anthropic,Max20x,200,7,본인,bot@example.com',
+      `개인,anthropic,Max20x,200,8,본인,${KEY}`,
+    ].join('\n'))
+    expect(rows.map((row) => row.accountKey)).toEqual([KEY, null])
+    expect(errors).toEqual(['4행: account_key 는 sha256 hex 여야 함', '5행: account_key 는 공용·서포트 행에만 둔다'])
+  })
+
+  it('계정 키가 바뀌면 갱신으로 세고, 열이 없던 옛 동기화는 기존 키를 건드리지 않는다', () => {
+    const keyed = parseRosterCsv([WITH_KEY, `공용(뽀짝이),anthropic,Max5x,100,10,홍지연,${KEY}`].join('\n')).rows
+    const changed = summarizeRosterSync(planRosterSync(keyed, existing), existing)
+    expect(changed.counts.update).toBe(1)
+
+    const stored = [{ ...existing[0], accountKey: KEY }]
+    const legacy = parseRosterCsv([HEADER, '공용(뽀짝이),,anthropic,Max5x,100,10,홍지연,'].join('\n')).rows
+    expect(legacy[0]).not.toHaveProperty('accountKey')
+    expect(summarizeRosterSync(planRosterSync(legacy, stored), stored).unchanged).toBe(true)
+    expect(summarizeRosterSync(planRosterSync(keyed, stored), stored).unchanged).toBe(true)
+  })
+})

@@ -31,7 +31,7 @@ export const dynamic = 'force-dynamic'
 
 const MAX_BODY_BYTES = 64 * 1024
 const NO_STORE = { 'Cache-Control': 'private, no-store' }
-const FORBIDDEN_COLUMNS = ['slack_id', 'card_last4']
+const FORBIDDEN_COLUMNS = ['slack_id', 'card_last4', 'email']
 
 function constantTimeEqual(actual: string, expected: string): boolean {
   const actualBytes = Buffer.from(actual)
@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
         billingCycle: axSubscriptions.billingCycle,
         status: axSubscriptions.status,
         note: axSubscriptions.note,
+        accountKey: axSubscriptions.accountKey,
       })
       .from(axSubscriptions)
     const plan = planRosterSync(parsed.rows, existing)
