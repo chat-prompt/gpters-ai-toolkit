@@ -622,6 +622,20 @@ function notifyAgentFileEdit(
     })).catch(() => {})
 }
 
+/** 본문 없이 바뀐 필드를 배포 알림 changelog 에 적을 때 쓰는 이름. 없는 필드는 '설정' */
+const CHANGED_FIELD_LABELS: Partial<Record<string, string>> = {
+  name: '이름', description: '설명', tags: '태그', files: '파일', status: '공개 상태',
+}
+
+/** 키 순서와 무관한 비교용 JSON — jsonb 는 키 순서를 바꿔 돌려준다 */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value ?? null, (_, v) => v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v)
+}
+
+/** null 이 빈 배열과 같은 뜻인 컬럼. platforms 는 null(전체 허용)과 [](어디에도 안 나옴)이 달라 넣지 않는다 */
+const EMPTY_ARRAY_COLUMNS = new Set(['tags', 'dependencies'])
+
 /**
  * Deploy a skill/agent/command to the marketplace
  * Handles both new deployments and updates with automatic versioning
@@ -652,7 +666,7 @@ export async function deploySkill(
     agentModel,
     agentPermissionMode,
     agentSkills,
-    status = 'published',
+    status: inputStatus,
     changelog: explicitChangelog,
     files,
     dependencies,
@@ -684,6 +698,16 @@ export async function deploySkill(
       authorId: catalogItems.authorId,
       files: catalogItems.files,
       orgId: catalogItems.orgId,
+      name: catalogItems.name,
+      description: catalogItems.description,
+      tags: catalogItems.tags,
+      allowedTools: catalogItems.allowedTools,
+      agentModel: catalogItems.agentModel,
+      agentPermissionMode: catalogItems.agentPermissionMode,
+      agentSkills: catalogItems.agentSkills,
+      status: catalogItems.status,
+      dependencies: catalogItems.dependencies,
+      platforms: catalogItems.platforms,
     })
     .from(catalogItems)
     .where(eq(catalogItems.id, id))
@@ -691,6 +715,8 @@ export async function deploySkill(
 
   const isUpdate = existing.length > 0
   const existingItem = isUpdate ? existing[0] : null
+  // status 를 안 보낸 업데이트가 draft·archived 항목을 published 로 되돌리지 않게 기존 값을 쓴다
+  const status = inputStatus ?? existingItem?.status ?? 'published'
 
   if (agentScope && (!authorId || !orgId || (existingItem && (existingItem.orgId !== orgId ||
     (agentScope === 'owner' && existingItem.authorId !== authorId))))) {
@@ -770,10 +796,9 @@ export async function deploySkill(
   // Enforce changelog: required on content-changing updates, auto-fill on new deployments.
   // Metadata-only updates (tags/description/etc) are exempt to match REST PUT behavior.
   let effectiveChangelog = explicitChangelog?.trim() ?? ''
+  const hasContentChange = !existingItem ||
+    (resolvedContent !== undefined && analyzeChanges(existingItem.content, resolvedContent).hasChanges)
   if (isUpdate) {
-    const hasContentChange =
-      resolvedContent !== undefined &&
-      analyzeChanges(existingItem!.content, resolvedContent).hasChanges
     if (hasContentChange && !effectiveChangelog) {
       return {
         success: false,
@@ -811,25 +836,38 @@ export async function deploySkill(
 
   const now = new Date()
 
+  // 업데이트는 보낸 필드만 바꾼다. 빠진 필드를 빈 값으로 덮으면 aitk deploy 처럼 옵션을 생략한 배포가
+  // 설명·태그를 지운다(2026-10-22 ax-workflow).
+  const updateFields = {
+    name,
+    ...(description !== undefined && { description: description || '' }),
+    ...(tags !== undefined && { tags: tags || [] }),
+    ...(allowedTools !== undefined && { allowedTools: allowedTools || null }),
+    ...(agentModel !== undefined && { agentModel: agentModel || null }),
+    ...(agentPermissionMode !== undefined && { agentPermissionMode: agentPermissionMode || null }),
+    ...(agentSkills !== undefined && { agentSkills: agentSkills || null }),
+    status,
+    files: resolvedFiles,
+    ...(dependencies !== undefined && { dependencies: dependencies || [] }),
+    ...(platforms !== undefined && { platforms: platforms || null }),
+  }
+  const changedFields = existingItem ? (Object.keys(updateFields) as (keyof typeof updateFields)[])
+    .filter((key) => canonicalJson(updateFields[key])
+      !== canonicalJson(existingItem[key] ?? (EMPTY_ARRAY_COLUMNS.has(key) ? [] : null))) : []
+  // 본문이 같으면 determineVersion 은 'No changes' 를 준다. 설명·파일만 고친 배포는 무엇을 고쳤는지 남기고,
+  // 아무것도 안 바뀐 재배포는 changelog·스냅샷·알림을 건드리지 않는다.
+  const unchanged = isUpdate && !hasContentChange && changedFields.length === 0
+  const changelog = hasContentChange || unchanged ? versionInfo.changelog
+    : effectiveChangelog || `${[...new Set(changedFields.map((key) => CHANGED_FIELD_LABELS[key] ?? '설정'))].join('·')} 수정`
+
   if (isUpdate) {
-    // Update existing item - only update provided fields, preserve existing for omitted ones
     const update = db
       .update(catalogItems)
       .set({
-        name,
+        ...updateFields,
         content: resolvedContent!,
-        description: description || '',
-        tags: tags || [],
-        allowedTools: allowedTools || null,
-        agentModel: agentModel || null,
-        agentPermissionMode: agentPermissionMode || null,
-        agentSkills: agentSkills || null,
-        status,
         version: versionInfo.version,
-        changelog: versionInfo.changelog,
-        files: resolvedFiles,
-        dependencies: dependencies || [],
-        platforms: platforms || null,
+        ...(!unchanged && { changelog }),
         mcpEnabled: status === 'published',
         visibility: 'public',
         updatedAt: now,
@@ -853,12 +891,12 @@ export async function deploySkill(
       .where(eq(catalogItems.id, id))
       .limit(1)
 
-    if (updatedItem) {
+    if (updatedItem && !unchanged) {
       await createVersionSnapshot(updatedItem, {
         version: versionInfo.version,
-        versionType: versionInfo.changelog?.includes('major') ? 'major' : 
-                     versionInfo.changelog?.includes('minor') ? 'minor' : 'patch',
-        changelog: versionInfo.changelog || undefined,
+        versionType: changelog?.includes('major') ? 'major' : 
+                     changelog?.includes('minor') ? 'minor' : 'patch',
+        changelog: changelog || undefined,
         createdBy: authorId || undefined,
       }).catch((err) => {
         // Log but don't fail the deploy if version snapshot fails
@@ -895,7 +933,9 @@ export async function deploySkill(
     })
   }
 
-  updateItemEmbedding(id, { name, description: description || '', content: resolvedContent!, tags }).catch(() => {})
+  // 생략한 설명·태그는 DB 에 남은 값으로 임베딩한다. 아무것도 안 바뀐 재배포는 다시 만들지 않는다
+  if (!unchanged) updateItemEmbedding(id, { name, description: updateFields.description ?? existingItem?.description ?? '',
+    content: resolvedContent!, tags: updateFields.tags ?? existingItem?.tags }).catch(() => {})
 
   const BASE_URL = getBaseUrl()
 
@@ -904,17 +944,17 @@ export async function deploySkill(
     id,
     version: versionInfo.version,
     previousVersion: existingItem?.version || undefined,
-    changelog: versionInfo.changelog,
+    changelog,
     status,
     webUrl: `${BASE_URL}/${type}/${id}`,
     ...(qualityWarnings.length > 0 ? { qualityWarnings } : {}),
     ...(duplicateWarning ? { duplicateWarning } : {}),
   }
 
-  // Fire-and-forget Slack notification
+  // Fire-and-forget Slack notification — 아무것도 안 바뀐 재배포는 알리지 않는다
   // 에이전트 배포는 배포자를 에이전트로 표시하고, 기존 항목이면 실제 작성자를 함께 알린다.
   // 작성자 이름을 못 찾아도 에이전트 수정 표시는 남긴다('')
-  Promise.all([resolveUserName(authorId), agentScope && existingItem
+  if (!unchanged) Promise.all([resolveUserName(authorId), agentScope && existingItem
     ? resolveUserName(existingItem.authorId).then((name) => name ?? '') : undefined])
     .then(([authorName, itemAuthorName]) => notifySlackDeploy({
       id,
@@ -922,7 +962,7 @@ export async function deploySkill(
       type,
       version: versionInfo.version,
       previousVersion: existingItem?.version || undefined,
-      changelog: versionInfo.changelog,
+      changelog,
       authorName,
       ...(agentScope && { agentId: agentId || 'agent', itemAuthorName }),
       webUrl: response.webUrl,

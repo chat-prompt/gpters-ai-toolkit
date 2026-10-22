@@ -153,6 +153,9 @@ const db = mockDb
 import { deploySkill } from '@/lib/mcp/handlers'
 import { eq } from 'drizzle-orm'
 import { determineVersion } from '../../../../packages/lib/src/versioning/version'
+import { analyzeChanges, createVersionSnapshot } from '../../../../packages/lib/src/versioning/skill-version'
+import { notifySlackDeploy } from '../../../../packages/lib/src/notifications/slack'
+import { prepareTextForEmbedding } from '../../../../packages/lib/src/search/embedding'
 
 /** Helper: create a fluent mock chain that resolves with the given rows */
 function createMockChain(result: unknown[] = []) {
@@ -417,5 +420,81 @@ describe('deploySkill — changelog enforcement (EDU-7987 D3)', () => {
     expect(result.success).toBe(true)
     expect(result.changelog).toBe('Initial release')
     expect(determineVersion).toHaveBeenCalledWith(null, expect.anything(), 'Initial release')
+  })
+})
+
+describe('deploySkill — 생략한 필드 보존과 변경 없는 재배포 알림 (2026-10-22)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const existingRow = {
+    id: 'sample-skill', content: 'same', version: '1.0.19', authorId: 'author', orgId: 'org-1', name: 'Sample',
+    description: '기존 설명', tags: ['ax'], status: 'published',
+    files: [{ type: 'reference', content: 'x', name: 'a.md' }],
+  }
+
+  /** 본문이 같은 업데이트를 돌리고 set 인자를 돌려준다 */
+  async function deployUnchangedContent(input: Record<string, unknown>) {
+    vi.mocked(analyzeChanges).mockReturnValueOnce({ hasChanges: false, breaking: false, newFeatures: false, summary: 'No changes' })
+    vi.mocked(determineVersion).mockReturnValueOnce({ version: '1.0.19', type: 'none', changelog: 'No changes' })
+    vi.mocked(db.select).mockReturnValue(createMockChain([existingRow]) as never)
+    const updateChain = { set: vi.fn().mockReturnThis(), where: vi.fn().mockResolvedValue(undefined) }
+    vi.mocked(db.update).mockReturnValue(updateChain as never)
+    const result = await deploySkill({ id: 'sample-skill', type: 'skill', name: 'Sample', content: 'same', ...input } as never,
+      'author', 'editor', 'org-1')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return { result, set: updateChain.set.mock.calls[0][0] }
+  }
+
+  it('설명·태그를 보내지 않으면 기존 값을 지우지 않는다', async () => {
+    const { set } = await deployUnchangedContent({ files: [{ name: 'a.md', content: 'y', type: 'reference' }] })
+    expect(set).not.toHaveProperty('description')
+    expect(set).not.toHaveProperty('tags')
+    // 검색 임베딩도 남은 설명·태그로 만든다
+    expect(prepareTextForEmbedding).toHaveBeenCalledWith(expect.objectContaining({ description: '기존 설명', tags: ['ax'] }))
+  })
+
+  it('status 를 보내지 않으면 draft 항목을 published 로 바꾸지 않는다', async () => {
+    existingRow.status = 'draft'
+    try {
+      const { set } = await deployUnchangedContent({ description: '새 설명' })
+      expect(set).toMatchObject({ status: 'draft', mcpEnabled: false })
+    } finally {
+      existingRow.status = 'published'
+    }
+  })
+
+  it('아무것도 안 바뀐 재배포는 알림·스냅샷·changelog 를 건드리지 않는다', async () => {
+    // files 는 jsonb 가 키 순서를 바꿔 돌려줘도 같은 값으로 본다
+    const { result, set } = await deployUnchangedContent({ description: '기존 설명', tags: ['ax'],
+      files: [{ name: 'a.md', content: 'x', type: 'reference' }] })
+    expect(result.success).toBe(true)
+    expect(set).not.toHaveProperty('changelog')
+    expect(notifySlackDeploy).not.toHaveBeenCalled()
+    expect(createVersionSnapshot).not.toHaveBeenCalled()
+    expect(prepareTextForEmbedding).not.toHaveBeenCalled()
+  })
+
+  it('기존 null 과 빈 배열은 같은 값으로 본다', async () => {
+    const { result } = await deployUnchangedContent({ description: '기존 설명', tags: ['ax'], dependencies: [],
+      files: [{ name: 'a.md', content: 'x', type: 'reference' }] })
+    expect(result.changelog).toBe('No changes')
+    expect(notifySlackDeploy).not.toHaveBeenCalled()
+  })
+
+  it('platforms 의 null 과 빈 배열은 다른 값으로 본다', async () => {
+    const { result } = await deployUnchangedContent({ description: '기존 설명', tags: ['ax'], platforms: [],
+      files: [{ name: 'a.md', content: 'x', type: 'reference' }] })
+    expect(result.changelog).toBe('설정 수정')
+  })
+
+  it('설명만 고치면 No changes 대신 무엇을 고쳤는지 알린다', async () => {
+    const { result } = await deployUnchangedContent({ description: '새 설명' })
+    expect(result.changelog).toBe('설명 수정')
+    expect(notifySlackDeploy).toHaveBeenCalledWith(expect.objectContaining({ changelog: '설명 수정' }))
+  })
+
+  it('본문이 같아도 배포자가 적은 changelog 는 버리지 않는다', async () => {
+    const { result } = await deployUnchangedContent({ description: '새 설명', changelog: '메타 설명 다듬기' })
+    expect(result.changelog).toBe('메타 설명 다듬기')
   })
 })
