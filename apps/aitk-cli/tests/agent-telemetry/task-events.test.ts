@@ -61,3 +61,11 @@ it('defers future events without advancing over them',()=>{
  expect(first.events).toEqual([]); expect(first.checkpoint?.offset).toBe(0)
  expect(collectTaskEvents('test-agent','codex',first.checkpoint,home,new Date('2030-01-02')).events).toEqual([e])
 })
+it('keeps collecting when only the device number changed (macOS remount), but stops on a different inode or truncation', () => {
+  appendTaskEvent('test-agent','hermes',event(),home)
+  const first = collectTaskEvents('test-agent','hermes',undefined,home)
+  const next = event(); appendTaskEvent('test-agent','hermes',next,home)
+  expect(collectTaskEvents('test-agent','hermes',{ ...first.checkpoint!, dev: '999' },home).events).toEqual([next])
+  expect(()=>collectTaskEvents('test-agent','hermes',{ ...first.checkpoint!, ino: '1' },home)).toThrow('Task journal changed')
+  expect(()=>collectTaskEvents('test-agent','hermes',{ ...first.checkpoint!, offset: 10_000_000 },home)).toThrow('Task journal changed')
+})

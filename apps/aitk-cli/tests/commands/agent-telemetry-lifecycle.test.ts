@@ -9,6 +9,7 @@ vi.mock('../../src/auth.js', () => ({ resolveToken: vi.fn(() => 'user-oauth-toke
 // 실제 claude 를 띄우지 않는다 — 한도 측정 자체는 tests/agent-telemetry/limit-probe.test.ts 가 본다
 vi.mock('../../src/agent-telemetry/limit-probe.js', () => ({
   probeAgentLimit: vi.fn(async () => ({ ok: false, reason: 'unsupported-source' })),
+  probeCswapAccounts: vi.fn(async () => ({ ok: false, reason: 'cswap-not-found' })),
   sendAgentLimitSnapshot: vi.fn(async () => true),
 }))
 vi.mock('../../src/output.js', () => ({
@@ -268,6 +269,23 @@ describe('agent telemetry lifecycle commands', () => {
     await runAgentTelemetryDoctor({ ...lifecycle(), now: new Date('2026-08-27T02:00:00Z'), collectorVersion: '0.7.0', cliScriptPath: cliPath, nodePath, limitProbe: vi.fn(async () => ({ ok: false as const, reason: 'no-account' as const })) })
     const doctor = vi.mocked(jsonOut).mock.calls.at(-1)?.[0] as { checks: Record<string, unknown> }
     expect(doctor.checks.limitProbe).toEqual({ ok: false, reason: 'no-account' })
+    expect(doctor.checks.cswapAccounts).toEqual({ ok: false, reason: 'cswap-not-found' })
+  })
+
+  it('run은 cswap 계정마다 한도를 보내고, 활성 계정 측정이 실패해도 cswap 측정은 보낸다', async () => {
+    await runAgentTelemetryInstall({
+      ...lifecycle(), sessionsDir, checkpointDir, days: 7, collectorVersion: '0.7.0',
+      collectorId: 'collector-test', cliScriptPath: cliPath, nodePath, noSchedule: true,
+      platform: 'darwin', keychainAccount: 'tester',
+    })
+    const snapshot = (key: string) => ({
+      agentId: 'test-agent', collectorInstanceId: 'collector-test', client: 'claude-code' as const, accountKey: key.repeat(64),
+      usedPercent: 30, resetsAt: '2026-08-30T00:00:00.000Z', observedAt: '2026-08-27T01:00:00.000Z',
+    })
+    vi.mocked(sendAgentLimitSnapshot).mockClear()
+    const cswapProbe = vi.fn(async () => ({ ok: true as const, snapshots: [snapshot('a'), snapshot('b')] }))
+    await runAgentTelemetryRun({ ...lifecycle(), limitProbe: vi.fn(async () => ({ ok: false as const, reason: 'no-account' as const })), cswapProbe })
+    expect(vi.mocked(sendAgentLimitSnapshot).mock.calls.map(([s]) => s.accountKey[0])).toEqual(['a', 'b'])
   })
 
   it('upgrade는 설치 기록의 CLI 경로·버전을 실행 중인 CLI로 바꾸고 credential·checkpoint·collector ID를 보존한다', async () => {

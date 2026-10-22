@@ -27,7 +27,7 @@ import {
 import type { AgentTelemetrySource } from '../agent-telemetry/types.js'
 import { error, jsonOut } from '../output.js'
 import { checkpointName, runAgentTelemetryCollect } from './agent-telemetry.js'
-import { probeAgentLimit, sendAgentLimitSnapshot, type AgentLimitProbeResult } from '../agent-telemetry/limit-probe.js'
+import { probeAgentLimit, probeCswapAccounts, sendAgentLimitSnapshot, type AgentLimitProbeResult, type CswapProbeResult } from '../agent-telemetry/limit-probe.js'
 
 const SOURCES = new Set<AgentTelemetrySource>(['openclaw', 'claude-code', 'codex', 'hermes'])
 const COLLECTOR_TOKEN = /^agt_[a-f0-9]{64}$/
@@ -82,6 +82,8 @@ export interface AgentTelemetryLifecycleOptions {
   now?: Date
   /** 계정 주간 한도 측정. 생략하면 실제로 잰다 (테스트에서 바꿔 끼운다) */
   limitProbe?: typeof probeAgentLimit
+  /** 테스트용 — cswap 전 계정 측정 */
+  cswapProbe?: typeof probeCswapAccounts
 }
 
 /** upgrade·doctor가 "지금 실행 중인 CLI"를 알기 위해 받는 정보. 생략하면 process.argv[1]·process.execPath·설치 기록을 쓴다. */
@@ -392,16 +394,52 @@ export async function runAgentTelemetryRun(options: AgentTelemetryLifecycleOptio
   if (result.dryRun) error('Installed telemetry runner unexpectedly used dry-run mode')
   // 사용량을 보낸 뒤 계정 주간 한도를 잰다. 실패해도 이번 수집은 성공이다 — 이유만 stderr 에 남긴다
   const probe = await measureLimit(installation, options)
-  if (!probe.ok) {
-    process.stderr.write(`limit probe skipped: ${probe.reason}\n`)
+  if (!probe.ok) process.stderr.write(`limit probe skipped: ${probe.reason}\n`)
+  else {
+    try {
+      const recorded = await sendAgentLimitSnapshot(probe.snapshot, installation.serverUrl, token)
+      process.stderr.write(`limit probe: ${probe.snapshot.client} ${probe.snapshot.usedPercent}% (recorded=${recorded})\n`)
+    } catch (cause) {
+      process.stderr.write(`limit probe not sent: ${cause instanceof Error ? cause.message : 'unknown error'}\n`)
+    }
+  }
+  // cswap 으로 돌려 쓰는 다른 계정들 — cswap 이 없는 머신은 조용히 건너뛴다
+  const cswap = await measureCswap(installation, options)
+  if (!cswap.ok) {
+    if (cswap.reason === 'cswap-failed') process.stderr.write('cswap probe skipped: cswap-failed\n')
     return
   }
-  try {
-    const recorded = await sendAgentLimitSnapshot(probe.snapshot, installation.serverUrl, token)
-    process.stderr.write(`limit probe: ${probe.snapshot.client} ${probe.snapshot.usedPercent}% (recorded=${recorded})\n`)
-  } catch (cause) {
-    process.stderr.write(`limit probe not sent: ${cause instanceof Error ? cause.message : 'unknown error'}\n`)
+  let sent = 0
+  for (const snapshot of cswap.snapshots) {
+    try {
+      await sendAgentLimitSnapshot(snapshot, installation.serverUrl, token)
+      sent++
+    } catch (cause) {
+      process.stderr.write(`cswap probe not sent: ${cause instanceof Error ? cause.message : 'unknown error'}\n`)
+    }
   }
+  process.stderr.write(`cswap probe: ${sent}/${cswap.snapshots.length} accounts sent\n`)
+}
+
+/**
+ * cswap 에 등록된 계정 전부의 주간 한도를 잰다. 테스트는 `cswapProbe` 로 바꿔 끼운다
+ *
+ * @param installation - 설치 기록
+ * @param options - home·now·cswapProbe
+ */
+function measureCswap(
+  installation: AgentTelemetryInstallation,
+  options: Pick<AgentTelemetryLifecycleOptions, 'home' | 'now' | 'cswapProbe'>
+): Promise<CswapProbeResult> {
+  return (options.cswapProbe ?? probeCswapAccounts)({
+    agentId: installation.agentId,
+    collectorInstanceId: installation.collectorId,
+    source: installation.source,
+    sessionsDir: installation.sessionsDir,
+    stateDir: installation.checkpointDir,
+    home: options.home,
+    now: options.now,
+  }).catch((): CswapProbeResult => ({ ok: false, reason: 'cswap-failed' }))
 }
 
 /**
@@ -540,6 +578,7 @@ export async function runAgentTelemetryDoctor(
     scheduleLoaded !== false && dryRun?.batch.collection.healthStatus === 'healthy'
   // 한도 측정은 건강 판정에 넣지 않는다 — Hermes·API 키 봇처럼 원래 잴 수 없는 설치도 수집은 정상이다
   const limit = await measureLimit(installation, options)
+  const cswap = await measureCswap(installation, options)
 
   jsonOut({
     ok: healthy,
@@ -567,6 +606,10 @@ export async function runAgentTelemetryDoctor(
       limitProbe: limit.ok
         ? { ok: true, client: limit.snapshot.client, accountKeyPrefix: limit.snapshot.accountKey.slice(0, 8), usedPercent: limit.snapshot.usedPercent, resetsAt: limit.snapshot.resetsAt }
         : { ok: false, reason: limit.reason },
+      // cswap 계정별 — 계정 키 앞 8자와 사용률만
+      cswapAccounts: cswap.ok
+        ? { ok: true, accounts: cswap.snapshots.map((s) => ({ accountKeyPrefix: s.accountKey.slice(0, 8), usedPercent: s.usedPercent, resetsAt: s.resetsAt, observedAt: s.observedAt })) }
+        : { ok: false, reason: cswap.reason },
     },
   })
   if (!healthy) process.exitCode = 1

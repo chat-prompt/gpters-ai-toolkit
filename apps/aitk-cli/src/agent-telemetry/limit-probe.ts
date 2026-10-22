@@ -11,6 +11,10 @@
  *   롤아웃에는 계정이 남지 않는다 — 계정이 바뀌면 그 시각을 로컬에 적고, 그 뒤에 관측된 한도만 보낸다.
  *   그렇지 않으면 옛 계정의 높은 값이 새 계정 회차의 최댓값으로 굳는다.
  *
+ * - cswap: 봇이 cswap 으로 여러 Claude 계정을 돌려 쓰면 지금 켜진 계정 하나만 위 방법으로 잴 수 있다.
+ *   `cswap list --json` 이 계정마다 주간 사용률을 조회해 주므로 그것을 그대로 싣는다(계정을 바꾸지 않는다 —
+ *   켜진 계정·세션이 쓰는 계정의 토큰은 cswap 이 건드리지 않고, 꺼진 계정만 자체 잠금 아래 갱신한다).
+ *
  * 측정은 사용량 수집을 막지 않는다. 실패하면 이유 하나만 돌려준다.
  * 계정 키는 솔트 없는 sha256 이라 익명화가 아니라 가명화다 — 후보 이메일을 알면 되돌릴 수 있다.
  * 사내 공용 계정을 잇는 용도라 그대로 둔다.
@@ -55,6 +59,8 @@ export interface AgentLimitProbeInput {
 }
 
 const PROBE_TIMEOUT_MS = 60_000
+/** cswap 이 마지막으로 성공한 조회(lastGoodUsage)는 이만큼까지만 쓴다 — 키체인이 잠겨 지금 조회가 실패한 경우 */
+const CSWAP_STALE_MS = 3 * 3_600_000
 /** Codex 롤아웃은 이보다 오래된 한도를 보지 않는다 — 회차(7일)를 넘긴 값은 쓸모가 없다 */
 const CODEX_LOOKBACK_MS = 8 * 86_400_000
 
@@ -255,6 +261,81 @@ export async function probeAgentLimit(input: AgentLimitProbeInput): Promise<Agen
   return {
     ok: true,
     snapshot: { ...base, client: 'claude-code', accountKey: accountKey(email), ...limit, observedAt: now.toISOString() },
+  }
+}
+
+/** cswap 전 계정 측정 결과 */
+export type CswapProbeResult =
+  | { ok: true; snapshots: AgentLimitSnapshot[] }
+  | { ok: false; reason: 'unsupported-source' | 'cswap-not-found' | 'cswap-failed' }
+
+type CswapWindow = { pct?: unknown; resetsAt?: unknown }
+type CswapAccount = {
+  email?: unknown
+  usage?: { sevenDay?: CswapWindow } | null
+  lastGoodUsage?: { sevenDay?: CswapWindow } | null
+  lastGoodFetchedAt?: unknown
+}
+
+/**
+ * `cswap list --json` 출력에서 계정별 주간 사용률을 꺼낸다
+ *
+ * 지금 조회(usage)가 있으면 그 값과 지금 시각, 없으면 3시간 안에 성공한 마지막 조회(lastGoodUsage)와 그 시각을 쓴다.
+ * 이미 지난 회차·이메일 없는 계정은 뺀다.
+ *
+ * @param output - cswap 출력
+ * @param now - 지금
+ */
+export function parseCswapAccounts(output: string, now: Date): Array<{ email: string; usedPercent: number; resetsAt: string; observedAt: string }> {
+  const accounts = (JSON.parse(output) as { accounts?: unknown }).accounts
+  const result: Array<{ email: string; usedPercent: number; resetsAt: string; observedAt: string }> = []
+  // 이상한 항목 하나 때문에 정상 계정까지 버리지 않는다
+  for (const account of (Array.isArray(accounts) ? accounts : []) as Array<CswapAccount | null>) {
+    if (!account || typeof account !== 'object' || typeof account.email !== 'string' || !account.email.includes('@')) continue
+    const fetchedAt = typeof account.lastGoodFetchedAt === 'string' ? Date.parse(account.lastGoodFetchedAt) : Number.NaN
+    const age = now.getTime() - fetchedAt
+    const fresh = account.usage && typeof account.usage === 'object' ? account.usage.sevenDay : undefined
+    // 서버는 미래 관측을 받지 않는다 — 시계가 앞선 cswap 기록은 쓰지 않는다
+    const stale = age >= 0 && age <= CSWAP_STALE_MS && account.lastGoodUsage && typeof account.lastGoodUsage === 'object'
+      ? account.lastGoodUsage.sevenDay : undefined
+    const week = fresh ?? stale
+    const observedAt = fresh ? now : new Date(fetchedAt)
+    const pct = week?.pct
+    const resetsAt = typeof week?.resetsAt === 'string' ? Date.parse(week.resetsAt) : Number.NaN
+    if (typeof pct !== 'number' || !Number.isFinite(pct) || pct < 0 || pct > 100) continue
+    // 서버 계약과 같다 — 초기화는 지금 뒤, 관측 뒤 8일 안
+    if (!Number.isFinite(resetsAt) || resetsAt <= now.getTime() || resetsAt > observedAt.getTime() + CODEX_LOOKBACK_MS) continue
+    result.push({ email: account.email, usedPercent: pct, resetsAt: new Date(resetsAt).toISOString(), observedAt: observedAt.toISOString() })
+  }
+  return result
+}
+
+/**
+ * cswap 에 등록된 Claude 계정 전부의 주간 사용률을 잰다. cswap 이 없으면 아무것도 하지 않는다
+ *
+ * @param input - 설치 정보
+ */
+export async function probeCswapAccounts(input: AgentLimitProbeInput): Promise<CswapProbeResult> {
+  if (input.source !== 'claude-code' && input.source !== 'openclaw') return { ok: false, reason: 'unsupported-source' }
+  const home = input.home ?? homedir()
+  const now = input.now ?? new Date()
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, PATH: probePath(home) }
+  const configDir = claudeConfigDirFor(input.source, input.sessionsDir, home)
+  if (configDir) env.CLAUDE_CONFIG_DIR = configDir
+  else delete env.CLAUDE_CONFIG_DIR
+  let output: string
+  try {
+    output = await (input.run ?? defaultRun)('cswap', ['list', '--json'], env, tmpdir())
+  } catch (cause) {
+    return { ok: false, reason: (cause as { code?: unknown })?.code === 'ENOENT' ? 'cswap-not-found' : 'cswap-failed' }
+  }
+  try {
+    const snapshots = parseCswapAccounts(output, now).map(({ email, ...limit }): AgentLimitSnapshot => ({
+      agentId: input.agentId, collectorInstanceId: input.collectorInstanceId, client: 'claude-code', accountKey: accountKey(email), ...limit,
+    }))
+    return { ok: true, snapshots }
+  } catch {
+    return { ok: false, reason: 'cswap-failed' }
   }
 }
 
