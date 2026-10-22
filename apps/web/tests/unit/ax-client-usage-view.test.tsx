@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AxClientUsageData, AxMemberServiceRow, AxUsageParticipationRow } from '../../../../packages/lib/src/features/ax/types'
 import { isLateReport } from '../../../../packages/lib/src/features/ax/types'
-import { ClientUsagePanel, compareVersions, limitCaptureLabel, formatShare, gaugeSegments } from '../../components/ax/panels/ClientUsagePanel'
+import { ClientUsagePanel, compareVersions, limitCaptureLabel, formatShare, gaugeSegments, weekAverageTone, weekPaceTone } from '../../components/ax/panels/ClientUsagePanel'
 
 /** 화면에 보이는 글자만 — 화면 낭독기용 sr-only 설명은 뺀다 */
 const visibleText = (element: Element) => {
@@ -140,6 +140,100 @@ describe('클라이언트 화면', () => {
     expect(within(empty).getByText('보고 없음')).toBeInTheDocument()
   })
 
+  it('주간 한도 색 기준 — 주기 평균은 20% 미만·100% 초과, 이번 주는 이어진 일수만큼의 속도(하루 20/7%·100/7%)', () => {
+    expect([19.9, 20, 100, 100.1].map(weekAverageTone)).toEqual(['low', null, null, 'over'])
+    const now = Date.parse('2026-10-22T00:00:00Z')
+    const resetsIn = (days: number) => new Date(now + days * 86_400_000).toISOString()
+    // 3.5일 지남(3.5일 남음): 10% 이상·50% 이하가 보통
+    expect(weekPaceTone(9.9, resetsIn(3.5), now)).toBe('low')
+    expect(weekPaceTone(10, resetsIn(3.5), now)).toBeNull()
+    expect(weekPaceTone(50, resetsIn(3.5), now)).toBeNull()
+    expect(weekPaceTone(50.1, resetsIn(3.5), now)).toBe('over')
+    // 초기화 시각이 없거나, 1일 미만(초기화 직후 몇 시간은 0%·1% 만으로 갈린다)이거나, 이미 끝난 회차는 판정하지 않는다
+    expect(weekPaceTone(0, null, now)).toBeNull()
+    expect(weekPaceTone(0, resetsIn(7), now)).toBeNull()
+    expect(weekPaceTone(5, resetsIn(6.5), now)).toBeNull()
+    expect(weekPaceTone(10, resetsIn(-1), now)).toBeNull()
+    // 딱 1일 지남: 하루 20/7%(≈2.86) 미만이면 덜 씀
+    expect(weekPaceTone(2.8, resetsIn(6), now)).toBe('low')
+  })
+
+  it('속도 판정 시각은 1분마다 새로 잡는다 — 탭을 켜 둔 채 시간이 지나도 옛 시각으로 판정하지 않는다', () => {
+    vi.useFakeTimers()
+    try {
+      const start = Date.parse('2026-10-20T00:00:00Z')
+      vi.setSystemTime(start)
+      // 6.5일 남음(0.5일 지남) — 1일 미만이라 판정하지 않는다
+      const resetsAt = new Date(start + 6.5 * 86_400_000).toISOString()
+      const row = { ...person('홍길동', 'Claude Code', 2), usage: { ...person('홍길동', 'Claude Code', 2).usage!, limitUsedPercent: 43, limitResetsAt: resetsAt } }
+      render(<ClientUsagePanel days={7} data={data([row])} />)
+      expect(screen.getByText('43%').className).not.toContain('accent-orange')
+      // 2일 뒤: 2.5일 지남 → 100% 선은 약 35.7% — 43% 는 넘침
+      act(() => { vi.setSystemTime(start + 2 * 86_400_000); vi.advanceTimersByTime(60_000) })
+      expect(screen.getByText('43%').className).toContain('accent-orange')
+      // 툴팁을 연 채 시간이 지나면 열린 설명도 새 판정으로 바뀐다
+      act(() => { screen.getByText('43%').focus() })
+      expect(screen.getByText('이 속도면 주간 한도를 넘음', HIDDEN)).toBeInTheDocument()
+      // 2일 더(4.5일 지남): 100% 선 약 64% — 43% 는 보통
+      act(() => { vi.setSystemTime(start + 4 * 86_400_000); vi.advanceTimersByTime(60_000) })
+      expect(screen.getByText('43%').className).not.toContain('accent-orange')
+      expect(screen.queryByText('이 속도면 주간 한도를 넘음', HIDDEN)).toBeNull()
+      expect(document.querySelector('[data-placement]')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('서비스별 주기 평균도 같은 기준 — 색의 이유는 바로 뜨는 툴팁과 화면 낭독기 설명으로', () => {
+    const base = data([])
+    render(<ClientUsagePanel days={7} data={{ ...base, byClient: base.byClient.map((row, index) => ({ ...row, avgLimitUsedPercent: index === 0 ? 120 : 50 })) }} />)
+    const over = screen.getByText('120%')
+    expect(over.className).toContain('accent-orange')
+    expect(over.querySelector('.sr-only')!.textContent).toContain('이 속도면 주간 한도를 넘음')
+    fireEvent.focus(over)
+    expect(screen.getByText('이 속도면 주간 한도를 넘음', HIDDEN)).toBeInTheDocument()
+    expect(screen.getByText('50%').className).not.toContain('accent-orange')
+  })
+
+  it('툴팁을 연 채 데이터가 바뀌어 설명이 사라지면 툴팁을 닫는다 (120% → 50%)', () => {
+    const base = data([])
+    const withAvg = (value: number) => ({ ...base, byClient: base.byClient.map((row, index) => ({ ...row, avgLimitUsedPercent: index === 0 ? value : 50 })) })
+    const { rerender } = render(<ClientUsagePanel days={7} data={withAvg(120)} />)
+    act(() => { screen.getByText('120%').focus() })
+    expect(screen.getByText('이 속도면 주간 한도를 넘음', HIDDEN)).toBeInTheDocument()
+    rerender(<ClientUsagePanel days={7} data={withAvg(60)} />)
+    expect(screen.queryByText('이 속도면 주간 한도를 넘음', HIDDEN)).toBeNull()
+    expect(document.querySelector('[data-placement]')).toBeNull()
+  })
+
+  it('툴팁이 열린 칸이 사라지면(조회 실패·미수집) 툴팁도 닫는다', () => {
+    const base = data([])
+    const withAvg = (value: number | null) => ({ ...base, byClient: base.byClient.map((row, index) => ({ ...row, avgLimitUsedPercent: index === 0 ? value : 50 })) })
+    const { rerender } = render(<ClientUsagePanel days={7} data={withAvg(120)} />)
+    act(() => { screen.getByText('120%').focus() })
+    expect(document.querySelector('[data-placement]')).not.toBeNull()
+    rerender(<ClientUsagePanel days={7} data={{ ...withAvg(120), cycleError: true }} />)
+    expect(document.querySelector('[data-placement]')).toBeNull()
+    rerender(<ClientUsagePanel days={7} data={withAvg(120)} />)
+    act(() => { screen.getByText('120%').focus() })
+    rerender(<ClientUsagePanel days={7} data={withAvg(null)} />)
+    expect(document.querySelector('[data-placement]')).toBeNull()
+  })
+
+  it('이번 주 한도는 속도로 색을 정하고, 이유와 초기화 시각은 호버로', () => {
+    const resetsAt = new Date(Date.now() + 3.5 * 86_400_000).toISOString()
+    const row = (percent: number) => ({ ...person('홍길동', 'Claude Code', 2), usage: { ...person('홍길동', 'Claude Code', 2).usage!, limitUsedPercent: percent, limitResetsAt: resetsAt } })
+    const { unmount } = render(<ClientUsagePanel days={7} data={data([row(70)])} />)
+    const over = screen.getByText('70%')
+    expect(over.className).toContain('accent-orange')
+    expect(over.getAttribute('data-tip')).toMatch(/^초기화 .+\n이 속도면 주간 한도를 넘음$/)
+    unmount()
+    render(<ClientUsagePanel days={7} data={data([row(30)])} />)
+    const normal = screen.getByText('30%')
+    expect(normal.className).not.toContain('accent-orange')
+    expect(normal.getAttribute('data-tip')).toMatch(/^초기화 [^\n]+$/)
+  })
+
   it('다음 결제는 날짜만 쓰고 남은 일수는 호버로, 대신 결제한 사람도 호버로', () => {
     const row: AxMemberServiceRow = { ...person('홍길동', 'Claude Code', 2), subscription: { ...person('홍길동', 'Claude Code', 2).subscription!, payer: '김결제' } }
     render(<ClientUsagePanel days={7} data={data([row])} />)
@@ -235,10 +329,12 @@ describe('클라이언트 화면', () => {
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
     // 경고는 칸에 쓰지 않고 값 색과 호버 맨 위 줄로
-    const cell = screen.getByText('66%').closest('[data-tip]')!
-    expect(cell.getAttribute('data-tip')).toMatch(/^끝 무렵 미수집 1회 — 실제보다 낮을 수 있음\n/)
+    const value = screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === '66%*')
+    const cell = value.closest('[data-tip]')!
+    expect(cell.getAttribute('data-tip')).toMatch(/^\* 끝 무렵 미수집 1회 — 실제보다 낮을 수 있음\n/)
     expect(visibleText(cell)).not.toMatch(/끝 무렵 미수집/)
-    expect(screen.getByText('66%').className).toContain('accent-orange')
+    // 끝 무렵 미수집은 색이 아니라 * 로 — 66% 는 20~100% 라 보통 색
+    expect(value.className).not.toContain('accent-orange')
     expect(cell.getAttribute('data-tip')).toContain('끝나기 44시간 전까지만 잡힘')
     expect(cell.getAttribute('data-tip')).not.toMatch(/93% \([^)]*잡힘/)
   })
@@ -256,7 +352,9 @@ describe('클라이언트 화면', () => {
     render(<ClientUsagePanel days={7} data={data([row])} />)
     const cell = screen.getByText('145.3%').closest('[data-tip]')!
     expect(within(cell as HTMLElement).getByText('2회')).toBeInTheDocument()
-    expect(cell.getAttribute('data-tip')).toMatch(/^7일 미만 1회 · 7일 환산\(추정\)\n/)
+    // 145.3% 는 100% 를 넘는 속도 — 주황색, 이유가 호버 맨 위
+    expect(cell.getAttribute('data-tip')).toMatch(/^이 속도면 주간 한도를 넘음\n7일 미만 1회 · 7일 환산\(추정\)\n/)
+    expect(screen.getByText('145.3%').className).toContain('accent-orange')
     expect(cell.getAttribute('data-tip')).not.toMatch(/끝 무렵 미수집/)
     expect(cell.getAttribute('data-tip')).toMatch(/조기 초기화 42% \(예정 [^)]+\) → 7일 환산 230\.5%/)
   })
@@ -283,7 +381,7 @@ describe('클라이언트 화면', () => {
       ] as unknown as AxMemberServiceRow['cycleWeeks'],
     }
     render(<ClientUsagePanel days={7} data={data([row])} />)
-    const cell = screen.getByText('66%').closest('[data-tip]')!
+    const cell = screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === '66%*').closest('[data-tip]')!
     expect(within(cell as HTMLElement).getByText('2회')).toBeInTheDocument()
     expect(cell.getAttribute('data-tip')).toContain('끝 무렵 미수집 1회')
     expect(cell.getAttribute('data-tip')).not.toMatch(/NaN|undefined/)

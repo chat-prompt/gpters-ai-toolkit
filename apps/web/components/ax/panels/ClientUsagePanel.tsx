@@ -71,6 +71,47 @@ const HOVER_CUE = 'cursor-help underline decoration-dotted decoration-[var(--bor
 /** 이 일수 안에 결제되면 경고 톤으로 표시한다 — 뽀밋이 DM 과 같은 기준 */
 const DUE_SOON_DAYS = 7
 
+/** 주간 한도 판정 기준(%) — 주 20% 미만이면 덜 쓰고, 100% 를 넘으면 한도에 걸린다(10/22 하영 결정) */
+const LOW_WEEKLY_PERCENT = 20
+const FULL_WEEKLY_PERCENT = 100
+const DAY_MS = 86_400_000
+
+/** 주간 한도 톤 — 덜 씀(low)·넘침(over)·보통(null) */
+type WeekTone = 'low' | 'over' | null
+
+/** 톤별 설명 — 호버·화면 낭독기용 */
+const WEEK_TONE_TEXT: Record<'low' | 'over', string> = {
+  low: `주 ${LOW_WEEKLY_PERCENT}% 미만 속도 — 덜 쓰고 있음`,
+  over: '이 속도면 주간 한도를 넘음',
+}
+
+/**
+ * 진행 중 회차의 속도로 톤을 정한다 — 지금까지 이어진 일수(7 − 남은 일수)에 하루 20/7%·100/7% 를 곱한 선과 비교.
+ * 끝난 회차와 1일 미만 회차는 판정하지 않는다
+ *
+ * @param percent - 지금 사용률
+ * @param resetsAt - 이 회차 초기화 시각. 없으면 판정하지 않는다
+ * @param now - 지금(ms). 기본은 호출 시각
+ */
+export function weekPaceTone(percent: number, resetsAt: string | null | undefined, now = Date.now()): WeekTone {
+  if (!resetsAt) return null
+  const left = Date.parse(resetsAt) - now
+  // 이미 끝난 회차는 지금 속도가 아니다. 1일 미만은 흔들림이 커서 주기 평균처럼 판정하지 않는다
+  if (!Number.isFinite(left) || left <= 0) return null
+  const elapsedDays = Math.min(7, 7 - left / DAY_MS)
+  if (elapsedDays < 1) return null
+  if (percent < (LOW_WEEKLY_PERCENT / 7) * elapsedDays) return 'low'
+  if (percent > (FULL_WEEKLY_PERCENT / 7) * elapsedDays) return 'over'
+  return null
+}
+
+/** 7일 기준 값(주기 평균)의 톤 — 20% 미만이면 덜 씀, 100% 를 넘으면 넘침 */
+export function weekAverageTone(percent: number): WeekTone {
+  return percent < LOW_WEEKLY_PERCENT ? 'low' : percent > FULL_WEEKLY_PERCENT ? 'over' : null
+}
+
+const toneClass = (tone: WeekTone, base = 'text-[var(--text-secondary)]') => (tone ? 'text-[var(--accent-orange)]' : base)
+
 /** 구성원 표의 칸 툴팁을 띄우는 함수 — 표 바깥(가로 스크롤 밖)에 한 개만 그린다 */
 const CellTipContext = createContext<{
   show: (element: HTMLElement, lines: string[], via: 'pointer' | 'focus') => void
@@ -78,6 +119,12 @@ const CellTipContext = createContext<{
   leave: (which: 'pointer' | 'focus') => void
   /** Esc — 바로 닫는다 */
   hide: () => void
+  /** 표를 가로로 스크롤했다 — 띄운 칸을 따라간다 */
+  follow: () => void
+  /** 칸 설명이 바뀌었다(판정 시각 갱신 등) — 그 칸의 툴팁이 열려 있으면 내용을 바꾸고, 설명이 사라졌으면 닫는다 */
+  refresh: (element: HTMLElement, lines: string[]) => void
+  /** 속도 판정 기준 시각 — 1분마다 고친다(렌더마다 읽지 않아 다시 그려도 색이 흔들리지 않는다) */
+  now: number
 } | null>(null)
 
 /**
@@ -88,12 +135,27 @@ const CellTipContext = createContext<{
 function CellTip({ lines, className, children }: { lines: string[]; className?: string; children: ReactNode }) {
   const tip = useContext(CellTipContext)
   const shown = lines.filter((line) => line !== '')
-  if (shown.length === 0 || !tip) return <span className={className}>{children}</span>
+  const ref = useRef<HTMLSpanElement>(null)
+  const text = shown.join('\n')
+  // 툴팁이 열린 채 설명이 바뀌면(1분마다 판정 시각 갱신·데이터 갱신) 열린 내용도 따라 바꾸고, 설명이 사라지면 닫는다
+  useEffect(() => {
+    if (ref.current) tip?.refresh(ref.current, text ? text.split('\n') : [])
+  }, [tip, text])
+  // 칸 자체가 사라지면(미수집·조회 실패로 바뀜) 열린 툴팁도 닫는다. tip 은 1분마다 바뀌므로 최신 것을 ref 로 들고 있는다
+  const latestTip = useRef(tip)
+  useEffect(() => { latestTip.current = tip }, [tip])
+  useEffect(() => {
+    const element = ref.current
+    return () => { if (element) latestTip.current?.refresh(element, []) }
+  }, [])
+  // 설명이 없어도 같은 칸(ref)을 유지한다 — 열린 툴팁을 닫으려면 이 칸을 알아야 한다
+  if (shown.length === 0 || !tip) return <span ref={ref} className={className}>{children}</span>
   const open = (event: MouseEvent<HTMLSpanElement> | FocusEvent<HTMLSpanElement>) => tip.show(event.currentTarget, shown, event.type === 'focus' ? 'focus' : 'pointer')
   return (
     <span
+      ref={ref}
       tabIndex={0}
-      data-tip={shown.join('\n')}
+      data-tip={text}
       onMouseEnter={open}
       onFocus={open}
       onMouseLeave={() => tip.leave('pointer')}
@@ -106,6 +168,89 @@ function CellTip({ lines, className, children }: { lines: string[]; className?: 
       <span className="sr-only">{` (${shown.join(', ')})`}</span>
     </span>
   )
+}
+
+/**
+ * 칸 툴팁 영역 — 툴팁은 가로 스크롤 영역 밖에 하나만 띄운다(안에 두면 첫 줄 툴팁이 잘린다). 안쪽 칸은 CellTip 을 쓴다
+ */
+function CellTipArea({ children }: { children: ReactNode }) {
+  // 속도 판정 시각 — 렌더마다 읽으면 같은 데이터도 다시 그릴 때 색이 바뀐다. 대시보드 자동 갱신(60초)에 맞춰 1분마다 고친다
+  // (탭을 연 시각에 묶어 두면 켜 둔 채 며칠 지나 들어온 새 데이터를 옛 시각으로 판정한다)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const tipRef = useRef<HTMLDivElement>(null)
+  const [tip, setTip] = useState<CellTipState | null>(null)
+  // 칸 포인터·칸 포커스·상자 포인터 중 하나라도 남아 있으면 열어 둔다 (InfoTip 의 useEscDismiss 와 같은 규칙)
+  const holding = useRef({ pointer: false, focus: false, box: false })
+  // 지금 툴팁을 띄운 칸 — 같은 칸에 포인터와 포커스가 함께 있으면 둘 다 유지한다
+  const holder = useRef<HTMLElement | null>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { holder.current = null; setTip(null) } }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    }
+  }, [])
+  const cellTip = useMemo(() => {
+    /** 칸 위치를 표 컨테이너 기준으로 잰다. lines 를 안 주면 지금 내용 그대로 위치만 바꾼다 */
+    const place = (element: HTMLElement, lines?: string[]) => {
+      const wrap = tipRef.current
+      if (!wrap) return
+      const cell = element.getBoundingClientRect()
+      const base = wrap.getBoundingClientRect()
+      const next = { left: cell.left - base.left + cell.width / 2, top: cell.top - base.top, bottom: cell.bottom - base.top, viewportTop: cell.top, wrapWidth: base.width }
+      setTip((current) => (lines ? { ...next, lines } : current && { ...next, lines: current.lines }))
+    }
+    // 칸과 상자 사이 8px 를 지나는 동안 닫히지 않게 잠깐 기다린다
+    const closeSoon = () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+      closeTimer.current = setTimeout(() => {
+        const { pointer, focus, box } = holding.current
+        if (!pointer && !focus && !box) { holder.current = null; setTip(null) }
+      }, 150)
+    }
+    return {
+      leave: (which: 'pointer' | 'focus') => { holding.current[which] = false; closeSoon() },
+      box: (inside: boolean) => { holding.current.box = inside; if (!inside) closeSoon() },
+      hide: () => { holder.current = null; setTip(null) },
+      show: (element: HTMLElement, lines: string[], via: 'pointer' | 'focus') => {
+        if (closeTimer.current) clearTimeout(closeTimer.current)
+        // 다른 칸으로 옮겨 가면 새로 센다. 같은 칸이면 다른 쪽(포인터·포커스) 상태를 지우지 않는다
+        if (holder.current !== element) holding.current = { pointer: false, focus: element === document.activeElement, box: false }
+        holder.current = element
+        holding.current[via] = true
+        place(element, lines)
+      },
+      // 표를 가로로 스크롤하면(Tab 으로 화면 밖 칸에 들어갈 때 브라우저가 스스로 스크롤한다) 띄운 칸을 따라간다
+      follow: () => { if (holder.current) place(holder.current) },
+      refresh: (element: HTMLElement, lines: string[]) => {
+        if (holder.current !== element) return
+        if (lines.length > 0) place(element, lines)
+        else { holder.current = null; setTip(null) }
+      },
+      now,
+    }
+  }, [now])
+
+  return (
+    <CellTipContext.Provider value={cellTip}>
+      <div ref={tipRef} className="relative">
+        <CellTipBox tip={tip} onPointer={cellTip.box} />
+        {children}
+      </div>
+    </CellTipContext.Provider>
+  )
+}
+
+/** 가로 스크롤 영역 — 스크롤하면 띄운 칸 툴팁이 칸을 따라간다(Tab 으로 화면 밖 칸에 들어갈 때 브라우저가 스스로 스크롤한다) */
+function TipScroll({ className, children }: { className: string; children: ReactNode }) {
+  const tip = useContext(CellTipContext)
+  return <div className={className} onScroll={tip?.follow}>{children}</div>
 }
 
 /** 포인터를 올릴 수 있는 툴팁 상자 — TIP_BOX 의 pointer-events-none 은 클래스를 덧붙여도 CSS 순서상 이기므로 뺀다 */
@@ -711,7 +856,8 @@ function ServiceTable({
   )
 
   return (
-    <div className="overflow-x-auto">
+    <CellTipArea>
+    <TipScroll className="overflow-x-auto">
       <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="border-b border-[var(--border-subtle)]">
@@ -807,7 +953,8 @@ function ServiceTable({
           만들지 않으므로 업그레이드만으로 채워지지는 않습니다.
         </p>
       )}
-    </div>
+    </TipScroll>
+    </CellTipArea>
   )
 }
 
@@ -825,16 +972,11 @@ function LimitCell({ row, cycleError }: { row: AxClientUsageClientRow; cycleErro
       ? <span className="font-mono text-[var(--text-muted)]">{EMPTY}</span>
       : <span className="text-[11px] text-[var(--text-muted)]">미수집</span>
   }
+  const tone = weekAverageTone(row.avgLimitUsedPercent)
   return (
-    <span
-      className={`font-mono tabular-nums ${
-        row.avgLimitUsedPercent >= 80
-          ? 'text-[var(--accent-orange)]'
-          : 'text-[var(--text-primary)]'
-      }`}
-    >
+    <CellTip lines={tone ? [WEEK_TONE_TEXT[tone]] : []} className={`font-mono tabular-nums ${toneClass(tone, 'text-[var(--text-primary)]')}`}>
       {row.avgLimitUsedPercent}%
-    </span>
+    </CellTip>
   )
 }
 
@@ -929,56 +1071,6 @@ function PeopleTable({
 }) {
   // 기본은 이름순 — 사람을 찾아 보는 표다. 결제가 임박한 사람은 결제 임박순으로 바꿔 본다
   const [sort, setSort] = useState<PeopleSort>('name')
-  // 칸 툴팁은 가로 스크롤 영역 밖에 하나만 띄운다 — 안에 두면 첫 줄 툴팁이 잘린다
-  const tipRef = useRef<HTMLDivElement>(null)
-  const [tip, setTip] = useState<CellTipState | null>(null)
-  // 칸 포인터·칸 포커스·상자 포인터 중 하나라도 남아 있으면 열어 둔다 (InfoTip 의 useEscDismiss 와 같은 규칙)
-  const holding = useRef({ pointer: false, focus: false, box: false })
-  // 지금 툴팁을 띄운 칸 — 같은 칸에 포인터와 포커스가 함께 있으면 둘 다 유지한다
-  const holder = useRef<HTMLElement | null>(null)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { holder.current = null; setTip(null) } }
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      if (closeTimer.current) clearTimeout(closeTimer.current)
-    }
-  }, [])
-  const cellTip = useMemo(() => {
-    /** 칸 위치를 표 컨테이너 기준으로 잰다. lines 를 안 주면 지금 내용 그대로 위치만 바꾼다 */
-    const place = (element: HTMLElement, lines?: string[]) => {
-      const wrap = tipRef.current
-      if (!wrap) return
-      const cell = element.getBoundingClientRect()
-      const base = wrap.getBoundingClientRect()
-      const next = { left: cell.left - base.left + cell.width / 2, top: cell.top - base.top, bottom: cell.bottom - base.top, viewportTop: cell.top, wrapWidth: base.width }
-      setTip((current) => (lines ? { ...next, lines } : current && { ...next, lines: current.lines }))
-    }
-    // 칸과 상자 사이 8px 를 지나는 동안 닫히지 않게 잠깐 기다린다
-    const closeSoon = () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current)
-      closeTimer.current = setTimeout(() => {
-        const { pointer, focus, box } = holding.current
-        if (!pointer && !focus && !box) { holder.current = null; setTip(null) }
-      }, 150)
-    }
-    return {
-      leave: (which: 'pointer' | 'focus') => { holding.current[which] = false; closeSoon() },
-      box: (inside: boolean) => { holding.current.box = inside; if (!inside) closeSoon() },
-      hide: () => { holder.current = null; setTip(null) },
-      show: (element: HTMLElement, lines: string[], via: 'pointer' | 'focus') => {
-        if (closeTimer.current) clearTimeout(closeTimer.current)
-        // 다른 칸으로 옮겨 가면 새로 센다. 같은 칸이면 다른 쪽(포인터·포커스) 상태를 지우지 않는다
-        if (holder.current !== element) holding.current = { pointer: false, focus: element === document.activeElement, box: false }
-        holder.current = element
-        holding.current[via] = true
-        place(element, lines)
-      },
-      // 표를 가로로 스크롤하면(Tab 으로 화면 밖 칸에 들어갈 때 브라우저가 스스로 스크롤한다) 띄운 칸을 따라간다
-      follow: () => { if (holder.current) place(holder.current) },
-    }
-  }, [])
 
   if (rows.length === 0) {
     return (
@@ -1003,9 +1095,7 @@ function PeopleTable({
   const unsubscribed = rows.filter((row) => !row.subscription).length
 
   return (
-    <CellTipContext.Provider value={cellTip}>
-    <div ref={tipRef} className="relative">
-      <CellTipBox tip={tip} onPointer={cellTip.box} />
+    <CellTipArea>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <div className="relative flex flex-wrap items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
           <span>
@@ -1014,7 +1104,8 @@ function PeopleTable({
           </span>
           <InfoTip label="주기 평균 기준">
             <p>주기 평균은 지난 결제일 이후 주간 한도가 초기화되기 전에 받은 사용률을 회차마다 하나씩 잡아 평균한 값입니다.</p>
-            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값을 주황색으로 쓰고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
+            <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값 옆에 *를 붙이고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이고, 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
+            <p className="mt-2">주황색은 사용량 기준입니다. 주기 평균은 주 {LOW_WEEKLY_PERCENT}% 미만(덜 씀)이거나 {FULL_WEEKLY_PERCENT}%를 넘으면(한도 초과 속도) 주황색입니다. 이번 주 한도는 회차가 이어진 일수만큼의 속도로 봅니다 — 하루 {LOW_WEEKLY_PERCENT}/7% 에 못 미치거나 하루 {FULL_WEEKLY_PERCENT}/7% 를 넘으면 주황색입니다. 다음 결제는 {DUE_SOON_DAYS}일 안이면 주황색입니다.</p>
             <p className="mt-2">공용·서포트 구독은 그 계정을 쓰는 봇의 수집기가 매시간 잰 값입니다(aitk 0.7.28부터). 서비스 · 플랜 칸에 측정한 봇을 적고, 서비스별 주기 평균(사람 평균)에는 넣지 않습니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
@@ -1037,8 +1128,7 @@ function PeopleTable({
           ))}
         </div>
       </div>
-      {/* 가로로 스크롤하면 칸만 움직인다 — 툴팁이 띄운 칸을 따라가게 다시 잰다 */}
-      <div className="mt-3 overflow-x-auto" onScroll={cellTip.follow}>
+      <TipScroll className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[920px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border-subtle)]">
@@ -1097,9 +1187,8 @@ function PeopleTable({
             )}
           </tbody>
         </table>
-      </div>
-    </div>
-    </CellTipContext.Provider>
+      </TipScroll>
+    </CellTipArea>
   )
 }
 
@@ -1174,6 +1263,16 @@ function RenewalCell({ row }: { row: AxMemberServiceRow }) {
   )
 }
 
+/** 이번 주 사용률 — 속도가 주 20% 에 못 미치거나 100% 를 넘을 속도면 주황색. 초기화 시각·이유는 호버로 */
+function WeekPercent({ percent, resetsAt }: { percent: number; resetsAt: string | null }) {
+  const tone = weekPaceTone(percent, resetsAt, useContext(CellTipContext)?.now)
+  return (
+    <CellTip lines={[...(resetsAt ? [`초기화 ${formatDateTime(resetsAt)}`] : []), ...(tone ? [WEEK_TONE_TEXT[tone]] : [])]} className={toneClass(tone)}>
+      {percent}%
+    </CellTip>
+  )
+}
+
 /**
  * 이번 주 한도 칸 — 사용 보고는 있는데 한도를 못 받았으면 미수집.
  * Claude Code 줄은 수집 연결 상태를 함께 쓴다: 값이 없으면 미수집 대신 상태를, 사용 보고가 없어도 미연결 사유를,
@@ -1186,14 +1285,7 @@ function CurrentLimitCell({ row, collector, cycleError = false }: { row: AxMembe
     // 공용·서포트 줄은 봇 수집기가 잰 계정 값이다 — 사람 수집 상태(표시줄 연결)와 무관하다
     const { currentPercent, currentResetsAt } = row.account
     if (currentPercent === null) return <span className="text-[11px] text-[var(--text-muted)]">측정 없음</span>
-    return (
-      <span
-        title={currentResetsAt ? `초기화 ${formatDateTime(currentResetsAt)}` : undefined}
-        className={currentPercent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
-      >
-        {currentPercent}%
-      </span>
-    )
+    return <WeekPercent percent={currentPercent} resetsAt={currentResetsAt} />
   }
   const capture = row.service === CLIENT_LABELS['claude-code'] && collector ? limitCaptureLabel(collector) : null
   const percent = row.usage?.limitUsedPercent ?? null
@@ -1208,12 +1300,7 @@ function CurrentLimitCell({ row, collector, cycleError = false }: { row: AxMembe
   }
   return (
     <>
-      <span
-        title={row.usage?.limitResetsAt ? `초기화 ${formatDateTime(row.usage.limitResetsAt)}` : undefined}
-        className={percent >= 80 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}
-      >
-        {percent}%
-      </span>
+      <WeekPercent percent={percent} resetsAt={row.usage?.limitResetsAt ?? null} />
       {/* 날짜가 붙은 경고는 지난 관측이다 — 지금 값 아래에 두면 지금 상태처럼 읽힌다 */}
       {capture?.warn && !capture.label.endsWith('관측)') && (
         <span className="block text-[11px] text-[var(--accent-orange)]">{capture.label}</span>
@@ -1251,7 +1338,8 @@ function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleE
     .join('\n')
   // 부가 설명은 호버 맨 위에 — 끝 무렵이 빠진 회차는 실제보다 낮다(경고), 7일 미만 회차는 7일 환산(추정)으로 들어갔다
   const notes = [
-    late > 0 ? `끝 무렵 미수집 ${late}회 — 실제보다 낮을 수 있음` : null,
+    late > 0 ? `* 끝 무렵 미수집 ${late}회 — 실제보다 낮을 수 있음` : null,
+    row.cycleAveragePercent !== null && weekAverageTone(row.cycleAveragePercent) ? WEEK_TONE_TEXT[weekAverageTone(row.cycleAveragePercent)!] : null,
     short > 0 ? `7일 미만 ${short}회 · 7일 환산(추정)` : null,
     excluded > 0 ? `환산 제외 ${excluded}회` : null,
   ].filter((line): line is string => line !== null)
@@ -1261,8 +1349,10 @@ function CycleAverageCell({ row, cycleError }: { row: AxMemberServiceRow; cycleE
         ? <span className="text-[11px] text-[var(--text-muted)]">환산할 회차 없음</span>
         : (
           <>
-            {/* 끝 무렵이 빠진 회차가 있으면 값을 경고색으로 — 이유는 호버에 */}
-            <span className={late > 0 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-primary)]'}>{row.cycleAveragePercent}%</span>{' '}
+            {/* 색은 사용량(20% 미만·100% 초과), 끝 무렵 미수집은 * 로 따로 — 둘은 다른 신호다 */}
+            <span className={toneClass(weekAverageTone(row.cycleAveragePercent), 'text-[var(--text-primary)]')}>
+              {row.cycleAveragePercent}%{late > 0 && <span aria-hidden className="text-[var(--text-muted)]">*</span>}
+            </span>{' '}
             <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{projected.length}회</span>
           </>
         )}
