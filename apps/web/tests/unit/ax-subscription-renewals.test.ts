@@ -212,6 +212,81 @@ describe('buildRenewalRows', () => {
     expect(row.averagePercent).toBe(74) // 100% 넘는 회차는 평균에 100%
   })
 
+  it('초기화 시각만 뒤로 옮겨 가고 사용률이 이어지면 조기 초기화가 아니라 한 회차다 (한가경 Claude 10/22 실측 모양)', () => {
+    const at = (text: string) => new Date(`${text}+09:00`)
+    const window = (resetsAt: string, percent: number, first: string, last: string) => ({
+      memberName: '홍길동', client: 'claude-code' as const, limitUsedPercent: percent, limitResetsAt: at(resetsAt),
+      syncedAt: at(last), seenAt: at(last), firstSeenAt: at(first),
+    })
+    const rows = buildRenewalRows([sub({ renewalDay: 15 })], [
+      window('2026-10-20T01:00:00', 60, '2026-10-13T02:00:00', '2026-10-19T23:00:00'),
+      // 10/27 01:00 예정 회차를 94% 까지 받다가 10/22 15:53 에 끊겼다
+      window('2026-10-27T01:00:00', 94, '2026-10-21T09:45:00', '2026-10-22T15:53:00'),
+      // 10/22 16:05 부터 10/28 02:00 예정 회차가 95% 로 이어졌다 — 계산상 시작 10/21 02:00 은 앞 회차 마지막 보고보다 이르다
+      window('2026-10-28T02:00:00', 95, '2026-10-22T16:05:00', '2026-10-23T08:40:00'),
+    ], at('2026-10-23T09:00:00'))
+    const [row] = rows
+    // 끝난 회차는 10/20 하나뿐이고(조기 초기화 251% 없음), 진행 중 회차는 10/28 예정 95%
+    expect(row.weeks.map((week) => [week.usedPercent, week.projectedPercent])).toEqual([[60, 60]])
+    expect(row.averagePercent).toBe(60)
+    expect(row).toMatchObject({ currentPercent: 95, currentResetsAt: at('2026-10-28T02:00:00').toISOString() })
+  })
+
+  it('같은 모양이라도 Codex(실제 조기 초기화가 많다)나 사용률이 떨어진 회차(진짜 초기화)는 합치지 않는다', () => {
+    const at = (text: string) => new Date(`${text}+09:00`)
+    const window = (client: 'claude-code' | 'codex', resetsAt: string, percent: number, first: string, last: string) => ({
+      memberName: '홍길동', client, limitUsedPercent: percent, limitResetsAt: at(resetsAt),
+      syncedAt: at(last), seenAt: at(last), firstSeenAt: at(first),
+    })
+    const now = at('2026-10-29T09:00:00')
+    // Codex: 하영 10/11 실측 모양 — 75% 회차가 끊기고 계산상 시작이 겹치는 21% 회차
+    const [codex] = buildRenewalRows([sub({ vendor: 'OpenAI', plan: 'Pro5x', renewalDay: 15 })], [
+      window('codex', '2026-10-27T01:00:00', 94, '2026-10-21T09:45:00', '2026-10-22T15:53:00'),
+      window('codex', '2026-10-28T02:00:00', 95, '2026-10-22T16:05:00', '2026-10-28T01:00:00'),
+    ], now)
+    expect(codex.weeks).toHaveLength(2)
+    // Claude 라도 뒤 회차가 앞 회차의 절반 미만이면 진짜 초기화다
+    const [claude] = buildRenewalRows([sub({ renewalDay: 15 })], [
+      window('claude-code', '2026-10-27T01:00:00', 94, '2026-10-21T09:45:00', '2026-10-22T15:53:00'),
+      window('claude-code', '2026-10-28T02:00:00', 21, '2026-10-22T16:05:00', '2026-10-28T01:00:00'),
+    ], now)
+    expect(claude.weeks).toHaveLength(2)
+    // 진짜 초기화 뒤 사용량이 앞 회차의 절반을 넘게 올라도(0 → 48%) 앞 회차 최댓값(94%)에 못 미치면 합치지 않는다
+    const [rising] = buildRenewalRows([sub({ renewalDay: 15 })], [
+      window('claude-code', '2026-10-27T01:00:00', 94, '2026-10-21T09:45:00', '2026-10-22T15:53:00'),
+      window('claude-code', '2026-10-28T02:00:00', 48, '2026-10-22T16:05:00', '2026-10-24T01:00:00'),
+    ], at('2026-10-24T09:00:00'))
+    expect(rising.recentWeeks.map((week) => week.usedPercent)).toEqual([94])
+    expect(rising.currentPercent).toBe(48)
+    // 낮은 값은 이어짐과 초기화 뒤 다시 오름을 가를 수 없다 — 앞 회차가 50% 미만이면 합치지 않는다(10% → 8%)
+    const [low] = buildRenewalRows([sub({ renewalDay: 15 })], [
+      window('claude-code', '2026-10-27T01:00:00', 10, '2026-10-21T09:45:00', '2026-10-22T15:53:00'),
+      window('claude-code', '2026-10-28T02:00:00', 8, '2026-10-22T16:05:00', '2026-10-24T01:00:00'),
+    ], at('2026-10-24T09:00:00'))
+    expect(low.recentWeeks.map((week) => week.usedPercent)).toEqual([10])
+    expect(low.currentPercent).toBe(8)
+  })
+
+  it('합친 회차가 나중에 실제로 일찍 초기화되면 기간은 앞 회차 시작부터 센다 (7일 환산이 다시 부풀지 않게)', () => {
+    const at = (text: string) => new Date(`${text}+09:00`)
+    const window = (resetsAt: string, percent: number, first: string, last: string) => ({
+      memberName: '홍길동', client: 'claude-code' as const, limitUsedPercent: percent, limitResetsAt: at(resetsAt),
+      syncedAt: at(last), seenAt: at(last), firstSeenAt: at(first),
+    })
+    const [row] = buildRenewalRows([sub({ renewalDay: 15 })], [
+      window('2026-10-27T01:00:00', 60, '2026-10-20T02:00:00', '2026-10-22T15:53:00'),
+      window('2026-10-28T02:00:00', 95, '2026-10-22T16:05:00', '2026-10-24T01:00:00'),
+      // 10/24 02:00 에 실제 초기화 — 새 회차(10/31 02:00 예정)
+      window('2026-10-31T02:00:00', 3, '2026-10-24T02:30:00', '2026-10-24T08:00:00'),
+    ], at('2026-10-24T09:00:00'))
+    const [merged] = row.recentWeeks
+    // 시작은 앞 회차 기준(10/27 01:00 − 7일 = 10/20 01:00), 끝은 실제 초기화 10/24 02:00 → 4.04일
+    expect(merged.startedAt).toBe(at('2026-10-20T01:00:00').toISOString())
+    expect(merged.usedPercent).toBe(95)
+    expect(merged.projectedPercent).toBeCloseTo((95 / ((Date.parse(merged.endedAt!) - Date.parse(merged.startedAt!)) / 86_400_000)) * 7, 6)
+    expect(merged.projectedPercent!).toBeLessThan(170)
+  })
+
   it('나란한 회차가 새 회차 첫 보고 30분 뒤에 보고되면 조기 초기화가 아니고 진행 중 사용률도 그대로다', () => {
     const at = kst('2026-10-10T11:00:00')
     const [row] = buildRenewalRows([sub()], [

@@ -45,6 +45,14 @@ const WEEK_MS = 7 * DAY_MS
 const EARLY_RESET_MIN_MS = 6 * HOUR_MS
 /** 평균에 넣을 회차 값의 상한(%) — 7일 환산이 100% 를 넘어도 평균에는 한도(100%)만큼만 */
 export const AVERAGE_CAP_PERCENT = 100
+/** 초기화 시각 이동으로 합칠 때 뒤 회차 최댓값이 앞 회차보다 이만큼(%p) 낮아도 이어진 것으로 본다 — 보고 반올림 흔들림 */
+const SHIFT_CONTINUITY_TOLERANCE = 2
+/**
+ * 앞 회차가 이 값(%) 이상일 때만 합친다. 낮은 값은 "이어짐"과 "초기화 뒤 다시 오름"(10% → 0 → 8%)을 최댓값만으로 가를 수 없다.
+ * 부풀림 문제는 높은 값에서만 생기고(2.6일에 94% → 251%), 낮은 값은 조기 초기화로 읽혀도 환산값이 작다(10% → 27%).
+ * 이 위에서 잘못 합쳐도 두 값이 2%p 안이라 평균·진행 중 사용률이 거의 같다
+ */
+const SHIFT_MIN_PERCENT = 50
 /** `recentWeeks` 에 싣는 기간 — 뽀밋이 저사용 알림이 며칠 밀려도 따라잡을 만큼 */
 const RECENT_WEEKS_DAYS = 8
 
@@ -145,7 +153,7 @@ function daysUntil(next: Date, now: Date): number {
  *
  * @param reports - 한 사람·한 클라이언트의 보고
  */
-function clusterWindows(reports: Report[]): Window[] {
+function clusterWindows(reports: Report[], mergeShifts = false): Window[] {
   const sorted = [...reports].sort((a, b) => a.resetsAt.getTime() - b.resetsAt.getTime())
   const windows: Window[] = []
   for (const item of sorted) {
@@ -168,7 +176,60 @@ function clusterWindows(reports: Report[]): Window[] {
   }
   // 묶는 동안 대표 초기화 시각이 늦춰졌을 수 있어 끝난 시각을 다시 맞춘다
   for (const window of windows) window.endedAt = window.resetsAt
-  return markEarlyResets(windows)
+  return markEarlyResets(mergeShifts ? mergeShiftedResets(windows) : windows)
+}
+
+/**
+ * 초기화 시각만 뒤로 옮겨 간 회차를 하나로 합친다 (사용률은 이어지는데 예정 초기화가 바뀐 경우).
+ *
+ * 2026-10-23 한가경 Claude 실측: 10/27 01:00 회차가 94% 인 채 10/22 15:53 에 끊기고, 10/22 16:05 부터 10/28 02:00 회차가
+ * 95% 로 이어졌다. 0 으로 떨어지지 않았으니 초기화가 아니다(초기화 시각 이동 또는 계정 전환). 조기 초기화로 읽으면
+ * "2.6일 만에 94%" → 7일 환산 251% 가 된다.
+ *
+ * 진짜 초기화(Codex 조기 초기화 포함)는 그 순간 새 7일 회차를 연다 — 다음 회차의 계산상 시작(다음 초기화 − 7일)이
+ * 앞 회차의 마지막 보고 무렵이다. 다음 회차가 그보다 6시간 넘게 먼저 "시작"한 셈이면 앞 회차와 겹친다 — 같은 사용량이
+ * 이어진 것이다. 세 조건이 모두 맞을 때만 합친다:
+ * - 앞 회차가 예정 초기화보다 6시간 넘게 일찍 끊겼다 (예정대로 끝난 회차는 건드리지 않는다)
+ * - 다음 회차의 계산상 시작이 앞 회차 마지막 보고보다 6시간 넘게 이르다
+ * - 앞 회차 마지막 보고 뒤에 다음 회차를 처음 받았다 (나란히 보고되는 두 계정은 합치지 않는다)
+ * - 다음 회차를 앞 회차의 예정 초기화 전에 이미 받았다 (예정 뒤에 처음 받았으면 앞 회차는 마지막 며칠 안 썼을 뿐 예정대로 끝났다)
+ * - 앞 회차가 50% 이상이고, 다음 회차 최댓값이 앞 회차 최댓값 이상이다(2%p 흔들림 허용) — 사용률이 이어졌다
+ *
+ * Claude 에만 쓴다 — Codex 는 벤더가 실제로 일찍 초기화하고 초기화 시각이 겹쳐 보이는 회차가 많다(하영 Codex 10/11:
+ * 75% 회차 뒤 21% 회차). 그런 진짜 초기화를 합치면 조기 초기화 회차를 잃는다.
+ * 합친 회차는 뒤 회차의 초기화 시각을 쓰고 사용률은 둘 중 큰 값이다. 시작은 앞 회차 기준을 이어받는다 — 뒤 회차 기준
+ * (뒤 초기화 − 7일)으로 두면 나중에 실제로 일찍 초기화될 때 기간이 짧게 잡혀 7일 환산이 다시 부푼다.
+ *
+ * @param windows - 초기화 시각 순으로 정렬된 회차
+ */
+function mergeShiftedResets(windows: Window[]): Window[] {
+  const merged: Window[] = []
+  for (const window of windows) {
+    const previous = merged[merged.length - 1]
+    const shifted = previous
+      && previous.lastSeenAt.getTime() < previous.resetsAt.getTime() - EARLY_RESET_MIN_MS
+      && window.firstResetsAt.getTime() - WEEK_MS < previous.lastSeenAt.getTime() - EARLY_RESET_MIN_MS
+      && previous.lastSeenAt.getTime() <= window.firstSeenAt.getTime()
+      && window.firstSeenAt.getTime() < previous.resetsAt.getTime() - EARLY_RESET_MIN_MS
+      // 사용률이 이어졌다 — 뒤 회차 최댓값이 앞 회차 최댓값 이상(반올림 흔들림 2%p). 회차 기록에는 처음 받은 값이 없어
+      // 최댓값으로 본다. 진짜 초기화면 0 에서 다시 시작하므로 겹친 구간 안에 앞 회차 값까지 다시 오르기 어렵다
+      && previous.usedPercent >= SHIFT_MIN_PERCENT
+      && window.usedPercent >= previous.usedPercent - SHIFT_CONTINUITY_TOLERANCE
+    if (!shifted) {
+      merged.push(window)
+      continue
+    }
+    // 뒤 회차가 이어받는다 — 처음 받은 시각·시작 근거(첫 초기화 시각)는 앞 회차 것, 최댓값과 그 보고 시각은 둘 중 큰 쪽
+    window.firstSeenAt = previous.firstSeenAt
+    window.firstResetsAt = previous.firstResetsAt
+    window.startedAt = previous.startedAt
+    if (previous.usedPercent > window.usedPercent) {
+      window.usedPercent = previous.usedPercent
+      window.reportedAt = previous.reportedAt
+    }
+    merged[merged.length - 1] = window
+  }
+  return merged
 }
 
 /**
@@ -270,7 +331,8 @@ export function buildRenewalRows(
     const entries = [...byOwner.values()].filter((entry) => entry.client === client && (shared
       ? entry.accountKey === accountKey
       : !entry.accountKey && samePerson(owner, entry.name)))
-    const mine = clusterWindows(entries.flatMap((entry) => entry.reports))
+    // 초기화 시각만 옮겨 간 회차 합치기는 Claude 만 — Codex 는 실제 조기 초기화가 많다
+    const mine = clusterWindows(entries.flatMap((entry) => entry.reports), client === 'claude-code')
 
     const toWeek = (week: Window) => ({
       resetsAt: week.resetsAt.toISOString(),
