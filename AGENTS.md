@@ -95,9 +95,8 @@ pnpm lint && pnpm test && pnpm build
 
 빌드나 테스트가 실패하면 Vercel 배포도 실패한다.
 
-> `pnpm typecheck`는 이번 작업과 무관한 기존 타입 오류가 남아 있어 red다
-> (테스트 matcher 타입, MCP response unknown, `packages/lib` 경로 별칭 등).
-> 회귀 판단은 대상 테스트 + `pnpm build`로 한다.
+> `pnpm typecheck`에 이번 변경과 무관한 기존 오류가 섞여 있을 수 있다. 그 경우 회귀 판단은
+> 변경 대상 테스트와 `pnpm build`로 한다.
 
 ## UI 변경 확인
 
