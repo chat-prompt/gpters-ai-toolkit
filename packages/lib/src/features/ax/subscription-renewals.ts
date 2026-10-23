@@ -101,16 +101,21 @@ export interface RenewalUsageInput {
   seenAt?: Date
   /** 이 회차를 처음 받은 시각 (회차 테이블). 없으면 syncedAt */
   firstSeenAt?: Date
+  /**
+   * 이 회차를 처음 받을 때의 사용률 (회차 테이블, 0048). 0048 전 행은 null(모름).
+   * 하루 단위 행은 이 필드가 없고(undefined) 그 행의 사용률이 곧 그 시각의 관측이다
+   */
+  firstUsedPercent?: number | string | null
 }
 
 /** 초기화 전에 받은 보고 한 건 */
-type Report = { resetsAt: Date; usedPercent: number; reportedAt: Date; seenAt: Date; firstSeenAt: Date }
+type Report = { resetsAt: Date; usedPercent: number; reportedAt: Date; seenAt: Date; firstSeenAt: Date; firstPercent: number | null }
 
 /**
  * 한 회차. reportedAt 은 최댓값을 보고한 시각, lastSeenAt 은 가장 늦은 보고 시각(진행 중 회차 고르기용),
  * endedAt 은 실제로 끝난 시각 — 보통 resetsAt, 벤더가 일찍 초기화했으면 다음 회차가 시작된 시각
  */
-type Window = { resetsAt: Date; firstResetsAt: Date; startedAt: Date; usedPercent: number; reportedAt: Date; firstSeenAt: Date; lastSeenAt: Date; endedAt: Date }
+type Window = { resetsAt: Date; firstResetsAt: Date; startedAt: Date; usedPercent: number; reportedAt: Date; firstSeenAt: Date; lastSeenAt: Date; endedAt: Date; firstPercent: number | null }
 
 // 화면(클라이언트)도 같은 규칙으로 사람을 잇는다 — DB 를 부르지 않는 types.ts 에 둔다
 export { personNameKeys, samePerson } from './types'
@@ -161,7 +166,11 @@ function clusterWindows(reports: Report[], mergeShifts = false): Window[] {
     if (last && item.resetsAt.getTime() - last.resetsAt.getTime() <= HOUR_MS) {
       last.resetsAt = item.resetsAt
       if (item.seenAt > last.lastSeenAt) last.lastSeenAt = item.seenAt
-      if (item.firstSeenAt < last.firstSeenAt) last.firstSeenAt = item.firstSeenAt
+      // 첫 관측 값은 가장 이른 관측의 것 — 그 관측의 값을 모르면(0048 전) 모른다
+      if (item.firstSeenAt < last.firstSeenAt) {
+        last.firstSeenAt = item.firstSeenAt
+        last.firstPercent = item.firstPercent
+      }
       // 보고 시각은 최댓값을 보고한 행의 것만 쓴다 — 낮은 옛 스냅샷의 늦은 시각을 붙이면
       // 최댓값을 더 늦게 확인한 것처럼 보인다
       if (item.usedPercent > last.usedPercent) {
@@ -171,7 +180,7 @@ function clusterWindows(reports: Report[], mergeShifts = false): Window[] {
         last.reportedAt = item.reportedAt
       }
     } else {
-      windows.push({ resetsAt: item.resetsAt, firstResetsAt: item.resetsAt, startedAt: new Date(item.resetsAt.getTime() - WEEK_MS), usedPercent: item.usedPercent, reportedAt: item.reportedAt, firstSeenAt: item.firstSeenAt, lastSeenAt: item.seenAt, endedAt: item.resetsAt })
+      windows.push({ resetsAt: item.resetsAt, firstResetsAt: item.resetsAt, startedAt: new Date(item.resetsAt.getTime() - WEEK_MS), usedPercent: item.usedPercent, reportedAt: item.reportedAt, firstSeenAt: item.firstSeenAt, lastSeenAt: item.seenAt, endedAt: item.resetsAt, firstPercent: item.firstPercent })
     }
   }
   // 묶는 동안 대표 초기화 시각이 늦춰졌을 수 있어 끝난 시각을 다시 맞춘다
@@ -193,7 +202,8 @@ function clusterWindows(reports: Report[], mergeShifts = false): Window[] {
  * - 다음 회차의 계산상 시작이 앞 회차 마지막 보고보다 6시간 넘게 이르다
  * - 앞 회차 마지막 보고 뒤에 다음 회차를 처음 받았다 (나란히 보고되는 두 계정은 합치지 않는다)
  * - 다음 회차를 앞 회차의 예정 초기화 전에 이미 받았다 (예정 뒤에 처음 받았으면 앞 회차는 마지막 며칠 안 썼을 뿐 예정대로 끝났다)
- * - 앞 회차가 50% 이상이고, 다음 회차 최댓값이 앞 회차 최댓값 이상이다(2%p 흔들림 허용) — 사용률이 이어졌다
+ * - 앞 회차가 50% 이상이고, 다음 회차가 앞 회차 최댓값 근처(2%p)에서 시작했다 — 사용률이 이어졌다.
+ *   시작 값은 회차의 첫 관측 값(0048)으로 본다. 그 전 기록처럼 첫 값을 모르면 최댓값으로 대신 본다
  *
  * Claude 에만 쓴다 — Codex 는 벤더가 실제로 일찍 초기화하고 초기화 시각이 겹쳐 보이는 회차가 많다(하영 Codex 10/11:
  * 75% 회차 뒤 21% 회차). 그런 진짜 초기화를 합치면 조기 초기화 회차를 잃는다.
@@ -211,16 +221,17 @@ function mergeShiftedResets(windows: Window[]): Window[] {
       && window.firstResetsAt.getTime() - WEEK_MS < previous.lastSeenAt.getTime() - EARLY_RESET_MIN_MS
       && previous.lastSeenAt.getTime() <= window.firstSeenAt.getTime()
       && window.firstSeenAt.getTime() < previous.resetsAt.getTime() - EARLY_RESET_MIN_MS
-      // 사용률이 이어졌다 — 뒤 회차 최댓값이 앞 회차 최댓값 이상(반올림 흔들림 2%p). 회차 기록에는 처음 받은 값이 없어
-      // 최댓값으로 본다. 진짜 초기화면 0 에서 다시 시작하므로 겹친 구간 안에 앞 회차 값까지 다시 오르기 어렵다
+      // 사용률이 이어졌다 — 뒤 회차가 앞 회차 최댓값 근처(2%p)에서 시작했다. 첫 관측 값(0048)이 있으면 그것으로 직접 보고,
+      // 없으면(0048 전 기록) 최댓값으로 대신 본다 — 진짜 초기화면 0 에서 다시 시작해 겹친 구간 안에 앞 값까지 오르기 어렵다
       && previous.usedPercent >= SHIFT_MIN_PERCENT
-      && window.usedPercent >= previous.usedPercent - SHIFT_CONTINUITY_TOLERANCE
+      && (window.firstPercent ?? window.usedPercent) >= previous.usedPercent - SHIFT_CONTINUITY_TOLERANCE
     if (!shifted) {
       merged.push(window)
       continue
     }
     // 뒤 회차가 이어받는다 — 처음 받은 시각·시작 근거(첫 초기화 시각)는 앞 회차 것, 최댓값과 그 보고 시각은 둘 중 큰 쪽
     window.firstSeenAt = previous.firstSeenAt
+    window.firstPercent = previous.firstPercent
     window.firstResetsAt = previous.firstResetsAt
     window.startedAt = previous.startedAt
     if (previous.usedPercent > window.usedPercent) {
@@ -314,7 +325,9 @@ export function buildRenewalRows(
     const key = `${row.accountKey ? `key:${row.accountKey}` : name}\u0000${row.client}`
     const entry = byOwner.get(key) ?? { name, accountKey: row.accountKey, client: row.client, reports: [], agentIds: new Set<string>() }
     for (const agentId of row.agentIds ?? []) entry.agentIds.add(agentId)
-    entry.reports.push({ resetsAt: row.limitResetsAt, usedPercent, reportedAt: row.syncedAt, seenAt: row.seenAt ?? row.syncedAt, firstSeenAt: row.firstSeenAt ?? row.syncedAt })
+    // 하루 단위 행은 그 시각의 관측이라 사용률이 곧 첫 관측 값 후보다. 회차 행은 0048 컬럼(없으면 모름)
+    const firstPercent = row.firstUsedPercent === undefined ? usedPercent : row.firstUsedPercent === null ? null : Number(row.firstUsedPercent)
+    entry.reports.push({ resetsAt: row.limitResetsAt, usedPercent, reportedAt: row.syncedAt, seenAt: row.seenAt ?? row.syncedAt, firstSeenAt: row.firstSeenAt ?? row.syncedAt, firstPercent: Number.isFinite(firstPercent) ? firstPercent : null })
     byOwner.set(key, entry)
   }
 
@@ -546,6 +559,7 @@ async function loadLimitWindows(since: Date): Promise<Array<RenewalUsageInput & 
         seenAt: axUsageLimitWindows.lastSeenAt,
         firstReportedAt: axUsageLimitWindows.firstReportedAt,
         firstSeenAt: axUsageLimitWindows.firstReportedAt,
+        firstUsedPercent: axUsageLimitWindows.firstUsedPercent,
       })
       .from(axUsageLimitWindows)
       .where(gte(axUsageLimitWindows.resetsAt, since))
@@ -577,6 +591,7 @@ function loadAccountLimitWindows(since: Date): Promise<RenewalUsageInput[]> {
       syncedAt: axAccountLimitWindows.lastReportedAt,
       seenAt: axAccountLimitWindows.lastSeenAt,
       firstSeenAt: axAccountLimitWindows.firstReportedAt,
+      firstUsedPercent: axAccountLimitWindows.firstUsedPercent,
     })
     .from(axAccountLimitWindows)
     .where(gte(axAccountLimitWindows.resetsAt, since))

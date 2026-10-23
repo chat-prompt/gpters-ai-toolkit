@@ -321,6 +321,8 @@ describe('report_usage', () => {
 
       expect(writes.windowValues).toEqual([expect.objectContaining({
         userId: 'user-1', client: 'codex', memberName: '현진우', maxUsedPercent: '43.00',
+        // 회차가 처음 생길 때의 사용률(0048) — 초기화 시각만 옮겨 간 회차를 가를 때 쓴다
+        firstUsedPercent: '43.00',
         resetsAt: new Date('2099-01-01T00:00:00.000Z'),
       })])
     })

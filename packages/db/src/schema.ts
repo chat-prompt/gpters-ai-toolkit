@@ -1395,6 +1395,8 @@ export const axUsageLimitWindows = pgTable('ax_usage_limit_windows', {
   memberName: text('member_name').notNull(),
   /** 이 회차에서 받은 사용률의 최댓값 (0~100) */
   maxUsedPercent: numeric('max_used_percent', { precision: 5, scale: 2 }).notNull(),
+  /** 이 회차를 처음 받을 때의 사용률 (0048). 그 전 행은 null — 초기화 시각만 옮겨 간 회차를 가를 때 쓴다 */
+  firstUsedPercent: numeric('first_used_percent', { precision: 5, scale: 2 }),
   firstReportedAt: timestamp('first_reported_at', { withTimezone: true }).defaultNow().notNull(),
   /** 최댓값을 마지막으로 확인한 보고 시각. 초기화 시각과 멀수록 마지막 날 사용량이 덜 반영됐다 */
   lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).defaultNow().notNull(),
@@ -1423,6 +1425,8 @@ export const axAccountLimitWindows = pgTable('ax_account_limit_windows', {
   resetsAt: timestamp('resets_at', { withTimezone: true }).notNull(),
   /** 이 회차에서 받은 사용률의 최댓값 (0~100) */
   maxUsedPercent: numeric('max_used_percent', { precision: 5, scale: 2 }).notNull(),
+  /** 이 회차를 처음 받을 때의 사용률 (0048). 그 전 행은 null — 초기화 시각만 옮겨 간 회차를 가를 때 쓴다 */
+  firstUsedPercent: numeric('first_used_percent', { precision: 5, scale: 2 }),
   firstReportedAt: timestamp('first_reported_at', { withTimezone: true }).defaultNow().notNull(),
   /** 최댓값을 마지막으로 확인한 보고 시각. 의미는 ax_usage_limit_windows 와 같다 */
   lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).defaultNow().notNull(),

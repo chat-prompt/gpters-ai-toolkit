@@ -1562,7 +1562,9 @@ async function recordLimitWindows(
     try {
       await db
         .insert(axUsageLimitWindows)
-        .values({ userId, client, resetsAt, memberName, maxUsedPercent: value, firstReportedAt: receivedAt, lastReportedAt: receivedAt, lastSeenAt: receivedAt })
+        // 첫 관측 값은 회차가 처음 생길 때만 남는다(받은 시각 순 — 같은 회차의 뒤 보고는 건드리지 않는다).
+        // 초기화 시각만 옮겨 간 회차를 가를 때 다음 회차가 어디서 시작했는지 본다
+        .values({ userId, client, resetsAt, memberName, maxUsedPercent: value, firstUsedPercent: value, firstReportedAt: receivedAt, lastReportedAt: receivedAt, lastSeenAt: receivedAt })
         .onConflictDoUpdate({
           target: [axUsageLimitWindows.userId, axUsageLimitWindows.client, axUsageLimitWindows.resetsAt],
           set: {
