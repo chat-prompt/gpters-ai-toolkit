@@ -267,6 +267,25 @@ describe('buildRenewalRows', () => {
     expect(low.currentPercent).toBe(8)
   })
 
+  it('첫 관측 값(0048)이 있으면 그것으로 이어짐을 가린다 — 최댓값이 앞 회차만큼 올라도 낮게 시작했으면 진짜 초기화다', () => {
+    const at = (text: string) => new Date(`${text}+09:00`)
+    const window = (resetsAt: string, max: number, first: number | null, firstAt: string, last: string) => ({
+      memberName: '홍길동', client: 'claude-code' as const, limitUsedPercent: max, limitResetsAt: at(resetsAt),
+      syncedAt: at(last), seenAt: at(last), firstSeenAt: at(firstAt), firstUsedPercent: first,
+    })
+    const build = (secondFirst: number | null) => buildRenewalRows([sub({ renewalDay: 15 })], [
+      window('2026-10-27T01:00:00', 94, 40, '2026-10-21T09:45:00', '2026-10-22T15:53:00'),
+      window('2026-10-28T02:00:00', 95, secondFirst, '2026-10-22T16:05:00', '2026-10-27T01:00:00'),
+    ], at('2026-10-27T09:00:00'))[0]
+    // 94% 회차 뒤 2% 에서 시작 → 진짜 초기화(나중에 95% 까지 올랐어도)
+    expect(build(2).recentWeeks.map((week) => week.usedPercent)).toEqual([94])
+    // 94% 에서 시작 → 초기화 시각만 옮겨 감
+    expect(build(94).recentWeeks).toEqual([])
+    expect(build(94).currentPercent).toBe(95)
+    // 첫 값을 모르면(0048 전 기록) 최댓값으로 대신 본다 — 이어진 것으로
+    expect(build(null).recentWeeks).toEqual([])
+  })
+
   it('합친 회차가 나중에 실제로 일찍 초기화되면 기간은 앞 회차 시작부터 센다 (7일 환산이 다시 부풀지 않게)', () => {
     const at = (text: string) => new Date(`${text}+09:00`)
     const window = (resetsAt: string, percent: number, first: string, last: string) => ({

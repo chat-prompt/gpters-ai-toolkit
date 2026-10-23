@@ -117,6 +117,7 @@ export async function recordAgentLimitSnapshot(snapshot: AgentLimitSnapshot, now
       accountKey: snapshot.accountKey,
       resetsAt,
       maxUsedPercent: value,
+      firstUsedPercent: value,
       firstReportedAt: observedAt,
       lastReportedAt: observedAt,
       lastSeenAt: observedAt,
@@ -131,6 +132,8 @@ export async function recordAgentLimitSnapshot(snapshot: AgentLimitSnapshot, now
           when ${value}::numeric = ${axAccountLimitWindows.maxUsedPercent} then greatest(${axAccountLimitWindows.lastReportedAt}, ${at}::timestamptz)
           else ${axAccountLimitWindows.lastReportedAt} end`,
         lastSeenAt: sql`greatest(${axAccountLimitWindows.lastSeenAt}, ${at}::timestamptz)`,
+        // 관측 시각이 지금 기록된 첫 관측보다 이르면(봇 여럿이 늦게 보냄) 첫 관측 값도 그 값으로. 0048 전 행(null)은 첫 값을 모르니 그대로 둔다
+        firstUsedPercent: sql`case when ${at}::timestamptz < ${axAccountLimitWindows.firstReportedAt} and ${axAccountLimitWindows.firstUsedPercent} is not null then ${value}::numeric else ${axAccountLimitWindows.firstUsedPercent} end`,
         firstReportedAt: sql`least(${axAccountLimitWindows.firstReportedAt}, ${at}::timestamptz)`,
         agentIds: sql`array(select distinct id from unnest(${axAccountLimitWindows.agentIds} || array[${snapshot.agentId}]::text[]) as id order by id)`,
       },
