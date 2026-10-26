@@ -2,6 +2,7 @@
  * AX 대시보드 — 클라이언트 화면 (EDU-11519)
  *
  * 구성원 × 구독 표는 사람 단위로 묶는다. 기본은 이름순, 결제 임박순이면 묶음끼리 그 사람의 가장 가까운 결제일 순이다.
+ * 공용·봇 구독 묶음은 어느 정렬이든 맨 위다.
  * 평소 설명은 "?" 도움말에 두고, 상태 경고(구독 조회 실패·시트 갱신 지연)와 빈 화면의 기준 시각은 펼쳐 둔다.
  * 서비스 비중 게이지는 항목마다 Claude Code 몫을 보여준다.
  */
@@ -107,6 +108,14 @@ describe('클라이언트 화면', () => {
       ['', 'Codex Pro'],
       ['김철수', 'Claude Code Pro'],
     ])
+  })
+
+  it('공용·봇 구독 묶음은 어느 정렬이든 맨 위에 모인다', () => {
+    const shared = { ...person('하나(봇)', 'Claude Code', 30), subscription: { ...person('하나(봇)', 'Claude Code', 30).subscription!, shared: true } }
+    render(<ClientUsagePanel days={7} data={data([...scattered(), shared])} />)
+    expect(peopleCells()[0][0]).toBe('하나(봇)')
+    fireEvent.click(screen.getByRole('button', { name: '결제 임박순' }))
+    expect(peopleCells()[0][0]).toBe('하나(봇)')
   })
 
   it('읽는 법·기준 시각은 도움말로 들어가고, 시트 반영 기록이 없으면 경고는 늘 보인다', () => {

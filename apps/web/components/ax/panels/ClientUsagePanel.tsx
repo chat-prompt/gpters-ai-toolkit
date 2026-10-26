@@ -1210,6 +1210,7 @@ function renewalOrder(row: AxMemberServiceRow): number {
  *
  * 결제 임박순이면 묶음끼리는 그 사람의 가장 가까운 결제일 순이다 — 결제일로 줄을 흩으면
  * 같은 사람의 Claude·Codex 가 멀리 떨어져 한 사람을 한눈에 볼 수 없다.
+ * 공용·봇 구독 묶음은 정렬 기준과 상관없이 맨 위에 모은다 — 사람 이름 사이에 흩어지면 공용 구독을 한눈에 못 본다.
  *
  * @param rows - 구성원 × 서비스 줄
  * @param sort - 묶음 정렬 기준
@@ -1220,7 +1221,9 @@ function groupByPerson(rows: AxMemberServiceRow[], sort: PeopleSort): AxMemberSe
   const groups = [...byName.values()].map((group) =>
     [...group].sort((a, b) => renewalOrder(a) - renewalOrder(b) || a.service.localeCompare(b.service))
   )
+  const shared = (group: AxMemberServiceRow[]) => (group[0].subscription?.shared ? 0 : 1)
   return groups.sort((a, b) =>
+    shared(a) - shared(b) ||
     (sort === 'renewal' ? renewalOrder(a[0]) - renewalOrder(b[0]) : 0) || a[0].name.localeCompare(b[0].name, 'ko')
   )
 }
