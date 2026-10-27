@@ -457,6 +457,7 @@ function measureLimit(
     collectorInstanceId: installation.collectorId,
     source: installation.source,
     sessionsDir: installation.sessionsDir,
+    hermesProfile: installation.hermesProfile,
     stateDir: installation.checkpointDir,
     home: options.home,
     now: options.now,
@@ -576,7 +577,7 @@ export async function runAgentTelemetryDoctor(
     : null
   const healthy = sourceExists && cliExists && cliUpToDate && scheduleMatchesRecord && credentialAvailable &&
     scheduleLoaded !== false && dryRun?.batch.collection.healthStatus === 'healthy'
-  // 한도 측정은 건강 판정에 넣지 않는다 — Hermes·API 키 봇처럼 원래 잴 수 없는 설치도 수집은 정상이다
+  // 한도 측정은 건강 판정에 넣지 않는다 — API 키 봇이나 Codex 로그인이 없는 Hermes 처럼 잴 수 없는 설치도 수집은 정상이다
   const limit = await measureLimit(installation, options)
   const cswap = await measureCswap(installation, options)
 

@@ -10,6 +10,10 @@
  * - Codex: 롤아웃에 한도가 남으므로 호출 없이 마지막 스냅샷을 읽는다. 계정은 auth.json id_token 의 email.
  *   롤아웃에는 계정이 남지 않는다 — 계정이 바뀌면 그 시각을 로컬에 적고, 그 뒤에 관측된 한도만 보낸다.
  *   그렇지 않으면 옛 계정의 높은 값이 새 계정 회차의 최댓값으로 굳는다.
+ * - Hermes(openai-codex provider): Hermes 기록(state.db)에는 한도가 남지 않는다. Hermes 런타임이 고르는 것과 같은
+ *   Codex 접근 토큰(auth.json)으로 Codex 사용량 API 를 조회한다 — Codex CLI 와 Hermes 의 `/usage` 가 쓰는 그 경로다.
+ *   토큰은 읽기만 하고 갱신하지 않는다. 갱신하면 refresh token 이 바뀌어 Hermes 로그인이 끊긴다.
+ *   만료됐으면 이번 회차는 건너뛴다 — 봇이 Hermes 를 쓰면 Hermes 가 갱신한다.
  *
  * - cswap: 봇이 cswap 으로 여러 Claude 계정을 돌려 쓰면 지금 켜진 계정 하나만 위 방법으로 잴 수 있다.
  *   `cswap list --json` 이 계정마다 주간 사용률을 조회해 주므로 그것을 그대로 싣는다(계정을 바꾸지 않는다 —
@@ -42,7 +46,7 @@ export interface AgentLimitSnapshot {
 /** 측정 결과 — 실패도 이유를 담아 doctor·run 출력에 그대로 싣는다 */
 export type AgentLimitProbeResult =
   | { ok: true; snapshot: AgentLimitSnapshot }
-  | { ok: false; reason: 'unsupported-source' | 'no-account' | 'no-limit' | 'claude-not-found' | 'probe-failed' | 'account-changed' }
+  | { ok: false; reason: 'unsupported-source' | 'no-account' | 'no-limit' | 'claude-not-found' | 'probe-failed' | 'account-changed' | 'token-expired' }
 
 /** 측정에 필요한 설치 정보 */
 export interface AgentLimitProbeInput {
@@ -50,11 +54,15 @@ export interface AgentLimitProbeInput {
   collectorInstanceId: string
   source: AgentTelemetrySource
   sessionsDir: string
+  /** Hermes 프로필 — 이름 있는 프로필은 `profiles/<이름>/auth.json` 을 먼저 본다 */
+  hermesProfile?: string
   /** Codex 계정 전환 시각을 적어 두는 디렉터리 (설치의 checkpointDir) */
   stateDir: string
   home?: string
   /** 테스트용 — 외부 명령 실행 */
   run?: (command: string, args: string[], env: NodeJS.ProcessEnv, cwd: string) => Promise<string>
+  /** 테스트용 — Codex 사용량 API 호출 */
+  fetchImpl?: typeof fetch
   now?: Date
 }
 
@@ -63,6 +71,10 @@ const PROBE_TIMEOUT_MS = 60_000
 const CSWAP_STALE_MS = 3 * 3_600_000
 /** Codex 롤아웃은 이보다 오래된 한도를 보지 않는다 — 회차(7일)를 넘긴 값은 쓸모가 없다 */
 const CODEX_LOOKBACK_MS = 8 * 86_400_000
+/** Codex 사용량 API. Codex CLI 와 Hermes 의 `/usage` 가 같이 쓴다 */
+const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
+/** 주간 창의 길이. 플랜마다 주간 창이 primary 일 수도 secondary 일 수도 있어 이름이 아니라 길이로 고른다 */
+const WEEK_SECONDS = 604_800
 
 /**
  * 계정 이메일을 계정 키로 바꾼다
@@ -162,6 +174,111 @@ const defaultRun: NonNullable<AgentLimitProbeInput['run']> = (command, args, env
   })
 
 /**
+ * Hermes 인증 저장소 위치. state.db 가 `profiles/<이름>/` 안에 있으면 그 폴더가 프로필 홈이고,
+ * 아니면 state.db 가 있는 폴더가 루트 홈이다(이름 있는 프로필은 `<루트>/profiles/<이름>`).
+ * 사용자의 `~/.hermes` 로는 넘어가지 않는다 — 봇이 아닌 사람의 계정을 잴 수 있다
+ *
+ * @param sessionsDir - 수집 대상 state.db 경로
+ * @param profile - `--hermes-profile`
+ */
+export function hermesAuthHomes(sessionsDir: string, profile: string | undefined): { profile?: string; root: string } {
+  const dbDir = dirname(resolve(sessionsDir))
+  if (basename(dirname(dbDir)) === 'profiles') return { profile: dbDir, root: dirname(dirname(dbDir)) }
+  return profile && profile !== 'default' ? { profile: join(dbDir, 'profiles', profile), root: dbDir } : { root: dbDir }
+}
+
+type HermesAuthStore = {
+  providers?: Record<string, { tokens?: { access_token?: unknown; refresh_token?: unknown; account_id?: unknown } } | undefined>
+  credential_pool?: Record<string, unknown>
+}
+
+function readHermesAuth(dir: string | undefined): HermesAuthStore {
+  if (!dir) return {}
+  try {
+    const parsed = JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf-8')) as unknown
+    return parsed && typeof parsed === 'object' ? parsed as HermesAuthStore : {}
+  } catch {
+    return {}
+  }
+}
+
+function jwtExpired(token: string, now: Date): boolean {
+  try {
+    const exp = (JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf-8')) as { exp?: unknown }).exp
+    return typeof exp === 'number' && exp * 1000 <= now.getTime()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Hermes 런타임이 고르는 Codex 접근 토큰을 같은 규칙으로 고른다(hermes_cli/auth_codex.py
+ * `resolve_codex_runtime_credentials`). 단일 로그인(프로필 → 루트)이 있으면 그것만 쓴다 — 만료됐어도 Hermes 는
+ * 그 로그인을 갱신해 쓰므로 다른 계정으로 넘어가지 않고 token-expired 로 둔다. refresh token 이 없는 단일 로그인은
+ * 없는 것으로 본다. 단일 로그인이 없으면 풀(프로필에 항목이 하나라도 있으면 프로필 것만)에서 한도 대기(cooldown)
+ * 중이 아닌 첫 항목을 고르고, 그 토큰이 만료됐으면 token-expired 다
+ *
+ * @param homes - {@link hermesAuthHomes} 결과
+ * @param now - 만료·대기 판정 시각
+ */
+export function pickHermesCodexToken(
+  homes: { profile?: string; root: string }, now: Date
+): { ok: true; accessToken: string; accountId?: string } | { ok: false; reason: 'no-account' | 'token-expired' } {
+  const profileStore = readHermesAuth(homes.profile)
+  const rootStore = homes.profile === homes.root ? {} : readHermesAuth(homes.root)
+  const state = profileStore.providers?.['openai-codex'] ?? rootStore.providers?.['openai-codex']
+  // Hermes 처럼 앞뒤 공백을 다듬는다
+  const trimmed = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
+  const single = trimmed(state?.tokens?.access_token)
+  const refresh = trimmed(state?.tokens?.refresh_token)
+  // Hermes 는 refresh token 이 없는 단일 로그인을 무효로 보고 풀로 넘어간다
+  if (single && refresh) {
+    if (jwtExpired(single, now)) return { ok: false, reason: 'token-expired' }
+    const accountId = state?.tokens?.account_id
+    return { ok: true, accessToken: single, ...(typeof accountId === 'string' && accountId ? { accountId } : {}) }
+  }
+  const poolOf = (store: HermesAuthStore) => {
+    const entries = store.credential_pool?.['openai-codex']
+    return Array.isArray(entries) ? entries as Array<{ access_token?: unknown; last_error_reset_at?: unknown } | null> : []
+  }
+  const pool = poolOf(profileStore).length > 0 ? poolOf(profileStore) : poolOf(rootStore)
+  for (const entry of pool) {
+    if (!entry || typeof entry !== 'object') continue
+    const token = trimmed(entry.access_token)
+    if (!token) continue
+    // Hermes 와 같다 — 숫자(초)로 적힌 대기 종료 시각만 본다
+    if (typeof entry.last_error_reset_at === 'number' && entry.last_error_reset_at * 1000 > now.getTime()) continue
+    // Hermes 는 만료와 상관없이 이 항목을 쓴다 — 다음 계정으로 넘어가면 봇이 쓰지 않는 계정을 잰다
+    return jwtExpired(token, now) ? { ok: false, reason: 'token-expired' } : { ok: true, accessToken: token }
+  }
+  return { ok: false, reason: 'no-account' }
+}
+
+/**
+ * Codex 사용량 API 응답에서 계정 이메일과 주간 한도를 꺼낸다
+ *
+ * @param payload - `/wham/usage` 응답
+ * @param now - 지난 회차를 거르는 시각
+ * @returns 이메일이 없으면 email null, 주간 창이 없으면 limit null
+ */
+export function parseCodexUsage(
+  payload: unknown, now: Date
+): { email: string | null; limit: { usedPercent: number; resetsAt: string } | null } {
+  const body = (payload && typeof payload === 'object' ? payload : {}) as { email?: unknown; rate_limit?: Record<string, unknown> | null }
+  const email = typeof body.email === 'string' && body.email.includes('@') ? body.email : null
+  for (const key of ['primary_window', 'secondary_window']) {
+    const window = body.rate_limit?.[key] as { used_percent?: unknown; reset_at?: unknown; limit_window_seconds?: unknown } | null | undefined
+    if (!window || window.limit_window_seconds !== WEEK_SECONDS) continue
+    const used = window.used_percent
+    const resets = window.reset_at
+    if (typeof used !== 'number' || !Number.isFinite(used) || used < 0 || used > 100) continue
+    if (typeof resets !== 'number' || !Number.isFinite(resets) || resets * 1000 <= now.getTime()) continue
+    return { email, limit: { usedPercent: used, resetsAt: new Date(resets * 1000).toISOString() } }
+  }
+  return { email, limit: null }
+}
+
+/**
  * Codex 계정이 이 키로 바뀐 시각. 처음 보거나 바뀌었으면 지금으로 적는다
  *
  * @param stateDir - 상태 디렉터리
@@ -214,6 +331,32 @@ export async function probeAgentLimit(input: AgentLimitProbeInput): Promise<Agen
       return { ok: false, reason: 'account-changed' }
     }
     return { ok: true, snapshot: { ...base, client: 'codex', accountKey: key, ...limit } }
+  }
+
+  if (input.source === 'hermes') {
+    const token = pickHermesCodexToken(hermesAuthHomes(input.sessionsDir, input.hermesProfile), now)
+    if (!token.ok) return token
+    let payload: unknown
+    try {
+      const response = await (input.fetchImpl ?? fetch)(CODEX_USAGE_URL, {
+        headers: {
+          Authorization: `Bearer ${token.accessToken}`, Accept: 'application/json', 'User-Agent': 'codex-cli',
+          ...(token.accountId ? { 'ChatGPT-Account-Id': token.accountId } : {}),
+        },
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      })
+      if (!response.ok) return { ok: false, reason: 'probe-failed' }
+      payload = await response.json()
+    } catch {
+      return { ok: false, reason: 'probe-failed' }
+    }
+    const usage = parseCodexUsage(payload, now)
+    if (!usage.email) return { ok: false, reason: 'no-account' }
+    if (!usage.limit) return { ok: false, reason: 'no-limit' }
+    return {
+      ok: true,
+      snapshot: { ...base, client: 'codex', accountKey: accountKey(usage.email), ...usage.limit, observedAt: now.toISOString() },
+    }
   }
 
   if (input.source !== 'claude-code' && input.source !== 'openclaw') return { ok: false, reason: 'unsupported-source' }

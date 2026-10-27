@@ -28,15 +28,16 @@ export interface AgentLimitSnapshot {
   observedAt: string
 }
 
-/** 수집 출처가 내보낼 수 있는 클라이언트 — OpenClaw 봇은 Claude Code CLI 로 돈다 */
+/** 수집 출처가 내보낼 수 있는 클라이언트 — OpenClaw 봇은 Claude Code CLI 로, Hermes 봇은 openai-codex provider 로 돈다 */
 const CLIENT_BY_SOURCE: Record<string, AgentLimitClient> = {
   'claude-code': 'claude-code',
   openclaw: 'claude-code',
   codex: 'codex',
+  hermes: 'codex',
 }
 
 /**
- * 출처에서 보낼 수 있는 클라이언트를 고른다. Hermes 등 아직 측정하지 않는 출처는 null
+ * 출처에서 보낼 수 있는 클라이언트를 고른다. 측정하지 않는 출처는 null
  *
  * @param source - 수집기 등록 출처
  */
