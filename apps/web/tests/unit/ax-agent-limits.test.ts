@@ -39,10 +39,11 @@ describe('계정 한도 스냅샷 검증', () => {
     expect(errors({ resetsAt: '9999-01-01T00:00:00.000Z' })).toContain('resetsAt must be within 8 days of observedAt')
   })
 
-  it('OpenClaw 봇은 Claude Code 한도를, Hermes 는 아직 아무것도 보내지 못한다', () => {
+  it('OpenClaw 봇은 Claude Code 한도를, Hermes 봇은 Codex 한도를 보낸다', () => {
     expect(agentLimitClientForSource('openclaw')).toBe('claude-code')
     expect(agentLimitClientForSource('claude-code')).toBe('claude-code')
     expect(agentLimitClientForSource('codex')).toBe('codex')
-    expect(agentLimitClientForSource('hermes')).toBeNull()
+    expect(agentLimitClientForSource('hermes')).toBe('codex')
+    expect(agentLimitClientForSource('unknown')).toBeNull()
   })
 })

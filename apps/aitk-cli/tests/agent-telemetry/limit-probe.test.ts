@@ -11,7 +11,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   accountKey,
   claudeConfigDirFor,
+  hermesAuthHomes,
   parseClaudeWeeklyLimit,
+  parseCodexUsage,
+  pickHermesCodexToken,
   parseCswapAccounts,
   probeAgentLimit,
   probeCswapAccounts,
@@ -253,8 +256,120 @@ describe('계정 주간 한도 측정', () => {
       .toEqual({ ok: false, reason: 'unsupported-source' })
   })
 
-  it('Hermes 는 아직 재지 않는다', async () => {
-    const result = await probeAgentLimit({ agentId: 'b', collectorInstanceId: 'c', source: 'hermes', sessionsDir: '/x', stateDir: temp(), home: '/h', now: NOW })
-    expect(result).toEqual({ ok: false, reason: 'unsupported-source' })
+  it('Hermes 에 Codex 로그인이 없으면 API 를 부르지 않고 no-account', async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch
+    const result = await probeAgentLimit({ agentId: 'b', collectorInstanceId: 'c', source: 'hermes', sessionsDir: join(temp(), 'state.db'), stateDir: temp(), home: temp(), now: NOW, fetchImpl })
+    expect(result).toEqual({ ok: false, reason: 'no-account' })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe('Hermes(openai-codex) 주간 한도', () => {
+  const FUTURE_EXP = Math.floor(NOW.getTime() / 1000) + 3600
+  const RESET = Math.floor(NOW.getTime() / 1000) + 5 * 86_400
+  // 2026-10-27 실측한 /wham/usage 의 모양 (prolite: 주간 창이 primary 에 온다)
+  const usage = (email: string | undefined, usedPercent = 39) => ({
+    email, plan_type: 'prolite',
+    rate_limit: { primary_window: { used_percent: usedPercent, limit_window_seconds: 604_800, reset_after_seconds: 1, reset_at: RESET }, secondary_window: null },
+  })
+  const hermesHome = (auth: object) => {
+    const root = temp()
+    writeFileSync(join(root, 'auth.json'), JSON.stringify(auth))
+    return root
+  }
+  const reply = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
+
+  it('주간 창은 이름이 아니라 7일 길이로 고르고, 지난 회차는 버린다', () => {
+    expect(parseCodexUsage(usage('a@example.com'), NOW)).toEqual({ email: 'a@example.com', limit: { usedPercent: 39, resetsAt: new Date(RESET * 1000).toISOString() } })
+    const fiveHourOnly = { email: 'a@example.com', rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18_000, reset_at: RESET } } }
+    expect(parseCodexUsage(fiveHourOnly, NOW).limit).toBeNull()
+    const weeklySecondary = { rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18_000, reset_at: RESET }, secondary_window: { used_percent: 70, limit_window_seconds: 604_800, reset_at: RESET } } }
+    expect(parseCodexUsage(weeklySecondary, NOW).limit?.usedPercent).toBe(70)
+    const past = { rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 604_800, reset_at: 1 } } }
+    expect(parseCodexUsage(past, NOW).limit).toBeNull()
+  })
+
+  const tok = (n: string, exp = FUTURE_EXP) => jwt({ exp, n })
+  const pickedName = (picked: ReturnType<typeof pickHermesCodexToken>) =>
+    picked.ok ? JSON.parse(Buffer.from(picked.accessToken.split('.')[1], 'base64url').toString()).n : picked.reason
+  const writeAuth = (dir: string, auth: object) => { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'auth.json'), JSON.stringify(auth)) }
+
+  it('인증 홈: profiles/<이름>/state.db 면 그 폴더가 프로필, 루트 state.db 면 이름 있는 프로필만 하위 폴더', () => {
+    expect(hermesAuthHomes('/srv/hermes/profiles/bot/state.db', 'bot')).toEqual({ profile: '/srv/hermes/profiles/bot', root: '/srv/hermes' })
+    expect(hermesAuthHomes('/srv/hermes/state.db', 'bot')).toEqual({ profile: '/srv/hermes/profiles/bot', root: '/srv/hermes' })
+    expect(hermesAuthHomes('/srv/hermes/state.db', 'default')).toEqual({ root: '/srv/hermes' })
+  })
+
+  it('단일 로그인은 프로필 → 루트 순이고, 있으면 풀보다 먼저 쓴다', () => {
+    const root = temp()
+    writeAuth(root, { providers: { 'openai-codex': { tokens: { refresh_token: 'r', access_token: tok('root-single') } } } })
+    writeAuth(join(root, 'profiles', 'bot'), { credential_pool: { 'openai-codex': [{ access_token: tok('profile-pool') }] } })
+    // 프로필에 단일 로그인이 없으면 루트 단일 로그인이 프로필 풀보다 앞선다 (Hermes resolve 순서)
+    expect(pickedName(pickHermesCodexToken(hermesAuthHomes(join(root, 'state.db'), 'bot'), NOW))).toBe('root-single')
+    writeAuth(join(root, 'profiles', 'bot'), { providers: { 'openai-codex': { tokens: { refresh_token: 'r', access_token: tok('profile-single') } } } })
+    expect(pickedName(pickHermesCodexToken(hermesAuthHomes(join(root, 'state.db'), 'bot'), NOW))).toBe('profile-single')
+  })
+
+  it('단일 로그인이 만료됐으면 다른 계정으로 넘어가지 않고 token-expired', () => {
+    const root = temp()
+    writeAuth(root, { providers: { 'openai-codex': { tokens: { refresh_token: 'r', access_token: tok('valid-root') } } } })
+    writeAuth(join(root, 'profiles', 'bot'), {
+      providers: { 'openai-codex': { tokens: { refresh_token: 'r', access_token: tok('expired', 1) } } },
+      credential_pool: { 'openai-codex': [{ access_token: tok('pool') }] },
+    })
+    expect(pickHermesCodexToken(hermesAuthHomes(join(root, 'state.db'), 'bot'), NOW)).toEqual({ ok: false, reason: 'token-expired' })
+  })
+
+  it('풀은 프로필에 항목이 있으면 프로필 것만, 목록 순서대로, 한도 대기 중인 계정은 건너뛴다', () => {
+    const root = temp()
+    writeAuth(root, { credential_pool: { 'openai-codex': [{ access_token: tok('root-pool') }] } })
+    const cooling = Math.floor(NOW.getTime() / 1000) + 600
+    writeAuth(join(root, 'profiles', 'bot'), { credential_pool: { 'openai-codex': [
+      { access_token: tok('cooling'), last_error_reset_at: cooling }, null, { access_token: tok('usable') },
+    ] } })
+    expect(pickedName(pickHermesCodexToken(hermesAuthHomes(join(root, 'state.db'), 'bot'), NOW))).toBe('usable')
+    expect(pickedName(pickHermesCodexToken(hermesAuthHomes(join(root, 'state.db'), 'default'), NOW))).toBe('root-pool')
+  })
+
+  it('토큰이 없으면 no-account, 풀의 첫 후보가 만료면 다음 계정으로 넘어가지 않고 token-expired', () => {
+    expect(pickHermesCodexToken({ root: temp() }, NOW)).toEqual({ ok: false, reason: 'no-account' })
+    const root = temp()
+    writeAuth(root, { credential_pool: { 'openai-codex': [{ access_token: tok('old', 1) }, { access_token: tok('other') }] } })
+    expect(pickHermesCodexToken({ root }, NOW)).toEqual({ ok: false, reason: 'token-expired' })
+  })
+
+  it('refresh token 이 없는 단일 로그인은 Hermes 처럼 없는 것으로 보고 풀을 쓴다', () => {
+    const root = temp()
+    writeAuth(root, {
+      providers: { 'openai-codex': { tokens: { access_token: tok('no-refresh') } } },
+      credential_pool: { 'openai-codex': [{ access_token: tok('pool') }] },
+    })
+    expect(pickedName(pickHermesCodexToken({ root }, NOW))).toBe('pool')
+  })
+
+  it('사용량 API 응답의 이메일로 계정 키를 만들어 codex 한도로 싣는다', async () => {
+    const root = hermesHome({ providers: { 'openai-codex': { tokens: { refresh_token: 'r', access_token: jwt({ exp: FUTURE_EXP }), account_id: 'acct-1' } } } })
+    const fetchImpl = reply(usage('Team@Example.com'))
+    const result = await probeAgentLimit({
+      agentId: 'bbochongmu', collectorInstanceId: 'c3', source: 'hermes', sessionsDir: join(root, 'state.db'), hermesProfile: 'default',
+      stateDir: temp(), home: temp(), now: NOW, fetchImpl,
+    })
+    expect(result).toEqual({
+      ok: true,
+      snapshot: {
+        agentId: 'bbochongmu', collectorInstanceId: 'c3', client: 'codex', accountKey: accountKey('team@example.com'),
+        usedPercent: 39, resetsAt: new Date(RESET * 1000).toISOString(), observedAt: NOW.toISOString(),
+      },
+    })
+    const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://chatgpt.com/backend-api/wham/usage')
+    expect(init.headers).toMatchObject({ 'ChatGPT-Account-Id': 'acct-1', 'User-Agent': 'codex-cli' })
+  })
+
+  it('API 가 거절하면 probe-failed, 이메일이 없으면 no-account 로 귀속을 추측하지 않는다', async () => {
+    const root = hermesHome({ providers: { 'openai-codex': { tokens: { refresh_token: 'r', access_token: jwt({ exp: FUTURE_EXP }) } } } })
+    const input = { agentId: 'b', collectorInstanceId: 'c', source: 'hermes' as const, sessionsDir: join(root, 'state.db'), stateDir: temp(), home: temp(), now: NOW }
+    expect(await probeAgentLimit({ ...input, fetchImpl: reply({}, 401) })).toEqual({ ok: false, reason: 'probe-failed' })
+    expect(await probeAgentLimit({ ...input, fetchImpl: reply(usage(undefined)) })).toEqual({ ok: false, reason: 'no-account' })
   })
 })

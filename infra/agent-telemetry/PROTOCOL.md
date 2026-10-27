@@ -152,7 +152,25 @@ subscription is judged per account no matter how many agents use it.
   (a tiny share of the 5-hour limit), using the installation's Claude config dir.
 - `codex`: reads the newest rollout `rate_limits` after the last account switch.
   The first run after an account switch reports `no-limit` until a new session runs.
-- `hermes`: not measured yet (`unsupported-source`).
+- `hermes` (0.7.30+): Hermes keeps no limit in `state.db`, so the run picks the
+  `openai-codex` access token the Hermes runtime would use from `auth.json` and
+  calls the Codex usage endpoint (`chatgpt.com/backend-api/wham/usage`, the one
+  Codex CLI and Hermes `/usage` use). Same order as Hermes: the single login
+  (profile home, then the root home; one without a refresh token counts as
+  absent) before the credential pool; the pool of the profile if it has any
+  entry, else the root pool, taking the first entry not in a limit cooldown. The profile home is the `state.db` folder when it
+  sits in `profiles/<name>/`, otherwise `<state.db folder>/profiles/<name>` for a
+  named `--hermes-profile`; the user's `~/.hermes` is never consulted. The weekly
+  window is chosen by its 7-day length and the account key comes from the email
+  in the response. The token is never refreshed — refreshing would rotate
+  Hermes's refresh token and log Hermes out — so an expired selected token
+  reports `token-expired` (it does not fall through to another account) until
+  Hermes itself refreshes it. No separate Codex login or Codex CLI is needed.
+  `no-account` means no account could be settled (no usable `openai-codex`
+  login, every pool entry in cooldown, or no email in the response); a stale Codex login
+  left in a Hermes that now runs another provider would still be measured, so
+  confirm `accountKeyPrefix` against the roster. The server
+  accepts `hermes` collectors' snapshots as `client: codex` from the same release.
 - cswap (0.7.29+): when `cswap` is installed, `claude-code`/`openclaw` runs also
   read `cswap list --json` and send every registered account's 7-day usage. It
   never switches accounts; cswap itself skips tokens owned by the active account
@@ -165,7 +183,8 @@ subscription is judged per account no matter how many agents use it.
 `{ ok: true, client, accountKeyPrefix, usedPercent, resetsAt }`, or `ok: false`
 with `reason` = `no-account` (not signed in to a subscription), `no-limit` (no
 limit in the output yet), `claude-not-found`, `probe-failed`, `account-changed`
-(the account switched mid-measurement; the next run retries) or
+(the account switched mid-measurement; the next run retries),
+`token-expired` (Hermes's stored Codex token has expired) or
 `unsupported-source`. Report `accountKeyPrefix` and `usedPercent` in the
 operations thread so the operator can match agents that share one account.
 
