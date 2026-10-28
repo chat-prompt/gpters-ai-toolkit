@@ -6,6 +6,10 @@
  *
  * Codex는 롤아웃의 rate-limit 스냅샷을, Claude Code는 statusline usage cache의
  * 계정 주간 한도 스냅샷을 보고한다. 최신 스냅샷을 얻지 못한 행은 null로 남긴다.
+ *
+ * 서비스별·모델별 사용량 합계는 회사가 결제한 구독(로스터 사람 행)에 짝지어지는 보고만 센다 —
+ * 공용·서포트 계정을 개인이 쓴 Codex 사용(초기화 시각이 그 계정과 같은 보고)도 결제한 구독의 사용으로 센다.
+ * 이 화면은 결제한 구독을 얼마나 쓰는지 보려는 것이다(EDU-11817). 구독을 못 읽으면 거르지 않는다.
  */
 
 import {
@@ -32,7 +36,7 @@ import type {
 import { AX_USAGE_PARTICIPATION_STATUS_ORDER } from './types'
 import { panelOk, panelError, panelNotConfigured } from './panel'
 import { subscriptionsPanel } from './subscriptions'
-import { averageCycleByClient, buildMemberServiceRows, loadRenewalData } from './subscription-renewals'
+import { averageCycleByClient, buildMemberServiceRows, loadRenewalData, onSharedAccount, usageMatchesSubscription } from './subscription-renewals'
 import { createLogger } from '../../core/logger'
 
 const log = createLogger('ax-usage')
@@ -426,11 +430,14 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
     const [allRows, internal, subscriptionResult, renewalData] = await Promise.all([
       loadUsageRows(),
       loadInternalMembers(),
-      subscriptionsPanel.load(ctx),
+      // 사용량을 결제한 구독에 짝짓느라 소유자 이름이 필요하다 — 서버 안에서만 쓰고, 응답에는 아래에서 관리자에게만 싣는다
+      subscriptionsPanel.load({ ...ctx, isAdmin: true }),
       // 서비스별 주기 평균(집계값)은 모두에게 보여준다. 사람별 회차는 아래에서 관리자에게만 싣는다
       loadRenewalData(),
     ])
-    const subscriptions = subscriptionResult.status === 'ok' ? subscriptionResult.data : null
+    const subscriptionData = subscriptionResult.status === 'ok' ? subscriptionResult.data : null
+    const subscriptionMembers = subscriptionData?.members ?? null
+    const subscriptions = subscriptionData ? { ...subscriptionData, members: ctx.isAdmin ? subscriptionData.members : null } : null
     const internalMemberRows = internal?.members ?? null
     // 공용 계정은 분모·참여 상태뿐 아니라 사용량·활성 인원에서도 뺀다 — 어느 한쪽에만
     // 남으면 오류 복구 경로에서 활성 인원이 전체 구성원보다 많아진다.
@@ -467,6 +474,23 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
       )
     }
 
+    const internalMemberNameById = new Map(
+      (internalMemberRows ?? []).map((member) => [
+        member.id,
+        member.name?.trim() || member.email.split('@')[0],
+      ])
+    )
+    // user_id가 연결된 신규 행은 수집 당시 별칭이 아니라 현재 계정 표시명을 쓴다.
+    // 이름 변경·이메일 로컬파트 백필 뒤에도 한 사람이 서로 다른 이름으로 보이지 않는다.
+    const displayName = (row: (typeof current)[number]) =>
+      row.userId ? internalMemberNameById.get(row.userId) ?? row.memberName : row.memberName
+    // 결제한 구독의 사용만 합계에 넣는다 — 자기 이름 구독에 짝지어지거나, 공용 계정을 쓴 것으로 확인된 보고
+    const ownSubscription = (row: (typeof current)[number]) => subscriptionMembers?.some((sub) =>
+      usageMatchesSubscription(sub, { client: row.client as AxUsageClient, memberName: displayName(row) })) ?? false
+    const sharedAccount = (row: (typeof current)[number]) =>
+      !ownSubscription(row) && onSharedAccount(row, renewalData?.rows ?? [])
+    const paid = subscriptionMembers ? current.filter((row) => ownSubscription(row) || sharedAccount(row)) : current
+
     const clientAgg = new Map<
       AxUsageClient,
       { members: Set<string>; tokens: number; sessions: number; limits: number[] }
@@ -474,7 +498,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
     const modelAgg = new Map<string, number>()
     let totalTokens = 0
 
-    for (const row of current) {
+    for (const row of paid) {
       const client = row.client as AxUsageClient
       const tokens = row.inputTokens + row.outputTokens + row.cachedTokens
       totalTokens += tokens
@@ -515,22 +539,11 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
       .sort((a, b) => b.tokens - a.tokens)
       .slice(0, MODEL_LIMIT)
 
-    const internalMemberNameById = new Map(
-      (internalMemberRows ?? []).map((member) => [
-        member.id,
-        member.name?.trim() || member.email.split('@')[0],
-      ])
-    )
-
     const members: AxClientUsageMemberRow[] | null = ctx.isAdmin
       ? current
           .map((row) => ({
             userId: row.userId,
-            // user_id가 연결된 신규 행은 수집 당시 별칭이 아니라 현재 계정 표시명을 쓴다.
-            // 이름 변경·이메일 로컬파트 백필 뒤에도 한 사람이 서로 다른 이름으로 보이지 않는다.
-            memberName: row.userId
-              ? internalMemberNameById.get(row.userId) ?? row.memberName
-              : row.memberName,
+            memberName: displayName(row),
             client: row.client as AxUsageClient,
             plan: row.plan,
             totalTokens: row.inputTokens + row.outputTokens + row.cachedTokens,
@@ -550,7 +563,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
     }, null)
 
     const usageMemberCount = new Set(
-      current.map((row) => row.userId ?? `legacy:${normalizeIdentity(row.memberName)}`)
+      paid.map((row) => row.userId ?? `legacy:${normalizeIdentity(row.memberName)}`)
     ).size
 
     // 사람마다 보고일이 달라 구간도 조금씩 다르다 — 화면에는 전체를 덮는 범위를 보여준다
@@ -588,7 +601,10 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
         participation,
         subscriptions,
         people: members !== null && subscriptions?.members
-          ? buildMemberServiceRows(members, subscriptions.members, renewalData?.rows ?? [], new Date())
+          // 공용 계정 사용은 그 공용 줄이 계정으로 잰다 — 「구독 없이 사용」으로 세지 않는다
+          ? buildMemberServiceRows(
+              members.filter((member) => !current.some((row) => sharedAccount(row) && row.client === member.client && displayName(row) === member.memberName)),
+              subscriptions.members, renewalData?.rows ?? [], new Date())
           : null,
         peopleError: members !== null && !subscriptions?.members,
         // 서비스별 주기 평균도 이 데이터로 만든다 — 실패를 "회차 없음"과 가르려면 비관리자에게도 알린다

@@ -432,6 +432,38 @@ export function averageCycleByClient(renewals: AxRenewalRow[]): Partial<Record<A
  * @param now - 기준 시각
  * @returns 다음 결제일이 가까운 순. 결제일이 없는 줄은 뒤로
  */
+/**
+ * 사용 보고가 이 구독(사람 구독)의 사용인지 — 서비스가 같고 소유자가 같은 사람이면 짝이다.
+ * 공용·서포트 구독에는 사람 보고를 붙이지 않는다(봇 수집기가 계정으로 잰다).
+ * 구성원 × 구독 표와 서비스별 사용량 합계가 같은 규칙을 쓴다(EDU-11817).
+ */
+export function usageMatchesSubscription(
+  sub: Pick<AxSubscriptionMemberRow, 'ownerName' | 'vendor'>,
+  member: Pick<AxClientUsageMemberRow, 'client' | 'memberName'>
+): boolean {
+  const owner = sub.ownerName?.trim() ?? ''
+  return !isSharedOwner(owner) && CLIENT_BY_VENDOR[sub.vendor] === member.client && samePerson(owner, member.memberName)
+}
+
+/** 같은 계정으로 볼 초기화 시각 차이 — Codex 일괄 조기 초기화로 다른 계정끼리도 수십 초 안에 몰린다 */
+const SAME_ACCOUNT_RESET_MS = 5_000
+
+/**
+ * 이름으로 구독에 짝지어지지 않은 개인 Codex 보고가 공용·서포트 계정의 사용인지 —
+ * 초기화 시각이 그 계정의 지금 회차와 몇 초 안이면 같은 계정이다(같은 계정이면 초 단위까지 같다).
+ * Claude 는 정시에 초기화돼 다른 계정끼리도 겹치므로 판정하지 않는다(EDU-11817).
+ * ponytail: 시각 근접 판정이라 일괄 초기화 직후 다른 계정이 몇 초 안에 겹치면 잘못 붙는다 — 개인 보고에 계정 키를 싣게 되면 그것으로 바꾼다
+ */
+export function onSharedAccount(
+  report: { client: string; limitResetsAt: Date | string | null },
+  renewals: Pick<AxRenewalRow, 'shared' | 'vendor' | 'currentResetsAt'>[]
+): boolean {
+  if (report.client !== 'codex' || !report.limitResetsAt) return false
+  const at = new Date(report.limitResetsAt).getTime()
+  return renewals.some((renewal) => renewal.shared && CLIENT_BY_VENDOR[renewal.vendor] === 'codex' && renewal.currentResetsAt !== null
+    && Math.abs(new Date(renewal.currentResetsAt).getTime() - at) <= SAME_ACCOUNT_RESET_MS)
+}
+
 export function buildMemberServiceRows(
   usageMembers: AxClientUsageMemberRow[],
   subscriptions: AxSubscriptionMemberRow[],
@@ -458,7 +490,7 @@ export function buildMemberServiceRows(
     // 같은 사람의 보고가 여럿이면(옛 이름 행 + 인증 계정 행) 가장 최근 것을 붙인다 — 입력은 토큰 순이라 첫 매칭이 최신이 아니다.
     // 나머지도 이 구독의 것으로 소비한다. 남겨 두면 "구독 없이 사용" 줄이 거짓으로 생긴다
     const candidates = trackable && !shared
-      ? usageMembers.filter((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
+      ? usageMembers.filter((candidate) => !used.has(candidate) && usageMatchesSubscription(sub, candidate))
       : []
     const member = candidates.reduce<AxClientUsageMemberRow | undefined>(
       (latest, candidate) => (!latest || (candidate.lastReportedAt ?? '') > (latest.lastReportedAt ?? '') ? candidate : latest),

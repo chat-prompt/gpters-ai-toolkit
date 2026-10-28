@@ -9,7 +9,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-const { averageCycleByClient, buildMemberServiceRows, buildRenewalRows, personNameKeys, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
+const { averageCycleByClient, buildMemberServiceRows, buildRenewalRows, onSharedAccount, personNameKeys, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
 
 /** KST 시각 → Date */
 const kst = (text: string) => new Date(`${text}+09:00`)
@@ -623,5 +623,19 @@ describe('공용·서포트 구독 — 계정 키로 봇 수집기 회차를 잇
       account: { agentIds: ['bbojjak'], currentPercent: 12, lastSeenAt: kst('2026-10-19T09:00:00').toISOString() },
     })
     expect(rows.find((row) => row.name === '서포트')).toMatchObject({ trackable: false, account: null, subscription: { shared: true } })
+  })
+})
+
+describe('onSharedAccount — 공용 계정을 개인이 쓴 Codex 보고 (EDU-11817)', () => {
+  const shared = { shared: true, vendor: 'OpenAI', currentResetsAt: '2026-11-02T06:08:20.000Z' }
+  it('초기화 시각이 공용 계정 지금 회차와 5초 안이면 같은 계정이다', () => {
+    expect(onSharedAccount({ client: 'codex', limitResetsAt: new Date('2026-11-02T06:08:23Z') }, [shared])).toBe(true)
+    expect(onSharedAccount({ client: 'codex', limitResetsAt: '2026-11-02T06:08:20.000Z' }, [shared])).toBe(true)
+  })
+  it('일괄 초기화로 몰린 다른 계정(수십 초 차이)·사람 구독·Claude·시각 없음은 아니다', () => {
+    expect(onSharedAccount({ client: 'codex', limitResetsAt: new Date('2026-11-02T06:07:51Z') }, [shared])).toBe(false)
+    expect(onSharedAccount({ client: 'codex', limitResetsAt: new Date('2026-11-02T06:08:20Z') }, [{ ...shared, shared: false }])).toBe(false)
+    expect(onSharedAccount({ client: 'claude-code', limitResetsAt: new Date('2026-11-02T06:08:20Z') }, [{ ...shared, vendor: 'Anthropic' }])).toBe(false)
+    expect(onSharedAccount({ client: 'codex', limitResetsAt: null }, [shared])).toBe(false)
   })
 })

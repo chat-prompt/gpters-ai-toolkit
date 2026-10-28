@@ -157,6 +157,73 @@ describe('clientUsagePanel', () => {
     expect(codex.avgLimitUsedPercent).toBeNull()
   })
 
+  describe('결제한 구독의 사용만 합계에 넣는다 (EDU-11817)', () => {
+    const sub = (ownerName: string, vendor: string) => ({
+      ownerName, vendor, plan: 'Pro5x', amount: 100, currency: 'USD', billingCycle: 'monthly',
+      renewalDay: 1, payer: '본인', status: 'active', hasAccountKey: false,
+    })
+    const subscriptions = {
+      status: 'ok',
+      data: {
+        syncedAt: null, activeSeats: 2, monthlyByCurrency: { USD: 200 },
+        byVendor: [{ vendor: 'OpenAI', seats: 2, monthlyByCurrency: { USD: 200 } }],
+        // 다혜는 공용 계정을 개인으로 쓴다 — 공용 구독에는 사람 보고를 붙이지 않는다
+        members: [sub('진우', 'OpenAI'), sub('공용(다혜팀)', 'OpenAI')],
+      },
+    }
+    const usage = () => [
+      row({ memberName: '진우', client: 'codex', models: { 'gpt-5.6-sol': 1000 } }),
+      row({ memberName: '다혜', client: 'codex', sessions: 2, models: { 'gpt-5.6-terra': 700 } }),
+      row({ memberName: '진우', client: 'claude-code', models: { 'claude-opus-5-5': 900 } }),
+    ]
+
+    it.each([['관리자', ADMIN], ['구성원', MEMBER]])('%s 화면의 서비스·모델 합계에서 구독 없는 사용을 뺀다', async (_, ctx) => {
+      subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+      queueRows(usage())
+      const result = await clientUsagePanel.load(ctx)
+
+      // 소유자 이름은 서버 안에서만 읽는다 — 구성원에게는 여전히 내보내지 않는다
+      expect(subscriptionMocks.subscriptions).toHaveBeenCalledWith(expect.objectContaining({ isAdmin: true }))
+      expect(result.data!.subscriptions!.members).toEqual(ctx.isAdmin ? subscriptions.data.members : null)
+      expect(result.data!.byClient).toEqual([
+        expect.objectContaining({ client: 'codex', members: 1, sessions: 3, totalTokens: 1000 }),
+      ])
+      expect(result.data!.totalTokens).toBe(1000)
+      expect(result.data!.byModel).toEqual([{ model: 'gpt-5.6-sol', tokens: 1000 }])
+    })
+
+    it('구성원 × 구독 표에는 구독 없는 줄도 넘겨 「구독 없이 사용」을 셀 수 있게 한다', async () => {
+      subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+      queueRows(usage())
+      const result = await clientUsagePanel.load(ADMIN)
+      expect(result.data!.people!.filter((person) => !person.subscription).map((person) => `${person.name}/${person.service}`).sort())
+        .toEqual(['다혜/Codex', '진우/Claude Code'])
+    })
+
+    it('공용 계정을 개인이 쓴 Codex 사용은 결제한 구독의 사용으로 세고, 「구독 없이 사용」에서도 뺀다', async () => {
+      subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+      // 다혜 보고의 초기화 시각이 공용(다혜팀) 계정의 지금 회차와 3초 차이 — 같은 계정이다
+      subscriptionMocks.renewals.mockResolvedValue({ rows: [{
+        ownerName: '공용(다혜팀)', vendor: 'OpenAI', plan: 'Pro5x', amount: 100, currency: 'USD', renewalDay: 1,
+        nextRenewal: '2026-09-01', daysLeft: 22, weeks: [], averagePercent: null, currentPercent: 12,
+        currentResetsAt: '2026-08-13T00:00:03.000Z', recentWeeks: [], shared: true, agentIds: ['bot'], lastSeenAt: null,
+      }] })
+      queueRows(usage())
+      const result = await clientUsagePanel.load(ADMIN)
+
+      expect(result.data!.byClient).toEqual([
+        expect.objectContaining({ client: 'codex', members: 2, sessions: 5, totalTokens: 2000 }),
+      ])
+      expect(result.data!.people!.filter((person) => !person.subscription).map((person) => person.name)).toEqual(['진우'])
+    })
+
+    it('구독을 못 읽으면 거르지 않는다', async () => {
+      queueRows(usage())
+      const result = await clientUsagePanel.load(ADMIN)
+      expect(result.data!.totalTokens).toBe(3000)
+    })
+  })
+
   it('서비스별 주간 한도는 사람별 주기 평균의 평균이고, 관리자가 아니어도 집계값은 받는다', async () => {
     const renewal = (ownerName: string, vendor: string, averagePercent: number | null) => ({
       ownerName, vendor, plan: 'Max5x', amount: 100, currency: 'USD', renewalDay: 1,
