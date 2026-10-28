@@ -909,6 +909,11 @@ export interface AxRenewalRow {
 export interface AxSubscriptionRenewalData {
   /** 다음 결제일이 가까운 순 */
   rows: AxRenewalRow[]
+  /**
+   * 활성 공용·서포트 구독 계정의 진행 중인 Codex 회차 초기화 시각(ISO) — 결제 주기 조건과 무관하게 모은다.
+   * 공용 계정을 개인이 쓴 보고를 가리는 데 쓴다(`onSharedAccount`, EDU-11817)
+   */
+  sharedCodexResets: string[]
 }
 
 /**

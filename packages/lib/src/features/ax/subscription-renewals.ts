@@ -438,29 +438,48 @@ const SAME_ACCOUNT_RESET_MS = 5_000
 
 /**
  * 이름으로 구독에 짝지어지지 않은 개인 Codex 보고가 공용·서포트 계정의 사용인지 —
- * 초기화 시각이 그 계정의 지금 회차와 몇 초 안이면 같은 계정이다(같은 계정이면 초 단위까지 같다).
+ * 초기화 시각이 그 계정의 진행 중인 회차와 몇 초 안이면 같은 계정이다(같은 계정이면 초 단위까지 같다).
  * Claude 는 정시에 초기화돼 다른 계정끼리도 겹치므로 판정하지 않는다(EDU-11817).
  * ponytail: 시각 근접 판정이라 일괄 초기화 직후 다른 계정이 몇 초 안에 겹치면 잘못 붙는다 — 개인 보고에 계정 키를 싣게 되면 그것으로 바꾼다
  */
 export function onSharedAccount(
   report: { client: string; limitResetsAt: Date | string | null },
-  renewals: Pick<AxRenewalRow, 'shared' | 'vendor' | 'currentResetsAt'>[]
+  sharedCodexResets: string[]
 ): boolean {
   if (report.client !== 'codex' || !report.limitResetsAt) return false
   const at = new Date(report.limitResetsAt).getTime()
-  return renewals.some((renewal) => renewal.shared && CLIENT_BY_VENDOR[renewal.vendor] === 'codex' && renewal.currentResetsAt !== null
-    && Math.abs(new Date(renewal.currentResetsAt).getTime() - at) <= SAME_ACCOUNT_RESET_MS)
+  return sharedCodexResets.some((resetsAt) => Math.abs(new Date(resetsAt).getTime() - at) <= SAME_ACCOUNT_RESET_MS)
+}
+
+/**
+ * 활성 공용·서포트 구독 계정의 진행 중인 Codex 회차 초기화 시각 — 결제일·결제 주기와 무관하게 계정 키만 본다
+ *
+ * @param subscriptions - 활성 구독 행
+ * @param accountWindows - 봇 수집기가 잰 계정 회차
+ */
+export function sharedCodexResets(
+  subscriptions: { ownerName: string | null; vendor: string; accountKey?: string | null }[],
+  accountWindows: Pick<RenewalUsageInput, 'accountKey' | 'client' | 'limitResetsAt'>[],
+  now: Date
+): string[] {
+  const keys = new Set(subscriptions
+    .filter((sub) => isSharedOwner(sub.ownerName) && sub.accountKey && CLIENT_BY_VENDOR[sub.vendor] === 'codex')
+    .map((sub) => sub.accountKey))
+  return accountWindows
+    .flatMap((window) => window.client === 'codex' && window.accountKey && keys.has(window.accountKey) && window.limitResetsAt && window.limitResetsAt > now
+      ? [window.limitResetsAt.toISOString()]
+      : [])
 }
 
 /**
  * 구성원 × 서비스 한 줄 표를 만든다 (DB 없이 테스트하는 순수 함수)
  *
  * 구독 한 건마다 한 줄을 만들고 같은 사람·같은 클라이언트의 사용 보고를 붙인다.
- * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등).
+ * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등). 화면은 이 줄을 그리지 않고 수만 센다.
  *
  * @param usageMembers - 클라이언트 패널의 팀원별 최신 사용량
  * @param subscriptions - 활성 구독 전체 (공용·연간 포함)
- * @param renewals - 갱신 결정표 (사람 구독만)
+ * @param renewals - 갱신 결정표 (사람 구독과 계정 키가 있는 공용 구독)
  * @param now - 기준 시각
  * @returns 다음 결제일이 가까운 순. 결제일이 없는 줄은 뒤로
  */
@@ -657,7 +676,10 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
       loadLimitWindows(since),
       loadAccountLimitWindows(since),
     ])
-    return { rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now) }
+    return {
+      rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now),
+      sharedCodexResets: sharedCodexResets(subscriptions, accountWindows, now),
+    }
   } catch (err) {
     log.error('구독 갱신 데이터 조회 실패', err)
     return null

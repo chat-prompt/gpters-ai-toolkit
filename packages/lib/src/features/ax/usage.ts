@@ -488,7 +488,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
     const ownSubscription = (row: (typeof current)[number]) => subscriptionMembers?.some((sub) =>
       usageMatchesSubscription(sub, { client: row.client as AxUsageClient, memberName: displayName(row) })) ?? false
     const sharedAccount = (row: (typeof current)[number]) =>
-      !ownSubscription(row) && onSharedAccount(row, renewalData?.rows ?? [])
+      !ownSubscription(row) && onSharedAccount(row, renewalData?.sharedCodexResets ?? [])
     const paid = subscriptionMembers ? current.filter((row) => ownSubscription(row) || sharedAccount(row)) : current
 
     const clientAgg = new Map<
@@ -561,8 +561,9 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
       return !latest || value > latest ? value : latest
     }, null)
 
+    // 주간 활성은 사용 보고를 보낸 사람 수다 — 결제와 무관하게 센다(참여 상태가 없을 때의 대체값)
     const usageMemberCount = new Set(
-      paid.map((row) => row.userId ?? `legacy:${normalizeIdentity(row.memberName)}`)
+      current.map((row) => row.userId ?? `legacy:${normalizeIdentity(row.memberName)}`)
     ).size
 
     // 사람마다 보고일이 달라 구간도 조금씩 다르다 — 화면에는 전체를 덮는 범위를 보여준다

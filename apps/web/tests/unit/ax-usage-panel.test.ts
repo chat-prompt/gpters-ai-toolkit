@@ -203,11 +203,7 @@ describe('clientUsagePanel', () => {
     it('공용 계정을 개인이 쓴 Codex 사용은 결제한 구독의 사용으로 세고, 「구독 없이 사용」에서도 뺀다', async () => {
       subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
       // 다혜 보고의 초기화 시각이 공용(다혜팀) 계정의 지금 회차와 3초 차이 — 같은 계정이다
-      subscriptionMocks.renewals.mockResolvedValue({ rows: [{
-        ownerName: '공용(다혜팀)', vendor: 'OpenAI', plan: 'Pro5x', amount: 100, currency: 'USD', renewalDay: 1,
-        nextRenewal: '2026-09-01', daysLeft: 22, weeks: [], averagePercent: null, currentPercent: 12,
-        currentResetsAt: '2026-08-13T00:00:03.000Z', recentWeeks: [], shared: true, agentIds: ['bot'], lastSeenAt: null,
-      }] })
+      subscriptionMocks.renewals.mockResolvedValue({ rows: [], sharedCodexResets: ['2026-08-13T00:00:03.000Z'] })
       queueRows(usage())
       const result = await clientUsagePanel.load(ADMIN)
 
@@ -217,11 +213,7 @@ describe('clientUsagePanel', () => {
       expect(result.data!.people!.filter((person) => !person.subscription).map((person) => person.name)).toEqual(['진우'])
     })
 
-    const sharedRenewal = (currentResetsAt: string) => ({ rows: [{
-      ownerName: '공용(다혜팀)', vendor: 'OpenAI', plan: 'Pro5x', amount: 100, currency: 'USD', renewalDay: 1,
-      nextRenewal: '2026-09-01', daysLeft: 22, weeks: [], averagePercent: null, currentPercent: 12,
-      currentResetsAt, recentWeeks: [], shared: true, agentIds: ['bot'], lastSeenAt: null,
-    }] })
+    const sharedRenewal = (resetsAt: string) => ({ rows: [], sharedCodexResets: [resetsAt] })
 
     it('자기 구독이 있는 사람은 초기화 시각이 공용 계정과 겹쳐도 자기 구독으로 한 번만 센다', async () => {
       subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
