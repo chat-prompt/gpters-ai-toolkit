@@ -8,7 +8,7 @@
  *
  * Codex는 롤아웃, Claude Code는 statusline usage cache에서 주간 한도 스냅샷을 수집한다.
  * 한도 캐시를 얻지 못한 값은 0%가 아니라 "미수집"으로, 구독은 있는데 사용 보고가 없으면
- * "보고 없음"으로 밝힌다. 구독 없이 사용 중인 줄도 남긴다 — 그 차이가 다음 달 구독을 정하는 신호다.
+ * "보고 없음"으로 밝힌다. 구독(결제) 없이 사용 중인 줄은 표에 그리지 않고 숫자만 센다. 사용량 합계도 회사가 결제한 구독의 사용만 센다(EDU-11817).
  */
 
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from 'react'
@@ -356,6 +356,7 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
                   />
                   {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
                   <p className="mt-2">게이지 가운데 숫자는 Claude Code 몫이고, 아래는 두 서비스의 값입니다.</p>
+                  <p className="mt-2">인원·세션·토큰과 모델별 사용량은 회사가 결제한 구독(로스터)의 사용만 셉니다. 공용 계정을 개인이 쓴 Codex 사용은 초기화 시각이 그 계정과 같으면 공용 구독의 사용으로 넣고, 결제와 이어지지 않는 사용은 뺍니다. 요약의 주간 활성은 결제와 무관하게 사용을 보고한 사람 수라 여기 인원과 다를 수 있습니다.</p>
                   <p className="mt-2">표의 주기 평균은 구독마다 지난 결제일 이후 회차별 주간 한도 사용률(7일을 못 채운 회차는 7일 환산 추정)을 평균하고, 그 값을 사람마다 같은 무게로 다시 평균한 것입니다. 끝난 회차가 아직 없는 구독은 빠집니다.</p>
                 </InfoTip>
               </div>
@@ -1056,8 +1057,9 @@ type PeopleSort = 'renewal' | 'name'
  * 구성원 × 구독 표 (관리자 전용)
  *
  * 한 줄 = 한 사람의 한 서비스. 구독(결제일·금액), 이번 결제 주기의 주간 한도 평균,
- * 지금 주간 한도와 최근 사용량을 함께 둔다. 구독만 있고 사용 보고가 없는 줄과
- * 구독 없이 사용하는 줄을 따로 세어 위에 밝힌다.
+ * 지금 주간 한도와 최근 사용량을 함께 둔다. 구독만 있고 사용 보고가 없는 줄은 따로 세어 위에 밝힌다.
+ * 구독 없이 사용하는 줄은 그리지 않고 숫자만 센다 — 공용 계정을 개인이 쓰거나 회사 결제가 아닌 사용이라
+ * 구독 결정에 쓸 정보가 없다(EDU-11817).
  *
  * @param rows - 다음 결제일이 가까운 순으로 정렬된 줄
  * @param cycleError - 결제 주기 회차를 못 읽었으면 true — 주기 평균 칸을 "조회 실패"로 쓴다
@@ -1074,16 +1076,20 @@ function PeopleTable({
 }) {
   // 기본은 이름순 — 사람을 찾아 보는 표다. 결제가 임박한 사람은 결제 임박순으로 바꿔 본다
   const [sort, setSort] = useState<PeopleSort>('name')
+  const unsubscribed = rows.filter((row) => !row.subscription).length
+  const subscribed = rows.filter((row) => row.subscription)
 
-  if (rows.length === 0) {
+  if (subscribed.length === 0) {
     return (
       <p className="border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
         구성원별 구독·사용 내역이 없습니다.
+        {/* 줄은 숨겨도 구독 없이 쓰는 사람이 있다는 사실은 밝힌다 */}
+        {unsubscribed > 0 && ` 구독 없이 사용 ${formatCount(unsubscribed)}`}
       </p>
     )
   }
 
-  const groups = groupByPerson(rows, sort)
+  const groups = groupByPerson(subscribed, sort)
   // 사용 보고가 붙은 줄은 계정 표시명, 아닌 줄은 로스터 이름(`타타`)이다 — 서버와 같은 이름 규칙으로 잇는다.
   // 공용 구독은 사람이 아니고, 후보가 둘 이상이면(동명이인·별칭 겹침) 엉뚱한 사람에게 붙이지 않고 비운다
   const collectorFor = (row: AxMemberServiceRow): AxUsageParticipationRow | undefined => {
@@ -1092,17 +1098,16 @@ function PeopleTable({
     const matches = exact.length > 0 ? exact : participation.filter((candidate) => samePerson(candidate.memberName, row.name))
     return matches.length === 1 ? matches[0] : undefined
   }
-  const dueSoon = rows.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
+  const dueSoon = subscribed.filter((row) => row.subscription?.daysLeft != null && row.subscription.daysLeft <= DUE_SOON_DAYS).length
   // 공용 줄의 측정은 결정표에서 온다 — 결정표를 못 읽었으면 미보고로 세지 않는다
-  const unused = rows.filter((row) => row.subscription && row.trackable && !lastReportOf(row) && !(cycleError && row.subscription.shared)).length
-  const unsubscribed = rows.filter((row) => !row.subscription).length
+  const unused = subscribed.filter((row) => row.subscription && row.trackable && !lastReportOf(row) && !(cycleError && row.subscription.shared)).length
 
   return (
     <CellTipArea>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <div className="relative flex flex-wrap items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
           <span>
-            구성원 × 구독 {formatCount(rows.length)}줄 · {DUE_SOON_DAYS}일 안 결제 {formatCount(dueSoon)} · 사용 보고 없는 구독{' '}
+            구성원 × 구독 {formatCount(subscribed.length)}줄 · {DUE_SOON_DAYS}일 안 결제 {formatCount(dueSoon)} · 사용 보고 없는 구독{' '}
             {formatCount(unused)} · 구독 없이 사용 {formatCount(unsubscribed)}
           </span>
           <InfoTip label="주기 평균 기준">
@@ -1110,6 +1115,7 @@ function PeopleTable({
             <p className="mt-2">회차의 마지막 보고가 회차가 끝나기 {LATE_REPORT_GAP_HOURS}시간 넘게 전이면 끝 무렵 사용량이 빠져 실제보다 낮습니다. 그런 회차가 있으면 주기 평균 값 옆에 *를 붙이고, 호버 맨 위에 「끝 무렵 미수집」을 적습니다. 벤더가 예정보다 일찍 초기화했거나 회차가 7일이 아니어서 7일을 다 채우지 못한 회차는 실측이 낮으므로, 사용률 ÷ 실제로 이어진 일수 × 7 로 환산(추정)해 평균에 넣고 호버에 「7일 미만 · 7일 환산」으로 적습니다. 환산값이 100%를 넘으면 그 속도로는 한도에 걸린다는 뜻이며, 평균에는 100%로 잘라 넣습니다(호버에 「평균에는 100%」). 1일 미만 회차는 환산하지 않습니다. 주기 평균 값에 마우스를 올리면 회차별 값과 마지막 보고 시각이 보입니다. 점선 밑줄이 있는 칸은 호버하면 남은 일수·결제자·측정 봇 같은 부가 정보가 나옵니다.</p>
             <p className="mt-2">주황색은 사용량 기준입니다. 주기 평균은 주 {LOW_WEEKLY_PERCENT}% 미만(덜 씀)이거나 {FULL_WEEKLY_PERCENT}%(회차마다 100%로 자른 평균의 최대 — 모든 회차가 한도에 걸림)면 주황색입니다. 이번 주 한도는 회차가 이어진 일수만큼의 속도로 봅니다 — 하루 {LOW_WEEKLY_PERCENT}/7% 에 못 미치거나 하루 {FULL_WEEKLY_PERCENT}/7% 를 넘으면 주황색입니다. 다음 결제는 {DUE_SOON_DAYS}일 안이면 주황색입니다.</p>
             <p className="mt-2">공용·서포트 구독은 그 계정을 쓰는 봇의 수집기가 매시간 잰 값입니다(aitk 0.7.28부터). 서비스 · 플랜 칸에 측정한 봇을 적고, 서비스별 주기 평균(사람 평균)에는 넣지 않습니다.</p>
+            <p className="mt-2">구독 없이 사용은 로스터의 자기 구독에도, 공용 계정에도 이어지지 않는 사용 보고의 수입니다. 표에 그리지 않고 숫자만 셉니다. 서비스별·모델별 사용량 합계에도 넣지 않습니다.</p>
             <p className="mt-2">Claude Code 한도를 못 받으면 이번 주 한도 칸에 이유를 적습니다(aitk 0.7.25부터 보고). 상태 미보고는 아직 0.7.25 이전 aitk라 연결 상태를 모른다는 뜻입니다. 연결됨 · 한도 미수신은 연결은 됐지만 7일 넘게 값을 못 받은 상태로, 새 세션을 안 열었거나 표시줄을 실행하지 않는 환경(IDE 확장·API 키)일 수 있습니다. 미연결 뒤에는 자동 연결을 건너뛴 이유를, 날짜가 붙은 값은 그날 관측한 이전 상태를 뜻합니다.</p>
           </InfoTip>
         </div>
@@ -1200,7 +1206,7 @@ function lastReportOf(row: AxMemberServiceRow): string | null {
   return row.usage?.lastReportedAt ?? row.account?.lastSeenAt ?? null
 }
 
-/** 한 사람의 줄 묶음 안 순서 — 결제일이 가까운 구독부터, 구독 없는 사용은 뒤로 */
+/** 한 사람의 줄 묶음 안 순서 — 결제일이 가까운 구독부터, 결제일을 모르는 구독은 뒤로 */
 function renewalOrder(row: AxMemberServiceRow): number {
   return row.subscription?.daysLeft ?? Number.POSITIVE_INFINITY
 }
@@ -1228,16 +1234,10 @@ function groupByPerson(rows: AxMemberServiceRow[], sort: PeopleSort): AxMemberSe
   )
 }
 
-/** 서비스 · 플랜 칸 — 구독 플랜, 대신 결제하는 사람, 구독 없이 쓰는 경우의 실제 플랜 */
+/** 서비스 · 플랜 칸 — 구독 플랜과 대신 결제하는 사람 */
 function PlanCell({ row }: { row: AxMemberServiceRow }) {
-  if (!row.subscription) {
-    return (
-      <>
-        {row.service} {row.usage?.plan ?? ''}
-        <span className="ml-2 text-xs text-[var(--text-muted)]">구독 없음</span>
-      </>
-    )
-  }
+  // 표는 구독 있는 줄만 그린다 — 타입상 남는 null 만 막는다
+  if (!row.subscription) return <>{row.service}</>
   const payer = row.subscription.payer
   // 결제·수집 정보는 호버로 — 칸에는 서비스·플랜만 둔다
   const details = [

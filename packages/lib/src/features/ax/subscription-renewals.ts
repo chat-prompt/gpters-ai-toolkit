@@ -421,14 +421,70 @@ export function averageCycleByClient(renewals: AxRenewalRow[]): Partial<Record<A
 }
 
 /**
+ * 사용 보고가 이 구독(사람 구독)의 사용인지 — 서비스가 같고 소유자가 같은 사람이면 짝이다.
+ * 공용·서포트 구독에는 사람 보고를 붙이지 않는다(봇 수집기가 계정으로 잰다).
+ * 구성원 × 구독 표와 서비스별 사용량 합계가 같은 규칙을 쓴다(EDU-11817).
+ */
+export function usageMatchesSubscription(
+  sub: Pick<AxSubscriptionMemberRow, 'ownerName' | 'vendor'>,
+  member: Pick<AxClientUsageMemberRow, 'client' | 'memberName'>
+): boolean {
+  const owner = sub.ownerName?.trim() ?? ''
+  return !isSharedOwner(owner) && CLIENT_BY_VENDOR[sub.vendor] === member.client && samePerson(owner, member.memberName)
+}
+
+/** 같은 계정으로 볼 초기화 시각 차이 — Codex 일괄 조기 초기화로 다른 계정끼리도 수십 초 안에 몰린다 */
+const SAME_ACCOUNT_RESET_MS = 5_000
+
+/**
+ * 이름으로 구독에 짝지어지지 않은 개인 Codex 보고가 공용·서포트 계정의 사용인지 —
+ * 초기화 시각이 그 계정의 진행 중인 회차와 몇 초 안이면 같은 계정이다(같은 계정이면 초 단위까지 같다).
+ * Claude 는 정시에 초기화돼 다른 계정끼리도 겹치므로 판정하지 않는다(EDU-11817).
+ * ponytail: 시각 근접 판정이라 일괄 초기화 직후 다른 계정이 몇 초 안에 겹치면 잘못 붙는다 — 개인 보고에 계정 키를 싣게 되면 그것으로 바꾼다
+ */
+export function onSharedAccount(
+  report: { client: string; limitResetsAt: Date | string | null },
+  sharedCodexResets: string[]
+): boolean {
+  if (report.client !== 'codex' || !report.limitResetsAt) return false
+  const at = new Date(report.limitResetsAt).getTime()
+  return sharedCodexResets.some((resetsAt) => Math.abs(new Date(resetsAt).getTime() - at) <= SAME_ACCOUNT_RESET_MS)
+}
+
+/**
+ * 활성 공용·서포트 구독 계정의 진행 중인 Codex 회차 초기화 시각 — 결제일·결제 주기와 무관하게 계정 키만 본다.
+ * 계정마다 가장 최근에 관측된 회차 하나다 — 조기 초기화로 끝난 회차도 예정 초기화 시각은 미래라 그것만으로는 못 가른다
+ *
+ * @param subscriptions - 활성 구독 행
+ * @param accountWindows - 봇 수집기가 잰 계정 회차
+ */
+export function sharedCodexResets(
+  subscriptions: { ownerName: string | null; vendor: string; accountKey?: string | null }[],
+  accountWindows: Pick<RenewalUsageInput, 'accountKey' | 'client' | 'limitResetsAt' | 'syncedAt' | 'seenAt'>[],
+  now: Date
+): string[] {
+  const keys = new Set(subscriptions
+    .filter((sub) => isSharedOwner(sub.ownerName) && sub.accountKey && CLIENT_BY_VENDOR[sub.vendor] === 'codex')
+    .map((sub) => sub.accountKey))
+  const latest = new Map<string, { resetsAt: Date; seenAt: Date }>()
+  for (const window of accountWindows) {
+    if (window.client !== 'codex' || !window.accountKey || !keys.has(window.accountKey) || !window.limitResetsAt || window.limitResetsAt <= now) continue
+    const seenAt = window.seenAt ?? window.syncedAt
+    const known = latest.get(window.accountKey)
+    if (!known || seenAt > known.seenAt) latest.set(window.accountKey, { resetsAt: window.limitResetsAt, seenAt })
+  }
+  return [...latest.values()].map((window) => window.resetsAt.toISOString())
+}
+
+/**
  * 구성원 × 서비스 한 줄 표를 만든다 (DB 없이 테스트하는 순수 함수)
  *
  * 구독 한 건마다 한 줄을 만들고 같은 사람·같은 클라이언트의 사용 보고를 붙인다.
- * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등).
+ * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등). 화면은 이 줄을 그리지 않고 수만 센다.
  *
  * @param usageMembers - 클라이언트 패널의 팀원별 최신 사용량
  * @param subscriptions - 활성 구독 전체 (공용·연간 포함)
- * @param renewals - 갱신 결정표 (사람 구독만)
+ * @param renewals - 갱신 결정표 (사람 구독과 계정 키가 있는 공용 구독)
  * @param now - 기준 시각
  * @returns 다음 결제일이 가까운 순. 결제일이 없는 줄은 뒤로
  */
@@ -458,7 +514,7 @@ export function buildMemberServiceRows(
     // 같은 사람의 보고가 여럿이면(옛 이름 행 + 인증 계정 행) 가장 최근 것을 붙인다 — 입력은 토큰 순이라 첫 매칭이 최신이 아니다.
     // 나머지도 이 구독의 것으로 소비한다. 남겨 두면 "구독 없이 사용" 줄이 거짓으로 생긴다
     const candidates = trackable && !shared
-      ? usageMembers.filter((candidate) => !used.has(candidate) && candidate.client === client && samePerson(owner, candidate.memberName))
+      ? usageMembers.filter((candidate) => !used.has(candidate) && usageMatchesSubscription(sub, candidate))
       : []
     const member = candidates.reduce<AxClientUsageMemberRow | undefined>(
       (latest, candidate) => (!latest || (candidate.lastReportedAt ?? '') > (latest.lastReportedAt ?? '') ? candidate : latest),
@@ -625,7 +681,10 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
       loadLimitWindows(since),
       loadAccountLimitWindows(since),
     ])
-    return { rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now) }
+    return {
+      rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now),
+      sharedCodexResets: sharedCodexResets(subscriptions, accountWindows, now),
+    }
   } catch (err) {
     log.error('구독 갱신 데이터 조회 실패', err)
     return null
