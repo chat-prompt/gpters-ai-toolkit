@@ -356,7 +356,7 @@ export function ClientUsagePanel({ data }: AxPanelViewProps<AxClientUsageData>) 
                   />
                   {data.subscriptions && <SyncedAtNotice syncedAt={data.subscriptions.syncedAt} />}
                   <p className="mt-2">게이지 가운데 숫자는 Claude Code 몫이고, 아래는 두 서비스의 값입니다.</p>
-                  <p className="mt-2">인원·세션·토큰과 모델별 사용량은 회사가 결제한 구독(로스터)의 사용만 셉니다. 공용 계정을 개인이 쓴 Codex 사용은 초기화 시각이 그 계정과 같으면 공용 구독의 사용으로 넣고, 결제와 이어지지 않는 사용은 뺍니다.</p>
+                  <p className="mt-2">인원·세션·토큰과 모델별 사용량은 회사가 결제한 구독(로스터)의 사용만 셉니다. 공용 계정을 개인이 쓴 Codex 사용은 초기화 시각이 그 계정과 같으면 공용 구독의 사용으로 넣고, 결제와 이어지지 않는 사용은 뺍니다. 요약의 주간 활성은 결제와 무관하게 사용을 보고한 사람 수라 여기 인원과 다를 수 있습니다.</p>
                   <p className="mt-2">표의 주기 평균은 구독마다 지난 결제일 이후 회차별 주간 한도 사용률(7일을 못 채운 회차는 7일 환산 추정)을 평균하고, 그 값을 사람마다 같은 무게로 다시 평균한 것입니다. 끝난 회차가 아직 없는 구독은 빠집니다.</p>
                 </InfoTip>
               </div>

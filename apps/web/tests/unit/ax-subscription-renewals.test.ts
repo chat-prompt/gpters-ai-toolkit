@@ -641,7 +641,8 @@ describe('onSharedAccount — 공용 계정을 개인이 쓴 Codex 보고 (EDU-1
 
 describe('sharedCodexResets — 공용 계정 진행 중 Codex 회차 (EDU-11817)', () => {
   const now = new Date('2026-10-28T00:00:00Z')
-  const window = (accountKey: string, client: string, resetsAt: string) => ({ accountKey, client, limitResetsAt: new Date(resetsAt) })
+  const window = (accountKey: string, client: string, resetsAt: string, seenAt = '2026-10-27T12:00:00Z') =>
+    ({ accountKey, client: client as 'codex' | 'claude-code', limitResetsAt: new Date(resetsAt), syncedAt: new Date(seenAt), seenAt: new Date(seenAt) })
   it('결제일·결제 주기와 무관하게 활성 공용 Codex 구독 계정의 진행 중 회차만 모은다', () => {
     const subscriptions = [
       // 결제일 없는 공용 구독도 계정 키가 있으면 포함한다(결제 주기 결정표에서는 빠지는 행)
@@ -656,6 +657,14 @@ describe('sharedCodexResets — 공용 계정 진행 중 Codex 회차 (EDU-11817
       window('key-b', 'claude-code', '2026-11-02T16:00:00Z'),
       window('key-p', 'codex', '2026-11-02T05:59:32Z'),
       window('key-x', 'codex', '2026-11-02T06:00:00Z'),
+    ], now)).toEqual(['2026-11-02T06:08:20.000Z'])
+  })
+  it('조기 초기화로 끝난 회차는 예정 초기화가 미래여도 빼고, 계정마다 가장 최근에 관측된 회차만 남긴다', () => {
+    const subscriptions = [{ ownerName: '공용(a)', vendor: 'OpenAI', accountKey: 'key-a' }]
+    expect(sharedCodexResets(subscriptions, [
+      // 10/30 예정이던 회차가 10/26 조기 초기화로 끝났다 — 그 뒤로는 11/2 회차만 관측된다
+      window('key-a', 'codex', '2026-10-30T05:27:53Z', '2026-10-26T05:00:00Z'),
+      window('key-a', 'codex', '2026-11-02T06:08:20Z', '2026-10-27T23:00:00Z'),
     ], now)).toEqual(['2026-11-02T06:08:20.000Z'])
   })
 })

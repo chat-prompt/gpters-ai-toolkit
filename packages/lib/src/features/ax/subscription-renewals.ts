@@ -452,23 +452,28 @@ export function onSharedAccount(
 }
 
 /**
- * 활성 공용·서포트 구독 계정의 진행 중인 Codex 회차 초기화 시각 — 결제일·결제 주기와 무관하게 계정 키만 본다
+ * 활성 공용·서포트 구독 계정의 진행 중인 Codex 회차 초기화 시각 — 결제일·결제 주기와 무관하게 계정 키만 본다.
+ * 계정마다 가장 최근에 관측된 회차 하나다 — 조기 초기화로 끝난 회차도 예정 초기화 시각은 미래라 그것만으로는 못 가른다
  *
  * @param subscriptions - 활성 구독 행
  * @param accountWindows - 봇 수집기가 잰 계정 회차
  */
 export function sharedCodexResets(
   subscriptions: { ownerName: string | null; vendor: string; accountKey?: string | null }[],
-  accountWindows: Pick<RenewalUsageInput, 'accountKey' | 'client' | 'limitResetsAt'>[],
+  accountWindows: Pick<RenewalUsageInput, 'accountKey' | 'client' | 'limitResetsAt' | 'syncedAt' | 'seenAt'>[],
   now: Date
 ): string[] {
   const keys = new Set(subscriptions
     .filter((sub) => isSharedOwner(sub.ownerName) && sub.accountKey && CLIENT_BY_VENDOR[sub.vendor] === 'codex')
     .map((sub) => sub.accountKey))
-  return accountWindows
-    .flatMap((window) => window.client === 'codex' && window.accountKey && keys.has(window.accountKey) && window.limitResetsAt && window.limitResetsAt > now
-      ? [window.limitResetsAt.toISOString()]
-      : [])
+  const latest = new Map<string, { resetsAt: Date; seenAt: Date }>()
+  for (const window of accountWindows) {
+    if (window.client !== 'codex' || !window.accountKey || !keys.has(window.accountKey) || !window.limitResetsAt || window.limitResetsAt <= now) continue
+    const seenAt = window.seenAt ?? window.syncedAt
+    const known = latest.get(window.accountKey)
+    if (!known || seenAt > known.seenAt) latest.set(window.accountKey, { resetsAt: window.limitResetsAt, seenAt })
+  }
+  return [...latest.values()].map((window) => window.resetsAt.toISOString())
 }
 
 /**
