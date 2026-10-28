@@ -421,18 +421,6 @@ export function averageCycleByClient(renewals: AxRenewalRow[]): Partial<Record<A
 }
 
 /**
- * 구성원 × 서비스 한 줄 표를 만든다 (DB 없이 테스트하는 순수 함수)
- *
- * 구독 한 건마다 한 줄을 만들고 같은 사람·같은 클라이언트의 사용 보고를 붙인다.
- * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등).
- *
- * @param usageMembers - 클라이언트 패널의 팀원별 최신 사용량
- * @param subscriptions - 활성 구독 전체 (공용·연간 포함)
- * @param renewals - 갱신 결정표 (사람 구독만)
- * @param now - 기준 시각
- * @returns 다음 결제일이 가까운 순. 결제일이 없는 줄은 뒤로
- */
-/**
  * 사용 보고가 이 구독(사람 구독)의 사용인지 — 서비스가 같고 소유자가 같은 사람이면 짝이다.
  * 공용·서포트 구독에는 사람 보고를 붙이지 않는다(봇 수집기가 계정으로 잰다).
  * 구성원 × 구독 표와 서비스별 사용량 합계가 같은 규칙을 쓴다(EDU-11817).
@@ -464,6 +452,18 @@ export function onSharedAccount(
     && Math.abs(new Date(renewal.currentResetsAt).getTime() - at) <= SAME_ACCOUNT_RESET_MS)
 }
 
+/**
+ * 구성원 × 서비스 한 줄 표를 만든다 (DB 없이 테스트하는 순수 함수)
+ *
+ * 구독 한 건마다 한 줄을 만들고 같은 사람·같은 클라이언트의 사용 보고를 붙인다.
+ * 어느 구독에도 붙지 않은 사용 보고는 "구독 없음" 줄로 남긴다(개인 결제 등).
+ *
+ * @param usageMembers - 클라이언트 패널의 팀원별 최신 사용량
+ * @param subscriptions - 활성 구독 전체 (공용·연간 포함)
+ * @param renewals - 갱신 결정표 (사람 구독만)
+ * @param now - 기준 시각
+ * @returns 다음 결제일이 가까운 순. 결제일이 없는 줄은 뒤로
+ */
 export function buildMemberServiceRows(
   usageMembers: AxClientUsageMemberRow[],
   subscriptions: AxSubscriptionMemberRow[],

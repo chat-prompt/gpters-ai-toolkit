@@ -539,21 +539,20 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
       .sort((a, b) => b.tokens - a.tokens)
       .slice(0, MODEL_LIMIT)
 
-    const members: AxClientUsageMemberRow[] | null = ctx.isAdmin
-      ? current
-          .map((row) => ({
-            userId: row.userId,
-            memberName: displayName(row),
-            client: row.client as AxUsageClient,
-            plan: row.plan,
-            totalTokens: row.inputTokens + row.outputTokens + row.cachedTokens,
-            sessions: row.sessions,
-            limitUsedPercent: toNumber(row.limitUsedPercent),
-            limitResetsAt: toIso(row.limitResetsAt),
-            lastReportedAt: toIso(row.syncedAt),
-          }))
-          .sort((a, b) => b.totalTokens - a.totalTokens)
-      : null
+    const toMembers = (reports: typeof current): AxClientUsageMemberRow[] => reports
+      .map((row) => ({
+        userId: row.userId,
+        memberName: displayName(row),
+        client: row.client as AxUsageClient,
+        plan: row.plan,
+        totalTokens: row.inputTokens + row.outputTokens + row.cachedTokens,
+        sessions: row.sessions,
+        limitUsedPercent: toNumber(row.limitUsedPercent),
+        limitResetsAt: toIso(row.limitResetsAt),
+        lastReportedAt: toIso(row.syncedAt),
+      }))
+      .sort((a, b) => b.totalTokens - a.totalTokens)
+    const members = ctx.isAdmin ? toMembers(current) : null
 
     // 수집 시각은 사람마다 다르다. 가장 늦은 것을 기준으로 보여준다.
     const syncedAt = current.reduce<Date | null>((latest, row) => {
@@ -602,9 +601,7 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
         subscriptions,
         people: members !== null && subscriptions?.members
           // 공용 계정 사용은 그 공용 줄이 계정으로 잰다 — 「구독 없이 사용」으로 세지 않는다
-          ? buildMemberServiceRows(
-              members.filter((member) => !current.some((row) => sharedAccount(row) && row.client === member.client && displayName(row) === member.memberName)),
-              subscriptions.members, renewalData?.rows ?? [], new Date())
+          ? buildMemberServiceRows(toMembers(current.filter((row) => !sharedAccount(row))), subscriptions.members, renewalData?.rows ?? [], new Date())
           : null,
         peopleError: members !== null && !subscriptions?.members,
         // 서비스별 주기 평균도 이 데이터로 만든다 — 실패를 "회차 없음"과 가르려면 비관리자에게도 알린다

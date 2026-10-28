@@ -217,6 +217,34 @@ describe('clientUsagePanel', () => {
       expect(result.data!.people!.filter((person) => !person.subscription).map((person) => person.name)).toEqual(['진우'])
     })
 
+    const sharedRenewal = (currentResetsAt: string) => ({ rows: [{
+      ownerName: '공용(다혜팀)', vendor: 'OpenAI', plan: 'Pro5x', amount: 100, currency: 'USD', renewalDay: 1,
+      nextRenewal: '2026-09-01', daysLeft: 22, weeks: [], averagePercent: null, currentPercent: 12,
+      currentResetsAt, recentWeeks: [], shared: true, agentIds: ['bot'], lastSeenAt: null,
+    }] })
+
+    it('자기 구독이 있는 사람은 초기화 시각이 공용 계정과 겹쳐도 자기 구독으로 한 번만 센다', async () => {
+      subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+      // 진우 Codex(초기화 08-13T00:00:00Z)가 공용 계정 회차와 1초 차이 — 일괄 초기화로 다른 계정이 몰린 경우
+      subscriptionMocks.renewals.mockResolvedValue(sharedRenewal('2026-08-13T00:00:01.000Z'))
+      queueRows([row({ memberName: '진우', client: 'codex' })])
+      const result = await clientUsagePanel.load(ADMIN)
+      expect(result.data!.byClient).toEqual([expect.objectContaining({ client: 'codex', members: 1, totalTokens: 1000 })])
+      expect(result.data!.people!.find((person) => person.name === '진우' && person.service === 'Codex')!.subscription).not.toBeNull()
+    })
+
+    it('같은 이름의 보고 둘 중 공용 계정에 맞는 보고만 「구독 없이 사용」에서 뺀다', async () => {
+      subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+      subscriptionMocks.renewals.mockResolvedValue(sharedRenewal('2026-08-13T00:00:03.000Z'))
+      queueRows([
+        row({ userId: 'u-1', memberName: '다혜', client: 'codex' }),
+        row({ userId: 'u-2', memberName: '다혜', client: 'codex', limitResetsAt: new Date('2026-08-15T00:00:00Z') }),
+      ])
+      const result = await clientUsagePanel.load(ADMIN)
+      expect(result.data!.people!.filter((person) => !person.subscription)).toHaveLength(1)
+      expect(result.data!.byClient).toEqual([expect.objectContaining({ client: 'codex', members: 1, totalTokens: 1000 })])
+    })
+
     it('구독을 못 읽으면 거르지 않는다', async () => {
       queueRows(usage())
       const result = await clientUsagePanel.load(ADMIN)
