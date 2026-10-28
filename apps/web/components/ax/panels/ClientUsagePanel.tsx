@@ -1082,6 +1082,8 @@ function PeopleTable({
     return (
       <p className="border-l-2 border-[var(--border-hover)] pl-4 text-sm text-[var(--text-secondary)]">
         구성원별 구독·사용 내역이 없습니다.
+        {/* 줄은 숨겨도 구독 없이 쓰는 사람이 있다는 사실은 밝힌다 */}
+        {unsubscribed > 0 && ` 구독 없이 사용 ${formatCount(unsubscribed)}`}
       </p>
     )
   }
@@ -1203,7 +1205,7 @@ function lastReportOf(row: AxMemberServiceRow): string | null {
   return row.usage?.lastReportedAt ?? row.account?.lastSeenAt ?? null
 }
 
-/** 한 사람의 줄 묶음 안 순서 — 결제일이 가까운 구독부터, 구독 없는 사용은 뒤로 */
+/** 한 사람의 줄 묶음 안 순서 — 결제일이 가까운 구독부터, 결제일을 모르는 구독은 뒤로 */
 function renewalOrder(row: AxMemberServiceRow): number {
   return row.subscription?.daysLeft ?? Number.POSITIVE_INFINITY
 }
