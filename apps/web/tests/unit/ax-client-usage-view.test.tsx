@@ -100,6 +100,17 @@ describe('클라이언트 화면', () => {
     ])
   })
 
+  it('구독 없이 사용하는 줄은 그리지 않고 숫자만 센다', () => {
+    render(<ClientUsagePanel days={7} data={data([...scattered(), person('이영희', 'Codex', null)])} />)
+    expect(peopleCells().map(([name]) => name)).not.toContain('이영희')
+    expect(screen.getByText(/구성원 × 구독 3줄 · .* · 구독 없이 사용 1/)).toBeInTheDocument()
+  })
+
+  it('구독 있는 줄이 없으면 표 대신 안내를 둔다', () => {
+    render(<ClientUsagePanel days={7} data={data([person('이영희', 'Codex', null)])} />)
+    expect(screen.getByText('구성원별 구독·사용 내역이 없습니다.')).toBeInTheDocument()
+  })
+
   it('결제 임박순이면 묶음은 그 사람의 가장 가까운 결제일 순이다', () => {
     render(<ClientUsagePanel days={7} data={data(scattered())} />)
     fireEvent.click(screen.getByRole('button', { name: '결제 임박순' }))
