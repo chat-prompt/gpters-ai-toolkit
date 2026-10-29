@@ -7,7 +7,7 @@
  * 계정 첫 관측 시각 이후만 믿는 것과 같은 규칙이다. 처음 보는 키는 그때부터 센다 — 그 전 계정은 모른다.
  */
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { UsageClient, UsageRecord } from './types.js'
@@ -61,13 +61,18 @@ export function stabilizeAccountKeys(
     return Date.parse(state[record.client]!.since) <= windowStart.getTime() ? record : { ...record, accountKey: null }
   })
   if (persist && changed) {
-    // 기록 실패는 보고를 막지 않는다 — 다음 보고에서 다시 처음 본 것으로 센다(키를 싣지 않는 쪽으로 틀린다)
     try {
       mkdirSync(dirname(path), { recursive: true })
       const temp = `${path}.${process.pid}.tmp`
       writeFileSync(temp, JSON.stringify(state))
       renameSync(temp, path)
-    } catch { /* 캐시 폴더 쓰기 실패 */ }
+    } catch {
+      // 전환을 기록하지 못했다 — 남은 옛 기록을 다음 보고가 믿지 않게 지우고, 이번 보고도 키를 싣지 않는다.
+      // 보고 자체는 막지 않는다(키를 싣지 않는 쪽으로 틀린다)
+      // ponytail: 폴더가 읽기만 되고 지우기도 막히면 옛 기록이 남는다 — 그런 캐시 폴더가 보이면 기록 시각을 서명해 검증한다
+      try { rmSync(path, { force: true }) } catch { /* 지우기도 막힘 */ }
+      return records.map((record) => (record.accountKey ? { ...record, accountKey: null } : record))
+    }
   }
   return stable
 }

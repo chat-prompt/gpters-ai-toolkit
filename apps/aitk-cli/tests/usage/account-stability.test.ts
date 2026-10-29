@@ -65,6 +65,18 @@ describe('stabilizeAccountKeys — 집계 구간 내내 같은 계정일 때만 
     expect(stabilizeAccountKeys([record('codex', A)], START, NOW, true, home)[0].accountKey).toBeNull()
   })
 
+  it('전환을 기록하지 못하면 이번 보고에 키를 싣지 않고, 옛 기록도 지워 다음 보고가 믿지 않는다', () => {
+    seed({ codex: { key: A, since: '2026-10-01T00:00:00.000Z' } })
+    const path = accountKeyStatePath(home)
+    // 임시 파일 자리를 디렉터리로 막아 쓰기만 실패시킨다
+    mkdirSync(`${path}.${process.pid}.tmp`)
+    expect(stabilizeAccountKeys([record('codex', B)], START, NOW, true, home)[0].accountKey).toBeNull()
+    expect(existsSync(path)).toBe(false)
+    rmSync(`${path}.${process.pid}.tmp`, { recursive: true })
+    // A 로 돌아와도 옛 기록이 없으니 처음 본 것으로 센다
+    expect(stabilizeAccountKeys([record('codex', A)], START, NOW, true, home)[0].accountKey).toBeNull()
+  })
+
   it('dry-run(persist=false)은 상태 파일을 만들지 않는다', () => {
     stabilizeAccountKeys([record('codex', A)], START, NOW, false, home)
     expect(existsSync(accountKeyStatePath(home))).toBe(false)
