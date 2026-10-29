@@ -8,7 +8,8 @@
  * 계정 주간 한도 스냅샷을 보고한다. 최신 스냅샷을 얻지 못한 행은 null로 남긴다.
  *
  * 서비스별·모델별 사용량 합계는 회사가 결제한 구독(로스터 사람 행)에 짝지어지는 보고만 센다 —
- * 공용·서포트 계정을 개인이 쓴 Codex 사용(초기화 시각이 그 계정과 같은 보고)도 결제한 구독의 사용으로 센다.
+ * 공용·서포트 계정을 개인이 쓴 사용도 결제한 구독의 사용으로 센다 — 보고에 계정 키가 있으면 공용 구독 계정 키와 맞춰 보고
+ * (aitk 새 버전, EDU-11835), 없으면 Codex 초기화 시각이 그 계정과 같은지로 가린다.
  * 이 화면은 결제한 구독을 얼마나 쓰는지 보려는 것이다(EDU-11817). 구독을 못 읽으면 거르지 않는다.
  */
 
@@ -125,7 +126,7 @@ async function loadUsageRows(): Promise<ClientUsageRow[]> {
       })
       .from(axClientUsage)
       .orderBy(desc(axClientUsage.periodStart))
-    return legacyRows.map((row) => ({ ...row, userId: null }))
+    return legacyRows.map((row) => ({ ...row, userId: null, accountKey: null }))
   }
 }
 
@@ -487,8 +488,12 @@ async function load(ctx: AxPanelContext): Promise<AxPanelResult<AxClientUsageDat
     // 결제한 구독의 사용만 합계에 넣는다 — 자기 이름 구독에 짝지어지거나, 공용 계정을 쓴 것으로 확인된 보고
     const ownSubscription = (row: (typeof current)[number]) => subscriptionMembers?.some((sub) =>
       usageMatchesSubscription(sub, { client: row.client as AxUsageClient, memberName: displayName(row) })) ?? false
-    const sharedAccount = (row: (typeof current)[number]) =>
-      !ownSubscription(row) && onSharedAccount(row, renewalData?.sharedCodexResets ?? [])
+    const sharedKeys = new Set((renewalData?.sharedAccounts ?? []).map((account) => `${account.client}\u0000${account.accountKey}`))
+    // 계정 키를 실은 보고는 키로만 가린다 — 공용 계정 키면 자기 이름 구독이 있어도 공용 구독의 사용이고, 아니면 공용이 아니다.
+    // 키가 없는 옛 aitk 보고만 초기화 시각 근사를 쓴다
+    const sharedAccount = (row: (typeof current)[number]) => row.accountKey
+      ? sharedKeys.has(`${row.client}\u0000${row.accountKey}`)
+      : !ownSubscription(row) && onSharedAccount(row, renewalData?.sharedCodexResets ?? [])
     const paid = subscriptionMembers ? current.filter((row) => ownSubscription(row) || sharedAccount(row)) : current
 
     const clientAgg = new Map<

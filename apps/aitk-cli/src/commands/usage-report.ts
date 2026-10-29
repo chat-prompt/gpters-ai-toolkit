@@ -10,6 +10,7 @@ import { collectClaudeCode } from '../usage/claude-code.js'
 import { readLimitCapture, type ClaudeLimitCapture } from '../usage/claude-statusline.js'
 import { collectCodex } from '../usage/codex.js'
 import type { UsageRecord } from '../usage/types.js'
+import { stabilizeAccountKeys } from '../usage/account-stability.js'
 
 /**
  * UTC 기준 그날 0시로 내린다
@@ -39,8 +40,9 @@ export interface UsageReportOptions {
  * 두 클라이언트의 사용량을 UTC 일 경계에 맞춰 집계한다.
  *
  * @param days - 집계할 일 수
+ * @param recordAccounts - 계정 키를 처음 본 시각을 기록할지. dry-run 은 false
  */
-export async function collectUsageRecords(days: number): Promise<UsageRecord[]> {
+export async function collectUsageRecords(days: number, recordAccounts = true): Promise<UsageRecord[]> {
   if (!Number.isFinite(days) || days < 1 || days > MAX_DAYS) {
     throw new Error(`--days must be between 1 and ${MAX_DAYS}`)
   }
@@ -59,7 +61,8 @@ export async function collectUsageRecords(days: number): Promise<UsageRecord[]> 
   const collected = await Promise.all([collectClaudeCode(window), collectCodex(window)])
   const records = collected.filter((record): record is UsageRecord => record !== null)
 
-  return records
+  // 구간 중에 계정을 바꿨으면 앞선 사용까지 새 계정으로 짝지어지지 않게 키를 뺀다
+  return stabilizeAccountKeys(records, start, new Date(), recordAccounts)
 }
 
 /** 한도 연결 상태는 부가 정보다. 읽다 실패해도 사용량 보고는 보낸다 */
@@ -92,7 +95,7 @@ export async function runUsageReport(opts: UsageReportOptions): Promise<UsageRec
     return []
   }
   try {
-    const records = await collectUsageRecords(opts.days)
+    const records = await collectUsageRecords(opts.days, !opts.dryRun)
     // dry-run도 실제로 보낼 값을 모두 보여준다
     if (opts.dryRun) { jsonOut({ records, limitCapture: safeLimitCapture() }); return records }
     const result = await sendUsageRecords(records)

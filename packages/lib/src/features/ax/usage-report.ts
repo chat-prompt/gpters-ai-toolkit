@@ -4,7 +4,8 @@
  * aitk CLI가 각 팀원 머신에서 집계해 서버로 보내는 payload의 정본이다.
  * CLI(보내는 쪽)와 API 라우트(받는 쪽)가 이 파일 하나를 함께 본다.
  *
- * **보내는 값의 범위**: 집계 수치와 플랜 문자열, Claude 한도 수집 연결 상태(고정 코드와 시각)뿐이다.
+ * **보내는 값의 범위**: 집계 수치와 플랜 문자열, 로그인 계정 이메일의 sha256 해시(계정 키),
+ * Claude 한도 수집 연결 상태(고정 코드와 시각)뿐이다. 이메일 원문은 보내지 않는다.
  * 대화 내용, 파일 경로, 인증 토큰은 이 계약에 자리가 없다 — 그런 필드를 추가하지 말 것.
  */
 
@@ -49,6 +50,11 @@ export interface AxUsageReportRecord {
   limitUsedPercent: number | null
   /** 한도 리셋 시각 (ISO 8601). 없으면 null */
   limitResetsAt: string | null
+  /**
+   * 그 클라이언트 로그인 계정 이메일의 sha256 hex (EDU-11835). 공용 구독 `account_key` 와 같은 해시라
+   * 공용 계정을 개인이 쓴 사용을 계정으로 짝짓는다. 옛 aitk 는 보내지 않고, 계정을 못 읽으면 null
+   */
+  accountKey?: string | null
 }
 
 /**
@@ -198,6 +204,10 @@ function validateRecord(record: unknown, index: number): string[] {
   }
   if (r.limitResetsAt !== null && !isIsoDate(r.limitResetsAt)) {
     errors.push(`${at}.limitResetsAt: ISO 8601 시각이거나 null이어야 합니다`)
+  }
+  // 옛 aitk 는 보내지 않는다. 보낸다면 해시 형식만 받는다 — 이메일 원문 같은 값이 들어올 자리를 막는다
+  if (r.accountKey != null && (typeof r.accountKey !== 'string' || !/^[a-f0-9]{64}$/.test(r.accountKey))) {
+    errors.push(`${at}.accountKey: 64자리 소문자 hex(sha256)이거나 null이어야 합니다`)
   }
 
   return errors

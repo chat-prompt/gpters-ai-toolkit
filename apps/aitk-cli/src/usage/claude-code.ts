@@ -2,7 +2,7 @@
  * Claude Code 로컬 트랜스크립트 사용량 수집기
  *
  * ~/.claude/projects 아래 세션 트랜스크립트에서 assistant 응답의 토큰만 합산한다.
- * 대화 내용·파일 경로는 읽되 어디에도 담지 않는다 — 나가는 건 집계 수치와 플랜 문자열뿐이다.
+ * 대화 내용·파일 경로는 읽되 어디에도 담지 않는다 — 나가는 건 집계 수치와 플랜 문자열, 로그인 계정 이메일의 해시뿐이다.
  */
 
 import { existsSync, readFileSync, statSync } from 'node:fs'
@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { findJsonlFiles, scanJsonl, toCount } from './jsonl.js'
 import { claudeUsagePaths, readClaudeQuota } from './claude-statusline.js'
 import type { UsageRecord, UsageWindow } from './types.js'
+import { accountKey } from '../agent-telemetry/limit-probe.js'
 
 /** 토큰이 붙는 줄은 assistant 줄뿐이다 — 이 문자열이 없으면 파싱할 이유가 없다 */
 const ASSISTANT_HINT = '"assistant"'
@@ -134,6 +135,21 @@ function isBetterSnapshot(candidate: Snapshot, current: Snapshot): boolean {
   const candidateTotal = candidate.input + candidate.cached + candidate.output
   const currentTotal = current.input + current.cached + current.output
   return candidateTotal > currentTotal
+}
+
+/**
+ * Claude Code 로그인 계정 이메일 — 계정 키를 만들 때만 쓰고 원문은 내보내지 않는다(EDU-11835)
+ *
+ * @param home - 홈 디렉터리
+ */
+function readAccountEmail(home: string): string | null {
+  try {
+    const config = JSON.parse(readFileSync(join(home, '.claude.json'), 'utf-8')) as { oauthAccount?: { emailAddress?: unknown } }
+    const email = config.oauthAccount?.emailAddress
+    return typeof email === 'string' && email.includes('@') ? email : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -274,6 +290,7 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
   if (adopted.size === 0) return null
 
   const planRaw = readPlanRaw(home)
+  const email = readAccountEmail(home)
   return {
     client: 'claude-code',
     planRaw,
@@ -289,5 +306,7 @@ export async function collectClaudeCode(window: UsageWindow): Promise<UsageRecor
     // 캐시가 없거나 오래됐으면 0으로 추정하지 않고 null을 유지한다.
     limitUsedPercent: weeklyLimit?.usedPercent ?? null,
     limitResetsAt: weeklyLimit?.resetsAt ?? null,
+    // 한도 스냅샷과 플랜과 같은 로그인 계정이다(EDU-11835)
+    accountKey: email ? accountKey(email) : null,
   }
 }

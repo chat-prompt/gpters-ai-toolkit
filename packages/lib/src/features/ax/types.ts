@@ -914,6 +914,11 @@ export interface AxSubscriptionRenewalData {
    * 공용 계정을 개인이 쓴 보고를 가리는 데 쓴다(`onSharedAccount`, EDU-11817)
    */
   sharedCodexResets: string[]
+  /**
+   * 활성 공용·서포트 구독의 (클라이언트, 계정 키) — 계정 키를 실은 개인 보고를 공용 구독에 짝짓는다(EDU-11835).
+   * 서버 안에서만 쓰고 응답에 싣지 않는다
+   */
+  sharedAccounts: Array<{ client: AxUsageClient; accountKey: string }>
 }
 
 /**

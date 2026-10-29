@@ -1322,6 +1322,11 @@ export const axClientUsage = pgTable('ax_client_usage', {
    */
   limitUsedPercent: numeric('limit_used_percent', { precision: 5, scale: 2 }),
   limitResetsAt: timestamp('limit_resets_at', { withTimezone: true }),
+  /**
+   * 그 클라이언트 로그인 계정 이메일의 sha256 hex (EDU-11835, 0049). 공용 구독 `account_key` 와 같은 해시라
+   * 공용 계정을 개인이 쓴 사용을 계정으로 짝짓는다. 옛 aitk 보고는 null. 형식은 DB CHECK 가 막는다
+   */
+  accountKey: text('account_key'),
   /** 마지막 수집 시각 */
   syncedAt: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

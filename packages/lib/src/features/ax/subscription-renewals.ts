@@ -452,6 +452,21 @@ export function onSharedAccount(
 }
 
 /**
+ * 활성 공용·서포트 구독의 (클라이언트, 계정 키) — 계정 키를 실은 개인 보고를 그 공용 구독의 사용으로 짝짓는다.
+ * 같은 이메일이라도 그 서비스의 공용 구독이 없으면 짝이 아니다(EDU-11835).
+ *
+ * @param subscriptions - 활성 구독 행
+ */
+export function sharedAccounts(
+  subscriptions: { ownerName: string | null; vendor: string; accountKey?: string | null }[]
+): Array<{ client: AxUsageClient; accountKey: string }> {
+  return subscriptions.flatMap((sub) => {
+    const client = CLIENT_BY_VENDOR[sub.vendor]
+    return isSharedOwner(sub.ownerName) && sub.accountKey && client ? [{ client, accountKey: sub.accountKey }] : []
+  })
+}
+
+/**
  * 활성 공용·서포트 구독 계정의 진행 중인 Codex 회차 초기화 시각 — 결제일·결제 주기와 무관하게 계정 키만 본다.
  * 계정마다 가장 최근에 관측된 회차 하나다 — 조기 초기화로 끝난 회차도 예정 초기화 시각은 미래라 그것만으로는 못 가른다
  *
@@ -672,6 +687,7 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
           limitUsedPercent: axClientUsage.limitUsedPercent,
           limitResetsAt: axClientUsage.limitResetsAt,
           syncedAt: axClientUsage.syncedAt,
+          accountKey: axClientUsage.accountKey,
         })
         .from(axClientUsage)
         .where(and(
@@ -681,9 +697,15 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
       loadLimitWindows(since),
       loadAccountLimitWindows(since),
     ])
+    const shared = sharedAccounts(subscriptions)
+    // 공용 계정으로 쓴 하루 단위 행의 한도는 그 공용 계정의 것이다 — 사람 회차로 읽지 않는다(EDU-11835)
+    const personal = usage
+      .filter((row) => !row.accountKey || !shared.some((account) => account.client === row.client && account.accountKey === row.accountKey))
+      .map(({ accountKey: _accountKey, ...row }) => row)
     return {
-      rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now),
+      rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(personal, windows), ...windows, ...accountWindows], now),
       sharedCodexResets: sharedCodexResets(subscriptions, accountWindows, now),
+      sharedAccounts: shared,
     }
   } catch (err) {
     log.error('구독 갱신 데이터 조회 실패', err)
