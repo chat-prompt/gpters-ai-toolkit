@@ -4,10 +4,10 @@ GPTers AI Toolkit MCP 서버와 연동하여 팀 스킬을 검색하고 사용�
 
 ## 주요 기능
 
-- **skill-suggest**: 사용자가 요청할 때 GPTers AI Toolkit에서 관련 스킬을 검색합니다. 검색된 스킬의 가이드라인과 체크리스트를 현재 작업에 적용할 수 있습니다.
+- **skill-suggest**: 새 작업을 시작하거나 사용자가 요청할 때 GPTers AI Toolkit에서 관련 스킬을 검색합니다. 검색된 스킬의 가이드라인과 체크리스트를 현재 작업에 적용할 수 있습니다.
 - **MCP 서버 자동 연결**: 플러그인 설치 시 GPTers AI Toolkit MCP 서버(`https://ai-toolkit.gpters.org/api/mcp`)가 자동으로 등록됩니다. 별도의 `claude mcp add` 명령이 필요하지 않습니다.
 - **사용량 자동 보고**: 하루 한 번, 세션 시작 시 Claude Code와 Codex 사용량을 집계해 [AX 대시보드](https://ai-toolkit.gpters.org/ko/ax)로 보냅니다. `aitk` CLI가 설치돼 있어야 동작합니다.
-- **세션 집계 보고**: 세션이 끝난 뒤 실제 사용자 입력 수만 계산해 보냅니다. 대화 중 실행되는 훅이나 모델 컨텍스트 출력은 없습니다.
+- **세션 집계 보고**: 세션이 끝난 뒤 실제 사용자 입력 수만 계산해 보냅니다. 종료 훅은 모델 컨텍스트에 아무것도 출력하지 않습니다.
 - **주간 한도 수집 자동 연결**: 같은 SessionStart 훅이 하루 한 번 `aitk usage setup --auto`를 실행합니다(aitk 0.7.23 이상). 화면이 바뀌지 않는 경우만 연결합니다 — 기존 상태 표시줄은 감싸고, 없으면 아무것도 그리지 않고 수집만 합니다. 에이전트 머신·다른 `CLAUDE_CONFIG_DIR`·심링크된 `settings.json`·command 형식이 아닌 표시줄·`aitk usage uninstall`을 했거나 직접 뺀 사람은 건너뜁니다. 결과는 `~/.cache/gpters-aitk/usage-setup.log`. 끄려면 `aitk usage uninstall`(연결 전에 실행해도 되고 이후 다시 켜지지 않음). 셸의 `AITK_USAGE_SETUP=0`은 GUI·IDE에서 띄운 세션에는 전달되지 않을 수 있습니다. 기본 한 줄을 보고 싶으면 "usage 설정해줘"(`usage-setup` 스킬)나 `aitk usage setup --display default`.
 - **에이전트 텔레메트리 설정 지침**: 사용자가 요청하면 `agent-telemetry-setup` 스킬이 범위를 확인하고 macOS Keychain·launchd 기반 수집기를 안전하게 설치·진단·해제합니다. 자동 설치되지는 않습니다.
 
@@ -84,10 +84,29 @@ ln -sf /absolute/path/to/gpters-ai-toolkit/apps/claude-code-plugin .claude/plugi
 
 ### 스킬 검색
 
-0.1.24부터 `UserPromptSubmit` 훅을 등록하지 않습니다. 훅 컨텍스트가 인터뷰 응답에
-섞이는 문제가 확인되어 대화 중 검색·카운트와 시작 시 컨텍스트 출력을 제거했습니다.
-세션 집계는 `SessionEnd`에서 transcript를 로컬로 읽는 방식으로 다시
-활성화했습니다. 종료 훅의 출력은 없고, 별도 프로세스가 집계 숫자만 전송합니다. 같은
+0.1.36부터 `UserPromptSubmit` 훅이 매 프롬프트에 `<team-skills>` 힌트를 다시 넣습니다.
+검색할지는 Claude가 대화 맥락을 보고 정합니다(`skill-suggest` SKILL.md의 "검색 여부 판단").
+0.1.24~0.1.35에서는 힌트가 Rona Coach 인터뷰 응답에 섞이는 문제(DEV-4377) 때문에 이 훅을 뺐었습니다.
+인터뷰처럼 힌트가 대화에 섞이면 안 되는 세션에서는 끕니다:
+
+```bash
+export AITK_SKILL_HINT=0
+```
+
+힌트만으로는 Claude가 검색을 자주 건너뛰어서(DEV-4700) `skill-gate.sh`가 메시지마다 Claude가 처음 도구를 쓰기 전에 한 번 막습니다.
+
+- 새 세션, `/clear`, 30분 넘게 쉰 뒤 첫 메시지: `aitk search`를 해야 넘어갑니다.
+- 그 밖의 메시지: 새 작업이면 검색하고, 같은 작업의 후속이면 `echo aitk:same-task`로 답해야 넘어갑니다.
+- "계속", "커밋해" 같은 뻔한 후속 메시지와 도구를 쓰지 않는 답변은 막지 않습니다.
+
+10/29 평소 환경 실험(메시지 3개짜리 세션 10개씩, 로컬 복사본으로 실제 검색)에서 힌트만 쓸 때보다 첫 작업 검색이 7/10에서 10/10, 작업이 바뀐 메시지가 8/10에서 10/10으로 늘었습니다. 후속 메시지에서 쓸데없이 검색한 경우는 없었고, 막힌 첫 작업 메시지가 약 20초 늘었습니다.
+aitk가 설치돼 있지 않거나, 쪽지를 끈 세션(`AITK_SKILL_HINT=0`)이거나, 에이전트 머신(`~/.config/aitk/agent.json`)이면 동작하지 않습니다. 끄려면:
+
+```bash
+export AITK_SKILL_GATE=0
+```
+
+세션 집계는 `SessionEnd`에서 transcript를 로컬로 읽어 사용자 입력 수만 보냅니다. 같은
 세션을 재개하면 이전 보고 이후의 증가분만 보냅니다. 세션 집계만 끄려면:
 
 ```bash
@@ -99,7 +118,7 @@ export AITK_SESSION_REPORT=0
 
 수정 대상은 이 저장소의 플러그인 원본입니다. main에 반영한 뒤 SessionStart의 자동 업데이트가
 새 버전을 캐시에 복사합니다. 현재 실행 중인 세션에 즉시 적용되는 것으로 보장하지 않으며,
-설치 버전 확인 후 새 세션에서 확인합니다. 훅 제거만으로 대화 오염은 사라지지만, 세션 집계가
+설치 버전 확인 후 새 세션에서 확인합니다. 세션 집계가
 실제로 적재되려면 MCP 세션 ID를 붙여 보내는 AITK CLI(`report-session` 수정본)가 필요합니다.
 옛 CLI는 서버가 이벤트를 버려도 성공으로 답하므로, CLI 릴리스 전 종료분은 집계되지 않습니다.
 

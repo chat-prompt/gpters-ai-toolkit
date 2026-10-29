@@ -1915,7 +1915,7 @@ export async function executeTool(
           }
         }
         // Append outcome reporting instruction to skill content
-        const outcomeHint = `\n\n---\n_실제 적용을 결정했다면 먼저 report_skill_execution_started를 호출해주세요(skillId="${input.pluginId}", journeyId="${journeyId}", agent=현재 런타임, agentId=안정적인 봇 ID). 적용·검증 뒤 응답의 attemptId로 report_skill_execution을 완료합니다. 적용하지 않았다면 report_skill_outcome(skillId="${input.pluginId}", journeyId="${journeyId}", applied=false, summary="한 줄 사유")를 호출해주세요._`
+        const outcomeHint = `\n\n---\n_실제 적용을 결정했다면 먼저 report_skill_execution_started를 호출해주세요(skillId="${input.pluginId}", journeyId="${journeyId}", agent=현재 런타임, agentId=안정적인 봇 ID). 적용·검증 뒤 응답의 attemptId로 report_skill_execution을 완료합니다. 적용하지 않았다면 report_skill_outcome(skillId="${input.pluginId}", journeyId="${journeyId}", applied=false, summary="한 줄 사유")를 호출해주세요. CLI를 쓰면 같은 순서로 \`aitk report-execution-start --skill-id '${input.pluginId}' --journey-id '${journeyId}' --agent <런타임>\`, \`aitk report-execution --skill-id '${input.pluginId}' --journey-id '${journeyId}' --attempt-id <attemptId> --status success|partial|failed|abandoned --agent <런타임>\`, \`aitk report-outcome --skill-id '${input.pluginId}' --journey-id '${journeyId}' --applied false --summary '한 줄 사유'\`를 실행합니다._`
         const resultWithHint = { ...result, journeyId }
         if (typeof resultWithHint.content === 'string') {
           resultWithHint.content = resultWithHint.content + outcomeHint

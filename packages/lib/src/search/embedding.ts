@@ -182,26 +182,23 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 /**
  * 카탈로그 아이템을 임베딩용 텍스트로 변환합니다.
  *
- * 이름, 설명, 태그, readme, content를 전체 결합하여
- * 임베딩 생성에 적합한 단일 텍스트로 만듭니다.
+ * 이름, 설명, 태그만 결합합니다. 본문(content)과 readme는 넣지 않습니다 —
+ * SKILL.md 본문은 스킬마다 구조가 비슷해 벡터가 서로 가까워지고, 짧은 검색어와의
+ * 유사도가 모든 스킬에서 0.3~0.4대로 뭉치기 때문입니다 (DEV-4697).
  * 최종 텍스트가 MAX_INPUT_CHARS를 초과하면 잘립니다.
  *
- * @param item - 카탈로그 아이템 데이터
+ * @param item - 카탈로그 아이템 데이터 (다른 필드가 있어도 무시)
  * @returns 임베딩 생성용 결합 텍스트
  */
 export function prepareTextForEmbedding(item: {
   name: string
   description: string
-  content?: string | null
   tags?: string[] | null
-  readme?: string | null
 }): string {
   const parts = [
     item.name,
     item.description,
     item.tags?.join(' ') || '',
-    item.readme || '',
-    item.content || '',
   ]
 
   return parts.filter(Boolean).join(' ').trim().slice(0, MAX_INPUT_CHARS)

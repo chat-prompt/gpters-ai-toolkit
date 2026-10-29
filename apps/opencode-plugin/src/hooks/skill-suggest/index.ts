@@ -106,7 +106,7 @@ function formatAvailableSkillsPrompt(skills: SkillSummary[]): string {
   if (skills.length === 0 && method === "cli") {
     return `
 <team-skills>이전 대화의 직접적 후속(확인, 수정, "계속해줘" 등)이 아니면 반드시 검색하세요. 새 기술/도구 질문, 사용법, 구현 요청 모두 포함됩니다.
-검색: Bash("aitk search '한영 병기 키워드 (예: 환불 refund)' --limit 3 --context '작업 맥락(있으면)'")
+검색: Bash("aitk search '한영 병기 키워드 (예: 환불 refund)' --limit 5 --context '작업 맥락(있으면)'")
 규칙: 0.40 이상→Bash("aitk get '스킬ID'")로 로드, 미만→Bash("aitk report-skip --query '검색어' --reason '사유'")로 스킵 보고.
 적용 후: Bash("aitk report-outcome --skill-id '스킬ID' --applied true --summary '결과'")로 보고.</team-skills>
 `.trim()
@@ -199,7 +199,7 @@ export function createSkillSuggestHook(ctx: PluginInput) {
           return
         }
 
-        const skills = await searchSkills(query, { category: "skill", limit: 3, userContext: context || undefined })
+        const skills = await searchSkills(query, { category: "skill", limit: 5, userContext: context || undefined })
 
         const relevantSkills = skills.filter(
           (s) => s.relevanceScore != null && s.relevanceScore >= SCORE_THRESHOLD
