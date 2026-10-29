@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -114,9 +115,9 @@ function turnContextLine(model: string): string {
 }
 
 /** ChatGPT 플랜 코드를 담은 가짜 id_token */
-function fakeIdToken(planType: string): string {
+function fakeIdToken(planType: string, email?: string): string {
   const payload = Buffer.from(
-    JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_plan_type: planType } })
+    JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_plan_type: planType }, ...(email ? { email } : {}) })
   ).toString('base64url')
   return `header.${payload}.signature`
 }
@@ -349,6 +350,16 @@ describe('collectClaudeCode', () => {
     expect(record!.limitResetsAt).toBeNull()
   })
 
+  it('로그인 계정 이메일을 계정 키(sha256)로만 싣는다 (EDU-11835)', async () => {
+    write('.claude.json', JSON.stringify({ oauthAccount: { emailAddress: 'Person@Example.com', organizationRateLimitTier: 'default_claude_max_5x' } }))
+    write('.claude/projects/p/s.jsonl', assistantLine({ id: 'a', sessionId: 's1', timestamp: IN_WINDOW, input: 10, cacheCreation: 0, cacheRead: 0, output: 1 }))
+
+    const record = await collectClaudeCode(WINDOW)
+
+    expect(record!.accountKey).toBe(createHash('sha256').update('person@example.com').digest('hex'))
+    expect(JSON.stringify(record).toLowerCase()).not.toContain('person@example.com')
+  })
+
   it('트랜스크립트가 없으면 null을 돌려준다', async () => {
     expect(await collectClaudeCode(WINDOW)).toBeNull()
   })
@@ -519,6 +530,21 @@ describe('collectCodex', () => {
     expect(serialized).not.toContain('secret-access')
   })
 
+  it('로그인 계정 이메일을 계정 키(sha256)로만 싣고 이메일 원문은 담지 않는다 (EDU-11835)', async () => {
+    write('.codex/auth.json', JSON.stringify({ tokens: { id_token: fakeIdToken('prolite', ' Shared@Example.com ') } }))
+    write('.codex/sessions/2026/08/05/rollout-a.jsonl', tokenCountLine({ timestamp: IN_WINDOW, input: 10, cached: 0, output: 1 }))
+
+    const record = await collectCodex(WINDOW)
+
+    expect(record!.accountKey).toBe(createHash('sha256').update('shared@example.com').digest('hex'))
+    expect(JSON.stringify(record).toLowerCase()).not.toContain('shared@example.com')
+  })
+
+  it('계정 이메일을 못 읽으면 계정 키는 null이다', async () => {
+    write('.codex/sessions/2026/08/05/rollout-a.jsonl', tokenCountLine({ timestamp: IN_WINDOW, input: 10, cached: 0, output: 1 }))
+    expect((await collectCodex(WINDOW))!.accountKey).toBeNull()
+  })
+
   it('롤아웃이 없으면 null을 돌려준다', async () => {
     expect(await collectCodex(WINDOW)).toBeNull()
   })
@@ -540,12 +566,12 @@ describe('collectCodex', () => {
 
 describe('서버 수신 계약 적합성', () => {
   it('두 수집기의 출력이 validateUsageReport를 그대로 통과한다', async () => {
-    write('.claude.json', JSON.stringify({ oauthAccount: { organizationRateLimitTier: 'default_claude_max_20x' } }))
+    write('.claude.json', JSON.stringify({ oauthAccount: { emailAddress: 'person@example.com', organizationRateLimitTier: 'default_claude_max_20x' } }))
     write(
       '.claude/projects/p/s.jsonl',
       assistantLine({ id: 'a', sessionId: 's1', timestamp: IN_WINDOW, input: 10, cacheCreation: 2, cacheRead: 40, output: 5 })
     )
-    write('.codex/auth.json', JSON.stringify({ tokens: { id_token: fakeIdToken('prolite') } }))
+    write('.codex/auth.json', JSON.stringify({ tokens: { id_token: fakeIdToken('prolite', 'shared@example.com') } }))
     write(
       '.codex/sessions/2026/08/05/rollout-a.jsonl',
       [
@@ -557,6 +583,7 @@ describe('서버 수신 계약 적합성', () => {
     const records = [await collectClaudeCode(WINDOW), await collectCodex(WINDOW)].filter((r) => r !== null)
     expect(records).toHaveLength(2)
 
+    expect(records.every((record) => typeof record!.accountKey === 'string')).toBe(true)
     const result = validateUsageReport({ records })
     expect(result.ok ? [] : result.errors).toEqual([])
   })

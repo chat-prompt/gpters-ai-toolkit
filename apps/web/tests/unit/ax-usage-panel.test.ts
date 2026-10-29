@@ -237,6 +237,50 @@ describe('clientUsagePanel', () => {
       expect(result.data!.byClient).toEqual([expect.objectContaining({ client: 'codex', members: 1, totalTokens: 1000 })])
     })
 
+    describe('계정 키를 실은 보고는 계정 키로 짝짓는다 (EDU-11835)', () => {
+      const SHARED = 'd'.repeat(64)
+      const keyed = (resetsAt = '2026-08-13T00:00:03.000Z') => ({
+        rows: [], sharedCodexResets: [resetsAt],
+        sharedAccounts: [{ client: 'codex', accountKey: SHARED }, { client: 'claude-code', accountKey: SHARED }],
+      })
+
+      it('공용 계정 키면 Claude 도 공용 구독의 사용으로 세고 「구독 없이 사용」에서 뺀다', async () => {
+        subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+        subscriptionMocks.renewals.mockResolvedValue(keyed())
+        queueRows([row({ memberName: '다혜', client: 'claude-code', accountKey: SHARED, models: { 'claude-opus-5-5': 900 } })])
+        const result = await clientUsagePanel.load(ADMIN)
+        expect(result.data!.byClient).toEqual([expect.objectContaining({ client: 'claude-code', members: 1, totalTokens: 1000 })])
+        expect(result.data!.people!.filter((person) => !person.subscription)).toEqual([])
+      })
+
+      it('공용이 아닌 계정 키면 초기화 시각이 공용 계정과 겹쳐도 근사 판정을 쓰지 않는다', async () => {
+        subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+        subscriptionMocks.renewals.mockResolvedValue(keyed())
+        // 다혜 보고의 초기화 시각은 공용 회차와 3초 차이지만, 계정 키가 공용 계정이 아니다
+        queueRows([row({ memberName: '다혜', client: 'codex', accountKey: 'e'.repeat(64) })])
+        const result = await clientUsagePanel.load(ADMIN)
+        expect(result.data!.byClient).toEqual([])
+        expect(result.data!.people!.filter((person) => !person.subscription).map((person) => person.name)).toEqual(['다혜'])
+      })
+
+      it('공용 계정 키면 자기 이름 구독이 있어도 공용 구독의 사용이고, 자기 구독 줄에는 붙지 않는다', async () => {
+        subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+        subscriptionMocks.renewals.mockResolvedValue(keyed('2026-09-30T00:00:00.000Z'))
+        queueRows([row({ memberName: '진우', client: 'codex', accountKey: SHARED })])
+        const result = await clientUsagePanel.load(ADMIN)
+        expect(result.data!.byClient).toEqual([expect.objectContaining({ client: 'codex', members: 1, totalTokens: 1000 })])
+        expect(result.data!.people!.find((person) => person.name === '진우' && person.service === 'Codex')!.usage).toBeNull()
+      })
+
+      it('같은 이메일이라도 그 서비스의 공용 구독이 없으면 짝이 아니다', async () => {
+        subscriptionMocks.subscriptions.mockResolvedValue(subscriptions)
+        subscriptionMocks.renewals.mockResolvedValue({ rows: [], sharedCodexResets: [], sharedAccounts: [{ client: 'codex', accountKey: SHARED }] })
+        queueRows([row({ memberName: '다혜', client: 'claude-code', accountKey: SHARED, limitResetsAt: null })])
+        const result = await clientUsagePanel.load(ADMIN)
+        expect(result.data!.byClient).toEqual([])
+      })
+    })
+
     it('구독을 못 읽으면 거르지 않는다', async () => {
       queueRows(usage())
       const result = await clientUsagePanel.load(ADMIN)

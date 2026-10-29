@@ -32,6 +32,8 @@ export interface UsageRecord {
   limitUsedPercent: number | null
   /** 한도 리셋 시각 (ISO 8601). 없으면 null */
   limitResetsAt: string | null
+  /** 로그인 계정 이메일(소문자·trim)의 sha256 hex — 공용 구독 계정과 짝짓는다. 이메일 원문은 보내지 않는다. 못 읽으면 null */
+  accountKey: string | null
 }
 
 /** 집계 구간 */

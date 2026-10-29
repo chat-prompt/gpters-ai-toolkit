@@ -9,7 +9,7 @@ vi.mock('../../../../packages/lib/src/core/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-const { averageCycleByClient, buildMemberServiceRows, buildRenewalRows, onSharedAccount, personNameKeys, sharedCodexResets, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
+const { averageCycleByClient, buildMemberServiceRows, buildRenewalRows, onSharedAccount, personNameKeys, sharedAccounts, sharedCodexResets, renewalCycle, samePerson, dailyRowsBeforeWindows } = await import('../../../../packages/lib/src/features/ax/subscription-renewals')
 
 /** KST 시각 → Date */
 const kst = (text: string) => new Date(`${text}+09:00`)
@@ -666,5 +666,22 @@ describe('sharedCodexResets — 공용 계정 진행 중 Codex 회차 (EDU-11817
       window('key-a', 'codex', '2026-10-30T05:27:53Z', '2026-10-26T05:00:00Z'),
       window('key-a', 'codex', '2026-11-02T06:08:20Z', '2026-10-27T23:00:00Z'),
     ], now)).toEqual(['2026-11-02T06:08:20.000Z'])
+  })
+})
+
+describe('sharedAccounts — 공용 구독의 (클라이언트, 계정 키) (EDU-11835)', () => {
+  it('계정 키가 있는 활성 공용·서포트 구독만, 서비스별로 모은다', () => {
+    expect(sharedAccounts([
+      { ownerName: '공용(a)', vendor: 'OpenAI', accountKey: 'key-a' },
+      { ownerName: '공용(a)', vendor: 'Anthropic', accountKey: 'key-a' },
+      { ownerName: '서포트', vendor: 'OpenAI', accountKey: 'key-s' },
+      { ownerName: '진우', vendor: 'OpenAI', accountKey: 'key-p' },
+      { ownerName: '공용(b)', vendor: 'OpenAI', accountKey: null },
+      { ownerName: '공용(c)', vendor: 'Cursor', accountKey: 'key-c' },
+    ])).toEqual([
+      { client: 'codex', accountKey: 'key-a' },
+      { client: 'claude-code', accountKey: 'key-a' },
+      { client: 'codex', accountKey: 'key-s' },
+    ])
   })
 })

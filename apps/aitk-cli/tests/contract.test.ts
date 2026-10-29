@@ -49,6 +49,7 @@ const CLAUDE: UsageRecord = {
   models: { 'claude-opus-5': 2_553_477_115 },
   limitUsedPercent: null,
   limitResetsAt: null,
+  accountKey: null,
 }
 
 /** 한도를 보고하는 클라이언트 (Codex) */
@@ -65,6 +66,7 @@ const CODEX: UsageRecord = {
   models: { 'gpt-5.6-sol': 982_488_965 },
   limitUsedPercent: 34,
   limitResetsAt: '2026-08-13T00:48:51.000Z',
+  accountKey: 'a'.repeat(64),
 }
 
 /** runUsageReport가 실제로 전송한 arguments를 꺼낸다 */
@@ -105,7 +107,16 @@ describe('CLI가 보내는 payload는 서버 검증기를 통과한다', () => {
     expect(result.ok, result.ok ? '' : result.errors.join(' / ')).toBe(true)
   })
 
-  it('서버가 required로 요구하는 12개 키를 값이 없어도 모두 싣는다', async () => {
+  it('계정 키 형식이 아닌 값은 서버가 거부한다 — 이메일 원문이 새 들어갈 자리를 막는다', async () => {
+    collected.codex = { ...CODEX, accountKey: 'shared@example.com' }
+
+    await runUsageReport({ days: 7, dryRun: false })
+    const result = validateUsageReport(sentArguments())
+
+    expect(result.ok).toBe(false)
+  })
+
+  it('서버가 required로 요구하는 12개 키와 선택 키 accountKey 를 값이 없어도 모두 싣는다', async () => {
     // 키를 빼면 서버 툴 스키마가 거부한다 (undefined ≠ null)
     collected.claude = CLAUDE
 
@@ -126,6 +137,7 @@ describe('CLI가 보내는 payload는 서버 검증기를 통과한다', () => {
         'plan',
         'planRaw',
         'sessions',
+        'accountKey',
       ].sort()
     )
   })

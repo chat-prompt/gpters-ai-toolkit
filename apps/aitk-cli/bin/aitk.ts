@@ -297,8 +297,9 @@ Usage: aitk usage report [--days <N>] [--dry-run]
 
 Aggregates token counts from local transcripts (~/.claude/projects,
 ~/.codex/sessions) and reports them to the team dashboard.
-Only aggregate numbers and the plan name leave your machine —
-never conversation content, file paths, or credentials.
+Only aggregate numbers, the plan name, and a sha256 hash of the logged-in
+account email (to match shared company accounts) leave your machine —
+never conversation content, file paths, credentials, or the email itself.
 
 Claude weekly limits:
   aitk usage setup      Connect the official statusline input, preserving your existing display.

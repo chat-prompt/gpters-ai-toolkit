@@ -1613,6 +1613,8 @@ function toUsageRow(record: AxUsageReportRecord, userId: string, memberName: str
     // 0으로 바꾸지 않는다.
     limitUsedPercent: record.limitUsedPercent != null ? record.limitUsedPercent.toFixed(2) : null,
     limitResetsAt: record.limitResetsAt ? new Date(record.limitResetsAt) : null,
+    // 옛 aitk 는 계정 키를 보내지 않는다 — 같은 날 행을 덮어쓸 때 이전 키를 남기지 않고 null 로 둔다(그 보고의 계정을 모른다)
+    accountKey: record.accountKey ?? null,
     syncedAt: now,
     updatedAt: now,
   }

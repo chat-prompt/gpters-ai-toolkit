@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { findJsonlFiles, scanJsonl, toCount } from './jsonl.js'
 import type { UsageRecord, UsageWindow } from './types.js'
 import { cumulativeUsageIdentity } from './codex-usage.js'
+import { accountKey, readCodexAccountEmail } from '../agent-telemetry/limit-probe.js'
 
 interface RateLimitWindow {
   used_percent?: unknown
@@ -255,6 +256,7 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
   if (counted === 0) return null
 
   const planRaw = readPlanRaw(home)
+  const email = readCodexAccountEmail(join(home, '.codex'))
   return {
     client: 'codex',
     planRaw,
@@ -268,5 +270,7 @@ export async function collectCodex(window: UsageWindow): Promise<UsageRecord | n
     models,
     limitUsedPercent,
     limitResetsAt,
+    // 한도 스냅샷과 같은 로그인 계정이다(EDU-11835)
+    accountKey: email ? accountKey(email) : null,
   }
 }

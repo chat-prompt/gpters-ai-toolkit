@@ -47,6 +47,16 @@ describe('validateUsageReport', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('계정 키는 선택이다 — 없거나 null이거나 64자리 소문자 hex만 받는다 (EDU-11835)', () => {
+    expect(validateUsageReport({ records: [record()] }).ok).toBe(true)
+    expect(validateUsageReport({ records: [record({ accountKey: null })] }).ok).toBe(true)
+    expect(validateUsageReport({ records: [record({ accountKey: 'a'.repeat(64) })] }).ok).toBe(true)
+    // 이메일 원문·대문자 hex·길이 틀림은 거부한다
+    for (const accountKey of ['person@example.com', 'A'.repeat(64), 'a'.repeat(63), 42]) {
+      expect(expectErrors({ records: [record({ accountKey })] }).some((error) => error.includes('accountKey'))).toBe(true)
+    }
+  })
+
   it('memberName은 계약에 없다 — 보내도 무시하고 서버 세션에서 유도한다', () => {
     const result = validateUsageReport({ records: [record()], memberName: '남의이름' })
     expect(result.ok).toBe(true)

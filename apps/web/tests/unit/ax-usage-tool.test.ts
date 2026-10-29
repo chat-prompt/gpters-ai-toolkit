@@ -235,6 +235,18 @@ describe('report_usage', () => {
       expect(writes.collectorValues).toHaveLength(1)
     })
 
+    it('계정 키를 저장하고, 보내지 않은 옛 보고는 null로 둔다 (EDU-11835)', async () => {
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[]])
+      const writes = stubWrites()
+      await reportUsage({ records: [record({ accountKey: 'b'.repeat(64) })] }, 'user-1')
+      expect(writes.insertedValues[0].accountKey).toBe('b'.repeat(64))
+
+      stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [[]])
+      const old = stubWrites()
+      await reportUsage({ records: [record()] }, 'user-1')
+      expect(old.insertedValues[0].accountKey).toBeNull()
+    })
+
     it('사용량이 없어도 사용자별 수집기 점검 상태를 upsert 한다', async () => {
       stubSelect([{ name: '현진우', email: 'primadonna@gpters.org' }], [])
       const writes = stubWrites()
