@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { countUserPrompts } from '../scripts/session-report.mjs'
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -70,7 +70,8 @@ function fixture(t) {
 }
 
 async function waitFor(check, message) {
-  for (let attempt = 0; attempt < 200; attempt++) {
+  // 백그라운드 보고가 끝나길 최대 10초 기다린다. 2초는 다른 테스트와 같이 돌 때 모자라 가끔 실패했다
+  for (let attempt = 0; attempt < 1000; attempt++) {
     if (check()) return
     await new Promise(resolve => setTimeout(resolve, 10))
   }
@@ -171,14 +172,125 @@ test('agent mode does not invoke the personal session reporter', async t => {
   assert.equal(existsSync(f.reports), false)
 })
 
-test('manifest has no conversation-context hook and only reports at SessionEnd', () => {
+test('manifest registers the skill hint and gate, and reports at SessionEnd', () => {
   const manifest = JSON.parse(readFileSync(join(source, '.claude-plugin', 'plugin.json'), 'utf8'))
   assert.match(manifest.version, /^0\.1\.\d+$/)
-  assert.equal(manifest.hooks.UserPromptSubmit, undefined)
+  assert.equal(manifest.hooks.UserPromptSubmit.length, 1)
+  assert.equal(manifest.hooks.UserPromptSubmit[0].hooks[0].command.includes('skill-search.sh'), true)
+  assert.equal(manifest.hooks.UserPromptSubmit[0].hooks[1].command.includes('skill-gate.sh'), true)
+  assert.equal(manifest.hooks.SessionStart.some(group => group.matcher === 'clear' && group.hooks[0].command.includes('skill-gate.sh')), true)
+  assert.equal(manifest.hooks.PreToolUse[0].hooks[0].command.includes('skill-gate.sh'), true)
   assert.equal(manifest.hooks.Stop, undefined)
   assert.equal(manifest.hooks.SessionEnd.length, 1)
   assert.equal(manifest.hooks.SessionEnd[0].hooks[0].command.includes('session-report.sh'), true)
   const startupCommands = manifest.hooks.SessionStart.flatMap(group => group.hooks.map(hook => hook.command))
   assert.equal(startupCommands.some(command => command.includes('toolkit-config.sh')), false)
   assert.equal(JSON.stringify(manifest.hooks).includes('team-skills'), false)
+})
+
+test('skill hint is printed by default and silenced by AITK_SKILL_HINT=0', t => {
+  const home = mkdtempSync(join(tmpdir(), 'skill-hint-'))
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+  const script = join(source, 'scripts', 'skill-search.sh')
+  const bin = join(home, 'bin')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'aitk'), '#!/bin/sh\n')
+  chmodSync(join(bin, 'aitk'), 0o755)
+  const env = { ...process.env, HOME: home, PATH: `${bin}:/usr/bin:/bin` }
+  delete env.AITK_SKILL_HINT
+  const on = execFileSync('bash', [script], { env, encoding: 'utf8' })
+  assert.match(on, /<team-skills>[\s\S]*aitk search/)
+  const off = execFileSync('bash', [script], { env: { ...env, AITK_SKILL_HINT: '0' }, encoding: 'utf8' })
+  assert.equal(off, '')
+  // aitk가 없으면 MCP 검색으로 안내한다
+  const noCli = execFileSync('bash', [script], { env: { ...env, PATH: '/usr/bin:/bin' }, encoding: 'utf8' })
+  assert.match(noCli, /semantic_search/)
+  assert.doesNotMatch(noCli, /Bash\("aitk search/)
+})
+
+test('skill gate forces a search first, then asks new-or-same once per message', t => {
+  const root = mkdtempSync(join(tmpdir(), 'skill-gate-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'aitk'), '#!/bin/sh\n')
+  chmodSync(join(bin, 'aitk'), 0o755)
+  const script = join(source, 'scripts', 'skill-gate.sh')
+  // HOME을 임시 폴더로 둬서 개발자 머신의 agent.json, 셸의 끄기 변수에 결과가 흔들리지 않게 한다
+  const env = { ...process.env, HOME: root, TMPDIR: root, PATH: `${bin}:${process.env.PATH}` }
+  delete env.AITK_SKILL_GATE
+  delete env.AITK_SKILL_HINT
+  const run = (event, extra = {}, extraEnv = {}) =>
+    spawnSync('bash', [script], {
+      env: { ...env, ...extraEnv },
+      input: JSON.stringify({ session_id: 's1', hook_event_name: event, ...extra }),
+      encoding: 'utf8',
+    })
+  const tool = command => run('PreToolUse', { tool_name: 'Bash', tool_input: { command } })
+
+  // 첫 메시지: 검색해야만 통과한다
+  assert.equal(run('UserPromptSubmit', { prompt: 'PR 코드 리뷰 해줘' }).stdout, '')
+  const first = tool('ls')
+  assert.equal(first.status, 2)
+  assert.match(first.stderr, /aitk search/)
+  assert.equal(tool('echo aitk:same-task').status, 2)
+  assert.equal(tool("aitk search '코드 리뷰 code review'").status, 0)
+  assert.equal(tool('ls').status, 0)
+
+  // 다음 메시지: 같은 작업이라고 답하면 통과하고, 그 메시지 동안은 다시 막지 않는다
+  run('UserPromptSubmit', { prompt: '이번에는 블로그 글 초안 써줘' })
+  const judge = tool('ls')
+  assert.equal(judge.status, 2)
+  assert.match(judge.stderr, /aitk:same-task/)
+  assert.equal(tool('echo aitk:same-task').status, 0)
+  assert.equal(tool('ls').status, 0)
+
+  // 뻔한 후속은 막지 않는다
+  run('UserPromptSubmit', { prompt: '좋아, 그대로 계속 진행해줘' })
+  assert.equal(tool('ls').status, 0)
+  run('UserPromptSubmit', { prompt: 'sure' })
+  assert.equal(tool('ls').status, 0)
+
+  // 짧아도 새 요청이면 묻는다
+  run('UserPromptSubmit', { prompt: 'PR 설명 써줘' })
+  assert.equal(tool('ls').status, 2)
+  tool('echo aitk:same-task')
+
+  // 파일 내용에 검색 명령이 적혀 있을 뿐이면 검색으로 치지 않고, MCP 검색 도구는 검색으로 친다
+  run('UserPromptSubmit', { prompt: '스킬 안내 문서 고쳐줘' })
+  assert.equal(run('PreToolUse', { tool_name: 'Edit', tool_input: { new_string: "aitk search 'x'" } }).status, 2)
+  assert.equal(run('PreToolUse', { tool_name: 'mcp__gpters-ai-toolkit__semantic_search', tool_input: { query: 'x' } }).status, 0)
+  // 따옴표가 든 짧은 답도 프롬프트를 끝까지 읽는다
+  run('UserPromptSubmit', { prompt: 'ok "그대로"' })
+  assert.equal(tool('ls').status, 2)
+  tool('echo aitk:same-task')
+
+  // 짧은 답으로 시작할 뿐인 새 요청도 묻는다
+  for (const prompt of ['next.js 대시보드 만들어줘', '네이버 뉴스 검색해줘', 'youtube 영상 요약해줘', '확인 메일 템플릿 만들어줘']) {
+    run('UserPromptSubmit', { prompt })
+    assert.equal(tool('ls').status, 2, prompt)
+    tool('echo aitk:same-task')
+  }
+  // 메시지 전체가 짧은 답이면 막지 않는다. 로케일이 C여도 한글을 글자로 센다
+  for (const prompt of ['네', 'ok!', '확인해줘', '그래']) {
+    run('UserPromptSubmit', { prompt }, { LC_ALL: 'C' })
+    assert.equal(tool('ls').status, 0, prompt)
+  }
+
+  // 30분 넘게 쉬면 첫 메시지처럼 검색을 요구한다
+  execFileSync('touch', ['-t', '200001010000', join(root, 'aitk-skill-gate', 's1.last')])
+  run('UserPromptSubmit', { prompt: '슬랙 봇 기능 추가해줘' })
+  assert.equal(tool('echo aitk:same-task').status, 2)
+
+  // /clear 뒤에도 마찬가지다
+  run('SessionStart')
+  run('UserPromptSubmit', { prompt: '좋아, 그대로 계속 진행해줘' })
+  assert.equal(tool('ls').status, 2)
+
+  assert.equal(run('PreToolUse', { tool_name: 'Read' }, { AITK_SKILL_GATE: '0' }).status, 0)
+  // 쪽지를 끈 세션과 에이전트 머신에서도 막지 않는다
+  assert.equal(run('PreToolUse', { tool_name: 'Read' }, { AITK_SKILL_HINT: '0' }).status, 0)
+  mkdirSync(join(root, '.config', 'aitk'), { recursive: true })
+  writeFileSync(join(root, '.config', 'aitk', 'agent.json'), '{}')
+  assert.equal(tool('ls').status, 0)
 })

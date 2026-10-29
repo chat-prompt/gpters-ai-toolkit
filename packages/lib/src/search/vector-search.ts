@@ -103,15 +103,15 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
 
   const vectorSimilarity = sql<number>`1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)})`
 
-  // Hybrid scoring: vector similarity + keyword match bonus
-  const keywordPattern = `%${cleanedQuery}%`
+  // 검색어에 스킬 ID·이름이 그대로 있으면 콕 집어 부른 것으로 보고 점수를 더하고 맨 앞에 세운다 (DEV-4697).
+  // 1.0으로 확정하지 않는 건 흔한 단어 이름(`회고`)이 지나가듯 걸려도 추천 기준에서 걸러지게 하려는 것이다.
+  // 맥락(userContext)은 임베딩에만 쓰고 이름 판정에는 쓰지 않는다
+  const nameMatch = nameInQuerySql(cleanedQuery)
   const similarity = sql<number>`(1 - (${cosineDistance(catalogItems.embedding, queryEmbedding)}))
-    + CASE WHEN ${catalogItems.name} ILIKE ${keywordPattern} THEN 0.15 ELSE 0 END
-    + CASE WHEN ${catalogItems.description} ILIKE ${keywordPattern} THEN 0.10 ELSE 0 END
-    + CASE WHEN ${catalogItems.tags}::text ILIKE ${keywordPattern} THEN 0.05 ELSE 0 END`
+    + CASE WHEN ${nameMatch} THEN ${NAME_IN_QUERY_BONUS}::float8 ELSE 0 END`
 
   const conditions = [
-    gt(vectorSimilarity, minSimilarity),
+    or(gt(vectorSimilarity, minSimilarity), nameMatch)!,
     eq(catalogItems.status, 'published'),
     sql`${catalogItems.embedding} IS NOT NULL`,
   ]
@@ -167,10 +167,11 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
       createdAt: catalogItems.createdAt,
       updatedAt: catalogItems.updatedAt,
       similarity,
+      nameMatch: sql<boolean>`${nameMatch}`,
     })
     .from(catalogItems)
     .where(and(...conditions))
-    .orderBy(desc(similarity))
+    .orderBy(desc(sql`${nameMatch}`), desc(similarity), desc(vectorSimilarity))
     .limit(fetchLimit)
   const dbMs = Date.now() - dbStart
 
@@ -258,7 +259,7 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
     }
   }
 
-  const candidates = results as Array<CatalogItemRecord & { similarity: number }>
+  const candidates = results as Array<CatalogItemRecord & { similarity: number; nameMatch: boolean }>
   let items = candidates
   let rerankInfo: SemanticSearchRerankInfo | undefined
   if (rerankEnabled) {
@@ -273,7 +274,8 @@ export async function semanticSearch(options: SemanticSearchOptions): Promise<Se
       jevMs: outcome.jevMs,
     }
   }
-  items = items.slice(0, limit)
+  // 재랭킹이 순서를 바꿔도 이름으로 부른 스킬은 맨 앞에 둔다 (sort 는 안정 정렬)
+  items = [...items].sort((a, b) => Number(isNameMatch(b)) - Number(isNameMatch(a))).slice(0, limit)
 
   const searchTime = Date.now() - startTime
 
@@ -362,6 +364,62 @@ export async function findSimilarItems(
     .limit(limit)
 
   return results as Array<CatalogItemRecord & { similarity: number }>
+}
+
+/** 검색어에 스킬 ID·이름이 그대로 있을 때 더하는 점수. 순서는 점수와 상관없이 맨 앞이다 */
+const NAME_IN_QUERY_BONUS = 0.3
+
+/** 영문으로 보는 문자 범위 — 이 범위만으로 된 띄어쓰기 없는 이름은 단어 단위로 맞춘다 */
+const ASCII_NAME_PATTERN = '^[a-zA-Z0-9 .+#_-]*$'
+
+/** DB 결과의 nameMatch 열. 드라이버에 따라 문자열로 올 수 있어 둘 다 받는다 */
+function isNameMatch(item: object): boolean {
+  const v = (item as { nameMatch?: unknown }).nameMatch
+  return v === true || v === 't' || v === 'true'
+}
+
+/**
+ * 검색어에서 영문 단어를 뽑는다. 스킬 ID·영문 이름을 단어 단위로 맞추는 데 쓴다.
+ *
+ * 한글·공백·기호에서 끊으므로 조사가 붙어도(`PR을`, `write-post로`) 단어가 남는다.
+ * 앞뒤 `.`·`-`·`_`는 떼고 2글자 미만은 버린다.
+ *
+ * @example extractAsciiWords('이 PR을 Next.js로 리뷰') // ['pr', 'next.js']
+ */
+export function extractAsciiWords(query: string): string[] {
+  const words = query
+    .toLowerCase()
+    .split(/[^a-z0-9.+#_-]+/)
+    .map(w => w.replace(/^[._-]+|[._-]+$/g, ''))
+    .filter(w => w.length >= 2)
+  return [...new Set(words)]
+}
+
+/**
+ * 검색어에 스킬 ID나 이름이 그대로 들어 있는지 보는 SQL 조건.
+ *
+ * - ID(`write-post`): 단어 단위로 맞춘다. `post`가 `write-post`에 걸리지 않는다.
+ * - 띄어쓰기 없는 영문 이름(`md2pdf`): 단어 단위.
+ * - 나머지 이름(`회의록 작성`, `Receiving Code Review`): 부분 문자열. 조사가 붙어도 걸린다.
+ *   3글자 미만은 부분 문자열로 맞추지 않는다. `보고`가 `보고서`에, `회고`가 `회고록`에 걸려 맨 앞에 서는 걸 막는다.
+ *
+ * 태그는 보지 않는다 — 태그 보너스는 41개 검색 기록에서 1위 정답을 줄였다 (DEV-4698).
+ *
+ * @internal 테스트(`name-in-query-sql.test.ts`)에서 실제 Postgres 로 식을 검증하려고 export 한다.
+ */
+export function nameInQuerySql(cleanedQuery: string) {
+  const lowerQuery = cleanedQuery.toLowerCase()
+  const words = extractAsciiWords(cleanedQuery)
+  const wordsArray = words.length > 0
+    ? sql`ARRAY[${sql.join(words.map(w => sql`${w}`), sql`, `)}]::text[]`
+    : sql`ARRAY[]::text[]`
+
+  return sql`(lower(${catalogItems.id}) = ANY(${wordsArray})
+    OR (length(${catalogItems.name}) >= 2 AND CASE
+          WHEN ${catalogItems.name} ~ ${ASCII_NAME_PATTERN} AND strpos(${catalogItems.name}, ' ') = 0
+            THEN lower(${catalogItems.name}) = ANY(${wordsArray})
+          ELSE char_length(${catalogItems.name}) >= 3 AND strpos(${lowerQuery}, lower(${catalogItems.name})) > 0
+        END))`
 }
 
 /** Maximum query length for meaningful semantic search */
