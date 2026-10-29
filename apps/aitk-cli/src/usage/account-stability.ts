@@ -48,7 +48,11 @@ export function stabilizeAccountKeys(
   const state = readState(path)
   let changed = false
   const stable = records.map((record) => {
-    if (!record.accountKey) return record
+    // 계정을 못 읽은 관측도 계정이 바뀐 것으로 본다 — A → (모름) → A 에서 가운데 사용이 A 로 짝지어지지 않게
+    if (!record.accountKey) {
+      if (state[record.client]) { delete state[record.client]; changed = true }
+      return record
+    }
     const seen = state[record.client]
     if (!seen || seen.key !== record.accountKey || Number.isNaN(Date.parse(seen.since))) {
       state[record.client] = { key: record.accountKey, since: now.toISOString() }

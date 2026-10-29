@@ -59,6 +59,12 @@ describe('stabilizeAccountKeys — 집계 구간 내내 같은 계정일 때만 
     expect(out.map((r) => r.accountKey)).toEqual([A, null, null])
   })
 
+  it('계정을 못 읽은 관측이 끼면 처음부터 다시 센다 — A → (모름) → A 에서 가운데 사용이 A 로 짝지어지지 않게', () => {
+    seed({ codex: { key: A, since: '2026-10-01T00:00:00.000Z' } })
+    stabilizeAccountKeys([record('codex', null)], START, NOW, true, home)
+    expect(stabilizeAccountKeys([record('codex', A)], START, NOW, true, home)[0].accountKey).toBeNull()
+  })
+
   it('dry-run(persist=false)은 상태 파일을 만들지 않는다', () => {
     stabilizeAccountKeys([record('codex', A)], START, NOW, false, home)
     expect(existsSync(accountKeyStatePath(home))).toBe(false)

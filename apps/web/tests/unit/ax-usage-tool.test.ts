@@ -363,6 +363,22 @@ describe('report_usage', () => {
       expect(queue).toHaveLength(0)
     })
 
+    it('공용 구독 조회에 실패하면 계정 키를 실은 보고는 사람 회차에 올리지 않는다(사용량은 저장)', async () => {
+      const queue: unknown[][] = [[{ name: '현진우', email: 'primadonna@gpters.org' }], 'fail' as never, []]
+      mockDb.select.mockImplementation(() => {
+        const result = queue.shift() ?? []
+        return { from: vi.fn().mockReturnThis(), where: vi.fn().mockImplementation(() => result === ('fail' as never)
+          ? Promise.reject(new Error('db down'))
+          : Object.assign(Promise.resolve(result), { limit: vi.fn().mockResolvedValue(result), orderBy: vi.fn().mockResolvedValue(result) })) }
+      })
+      const writes = stubWrites()
+
+      const result = await reportUsage({ records: [record({ limitUsedPercent: 43, limitResetsAt: '2099-01-01T00:00:00.000Z', accountKey: 'd'.repeat(64) })] }, 'user-1')
+
+      expect(result).toMatchObject({ success: true, inserted: 1 })
+      expect(writes.windowValues).toHaveLength(0)
+    })
+
     it('공용이 아닌 계정 키는 평소처럼 사람 회차에 올린다', async () => {
       const queue: unknown[][] = [
         [{ name: '현진우', email: 'primadonna@gpters.org' }],

@@ -642,7 +642,7 @@ Codex는 최신 rollout 스냅샷이 있을 때만 보고합니다. 수집하지
                 description: '로그인 계정 이메일(소문자·trim)의 sha256 hex. 이메일 원문은 보내지 않는다. 선택 — 계정을 못 읽으면 null',
               },
             },
-            // 전부 필수다. nullable 필드도 "없음"을 null로 명시해야 한다 —
+            // accountKey(옛 aitk 는 보내지 않음) 말고는 전부 필수다. nullable 필드도 "없음"을 null로 명시해야 한다 —
             // 키를 빼면 "보고할 값이 없다"와 "보내는 걸 잊었다"가 구분되지 않는다.
             required: [
               'client',

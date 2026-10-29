@@ -1536,8 +1536,9 @@ export async function reportUsage(
 /**
  * 보고가 활성 공용·서포트 구독 계정의 사용인지 가리는 함수 (EDU-11835)
  *
- * 계정 키를 실은 보고가 없으면 조회하지 않는다(옛 aitk). 조회에 실패하면 아무것도 공용으로 보지 않는다 —
- * 회차 기록은 부가 지표라 본 보고를 막지 않는다.
+ * 계정 키를 실은 보고가 없으면 조회하지 않는다(옛 aitk). 조회에 실패하면 키를 실은 보고는 공용일 수 있다고 보고
+ * 사람 회차 기록·한도 이어받기를 건너뛴다 — 회차는 계정 키 없이 남아 나중에 가를 수 없으니 오염시키는 쪽으로 틀리지 않는다.
+ * 사용량 저장은 그대로 한다(부가 지표가 본 보고를 막지 않는다).
  *
  * @param records - 검증된 레코드
  */
@@ -1551,8 +1552,8 @@ async function sharedAccountMatcher(records: AxUsageReportRecord[]): Promise<(re
     const keys = new Set(sharedAccounts(rows).map((account) => `${account.client}\u0000${account.accountKey}`))
     return (record) => Boolean(record.accountKey) && keys.has(`${record.client}\u0000${record.accountKey}`)
   } catch (err) {
-    log.warn('공용 구독 계정 키 조회 실패 — 회차 기록에서 공용 사용을 가르지 않는다', { err })
-    return () => false
+    log.warn('공용 구독 계정 키 조회 실패 — 계정 키를 실은 보고는 사람 회차에 올리지 않는다', { err })
+    return (record) => Boolean(record.accountKey)
   }
 }
 
