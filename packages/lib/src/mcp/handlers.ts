@@ -6,7 +6,8 @@
 
 import { randomUUID } from 'node:crypto'
 import { createLogger } from '../core/logger'
-import { db, catalogItems, users, orgMemberships, axClientUsage, axUsageCollectorState, axUsageLimitWindows } from '@gpters/db'
+import { db, catalogItems, users, orgMemberships, axClientUsage, axSubscriptions, axUsageCollectorState, axUsageLimitWindows } from '@gpters/db'
+import { sharedAccounts } from '../features/ax/subscription-renewals'
 import { validateUsageReport } from '../features/ax/usage-report'
 import type { AxUsageReportRecord } from '../features/ax/usage-report'
 import { validateSkillExecutionReport, validateSkillExecutionStart } from '../features/ax/execution-report'
@@ -1468,11 +1469,15 @@ export async function reportUsage(
   let inserted = 0
   let updated = 0
 
+  // 공용 계정으로 쓴 보고의 한도는 그 공용 계정의 회차다 — 사람 회차에 섞으면 본인 구독의 주기 평균이 오염된다
+  const onShared = await sharedAccountMatcher(validation.payload.records)
+
   // 회차별 최댓값을 먼저 갱신해 두고, 하루 단위 행의 한도는 그 값으로 맞춘다(아래 carryLimit)
-  await recordLimitWindows(validation.payload.records, userId, memberName, receivedAt)
+  await recordLimitWindows(validation.payload.records.filter((record) => !onShared(record)), userId, memberName, receivedAt)
 
   for (const record of validation.payload.records) {
-    const values = carryLimit(toUsageRow(record, userId, memberName, receivedAt), await currentLimitWindow(userId, record.client, receivedAt))
+    const row = toUsageRow(record, userId, memberName, receivedAt)
+    const values = onShared(record) ? row : carryLimit(row, await currentLimitWindow(userId, record.client, receivedAt))
 
     const [existing] = await db
       .select({ id: axClientUsage.id })
@@ -1526,6 +1531,29 @@ export async function reportUsage(
     records: validation.payload.records.length,
   })
   return { success: true, memberName, inserted, updated }
+}
+
+/**
+ * 보고가 활성 공용·서포트 구독 계정의 사용인지 가리는 함수 (EDU-11835)
+ *
+ * 계정 키를 실은 보고가 없으면 조회하지 않는다(옛 aitk). 조회에 실패하면 아무것도 공용으로 보지 않는다 —
+ * 회차 기록은 부가 지표라 본 보고를 막지 않는다.
+ *
+ * @param records - 검증된 레코드
+ */
+async function sharedAccountMatcher(records: AxUsageReportRecord[]): Promise<(record: AxUsageReportRecord) => boolean> {
+  if (!records.some((record) => record.accountKey)) return () => false
+  try {
+    const rows = await db
+      .select({ ownerName: axSubscriptions.ownerName, vendor: axSubscriptions.vendor, accountKey: axSubscriptions.accountKey })
+      .from(axSubscriptions)
+      .where(eq(axSubscriptions.status, 'active'))
+    const keys = new Set(sharedAccounts(rows).map((account) => `${account.client}\u0000${account.accountKey}`))
+    return (record) => Boolean(record.accountKey) && keys.has(`${record.client}\u0000${record.accountKey}`)
+  } catch (err) {
+    log.warn('공용 구독 계정 키 조회 실패 — 회차 기록에서 공용 사용을 가르지 않는다', { err })
+    return () => false
+  }
 }
 
 /**

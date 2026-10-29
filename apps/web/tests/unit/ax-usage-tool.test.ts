@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState, mockAxUsageLimitWindows } = vi.hoisted(() => ({
+const { mockDb, mockUsers, mockAxClientUsage, mockAxSubscriptions, mockAxUsageCollectorState, mockAxUsageLimitWindows } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -24,6 +24,7 @@ const { mockDb, mockUsers, mockAxClientUsage, mockAxUsageCollectorState, mockAxU
     periodStart: 'periodStart',
   },
   mockAxUsageCollectorState: { userId: 'collector.userId' },
+  mockAxSubscriptions: { ownerName: 'sub.ownerName', vendor: 'sub.vendor', accountKey: 'sub.accountKey', status: 'sub.status' },
   mockAxUsageLimitWindows: { userId: 'window.userId', client: 'window.client', resetsAt: 'window.resetsAt', maxUsedPercent: 'window.max', lastSeenAt: 'window.lastSeenAt' },
 }))
 
@@ -34,6 +35,7 @@ vi.mock('@gpters/db', () => ({
   suggestions: {},
   axClientUsage: mockAxClientUsage,
   axUsageCollectorState: mockAxUsageCollectorState,
+  axSubscriptions: mockAxSubscriptions,
   axUsageLimitWindows: mockAxUsageLimitWindows,
 }))
 
@@ -337,6 +339,45 @@ describe('report_usage', () => {
         firstUsedPercent: '43.00',
         resetsAt: new Date('2099-01-01T00:00:00.000Z'),
       })])
+    })
+
+    it('공용 구독 계정 키로 온 보고는 사람 회차에 올리지 않고 하루 단위 행의 한도도 이어받지 않는다 (EDU-11835)', async () => {
+      const SHARED = 'c'.repeat(64)
+      const queue: unknown[][] = [
+        [{ name: '현진우', email: 'primadonna@gpters.org' }],
+        // 공용 구독 조회 — where 에서 끝난다
+        [{ ownerName: '공용(support)', vendor: 'OpenAI', accountKey: SHARED }, { ownerName: '현진우', vendor: 'OpenAI', accountKey: null }],
+        // 기존 행 조회(진행 중 회차 조회는 하지 않는다)
+        [],
+      ]
+      mockDb.select.mockImplementation(() => {
+        const result = queue.shift() ?? []
+        return { from: vi.fn().mockReturnThis(), where: vi.fn().mockImplementation(() => Object.assign(Promise.resolve(result), { limit: vi.fn().mockResolvedValue(result), orderBy: vi.fn().mockResolvedValue(result) })) }
+      })
+      const writes = stubWrites()
+
+      await reportUsage({ records: [record({ limitUsedPercent: 62, limitResetsAt: '2099-01-01T00:00:00.000Z', accountKey: SHARED })] }, 'user-1')
+
+      expect(writes.windowValues).toHaveLength(0)
+      expect(writes.insertedValues[0]).toMatchObject({ accountKey: SHARED, limitUsedPercent: '62.00' })
+      expect(queue).toHaveLength(0)
+    })
+
+    it('공용이 아닌 계정 키는 평소처럼 사람 회차에 올린다', async () => {
+      const queue: unknown[][] = [
+        [{ name: '현진우', email: 'primadonna@gpters.org' }],
+        [{ ownerName: '공용(support)', vendor: 'OpenAI', accountKey: 'c'.repeat(64) }],
+        [], [],
+      ]
+      mockDb.select.mockImplementation(() => {
+        const result = queue.shift() ?? []
+        return { from: vi.fn().mockReturnThis(), where: vi.fn().mockImplementation(() => Object.assign(Promise.resolve(result), { limit: vi.fn().mockResolvedValue(result), orderBy: vi.fn().mockResolvedValue(result) })) }
+      })
+      const writes = stubWrites()
+
+      await reportUsage({ records: [record({ limitUsedPercent: 43, limitResetsAt: '2099-01-01T00:00:00.000Z', accountKey: 'd'.repeat(64) })] }, 'user-1')
+
+      expect(writes.windowValues).toHaveLength(1)
     })
 
     it('초기화 시각이 지난 보고·한도 없는 보고는 올리지 않는다', async () => {

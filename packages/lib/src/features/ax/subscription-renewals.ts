@@ -687,6 +687,7 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
           limitUsedPercent: axClientUsage.limitUsedPercent,
           limitResetsAt: axClientUsage.limitResetsAt,
           syncedAt: axClientUsage.syncedAt,
+          accountKey: axClientUsage.accountKey,
         })
         .from(axClientUsage)
         .where(and(
@@ -696,10 +697,15 @@ export async function loadRenewalData(): Promise<AxSubscriptionRenewalData | nul
       loadLimitWindows(since),
       loadAccountLimitWindows(since),
     ])
+    const shared = sharedAccounts(subscriptions)
+    // 공용 계정으로 쓴 하루 단위 행의 한도는 그 공용 계정의 것이다 — 사람 회차로 읽지 않는다(EDU-11835)
+    const personal = usage
+      .filter((row) => !row.accountKey || !shared.some((account) => account.client === row.client && account.accountKey === row.accountKey))
+      .map(({ accountKey: _accountKey, ...row }) => row)
     return {
-      rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(usage, windows), ...windows, ...accountWindows], now),
+      rows: buildRenewalRows(subscriptions, [...dailyRowsBeforeWindows(personal, windows), ...windows, ...accountWindows], now),
       sharedCodexResets: sharedCodexResets(subscriptions, accountWindows, now),
-      sharedAccounts: sharedAccounts(subscriptions),
+      sharedAccounts: shared,
     }
   } catch (err) {
     log.error('구독 갱신 데이터 조회 실패', err)

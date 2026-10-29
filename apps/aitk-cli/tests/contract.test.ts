@@ -31,6 +31,9 @@ vi.mock('../src/output.js', () => ({
   }),
 }))
 
+// 계약 테스트는 수집기가 만든 값이 그대로 나가는지 본다 — 계정 키 안정화는 따로 테스트한다(account-stability)
+vi.mock('../src/usage/account-stability.js', () => ({ stabilizeAccountKeys: (records: unknown) => records }))
+
 import { runUsageReport } from '../src/commands/usage-report.js'
 import { jsonRpcCall } from '../src/client.js'
 import { collectClaudeCode } from '../src/usage/claude-code.js'
